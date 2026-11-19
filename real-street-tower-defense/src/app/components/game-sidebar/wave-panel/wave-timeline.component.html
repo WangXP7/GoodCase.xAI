@@ -1,0 +1,65 @@
+<h3 class="td-side-head">Next</h3>
+
+<div class="td-next-line" role="group" aria-label="Next waves">
+  @for (peek of peeks(); track peek.wave; let first = $first) {
+    <button type="button" class="td-next-mark"
+            [class.td-next-mark-first]="first"
+            [class.td-next-mark-shown]="peek.wave === shown()?.wave"
+            [attr.aria-pressed]="peek.wave === shown()?.wave"
+            [attr.aria-label]="markLabel(peek)"
+            (mouseenter)="hovered.set(peek.wave)"
+            (mouseleave)="hovered.set(null)"
+            (focus)="hovered.set(peek.wave)"
+            (blur)="hovered.set(null)"
+            (click)="picked.set(peek.wave)">
+      <span class="td-next-icons" aria-hidden="true">
+        @if (peek.bloodMoon) {
+          <td-icon class="td-next-moon" name="moon" [size]="10"></td-icon>
+        }
+      </span>
+      <span class="td-next-dot" [class]="'is-' + markShape(peek)" aria-hidden="true">
+        <td-icon [name]="markIcon[markShape(peek)]" [size]="11"></td-icon>
+      </span>
+      <span class="td-next-num" aria-hidden="true">{{ peek.wave }}</span>
+    </button>
+  }
+</div>
+
+@if (shown(); as peek) {
+  <!-- Two lines: what the wave is, then who comes and what hurts them -->
+  <div class="td-well td-next-detail" [tdRichTooltip]="peek.tooltip" tdRichTooltipPosition="left">
+    <div class="td-next-head">
+      <span class="td-name td-next-name" [class.td-next-name-boss]="peek.boss">{{ peek.name }}</span>
+      @if (peek.mutator; as mutator) {
+        <span class="td-caps td-tone-hurt td-next-mut">{{ mutator }}</span>
+      }
+    </div>
+    <div class="td-note td-next-facts">
+      @if (peek.known) {
+        @if (peek.count; as count) {
+          <span class="td-num td-next-count"><b>{{ count }}</b> enemies</span>
+        }
+        @if (peek.air) {
+          <span class="td-next-fact td-next-fact-air">
+            <td-icon name="plane" [size]="10"></td-icon>
+            <span>Air</span>
+          </span>
+        }
+        <span class="td-next-fact">
+          <td-icon name="shield" [size]="10"></td-icon>
+          <span>{{ peek.armorLabel }}</span>
+        </span>
+        @if (peek.weakToTypes.length > 0) {
+          <span class="td-next-weak td-tone-brass" role="img" [attr.aria-label]="'Weak to ' + peek.weakTo">
+            <span class="td-caps" aria-hidden="true">weak</span>
+            @for (type of peek.weakToTypes; track type) {
+              <td-icon [name]="damageTypeIcon(type)" [size]="11"></td-icon>
+            }
+          </span>
+        }
+      } @else {
+        <span class="td-next-note td-trunc">{{ peek.note }}</span>
+      }
+    </div>
+  </div>
+}

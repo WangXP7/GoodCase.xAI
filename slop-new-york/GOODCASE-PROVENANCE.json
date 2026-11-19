@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/mrdoob/slop-newyork",
+  "commit": "2813185434ec4f11e105fff7fb87665fab81b558",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 108,
+  "bytes": 18978647
+}

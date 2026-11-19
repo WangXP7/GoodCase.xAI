@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "cs-procedural-asset-provenance/1",
+  "itemId": "treta-cap-procedural-v1",
+  "asset": "public/js/procedural-cap.js",
+  "assetSha256": "3d30bc6e84f88d400f85b4daec7e3ceede9ac2b82d347c5370171dd9dfa22aa7",
+  "origin": "private-assets/treta-store/items/fitting-room/cap.mjs",
+  "originSha256": "267d68c633743aeccb3bd2777c8cfef4c823c6d78f894c98577bda2f2ec6f321",
+  "proofReport": "private-assets/treta-store/items/fitting-room/qa/cap-report.json",
+  "proofReportSha256": "3d4b8472a3275bfed7ba5ba306db521a195829e4d144a30d9c8cbfa5fd106d6c",
+  "artifactManifestSha256": "ea699f0fd45ef6b8b48755c5aa997d788dc4fc683de7a0bf1b6cbb3e12341812",
+  "coveredBodies": [
+    "character:barbudo",
+    "character:capitao",
+    "character:esquerdomacho"
+  ],
+  "coveredMotions": ["idle", "walk", "crouch"],
+  "classification": "candidate",
+  "certified": false,
+  "humanDecision": "pending"
+}

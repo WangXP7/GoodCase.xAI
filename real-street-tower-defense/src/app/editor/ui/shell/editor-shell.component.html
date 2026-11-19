@@ -1,0 +1,232 @@
+<div class="es-root">
+  <header class="es-top td-topbar">
+    <button class="td-tool" type="button" aria-label="Back to the maps" matTooltip="Back to the maps" (click)="leave()" data-test="back">
+      <td-icon name="caretL" [size]="18" />
+    </button>
+    <div class="es-name td-sunk">
+      <span class="td-loc-label">Map</span>
+      <span class="td-loc-name td-trunc" data-test="map-name">{{ title() }}</span>
+      <span class="es-save td-note" [class.is-warn]="session.dirty() && session.origin() === 'own'" data-test="save-state">{{ saveLine() }}</span>
+    </div>
+    <button class="td-tool" type="button" aria-label="Undo" [matTooltip]="session.undoLabel() ? 'Undo ' + session.undoLabel() + ' (Ctrl+Z)' : 'Nothing to undo'"
+            [attr.aria-disabled]="!session.canUndo() || null" (click)="session.undo()" data-test="undo">
+      <td-icon name="undo" [size]="18" />
+    </button>
+    <button class="td-tool es-redo" type="button" aria-label="Redo" [matTooltip]="session.redoLabel() ? 'Redo ' + session.redoLabel() + ' (Ctrl+Y)' : 'Nothing to redo'"
+            [attr.aria-disabled]="!session.canRedo() || null" (click)="session.redo()" data-test="redo">
+      <td-icon name="undo" [size]="18" />
+    </button>
+    <span class="td-tool-gap"></span>
+    <button class="td-tool" type="button" aria-label="Save" matTooltip="Save now (Ctrl+S); the editor also saves on its own"
+            [attr.aria-disabled]="session.origin() !== 'own' || null" (click)="session.save(true)" data-test="save">
+      <td-icon name="download" [size]="18" />
+    </button>
+    <div class="es-file">
+      <button class="td-btn-ghost td-btn-sm" type="button" aria-label="File" matTooltip="Download, export, frame the map" [attr.aria-expanded]="fileMenu()" (click)="toggleFile()">
+        File <td-icon name="caret" [size]="12" />
+      </button>
+      @if (fileMenu()) {
+        <div class="es-file-menu td-popup td-rows" role="menu">
+          <button class="td-row" role="menuitem" type="button" (click)="fileAction('download')">Download map file</button>
+          <button class="td-row" role="menuitem" type="button" (click)="fileAction('png')">Export top view as picture</button>
+          <button class="td-row" role="menuitem" type="button" (click)="fileAction('frame')">Frame the whole map</button>
+          <button class="td-row" role="menuitem" type="button" (click)="fileAction('top')">Top view on or off <kbd class="td-kbd">T</kbd></button>
+        </div>
+      }
+    </div>
+    <span class="td-tool-gap"></span>
+    <label class="es-sym" [matTooltip]="symmetryHint()">
+      <span class="td-caps">Symmetry</span>
+      <select class="td-select is-auto td-btn-sm" [value]="symmetry()" (change)="setSymmetry($any($event.target).value)" aria-label="Symmetry" data-test="symmetry">
+        @for (m of symmetryModes; track m.id) {
+          <option [value]="m.id" [selected]="symmetry() === m.id">{{ m.label }}</option>
+        }
+      </select>
+    </label>
+    <span class="es-spacer"></span>
+    <button class="td-btn-ghost td-btn-sm" type="button" aria-label="Help" matTooltip="Keys, tips for good levels and the tour (?)" [attr.aria-expanded]="help()" (click)="help.set(!help())" data-test="help">
+      <td-icon name="keyboard" [size]="16" /> Help
+    </button>
+    <button class="td-btn-secondary td-btn-sm" type="button" (click)="check()" matTooltip="Check the map for problems (V)" data-test="check" data-tour="check">
+      Check
+      @if (session.issues(); as issues) {
+        <span class="td-tag" [class.is-error]="issueCount() > 0" [class.is-ok]="!issues.length">{{ issues.length }}</span>
+      }
+    </button>
+    <button class="td-btn-secondary td-btn-sm" type="button" (click)="trial()" [attr.aria-pressed]="trialOn()"
+            matTooltip="The enemies walk the routes at their real speed, here in the editor (P)" data-test="trial" data-tour="trial">
+      Trial wave
+    </button>
+    <button class="td-btn-primary td-btn-sm" type="button" (click)="testPlay()" matTooltip="Save and play this map in a new tab" data-test="test-play" data-tour="test-play">
+      <td-icon name="play" [size]="14" /> Test map
+    </button>
+  </header>
+
+  <nav class="es-tools" aria-label="Tools">
+    @for (g of toolGroups; track g.label) {
+      <span class="es-tools-head td-caps" aria-hidden="true">{{ g.label }}</span>
+      @for (t of g.tools; track t.id) {
+        @let info = toolInfo(t.id);
+        <button class="es-tool" type="button" [attr.aria-pressed]="session.tool() === t.id" [attr.aria-label]="info.label"
+                [matTooltip]="info.label + ' (' + info.key + '): ' + info.about" matTooltipPosition="right" (click)="pick(t.id)" [attr.data-tool]="t.id" [attr.data-tour]="'tool-' + t.id">
+          <td-icon [name]="icons[t.id]" [size]="18" />
+          <span class="es-tool-name">{{ t.short }}</span>
+        </button>
+      }
+    }
+  </nav>
+
+  @if (tour(); as t) {
+    @if (tourRing(); as r) {
+      <div class="es-tour-ring" aria-hidden="true" [style.left.px]="r.left" [style.top.px]="r.top" [style.width.px]="r.width" [style.height.px]="r.height"></div>
+    }
+    <div class="es-tour" data-test="tour" [attr.data-step]="t.step.id">
+      <app-context-hint [title]="t.step.title" [counter]="t.counter" [message]="t.step.message" [hints]="t.step.hints"
+                        [actions]="tourActions()" (actionClicked)="onTourAction($event)" />
+    </div>
+  }
+  @if (session.error(); as error) {
+    <p class="td-banner is-error is-row es-error" role="alert" data-test="editor-error">
+      <span>{{ error }}</span>
+      <button class="td-btn-ghost td-btn-sm" type="button" (click)="session.error.set(null)">Dismiss</button>
+    </p>
+  }
+  <main class="es-view">
+    <canvas #canvas class="es-canvas" tabindex="0" aria-label="Map view" data-test="viewport"></canvas>
+    @if (session.box(); as b) {
+      <div class="es-box" [style.left.px]="b.x0 < b.x1 ? b.x0 : b.x1" [style.top.px]="b.y0 < b.y1 ? b.y0 : b.y1"
+           [style.width.px]="b.x1 > b.x0 ? b.x1 - b.x0 : b.x0 - b.x1" [style.height.px]="b.y1 > b.y0 ? b.y1 - b.y0 : b.y0 - b.y1"></div>
+    }
+    @if (session.lasso(); as points) {
+      <svg class="es-lasso" aria-hidden="true"><polygon [attr.points]="points" /></svg>
+    }
+    @if (session.issues()) {
+      <app-editor-check class="es-check" />
+    }
+    <app-editor-minimap class="es-minimap" />
+    @if (legend()) {
+      <div class="es-legend td-overlay" role="note" aria-label="Mouse and keys in the view" data-test="legend">
+        <span class="es-legend-row"><td-icon name="mouseLeft" [size]="14" /> Tool</span>
+        <span class="es-legend-row"><td-icon name="mouseRight" [size]="14" /> drag: Turn</span>
+        <span class="es-legend-row"><td-icon name="mouseWheel" [size]="14" /> drag: Pan, roll: Zoom</span>
+        <span class="es-legend-row"><kbd class="td-kbd">Ctrl</kbd>+<td-icon name="mouseWheel" [size]="14" /> Brush size</span>
+        <span class="es-legend-row"><kbd class="td-kbd">RMB</kbd>+<kbd class="td-kbd">WASD</kbd> Fly</span>
+        <span class="es-legend-row"><kbd class="td-kbd">F</kbd> Frame <kbd class="td-kbd">T</kbd> Top <kbd class="td-kbd">C</kbd> Game view</span>
+        <button class="td-close es-legend-close" type="button" aria-label="Hide the legend" matTooltip="Hide; the Help (?) has all keys" (click)="setLegend(false)"><td-icon name="close" [size]="10" /></button>
+      </div>
+    } @else {
+      <button class="td-btn-ghost td-btn-sm es-legend-open td-overlay" type="button" (click)="setLegend(true)" data-test="legend-open">
+        <td-icon name="mouseLeft" [size]="14" /> Controls
+      </button>
+    }
+    @if (session.status()) {
+      <p class="es-flash td-chip" role="status">{{ session.status() }}</p>
+    }
+  </main>
+
+  <aside class="es-side td-side td-dense" aria-label="Tool options">
+    <div class="td-seg is-sm es-side-tabs" role="tablist" aria-label="Side column" tdRovingGroup>
+      <button type="button" role="tab" id="es-tab-tool" aria-controls="es-panel-tool" [attr.aria-selected]="sideView() === 'tool'" (click)="sideView.set('tool')" data-test="side-tool">{{ toolLabel() }}</button>
+      <button type="button" role="tab" id="es-tab-outline" aria-controls="es-panel-outline" [attr.aria-selected]="sideView() === 'outline'" (click)="sideView.set('outline')" data-test="side-outline">Outline</button>
+    </div>
+    <section class="td-side-section es-options is-fill" id="es-panel-tool" role="tabpanel" aria-labelledby="es-tab-tool" [hidden]="sideView() !== 'tool'">
+      <div class="td-side-body">
+        <!-- Panels stay once made and only hide: switching tools does not build them again -->
+        @if (mounted().has('landscape')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'landscape'"><app-landscape-panel /></div>
+        }
+        @if (mounted().has('terrain')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'terrain'"><app-terrain-panel /></div>
+        }
+        @if (mounted().has('paint')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'paint'"><app-paint-panel /></div>
+        }
+        @if (mounted().has('water')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'water'"><app-water-panel /></div>
+        }
+        @if (mounted().has('objects')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'objects'"><app-object-panel /></div>
+        }
+        @if (mounted().has('paths')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'paths'"><app-path-panel /></div>
+        }
+        @if (mounted().has('markers')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'markers'"><app-marker-panel /></div>
+        }
+        @if (mounted().has('environment')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'environment'"><app-environment-panel /></div>
+        }
+        @if (mounted().has('settings')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'settings'"><app-map-panel /></div>
+        }
+        @if (mounted().has('stamp')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'stamp'"><app-stamp-panel /></div>
+        }
+        @if (mounted().has('gameplay')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'gameplay'"><app-gameplay-panel /></div>
+        }
+        @if (mounted().has('measure')) {
+          <div class="es-panel" [class.is-off]="session.tool() !== 'measure'"><app-measure-panel /></div>
+        }
+      </div>
+    </section>
+    <app-editor-outliner class="td-side-section is-fill" id="es-panel-outline" role="tabpanel" aria-labelledby="es-tab-outline" [hidden]="sideView() !== 'outline'" />
+  </aside>
+
+  <app-editor-status class="es-status" />
+
+  @if (palette(); as commands) {
+    <app-command-palette [commands]="commands" (closed)="closePalette()" />
+  }
+  @if (help()) {
+    <div class="es-help-veil" (click)="help.set(false)" aria-hidden="true"></div>
+    <section class="es-help td-dlg" role="dialog" aria-modal="true" aria-labelledby="es-help-title" data-test="help-dialog">
+      <header class="td-dlg-head">
+        <h2 class="td-dlg-title" id="es-help-title">Help</h2>
+        <div class="td-seg is-sm es-help-tabs" role="tablist" aria-label="Help">
+          <button type="button" role="tab" [attr.aria-selected]="helpView() === 'keys'" (click)="helpView.set('keys')">Keys</button>
+          <button type="button" role="tab" [attr.aria-selected]="helpView() === 'guide'" (click)="helpView.set('guide')" data-test="help-guide">Good levels</button>
+        </div>
+        <button class="td-btn-ghost td-btn-sm" type="button" (click)="startTour()" data-test="start-tour">Start the tour</button>
+        <button class="td-close" type="button" aria-label="Close" (click)="help.set(false)"><td-icon name="close" [size]="12" /></button>
+      </header>
+      @if (helpView() === 'guide') {
+        <div class="td-dlg-body es-guide">
+          <h3 class="td-section">How to build a good TD level</h3>
+          @for (g of guide; track g.id) {
+            <div class="es-guide-topic" [attr.data-topic]="g.id">
+              <h4 class="td-name">{{ g.title }}</h4>
+              <p class="td-note">{{ g.text }}</p>
+              @if (g.tool) {
+                <button class="td-btn-secondary td-btn-sm" type="button" (click)="guideTool(g.tool)">{{ g.action }}</button>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+      <div class="td-dlg-body es-help-body">
+        @for (g of shortcuts; track g.group) {
+          <div class="es-help-group">
+            <h3 class="td-section">{{ g.group }}</h3>
+            @for (k of g.keys; track k[0]) {
+              <div class="td-kv"><span><kbd class="td-kbd">{{ k[0] }}</kbd></span><span>{{ k[1] }}</span></div>
+            }
+          </div>
+        }
+        <div class="es-help-group es-help-keys">
+          <h3 class="td-section">Your keys <span class="td-note">a click, then the new key; Esc keeps the old one</span></h3>
+          @for (a of keyActions; track a.id) {
+            <div class="td-kv">
+              <button class="td-btn-ghost td-btn-sm es-key" type="button" (click)="capturing.set(a.id)" [attr.aria-pressed]="capturing() === a.id" [attr.data-key-action]="a.id">
+                <kbd class="td-kbd">{{ capturing() === a.id ? '…' : keyOf(a.id) }}</kbd>
+              </button>
+              <span>{{ a.label }}</span>
+            </div>
+          }
+          <div class="td-actions is-start"><button class="td-btn-ghost td-btn-sm" type="button" (click)="resetKeys()">Back to the default keys</button></div>
+        </div>
+      </div>
+      }
+    </section>
+  }
+</div>

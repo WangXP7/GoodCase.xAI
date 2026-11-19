@@ -1,0 +1,221 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as THREE from 'three';
+import {
+  NEAR_SHADOW_DETAIL_MAX_MESHES, NEAR_SHADOW_DETAIL_NAMES, NEAR_VEHICLE_SHADOW_EXTENT_M, NEAR_VEHICLE_SHADOW_MAX,
+  NEAR_VEHICLE_SHADOW_RANGE_M, VEHICLE_SHADOW_DETAIL_KEY, cascadeMaskForDepth, cascadeRangesFromBreaks,
+  createNearVehicleShadowPolicy, markVehicleShadowDetail, vehicleShadowDetailOf,
+  NEAR_VEHICLE_SHADOW_HYSTERESIS_M, NEAR_VEHICLE_SHADOW_RANK_HOLD_M, nearVehicleShadowMaxFor,
+  NEAR_VEHICLE_SHADOW_REDUCED_RANGE_M, NEAR_SHADOW_REDUCED_NAMES,
+} from './nearVehicleShadowDetail.ts';
+import {
+  getShadowCascadePolicy, registerShadowCascadeCamera, routeShadowOnlyLayer, setShadowCascadePolicy,
+  shadowCascadeIndexOf, SHADOW_ONLY_LAYER,
+} from './renderLayers.ts';
+
+// Round 28 (2026-09-20, owner: "shadows look weird on tanks, verify this yourself from a shadow on a tank"):
+// the nearest hulls cast their real armour into the cascade that covers them; every other hull, and every
+// farther cascade, keeps the three convex proxies.
+
+// --- cascade ranges: CSM breaks are fractions of min(camera.far, maxFar)
+const ranges = cascadeRangesFromBreaks([0.1, 0.3, 0.6, 1.0], 0.5, 700);
+assert.deepEqual(ranges.map((r) => [+r.near.toFixed(1), +r.far.toFixed(1)]), [[0.5, 70], [70, 210], [210, 420], [420, 700]]);
+assert.equal(cascadeMaskForDepth(20, 6, ranges), 0b0001, 'a hull well inside cascade 0 casts only there');
+assert.equal(cascadeMaskForDepth(68, 6, ranges), 0b0011, 'a hull straddling a split casts into both cascades');
+assert.equal(cascadeMaskForDepth(300, 6, ranges), 0b0100);
+assert.equal(cascadeMaskForDepth(900, 6, ranges), 0, 'beyond the last cascade nothing is selected');
+
+// --- a scene with hulls at several depths
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.5, 2000);
+camera.position.set(0, 5, 0); camera.lookAt(0, 0, -100); camera.updateMatrixWorld();
+function hull(name, z, detailCount = 3) {
+  const root = new THREE.Group(); root.name = name; root.position.set(0, 0, z);
+  const detail = []; for (let i = 0; i < detailCount; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()); m.castShadow = false; m.name = `armour${i}`; root.add(m); detail.push(m); }
+  const proxy = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ colorWrite: false })); proxy.castShadow = true; proxy.name = 'procShadow_hull'; root.add(proxy);
+  markVehicleShadowDetail(root, { detail, proxies: [proxy] });
+  scene.add(root); root.updateMatrixWorld(true);
+  return { root, detail, proxy };
+}
+const near = hull('tank_near', -12), mid = hull('tank_mid', -40), split = hull('tank_split', -68), far = hull('tank_far', -150), behind = hull('tank_behind', 30);
+const fifth = hull('tank_fifth', -50); const sixth = hull('tank_sixth', -60);
+const unmarked = new THREE.Group(); unmarked.name = 'tank_unmarked'; unmarked.position.set(0, 0, -5); scene.add(unmarked);
+assert.equal(vehicleShadowDetailOf(unmarked), null);
+assert.ok(vehicleShadowDetailOf(near.root));
+assert.equal(near.root.userData[VEHICLE_SHADOW_DETAIL_KEY].detail.length, 3);
+
+let enabled = true;
+let cap = 4; // (r2b) the cap is read at every update: Medium and Low's four here, Ultra and High's six below
+const policy = createNearVehicleShadowPolicy({ camera, scene, cascadeRanges: () => ranges, enabled: () => enabled, max: () => cap });
+policy.update();
+assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_near', 'tank_mid', 'tank_fifth', 'tank_sixth'],
+  `the ${cap} nearest hulls in front of the camera within the range, nearest first (the straddling hull at 68 m loses the cap)`);
+// 2026-10-15 (SKY shadows r2b, the shadow-quality plan's P2a): 90 m (High's cascade-1 break; 70 m swapped where the
+// ground occlusion fades), six hulls on Ultra and High, four on Medium and Low, a ±8 m swap band and a 6 m rank hold
+assert.equal(NEAR_VEHICLE_SHADOW_MAX, 6); assert.equal(NEAR_VEHICLE_SHADOW_RANGE_M, 90); assert.equal(NEAR_VEHICLE_SHADOW_EXTENT_M, 6);
+assert.equal(NEAR_VEHICLE_SHADOW_HYSTERESIS_M, 8); assert.equal(NEAR_VEHICLE_SHADOW_RANK_HOLD_M, 6);
+assert.deepEqual(['ultra', 'high', 'medium', 'low', 'ultralow', 'mobile-high'].map(nearVehicleShadowMaxFor), [6, 6, 4, 4, 4, 4]);
+assert.ok(!policy.selected.some((s) => s.root === far.root || s.root === behind.root), 'far and behind-the-camera hulls keep their proxies');
+assert.equal(policy.selected[0].cascadeMask, 0b0001);
+{
+  fifth.root.visible = false; sixth.root.visible = false; policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_near', 'tank_mid', 'tank_split'], 'hidden hulls are skipped');
+  assert.equal(policy.selected[2].cascadeMask, 0b0011, 'the hull straddling 70 m casts into cascades 0 and 1');
+}
+
+// --- flags flip only around the cascade that covers the hull, and are restored exactly
+const light0 = new THREE.DirectionalLight(), light1 = new THREE.DirectionalLight(), light2 = new THREE.DirectionalLight();
+registerShadowCascadeCamera(light0.shadow.camera, 0); registerShadowCascadeCamera(light1.shadow.camera, 1); registerShadowCascadeCamera(light2.shadow.camera, 2);
+assert.equal(shadowCascadeIndexOf(light1), 1); assert.equal(shadowCascadeIndexOf(new THREE.DirectionalLight()), -1);
+policy.beforeLight(light0, 0);
+assert.ok(near.detail.every((m) => m.castShadow) && !near.proxy.visible, 'cascade 0: the near hull casts its armour, its proxy is hidden');
+assert.ok(mid.detail.every((m) => m.castShadow) && split.detail.every((m) => m.castShadow));
+assert.ok(far.detail.every((m) => !m.castShadow) && far.proxy.visible, 'the far hull is untouched');
+policy.afterLight(light0, 0);
+assert.ok(near.detail.every((m) => !m.castShadow) && near.proxy.visible, 'restored after the cascade');
+policy.beforeLight(light1, 1);
+assert.ok(near.detail.every((m) => !m.castShadow) && near.proxy.visible, 'cascade 1 does not cover the 12 m hull: proxies as before');
+assert.ok(split.detail.every((m) => m.castShadow) && !split.proxy.visible, 'the straddling hull casts armour into cascade 1 as well');
+policy.afterLight(light1, 1);
+policy.beforeLight(light2, 2);
+assert.ok(split.detail.every((m) => !m.castShadow) && split.proxy.visible);
+policy.afterLight(light2, 2);
+policy.beforeLight(new THREE.DirectionalLight(), -1);
+assert.ok(near.detail.every((m) => !m.castShadow), 'an unregistered light flips nothing');
+policy.afterLight(new THREE.DirectionalLight(), -1);
+enabled = false; policy.update(); assert.equal(policy.selected.length, 0, 'disabled: every hull on proxies (mobile tier, low presets, debug)');
+enabled = true; policy.update();
+
+// --- r2b: the cap read live, the swap band and the rank hold
+{
+  fifth.root.visible = true; sixth.root.visible = true;
+  cap = 6; policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_near', 'tank_mid', 'tank_fifth', 'tank_sixth', 'tank_split'],
+    'six allowed: every hull inside the range takes its armour (the straddling one too)');
+  const edge = hull('tank_edge', -86);
+  policy.update();
+  assert.ok(!policy.selected.some((s) => s.root === edge.root), 'a new hull at 86 m stays on its proxies (in only inside 90 - 8 m)');
+  edge.root.position.z = -80; edge.root.updateMatrixWorld(true); policy.update();
+  assert.ok(policy.selected.some((s) => s.root === edge.root), 'inside 82 m it takes its armour');
+  for (const z of [-86, -95, -97.5]) {
+    edge.root.position.z = z; edge.root.updateMatrixWorld(true); policy.update();
+    assert.ok(policy.selected.some((s) => s.root === edge.root), `held at ${-z} m (out only past 90 + 8 m)`);
+  }
+  edge.root.position.z = -99; edge.root.updateMatrixWorld(true); policy.update();
+  assert.ok(!policy.selected.some((s) => s.root === edge.root), 'past 98 m it returns to its proxies');
+  edge.root.position.z = -86; edge.root.updateMatrixWorld(true); policy.update();
+  assert.ok(!policy.selected.some((s) => s.root === edge.root), 'and does not flip back at 86 m');
+  scene.remove(edge.root);
+  // the rank hold: one slot, the held hull at 40 m keeps it against a rival less than 6 m nearer
+  cap = 1; for (const h of [near, fifth, sixth, split]) h.root.visible = false;
+  policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_mid']);
+  const rival = hull('tank_rival', -36);
+  policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_mid'], 'a rival 4 m nearer does not take the held slot');
+  rival.root.position.z = -33; rival.root.updateMatrixWorld(true); policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_rival'], 'one 7 m nearer does');
+  rival.root.position.z = -37; rival.root.updateMatrixWorld(true); policy.update();
+  assert.deepEqual(policy.selected.map((s) => s.root.name), ['tank_rival'], 'and holds it in turn');
+  scene.remove(rival.root);
+  for (const h of [near, fifth, sixth, split]) h.root.visible = true;
+  cap = 4; policy.update();
+}
+
+// --- r2b P2b: the reduced tier (Ultra Low, every phone preset): the nearest hull alone — the player's own, 13 m from the
+// orbit camera — into cascade 0 only, with the reduced set (about eight draws); a hull without one keeps its proxies
+{
+  assert.equal(NEAR_VEHICLE_SHADOW_REDUCED_RANGE_M, 30);
+  assert.deepEqual([...NEAR_SHADOW_REDUCED_NAMES], ['hull', 'turret', 'gun', 'gearTrackBandL', 'gearTrackBandR', 'gearRoadWheelDiscs', 'gearRoadWheelTires', 'gearTrackPadsSimplified']);
+  for (const name of NEAR_SHADOW_REDUCED_NAMES) assert.ok(NEAR_SHADOW_DETAIL_NAMES.has(name), `${name} is in the full set too`);
+  const scene2 = new THREE.Scene();
+  const make = (name, z, names) => {
+    const root = new THREE.Group(); root.name = name; root.position.set(0, 0, z);
+    const detail = names.map((n) => { const m = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()); m.name = n; m.castShadow = false; root.add(m); return m; });
+    const proxy = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()); proxy.castShadow = true; root.add(proxy);
+    markVehicleShadowDetail(root, { detail, proxies: [proxy] }); scene2.add(root); root.updateMatrixWorld(true);
+    return { root, detail, proxy };
+  };
+  const player = make('player', -16, ['hull', 'hullDetail', 'turret', 'gun', 'gearTrackBandL', 'gearTrackBandR', 'gearRoadWheelDiscs', 'hullEquipment']);
+  const enemy = make('enemy', -18, ['hull', 'turret', 'gun']);
+  let reduced = true;
+  const lowRanges = cascadeRangesFromBreaks([0.05, 0.2, 0.5, 1.0], 0.5, 400);
+  const low = createNearVehicleShadowPolicy({ camera, scene: scene2, cascadeRanges: () => lowRanges, enabled: () => true, reduced: () => reduced, max: 6 });
+  low.update();
+  assert.deepEqual(low.selected.map((s) => s.root.name), ['player'], 'one hull, the nearest');
+  assert.equal(low.selected[0].cascadeMask, 0b0001, 'cascade 0 only (it straddles its 20 m break)');
+  const l0 = new THREE.DirectionalLight(), l1 = new THREE.DirectionalLight();
+  registerShadowCascadeCamera(l0.shadow.camera, 0); registerShadowCascadeCamera(l1.shadow.camera, 1);
+  low.beforeLight(l0, 0);
+  assert.deepEqual(player.detail.filter((m) => m.castShadow).map((m) => m.name), ['hull', 'turret', 'gun', 'gearTrackBandL', 'gearTrackBandR', 'gearRoadWheelDiscs'],
+    'the reduced set casts (no greeble, no equipment)');
+  assert.equal(player.proxy.visible, false);
+  low.afterLight(l0, 0);
+  assert.ok(player.detail.every((m) => !m.castShadow) && player.proxy.visible, 'restored');
+  low.beforeLight(l1, 1);
+  assert.ok(player.detail.every((m) => !m.castShadow) && player.proxy.visible, 'cascade 1 keeps the proxies');
+  low.afterLight(l1, 1);
+  // a hull past the reduced range stays on proxies; one with no reduced mesh is skipped (its proxies would hide for nothing)
+  player.root.position.z = -45; player.root.updateMatrixWorld(true);
+  const bare = make('bare', -10, ['hullDetail', 'hullEquipment']);
+  low.update();
+  assert.deepEqual(low.selected.map((s) => s.root.name), ['enemy'], 'past 30 m: proxies; no reduced mesh: proxies');
+  // off the reduced tier the same policy takes the full sets again
+  reduced = false; low.update();
+  assert.deepEqual(low.selected.map((s) => s.root.name).sort(), ['bare', 'enemy', 'player']);
+  scene2.remove(bare.root);
+}
+
+// --- the shadow router renders lights one at a time only while a policy is installed
+{
+  const calls = [];
+  const renderer = { shadowMap: { render(lights, _scene, cam) { calls.push({ n: lights.length, mask: cam.layers.mask, name: lights[0]?.name }); } } };
+  routeShadowOnlyLayer(renderer);
+  const cam = new THREE.PerspectiveCamera(); const mask = cam.layers.mask;
+  light0.name = 'c0'; light1.name = 'c1'; light2.name = 'c2';
+  setShadowCascadePolicy(null);
+  renderer.shadowMap.render([light0, light1, light2], scene, cam);
+  assert.deepEqual(calls.map((c) => c.n), [3], 'no policy: the single three call');
+  const order = [];
+  setShadowCascadePolicy({ beforeLight(l, i) { order.push(`before:${l.name}:${i}`); }, afterLight(l, i) { order.push(`after:${l.name}:${i}`); } });
+  assert.ok(getShadowCascadePolicy());
+  calls.length = 0;
+  renderer.shadowMap.render([light0, light1, light2], scene, cam);
+  assert.deepEqual(calls.map((c) => [c.n, c.name]), [[1, 'c0'], [1, 'c1'], [1, 'c2']], 'with a policy: one render per light, in order');
+  assert.ok(calls.every((c) => c.mask & (1 << SHADOW_ONLY_LAYER)), 'the proxy layer stays exposed for every cascade');
+  assert.deepEqual(order, ['before:c0:0', 'after:c0:0', 'before:c1:1', 'after:c1:1', 'before:c2:2', 'after:c2:2']);
+  assert.equal(cam.layers.mask, mask, 'the presentation mask is restored');
+  calls.length = 0;
+  renderer.shadowMap.render([light0], scene, cam);
+  assert.deepEqual(calls.map((c) => c.n), [1], 'a single light (the deployment warm) is one plain call');
+  const failing = { beforeLight() {}, afterLight() { order.push('after-throw'); } };
+  setShadowCascadePolicy(failing);
+  const throwing = { shadowMap: { render() { throw new Error('gl lost'); } } };
+  routeShadowOnlyLayer(throwing);
+  assert.throws(() => throwing.shadowMap.render([light0, light1], scene, cam));
+  assert.equal(order[order.length - 1], 'after-throw', 'afterLight runs even when a cascade render throws');
+  assert.equal(cam.layers.mask, mask);
+  setShadowCascadePolicy(null);
+}
+
+// --- the detail vocabulary: silhouette armour, gun, track bands and instanced running gear; never greeble or pads
+for (const name of ['hull', 'turret', 'gun', 'gunMount', 'hullDark', 'turretDetail', 'hullExternalArmor', 'gearTrackBandL', 'gearTrackBandR', 'gearRoadWheelDiscs', 'gearTrackPadsSimplified']) assert.ok(NEAR_SHADOW_DETAIL_NAMES.has(name), name);
+for (const name of ['gearTrackPads', 'hullInteriorFill', 'decor_hull_steel', 'fx_impactDecals', 'gearSuspensionLinks', 'procShadow_hull']) assert.ok(!NEAR_SHADOW_DETAIL_NAMES.has(name), `${name} stays on the proxies`);
+assert.equal(NEAR_SHADOW_DETAIL_MAX_MESHES, 28);
+
+// --- wiring: the lighting module installs the policy and updates it per frame; the factory marks every hull
+const lighting = readFileSync(new URL('./lighting.ts', import.meta.url), 'utf8');
+assert.match(lighting, /registerShadowCascadeCamera\(csm\.lights\[i\]\.shadow\.camera, i\)/, 'every CSM cascade camera is registered with the router');
+assert.match(lighting, /setShadowCascadePolicy\(nearVehiclePolicy\)/);
+assert.match(lighting, /updateCasterProxies\(csm\.lights, scene, false\);\n\s*nearVehiclePolicy\.update\(\);/, 'the selection refreshes with the caster proxies every lighting update');
+assert.match(lighting, /getDeviceTier\(\) !== 'mobile' && preset\.shadowMapSizes\[0\] >= 2048/, 'desktop tiers with a 2K+ near cascade only');
+assert.match(lighting, /__SHADOW_DEBUG\?\.noVehicleDetail/, 'A/B probes can keep every hull on proxies');
+assert.match(lighting, /max: \(\) => nearVehicleMax,/, 'the cap is the live preset\'s');
+assert.match(lighting, /enabled: \(\) => !\(typeof window !== 'undefined' && window\.__SHADOW_DEBUG\?\.noVehicleDetail\),\s*reduced: \(\) => !nearVehicleDetailAllowed,/,
+  'the tiers without a near-detail budget take the reduced tier');
+assert.equal(lighting.split('nearVehicleMax = nearVehicleShadowMaxFor(resolvePresetName());').length, 3, 'at boot and on every preset switch');
+const factory = readFileSync(new URL('../vehicles/tankFactoryCore.ts', import.meta.url), 'utf8');
+assert.match(factory, /markVehicleShadowDetail\(root, \{\n\s*detail: collectNearShadowDetail\(\[hullG, turretG, gunG, recoilG\]\),\n\s*proxies: proceduralShadowSources,/, 'each built hull publishes its detail set and proxies');
+assert.match(factory, /'hullFixedPaintedBodywork', \.\.\.\(additionalSources\?\.hull \?\? \[\]\)\]\), PROC_SHADOW_BODY_INSET_M\)/,
+  'the convex proxies keep their armour-only support points (suppliedShadowCoverage pins them byte-exact); the running gear shadows through the detail set');
+console.log('nearVehicleShadowDetail: cascade ranges, nearest-hull selection and cap (r2b: 90 m, 6 / 4 hulls, ±8 m swap band, 6 m rank hold), per-cascade flag flips with exact restore, per-light router split, detail vocabulary, lighting/factory wiring');

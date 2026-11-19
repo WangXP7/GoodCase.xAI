@@ -1,0 +1,450 @@
+<div class="td-container" [class.td-fullscreen]="!isDialog" [class.td-photo-mode]="photoMode.active()"
+     [class.td-replay-mode]="replay.active()"
+     [class.td-start-menu]="startMenu()"
+     [class.td-tower-control]="towerControl.active()"
+     (contextmenu)="$event.preventDefault()">
+  <!-- The one message banner (UIStore.notice) -->
+  @if (uiStore.notice(); as notice) {
+    <div class="notice-banner td-overlay td-banner is-row" role="alert" [class.is-error]="(notice.tone ?? 'error') === 'error'"
+         [class.is-warn]="notice.tone === 'warn'" [class.is-ok]="notice.tone === 'ok'">
+      <span>{{ notice.text }}</span>
+      @if (notice.reload) {
+        <button type="button" class="td-btn-secondary td-btn-sm" (click)="reloadPage()">Reload</button>
+      }
+      <button type="button" class="td-close" (click)="uiStore.notice.set(null)" aria-label="Close the message">
+        <td-icon name="close" [size]="12"></td-icon>
+      </button>
+    </div>
+  }
+
+  <!-- Info Header -->
+  <app-game-header
+    [locationName]="currentLocationName()"
+    [baseHealth]="store.baseHealth()"
+    [credits]="store.credits()"
+    [stateJumps]="store.stateJumps()"
+    [waveNumber]="store.waveNumber()"
+    [enemiesAlive]="store.enemiesAlive()"
+    [waveActive]="waveActive()"
+    [waveEnemyTotal]="store.waveEnemyTotal()"
+    [waveEnemiesLeft]="store.waveEnemiesLeft()"
+    [isDialog]="isDialog"
+    [favorites]="favorites()"
+    [favoriteNames]="favoriteNamesMap()"
+    [placementMode]="mapPlacementMode()"
+    [canPlace]="canPlaceOnMap()"
+    [locationLocked]="uiStore.coopMapLocked()"
+    (locationClick)="openPlaceChoice()"
+    (closeClick)="close()"
+    (menuClick)="mainMenu.open()"
+    (shareClick)="onShareLocation()"
+    (diceClick)="onWorldDice()"
+    (addFavoriteClick)="onAddFavorite($event)"
+    (renameFavoriteClick)="onRenameFavorite($event.id, $event.name)"
+    (moveFavoriteClick)="onMoveFavorite($event.id, $event.offset)"
+    (selectFavoriteClick)="onSelectFavorite($event)"
+    (deleteFavoriteClick)="onDeleteFavorite($event)"
+    (placeHqClick)="onPlaceHq()"
+    (placeSpawnClick)="onPlaceSpawn($event)"
+    [spawnCount]="store.spawnPoints().length"
+    (addSpawnClick)="onAddSpawn()"
+    [coopChip]="coopChip()"
+    (coopClick)="openCoop()"
+  />
+
+  <!-- Main Content: Canvas + Sidebar -->
+  <div class="td-main">
+    <!-- Canvas Area -->
+    <div class="td-canvas-area">
+      <!-- Desktop build only: a downloaded update and "Restart now". Outside the
+           loading and error blocks: an update may be what fixes an error. -->
+      <app-update-hint />
+      <!-- While a spawn is placed: every lane's length, the placed one live -->
+      <app-lane-length-panel />
+
+      <!-- Tile credentials missing or rejected: everything else waits.
+           The screen is a lazy chunk, loaded the first time it shows. -->
+      @if (tokenScreen()) {
+        @defer (on immediate) {
+          <td-token-setup (tokenSaved)="onCredentialsSaved()" />
+        } @error {
+          <div class="td-error-overlay" role="alert">
+            <div class="td-dlg td-error-plate">
+              <header class="td-dlg-head"><h3 class="td-dlg-title">The map key screen did not load</h3></header>
+              <p class="td-dlg-body td-text">Check the connection and reload the page.</p>
+              <div class="td-dlg-foot">
+                <button type="button" class="td-btn-primary" (click)="reloadPage()">Reload</button>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      <!-- The engine failed where no menu stands (an automated run): the menu's plate says it otherwise -->
+      @if (error() && !loading() && !uiStore.mainMenuOpen()) {
+        <div class="td-error-overlay" role="alert">
+          <div class="td-dlg td-error-plate">
+            <header class="td-dlg-head"><h3 class="td-dlg-title">The map did not load</h3></header>
+            <p class="td-dlg-body td-text">{{ error() }}</p>
+            <div class="td-dlg-foot">
+              <button type="button" class="td-btn-secondary" (click)="awaitingCredentials.set(true)">Map key</button>
+              <button type="button" class="td-btn-primary" (click)="reloadPage()">Reload</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <canvas #gameCanvas class="td-canvas" [class.hidden]="error()" [class.td-placement-cursor]="!!mapPlacementMode()"></canvas>
+
+      <!-- The menu globe while no place stands, and the dive into it (docs/GLOBE_PLAN.md) -->
+      <app-globe-backdrop />
+
+      <!-- Google Attribution (required) -->
+      @if (hudShown()) {
+        <!-- Red edge when an enemy reaches the HQ -->
+        <app-leak-vignette />
+
+        <!-- Arrows at the edge toward bosses and enemies close to the HQ -->
+        <app-offscreen-indicators />
+        <!-- Coop: arrows at the edge toward a player's mark on the map -->
+        @if (coop.inGame()) {
+          <app-coop-ping-arrows />
+        }
+
+        <!-- "Blood Moon" for a few seconds when a blood moon wave starts -->
+        <app-blood-moon-banner />
+
+        <!-- "Moving HQ" while the HQ moves and its corridor is measured -->
+        <app-relocation-status />
+
+        <!-- Cell report (developer options, __corridor.report()): its panel and the box of a Shift drag -->
+        <app-cell-report-panel />
+
+        <div class="td-logo-attribution">
+          @for (logo of worldContext.logos(); track logo.src) {
+            <img [src]="logo.src" [alt]="logo.alt" [class]="logo.cssClass">
+          }
+        </div>
+        @if (creditLine()) {
+          <div class="td-map-attribution td-overlay td-note td-trunc">{{ creditLine() }}</div>
+        }
+
+        <!-- Compass Overlay -->
+        <app-compass [rotation]="compassRotation()" (resetBearing)="resetCamera()" />
+        <!-- Minimap under it: a custom map's picture, or a real place drawn from OSM -->
+        <app-world-minimap [osm]="minimapOsm" />
+
+        <!-- Debug Windows (draggable), one lazy chunk, see debugWindowsRequested -->
+        @defer (when debugWindowsRequested()) {
+          <app-camera-debugger />
+          <app-devworld-debugger [isRegenerating]="worldRegenerating()" (terrainRefresh)="refreshTerrainHeights()" />
+          <app-wave-debugger [eventBus]="sim.bus" />
+          <app-sound-debugger />
+          <app-event-debugger [eventBus]="sim.bus" />
+          <app-bot-debugger
+            [botEnabled]="botEnabled()"
+            [botSkillLevel]="botSkillLevel()"
+            [botStats]="botStats()"
+            (botEnableRequested)="enableBot($event)"
+            (botDisableRequested)="disableBot()"
+            (dpsBinsToggled)="onDpsBinsToggled($event)"
+          />
+          <app-tower-debugger />
+          <app-enemy-debugger
+            (removeEnemy)="enemyDebug.onRemoveDebugEnemy($event)"
+            (clearAllEnemies)="enemyDebug.onClearDebugEnemies()"
+            (playWalk)="enemyDebug.onPlayWalkAnimation($event)"
+            (playRun)="enemyDebug.onPlayRunAnimation($event)"
+            (startMovement)="enemyDebug.onStartEnemyMovement($event)"
+            (stopMovement)="enemyDebug.onStopEnemyMovement($event)"
+          />
+          <app-performance-debugger />
+          <app-los-debugger />
+          <app-display-options
+            (enemiesToggled)="debugFacade.onEnemiesToggled($event)"
+            (healthBarsToggled)="debugFacade.onHealthBarsToggled($event)"
+            (animationsToggled)="debugFacade.onAnimationsToggled($event)"
+            (movementToggled)="debugFacade.onMovementToggled($event)"
+            (colorGradingChanged)="debugFacade.onColorGradingChanged($event)"
+            (screenShakeToggled)="debugFacade.onScreenShakeToggled($event)"
+            (tileLodDebugToggled)="debugFacade.onTileLodDebugToggled($event)"
+          />
+        }
+
+        <!-- The in-game benchmark's progress and results (top centre) -->
+        <app-benchmark-panel />
+
+        <!-- Info Overlay (top left) -->
+        <app-info-overlay
+          [fps]="fps()"
+          [tileStats]="tileStats()"
+          [streetCount]="streetCount()"
+        />
+      }
+
+      <!-- Top centre, one column so the PAUSED chip and the boss bar never
+           overlap. Game Speed: build phase and waves; between waves it speeds
+           up research, which runs in game time. Boss bar: while a boss lives. -->
+      @if (hudShown()) {
+        <div class="td-hud-top" [class.td-hud-muted]="bossIntro.active()">
+          @if (!isGameOver()) {
+            <app-game-speed />
+          }
+          <app-boss-bar />
+        </div>
+
+        <!-- Boss intro: dark veil around the camera cuts, the boss's name
+             while the portal shot holds. Transparent otherwise. -->
+        <app-boss-intro />
+      }
+
+      @if (hudShown()) {
+        <!-- Quick Actions (bottom right) -->
+        <app-quick-actions
+          [cameraFramingDebug]="cameraFramingDebug()"
+          (resetCamera)="resetCamera()"
+          (buildingsToggled)="onBuildingsToggled()"
+          (streetsToggled)="onStreetsToggled()"
+          (routesToggled)="onRoutesToggled()"
+          (heightDebugToggled)="toggleHeightDebug()"
+          (cameraFramingDebugToggled)="toggleCameraFramingDebug()"
+          (specialPointsDebugToggled)="onSpecialPointsDebugToggled()"
+          (spatialGridDebugToggled)="onSpatialGridDebugToggled()"
+          (airSpatialGridDebugToggled)="onAirSpatialGridDebugToggled()"
+          (airRouteToggled)="onAirRouteToggled()"
+          (perTowerLosFilterCycled)="onPerTowerLosFilterCycled()"
+          (playRouteAnimation)="onPlayRouteAnimation()"
+          (refreshHeights)="refreshTerrainHeights()"
+          (killAllEnemies)="killAllEnemies()"
+          (addCredits)="addDebugCredits($event)"
+          (addHealth)="addDebugHealth($event)"
+          (completeAllResearch)="completeAllResearch()"
+          (maxUpgradeAllTowers)="maxUpgradeAllTowers()"
+          (readyAbilities)="readyAbilities()"
+          (readyHero)="readyHero()"
+          (photoModeRequested)="photoMode.enter()"
+          (settingsRequested)="openSettings()"
+        />
+
+        <!-- Ability bar (left edge): the hero on top once there is one, then
+             one button per ability; below the info overlay -->
+        <app-ability-bar [hero]="heroBar()" [topInset]="uiStore.infoOverlayBottom()" (heroPressed)="onHeroBarPressed()" />
+
+        <!-- Coop, bottom left: the squad and the chat; empty outside a coop game -->
+        <app-coop-squad />
+        <!-- Coop: the room dock right of the ability bar (Tab or the header chip) -->
+        @if (uiStore.coopDockOpen() && (coop.room() || coop.intent() === 'join' || coop.error())) {
+          @defer {
+            <app-coop-dock />
+          }
+        }
+      }
+
+      <!-- Bottom centre of the map: skip intro, LOS legend and the hint box
+           share one column, so a box that grows (a warning row) pushes the
+           legend up instead of running into it. -->
+      <div class="td-bottom-stack">
+        <!-- Intro camera flight skip control -->
+        @if (introFlightActive()) {
+          <app-intro-skip />
+        }
+
+        <!-- LOS Coverage Legend (Build Preview + Tower Selection) -->
+        @if (losLegendVisible()) {
+          <app-los-legend
+            [canTargetGround]="losLegendCanGround()"
+            [canTargetAir]="losLegendCanAir()"
+          />
+        }
+
+        <!-- Context hint box, one at a time: why the last press on an ability or
+             the hero did nothing, build mode, map placement, ability targeting,
+             the selected hero, else the first-run tip -->
+        @if (refusal(); as refused) {
+          <app-context-hint
+            [title]="refused.subject"
+            [warning]="refused.reason"
+            [live]="true"
+          />
+        } @else if (buildMode()) {
+          <app-context-hint
+            [hints]="buildModeHints"
+            [warning]="buildModeWarning()"
+          />
+        } @else if (mapPlacementMode()) {
+          <app-context-hint
+            [hints]="placementModeHints()"
+            [warning]="placementModeWarning()"
+          />
+        } @else if (abilityTargetingActive()) {
+          <app-context-hint
+            [hints]="abilityTargetingHints()"
+            [warning]="abilityTargetingWarning()"
+          />
+        } @else if (heroSelected()) {
+          <app-context-hint
+            [hints]="heroHints"
+            [warning]="heroWarning()"
+          />
+        } @else if (onboardingTip(); as tip) {
+          <app-context-hint
+            [title]="tip.title"
+            [counter]="tip.index + '/' + tip.total"
+            [message]="tip.text"
+            [hints]="tip.keys"
+            [actions]="onboardingActions"
+            (actionClicked)="onOnboardingAction($event)"
+          />
+        } @else if (controlsHintVisible() && !introFlightActive() && hudShown() && !uiStore.mainMenuOpen()) {
+          <!-- Camera controls at the start, auto-hidden after 15 s. In the hint
+               slot rather than bottom left, where it covered the map credits. -->
+          <app-context-hint
+            [hints]="controlsHints()"
+            [actions]="controlsHintActions"
+            (actionClicked)="controlsHintVisible.set(false)"
+          />
+        }
+      </div>
+
+      <!-- Coop: the connection broke in the game, which stands still until the player decides (TODO E40) -->
+      @if (coop.lostInGame() && !store.showGameOverScreen()) {
+        <div class="td-lost-overlay td-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="td-lost-title" tabindex="-1" tdFocusOnShow cdkTrapFocus>
+          <div class="td-dlg td-lost-content">
+            <header class="td-dlg-head"><h2 class="td-dlg-title" id="td-lost-title">Connection lost</h2></header>
+            <p class="td-dlg-body td-text">The connection to the coop server closed, the game stands still. Go on alone with this run, or start a new one alone.</p>
+            <div class="td-dlg-foot">
+              <button type="button" class="td-btn-secondary" (click)="restartGame()">Start over alone</button>
+              <button type="button" class="td-btn-primary" (click)="coop.continueAlone()">Continue alone</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Game Over Overlay -->
+      @if (store.showGameOverScreen()) {
+        <div class="td-gameover-overlay td-gameover-veil" role="dialog" aria-modal="true" aria-labelledby="td-gameover-title" aria-describedby="td-gameover-sub" tabindex="-1" tdFocusOnShow cdkTrapFocus>
+          <div class="td-gameover-title">
+            <h1 class="td-gameover-word" id="td-gameover-title">Game over</h1>
+            <p class="td-gameover-sub" id="td-gameover-sub">HQ lost | {{ currentLocationName() }} | wave <b>{{ store.waveNumber() }}</b></p>
+          </div>
+          <div class="td-dlg td-gameover-content td-gameover-rise">
+           <div class="td-dlg-body td-gameover-scroll">
+            @if (store.runSummary(); as summary) {
+              <app-run-summary [summary]="summary" />
+            }
+            <!-- Coop: each player's part of the run (docs/COOP_PLAN.md, R16) -->
+            @if (coop.summary(); as rows) {
+              <table class="td-table td-coop-summary" aria-label="Players">
+                <thead>
+                  <tr><th>Player</th><th class="num">Kills</th><th class="num">Leaks</th><th class="num">Towers</th><th class="num">Earned</th><th class="num">Gold given</th><th class="num">Gold</th></tr>
+                </thead>
+                <tbody>
+                  @for (row of rows; track row.id) {
+                    <tr [class.is-own]="row.me" [class.is-gone]="row.left">
+                      <td><span class="td-inline td-coop-player"><span class="td-swatch is-round" [style.--td-mark]="row.color"></span><span class="td-name">{{ row.name }}{{ row.me ? ' (you)' : '' }}</span></span></td>
+                      <td class="num">{{ row.kills }}</td>
+                      <td class="num">{{ row.leaks }}</td>
+                      <td class="num">{{ row.towers }}</td>
+                      <td class="num">{{ goldEarnedOf(row.id) }}</td>
+                      <td class="num">{{ row.goldGiven }}</td>
+                      <td class="num">{{ row.gold }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+            <!-- Each player's run wave by wave (TODO E46) -->
+            <app-run-charts [points]="waveSeries()" [players]="chartPlayers()" />
+            @if (coop.lostInGame()) {
+              <p class="td-note td-gameover-wait">The connection to the coop server is lost: Restart plays alone.</p>
+            }
+            @if (coop.inGame() && !coop.isHost()) {
+              <p class="td-note td-gameover-wait">The host starts the next run.</p>
+            }
+            <!-- New record of this place: under Restart, fades in after a moment, Skip hides it.
+                 on immediate like the other @defer blocks; a timer trigger would add core code to the initial bundle. -->
+            @if (bestWaves.newRecord(); as record) {
+              @defer (on immediate) {
+                <app-world-record
+                  [record]="record"
+                  [records]="bestWaves.records()"
+                  (dismissed)="bestWaves.dismissRecord()"
+                />
+              }
+            }
+           </div>
+           <footer class="td-dlg-foot td-actions is-split">
+            <span class="td-inline td-gameover-files">
+              <!-- The run as a file: the analysis reads it, and it can be sent (docs/RUN_LOG.md) -->
+              <button type="button" class="td-btn-secondary" (click)="exportRunLog()">{{ runLogExported() ? 'Run log saved' : 'Save the run log' }}</button>
+              <!-- Coop: no replay to watch here, but the host saves the waves as a file -->
+              @if (coopReplaySave()) {
+                <button type="button" class="td-btn-secondary" (click)="saveCoopReplay()">{{ coopReplaySaved() ? 'Replay saved' : 'Save the replay' }}</button>
+              }
+            </span>
+            <span class="td-inline td-end-actions">
+              <button type="button" class="td-btn-secondary" (click)="openMainMenu()">Main menu</button>
+              <!-- The wave that broke the HQ, once more, while the replay is offered -->
+              @if (replay.offered()) {
+                <button type="button" class="td-btn-secondary" (click)="replay.enter()">Replay wave {{ replay.recordedWave() }}</button>
+              }
+              @if (!coop.inGame() || coop.isHost()) {
+                <button type="button" class="td-btn-primary" (click)="restartGame()">Restart here</button>
+              }
+            </span>
+           </footer>
+          </div>
+        </div>
+      }
+
+      <!-- Photo mode: only the map, its attribution and this bar stay -->
+      @if (photoMode.active()) {
+        <div class="td-photo-bar td-overlay td-inline" role="toolbar" aria-label="Photo mode">
+          <button type="button" class="td-btn-primary td-btn-sm" (click)="photoMode.saveScreenshot()" [disabled]="photoMode.saving()">
+            <td-icon name="camera" [size]="16"></td-icon>
+            Save screenshot
+          </button>
+          <button type="button" class="td-btn-secondary td-btn-sm" (click)="photoMode.exit()">
+            Exit <kbd class="td-kbd">Esc</kbd>
+          </button>
+          @if (photoMode.savedAs(); as saved) {
+            <span class="td-note">Saved to Downloads: {{ saved }}</span>
+          }
+        </div>
+      }
+
+      <!-- In a manned tower: the crosshair over the map, header and attribution stay -->
+      @if (towerControl.active()) {
+        <app-tower-control-hud />
+      }
+
+      <!-- Replay of the last wave: only the map, its attribution and the replay bar stay -->
+      @if (replay.active()) {
+        <app-replay-bar />
+      }
+    </div>
+
+    <!-- Right Sidebar -->
+    <app-game-sidebar
+      [towerTypes]="towerTypes"
+      [buildMode]="buildMode()"
+      [waveActive]="waveActive()"
+      [isGameOver]="isGameOver()"
+      (startWave)="startWave()"
+      (cancelBuild)="toggleBuildMode()"
+      (selectTower)="selectTowerType($event)"
+      (sellTower)="sellSelectedTower()"
+      (upgradeTower)="upgradeTower($event.tower, $event.upgradeId, $event.times)"
+      (changeTargeting)="changeTargeting($event.tower, $event.strategy)"
+      (changeAirSubStrategy)="changeAirSubStrategy($event.tower, $event.strategy)"
+      (setHoldFire)="setHoldFire($event.tower, $event.holdFire)"
+      (takeControl)="towerControl.enter($event)"
+      (cancelResearch)="onCancelResearch($event)"
+    />
+  </div>
+
+  <!-- The main menu: in front of the scene that loads behind it, and Esc in the game -->
+  @if (uiStore.mainMenuOpen() && !tokenScreen()) {
+    <app-main-menu />
+  }
+</div>

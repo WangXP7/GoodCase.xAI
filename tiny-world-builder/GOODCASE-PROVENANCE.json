@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/jasonkneen/tiny-world-builder",
+  "commit": "19824acbff3148287b717e4bab4f1136bb6dc762",
+  "license": "AGPL-3.0",
+  "scope": "code-only",
+  "files": 2941,
+  "bytes": 12620655
+}

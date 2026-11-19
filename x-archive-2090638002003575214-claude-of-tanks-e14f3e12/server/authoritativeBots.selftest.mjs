@@ -1,0 +1,134 @@
+import assert from 'node:assert/strict';
+import { createAuthoritativeMatch } from '../src/sim/authoritativeMatch.ts';
+// The soak used to find its six mobile hulls among the core specs.ts rows; those
+// archived WWII hulls retired on 2026-09-23, so register the complete fleet first.
+import '../src/vehicles/tankFactory.ts';
+import { ALL_TANK_IDS, getSpec } from '../src/vehicles/specs.ts';
+import { MAP_IDS } from '../src/world/maps/index.ts';
+import { createDedicatedWorldCollision } from './dedicatedWorldCollision.ts';
+import { createRamTally, judgeRams } from './soakRams.test-support.mjs';
+
+// COT_BOT_SOAK_MAPS=verdant,steppe runs a capped section (the whole soak is an owner-run receipt, about 2 min a map).
+// Each map keeps its place in MAP_IDS for its seed and bot ids, so a capped map plays the whole soak's battle on that
+// map (round 3 B8: the list's own index gave steppe alone seed 9000, a battle the whole soak never plays).
+const MAPS = process.env.COT_BOT_SOAK_MAPS
+  ? process.env.COT_BOT_SOAK_MAPS.split(',').filter((id) => MAP_IDS.includes(id)) : MAP_IDS;
+assert.ok(MAPS.length > 0, 'the soak runs at least one map');
+const SPECS = ALL_TANK_IDS
+  .filter((id) => ['light', 'medium', 'heavy'].includes(getSpec(id).role))
+  .slice(0, 6);
+assert.equal(SPECS.length, 6, 'bot soak requires six mobile registered tanks');
+
+for (const mapId of MAPS) {
+  const mapIndex = MAP_IDS.indexOf(mapId);
+  const players = SPECS.map((specId, index) => ({
+    id: `bot-${mapIndex}-${index}`,
+    specId,
+    team: index < 3 ? 'alpha' : 'bravo',
+    bot: true,
+    difficulty: 'normal',
+  }));
+  const match = createAuthoritativeMatch({
+    players,
+    mapId,
+    seed: 9000 + mapIndex,
+    countdownS: 0,
+    worldCollision: createDedicatedWorldCollision(mapId),
+  });
+  match.onMatchReady();
+  const initial = new Map(match.entities.map((entity) => [entity.id, entity.state.pos.clone()]));
+  const prior = new Map(match.entities.map((entity) => [entity.id, entity.state.pos.clone()]));
+  const maxDistance = new Map(match.entities.map((entity) => [entity.id, 0]));
+  const stuckSeconds = new Map(match.entities.map((entity) => [entity.id, 0]));
+  const maxStuckSeconds = new Map(match.entities.map((entity) => [entity.id, 0]));
+  const teamById = new Map(match.entities.map((entity) => [entity.id, entity.team]));
+  // the ally gate and the per-ram viewer check (soakRams.test-support.mjs; soakRams.selftest drives them over real rams)
+  const ramTally = createRamTally();
+  let yieldFrames = 0;
+
+  for (let tick = 0; tick < 90 * 60 && !match.result; tick++) {
+    match.step({ dt: 1 / 60, inputs: new Map() });
+    if ((tick + 1) % 60 !== 0) continue;
+    const snapshot = match.snapshot({ tick, serverTimeMs: tick * 1000 / 60 });
+    judgeRams(match, teamById, snapshot, tick, ramTally);
+    match.afterSnapshotBroadcast();
+    for (const entity of match.entities) {
+      const distance = entity.state.pos.distanceTo(initial.get(entity.id));
+      maxDistance.set(entity.id, Math.max(maxDistance.get(entity.id), distance));
+      const moved = entity.state.pos.distanceTo(prior.get(entity.id));
+      const driving = Math.abs(entity.input.throttle || 0) > 0.35 && !entity.combat.destroyed;
+      const stuck = driving && moved < 0.35 ? stuckSeconds.get(entity.id) + 1 : 0;
+      stuckSeconds.set(entity.id, stuck);
+      maxStuckSeconds.set(entity.id, Math.max(maxStuckSeconds.get(entity.id), stuck));
+      prior.get(entity.id).copy(entity.state.pos);
+      assert.ok(Number.isFinite(entity.state.pos.x) && Number.isFinite(entity.state.pos.z));
+      assert.ok(Math.abs(entity.state.pos.x) <= 510 && Math.abs(entity.state.pos.z) <= 510);
+      if (entity.aiCtl?.debugInfo().allyYielding) yieldFrames++;
+    }
+  }
+
+  const mobileBots = [...maxDistance.values()].filter((distance) => distance >= 12).length;
+  const worstStuck = Math.max(...maxStuckSeconds.values());
+  assert.ok(mobileBots >= 4, `${mapId}: at least four of six bots must make route progress`);
+  assert.ok(worstStuck <= 12, `${mapId}: deliberate-drive stall exceeded 12 s (${worstStuck})`);
+  assert.equal(ramTally.alliedContacts, 0, `${mapId}: bots give allies right of way: no teammate contact at ram speed (${ramTally.alliedContacts})`);
+  assert.equal(ramTally.viewerFaults, 0, `${mapId}: a ram must reach no viewer outside it that does not see both hulls`);
+  console.log(`${mapId}: mobile=${mobileBots}/6 worstStuck=${worstStuck}s rams=${ramTally.rams} allyRams=0 ramViews=${ramTally.viewerChecks} ramViewerFaults=0 yields=${yieldFrames} result=${match.result || 'live'}`);
+}
+
+// Live close-contact calibration: four normal bots drive, turn, fire physical
+// shells and damage one another through the authoritative runtime. This is a
+// real moving battle sample rather than a mathematical dispersion mock.
+let calibrationShots = 0;
+let calibrationHits = 0;
+for (let sample = 0; sample < 8; sample++) {
+  const players = [
+    { id: 'a0', specId: 'm1a1_abrams_hc', team: 'alpha', bot: true, difficulty: 'normal', spawn: { x: -28, z: -125, yaw: 0 } },
+    { id: 'a1', specId: 'leo2_improved', team: 'alpha', bot: true, difficulty: 'normal', spawn: { x: 28, z: -125, yaw: 0 } },
+    { id: 'b0', specId: 't90am', team: 'bravo', bot: true, difficulty: 'normal', spawn: { x: -28, z: 125, yaw: Math.PI } },
+    { id: 'b1', specId: 'm1a1_abrams_hc', team: 'bravo', bot: true, difficulty: 'normal', spawn: { x: 28, z: 125, yaw: Math.PI } },
+  ];
+  const match = createAuthoritativeMatch({
+    players,
+    mapId: 'verdant',
+    seed: 42000 + sample * 97,
+    countdownS: 0,
+    worldCollision: createDedicatedWorldCollision('verdant'),
+  });
+  match.onMatchReady();
+  const cannonShots = new Set();
+  const cannonHits = new Set();
+  for (let tick = 0; tick < 75 * 60 && !match.result; tick++) {
+    match.step({ dt: 1 / 60, inputs: new Map() });
+    if ((tick + 1) % 15 !== 0) continue;
+    const snapshot = match.snapshot({ tick, serverTimeMs: tick * 1000 / 60 });
+    for (const event of snapshot.events) {
+      if (event.type === 'shell_fired') { cannonShots.add(event.shellId); calibrationShots++; }
+      // Roof MGs now fire too. Measure this cannon-aim contract against its
+      // actual projectiles, counting a shell at most once (including HE bursts).
+      if (event.type === 'shell_hit' && cannonShots.has(event.shellId) && !cannonHits.has(event.shellId)) {
+        cannonHits.add(event.shellId); calibrationHits++;
+      }
+    }
+    match.afterSnapshotBroadcast();
+  }
+}
+const movingHitRate = calibrationHits / Math.max(1, calibrationShots);
+assert.ok(calibrationShots >= 50,
+  `live moving-battle aim sample is meaningful (${calibrationShots} shots)`);
+// The selected authoritative round now matches the velocity used by the
+// controller's lead solution. Keep a narrow non-robotic ceiling while no
+// longer budgeting for the former cross-ammunition ballistic mismatch.
+// Round 60 pacing (2026-09-24): the weak-spot probe no longer scores zones the
+// gun cannot reach (behind a crest, outside the elevation arc), so the fired
+// sample loses its doomed rounds and the rate rose 54.7 % -> 62.5 % on the same
+// eight seeds with the aim model untouched; ceiling 0.58 -> 0.70.
+// 2026-10-02 (Verdant rebuilt to the layout brief): the same four spawns now meet on the village square and its even
+// fields instead of the old 1.0-scale roll, and the rate on the same eight seeds rose 67.0 % (124/185, the PR head
+// before the rebuild) -> 71.7 % (119/166) with the aim model untouched; ceiling 0.70 -> 0.76.
+// 2026-10-17 (227 guards): the sampled hulls' belly pans and combat hull boxes are pinned in
+// docs/geometry-gate/sim-floors.json. On 226 the T-90M blade dropped t90am's to ~0.2 m and this rate rose 75.0 % ->
+// 78.9 % through a routine regen; with the aim code unchanged, a rate move points at that ledger first.
+assert.ok(movingHitRate >= 0.12 && movingHitRate <= 0.76,
+  `moving-battle hit rate stays useful but non-robotic (${(movingHitRate * 100).toFixed(1)}%)`);
+console.log(`authoritativeBots.selftest: route/ally/aim gates passed; live moving-battle hit rate ${(movingHitRate * 100).toFixed(1)}% (${calibrationHits}/${calibrationShots})`);

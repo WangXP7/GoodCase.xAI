@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Tiny World Builder is a playful voxel world editor for building, remixing, flying through, and sharing tiny worlds in your browser." />
+<title>Tiny World Builder - Build voxel worlds in your browser</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<link rel="stylesheet" href="styles/countdown.css" />
+<link rel="stylesheet" href="styles/github-stars.css" />
+<link rel="preload" as="image" href="assets/landing-hero.png" />
+<script>
+  (function landingAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<style>
+  /* ---- Latest news teaser (sits directly under the hero) ----
+     Same glass idiom as the news-page entries so the home page and the
+     /news timeline read as one system. The whole card is a link to /news. */
+  .top-story-section {
+    width: min(1200px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 28px 0 4px;
+  }
+  .top-story {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 16px 22px;
+    text-decoration: none;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 16px 40px -22px rgba(40, 50, 80, 0.30);
+    backdrop-filter: blur(18px) saturate(170%);
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .top-story:hover,
+  .top-story:focus-visible {
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06),
+      0 22px 52px -20px rgba(40, 50, 80, 0.36);
+  }
+  .top-story-flag {
+    flex: none;
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #e7f0fe;
+    color: #1a56b0;
+    border: 1px solid #cadcfb;
+  }
+  .top-story-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .top-story-headline {
+    font-family: var(--display-font);
+    font-size: clamp(17px, 2.4vw, 21px);
+    line-height: 1.2;
+    color: #111b45;
+  }
+  .top-story-summary {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .top-story-arrow {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  @media (max-width: 600px) {
+    .top-story { flex-wrap: wrap; gap: 10px 14px; padding: 14px 16px; }
+    .top-story-arrow { display: none; }
+  }
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/" aria-current="page">Home</a>
+      <a href="#features">Features</a>
+      <a href="#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/badges">Badges</a>
+      <a href="/rewards">Rewards</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a class="gh-stars-pill gh-stars-nav" id="gh-stars-pill" href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer" aria-label="View Tiny World Builder on GitHub">
+        <svg class="gh-stars-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.12-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.77.84 1.24 1.92 1.24 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5z"/></svg>
+        <span class="gh-stars-text">Github</span>
+        <span class="gh-stars-count" data-gh-stars-count hidden>
+          <svg class="gh-stars-star" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.9 6.26 6.84.55-5.2 4.48 1.58 6.7L12 16.9l-6.12 3.59 1.58-6.7-5.2-4.48 6.84-.55z"/></svg>
+          <span data-gh-stars-value></span>
+        </span>
+      </a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+      <a class="landing-account-chip" id="landing-account-chip" href="/tiny-world-builder" hidden></a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero-section" aria-labelledby="hero-title">
+      <div class="hero-media" aria-hidden="true">
+        <img src="assets/landing-hero.png" alt="" width="1536" height="864" fetchpriority="high" />
+      </div>
+      <div class="hero-copy">
+        <h1 id="hero-title">Dream Big<br><span>Build Small</span></h1>
+        <p>Create beautiful worlds then explore, play, trade, share.</p>
+        <div class="hero-countdown" data-countdown-mount data-countdown-skin="hero" data-countdown-tick="interval" aria-live="polite">WAVE 3 in</div>
+        <div class="hero-actions" aria-label="Hero actions">
+          <a class="primary-action" href="/tiny-world-builder">
+            <span>Start building</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </a>
+          <a class="secondary-action" href="#features">
+            <span>See features</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="hero-binky-wrap">
+        <div class="hero-speech" role="note">
+          <p class="hero-speech-text">It's time to claim your <strong>FREE</strong> worlds!</p>
+          <a class="hero-speech-cta" href="/card_reveal">
+            <span>Claim now</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </a>
+        </div>
+        <img class="hero-binky" src="assets/binky_thumbs.png" alt="" aria-hidden="true" loading="lazy" width="1091" height="1004" />
+        <img class="hero-binky-badge" src="assets/binky_badge_sm.png" alt="" aria-hidden="true" loading="lazy" width="400" height="267" />
+      </div>
+      <aside class="hero-feed" id="hero-feed" aria-label="Live public collab worlds" hidden>
+        <div class="hero-feed-head">
+          <span class="hero-feed-live"><span class="hero-feed-dot"></span>Live</span>
+          <span class="hero-feed-title">Public collab builds</span>
+        </div>
+        <ul class="hero-feed-list" id="hero-feed-list"></ul>
+        <a class="hero-feed-foot" href="/collabs">
+          <span>More worlds</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </aside>
+      <a class="scroll-cue" href="#features" aria-label="Scroll to features">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </a>
+    </section>
+
+    <!-- Early-access promo strip. Honest "coming soon" copy: the harvest-to-earn path is
+         still gated, so this must NOT promise the public an action they can't take yet. -->
+    <aside class="preview-strip" aria-label="A message from the team">
+      <div class="preview-strip-inner">
+        <span class="preview-strip-tag">News</span>
+        <p class="preview-strip-text">Wave 2 is here — the Tinyverse takes shape, and Wave 3 lands in 7 days.</p>
+        <a class="preview-strip-cta" href="/news#wave2-shipped">Read the update</a>
+      </div>
+    </aside>
+
+    <!-- The content below is a fallback; scripts/latest-news.js replaces the
+         headline/summary at runtime with the newest entry from /news so the home
+         teaser always tracks the latest story. -->
+    <section class="top-story-section" aria-label="Latest news">
+      <a class="top-story" href="/news#wave2-shipped" data-latest-news aria-label="Latest news">
+        <span class="top-story-flag">Latest</span>
+        <span class="top-story-body">
+          <span class="top-story-headline">Wave 2 is here — the Tinyverse takes shape</span>
+          <span class="top-story-summary">Tinyverse is now home for your island collection: discovery, unique 8×8 islands, rarity and traits, and economic potential previews. Wave 3 lands in 7 days.</span>
+        </span>
+        <svg class="top-story-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </a>
+    </section>
+
+    <section class="features-section" id="features" aria-labelledby="features-title">
+      <img class="section-binky section-binky--right" src="assets/binky_build.png" alt="" aria-hidden="true" loading="lazy" width="1091" height="1052" />
+      <div class="section-head">
+        <h2 id="features-title">Tiny Worlds in your browser</h2>
+        <p>Start with friendly tools, then keep adding detail until the island feels alive.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card feature-card-build">
+          <div class="feature-visual" aria-hidden="true">
+            <img src="assets/landing-feature-build.png" alt="" width="1254" height="1254" loading="lazy" />
+          </div>
+          <h3>Build worlds</h3>
+          <p>Place terrain, props, homes, paths, crops, animals, and stamps with immediate visual feedback.</p>
+        </article>
+        <article class="feature-card feature-card-sculpt">
+          <div class="feature-visual" aria-hidden="true">
+            <img src="assets/landing-feature-sculpt.png" alt="" width="1254" height="1254" loading="lazy" />
+          </div>
+          <h3>Sculpt terrain</h3>
+          <p>Raise, lower, paint, and tune the ground to shape cliffs, rivers, islands, and voxel landscapes.</p>
+        </article>
+        <article class="feature-card feature-card-fly">
+          <div class="feature-visual" aria-hidden="true">
+            <img src="assets/landing-feature-fly.png" alt="" width="1254" height="1254" loading="lazy" />
+          </div>
+          <h3>Fly and explore</h3>
+          <p>Switch camera modes, enter the stunt plane, and inspect your world from every angle.</p>
+        </article>
+        <article class="feature-card feature-card-share">
+          <div class="feature-visual" aria-hidden="true">
+            <img src="assets/landing-feature-share.png" alt="" width="1254" height="1254" loading="lazy" />
+          </div>
+          <h3>Share your tinyverse</h3>
+          <p>Save, remix, export, and keep building from the same browser-native workspace.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="docs-section" id="worlds" aria-labelledby="worlds-title">
+      <div class="section-head">
+        <h2 id="worlds-title">Enter the tinyverse.</h2>
+        <p>Build your world and open it to real players. A living MMO inside the browser.</p>
+      </div>
+      <div class="docs-grid">
+        <a class="docs-card" href="/worlds">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M2 12h20"/><path d="M12 2c3.4 2.6 3.4 17.4 0 20"/><path d="M12 2c-3.4 2.6-3.4 17.4 0 20"/></svg>
+          </div>
+          <h3>Tinyverse</h3>
+          <p>Buy a world slug, build it in the editor, set your tax rate, and publish. Players enter in real time, explore, and earn resources — you earn from every harvest.</p>
+          <span class="docs-card-link" aria-hidden="true">Learn more
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="docs-card" href="/harvest">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-width="0" fill="currentColor"><path d="M2 12c4-5 10-5 14 0-4 5-10 5-14 0z"/><path d="M16 12l5-3v6l-5-3z"/></svg>
+          </div>
+          <h3>Harvest resources</h3>
+          <p>Fish from water, mine stone for ore, gather crops, and hunt animals. Each action consumes a heart — hearts regenerate at one per minute.</p>
+          <span class="docs-card-link" aria-hidden="true">How it works
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="docs-card" href="/roadmap">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3>Battle Worlds</h3>
+          <p>PvP arena mode built on top of the Tinyverse infrastructure. Currently in active development — track progress on the roadmap.</p>
+          <span class="docs-card-link" aria-hidden="true">View roadmap
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="docs-card" href="/features">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+          </div>
+          <h3>Create Artifacts</h3>
+          <p>Build your own creations and limited runs, then list them in the marketplace.</p>
+          <span class="docs-card-link" aria-hidden="true">Learn more
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </span>
+        </a>
+      </div>
+    </section>
+
+    <section class="cta-section cta-section--book" id="economy-cta" aria-labelledby="economy-cta-title">
+      <div class="cta-copy">
+        <h2 id="economy-cta-title">How the TinyWorld economy works</h2>
+        <p>A plain-English guide to $TINYWORLD, GOLD, islands, and the marketplace — plus the full technical overview.</p>
+      </div>
+      <div class="cta-actions cta-actions--stack">
+        <a class="primary-action" href="/doc.html?file=docs/economy.md">
+          <span>Read the Economy Guide</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+        <a class="secondary-action" href="/assets/tinyworld-economy-guide.pdf">
+          <span>Download PDF</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        </a>
+      </div>
+      <img class="cta-figure cta-figure--book" src="assets/binky_book.png" alt="" aria-hidden="true" loading="lazy" width="977" height="1004" />
+    </section>
+
+    <section class="workflow-section" id="workflow" aria-labelledby="workflow-title">
+      <img class="section-binky section-binky--left" src="assets/binky_think.png" alt="" aria-hidden="true" loading="lazy" width="977" height="1052" />
+      <div class="section-head">
+        <h2 id="workflow-title">Claim. Create. Play.</h2>
+        <p>A simple loop from first tile to living tinyverse.</p>
+      </div>
+      <ol class="workflow-steps">
+        <li>
+          <span class="step-number">1</span>
+          <div>
+            <h3>Claim</h3>
+            <p>Claim your land, set up your resources, and set a tax.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <div>
+            <h3>Create</h3>
+            <p>Create buildings, landmarks, minerals, water, and more.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <div>
+            <h3>Play</h3>
+            <p>Walk around and meet people, fly, explore, mine, create.</p>
+          </div>
+        </li>
+      </ol>
+    </section>    
+    <section class="cta-section" aria-labelledby="cta-title">
+      <img class="cta-figure cta-figure--center" src="assets/binky_info.png" alt="" aria-hidden="true" loading="lazy" width="2068" height="794" />
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+        <p>Sign in with your wallet, start building, multiplayer coming.</p>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+        <a class="secondary-action" href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer" aria-label="View source on GitHub">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.12-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.77.84 1.24 1.92 1.24 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5z"/></svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </section>
+  </main>
+  <script src="scripts/countdown.js" defer></script>
+  <script src="scripts/github-stars.js" defer></script>
+  <script src="scripts/landing-auth-chip.js" defer></script>
+  <script src="scripts/landing-feed.js" defer></script>
+  <script src="scripts/world-preview.js" defer></script>
+  <script src="scripts/latest-news.js" defer></script>
+  <script src="scripts/achievements.js" defer></script>
+</body>
+</html>

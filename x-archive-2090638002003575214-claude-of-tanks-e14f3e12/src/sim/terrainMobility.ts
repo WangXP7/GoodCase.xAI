@@ -1,0 +1,190 @@
+import type { RuntimeValue } from '../runtimeTypes.ts';
+import * as detMath from './detMath.ts';
+/**
+ * Shared deterministic terrain-mobility policy.
+ *
+ * A slope is never classified by one fleet-wide angle. Uphill authority is
+ * bounded by both the engine's available tractive acceleration and the
+ * tracks' grip on the current ground. Downhill traversal is grip-limited:
+ * the engine is not required to descend, but the tracks must retain control.
+ * Movement and bot navigation consume these same scalar functions so a route
+ * the planner accepts is one the authoritative drivetrain can sustain.
+ */
+
+export const DRIVE_ACCEL_PER_HPT = 0.165;
+export const GRAVITY_MPS2 = 9.81;
+const TRACKED_GRAVITY_SHARE = 0.3;
+export const TERRAIN_MARGIN_EPS = 0.01;
+/**
+ * Round 30 (owner 2026-09-20: hulls "going up walls, or sides of steep hills at high speeds"): ground rising
+ * steeper than this grade (tan 52°) is a wall for every hull whatever its power — the movement step stops against
+ * it (movement.ts cliffAhead) and the route planner never plans across it, so a bot is never sent into a face it
+ * cannot climb (the pacing receipt stranded bots when only the hull knew).
+ */
+export const CLIFF_GRADE = 1.28;
+
+const TRACK_GRIP_PER_RESISTANCE = 0.24;
+const TRACK_GRIP_MIN = 0.08;
+// Caps controlled climb near 42° under the tuned tracked-gravity share. The
+// limit still emerges from grip force (and is usually lower from engine or
+// ground resistance); it is not a universal map-angle gate.
+const TRACK_GRIP_MAX = 0.27;
+
+export interface TerrainMobilitySpec {
+  terrainResistance?: Readonly<Record<string, number>>;
+  enginePowerHp?: RuntimeValue;
+  weightTons?: RuntimeValue;
+  trackTraction?: RuntimeValue;
+}
+
+export interface DriveGroundField {
+  getGroundType?(x: number, z: number): string;
+  getDriveGroundType?(x: number, z: number): string;
+}
+
+/** Movement and route costs share the water-aware sampler when available. */
+export function driveGroundTypeAt(field: DriveGroundField, x: number, z: number): string {
+  return field.getDriveGroundType?.(x, z) ?? field.getGroundType?.(x, z) ?? 'medium';
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return value < min ? min : value > max ? max : value;
+}
+
+/** Resistance multiplier authored per vehicle and ground material. */
+export function groundResistanceFor(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType = 'medium',
+): number {
+  const resistance = spec?.terrainResistance;
+  if (!resistance) return 1;
+  const value = resistance[groundType] ?? resistance.medium ?? resistance.hard ?? 1;
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+/** Rated engine acceleration available at the tracks on this ground. */
+function engineDriveAcceleration(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType = 'medium',
+  powerMult = 1,
+  accelMult = 1,
+): number {
+  const hp = Math.max(0, Number(spec?.enginePowerHp) || 0);
+  const tons = Math.max(0.1, Number(spec?.weightTons) || 0.1);
+  const resistance = groundResistanceFor(spec, groundType);
+  return DRIVE_ACCEL_PER_HPT * (hp / tons) / resistance *
+    Math.max(0, powerMult) * Math.max(0, accelMult);
+}
+
+/**
+ * Effective longitudinal grip coefficient. `terrainResistance` already
+ * captures track/ground performance fleet-wide; `trackTraction` is an
+ * optional explicit multiplier for vehicles with unusually capable or poor
+ * running gear without forcing every existing specification to duplicate it.
+ */
+function trackGripCoefficient(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType = 'medium',
+): number {
+  const resistance = groundResistanceFor(spec, groundType);
+  const requestedTraction = Number(spec?.trackTraction ?? 1);
+  const authoredTraction = clamp(
+    Number.isFinite(requestedTraction) ? requestedTraction : 1,
+    0.35,
+    1.8,
+  );
+  return clamp(
+    TRACK_GRIP_PER_RESISTANCE * authoredTraction / resistance,
+    TRACK_GRIP_MIN,
+    TRACK_GRIP_MAX,
+  );
+}
+
+/**
+ * Sliding friction coefficient of the tracks on this ground (the same grip coefficient the margins use): on a face
+ * steeper than the tracks hold, the hull slides under g·sin θ against μ·g·cos θ (movement.ts applySlopeForces).
+ */
+export function trackSlideCoefficient(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType = 'medium',
+): number {
+  return trackGripCoefficient(spec, groundType);
+}
+
+function forceMargin(available: number, required: number): number {
+  if (!(available > 0)) return 0;
+  return clamp((available - required) / available, 0, 1);
+}
+
+/** Grip-only margin for retaining controlled contact on an uphill face. */
+export function trackGripMargin(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType: string,
+  uphillPitchRad: number,
+): number {
+  if (!(uphillPitchRad > 0)) return 1;
+  const pitch = Math.min(uphillPitchRad, Math.PI * 0.5);
+  const grip = trackGripCoefficient(spec, groundType) *
+    GRAVITY_MPS2 * Math.max(0, detMath.cos(pitch));
+  const gravity = GRAVITY_MPS2 * detMath.sin(pitch) * TRACKED_GRAVITY_SHARE;
+  return forceMargin(grip, gravity);
+}
+
+/**
+ * Rated uphill drive margin after engine force and track grip are both
+ * applied. Zero means open throttle cannot sustain forward progress.
+ */
+export function uphillDriveMargin(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType: string,
+  uphillPitchRad: number,
+  powerMult = 1,
+  accelMult = 1,
+): number {
+  if (!(uphillPitchRad > 0)) return 1;
+  const pitch = Math.min(uphillPitchRad, Math.PI * 0.5);
+  const engine = engineDriveAcceleration(spec, groundType, powerMult, accelMult);
+  const grip = trackGripCoefficient(spec, groundType) *
+    GRAVITY_MPS2 * Math.max(0, detMath.cos(pitch));
+  const available = Math.min(engine, grip);
+  const gravity = GRAVITY_MPS2 * detMath.sin(pitch) * TRACKED_GRAVITY_SHARE;
+  return forceMargin(available, gravity);
+}
+
+/** Signed grade (rise/run) margin used by terrain-aware route planning. */
+export function terrainSlopeMargin(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType: string,
+  signedGrade: number,
+  powerMult = 1,
+  accelMult = 1,
+): number {
+  if (!Number.isFinite(signedGrade) || signedGrade === 0) return signedGrade === 0 ? 1 : 0;
+  if (signedGrade > CLIFF_GRADE) return 0; // a wall, whatever the power-to-weight says
+  const pitch = detMath.atan(Math.abs(signedGrade));
+  return signedGrade > 0
+    ? uphillDriveMargin(spec, groundType, pitch, powerMult, accelMult)
+    : trackGripMargin(spec, groundType, pitch);
+}
+
+/**
+ * Deterministic A* / local-fan cost. Infinity is a real capability rejection;
+ * finite costs prefer firm, shallow routes without forcing every tank into
+ * the same lane.
+ */
+export function terrainTravelCostFactor(
+  spec: TerrainMobilitySpec | null | undefined,
+  groundType: string,
+  signedGrade: number,
+  powerMult = 1,
+  accelMult = 1,
+): number {
+  const margin = terrainSlopeMargin(
+    spec, groundType, signedGrade, powerMult, accelMult,
+  );
+  if (margin <= TERRAIN_MARGIN_EPS) return Infinity;
+  const hard = groundResistanceFor(spec, 'hard');
+  const resistance = groundResistanceFor(spec, groundType);
+  const groundCost = clamp(resistance / Math.max(hard, 0.1), 0.8, 3.2);
+  return groundCost * (1 + (1 - margin) * 2);
+}

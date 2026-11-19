@@ -1,0 +1,375 @@
+/**
+ * LittleJS Build System
+ * - Concatenates engine source files into distributable bundles
+ * - Generates multiple output formats (standard, ES6 module, minified)
+ * - Creates debug and release builds (with/without debug code)
+ * - Produces TypeScript definition file (.d.ts)
+ * - Includes plugin files in builds
+ * - Type checks and minifies, and stops when tsc, Closure or uglify fails
+ * - Outputs to dist/ folder, which is left as it was when a step fails
+ */
+
+import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { basename, dirname, join } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+const ROOT_DIR = join(__dirname, '..');
+
+const ENGINE_NAME = 'littlejs';
+// built in a folder of its own and put in dist when all of it is there, so a step that fails leaves dist whole
+const OUTPUT_FOLDER = join(ROOT_DIR, 'dist');
+const BUILD_FOLDER = join(ROOT_DIR, 'dist.build');
+const SOURCE_FOLDER = join(ROOT_DIR, 'src');
+const PLUGIN_FOLDER = join(ROOT_DIR, 'plugins');
+const engineSourceFiles =
+[
+    `${SOURCE_FOLDER}/engineMath.js`,
+    `${SOURCE_FOLDER}/engineUtilities.js`,
+    `${SOURCE_FOLDER}/engineLogo.js`, // before the settings, whose loadingScreen is its drawLoadingScreen
+    `${SOURCE_FOLDER}/engineSettings.js`,
+    `${SOURCE_FOLDER}/engineObject.js`,
+    `${SOURCE_FOLDER}/engineDraw.js`,
+    `${SOURCE_FOLDER}/engineInput.js`,
+    `${SOURCE_FOLDER}/engineAudio.js`,
+    `${SOURCE_FOLDER}/engineTileLayer.js`,
+    `${SOURCE_FOLDER}/engineParticles.js`,
+    `${SOURCE_FOLDER}/engineWebGL.js`,
+];
+const enginePluginFiles =
+[
+    `${PLUGIN_FOLDER}/medalSystem.js`,
+    `${PLUGIN_FOLDER}/newgrounds.js`,
+    `${PLUGIN_FOLDER}/wavedash.js`,
+    `${PLUGIN_FOLDER}/postProcess.js`,
+    `${PLUGIN_FOLDER}/lightSystem.js`,
+    `${PLUGIN_FOLDER}/audioEffects.js`,
+    `${PLUGIN_FOLDER}/uiSystem.js`,
+    `${PLUGIN_FOLDER}/box2d.js`,
+    `${PLUGIN_FOLDER}/drawUtilities.js`,
+    `${PLUGIN_FOLDER}/textureSheet.js`,
+    `${PLUGIN_FOLDER}/tweenSystem.js`,
+    `${PLUGIN_FOLDER}/sceneSystem.js`,
+    `${PLUGIN_FOLDER}/parallax.js`,
+    `${PLUGIN_FOLDER}/camera.js`,
+    `${PLUGIN_FOLDER}/pathFinder.js`,
+    `${PLUGIN_FOLDER}/math3d.js`,
+    `${PLUGIN_FOLDER}/render3d.js`,
+    `${PLUGIN_FOLDER}/render3dMesh.js`,
+    `${PLUGIN_FOLDER}/render3dObject.js`,
+    `${PLUGIN_FOLDER}/render3dExtras.js`,
+    `${PLUGIN_FOLDER}/render3dVoxels.js`,
+    `${PLUGIN_FOLDER}/render3dLevel.js`,
+    `${PLUGIN_FOLDER}/particleEffects.js`,
+    `${PLUGIN_FOLDER}/gltf.js`,
+    `${PLUGIN_FOLDER}/threejs.js`,
+];
+// debug only, the release build has stubs for these in engineRelease.js and none of their code
+const engineDebugFiles =
+[
+    `${PLUGIN_FOLDER}/tweakables.js`,
+    `${PLUGIN_FOLDER}/render3dDebug.js`,
+    `${SOURCE_FOLDER}/engineEditor.js`,
+    `${PLUGIN_FOLDER}/render3dEditor.js`,
+];
+const engineExtraFiles =
+[
+    `${PLUGIN_FOLDER}/box2d.wasm.js`,
+    `${PLUGIN_FOLDER}/box2d.wasm.wasm`,
+];
+const asciiArt =`
+      ~~~~°°°°ooo°oOo°ooOooOooOo.
+ __________   ________   ____'°oO.
+ |LittleJS|   |Engine|   |[]|_._Y
+.|________|_._|______|_._|__|_|_|}
+  OOO  OOO     OO  OO     OO=OO-oo\\
+`;
+const license = '// LittleJS Engine - MIT License - Copyright 2021 Frank Force\n'+
+                '// https://github.com/KilledByAPixel/LittleJS\n\n';
+
+console.log(asciiArt);
+console.log('Choo Choo... Building LittleJS Engine!');
+const startTime = Date.now();
+
+try
+{
+    // Setup build folder
+    fs.rmSync(BUILD_FOLDER, { recursive: true, force: true });
+    fs.mkdirSync(BUILD_FOLDER);
+
+    // copy extra files to build folder
+    for (const file of engineExtraFiles)
+        fs.copyFileSync(file, join(BUILD_FOLDER, basename(file)));
+
+}
+catch (e) { handleError(e, 'Failed to create build folder!'); }
+
+// Build all versions
+await buildAll();
+
+try
+{
+    // every step is done: dist is given what was built, and loses what is no longer built
+    fs.mkdirSync(OUTPUT_FOLDER, { recursive: true });
+    const built = fs.readdirSync(BUILD_FOLDER);
+    for (const file of built)
+        fs.copyFileSync(join(BUILD_FOLDER, file), join(OUTPUT_FOLDER, file));
+    for (const file of fs.readdirSync(OUTPUT_FOLDER))
+        built.includes(file) || fs.rmSync(join(OUTPUT_FOLDER, file), { recursive: true, force: true });
+    fs.rmSync(BUILD_FOLDER, { recursive: true, force: true });
+}
+catch (e) { handleError(e, 'Failed to put the build in dist!'); }
+
+console.log(`Engine built in ${((Date.now() - startTime)/1e3).toFixed(2)} seconds! ✨`);
+
+///////////////////////////////////////////////////////////////////////////////
+
+async function buildAll()
+{
+    // Build independent base versions
+    await Promise.all([
+        Build
+        (
+            'Build Engine -- all',
+            `${BUILD_FOLDER}/${ENGINE_NAME}.js`,
+            [
+                `${SOURCE_FOLDER}/engine.js`,
+                `${SOURCE_FOLDER}/engineDebug.js`,
+                ...engineSourceFiles,
+                ...enginePluginFiles,
+                ...engineDebugFiles
+            ],
+            [], true
+        ),
+        Build
+        (
+            'Build Engine -- release',
+            `${BUILD_FOLDER}/${ENGINE_NAME}.release.js`,
+            [
+                `${SOURCE_FOLDER}/engine.js`,
+                `${SOURCE_FOLDER}/engineRelease.js`,
+                ...engineSourceFiles,
+                ...enginePluginFiles
+            ],
+            [stripDebugCallsStep], true
+        )
+    ]);
+
+    // Build dependent versions
+    await Promise.all([
+        Build
+        (
+            'Build Engine -- minified',
+            `${BUILD_FOLDER}/${ENGINE_NAME}.min.js`,
+            [`${BUILD_FOLDER}/${ENGINE_NAME}.release.js`],
+            [closureCompilerStep, uglifyBuildStep, addLicenseStep]
+        ),
+        Build
+        (
+            'Build Engine -- ESM',
+            `${BUILD_FOLDER}/${ENGINE_NAME}.esm.js`,
+            [
+                `${BUILD_FOLDER}/${ENGINE_NAME}.js`,
+                `${SOURCE_FOLDER}/engineExport.js`,
+                `${PLUGIN_FOLDER}/pluginExport.js`
+            ],
+            [typeScriptBuildStep]
+        ),
+        Build
+        (
+            'Build Engine -- ESM minified release',
+            `${BUILD_FOLDER}/${ENGINE_NAME}.esm.min.js`,
+            [
+                `${BUILD_FOLDER}/${ENGINE_NAME}.release.js`,
+                `${SOURCE_FOLDER}/engineExport.js`,
+                `${PLUGIN_FOLDER}/pluginExport.js`
+            ],
+            [uglifyModuleBuildStep, addLicenseStep]
+        )
+    ]);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// A single build with its own source files, build steps, and output file
+// - each build step is a callback that accepts a single filename
+async function Build(message, outputFile, files=[], buildSteps=[], isPrimaryBuild)
+{
+    console.log(message);
+
+    // copy files into a buffer
+    let buffer = '';
+    if (isPrimaryBuild)
+    {
+        // add license and strict mode to top
+        buffer += license;
+        buffer += `'use strict';\n\n`;
+    }
+
+    for (const file of files)
+    {
+        // get file content
+        let fileContent = fs.readFileSync(file) + '\n';
+
+        // remove first 'use strict' and surrounding new lines
+        if (isPrimaryBuild)
+            fileContent = fileContent.replace(/'use strict';\s*\n/g, '');
+
+        // add it to the buffer
+        buffer += fileContent;
+    }
+
+    // output file
+    fs.writeFileSync(outputFile, buffer, {flag: 'w+'});
+
+    // execute build steps in order
+    for (const buildStep of buildSteps)
+        buildStep(outputFile);
+}
+
+// Process with Closure Compiler to minify and check for errors
+function closureCompilerStep(filename)
+{
+    const filenameTemp = filename + '.tmp';
+    fs.copyFileSync(filename, filenameTemp);
+    try
+    {
+        runTool('google-closure-compiler/cli.js', [`--js=${filenameTemp}`, `--js_output_file=${filename}`, '--jscomp_off=*']);
+        fs.rmSync(filenameTemp);
+    }
+    catch (e) { handleError(e, 'Failed to run Closure Compiler step!'); }
+}
+
+// Process with Uglify to minify
+function uglifyBuildStep(filename)
+{
+    try
+    {
+        runTool('uglify-js/bin/uglifyjs', [filename, '-o', filename]);
+    }
+    catch (e) { handleError(e,'Failed to run Uglify minification step!'); }
+};
+
+// Process an ES module with Uglify, compressed so the guarded debug calls are dropped, Closure does that for the
+// script build before its Uglify step; the pure annotations are kept, so a game's bundler can still leave out a
+// plugin's tables, made by calls marked pure, when the game uses nothing of that plugin
+function uglifyModuleBuildStep(filename)
+{
+    try
+    {
+        runTool('uglify-js/bin/uglifyjs', [filename, '-c', '--module', '--annotations', '-o', filename]);
+    }
+    catch (e) { handleError(e,'Failed to run Uglify minification step!'); }
+};
+
+// Guard every ASSERT and LOG call in the release build so its arguments are never evaluated
+// - engineRelease.js makes them empty functions, but a call still evaluates its arguments first,
+//   so isVector3 checks and message strings would run in release; false&& short circuits them
+//   and the minifiers then drop the dead calls entirely
+// - The helpers like ASSERT_VECTOR3_VALID are guarded the same way, their definitions are skipped by name
+function stripDebugCallsStep(filename)
+{
+    const source = fs.readFileSync(filename, 'utf8');
+    fs.writeFileSync(filename, source.replace(/(?<!function )\b(ASSERT\w*|LOG)\(/g, 'false&&$1('), {flag: 'w+'});
+}
+
+// Add license to top of file
+function addLicenseStep(filename)
+{
+    try
+    {
+        // add license to top of minified file
+        let fileContent = fs.readFileSync(filename, 'utf8');
+        fileContent = license + fileContent;
+        fs.writeFileSync(filename, fileContent);
+    }
+    catch (e) { handleError(e, 'Failed to add license to minified file!'); }
+};
+
+// Build TypeScript definitions
+function typeScriptBuildStep(filename)
+{
+    try
+    {
+        const tsFilename = join(BUILD_FOLDER, `${ENGINE_NAME}.d.ts`);
+        // strictNullChecks keeps undefined in the types, where tsc would drop it from accessors and object types
+        // whatever the JSDoc says, so a game in strict mode can set render3D.shader = undefined and is told a
+        // flare may be missing; a game not in strict mode reads the same types as before
+        // the target names the library tsc types with: without it tsc takes ES5's, where Map and Set do not resolve
+        // and come out as any, which went unseen while a dependency brought @types/node, which declares them
+        runTool('typescript/bin/tsc', [filename, '--declaration', '--allowJs', '--emitDeclarationOnly', '--strictNullChecks', '--target', 'es2022', '--outFile', tsFilename]);
+
+        // Make declare module part use the package name littlejsengine
+        let fileContent = fs.readFileSync(tsFilename, 'utf8');
+        fileContent = fileContent.replace(`${ENGINE_NAME}\.esm`, 'littlejsengine')
+        fs.writeFileSync(tsFilename, typeScriptOptionalTidy(fileContent));
+
+    }
+    catch (e) { handleError(e, 'Failed to run TypeScript build step!'); }
+};
+
+// strictNullChecks writes an optional parameter or field as x?: T | undefined, which is the same as x?: T, so the
+// redundant | undefined is taken off: each ?: is followed to the end of its type, the first , ; ) or line end outside
+// brackets, and only that type is changed; a required x: T | undefined keeps it
+function typeScriptOptionalTidy(text)
+{
+    let out = '', i = 0;
+    for (let at; (at = text.indexOf('?: ', i)) >= 0;)
+    {
+        const start = at + 3;
+        let end = start, depth = 0;
+        for (; end < text.length; ++end)
+        {
+            const c = text[end];
+            if (c === '=' && text[end + 1] === '>') { ++end; continue; } // an arrow is not a closing bracket
+            if ('([{<'.includes(c)) ++depth;
+            else if (')]}>'.includes(c) && depth) --depth;
+            else if (!depth && (',;)\n'.includes(c))) break;
+        }
+        let type = typeScriptOptionalTidy(text.slice(start, end)); // and the optional fields of a record type in it
+        if (type.endsWith(' | undefined'))
+        {
+            type = type.slice(0, -12);
+            // a function type was wrapped for the union, (() => void) | undefined, and needs it no more
+            if (type[0] === '(' && typeScriptCloseOf(type, 0) === type.length - 1)
+                type = type.slice(1, -1);
+        }
+        out += text.slice(i, start) + type;
+        i = end;
+    }
+    return out + text.slice(i);
+}
+
+// the index of the bracket that closes the one at start
+function typeScriptCloseOf(text, start)
+{
+    let depth = 0;
+    for (let k = start; k < text.length; ++k)
+    {
+        if (text[k] === '(') ++depth;
+        else if (text[k] === ')' && !--depth) return k;
+    }
+    return -1;
+}
+
+// display the error and exit
+// Run an installed tool's script with node, its arguments passed as they are with no shell to read them,
+// so a file name can not run as a command; a tool that is not installed fails instead of being downloaded
+function runTool(binPath, args, options)
+{
+    let bin;
+    try { bin = require.resolve(binPath); }
+    catch { throw new Error(`${binPath.split('/')[0]} is not installed, run "npm install" first`); }
+    execFileSync(process.execPath, [bin, ...args], options);
+}
+
+function handleError(e,message)
+{
+    console.error(e);
+    console.error(message);
+    process.exit(1);
+}

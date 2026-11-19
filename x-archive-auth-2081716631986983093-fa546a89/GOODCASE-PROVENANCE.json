@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/e01-ai/starfall",
+  "commit": "f062c9b2b7e770e184a328bcf7f2bf216554d3ee",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 121,
+  "bytes": 14913235
+}

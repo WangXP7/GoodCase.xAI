@@ -1,0 +1,5524 @@
+{
+  "schema": "glove-package/v1",
+  "manifestVersion": 1,
+  "generatedBy": "tools/character-kit/gloves/build.mjs",
+  "selectionContract": "cs-mesh-part-selection/1",
+  "familyContract": "cs-skeleton-family/1",
+  "materials": [
+    {
+      "id": "couro-marinho",
+      "baseColorFactor": [
+        0.045,
+        0.105,
+        0.19,
+        1
+      ],
+      "metallicFactor": 0.08,
+      "roughnessFactor": 0.44
+    },
+    {
+      "id": "verde-oliva",
+      "baseColorFactor": [
+        0.09,
+        0.14,
+        0.055,
+        1
+      ],
+      "metallicFactor": 0.04,
+      "roughnessFactor": 0.58
+    },
+    {
+      "id": "areia",
+      "baseColorFactor": [
+        0.34,
+        0.245,
+        0.13,
+        1
+      ],
+      "metallicFactor": 0.02,
+      "roughnessFactor": 0.63
+    }
+  ],
+  "packages": [
+    {
+      "id": "fpvm-2c8f9a3dd5ca",
+      "perspective": "1p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "fpvm-hands",
+        "fingerprintSha256": "2c8f9a3dd5ca8aaef16de1eb0fe8681f0566c060c5c3f362f0792d8076a2fbe8"
+      },
+      "supportedCharacterIds": [
+        "adjim",
+        "ancap",
+        "bandeirante",
+        "barbudo",
+        "blackmetal",
+        "bombado",
+        "bonzo",
+        "boto",
+        "cadequinha",
+        "caipora",
+        "camera-roxa",
+        "caminhoneiro",
+        "canarinho",
+        "capitao",
+        "chave",
+        "clubber",
+        "coach",
+        "criarj",
+        "cuca",
+        "curupira",
+        "dama",
+        "deputado",
+        "designer-ux",
+        "doidinho-bairro",
+        "dollynho",
+        "doutora",
+        "emo",
+        "esbirro",
+        "esquerdomacho",
+        "et",
+        "farialimer",
+        "fluxo",
+        "funkeiro",
+        "funkraiz",
+        "gilbomes",
+        "gotinha",
+        "hipster",
+        "jozo",
+        "juiz",
+        "julia-zanatta",
+        "lampiao",
+        "lenda-lanhouse",
+        "lobisomem",
+        "mandrake",
+        "mariabonita",
+        "marina-silva",
+        "metaleiro",
+        "microfonildo",
+        "ministro",
+        "mistico",
+        "motoca-cachorro-loko",
+        "mst",
+        "oakley",
+        "ostentacao",
+        "padata",
+        "padati",
+        "pagodeiro",
+        "palhacomal",
+        "proerd",
+        "professor",
+        "profeta-calcada",
+        "programador-virado",
+        "punk",
+        "rapper",
+        "raul",
+        "reggae",
+        "saci",
+        "senador",
+        "sertanejo",
+        "sindicato",
+        "skatista",
+        "titica",
+        "trapfunk",
+        "zumbi"
+      ],
+      "sourceVariants": [
+        {
+          "id": "fpvm-hands",
+          "characterIds": [
+            "adjim",
+            "ancap",
+            "bandeirante",
+            "barbudo",
+            "blackmetal",
+            "bombado",
+            "bonzo",
+            "boto",
+            "cadequinha",
+            "caipora",
+            "camera-roxa",
+            "caminhoneiro",
+            "canarinho",
+            "capitao",
+            "chave",
+            "clubber",
+            "coach",
+            "criarj",
+            "cuca",
+            "curupira",
+            "dama",
+            "deputado",
+            "designer-ux",
+            "doidinho-bairro",
+            "dollynho",
+            "doutora",
+            "emo",
+            "esbirro",
+            "esquerdomacho",
+            "et",
+            "farialimer",
+            "fluxo",
+            "funkeiro",
+            "funkraiz",
+            "gilbomes",
+            "gotinha",
+            "hipster",
+            "jozo",
+            "juiz",
+            "julia-zanatta",
+            "lampiao",
+            "lenda-lanhouse",
+            "lobisomem",
+            "mandrake",
+            "mariabonita",
+            "marina-silva",
+            "metaleiro",
+            "microfonildo",
+            "ministro",
+            "mistico",
+            "motoca-cachorro-loko",
+            "mst",
+            "oakley",
+            "ostentacao",
+            "padata",
+            "padati",
+            "pagodeiro",
+            "palhacomal",
+            "proerd",
+            "professor",
+            "profeta-calcada",
+            "programador-virado",
+            "punk",
+            "rapper",
+            "raul",
+            "reggae",
+            "saci",
+            "senador",
+            "sertanejo",
+            "sindicato",
+            "skatista",
+            "titica",
+            "trapfunk",
+            "zumbi"
+          ],
+          "source": {
+            "path": "public/models/viewmodels/fpvm_hands.glb",
+            "sha256": "07c773a0a50a7f7386d3cf54cbf7d59ac4c8d2518daae8a1b168c33dd04d1bb4"
+          },
+          "selection": {
+            "method": "authored-glove-primitive",
+            "nodes": [
+              {
+                "side": "left",
+                "node": 0,
+                "mesh": 0,
+                "primitive": 0
+              },
+              {
+                "side": "right",
+                "node": 2,
+                "mesh": 1,
+                "primitive": 0
+              }
+            ]
+          },
+          "mesh": {
+            "path": "public/models/gloves/1p/fpvm-hands-2c8f9a3dd5ca.glb",
+            "sha256": "7a514762beacb1fd8311093872590092d75a223e68ea88c34547e995416597c8"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 1918,
+              "joints": 0,
+              "nonzeroWeights": 0,
+              "primitives": 6,
+              "triangles": 2088
+            },
+            "after": {
+              "vertices": 614,
+              "joints": 0,
+              "nonzeroWeights": 0,
+              "triangles": 688,
+              "leftTriangles": 344,
+              "rightTriangles": 344
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "fpvm_hands",
+        "gloveSurfaceRole": "material-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "fpvm_hands",
+        "mode": "inherit-existing-transforms",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-01e1e96a383f",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-01e1e96a383f",
+        "fingerprintSha256": "01e1e96a383fcffa6cfd333571563d57495b1bdaa06d6cb73f17b2e07bfda922"
+      },
+      "supportedCharacterIds": [
+        "emo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "emo",
+          "characterIds": [
+            "emo"
+          ],
+          "source": {
+            "path": "public/models/characters/emo.glb",
+            "sha256": "00babbe22acbf528e4d1a7cd5e60461ed4f0ac1727a09f88fa21c84c5e858bda",
+            "skeletonFamilySha256": "01e1e96a383fcffa6cfd333571563d57495b1bdaa06d6cb73f17b2e07bfda922",
+            "geometrySha256": "f8746e4c1c6c8af3710f7fb2718704171ee6f627e0d8402e5147c0252f981c09",
+            "weightsSha256": "804f50711d3030d881d29fa8ea725274a7a2d6d7975883398624932d183f658f"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "0ffab142362a47e2363136522ff6a6b80ca4837d73342da07706970eff73f87f",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/emo-01e1e96a383f.glb",
+            "sha256": "227e9637c77f0769df74898971ca46988861648ce2f70fc2b0ad231722cdd480",
+            "bindFingerprintSha256": "01e1e96a383fcffa6cfd333571563d57495b1bdaa06d6cb73f17b2e07bfda922",
+            "geometryFingerprintSha256": "be652ac88bbdd68177a0aec9902c7d82d53b3a7c5c3a204cb4b666325175569e",
+            "weightsFingerprintSha256": "52d65f447387d45abf5c5ce06479b77c85888efa496d861e4670244351d0f8ea"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6051,
+              "joints": 24,
+              "nonzeroWeights": 12558,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 808,
+              "joints": 24,
+              "nonzeroWeights": 1136,
+              "triangles": 582,
+              "leftTriangles": 291,
+              "rightTriangles": 291
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-03d259006922",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-03d259006922",
+        "fingerprintSha256": "03d259006922932fcbd3bb22d01d0d3df3258f0f6edefba5a45ca314c42e1157"
+      },
+      "supportedCharacterIds": [
+        "programador-virado"
+      ],
+      "sourceVariants": [
+        {
+          "id": "programador-virado",
+          "characterIds": [
+            "programador-virado"
+          ],
+          "source": {
+            "path": "public/models/characters/programador-virado.glb",
+            "sha256": "7468d7e4a693443a0d6597c24106c5e4c7756c7410c85f623173df9e1c87bce9",
+            "skeletonFamilySha256": "03d259006922932fcbd3bb22d01d0d3df3258f0f6edefba5a45ca314c42e1157",
+            "geometrySha256": "f04dc02b6cbf0c17a3ad781dd47a94e79e374307e49f61ebeee3c4c447583e93",
+            "weightsSha256": "a548c65c29963861480b93074715b31951fccc266ecccf01178cd92948544537"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "d7a23bd745b47e696e67802d41a897f671bc74c83d8b157741af95a68b7ac756",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/programador-virado-03d259006922.glb",
+            "sha256": "73355fb5e1d0d40a6b1e87c8e18a3bb847a1e6c9f2240861bd906f2a88cfecc5",
+            "bindFingerprintSha256": "03d259006922932fcbd3bb22d01d0d3df3258f0f6edefba5a45ca314c42e1157",
+            "geometryFingerprintSha256": "5cf31b827b390f8b6e364643f0e83e272c95f5701e62db74a94a7711390c3860",
+            "weightsFingerprintSha256": "599d13df37318cb866a5fa826ac13cf6253230bd03cc09c2ec3778f6f32fce05"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 13833,
+              "joints": 28,
+              "nonzeroWeights": 29603,
+              "primitives": 7
+            },
+            "after": {
+              "vertices": 371,
+              "joints": 28,
+              "nonzeroWeights": 660,
+              "triangles": 412,
+              "leftTriangles": 201,
+              "rightTriangles": 211
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-0411be2ce0fe",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-0411be2ce0fe",
+        "fingerprintSha256": "0411be2ce0fe268772c606ce226e80571142071261dbdf539733a95714fb5b0b"
+      },
+      "supportedCharacterIds": [
+        "coach"
+      ],
+      "sourceVariants": [
+        {
+          "id": "coach",
+          "characterIds": [
+            "coach"
+          ],
+          "source": {
+            "path": "public/models/characters/coach.glb",
+            "sha256": "66fed26352db3db08d54b4cfebc447fb9bed862e399babce8b219a473934fae9",
+            "skeletonFamilySha256": "0411be2ce0fe268772c606ce226e80571142071261dbdf539733a95714fb5b0b",
+            "geometrySha256": "03453d0df48251789f50d24bc22233e52b6f600164f58f765d789cceda82ec56",
+            "weightsSha256": "1e0c7b9a3e07804b984b67243f590a0b926aa26e8b8bccf5372eb35b8777fa3e"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "a002346d996786a5fbbf648eaf1c33b6cffe432ace359d2c6532480d4260cf9c",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/coach-0411be2ce0fe.glb",
+            "sha256": "284771474028470a08cd1737c4bf06c1b645c09ef52c23f8836e95477bba4c18",
+            "bindFingerprintSha256": "0411be2ce0fe268772c606ce226e80571142071261dbdf539733a95714fb5b0b",
+            "geometryFingerprintSha256": "a21c57223f118332ebfe489b5ff380d7d3fe76ef89fa0fae583b4d9b8ead3010",
+            "weightsFingerprintSha256": "a86c057f39862586aaf8265d881a264a1aad40de7de492f5506de778cfd4bbeb"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6601,
+              "joints": 24,
+              "nonzeroWeights": 13439,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1499,
+              "joints": 24,
+              "nonzeroWeights": 1671,
+              "triangles": 1082,
+              "leftTriangles": 541,
+              "rightTriangles": 541
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-055505b7cc96",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-055505b7cc96",
+        "fingerprintSha256": "055505b7cc969c7921f0fe2b90414bd70c6f6ffceec06c853fb821184cdce5a1"
+      },
+      "supportedCharacterIds": [
+        "caminhoneiro"
+      ],
+      "sourceVariants": [
+        {
+          "id": "caminhoneiro",
+          "characterIds": [
+            "caminhoneiro"
+          ],
+          "source": {
+            "path": "public/models/characters/caminhoneiro.glb",
+            "sha256": "19df82a2ec7758f0c0a1c0743a65deb3fb275f9352b38c4f527f26cae1c13358",
+            "skeletonFamilySha256": "055505b7cc969c7921f0fe2b90414bd70c6f6ffceec06c853fb821184cdce5a1",
+            "geometrySha256": "4d3b159d1006fb14a0ed09fe883b2d965f0c264545823c484ff563dff3c685a6",
+            "weightsSha256": "84b6b197d075d9e53ffd6dc1c113866b1e23190eb73eeb2c901cdd75c4ad4670"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "d81138a1b95e9b885462e8be9bb9f0415fa1b532928ba17c2d6160c77c408f86",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/caminhoneiro-055505b7cc96.glb",
+            "sha256": "8ae0e8750859e3647fd018971ad2f14f7aefb2870720c8b26ec53bed0849dac4",
+            "bindFingerprintSha256": "055505b7cc969c7921f0fe2b90414bd70c6f6ffceec06c853fb821184cdce5a1",
+            "geometryFingerprintSha256": "a5bd5f58639e875afb2cdfde691ca6f1aac18345ec5cc24d7201315410a852dd",
+            "weightsFingerprintSha256": "fc6b37c2535ceaa09b212d0a98993f7281dea8c01f90010d028d7eadd1d61e33"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6945,
+              "joints": 26,
+              "nonzeroWeights": 19711,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 907,
+              "joints": 26,
+              "nonzeroWeights": 1453,
+              "triangles": 684,
+              "leftTriangles": 342,
+              "rightTriangles": 342
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-112b695e5f82",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-112b695e5f82",
+        "fingerprintSha256": "112b695e5f8253fa87d148ac918e805b7cca9b9590ec2b9b85bec4f293172558"
+      },
+      "supportedCharacterIds": [
+        "bonzo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "bonzo",
+          "characterIds": [
+            "bonzo"
+          ],
+          "source": {
+            "path": "public/models/characters/bonzo.glb",
+            "sha256": "65a00009271c63133f0f2120aa7da01f57abff0c64c3a165c41624ea89ce67ba",
+            "skeletonFamilySha256": "112b695e5f8253fa87d148ac918e805b7cca9b9590ec2b9b85bec4f293172558",
+            "geometrySha256": "aebd279434ce1722c81ec21826cbdddf7214b6783cd83c2e1ff024e3c119dd37",
+            "weightsSha256": "8d1989821368fa4965a250c5f58c20823f096d203c854c754409af1e883a4c66"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "7fde1360d1676827a60d6242fd6abf708aa360f7a35b42c82c8edca1546be6d5",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/bonzo-112b695e5f82.glb",
+            "sha256": "0015b990ee498f4d75dd89204a20020d6969e8030abac7e5ba491a91376958be",
+            "bindFingerprintSha256": "112b695e5f8253fa87d148ac918e805b7cca9b9590ec2b9b85bec4f293172558",
+            "geometryFingerprintSha256": "e5f59f23e748d746b9b5e209ad5cb1981d5bdda3cb5115e26f00562f4aa8819e",
+            "weightsFingerprintSha256": "29aa79edc695055a1ea4112f7c0a3f8b5ecb6f5b6fec1d8ba954e968c8a2e757"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6084,
+              "joints": 24,
+              "nonzeroWeights": 12404,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1258,
+              "joints": 24,
+              "nonzeroWeights": 1401,
+              "triangles": 840,
+              "leftTriangles": 420,
+              "rightTriangles": 420
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-1663d71b1cbb",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-1663d71b1cbb",
+        "fingerprintSha256": "1663d71b1cbbdae15823cec287f1cdb4fbda3f9985e367bcc46b96488f3d0e09"
+      },
+      "supportedCharacterIds": [
+        "ancap"
+      ],
+      "sourceVariants": [
+        {
+          "id": "ancap",
+          "characterIds": [
+            "ancap"
+          ],
+          "source": {
+            "path": "public/models/characters/ancap.glb",
+            "sha256": "bca604b0719fa36e0c23a8a762c79dce9af67aa553981a3084f4a31eca9a20c1",
+            "skeletonFamilySha256": "1663d71b1cbbdae15823cec287f1cdb4fbda3f9985e367bcc46b96488f3d0e09",
+            "geometrySha256": "27f77d1a76f772362c74b487e8602d9844b7d1b2a05f5bc1384a346e55e87847",
+            "weightsSha256": "b0e7c4c04bb5e3acd4904bb31b6c6388c6bb5024dd98fca81e0434e25d75db5c"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "38767b950ac29494d2c0a6a287898a6789c5b9bffade8f5e8e9fe21b70cbddfb",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/ancap-1663d71b1cbb.glb",
+            "sha256": "e69f202b67c6551c7067d56469769d5c0295fc68384e60c74e63768e5514bbda",
+            "bindFingerprintSha256": "1663d71b1cbbdae15823cec287f1cdb4fbda3f9985e367bcc46b96488f3d0e09",
+            "geometryFingerprintSha256": "40cc5144eba6f23914630ab9daf9a552604dabc810ce4ee3a26de3099b023bbd",
+            "weightsFingerprintSha256": "c282d54fb41fcc4ca76c7174635559e0e22522e7cc75f7e30759819e34f1af71"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 5512,
+              "joints": 26,
+              "nonzeroWeights": 15141,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1314,
+              "joints": 26,
+              "nonzeroWeights": 2555,
+              "triangles": 1133,
+              "leftTriangles": 579,
+              "rightTriangles": 554
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-194709c8269b",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-194709c8269b",
+        "fingerprintSha256": "194709c8269b2491a0ef6186c7bbebdd0fdc2ee69e2c8f61aaa3f96f5d1e19d8"
+      },
+      "supportedCharacterIds": [
+        "capitao"
+      ],
+      "sourceVariants": [
+        {
+          "id": "capitao",
+          "characterIds": [
+            "capitao"
+          ],
+          "source": {
+            "path": "public/models/characters/capitao.glb",
+            "sha256": "433fc02554e818a7607caa3df8b1e859e086fe61965a1950b8a391cfdab8ba1d",
+            "skeletonFamilySha256": "194709c8269b2491a0ef6186c7bbebdd0fdc2ee69e2c8f61aaa3f96f5d1e19d8",
+            "geometrySha256": "bc83ada59d912b254bb2843518571bfb3507630b3069f529b349af606c63e2f0",
+            "weightsSha256": "022cb0923d0e0569831f425a479a3440fb41fc46a8225adcbe407f9a80f468a0"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "928be9333591436fcca035623e171d59210296928e9d2ac4a6e5df03684c2fe3",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/capitao-194709c8269b.glb",
+            "sha256": "1bb8574670fad81b132f1c91fb2944b5ec03c896525b0c22b4c8976915aa156c",
+            "bindFingerprintSha256": "194709c8269b2491a0ef6186c7bbebdd0fdc2ee69e2c8f61aaa3f96f5d1e19d8",
+            "geometryFingerprintSha256": "52cc2ea630cf4da182b85c99fcb95fbd755c066259588403d803e0c0f8ea34c9",
+            "weightsFingerprintSha256": "91e1e2471f6283cdda5243fe039ac7564f730f631c2a55d64accf23247c4ba80"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6200,
+              "joints": 24,
+              "nonzeroWeights": 14376,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1596,
+              "joints": 24,
+              "nonzeroWeights": 1988,
+              "triangles": 1132,
+              "leftTriangles": 566,
+              "rightTriangles": 566
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-276e7c6af74c",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-276e7c6af74c",
+        "fingerprintSha256": "276e7c6af74ca2889fae0e83fe8a39abfd42946bc385ae542fa8159deeabbbbb"
+      },
+      "supportedCharacterIds": [
+        "mistico"
+      ],
+      "sourceVariants": [
+        {
+          "id": "mistico",
+          "characterIds": [
+            "mistico"
+          ],
+          "source": {
+            "path": "public/models/characters/mistico.glb",
+            "sha256": "0b8143aa3fe4b51db1fc0c9eba86583a964198fa1780397963e0d7d816d6ceb4",
+            "skeletonFamilySha256": "276e7c6af74ca2889fae0e83fe8a39abfd42946bc385ae542fa8159deeabbbbb",
+            "geometrySha256": "aa0af5227c84bdebaa0e3c905024f7096fc46c6019953696ff91c8b018c061aa",
+            "weightsSha256": "dc30f02990a35876b52b706da1395e772428710421ff07550929b3f79f92fab8"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "e2a9786584216740d4050787f67f3921f6ed215a0a026d5e4f4506631269feda",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/mistico-276e7c6af74c.glb",
+            "sha256": "ed5b93dcc6462eee798ac5a0599a68ea64bf034686d26f9763c9cb2a6d47d72d",
+            "bindFingerprintSha256": "276e7c6af74ca2889fae0e83fe8a39abfd42946bc385ae542fa8159deeabbbbb",
+            "geometryFingerprintSha256": "e3bf9920d05967ac64317b51346be7730f9dd16cb2b72e4125dfe4209e80de39",
+            "weightsFingerprintSha256": "a9c8a6e458d0592a0d0d652c55cc30edbbcba580cabb374e2f2a5e47646b9dc9"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6712,
+              "joints": 26,
+              "nonzeroWeights": 15316,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 569,
+              "joints": 26,
+              "nonzeroWeights": 1006,
+              "triangles": 437,
+              "leftTriangles": 211,
+              "rightTriangles": 226
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-27dd9afb314c",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-27dd9afb314c",
+        "fingerprintSha256": "27dd9afb314c39e2e0c225477787c4b86d38787fe6226c9586828680a82690dd"
+      },
+      "supportedCharacterIds": [
+        "curupira"
+      ],
+      "sourceVariants": [
+        {
+          "id": "curupira",
+          "characterIds": [
+            "curupira"
+          ],
+          "source": {
+            "path": "public/models/characters/curupira.glb",
+            "sha256": "43e554c6aa08dee54f9e2d3e15bd88ab1d3a8ef1a20a8c91971b66ffbb198afc",
+            "skeletonFamilySha256": "27dd9afb314c39e2e0c225477787c4b86d38787fe6226c9586828680a82690dd",
+            "geometrySha256": "41595817ac019604d4220e9a410f2fce5b750045442941ff6e84c5a2bb37a1de",
+            "weightsSha256": "7702bac78042192d170d5b61aa9ba89edb00af1d785cc82cdc2c13ea81666fc1"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "e593b7558ba3691f4fc6599b0711735c11169eab04d3bd9f3bf5a6be73c78762",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/curupira-27dd9afb314c.glb",
+            "sha256": "9f43e6b0a545be0eea8d81f07b1608a630db1cb45e1be7809925452617c2f80b",
+            "bindFingerprintSha256": "27dd9afb314c39e2e0c225477787c4b86d38787fe6226c9586828680a82690dd",
+            "geometryFingerprintSha256": "560ff2289fa7c2b5ecced85afdbb412c533ad8e08c5912f5c253014b5fa480bf",
+            "weightsFingerprintSha256": "4b0aefd64527b9443f8479b22bb239101834ea9086fd149646eebdb6d6b5a094"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3762,
+              "joints": 24,
+              "nonzeroWeights": 7885,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 386,
+              "joints": 24,
+              "nonzeroWeights": 486,
+              "triangles": 494,
+              "leftTriangles": 247,
+              "rightTriangles": 247
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-2d9c224caa30",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-2d9c224caa30",
+        "fingerprintSha256": "2d9c224caa30b1557eab689c0d1f4c3cbec21e51beebf2d2512a045cd2cbfe73"
+      },
+      "supportedCharacterIds": [
+        "chave"
+      ],
+      "sourceVariants": [
+        {
+          "id": "chave",
+          "characterIds": [
+            "chave"
+          ],
+          "source": {
+            "path": "public/models/characters/chave.glb",
+            "sha256": "10f1ccfcdbcaba830568707e618ac17b107993ac70d9e22f8504f2ed51cd3d48",
+            "skeletonFamilySha256": "2d9c224caa30b1557eab689c0d1f4c3cbec21e51beebf2d2512a045cd2cbfe73",
+            "geometrySha256": "21bda0c7de2f53bdb2973d234ad2f5a88bbc6ef2e851108a44f3cb87206ebc39",
+            "weightsSha256": "9d5016c13af1d52330417f24a96b6bb51d296ce2c71981e74fadf9d5c8f0d00c"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "788412d19fcb2a0fbb11c4decb40bca34f6e3c7e6d25541be8a2f0106fbb71b2",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/chave-2d9c224caa30.glb",
+            "sha256": "847f57751c2dd321fb23f4bd6fa8fdc2175cdb91d3551547170ddb7b5804a9bc",
+            "bindFingerprintSha256": "2d9c224caa30b1557eab689c0d1f4c3cbec21e51beebf2d2512a045cd2cbfe73",
+            "geometryFingerprintSha256": "d09eb5f890b35a8c02ff9c566b3c7d61106fbd57cf55cc7b131e54ac1206f488",
+            "weightsFingerprintSha256": "00ad2005fe5cbe9b09a927d45079065560d4b83bde8881c4707207721cbe2353"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6156,
+              "joints": 24,
+              "nonzeroWeights": 10936,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1081,
+              "joints": 24,
+              "nonzeroWeights": 1320,
+              "triangles": 726,
+              "leftTriangles": 360,
+              "rightTriangles": 366
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-327a14a6e0d3",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-327a14a6e0d3",
+        "fingerprintSha256": "327a14a6e0d3956354690ac58cdbda1f6ba3d92db1c1a5205a174469b6a56881"
+      },
+      "supportedCharacterIds": [
+        "caipora"
+      ],
+      "sourceVariants": [
+        {
+          "id": "caipora",
+          "characterIds": [
+            "caipora"
+          ],
+          "source": {
+            "path": "public/models/characters/caipora.glb",
+            "sha256": "c946867988c416e43930e9f60772e0b7de9bd6733f112f6d2b92f9cab3f30fd7",
+            "skeletonFamilySha256": "327a14a6e0d3956354690ac58cdbda1f6ba3d92db1c1a5205a174469b6a56881",
+            "geometrySha256": "631448922c219800d3a711c203170d94a7fc224d9eefd30a25dde4b705c5c9dd",
+            "weightsSha256": "d985c2f9627c69daca4c5ba5c0f4ab0fc2feff5ee93eb2edd3db328c966969c8"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "8f931cf43664ebcc70d3fdd529aa4b282d4eecbcea3c49f9c68c09b14130fd0d",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/caipora-327a14a6e0d3.glb",
+            "sha256": "2563b2386cf93b35c37ed0ea041fcafea933bd602653fcef14e4efd4c1b22f1b",
+            "bindFingerprintSha256": "327a14a6e0d3956354690ac58cdbda1f6ba3d92db1c1a5205a174469b6a56881",
+            "geometryFingerprintSha256": "3c95344b29d8b8481a4defc9d26b7770d8c7f9f3afac4abfc45c2d7248bebd48",
+            "weightsFingerprintSha256": "9ae44a5860bfb0b28294bcbde5f1967cfc58fd38a8f785ef0b0ae96aeea39d53"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6236,
+              "joints": 26,
+              "nonzeroWeights": 16002,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 547,
+              "joints": 26,
+              "nonzeroWeights": 960,
+              "triangles": 388,
+              "leftTriangles": 194,
+              "rightTriangles": 194
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-3ac7abe60052",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-3ac7abe60052",
+        "fingerprintSha256": "3ac7abe600523557d4d8deb568017845cc275ce6bc7f40b221108e95715a3cfc"
+      },
+      "supportedCharacterIds": [
+        "saci"
+      ],
+      "sourceVariants": [
+        {
+          "id": "saci",
+          "characterIds": [
+            "saci"
+          ],
+          "source": {
+            "path": "public/models/characters/saci.glb",
+            "sha256": "10bd7ea91dae8e00fd306b10c8c4d4be1a28f3c3724d1cf4d13a63f5548cc562",
+            "skeletonFamilySha256": "3ac7abe600523557d4d8deb568017845cc275ce6bc7f40b221108e95715a3cfc",
+            "geometrySha256": "07413d88f92c364f5c024cd175d3e11c39406d938c50c259c7354c1dc6cc0d92",
+            "weightsSha256": "31d9e3cce9748d750cee43176786e2ee2f5f79302ce99b7b5fa16587c768f608"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "cb89f74cab68645225be3a1dd2ac1d66a4d015cd54f5450fa1b0a9eb550d4736",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/saci-3ac7abe60052.glb",
+            "sha256": "b969b5674a9966b3054c7d68291db9a32da9c332340ea2609c4ac2c5377e1479",
+            "bindFingerprintSha256": "3ac7abe600523557d4d8deb568017845cc275ce6bc7f40b221108e95715a3cfc",
+            "geometryFingerprintSha256": "89d22d7e9182dd1f737f837d666925d08e4957abff01db8fb913fce27738abbf",
+            "weightsFingerprintSha256": "b993ede32013973d464e71da4ea4e00f0a6f6380bf0e957b076f200e39b0bbfb"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3527,
+              "joints": 26,
+              "nonzeroWeights": 7420,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 538,
+              "joints": 26,
+              "nonzeroWeights": 994,
+              "triangles": 694,
+              "leftTriangles": 347,
+              "rightTriangles": 347
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-42fdb48a2f1d",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-42fdb48a2f1d",
+        "fingerprintSha256": "42fdb48a2f1db91d8b42dc5fd7d63e1929c2a695d8a3769efad0b768e47bc18e"
+      },
+      "supportedCharacterIds": [
+        "padati"
+      ],
+      "sourceVariants": [
+        {
+          "id": "padati",
+          "characterIds": [
+            "padati"
+          ],
+          "source": {
+            "path": "public/models/characters/padati.glb",
+            "sha256": "a67fbfd22b553d8f0083e952baf12235bb14b06ee0069c77daad9dd0a82c8762",
+            "skeletonFamilySha256": "42fdb48a2f1db91d8b42dc5fd7d63e1929c2a695d8a3769efad0b768e47bc18e",
+            "geometrySha256": "e634dd46eb918fea7d9347415a299c42f9ad323a3bb637325deb53f9aae41b71",
+            "weightsSha256": "b033a7af0e8aefc6d493eba75fbfd873bb65c98566a4f7b3bebe44e3444e3386"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "157531c1e141ff2a57d45d31fee44bc79533900cbdaf3f214ddc0e28885ba8a8",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/padati-42fdb48a2f1d.glb",
+            "sha256": "be4ba1ca87c70f952382cf64310a2ae4d44f187b6aa4ba2c77e45dfa3ee2cf98",
+            "bindFingerprintSha256": "42fdb48a2f1db91d8b42dc5fd7d63e1929c2a695d8a3769efad0b768e47bc18e",
+            "geometryFingerprintSha256": "af7ad5a9f9c8e7725e1fba6e205f0af87377d1925f7ede2e21128ce2328877b4",
+            "weightsFingerprintSha256": "247432f399e73b89f7f10ab79925f0c0a85ccb9327d00e2117f414c607f3022a"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3271,
+              "joints": 24,
+              "nonzeroWeights": 7247,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 804,
+              "joints": 24,
+              "nonzeroWeights": 897,
+              "triangles": 1078,
+              "leftTriangles": 535,
+              "rightTriangles": 543
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-50445616bceb",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-50445616bceb",
+        "fingerprintSha256": "50445616bceb54bcc4e72a2663814a557b68b1ce5d4335b1b26fee609383106d"
+      },
+      "supportedCharacterIds": [
+        "canarinho"
+      ],
+      "sourceVariants": [
+        {
+          "id": "canarinho",
+          "characterIds": [
+            "canarinho"
+          ],
+          "source": {
+            "path": "public/models/characters/canarinho.glb",
+            "sha256": "ae53ff9beded899f4845f3c39f491373a80a5694a69130fcff5c5ad0404e73be",
+            "skeletonFamilySha256": "50445616bceb54bcc4e72a2663814a557b68b1ce5d4335b1b26fee609383106d",
+            "geometrySha256": "a2f1996c1342b5055555550a28f86db112490dbb9491997efc3d8f807ce36444",
+            "weightsSha256": "2d8bf70e0820704baa027d5bba6ce215bb685f19d07312bbb0ac1a9a5956505b"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "7081d4b514c871345966de5352aae5c02d7733d2f671d132bfccf8fb7f1afbf6",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/canarinho-50445616bceb.glb",
+            "sha256": "34ad338db1285e29da18fb8dadd04ab0c2d1c396e73b718702cb1dbfde2fbb31",
+            "bindFingerprintSha256": "50445616bceb54bcc4e72a2663814a557b68b1ce5d4335b1b26fee609383106d",
+            "geometryFingerprintSha256": "0103b7a826e13aa56519134593ab22e4a4cd2c722e82d77e4c2b44254053f7f2",
+            "weightsFingerprintSha256": "f1f75acb336421f8dc3cd7a1df1bdb09ed2963c3efdf30b8e7cde29a1504d918"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6411,
+              "joints": 24,
+              "nonzeroWeights": 13979,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 834,
+              "joints": 24,
+              "nonzeroWeights": 1014,
+              "triangles": 574,
+              "leftTriangles": 287,
+              "rightTriangles": 287
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-52268faf4d91",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-52268faf4d91",
+        "fingerprintSha256": "52268faf4d91ba1b18862fe1eba0e5a1bcb9800f2ff5536b6d93c5ddb2a8eaf1"
+      },
+      "supportedCharacterIds": [
+        "ministro"
+      ],
+      "sourceVariants": [
+        {
+          "id": "ministro",
+          "characterIds": [
+            "ministro"
+          ],
+          "source": {
+            "path": "public/models/characters/ministro.glb",
+            "sha256": "129121e14a0f78ed89dd677e881280462cc3de468ad7edfa17937350098b2759",
+            "skeletonFamilySha256": "52268faf4d91ba1b18862fe1eba0e5a1bcb9800f2ff5536b6d93c5ddb2a8eaf1",
+            "geometrySha256": "5ed923f1277831dc0cc1ad37b2c93dee9e2e5219ec2e1c36c55cd1c25eba6997",
+            "weightsSha256": "4b788bb1b2b45fe174a46ae2ee5a2723e321ce76150431c7800a72799221d233"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "7c1e5638d656debb20e34e29138db49e9371f0fbc8a5edaa1c10b918f8d0949d",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/ministro-52268faf4d91.glb",
+            "sha256": "0f1d9610e4109b0f2fb46073fd81161fc60e0c49ad5fe3bf8c7c2ea008c0362a",
+            "bindFingerprintSha256": "52268faf4d91ba1b18862fe1eba0e5a1bcb9800f2ff5536b6d93c5ddb2a8eaf1",
+            "geometryFingerprintSha256": "ffa9c9fcf55bce464eca3f95322a9ebe1bd2a50954e76f01af6cd21a600c2edf",
+            "weightsFingerprintSha256": "4094f8517d21a97ad322898b178fd97eea9fa7966ba84b4b48f77720018c037c"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6823,
+              "joints": 24,
+              "nonzeroWeights": 18802,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 820,
+              "joints": 24,
+              "nonzeroWeights": 1074,
+              "triangles": 530,
+              "leftTriangles": 265,
+              "rightTriangles": 265
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-52e48e14ebc6",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-52e48e14ebc6",
+        "fingerprintSha256": "52e48e14ebc60aa3971f862e8d11a6c8f836e1deb02999606a98a797f72ddf9d"
+      },
+      "supportedCharacterIds": [
+        "lobisomem"
+      ],
+      "sourceVariants": [
+        {
+          "id": "lobisomem",
+          "characterIds": [
+            "lobisomem"
+          ],
+          "source": {
+            "path": "public/models/characters/lobisomem.glb",
+            "sha256": "6b3839025c194b1418c71c7ddb68a9a9afe59794d50d49c4409197edf6f0093d",
+            "skeletonFamilySha256": "52e48e14ebc60aa3971f862e8d11a6c8f836e1deb02999606a98a797f72ddf9d",
+            "geometrySha256": "450c81bfddd0593ca1953fec1b719eae6c9cccea1279fd658d5b2d2afc17e67d",
+            "weightsSha256": "39917f27c776a3b041066516409aebdfd0f5c543f4cd95ee13c6b9eaabf4f089"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "2b62783c8dcf660c824360385c7fce444f7d2a1185ffdd8fa6e4861064d985d8",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/lobisomem-52e48e14ebc6.glb",
+            "sha256": "f9407af761afd2f63a23c8af07b59feca512f1eca9d31091ea3ad5d1177eb357",
+            "bindFingerprintSha256": "52e48e14ebc60aa3971f862e8d11a6c8f836e1deb02999606a98a797f72ddf9d",
+            "geometryFingerprintSha256": "01973f09563157af10a23017306469f30bef1364658b72658037f4d1969f116a",
+            "weightsFingerprintSha256": "2be947ad9cf985dd1a2c1fd026796ed670b8655a5cdee6175e786b3a08e50c84"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3613,
+              "joints": 26,
+              "nonzeroWeights": 7315,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 651,
+              "joints": 26,
+              "nonzeroWeights": 1065,
+              "triangles": 803,
+              "leftTriangles": 399,
+              "rightTriangles": 404
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-533c7549cd0d",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-533c7549cd0d",
+        "fingerprintSha256": "533c7549cd0dea0a96151046c272d346d19afe152439b7600ca3aa945a06be6a"
+      },
+      "supportedCharacterIds": [
+        "zumbi"
+      ],
+      "sourceVariants": [
+        {
+          "id": "zumbi",
+          "characterIds": [
+            "zumbi"
+          ],
+          "source": {
+            "path": "public/models/characters/zumbi.glb",
+            "sha256": "f56419e19f335aaab04317059142de326208f3d71889a4f82c645f1dabfbd066",
+            "skeletonFamilySha256": "533c7549cd0dea0a96151046c272d346d19afe152439b7600ca3aa945a06be6a",
+            "geometrySha256": "b9d20a4ea851cc7d408de1f5eeab682c8c044931d0a90e97f425545ef79fcce1",
+            "weightsSha256": "0fedde176a9a5dd45f72c7e8f265304e8e451890e2f81a24dcbcb469e577aa89"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "a59a29e79b599b510824483d84128750d6fee68d26dff7f124ca2e326b7d5850",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/zumbi-533c7549cd0d.glb",
+            "sha256": "7b72a87db8b19b24d86684a820a2e50c57e1dd4fa997e000c4b7a1879747e3f4",
+            "bindFingerprintSha256": "533c7549cd0dea0a96151046c272d346d19afe152439b7600ca3aa945a06be6a",
+            "geometryFingerprintSha256": "0847bf29d933548e238d96ba59295042a79acdfe00bee6e53e068e1692233adf",
+            "weightsFingerprintSha256": "2d4a9adabbb4544cc792288bc105b78a764312596dec3ab433de324ffe76bb17"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7228,
+              "joints": 26,
+              "nonzeroWeights": 16782,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1403,
+              "joints": 26,
+              "nonzeroWeights": 2315,
+              "triangles": 946,
+              "leftTriangles": 466,
+              "rightTriangles": 480
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-560e25ef48af",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-560e25ef48af",
+        "fingerprintSha256": "560e25ef48af70b447299f5fbf42b4731f336d13e9d92ab3f2b1ca93df3da13d"
+      },
+      "supportedCharacterIds": [
+        "juiz"
+      ],
+      "sourceVariants": [
+        {
+          "id": "juiz",
+          "characterIds": [
+            "juiz"
+          ],
+          "source": {
+            "path": "public/models/characters/juiz.glb",
+            "sha256": "e4ea8299c825b2feab78eb79bff5f721deec5367c5f56c12a94df578b02f1264",
+            "skeletonFamilySha256": "560e25ef48af70b447299f5fbf42b4731f336d13e9d92ab3f2b1ca93df3da13d",
+            "geometrySha256": "f7db672a828c9fc97f1be651e0f2c6c8ccd33285446e2816590ea6a6cf604f71",
+            "weightsSha256": "0568d8dc19cc8eea8f63ad33280472c2d8b0b4bfd1786f2f7a64efe31353b933"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "c640759eadf65392a6b0e415c836b1306b06804273ea662bea55e51ba8bdb6e0",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/juiz-560e25ef48af.glb",
+            "sha256": "67c96450d3520c71303e4dec368d495ae64eaa36d51e002d24a9f1fc7041569e",
+            "bindFingerprintSha256": "560e25ef48af70b447299f5fbf42b4731f336d13e9d92ab3f2b1ca93df3da13d",
+            "geometryFingerprintSha256": "a3b5be904accd3fa715f0aafe34d954fa6142d0bde142c736cc4a274d7fd13a9",
+            "weightsFingerprintSha256": "1e8547f37daef929c7d1d7c64ab92c0c4ba927c3368415b92670d9192f41d68a"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6954,
+              "joints": 24,
+              "nonzeroWeights": 17367,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1182,
+              "joints": 24,
+              "nonzeroWeights": 1444,
+              "triangles": 794,
+              "leftTriangles": 393,
+              "rightTriangles": 401
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-56e5b4c15689",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-56e5b4c15689",
+        "fingerprintSha256": "56e5b4c1568963d9dc89eb293a612d3df53619242ce77e84f2b416a31e19f8c0"
+      },
+      "supportedCharacterIds": [
+        "metaleiro"
+      ],
+      "sourceVariants": [
+        {
+          "id": "metaleiro",
+          "characterIds": [
+            "metaleiro"
+          ],
+          "source": {
+            "path": "public/models/characters/metaleiro.glb",
+            "sha256": "f424e96d8c2f6b4d00c4c16ddd3178bc1fa639312a7ecbafa442ab0817dc56fc",
+            "skeletonFamilySha256": "56e5b4c1568963d9dc89eb293a612d3df53619242ce77e84f2b416a31e19f8c0",
+            "geometrySha256": "441b7e39fc226eab509b24f0807e24820b5d978bd3ec8f5014ee89d2e475b674",
+            "weightsSha256": "dba378804e934014bcbe018ec77b412cb464c4ed95b531f99acc4eb6d53d620d"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "a3fb525ce1da7a7faf0e7ef6be1bdc02836fb0330ad63ccd64c2308a48857fb9",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/metaleiro-56e5b4c15689.glb",
+            "sha256": "9ee480bc12b9ff2ce2313c1936b5a7bdd9236da4555e96feff5e933c27de2323",
+            "bindFingerprintSha256": "56e5b4c1568963d9dc89eb293a612d3df53619242ce77e84f2b416a31e19f8c0",
+            "geometryFingerprintSha256": "e2fdaa1010eab5245c3a22e10b1f754fee44fd47e0cd797eb8e2baecd96afa8f",
+            "weightsFingerprintSha256": "a56a41ad5e46d87460e32bf323003d63f0e34c0f5c07032b87662fa9e673ab8b"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7111,
+              "joints": 24,
+              "nonzeroWeights": 17770,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 812,
+              "joints": 24,
+              "nonzeroWeights": 995,
+              "triangles": 546,
+              "leftTriangles": 274,
+              "rightTriangles": 272
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-5b5f06233e95",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-5b5f06233e95",
+        "fingerprintSha256": "5b5f06233e955f9e074f719e040e787c97a929eee0e692b18c06603643150531"
+      },
+      "supportedCharacterIds": [
+        "et"
+      ],
+      "sourceVariants": [
+        {
+          "id": "et",
+          "characterIds": [
+            "et"
+          ],
+          "source": {
+            "path": "public/models/characters/et.glb",
+            "sha256": "342a10adce06574055c9c169bedbb159e6170c1783f99140c145a3adc4b36cd2",
+            "skeletonFamilySha256": "5b5f06233e955f9e074f719e040e787c97a929eee0e692b18c06603643150531",
+            "geometrySha256": "acd050ab87584710e06b95599e0869250668867a8adde750e9d55b210da0b339",
+            "weightsSha256": "8589c7c6ad527e7192148d3e1e17c97cd505c2f0423ddabb3200de1d4db05784"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "a6040017f6d078e9890a41d37f28fc966ad0e018489365fdbc89a18d6c2928f0",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/et-5b5f06233e95.glb",
+            "sha256": "a68f9bc895fe426c3eab42a10e467527ff55c515962fe2f8939788d0583ebcf0",
+            "bindFingerprintSha256": "5b5f06233e955f9e074f719e040e787c97a929eee0e692b18c06603643150531",
+            "geometryFingerprintSha256": "528173fe30c809375ac0899cc326025a13e0f67f512f07a02daa608f4819d199",
+            "weightsFingerprintSha256": "fdd657c9bd616e3f5e2b8ec54a7c2c378c2e7b8aeb8cfebf54622ef3f6361ff9"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3484,
+              "joints": 26,
+              "nonzeroWeights": 5551,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 771,
+              "joints": 26,
+              "nonzeroWeights": 1316,
+              "triangles": 992,
+              "leftTriangles": 494,
+              "rightTriangles": 498
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-5bead824c62a",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-5bead824c62a",
+        "fingerprintSha256": "5bead824c62ac13e9f71a8036faa442cf8c58ca51f30cc5c477552647a2eb4e4"
+      },
+      "supportedCharacterIds": [
+        "trapfunk"
+      ],
+      "sourceVariants": [
+        {
+          "id": "trapfunk",
+          "characterIds": [
+            "trapfunk"
+          ],
+          "source": {
+            "path": "public/models/characters/trapfunk.glb",
+            "sha256": "7ed59f4903ff6be47dc51dfa6c44199d19afd4f21b5693e83eb84ab94c89470c",
+            "skeletonFamilySha256": "5bead824c62ac13e9f71a8036faa442cf8c58ca51f30cc5c477552647a2eb4e4",
+            "geometrySha256": "cdde0bfeb22710c19bd0a1362e693c0bd2f920825b0f055773b764e830a736ed",
+            "weightsSha256": "0bd39283245d71b5014040c41a266e0c33935b2310d98f7b96e6a3c407382916"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "1fde026292d6f91e9462385467b8c0a74bf2bfd6bbac9d8a8679a5d472c9549b",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/trapfunk-5bead824c62a.glb",
+            "sha256": "0b12b9d09c024866c2bdcef3c47ba24893c5e765d5257750a88816364ba4d2e4",
+            "bindFingerprintSha256": "5bead824c62ac13e9f71a8036faa442cf8c58ca51f30cc5c477552647a2eb4e4",
+            "geometryFingerprintSha256": "22a450a3c69ec9f57b704c5d3932905e1ff9c835375cb2862429bc515a309b62",
+            "weightsFingerprintSha256": "a9d23efb2c768f1c2cabac154275935a33b9d934364575b7cb7cada6e7732ab2"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6780,
+              "joints": 24,
+              "nonzeroWeights": 17583,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 760,
+              "joints": 24,
+              "nonzeroWeights": 1013,
+              "triangles": 476,
+              "leftTriangles": 236,
+              "rightTriangles": 240
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-608d8cca5171",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-608d8cca5171",
+        "fingerprintSha256": "608d8cca517119a2f0acfd3f7d3c837cc9d1f0da64480c1d588ab9e2b6e596d2"
+      },
+      "supportedCharacterIds": [
+        "hipster"
+      ],
+      "sourceVariants": [
+        {
+          "id": "hipster",
+          "characterIds": [
+            "hipster"
+          ],
+          "source": {
+            "path": "public/models/characters/hipster.glb",
+            "sha256": "e954d312d355379ee3a4dcf18c36e99862bbb096dbef4ca1a607564f5bd8f5d2",
+            "skeletonFamilySha256": "608d8cca517119a2f0acfd3f7d3c837cc9d1f0da64480c1d588ab9e2b6e596d2",
+            "geometrySha256": "69afa81fe08e6f9c20de6aaa23659cc24815775fbef292b6bc455e68d03cff43",
+            "weightsSha256": "c8eb1bebf3d3f5a9ec96cd7ff43fb4f1591d848abff1ccb775320d0dcdda7808"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "db7cef3c3bc620d64430db22cfd2ea598d2ee1252c758187d124d77f780d09ff",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/hipster-608d8cca5171.glb",
+            "sha256": "c73759c251db9f9430ed10057ca68a806501dbe5a42ad18655558871ee4c2085",
+            "bindFingerprintSha256": "608d8cca517119a2f0acfd3f7d3c837cc9d1f0da64480c1d588ab9e2b6e596d2",
+            "geometryFingerprintSha256": "27f25065840fc09ea2973eea12f584fb71ff55280f0e9180e29fee0e1d2a8a31",
+            "weightsFingerprintSha256": "482109000d7400b52012f25b56db59bb89d078ea0f342297fcd3d48e2c74f47a"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6022,
+              "joints": 26,
+              "nonzeroWeights": 13025,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1166,
+              "joints": 26,
+              "nonzeroWeights": 2379,
+              "triangles": 866,
+              "leftTriangles": 433,
+              "rightTriangles": 433
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-6aa1b04af614",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-6aa1b04af614",
+        "fingerprintSha256": "6aa1b04af614022c41165469fba60f31e78e4316c859d33e962256bf5c046b6d"
+      },
+      "supportedCharacterIds": [
+        "dama"
+      ],
+      "sourceVariants": [
+        {
+          "id": "dama",
+          "characterIds": [
+            "dama"
+          ],
+          "source": {
+            "path": "public/models/characters/dama.glb",
+            "sha256": "34a33e1f0f0a6c3d74721452efe88aeae7888813d61f0b0e737491e4553b47ec",
+            "skeletonFamilySha256": "6aa1b04af614022c41165469fba60f31e78e4316c859d33e962256bf5c046b6d",
+            "geometrySha256": "7311887b5f8204185cb4df9a687a55e3dbf108233b89cd74df25f055f0295de4",
+            "weightsSha256": "5abaa3e5242bf663b4f33e6cc6dc4396479bc1b6187caa119691e272705c562a"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "1ed26cad98745c01fb8506a8597844223c6af433359e8f343dc3f164273c1251",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/dama-6aa1b04af614.glb",
+            "sha256": "2972b45ef23391be1ea98bb7bd863c8770af0d99587f2822bc4f6c398105b6c4",
+            "bindFingerprintSha256": "6aa1b04af614022c41165469fba60f31e78e4316c859d33e962256bf5c046b6d",
+            "geometryFingerprintSha256": "ebe33f50771d71dc2c5c3ea0d073923585d2d237e1c6cb6f38812dcfa9be7e46",
+            "weightsFingerprintSha256": "3bfa53aced02b49785a48d13a1d5a0e460e87f164d68683f7b95ea11a23c5220"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6689,
+              "joints": 24,
+              "nonzeroWeights": 14932,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1593,
+              "joints": 24,
+              "nonzeroWeights": 1939,
+              "triangles": 987,
+              "leftTriangles": 487,
+              "rightTriangles": 500
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-6b1aefbfa659",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-6b1aefbfa659",
+        "fingerprintSha256": "6b1aefbfa659d18d18956bd4138cb556fb24b03222f455286df8fc3d37d7f7d5"
+      },
+      "supportedCharacterIds": [
+        "rapper"
+      ],
+      "sourceVariants": [
+        {
+          "id": "rapper",
+          "characterIds": [
+            "rapper"
+          ],
+          "source": {
+            "path": "public/models/characters/rapper.glb",
+            "sha256": "7a3e62ec70d65b36de629acf456f0c82692430c8523a6a34b86ec80f5e88428d",
+            "skeletonFamilySha256": "6b1aefbfa659d18d18956bd4138cb556fb24b03222f455286df8fc3d37d7f7d5",
+            "geometrySha256": "80840e021798f8142bcb84b84e8b98191b9f4a2928476223b3613ad3adf8fb83",
+            "weightsSha256": "8bd137c49209d898ab55b8a35e2823e7af0d5c331cc1c4c0e0bdab7f2df549be"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "a672b159698fcd8db800a2973e6d44e872fc5b3b50601119749bd28cd25105d2",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/rapper-6b1aefbfa659.glb",
+            "sha256": "34baa1fe09670979965076b44b48ff9234ea4e08fa5ff6f5611660aa5467face",
+            "bindFingerprintSha256": "6b1aefbfa659d18d18956bd4138cb556fb24b03222f455286df8fc3d37d7f7d5",
+            "geometryFingerprintSha256": "a4c5571077d828c7dd036ec5f78bd66319f6620cc71a2727e7995bdf3aa750f9",
+            "weightsFingerprintSha256": "84a3bd0d6aaf758790921fc256a4017179094321985c94dce12d135c187517ba"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6459,
+              "joints": 24,
+              "nonzeroWeights": 13163,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1158,
+              "joints": 24,
+              "nonzeroWeights": 1248,
+              "triangles": 797,
+              "leftTriangles": 397,
+              "rightTriangles": 400
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-738f0bb28fb8",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-738f0bb28fb8",
+        "fingerprintSha256": "738f0bb28fb8fad5dac4142f1e6ed6f8c49c8ca60b96a582e7c34fff14eda3e8"
+      },
+      "supportedCharacterIds": [
+        "proerd"
+      ],
+      "sourceVariants": [
+        {
+          "id": "proerd",
+          "characterIds": [
+            "proerd"
+          ],
+          "source": {
+            "path": "public/models/characters/proerd.glb",
+            "sha256": "004a55debd33f0af5d0d7d0de8110f8c52e21f4a5761b1cc3b4d26a97ca10ddd",
+            "skeletonFamilySha256": "738f0bb28fb8fad5dac4142f1e6ed6f8c49c8ca60b96a582e7c34fff14eda3e8",
+            "geometrySha256": "1c5246929ecb8c21c47c80f9faf139d02d05fcc17648eb6c7c357a41a838f541",
+            "weightsSha256": "63ae1bc5865ceb72c1dac63adaf473a4815d1ef0c436a8e33d3c8a2d110ff0ca"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "d29e404f3d6c482aa119411f370db1de93a8e2ba05aba9d9f1277f467929c336",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/proerd-738f0bb28fb8.glb",
+            "sha256": "9c084dc423b429e538c061176093a61791289885b33415b7a02abe08ea9df531",
+            "bindFingerprintSha256": "738f0bb28fb8fad5dac4142f1e6ed6f8c49c8ca60b96a582e7c34fff14eda3e8",
+            "geometryFingerprintSha256": "8995ec25d40ae2999455d04f696ecd92deec9e70b8aad7598025c249a7ee9431",
+            "weightsFingerprintSha256": "ed693481c324e3d54b3e1a938c51e61410daab0af114c811bde935bcd8eb0fe0"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6393,
+              "joints": 24,
+              "nonzeroWeights": 17920,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 968,
+              "joints": 24,
+              "nonzeroWeights": 1273,
+              "triangles": 754,
+              "leftTriangles": 363,
+              "rightTriangles": 391
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-7713a5325128",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-7713a5325128",
+        "fingerprintSha256": "7713a5325128f70b66027b1fbbe4a0adfb33880a9433af2668ee01492f1f1d3d"
+      },
+      "supportedCharacterIds": [
+        "bombado"
+      ],
+      "sourceVariants": [
+        {
+          "id": "bombado",
+          "characterIds": [
+            "bombado"
+          ],
+          "source": {
+            "path": "public/models/characters/bombado.glb",
+            "sha256": "d4b4196aa5ed298ebd30df46650f40c3d93f408271bbc422cfad1417ee140647",
+            "skeletonFamilySha256": "7713a5325128f70b66027b1fbbe4a0adfb33880a9433af2668ee01492f1f1d3d",
+            "geometrySha256": "99ced445e42c3dee87f18f849f081cc1718cbd43ad42009688b69a96c9acdc4b",
+            "weightsSha256": "7b9486d7304b6c67044ac97a93d323fd23563b28a4845491cb0bb740e06d72eb"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "083ea5757fdaf3e76a0b55dcb423299826c0709cb1b22ea899d806901e28681e",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/bombado-7713a5325128.glb",
+            "sha256": "47cc02dbce365aa3d7aa6de9c9e7f271f46e935fbbd0803adde4e78df86b8ca5",
+            "bindFingerprintSha256": "7713a5325128f70b66027b1fbbe4a0adfb33880a9433af2668ee01492f1f1d3d",
+            "geometryFingerprintSha256": "2d99034e8e82c8abe04af137e79417324a23ce6a8799266c45e991465c65851d",
+            "weightsFingerprintSha256": "d8569e5e03afdbac944583320a6942ad4d74f7007d026175fd00b26a1c73751b"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6194,
+              "joints": 26,
+              "nonzeroWeights": 15434,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1256,
+              "joints": 26,
+              "nonzeroWeights": 2401,
+              "triangles": 844,
+              "leftTriangles": 429,
+              "rightTriangles": 415
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-86fd88ec3447",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-86fd88ec3447",
+        "fingerprintSha256": "86fd88ec344786d1e0279c64877e7c8e2fa1e52e09b87a4d8a16f44a5b062903"
+      },
+      "supportedCharacterIds": [
+        "professor"
+      ],
+      "sourceVariants": [
+        {
+          "id": "professor",
+          "characterIds": [
+            "professor"
+          ],
+          "source": {
+            "path": "public/models/characters/professor.glb",
+            "sha256": "ab008ee5a573f7279227cd71ccb36e6b5dd3a193246fbe4fa169ff42daf9a3fb",
+            "skeletonFamilySha256": "86fd88ec344786d1e0279c64877e7c8e2fa1e52e09b87a4d8a16f44a5b062903",
+            "geometrySha256": "9ed5639b0380b6da76c810ebb0a4f5fdad15f66fbce415ce3ebaa730c0ce005c",
+            "weightsSha256": "fcee99757e8cc7391322fff7905eccaf97372862dfefd91b8b6f975ead409001"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "ffd9b58cfb8f9063e9b860efbed72c2d57d01c697fcc9b2cef09f38c2f8a936f",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/professor-86fd88ec3447.glb",
+            "sha256": "01db0a4369958607a6c783bbe95303afab2e75fdd04c8045246204f601ed0621",
+            "bindFingerprintSha256": "86fd88ec344786d1e0279c64877e7c8e2fa1e52e09b87a4d8a16f44a5b062903",
+            "geometryFingerprintSha256": "02fd255105ecb2e1d8092944cc7142b903959d66a41e645b7df20987c6fdfd0c",
+            "weightsFingerprintSha256": "d0fa198d8c22cf193785e6fb3bb9c32c36f66710f0f6752a819fd77e5ea7bb76"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6739,
+              "joints": 24,
+              "nonzeroWeights": 16017,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1651,
+              "joints": 24,
+              "nonzeroWeights": 2018,
+              "triangles": 1088,
+              "leftTriangles": 539,
+              "rightTriangles": 549
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-9409af806791",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-9409af806791",
+        "fingerprintSha256": "9409af8067912e88659e4664f725cd61e8aa4c6095a731d4f19214805b1bbf79"
+      },
+      "supportedCharacterIds": [
+        "oakley"
+      ],
+      "sourceVariants": [
+        {
+          "id": "oakley",
+          "characterIds": [
+            "oakley"
+          ],
+          "source": {
+            "path": "public/models/characters/oakley.glb",
+            "sha256": "47fa5a289b043ae4698e707f45d2ce920fa33a98de11965dbd36de515ccd3618",
+            "skeletonFamilySha256": "9409af8067912e88659e4664f725cd61e8aa4c6095a731d4f19214805b1bbf79",
+            "geometrySha256": "58e80a7556c898447c198587197aade3b94b8ea5e1fbb3083998091d43d6727c",
+            "weightsSha256": "5018169a83b0318bba793f38d9d6711573b89196274377b3ffd710f3d743805d"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "e0e5440b2263b6ce8c96c88f5ce9f497a938c8cf913f81911a58fac5ef102953",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/oakley-9409af806791.glb",
+            "sha256": "339c2a74a7e496fd3ed46e5d4f384e5edadb83902457b4db3e7718cdc7726d23",
+            "bindFingerprintSha256": "9409af8067912e88659e4664f725cd61e8aa4c6095a731d4f19214805b1bbf79",
+            "geometryFingerprintSha256": "2ba2fe36bdb2c7b524f0cf57a54505e8851848917f0d59523bd7129960172d71",
+            "weightsFingerprintSha256": "3bf42eca2162d6205d3053aae139e9fb4d867eb19a406803e30230d420ca7d91"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6808,
+              "joints": 24,
+              "nonzeroWeights": 18261,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 441,
+              "joints": 24,
+              "nonzeroWeights": 515,
+              "triangles": 312,
+              "leftTriangles": 155,
+              "rightTriangles": 157
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-97bfcfb6e513",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-97bfcfb6e513",
+        "fingerprintSha256": "97bfcfb6e5131f24f9ea6304e092fedd3b8b01ab2c7cd3edae8a90c7e74554c3"
+      },
+      "supportedCharacterIds": [
+        "sindicato"
+      ],
+      "sourceVariants": [
+        {
+          "id": "sindicato",
+          "characterIds": [
+            "sindicato"
+          ],
+          "source": {
+            "path": "public/models/characters/sindicato.glb",
+            "sha256": "07fdc15280641f8e60748d0cb081b10cf81607b7626de0216c2280e7704db3c6",
+            "skeletonFamilySha256": "97bfcfb6e5131f24f9ea6304e092fedd3b8b01ab2c7cd3edae8a90c7e74554c3",
+            "geometrySha256": "47a1253f9352c7685832a5739f5f802e7d8e3fd24c388b1faa2623ccd7ca5774",
+            "weightsSha256": "9d5b63dad59e42aba0bf4de047853ce79af10119db72aad5aba3df85c706b4dd"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "2a3289e1d97cf88f3ccc82554231f9e4fc937ce7bca789194bb28a433f46d72d",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/sindicato-97bfcfb6e513.glb",
+            "sha256": "7d4c4179f071363fa78de6d3d32680f7e94841d38c30a18258715275159f2b8c",
+            "bindFingerprintSha256": "97bfcfb6e5131f24f9ea6304e092fedd3b8b01ab2c7cd3edae8a90c7e74554c3",
+            "geometryFingerprintSha256": "bdc6efab6f0a6a6fe98713acacbd79c903c5a25d0b17ee06a5f41d17ba1599ea",
+            "weightsFingerprintSha256": "7cbf104313e017a3c195ef41acdc8249e57adb59b46153eeeb5c948161cb8149"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7052,
+              "joints": 26,
+              "nonzeroWeights": 20120,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 719,
+              "joints": 26,
+              "nonzeroWeights": 1232,
+              "triangles": 448,
+              "leftTriangles": 224,
+              "rightTriangles": 224
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-9a15c53c2e84",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-9a15c53c2e84",
+        "fingerprintSha256": "9a15c53c2e846f4dd710edf12e85eaf026e2b8421a3928ed5ab161ba65f7b016"
+      },
+      "supportedCharacterIds": [
+        "lenda-lanhouse"
+      ],
+      "sourceVariants": [
+        {
+          "id": "lenda-lanhouse",
+          "characterIds": [
+            "lenda-lanhouse"
+          ],
+          "source": {
+            "path": "public/models/characters/lenda-lanhouse.glb",
+            "sha256": "19c0eabefc93a6c0acda0f25631cb7b3ca7d69806ab17abba844be6e94a969a0",
+            "skeletonFamilySha256": "9a15c53c2e846f4dd710edf12e85eaf026e2b8421a3928ed5ab161ba65f7b016",
+            "geometrySha256": "0292b53503709abfb57fed40dc7623f717f3f6e1d2b3bce8fde28e28cdf5b2ff",
+            "weightsSha256": "ba1225b80325f577d0d93a86e0f0f0b9b1f13b7e4ef69681d452ef371cbd2ddc"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "cac742700834a64e0a436b2ca08a2d95b2786edc8fb04a2564606984b9444031",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/lenda-lanhouse-9a15c53c2e84.glb",
+            "sha256": "7c2f0fc17263c10c525be777b34856ee0156f0eaf2d158be5a04e917d3a05dc8",
+            "bindFingerprintSha256": "9a15c53c2e846f4dd710edf12e85eaf026e2b8421a3928ed5ab161ba65f7b016",
+            "geometryFingerprintSha256": "8435797df9beedd3290274674b32b0435fcfcac6b4249c57ee8b4327009ebe10",
+            "weightsFingerprintSha256": "f4c5f0206552e0fedf65e5ede53c10d38c142e693e678762e3d3a6b7042c275e"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 12925,
+              "joints": 24,
+              "nonzeroWeights": 24408,
+              "primitives": 12
+            },
+            "after": {
+              "vertices": 1037,
+              "joints": 24,
+              "nonzeroWeights": 1221,
+              "triangles": 1411,
+              "leftTriangles": 714,
+              "rightTriangles": 697
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-a024d9620543",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-a024d9620543",
+        "fingerprintSha256": "a024d9620543189f5cabce24c266474f9b441ba1b9f654ca8044b8897f9cd906"
+      },
+      "supportedCharacterIds": [
+        "skatista"
+      ],
+      "sourceVariants": [
+        {
+          "id": "skatista",
+          "characterIds": [
+            "skatista"
+          ],
+          "source": {
+            "path": "public/models/characters/skatista.glb",
+            "sha256": "9bd3a0a8af9d7b175f85cf4ae71627bcac9a1fb0d5108dc3dd485bb0c2831fa6",
+            "skeletonFamilySha256": "a024d9620543189f5cabce24c266474f9b441ba1b9f654ca8044b8897f9cd906",
+            "geometrySha256": "8259a3f9a64cbc22502594295c851073e3f31c1db9784ea705c770504e590e21",
+            "weightsSha256": "a73c35ce1b7b447888e0561b2aeb2f4e33279b49878f1fccd1764097398ffb4e"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "1965d8d63af49872babbb7aa9ba0c2c78b2214d485ed107dbde10665d92bb107",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/skatista-a024d9620543.glb",
+            "sha256": "96335c6b051664c9393c8691c5de232967879e545d0b27a349878d4cc2d9eb3a",
+            "bindFingerprintSha256": "a024d9620543189f5cabce24c266474f9b441ba1b9f654ca8044b8897f9cd906",
+            "geometryFingerprintSha256": "862dad89efb8678f1f606f5c37f6fc9c841d438476882fc52f2a360a6aab9471",
+            "weightsFingerprintSha256": "db37aadcd071f2345d0618122962265d1b94ee8a858e13d4d24f595d88669f7c"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6451,
+              "joints": 24,
+              "nonzeroWeights": 13043,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1324,
+              "joints": 24,
+              "nonzeroWeights": 1584,
+              "triangles": 880,
+              "leftTriangles": 438,
+              "rightTriangles": 442
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-a4584c3c1afe",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-a4584c3c1afe",
+        "fingerprintSha256": "a4584c3c1afed84d0d79a046c5b9c2708e308a591a63b55be9474fe677df486f"
+      },
+      "supportedCharacterIds": [
+        "farialimer"
+      ],
+      "sourceVariants": [
+        {
+          "id": "farialimer",
+          "characterIds": [
+            "farialimer"
+          ],
+          "source": {
+            "path": "public/models/characters/farialimer.glb",
+            "sha256": "b68b3fe3e4a1de08a712925543ed1dfdc35f70dfef58666c0c9da36b6be61b26",
+            "skeletonFamilySha256": "a4584c3c1afed84d0d79a046c5b9c2708e308a591a63b55be9474fe677df486f",
+            "geometrySha256": "9644d892cf4871a4c87ebac537c384b29c217d3c4a0adde8271cc4ba23874b55",
+            "weightsSha256": "9fa47437a591baaea29603ffcb3a7a09a237973d38ce4bd05a59d44b401849b6"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "7bf489064b672bb78f4d48edfd01d45bd5f73916c4cf934f5b51615e9d9bfea1",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/farialimer-a4584c3c1afe.glb",
+            "sha256": "90c10d5fabc78ef050a3e3617e4e5e7f907438ff5d0259f2ec4eca76badde8ae",
+            "bindFingerprintSha256": "a4584c3c1afed84d0d79a046c5b9c2708e308a591a63b55be9474fe677df486f",
+            "geometryFingerprintSha256": "2ebebf5b59e08512fd7645a9cce0b99c642e55fef9dbb2b9ece0afdb7508df1e",
+            "weightsFingerprintSha256": "4199d457e561b5b86068fb5032e444dc98ca07d3d47d2165723332c4453a71da"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6572,
+              "joints": 26,
+              "nonzeroWeights": 15660,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 973,
+              "joints": 26,
+              "nonzeroWeights": 1642,
+              "triangles": 662,
+              "leftTriangles": 326,
+              "rightTriangles": 336
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-a623e1c6baa2",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-a623e1c6baa2",
+        "fingerprintSha256": "a623e1c6baa215d9e35e5a1cacbd1ee1751160a10bc575ce89f210ab76e25cd2"
+      },
+      "supportedCharacterIds": [
+        "bandeirante"
+      ],
+      "sourceVariants": [
+        {
+          "id": "bandeirante",
+          "characterIds": [
+            "bandeirante"
+          ],
+          "source": {
+            "path": "public/models/characters/bandeirante.glb",
+            "sha256": "f968ddb07ab256a948c6815a2d13ca241e7de4b623bda238eb7cdbf434ca4885",
+            "skeletonFamilySha256": "a623e1c6baa215d9e35e5a1cacbd1ee1751160a10bc575ce89f210ab76e25cd2",
+            "geometrySha256": "6e2cedbefe75e1f674e40d1b54e55743cdcce89f2d631690253a96c478f4e0ef",
+            "weightsSha256": "432d8e85303d6f2d92e88977ae3060ae98383f2fee93669067fec54da2432ec4"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "4649c168474461bb69b02f3dc8bbb89dec182735fa0f0c81f2cd5bc7773ca171",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/bandeirante-a623e1c6baa2.glb",
+            "sha256": "a8c7094cb877d5e1154882541034d2a8be0e2141c6d3ad1b510be1b8cab3c724",
+            "bindFingerprintSha256": "a623e1c6baa215d9e35e5a1cacbd1ee1751160a10bc575ce89f210ab76e25cd2",
+            "geometryFingerprintSha256": "3b1f506efd325796b3c657389baa3efeea4b2be00d4409e0e63c987d7fd2cd67",
+            "weightsFingerprintSha256": "b28ab094411bae947c14ef2f51f8330cb09e9c8b72d2816742e11e7d9d8f8cb1"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7679,
+              "joints": 24,
+              "nonzeroWeights": 20641,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 762,
+              "joints": 24,
+              "nonzeroWeights": 844,
+              "triangles": 456,
+              "leftTriangles": 228,
+              "rightTriangles": 228
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-a723183f7d0f",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-a723183f7d0f",
+        "fingerprintSha256": "a723183f7d0f58e4cc03cb1181e140200c3e90bfc833554cb19aee4076d2d8af"
+      },
+      "supportedCharacterIds": [
+        "camera-roxa"
+      ],
+      "sourceVariants": [
+        {
+          "id": "camera-roxa",
+          "characterIds": [
+            "camera-roxa"
+          ],
+          "source": {
+            "path": "public/models/characters/camera-roxa.glb",
+            "sha256": "148997911e43e4489ea7994860cb0a85d24a7e657940ca08949250551c04316b",
+            "skeletonFamilySha256": "a723183f7d0f58e4cc03cb1181e140200c3e90bfc833554cb19aee4076d2d8af",
+            "geometrySha256": "7a126e85fcf5d3ae7732516536fcf178a687246aac4856cc3acd2367223cfea0",
+            "weightsSha256": "8d0b502c666ddd32097fcf8229a06e437a78280afa5afed7f5d734d7f42911f0"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "77a560e9b088ac3c60d9eca8e65000b958ca7f94a8b25bb5e4f72ff910e326be",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/camera-roxa-a723183f7d0f.glb",
+            "sha256": "c93c0e87847e5bcc30d6151b19b90d64d783994d11ad603f57c73a0980d98651",
+            "bindFingerprintSha256": "a723183f7d0f58e4cc03cb1181e140200c3e90bfc833554cb19aee4076d2d8af",
+            "geometryFingerprintSha256": "cb6420454cfcc8c56bdadb6c4b770088887ddd0db6e71775ff90ad9215291663",
+            "weightsFingerprintSha256": "f4177e728e3f15e65ae49f97ad8f6cd87300802009152ec625c7854693ab1fd7"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 8340,
+              "joints": 24,
+              "nonzeroWeights": 22984,
+              "primitives": 4
+            },
+            "after": {
+              "vertices": 466,
+              "joints": 24,
+              "nonzeroWeights": 596,
+              "triangles": 544,
+              "leftTriangles": 297,
+              "rightTriangles": 247
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-aa09e0bd8390",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-aa09e0bd8390",
+        "fingerprintSha256": "aa09e0bd83908362ab81edc221caa72e41631cd3bd9fe3980f8da1173543d2aa"
+      },
+      "supportedCharacterIds": [
+        "esquerdomacho"
+      ],
+      "sourceVariants": [
+        {
+          "id": "esquerdomacho",
+          "characterIds": [
+            "esquerdomacho"
+          ],
+          "source": {
+            "path": "public/models/characters/esquerdomacho.glb",
+            "sha256": "5a615784b38b71cd3b2557f8baa7440ad7b972ad6d8dc1f3dddd75a4cee9afe2",
+            "skeletonFamilySha256": "aa09e0bd83908362ab81edc221caa72e41631cd3bd9fe3980f8da1173543d2aa",
+            "geometrySha256": "d18f1594d93062bbb4f51a3c0ca22c2b314395050f2a94c901328f97a481a8ad",
+            "weightsSha256": "b5d062525acb05165246d93a10947c0f48fd1ab25c3aded2a933cae182a442eb"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "88b7402c4a2238d7d5f11c309f3c33ae7aa2de82fa24587b6dcf12b752dc119c",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/esquerdomacho-aa09e0bd8390.glb",
+            "sha256": "cb7e74147abd68d279f2feed9b6a5d7481ccec3372e4f8beb1db861b3954da81",
+            "bindFingerprintSha256": "aa09e0bd83908362ab81edc221caa72e41631cd3bd9fe3980f8da1173543d2aa",
+            "geometryFingerprintSha256": "827939371eb597adede1f3797ffecff00b2f0837e49cab5ce1db036d0468071e",
+            "weightsFingerprintSha256": "86f2e434bc4e25d2942c24ec08c4ed71cff0a42a7f024cdf4ceddaf6ec1a713e"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6861,
+              "joints": 26,
+              "nonzeroWeights": 14828,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1910,
+              "joints": 26,
+              "nonzeroWeights": 3429,
+              "triangles": 1441,
+              "leftTriangles": 723,
+              "rightTriangles": 718
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-aaf74fd9b73b",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-aaf74fd9b73b",
+        "fingerprintSha256": "aaf74fd9b73b5a7559d1bfddb3437e6b4432bd935f3329a6d064020079940585"
+      },
+      "supportedCharacterIds": [
+        "raul"
+      ],
+      "sourceVariants": [
+        {
+          "id": "raul",
+          "characterIds": [
+            "raul"
+          ],
+          "source": {
+            "path": "public/models/characters/raul.glb",
+            "sha256": "8e43002b8eec8dbf2f186b89f9d55edadb98574799d8b6372f8f917556da1a2a",
+            "skeletonFamilySha256": "aaf74fd9b73b5a7559d1bfddb3437e6b4432bd935f3329a6d064020079940585",
+            "geometrySha256": "1520246adfcdca97f1525ce40bb76cce30510245c108532b1e392dd2862ea54d",
+            "weightsSha256": "06f1520028f553608d98bdb696534d003f57c8b8d7cd12ec727fd0c139458580"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "7ea7a8b2fa4005860a9a7813b1f08c7ac6d4ca13dc206bbb445d9206cbef3be6",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/raul-aaf74fd9b73b.glb",
+            "sha256": "0b79b20c2f343a2d9e4db631ccae4273b25b06ef4d3be5cac3c821fde280f0ef",
+            "bindFingerprintSha256": "aaf74fd9b73b5a7559d1bfddb3437e6b4432bd935f3329a6d064020079940585",
+            "geometryFingerprintSha256": "9f7efe2b496e619a232560d29d352a8c7d1156fb69c9882566cfab9fbb25a12d",
+            "weightsFingerprintSha256": "ab1bb39d39d7350f63067f08c0eb7f0928eff0a2895dd7a250ef023b953bdf74"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6149,
+              "joints": 24,
+              "nonzeroWeights": 12541,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 620,
+              "joints": 24,
+              "nonzeroWeights": 652,
+              "triangles": 476,
+              "leftTriangles": 238,
+              "rightTriangles": 238
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-ae20c7239420",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-ae20c7239420",
+        "fingerprintSha256": "ae20c72394207402725b2b100844927501b4da673195a636d1576f44eeae98b4"
+      },
+      "supportedCharacterIds": [
+        "gotinha"
+      ],
+      "sourceVariants": [
+        {
+          "id": "gotinha",
+          "characterIds": [
+            "gotinha"
+          ],
+          "source": {
+            "path": "public/models/characters/gotinha.glb",
+            "sha256": "941b812cad28ccac2cd25024292ad6f87efa1c2dcafecc694aa052209c603253",
+            "skeletonFamilySha256": "ae20c72394207402725b2b100844927501b4da673195a636d1576f44eeae98b4",
+            "geometrySha256": "3d9b967e9336776ccbf4517030b003f0820aabf29e651ecc2f8464615ed36e8c",
+            "weightsSha256": "e614d5a3a5a8bc19fa13ad2f3315ba7d11b1cb7b22ee02c9505ce9284838b980"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "c45a472bb2b7458ba751e5c0c5f96f975ff5be8ceb8ccb23fb62b4b89df0f756",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/gotinha-ae20c7239420.glb",
+            "sha256": "345fce9712cf4ddf056aff709006ffe6875882b5d17f6d2f58f3c6a4604a7c48",
+            "bindFingerprintSha256": "ae20c72394207402725b2b100844927501b4da673195a636d1576f44eeae98b4",
+            "geometryFingerprintSha256": "73673ce5d16ff8ee056d3c2cd16f89232712f1db0dbb5a6e9c5ef7b31afe82ad",
+            "weightsFingerprintSha256": "9e35dc5e82f35902f7369987fff5841dd7f36b85d9447407c83212996710dec4"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3249,
+              "joints": 26,
+              "nonzeroWeights": 8787,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 580,
+              "joints": 26,
+              "nonzeroWeights": 1076,
+              "triangles": 858,
+              "leftTriangles": 430,
+              "rightTriangles": 428
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-b2013bcf639a",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-b2013bcf639a",
+        "fingerprintSha256": "b2013bcf639a5942902dc6e5db735c59cc0369607195120bc1e791f686a541ca"
+      },
+      "supportedCharacterIds": [
+        "barbudo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "barbudo",
+          "characterIds": [
+            "barbudo"
+          ],
+          "source": {
+            "path": "public/models/characters/barbudo.glb",
+            "sha256": "2aaace3d7d18147693da0002f2f1e3477263cfd4eb8b74d2056869c3ae0f45f2",
+            "skeletonFamilySha256": "b2013bcf639a5942902dc6e5db735c59cc0369607195120bc1e791f686a541ca",
+            "geometrySha256": "22a79222115603bd18b8519543d2fd1f7f5a597b9f706f7374f30e4883d6bbd7",
+            "weightsSha256": "9f5ccc698134e68184f0fab8ad4c4f250f563cd8fc01a03aede45148dfc2bd17"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "23ff50e73d805a819dd34ee93d6c94792895b4723b3c64f64c670b1d3f08f337",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/barbudo-b2013bcf639a.glb",
+            "sha256": "9cc086275dc61eb07b6eeb8eb4b2a78292fbb79a950b1c4338a8e9bb14a72dc3",
+            "bindFingerprintSha256": "b2013bcf639a5942902dc6e5db735c59cc0369607195120bc1e791f686a541ca",
+            "geometryFingerprintSha256": "6a63860cf0d3c6b152ac1b6f7bd4965a3782020521bd0408f113ae3aa2500eca",
+            "weightsFingerprintSha256": "a14565e793747d6bf54afe74697039e9473910ae211034042b4afb3fbd7d7b9f"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6274,
+              "joints": 24,
+              "nonzeroWeights": 18404,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1066,
+              "joints": 24,
+              "nonzeroWeights": 1394,
+              "triangles": 763,
+              "leftTriangles": 384,
+              "rightTriangles": 379
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-bacebc82c188",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-bacebc82c188",
+        "fingerprintSha256": "bacebc82c188de31193d1e06a83ab13898c8958519651061611074f27a3391a6"
+      },
+      "supportedCharacterIds": [
+        "sertanejo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "sertanejo",
+          "characterIds": [
+            "sertanejo"
+          ],
+          "source": {
+            "path": "public/models/characters/sertanejo.glb",
+            "sha256": "55aa94450dd09b595dde1c46f0b91fabfe30dca866e98c9a013f7380cb627207",
+            "skeletonFamilySha256": "bacebc82c188de31193d1e06a83ab13898c8958519651061611074f27a3391a6",
+            "geometrySha256": "f364eefab58fa1f099f654861dc371c168251c8a9e4566a4b661d53b23a30819",
+            "weightsSha256": "6e89104eecd2d60c1a4902de112b559346e8d211f3d215f74c209e0fa4d88bff"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "572c7ed50310b6371b8a5fc91935e5303a1eb650250160041f36f6e7bb9159ef",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/sertanejo-bacebc82c188.glb",
+            "sha256": "eed3d88215ea9db32b49d3060f07c992ad503a178241b6a41531817c10de66ca",
+            "bindFingerprintSha256": "bacebc82c188de31193d1e06a83ab13898c8958519651061611074f27a3391a6",
+            "geometryFingerprintSha256": "5bb42650dee3c48ddfbf3be3124a0e2c7f0ca866ae82be102e0b81019c5b4725",
+            "weightsFingerprintSha256": "bc0048a77e01c28421e548341956492404c6c1ac004649686d4dc19f5b6d4d6c"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 5614,
+              "joints": 26,
+              "nonzeroWeights": 12504,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1006,
+              "joints": 26,
+              "nonzeroWeights": 1811,
+              "triangles": 793,
+              "leftTriangles": 397,
+              "rightTriangles": 396
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-bead84bb166c",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-bead84bb166c",
+        "fingerprintSha256": "bead84bb166c8a43378f2ea3a581ddd7184814447610011cbb1c38a090dcd68e"
+      },
+      "supportedCharacterIds": [
+        "mst"
+      ],
+      "sourceVariants": [
+        {
+          "id": "mst",
+          "characterIds": [
+            "mst"
+          ],
+          "source": {
+            "path": "public/models/characters/mst.glb",
+            "sha256": "acecd2a763dc417f6b132a2d555bffd2c6a5e7cf3b1a83a50ee24d938fce4b0f",
+            "skeletonFamilySha256": "bead84bb166c8a43378f2ea3a581ddd7184814447610011cbb1c38a090dcd68e",
+            "geometrySha256": "f5631b6368e04a260d0a0c4fbe66c4ef18fed35e5cdf11ebfecd77fde3b1d9ac",
+            "weightsSha256": "c8754b38ca14bb2a00114acedc792ee27d949879874485c74c1b2d5177b082dd"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "c80fe174b9e86cf75679ea85b5a79339277ce1724a1abe54f27472489cf972b8",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/mst-bead84bb166c.glb",
+            "sha256": "6c3418ea3018a5ae44e0dce968e4bcaaeef0c71158956d5173c9dde231b05418",
+            "bindFingerprintSha256": "bead84bb166c8a43378f2ea3a581ddd7184814447610011cbb1c38a090dcd68e",
+            "geometryFingerprintSha256": "710dfebad3bf3d641b06d0bda6c5ab995eb3c7a33495abc258af327490683a62",
+            "weightsFingerprintSha256": "8f34069198d83fdf05cccc18d10a02fe55d1aacf2b3add1567dce445ba7f7169"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6587,
+              "joints": 28,
+              "nonzeroWeights": 16403,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 626,
+              "joints": 28,
+              "nonzeroWeights": 1207,
+              "triangles": 448,
+              "leftTriangles": 224,
+              "rightTriangles": 224
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-c3053ce52e3c",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-c3053ce52e3c",
+        "fingerprintSha256": "c3053ce52e3ccb4e1a3db3970dc9ec0817d472b69aaedb3ec0a5f329d23385fe"
+      },
+      "supportedCharacterIds": [
+        "marina-silva"
+      ],
+      "sourceVariants": [
+        {
+          "id": "marina-silva",
+          "characterIds": [
+            "marina-silva"
+          ],
+          "source": {
+            "path": "public/models/characters/marina-silva.glb",
+            "sha256": "42dc11431db1633625d37f64fcff3ff53fb51deb6bf43eeec86c353026b15e56",
+            "skeletonFamilySha256": "c3053ce52e3ccb4e1a3db3970dc9ec0817d472b69aaedb3ec0a5f329d23385fe",
+            "geometrySha256": "8812ecd47bd3d1ac4f20a71953a4294d98c586f500eb15c5e254eb8423506e62",
+            "weightsSha256": "dde6535984632481af1ecffff46df0cde27a134301510de1fddfdb25a69b9eef"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "05a9c7b39db6e020c4e68aef6d2494cc96c6a0743fc21a8187f052132d97e4a8",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/marina-silva-c3053ce52e3c.glb",
+            "sha256": "31371766a6f7b9f20bbc097cdb5f8802e2434d02c70c6543986971767ec12740",
+            "bindFingerprintSha256": "c3053ce52e3ccb4e1a3db3970dc9ec0817d472b69aaedb3ec0a5f329d23385fe",
+            "geometryFingerprintSha256": "51929ebb5ed293ceae1c7c7e71b192a945214a9d0f83a483827a577c05dcc4df",
+            "weightsFingerprintSha256": "d8bda5b88b4536103b311146f6bc05e52cb14ec0094505ae2b334e6eaecb9648"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6840,
+              "joints": 24,
+              "nonzeroWeights": 18385,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1076,
+              "joints": 24,
+              "nonzeroWeights": 1284,
+              "triangles": 764,
+              "leftTriangles": 380,
+              "rightTriangles": 384
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-c779857d3d98",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-c779857d3d98",
+        "fingerprintSha256": "c779857d3d9884b8a4debb225cbdd8dac7f91d67694323f52ee9ed6dae59a1f7"
+      },
+      "supportedCharacterIds": [
+        "reggae"
+      ],
+      "sourceVariants": [
+        {
+          "id": "reggae",
+          "characterIds": [
+            "reggae"
+          ],
+          "source": {
+            "path": "public/models/characters/reggae.glb",
+            "sha256": "60a8839c6e657a2deb391551504c30a3e3cbfbc2221c608af63bc45173be91d3",
+            "skeletonFamilySha256": "c779857d3d9884b8a4debb225cbdd8dac7f91d67694323f52ee9ed6dae59a1f7",
+            "geometrySha256": "ca7d402c867917e94ac1644c701ac256efbe0be2c4eb5689a57c60fb02b1da82",
+            "weightsSha256": "51e077428eeec012a0e3b1060a719ca3b1c3dbdf82a82790c7ca964bfa78282c"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "135655535182f8912af98f07f9826f5935dc7a03276ad81a197d7d93c3e2f226",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/reggae-c779857d3d98.glb",
+            "sha256": "7d4ca5222d817f8b1c44cda6cbf8ffdc0443bb49fde657f9a6bb2d2b0b1547ea",
+            "bindFingerprintSha256": "c779857d3d9884b8a4debb225cbdd8dac7f91d67694323f52ee9ed6dae59a1f7",
+            "geometryFingerprintSha256": "97d0c0d6ba93441bb4749b467479e81a7fec94988dc7225b737c2fa324f6102c",
+            "weightsFingerprintSha256": "0a7ca9b27d84229ce924dd394214548dd9c0a943a973e2bafff0fdf1eaab859e"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6987,
+              "joints": 24,
+              "nonzeroWeights": 17820,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1016,
+              "joints": 24,
+              "nonzeroWeights": 1208,
+              "triangles": 652,
+              "leftTriangles": 331,
+              "rightTriangles": 321
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-c88505ea4728",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-c88505ea4728",
+        "fingerprintSha256": "c88505ea4728eb68c99f45bd2535da362e4e98fda8517b1b817ea99b9f1f5dc5"
+      },
+      "supportedCharacterIds": [
+        "jozo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "jozo",
+          "characterIds": [
+            "jozo"
+          ],
+          "source": {
+            "path": "public/models/characters/jozo.glb",
+            "sha256": "6e7609f191624759e4b2fffc6e545bc30e045ae2b2cdc482eacfb66771701913",
+            "skeletonFamilySha256": "c88505ea4728eb68c99f45bd2535da362e4e98fda8517b1b817ea99b9f1f5dc5",
+            "geometrySha256": "683dc81ba157241e925c12e701448726ea7b5fd2e5e2c2f605f7b1e9c9274267",
+            "weightsSha256": "1d6843fc276555b021bc2374dff6759e3e13ddb4e901f577041fdd4a879c4c7a"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "3d89859e99a218ed912532d7d2b5c896388f82703793ffa03f55c9ace5556a12",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/jozo-c88505ea4728.glb",
+            "sha256": "15025f2b6ac7d1768b76d36ffd7744c87cf31db1cbaeb3bc667f80611c7d8457",
+            "bindFingerprintSha256": "c88505ea4728eb68c99f45bd2535da362e4e98fda8517b1b817ea99b9f1f5dc5",
+            "geometryFingerprintSha256": "1b5a296aba5086d6a7daf23fcdab18efe061c85be848f5f17f36700e1d976a8a",
+            "weightsFingerprintSha256": "6dfcc226c1b439b8d2a9dfb9e3496bb4014bdffb26684d8178eee6871616e59d"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6963,
+              "joints": 24,
+              "nonzeroWeights": 14008,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1170,
+              "joints": 24,
+              "nonzeroWeights": 1432,
+              "triangles": 796,
+              "leftTriangles": 400,
+              "rightTriangles": 396
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-c9d48e656cdb",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-c9d48e656cdb",
+        "fingerprintSha256": "c9d48e656cdb8d815b0f24d1e3410cf15492923e8a9d623f02fa24b8cc98d0a9"
+      },
+      "supportedCharacterIds": [
+        "punk"
+      ],
+      "sourceVariants": [
+        {
+          "id": "punk",
+          "characterIds": [
+            "punk"
+          ],
+          "source": {
+            "path": "public/models/characters/punk.glb",
+            "sha256": "3cb41807481b40578f41d0c9a4ccf556e96dfc95d1d4a2663feb86b9532326fa",
+            "skeletonFamilySha256": "c9d48e656cdb8d815b0f24d1e3410cf15492923e8a9d623f02fa24b8cc98d0a9",
+            "geometrySha256": "d17d15d58c00518af4abd25f99482558e3a35a2256a03444c37e0d29b6be0dbf",
+            "weightsSha256": "a52d6b42d7cd62dd3b4289259f5d73db70a451eacbbe7d9408d9d574aa40a29d"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "59d5dbc0f2d946812bd7c7523443e825fcb3f533163bc11254cbfb89fc5da22a",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/punk-c9d48e656cdb.glb",
+            "sha256": "253eab1a9f38b4875c37b52dcfbaf14e4e195d680a4e3f7d9afbfdfd7cb9b8cf",
+            "bindFingerprintSha256": "c9d48e656cdb8d815b0f24d1e3410cf15492923e8a9d623f02fa24b8cc98d0a9",
+            "geometryFingerprintSha256": "04de827d5655649b3a62cf5a0f4d2b412f52e133943a27993b3bc45ef880a87a",
+            "weightsFingerprintSha256": "e96b2d5db0cacc7758adaf90420ee3cf1f80b5c381ea575cba82058908acac3f"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 9502,
+              "joints": 24,
+              "nonzeroWeights": 20855,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 392,
+              "joints": 24,
+              "nonzeroWeights": 528,
+              "triangles": 240,
+              "leftTriangles": 120,
+              "rightTriangles": 120
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-cbfee9879bbe",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-cbfee9879bbe",
+        "fingerprintSha256": "cbfee9879bbee1875066d9b6e62084cd517cefd14c35d05598a7e5159c6f7156"
+      },
+      "supportedCharacterIds": [
+        "clubber"
+      ],
+      "sourceVariants": [
+        {
+          "id": "clubber",
+          "characterIds": [
+            "clubber"
+          ],
+          "source": {
+            "path": "public/models/characters/clubber.glb",
+            "sha256": "d22a08d12c24d568f72d271ca7a4f0f45bcda6f23264385664a69d768670bad3",
+            "skeletonFamilySha256": "cbfee9879bbee1875066d9b6e62084cd517cefd14c35d05598a7e5159c6f7156",
+            "geometrySha256": "f36c6d2584e27c56304495bb89939f981a3a498c4cc35a3b1acd96af1093aa26",
+            "weightsSha256": "6aaa8b0bd36b8cea534d576216f409d210a5dc1042ee2620a3e06590cfccda91"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "333149c294d304cd20740b899ca07b057af343779f0f4db05c693d2ff807941c",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/clubber-cbfee9879bbe.glb",
+            "sha256": "5682eb4f537a544aa6cd4096ff3360589833e3a8ea0b8d3770ca5d1d75772937",
+            "bindFingerprintSha256": "cbfee9879bbee1875066d9b6e62084cd517cefd14c35d05598a7e5159c6f7156",
+            "geometryFingerprintSha256": "fc7bd43c7016143f913efb57af18ed0613628277c817bae097659bd68a278b04",
+            "weightsFingerprintSha256": "7ea30e6584075687880fedec24fe1263759703a8d41bc95d1ac7b5079a0faf79"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7003,
+              "joints": 24,
+              "nonzeroWeights": 14475,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1009,
+              "joints": 24,
+              "nonzeroWeights": 1220,
+              "triangles": 700,
+              "leftTriangles": 350,
+              "rightTriangles": 350
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-cc1dfcf56df3",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-cc1dfcf56df3",
+        "fingerprintSha256": "cc1dfcf56df32195fc27fffbc2b452d554f1c1e58c8b0e533935e25fc95aefc5"
+      },
+      "supportedCharacterIds": [
+        "pagodeiro"
+      ],
+      "sourceVariants": [
+        {
+          "id": "pagodeiro",
+          "characterIds": [
+            "pagodeiro"
+          ],
+          "source": {
+            "path": "public/models/characters/pagodeiro.glb",
+            "sha256": "59f08630e844400b42bf542dee9069c3f3388ef760ee310f7e76004c1679b8b8",
+            "skeletonFamilySha256": "cc1dfcf56df32195fc27fffbc2b452d554f1c1e58c8b0e533935e25fc95aefc5",
+            "geometrySha256": "65b5938b0b673c0e09a66b61095e99388638aa5556cc4fbed75050fe1ff5b645",
+            "weightsSha256": "bba4f66b5469f076fa33756c77a4067af332f908e003aea98b24e212256f44d1"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "db5e01011fbd4ccc6a10c8960b02b5522bd905f341020fd2b67c767631bb09c1",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/pagodeiro-cc1dfcf56df3.glb",
+            "sha256": "a78f3f60ef1d3357e6f9c7c2d6efe5e1414a9c02e8668f966ca6ffd3259f1d1e",
+            "bindFingerprintSha256": "cc1dfcf56df32195fc27fffbc2b452d554f1c1e58c8b0e533935e25fc95aefc5",
+            "geometryFingerprintSha256": "e031dded5dcab834f5832f8361da0e4207c530c1f5e69f57084175145528dfb8",
+            "weightsFingerprintSha256": "fbd48ddfd6d820da39a7799696f8929d875a4fb762b54f39e81e45b188dee87e"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7024,
+              "joints": 24,
+              "nonzeroWeights": 19018,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 819,
+              "joints": 24,
+              "nonzeroWeights": 891,
+              "triangles": 558,
+              "leftTriangles": 278,
+              "rightTriangles": 280
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-d0555a9b53c4",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-d0555a9b53c4",
+        "fingerprintSha256": "d0555a9b53c477555afb709b69533771ef9304f787ad4fa5615566c84370e96a"
+      },
+      "supportedCharacterIds": [
+        "funkraiz"
+      ],
+      "sourceVariants": [
+        {
+          "id": "funkraiz",
+          "characterIds": [
+            "funkraiz"
+          ],
+          "source": {
+            "path": "public/models/characters/funkraiz.glb",
+            "sha256": "d21dd7157b429cdf090e12e7507065ba95a197076fb57624071100068533fede",
+            "skeletonFamilySha256": "d0555a9b53c477555afb709b69533771ef9304f787ad4fa5615566c84370e96a",
+            "geometrySha256": "6ccd1f2ee13c1f2b239afea0ab7031358a7cc97adb586ec7be0655796c59a979",
+            "weightsSha256": "da384688fadbf797141ef03c7068ae7dc38d0f485c2ecd5bcbd056f2c78d291b"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "4bfb80a159625eee5928de0b6957c99cba78ef8dd5d3b0f2178bbf27eaab0f2e",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/funkraiz-d0555a9b53c4.glb",
+            "sha256": "2569bff62cc2fb1be880bd75b9f0034fd918c95cfdf7ae277182c34c8beff12f",
+            "bindFingerprintSha256": "d0555a9b53c477555afb709b69533771ef9304f787ad4fa5615566c84370e96a",
+            "geometryFingerprintSha256": "2d36bf1eb850f33ab669bd167db0a78a716514c9c7cb0fc2e3c1a2f4cacdd477",
+            "weightsFingerprintSha256": "ff38439555a9f60e64b7c472c7c8ffe0751c1a7104e0afb310e2e371b90df082"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6494,
+              "joints": 24,
+              "nonzeroWeights": 11156,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1252,
+              "joints": 24,
+              "nonzeroWeights": 1521,
+              "triangles": 931,
+              "leftTriangles": 467,
+              "rightTriangles": 464
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-d2ce6ed1b5c8",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-d2ce6ed1b5c8",
+        "fingerprintSha256": "d2ce6ed1b5c8810eb7837dbdd1712a803ffb42c71aa48ea32a8a0f1752003593"
+      },
+      "supportedCharacterIds": [
+        "titica"
+      ],
+      "sourceVariants": [
+        {
+          "id": "titica",
+          "characterIds": [
+            "titica"
+          ],
+          "source": {
+            "path": "public/models/characters/titica.glb",
+            "sha256": "264d99d9a04b92e169e59f8c7214d8c166666a15eb87e82b16a7925f098413e4",
+            "skeletonFamilySha256": "d2ce6ed1b5c8810eb7837dbdd1712a803ffb42c71aa48ea32a8a0f1752003593",
+            "geometrySha256": "03d7d5fa6ad419631e44f5f5dd075414ea9ac205009464a5fa0e1802369488f7",
+            "weightsSha256": "407eb2ba9852bb7dad3449372607cede07434b44201a0c934dbf2b314f31f839"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "e941d4913b5cff00d1ff69128d4979b1ab7755769c93defee8864b3cae01d09d",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/titica-d2ce6ed1b5c8.glb",
+            "sha256": "a04737335030764b02cae97ef15520f0bf9036d384afe54dd0a5b4b444e60693",
+            "bindFingerprintSha256": "d2ce6ed1b5c8810eb7837dbdd1712a803ffb42c71aa48ea32a8a0f1752003593",
+            "geometryFingerprintSha256": "bbd0a0fee19bf2410dfdf554feba7564b72bde8f97d2cf7b895ae21e5860be33",
+            "weightsFingerprintSha256": "959b8e23026abcebe9b46b0761d2a1008a902219ea7c9369a3c6d96b342f64c7"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6551,
+              "joints": 24,
+              "nonzeroWeights": 14776,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1176,
+              "joints": 24,
+              "nonzeroWeights": 1295,
+              "triangles": 778,
+              "leftTriangles": 376,
+              "rightTriangles": 402
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-da748b56c8df",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-da748b56c8df",
+        "fingerprintSha256": "da748b56c8df64c20942da101b39957fcc49e9641b5fd3686fd9486bf8043985"
+      },
+      "supportedCharacterIds": [
+        "gilbomes"
+      ],
+      "sourceVariants": [
+        {
+          "id": "gilbomes",
+          "characterIds": [
+            "gilbomes"
+          ],
+          "source": {
+            "path": "public/models/characters/gilbomes.glb",
+            "sha256": "19b55ce55caeb7ce2ac67f1970590fcda9ddef51daabac122741a72fc3315266",
+            "skeletonFamilySha256": "da748b56c8df64c20942da101b39957fcc49e9641b5fd3686fd9486bf8043985",
+            "geometrySha256": "8c7749207e456084ef8608d462f48c84f3929856c251740784eac8420654a348",
+            "weightsSha256": "b31a26258e03df814cf90110511036bc4e4155653ea2c4aabb9935d1101b7265"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "d820cdec9c8b7771ba05ffa65d0d3cda61ac38fe0ad431dae674125936aceae5",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/gilbomes-da748b56c8df.glb",
+            "sha256": "e01882f2f56daadc719b1dd3c96fd3176cb7733cdf99e671a9b5f5db8039f53c",
+            "bindFingerprintSha256": "da748b56c8df64c20942da101b39957fcc49e9641b5fd3686fd9486bf8043985",
+            "geometryFingerprintSha256": "0965bb77df86e0f9dc9f55ba1ec4d3287ad0f75937fef2c335482dfe514b9bed",
+            "weightsFingerprintSha256": "09edbae3a406b0c70abf26e147c35d29f7f62843ca9776cccc0c91ad0160f647"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3319,
+              "joints": 24,
+              "nonzeroWeights": 7247,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 841,
+              "joints": 24,
+              "nonzeroWeights": 947,
+              "triangles": 1059,
+              "leftTriangles": 514,
+              "rightTriangles": 545
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-e335a19cdebe",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-e335a19cdebe",
+        "fingerprintSha256": "e335a19cdebe81b98f437d0be7644f987a288ec069968e29a953b8c05a7a03ef"
+      },
+      "supportedCharacterIds": [
+        "doutora"
+      ],
+      "sourceVariants": [
+        {
+          "id": "doutora",
+          "characterIds": [
+            "doutora"
+          ],
+          "source": {
+            "path": "public/models/characters/doutora.glb",
+            "sha256": "eaafe1c0a7e4d0963940555e56ea1a3f2688c8cffeaf1dd4d917e11b34a41efe",
+            "skeletonFamilySha256": "e335a19cdebe81b98f437d0be7644f987a288ec069968e29a953b8c05a7a03ef",
+            "geometrySha256": "ccf46538991d8f59fe625f199df1e85f3fb8e89862b48537fd44e0a875669364",
+            "weightsSha256": "72278c19bd9c520232a61fb2922d2807e40b1c21c9989e40082b3c2352ad8286"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "446ebf51bdb6055146205fb9c752deeab6196266c5cd18b43f1046b9db1c0ef4",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/doutora-e335a19cdebe.glb",
+            "sha256": "d5f797572c84601a0c897f75b43b2beb5a17dceb8753639ba3a50c3036783a2f",
+            "bindFingerprintSha256": "e335a19cdebe81b98f437d0be7644f987a288ec069968e29a953b8c05a7a03ef",
+            "geometryFingerprintSha256": "445ed5ec36393140d7ba9669e03b2306e0606e8a04801430e31245bc57a8b1f5",
+            "weightsFingerprintSha256": "c9f6c8b5f6bff43996f811e84dfb28b6420d64dc434d3ae157db7bbdba3a83a3"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6868,
+              "joints": 26,
+              "nonzeroWeights": 15942,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1164,
+              "joints": 26,
+              "nonzeroWeights": 2127,
+              "triangles": 782,
+              "leftTriangles": 395,
+              "rightTriangles": 387
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-e737dc8085c7",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-e737dc8085c7",
+        "fingerprintSha256": "e737dc8085c76c7e70e32897033802e3be0acc7961d32542596c6d1be28a19fc"
+      },
+      "supportedCharacterIds": [
+        "julia-zanatta"
+      ],
+      "sourceVariants": [
+        {
+          "id": "julia-zanatta",
+          "characterIds": [
+            "julia-zanatta"
+          ],
+          "source": {
+            "path": "public/models/characters/julia-zanatta.glb",
+            "sha256": "961ff061920733e7f9e6acad46fb96379529ee2078e93f3a9eb2b33aff8f7769",
+            "skeletonFamilySha256": "e737dc8085c76c7e70e32897033802e3be0acc7961d32542596c6d1be28a19fc",
+            "geometrySha256": "f90cd52796a93c70101d02dbc26500551cdee4fde04793485a9a66d3ef1cd864",
+            "weightsSha256": "f500423665c89a2fe8ebb3f61eeb7bc3ac20c4d783050bd5e775e4b28074f617"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "33602c752bd7c06fe4391ddd970a9e9d340fd07cb585733d661d793789e70029",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/julia-zanatta-e737dc8085c7.glb",
+            "sha256": "2a97316bb4e8dfc0810139e0c23c42b9d550baaefdce3e59bec98da221029bdb",
+            "bindFingerprintSha256": "e737dc8085c76c7e70e32897033802e3be0acc7961d32542596c6d1be28a19fc",
+            "geometryFingerprintSha256": "f2ef91c25ceb0b55e039142dc4e91815fb52ada0d60ad52238c015efc4f6396e",
+            "weightsFingerprintSha256": "9b9c85ea896c42c042b4b0c970fd52389d9249a1f4227bc00b8868ad9fd2c030"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7208,
+              "joints": 24,
+              "nonzeroWeights": 18872,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 322,
+              "joints": 24,
+              "nonzeroWeights": 459,
+              "triangles": 211,
+              "leftTriangles": 107,
+              "rightTriangles": 104
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-ec31b809c849",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-ec31b809c849",
+        "fingerprintSha256": "ec31b809c849a2827de6bc7bb8fcfa68802630f3e84fc28b1d1ad7956ae1cc04"
+      },
+      "supportedCharacterIds": [
+        "padata"
+      ],
+      "sourceVariants": [
+        {
+          "id": "padata",
+          "characterIds": [
+            "padata"
+          ],
+          "source": {
+            "path": "public/models/characters/padata.glb",
+            "sha256": "1ded075128059d3a49064b1d06cbae9dd8fee1dbb26844bf7583801c8648cfa7",
+            "skeletonFamilySha256": "ec31b809c849a2827de6bc7bb8fcfa68802630f3e84fc28b1d1ad7956ae1cc04",
+            "geometrySha256": "c90753f062109d3edec8b0b0336631f2b82217437902a941a0b8009654296151",
+            "weightsSha256": "060e9f385b8a1c9703330d501c3ff13bdc7bd1ba535a3ef8e37930560ff4ef5b"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "4ce9fcd93538c1e9b9647fafeb345169578e42fc567e4fad6e18bf1a8a7908c1",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/padata-ec31b809c849.glb",
+            "sha256": "465c59ce9d93cc1b73b63d2671b882fc7af18f1644d5077ed92ce4c3e740bdb9",
+            "bindFingerprintSha256": "ec31b809c849a2827de6bc7bb8fcfa68802630f3e84fc28b1d1ad7956ae1cc04",
+            "geometryFingerprintSha256": "b2b70eab1251cc825f0f801e1399585507dc18b43f5da311a390f308eb60740b",
+            "weightsFingerprintSha256": "d1072d488892275090f5a5d5fc4c55c9a7087203916950c70e03b1d6befa5294"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3432,
+              "joints": 24,
+              "nonzeroWeights": 7672,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 594,
+              "joints": 24,
+              "nonzeroWeights": 662,
+              "triangles": 784,
+              "leftTriangles": 392,
+              "rightTriangles": 392
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-edb601e585a9",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-edb601e585a9",
+        "fingerprintSha256": "edb601e585a9b00fa9795de8e68a25bb4b5e0bb66b8c5e338cfada52bde2e54f"
+      },
+      "supportedCharacterIds": [
+        "deputado"
+      ],
+      "sourceVariants": [
+        {
+          "id": "deputado",
+          "characterIds": [
+            "deputado"
+          ],
+          "source": {
+            "path": "public/models/characters/deputado.glb",
+            "sha256": "8b8915819fc086bcfc2c1e1a66d52a8d938594799707415fbf1516dfbf70d95a",
+            "skeletonFamilySha256": "edb601e585a9b00fa9795de8e68a25bb4b5e0bb66b8c5e338cfada52bde2e54f",
+            "geometrySha256": "65197736ac4f1fda458ba8e3cde3a0c2c1ac28f007a51d546a51ec0ded11750c",
+            "weightsSha256": "5b05ae7ea052765e3d2433e8fd4eb12886f58687df6a964acdfcfe717bbbf5ca"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "52e036a93479e6c10a81557146c8b56798177043e49c692e60bb8197d6510315",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/deputado-edb601e585a9.glb",
+            "sha256": "1ec1bbf3b28c14b742e5ecc9839f12893e8f9dae7a4499c450b9da3661db4485",
+            "bindFingerprintSha256": "edb601e585a9b00fa9795de8e68a25bb4b5e0bb66b8c5e338cfada52bde2e54f",
+            "geometryFingerprintSha256": "991161e1c8099e44ed95422d79919de7353fcbd38bcbefea9b7547c6ca8b3ade",
+            "weightsFingerprintSha256": "f32268483d219a4e02979a5107eba48a61b764d0247428ed8f86f33efdb81ed4"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 3602,
+              "joints": 24,
+              "nonzeroWeights": 8940,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 782,
+              "joints": 24,
+              "nonzeroWeights": 1005,
+              "triangles": 988,
+              "leftTriangles": 478,
+              "rightTriangles": 510
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-f6784a862acd",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-f6784a862acd",
+        "fingerprintSha256": "f6784a862acdded0b28a4fd45607d45bd6e1f24b1b16c5addedafcf76565bf30"
+      },
+      "supportedCharacterIds": [
+        "fluxo"
+      ],
+      "sourceVariants": [
+        {
+          "id": "fluxo",
+          "characterIds": [
+            "fluxo"
+          ],
+          "source": {
+            "path": "public/models/characters/fluxo.glb",
+            "sha256": "644d6ae0dcf645b4cda6fe724e28f7125ef79ae4869073a7d13122cc83941cda",
+            "skeletonFamilySha256": "f6784a862acdded0b28a4fd45607d45bd6e1f24b1b16c5addedafcf76565bf30",
+            "geometrySha256": "ccf5086346d0f6807cdcc6f9ff665c0aa95186f0b7fd71a29cbea064e486420c",
+            "weightsSha256": "32465f4d2d26b5733cc49bfc728102dd9836c80ab120fed0250b16aa5d34df4a"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "e1955c3f09b794e1f550658c64c8a2da424b45df9db5f0a5f620186c68765f25",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/fluxo-f6784a862acd.glb",
+            "sha256": "8863d024faa8b7cb2de8dc8c39361e2bb036c5f1f1ce7ebf13fd864dd4533260",
+            "bindFingerprintSha256": "f6784a862acdded0b28a4fd45607d45bd6e1f24b1b16c5addedafcf76565bf30",
+            "geometryFingerprintSha256": "1095ba7a6bd0854141fa1ec71820ab5847fbb3c0c3f80fd917447110fdb33f53",
+            "weightsFingerprintSha256": "3442c6bfd73017b8334c8fb1b4e1b84c3c5456268fe66851f377f3aaa549b8df"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 7055,
+              "joints": 24,
+              "nonzeroWeights": 16096,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1454,
+              "joints": 24,
+              "nonzeroWeights": 1565,
+              "triangles": 926,
+              "leftTriangles": 464,
+              "rightTriangles": 462
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-fe58d4b484c9",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-fe58d4b484c9",
+        "fingerprintSha256": "fe58d4b484c955b8dd5c94df71f8a875ebf436067d615eab84e0dd862aea52ce"
+      },
+      "supportedCharacterIds": [
+        "cuca"
+      ],
+      "sourceVariants": [
+        {
+          "id": "cuca",
+          "characterIds": [
+            "cuca"
+          ],
+          "source": {
+            "path": "public/models/characters/cuca.glb",
+            "sha256": "7714dbb9ff324e0c1fac93de2e0ee2d2fb150c3576eba304840bcaa876ee955e",
+            "skeletonFamilySha256": "fe58d4b484c955b8dd5c94df71f8a875ebf436067d615eab84e0dd862aea52ce",
+            "geometrySha256": "302d1c917a3abb0b6e4c35e40f21551090495bf517da447d392ae78e3440f0cc",
+            "weightsSha256": "727b992a6056f77f488058fdbe7c0097a108fd7d6fccce42e08a565d18fdb327"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "95066c0ee2e2eaba6f52f24200e2ca31ffaf304941c23efc82302f6f925e77dc",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/cuca-fe58d4b484c9.glb",
+            "sha256": "33a72806fbfabad8837f22e433cacab83f67d4c69ca5b7a575bdd950722b62e8",
+            "bindFingerprintSha256": "fe58d4b484c955b8dd5c94df71f8a875ebf436067d615eab84e0dd862aea52ce",
+            "geometryFingerprintSha256": "3b7590a3f9c16db89489ef9b06f9a1b29b3899aca2cb2bf0558bd4eb026140c7",
+            "weightsFingerprintSha256": "a10c1c80bf2d2a2fafa6b92caab0e34275bc54ca9fc474a42275906d6d2e17cf"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 5598,
+              "joints": 26,
+              "nonzeroWeights": 21294,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 682,
+              "joints": 26,
+              "nonzeroWeights": 1920,
+              "triangles": 412,
+              "leftTriangles": 207,
+              "rightTriangles": 205
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    },
+    {
+      "id": "tp-fe6c317b7bbc",
+      "perspective": "3p",
+      "packageVersion": 1,
+      "skeletonFamily": {
+        "schema": "cs-skeleton-family/1",
+        "id": "tp-fe6c317b7bbc",
+        "fingerprintSha256": "fe6c317b7bbcd4f03a7f9ca11ec7ca62f6cda2e6e93dcb9d3bb357b0f714d24b"
+      },
+      "supportedCharacterIds": [
+        "senador"
+      ],
+      "sourceVariants": [
+        {
+          "id": "senador",
+          "characterIds": [
+            "senador"
+          ],
+          "source": {
+            "path": "public/models/characters/senador.glb",
+            "sha256": "73fdf646d7c1f3b4b2719dd96094761cb3e396fd3a638c26ee48a3043b8b6de8",
+            "skeletonFamilySha256": "fe6c317b7bbcd4f03a7f9ca11ec7ca62f6cda2e6e93dcb9d3bb357b0f714d24b",
+            "geometrySha256": "d95615bd5023e3883b3f349cf99fb74b19e3beb351f838e040666a3b4aecb970",
+            "weightsSha256": "ed42ce75b3a98b909f1f6cbd62105e50fc4630565128220d931db7fdebce7767"
+          },
+          "selection": {
+            "path": "tools/character-kit/gloves/selections.json",
+            "fileSha256": "3a9e157c014ae45ea20bc1212ffc17ec1b5717ab810154a4fe480a1d57387188",
+            "recordSha256": "b29dbb23e34de61ed9e2f87e5bb12f86d7f0083e11b7b2d0ad18c1478bc0b97a",
+            "schema": "cs-glove-mesh-parts/1",
+            "meshPartsSchema": "cs-mesh-part-selection/1"
+          },
+          "mesh": {
+            "path": "public/models/gloves/3p/senador-fe6c317b7bbc.glb",
+            "sha256": "06e349715b7ade7d7dde69a89e39f9d984c374b18df35eef33ac4414b5a40405",
+            "bindFingerprintSha256": "fe6c317b7bbcd4f03a7f9ca11ec7ca62f6cda2e6e93dcb9d3bb357b0f714d24b",
+            "geometryFingerprintSha256": "cb11b76e29bac338dac83723d3b77023f73e2b017cd86304ebc7d0b7bb8a1ead",
+            "weightsFingerprintSha256": "b66b3311cadde60bbc07b94fe165024182c2f46fb99cbc245edf1c6b3ffcdfa2"
+          },
+          "metrics": {
+            "before": {
+              "vertices": 6705,
+              "joints": 24,
+              "nonzeroWeights": 15786,
+              "primitives": 1
+            },
+            "after": {
+              "vertices": 1835,
+              "joints": 24,
+              "nonzeroWeights": 2191,
+              "triangles": 1196,
+              "leftTriangles": 595,
+              "rightTriangles": 601
+            }
+          }
+        }
+      ],
+      "materialVariantIds": [
+        "couro-marinho",
+        "verde-oliva",
+        "areia"
+      ],
+      "handOwnership": {
+        "baseHandsOwner": "character-body",
+        "gloveSurfaceRole": "derived-overlay",
+        "sourceHandRemovalCount": 0
+      },
+      "animationOwnership": {
+        "owner": "character-rig",
+        "mode": "inherit-live-skeleton",
+        "animationsEmbedded": false,
+        "poseOverrides": false,
+        "teleport": false
+      },
+      "visualApproved": false,
+      "runtimeEnabled": false,
+      "unverified": [
+        "visual-fit",
+        "contact",
+        "clipping",
+        "material-art-direction",
+        "runtime-integration"
+      ]
+    }
+  ],
+  "incompatible": [
+    {
+      "id": "adjim",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/adjim.glb",
+        "sha256": "5b76d9c11736520fb6095e23cccc1757ea78f2bbd0fcc6a81530ccbaa80bb6aa"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=2",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "9449fb1f56aea842099a45b39bdd200011e0204a5018ddcbd0d8074cfe1d4ec0",
+        "geometrySha256": "835121267bd7bd272c31fd9c381934772d4df0211e9d8699521ab283bbb52736",
+        "weightsSha256": "adda04c2d672f9659d8d265299d0c9c2c4b19942bd762f0bf5c4d691b88829e5"
+      }
+    },
+    {
+      "id": "blackmetal",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/blackmetal.glb",
+        "sha256": "af79de6acb490f964f7067cfb51e712ca744b46aa8bc218e0cb6063d9a28e3b3"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=5 right=8",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "4443dc2dc4e7fc3c2452946bcd5688ff80ed28dcd0b104b383649ebccdda8aae",
+        "geometrySha256": "3b77e2a56a1d02e09e44d886b1d201e058500dfc12729fe40129b7d0e5be998c",
+        "weightsSha256": "11deb85437bcc0807dc83000ca8b05f9e9586508a0d21d89312a266091d278ae"
+      }
+    },
+    {
+      "id": "boto",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/boto.glb",
+        "sha256": "aa8d0937a4a32457cfc6c91d72c5ffc0e33d03fb5569c50a1e829eecd0de3094"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=2",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "5d71ba3ebf3e93487fe14893680264d1d9787f6f4418581f5295284db9253086",
+        "geometrySha256": "e8ae7b25f21594551a0104e818320e8435188bc37ebcf59fb1bdfe3aeab7b7bb",
+        "weightsSha256": "d1f860de1f33790b27c6a82e5ff25e40de388e648ffe04d1350b66ee5aa9a4b0"
+      }
+    },
+    {
+      "id": "cadequinha",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/cadequinha.glb",
+        "sha256": "1d062d32cb525e32e27c56dd1dad68466b41983a591b53e42542d6046d81c2d3"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=8 right=8",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "218e05f8b156f9f4d6bcd340125986e588cc6275962b0c210505401628ae8542",
+        "geometrySha256": "9276c94c2ec24ca9ce6d9eed755e0221323060c0399d92e9473cba143c1c0175",
+        "weightsSha256": "faab158af2e77e8fcec97b77ea5bd0026f3f145b55efd8db8c3afa32098ef8f9"
+      }
+    },
+    {
+      "id": "criarj",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/criarj.glb",
+        "sha256": "f9b56a080b5e307ec4b0b2a3718ecfe72e5e7bb79698d433107d9ffca590bef8"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=5 right=1",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "7b5cabc5fddbea458bae8c709fbc12c8aedb839751dd2717cc7179419e4abe68",
+        "geometrySha256": "c8b529d58c1879132669b4ba976e01da7afc18e7d6169f33fb83e0a86eb88330",
+        "weightsSha256": "bb60c9b4a65b68e09bd9230a9a73dc4f7ee3d0f317a8a949f9c0e93f213b72a2"
+      }
+    },
+    {
+      "id": "designer-ux",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/designer-ux.glb",
+        "sha256": "77d1d5d6c6f7cce58846797bea4db5ffe21160f22f1880a7f440b8b1fdccfb07"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=14 right=15",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "88be2dc1f0cbc3e90feab685ff6c13ce31eeb9c8b867d9d0bbf979576022eef5",
+        "geometrySha256": "91fec58f630996e7b0a90ffce5082685e811b034ad1624821bd8ff1a7ba33836",
+        "weightsSha256": "415d53798bf7ed27ec07edbcd1a7474a9b192c07b8fa986bac6a43f035cca24e"
+      }
+    },
+    {
+      "id": "doidinho-bairro",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/doidinho-bairro.glb",
+        "sha256": "9d65fc624e894f23f1e029309dca0130e68a582bf70a172bfd09804fc53a6153"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=11 right=10",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "f93da7e4bab21fe5ad38392750d4b29e93c1c137a98e37a6852e723be53a4f38",
+        "geometrySha256": "38bf8f30ef295b50ed77ce94a7d6492328233381d711edcb5039475b86106009",
+        "weightsSha256": "1be6b231ee8267e32b932cd115e7e53487168cdf93efc563df1966fc6f653fe8"
+      }
+    },
+    {
+      "id": "dollynho",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/dollynho.glb",
+        "sha256": "15c579883e2918ef243de278a1216323d4fa323708f23dfd3c78aceedfe06549"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=2",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "8fe51b6c9630a3414301dde88f2d010f990959f7f334b4fdb8d922be17b9d85a",
+        "geometrySha256": "65dbe7c6ff061322882ee75bb578f672f38e2c88abd1deb4b85bf71d2c5089be",
+        "weightsSha256": "8786a092a06f446dc384ccc9b7e5853bbfe4afabb743a92dfc746e9b32f01dc4"
+      }
+    },
+    {
+      "id": "esbirro",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/esbirro.glb",
+        "sha256": "574653fa2a5d2e5f96d40cfa2cad91d0eb1b100172347a76118649c47e8d79f1"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=2",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "62403ffd2ae67d64934e85456c26366c19818d3e5c62bee88a919ee944cd8389",
+        "geometrySha256": "fef47f15589daeeab057c7377e195c7e3b64d9c7d71a1e8aa02e9c9c0faa5533",
+        "weightsSha256": "bbd6199ff3d2bb3e671feb6e954a15d32048ac93e85a6d045b3aaeed4f2040e0"
+      }
+    },
+    {
+      "id": "funkeiro",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/funkeiro.glb",
+        "sha256": "067b5e31b48ae28f8e4b9eb4d0dafa9a5393e905e2d071a44a27931bba8184e5"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=3 right=1",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "bf4185750422b38ab1029301679a51561fbaa18a7201d190fec82737d1c6a5d9",
+        "geometrySha256": "c70afff5092ec8bc614152c9ee80ac23b1bafe79bb796d92a88f96f9284901af",
+        "weightsSha256": "c79b9dadc054a9206c6f7e8a869fd8c54f4cf8cdfa91bdfa4f09877e5ce4ee5b"
+      }
+    },
+    {
+      "id": "lampiao",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/lampiao.glb",
+        "sha256": "d32764d5254aa221951d0ea37f013d2a32f07f925a5aeaec8907ee6ed032a129"
+      },
+      "status": "incompatible",
+      "reasonCode": "invalid-bind-or-weights",
+      "reason": "WEIGHTS sum outside encoding tolerance",
+      "details": {},
+      "fingerprints": null
+    },
+    {
+      "id": "mandrake",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/mandrake.glb",
+        "sha256": "69a63fdf46959b734e8b1973fcc489739c6ab466d2890bf7f6e6f3326bf0e7a2"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=3 right=1",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "bf4185750422b38ab1029301679a51561fbaa18a7201d190fec82737d1c6a5d9",
+        "geometrySha256": "c70afff5092ec8bc614152c9ee80ac23b1bafe79bb796d92a88f96f9284901af",
+        "weightsSha256": "c79b9dadc054a9206c6f7e8a869fd8c54f4cf8cdfa91bdfa4f09877e5ce4ee5b"
+      }
+    },
+    {
+      "id": "mariabonita",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/mariabonita.glb",
+        "sha256": "96aa7ef6278dce4d8b11a5d58ab8d9f0c6d0b835b9ab3ab530d5bd1bbeea0048"
+      },
+      "status": "incompatible",
+      "reasonCode": "invalid-bind-or-weights",
+      "reason": "WEIGHTS sum outside encoding tolerance",
+      "details": {},
+      "fingerprints": null
+    },
+    {
+      "id": "microfonildo",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/microfonildo.glb",
+        "sha256": "7e45cde94e8faf3afcd133832440af2a015b8aabc9cb711eb65dfcdfe057e609"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=6 right=6",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "9a15c53c2e846f4dd710edf12e85eaf026e2b8421a3928ed5ab161ba65f7b016",
+        "geometrySha256": "b63691633399071f06a4c252fee317fa111d3501fa44dd0f196cc74cd018bf6a",
+        "weightsSha256": "202beb648398bfa774d983dd96df7f2367bbf9ae052dbdd2b498eb00baccef5c"
+      }
+    },
+    {
+      "id": "motoca-cachorro-loko",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/motoca-cachorro-loko.glb",
+        "sha256": "e5a31ca1d72b6a4cb3231757c6a9ad075c3713e8a32722a665f10b3a7f4a177b"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=6 right=5",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "026bdf622b061812b5e0a787ca08713d1f7504caab221df21cda5a5ee069e9b0",
+        "geometrySha256": "06c1b746886df92cd2af4cc44b08eb7f10b6ae9ed45783ca18a083ca66293536",
+        "weightsSha256": "b4fdb6374cd53ed7cbb919105c76de1c0a6f3e34126793169ced01f90e88e34b"
+      }
+    },
+    {
+      "id": "ostentacao",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/ostentacao.glb",
+        "sha256": "724bd52e02b1f5f8c571b21b33ad73f639ac9f433ba8bccefd2cedffdc986bcb"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=4 right=4",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "238a464e3a2b5e925fd2e3653a145a34b3112a4d800d2248de62eabf8ba44580",
+        "geometrySha256": "a33c81a1b61f5701c7016a40a50861966cdd1a265df0ea7090f85d6145861d06",
+        "weightsSha256": "8491c287d1ef404529c60e1d07895663ab665db790e506f23374907ee782bb64"
+      }
+    },
+    {
+      "id": "palhacomal",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/palhacomal.glb",
+        "sha256": "eaacf1917ac2317318e2c2704d35fe6295f2eafc74837ee39acaa446b20f58f7"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=2",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "36d6d1db531d61b7f2b35176eff9110fd347c72824fa874d53cd9287939e5551",
+        "geometrySha256": "871dd142daf78fcdb0a5089e8ae054a43b3cab395d2d1ffaea9654763cece92e",
+        "weightsSha256": "f16514d768a25138541d5653182a197454899ff2aa9eb82273276245c6047cc8"
+      }
+    },
+    {
+      "id": "profeta-calcada",
+      "perspective": "3p",
+      "source": {
+        "path": "public/models/characters/profeta-calcada.glb",
+        "sha256": "ae201746977859d212aafe3f5f2b97e5152758af7421d0cad439ac00f1f7e400"
+      },
+      "status": "unknown",
+      "reasonCode": "selection-not-robust",
+      "reason": "ambiguous hand components left=2 right=1",
+      "details": {},
+      "fingerprints": {
+        "skeletonFamilySha256": "7cc203d1590c1ed2c83bee5a288e74ad22e57be726c5ad5d93b696a88ab3f480",
+        "geometrySha256": "e2b719f3271b6ced947a5f73eac9cb5a20ba6c855b9fc94c77af31f7b2022807",
+        "weightsSha256": "06085507068197af6c8d92a07b31729155b7139f71eaced5a48fc20e597fe43d"
+      }
+    }
+  ],
+  "coverage": {
+    "candidateCharacterIds": [
+      "adjim",
+      "ancap",
+      "bandeirante",
+      "barbudo",
+      "blackmetal",
+      "bombado",
+      "bonzo",
+      "boto",
+      "cadequinha",
+      "caipora",
+      "camera-roxa",
+      "caminhoneiro",
+      "canarinho",
+      "capitao",
+      "chave",
+      "clubber",
+      "coach",
+      "criarj",
+      "cuca",
+      "curupira",
+      "dama",
+      "deputado",
+      "designer-ux",
+      "doidinho-bairro",
+      "dollynho",
+      "doutora",
+      "emo",
+      "esbirro",
+      "esquerdomacho",
+      "et",
+      "farialimer",
+      "fluxo",
+      "funkeiro",
+      "funkraiz",
+      "gilbomes",
+      "gotinha",
+      "hipster",
+      "jozo",
+      "juiz",
+      "julia-zanatta",
+      "lampiao",
+      "lenda-lanhouse",
+      "lobisomem",
+      "mandrake",
+      "mariabonita",
+      "marina-silva",
+      "metaleiro",
+      "microfonildo",
+      "ministro",
+      "mistico",
+      "motoca-cachorro-loko",
+      "mst",
+      "oakley",
+      "ostentacao",
+      "padata",
+      "padati",
+      "pagodeiro",
+      "palhacomal",
+      "proerd",
+      "professor",
+      "profeta-calcada",
+      "programador-virado",
+      "punk",
+      "rapper",
+      "raul",
+      "reggae",
+      "saci",
+      "senador",
+      "sertanejo",
+      "sindicato",
+      "skatista",
+      "titica",
+      "trapfunk",
+      "zumbi"
+    ],
+    "firstPersonSupportedCharacterIds": [
+      "adjim",
+      "ancap",
+      "bandeirante",
+      "barbudo",
+      "blackmetal",
+      "bombado",
+      "bonzo",
+      "boto",
+      "cadequinha",
+      "caipora",
+      "camera-roxa",
+      "caminhoneiro",
+      "canarinho",
+      "capitao",
+      "chave",
+      "clubber",
+      "coach",
+      "criarj",
+      "cuca",
+      "curupira",
+      "dama",
+      "deputado",
+      "designer-ux",
+      "doidinho-bairro",
+      "dollynho",
+      "doutora",
+      "emo",
+      "esbirro",
+      "esquerdomacho",
+      "et",
+      "farialimer",
+      "fluxo",
+      "funkeiro",
+      "funkraiz",
+      "gilbomes",
+      "gotinha",
+      "hipster",
+      "jozo",
+      "juiz",
+      "julia-zanatta",
+      "lampiao",
+      "lenda-lanhouse",
+      "lobisomem",
+      "mandrake",
+      "mariabonita",
+      "marina-silva",
+      "metaleiro",
+      "microfonildo",
+      "ministro",
+      "mistico",
+      "motoca-cachorro-loko",
+      "mst",
+      "oakley",
+      "ostentacao",
+      "padata",
+      "padati",
+      "pagodeiro",
+      "palhacomal",
+      "proerd",
+      "professor",
+      "profeta-calcada",
+      "programador-virado",
+      "punk",
+      "rapper",
+      "raul",
+      "reggae",
+      "saci",
+      "senador",
+      "sertanejo",
+      "sindicato",
+      "skatista",
+      "titica",
+      "trapfunk",
+      "zumbi"
+    ],
+    "thirdPersonSupportedCharacterIds": [
+      "ancap",
+      "bandeirante",
+      "barbudo",
+      "bombado",
+      "bonzo",
+      "caipora",
+      "camera-roxa",
+      "caminhoneiro",
+      "canarinho",
+      "capitao",
+      "chave",
+      "clubber",
+      "coach",
+      "cuca",
+      "curupira",
+      "dama",
+      "deputado",
+      "doutora",
+      "emo",
+      "esquerdomacho",
+      "et",
+      "farialimer",
+      "fluxo",
+      "funkraiz",
+      "gilbomes",
+      "gotinha",
+      "hipster",
+      "jozo",
+      "juiz",
+      "julia-zanatta",
+      "lenda-lanhouse",
+      "lobisomem",
+      "marina-silva",
+      "metaleiro",
+      "ministro",
+      "mistico",
+      "mst",
+      "oakley",
+      "padata",
+      "padati",
+      "pagodeiro",
+      "proerd",
+      "professor",
+      "programador-virado",
+      "punk",
+      "rapper",
+      "raul",
+      "reggae",
+      "saci",
+      "senador",
+      "sertanejo",
+      "sindicato",
+      "skatista",
+      "titica",
+      "trapfunk",
+      "zumbi"
+    ],
+    "thirdPersonBlockedCharacterIds": [
+      "adjim",
+      "blackmetal",
+      "boto",
+      "cadequinha",
+      "criarj",
+      "designer-ux",
+      "doidinho-bairro",
+      "dollynho",
+      "esbirro",
+      "funkeiro",
+      "lampiao",
+      "mandrake",
+      "mariabonita",
+      "microfonildo",
+      "motoca-cachorro-loko",
+      "ostentacao",
+      "palhacomal",
+      "profeta-calcada"
+    ]
+  },
+  "visualApproved": false,
+  "runtimeEnabled": false,
+  "unverified": [
+    "visual-fit",
+    "contact",
+    "clipping",
+    "material-art-direction",
+    "runtime-integration"
+  ]
+}

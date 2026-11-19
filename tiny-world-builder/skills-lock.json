@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "3d-modeling": {
+      "source": "omer-metin/skills-for-antigravity",
+      "sourceType": "github",
+      "skillPath": "skills/3d-modeling/SKILL.md",
+      "computedHash": "dd0beea41a5f5711c6a8b209bb2218340ab7afabe26147eb1560e4d26d65f7c5"
+    },
+    "fractal": {
+      "source": "Trampoline-AI/fractal",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/fractal/SKILL.md",
+      "computedHash": "0e1b0566ab4fca240eadaf913489950be022a3d0007e96e66f665dcbfd95f229"
+    },
+    "lightweight-3d-effects": {
+      "source": "freshtechbro/claudedesignskills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/lightweight-3d-effects/SKILL.md",
+      "computedHash": "4fb89172f097f03603cb15cb414b8245b6efc927c72e71a26c4ae4b43bb5d1fa"
+    },
+    "poly-pizza-api": {
+      "source": "editframe/skills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/poly-pizza-api/SKILL.md",
+      "computedHash": "56b6c5334eb4ffbb2a31c7ee8850745ef6e92ac134b13845b751d8b031063a93"
+    }
+  }
+}

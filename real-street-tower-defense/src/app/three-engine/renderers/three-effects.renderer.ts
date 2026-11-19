@@ -1,0 +1,597 @@
+import {
+  Vector3,
+  Color,
+  Scene,
+  Mesh,
+  MeshBasicMaterial,
+  SphereGeometry,
+  Material,
+  type IUniform,
+} from 'three';
+import { CoordinateSync } from './index';
+import { TrailParticleConfig } from '../../configs/projectile-types.config';
+import type {
+  BurstPalette,
+  MuzzleFlashProfile,
+  ScorchSource,
+} from '../../configs/visual-effects.config';
+import type { ScorchGround } from './scorch-marks';
+import type { GooSplash } from './ground-decals';
+import { FloatingTextInstanceManager } from './floating-text/floating-text-instance.manager';
+import { ParticlePoolManager } from './particle-pool-manager';
+import type { ParticleShaderMaterials } from './particle-shaders';
+import { AuraRenderer } from './aura-renderer';
+import { EnvironmentEffectsRenderer } from './environment-effects-renderer';
+import { ParticleEffectsRenderer } from './particle-effects-renderer';
+import type { Camera } from 'three';
+
+/**
+ * Floating text configuration
+ */
+export interface FloatingTextConfig {
+  /** Text color (CSS format, default: '#FFD700' gold) */
+  color?: string;
+  /** Font size in pixels (default: 48) */
+  fontSize?: number;
+  /** Duration in ms (default: 1000) */
+  duration?: number;
+  /** Float speed - how fast it rises (default: 2) */
+  floatSpeed?: number;
+  /** Initial scale (default: 1) */
+  scale?: number;
+  /** Outline color (default: '#000000') */
+  outlineColor?: string;
+  /** Outline width (default: 3) */
+  outlineWidth?: number;
+  /** Screen-right spawn offset in world units (negative = left). Default 0. */
+  lateralOffset?: number;
+  /** Screen-right drift in world units per second (negative = left). Default 0. */
+  lateralDrift?: number;
+}
+
+/**
+ * ThreeEffectsRenderer - Renders particle effects using Three.js
+ *
+ * Effects:
+ * - Blood splatter (on enemy hit)
+ * - Fire/smoke (on base damage)
+ * - Explosions (on projectile impact)
+ *
+ * Uses Points with custom shader for GPU-accelerated particles.
+ *
+ * This class is a thin delegation facade — the heavy lifting lives in
+ * dedicated sub-renderers:
+ * - ParticlePoolManager: GPU particle pools (free-lists, buffers, atlas)
+ * - ParticleEffectsRenderer: combat/environment particle effects + activeEffects
+ * - EnvironmentEffectsRenderer: HQ explosion, fire-flash, tower inner-fire
+ * - AuraRenderer: orbiting status-effect auras (frost + poison)
+ * - FloatingTextInstanceManager: GPU-instanced floating text
+ */
+export class ThreeEffectsRenderer {
+  private scene: Scene;
+  private sync: CoordinateSync;
+
+  // GPU particle pools (trail additive/normal + tower fire) — all pool
+  // mechanics (free-lists, buffers, materials, atlas) live in this manager.
+  private pools: ParticlePoolManager;
+
+  // Combat & environment particle effects + the central activeEffects map
+  private particleEffects: ParticleEffectsRenderer;
+
+  // Environmental VFX (HQ explosion, fire-flash, tower inner-fire)
+  private environment: EnvironmentEffectsRenderer;
+
+  // GPU-instanced floating text system (1 draw call for all texts)
+  private floatingTextManager!: FloatingTextInstanceManager;
+
+  // Orbiting status-effect auras (frost + poison) — particles borrowed from the pools
+  private auras: AuraRenderer;
+
+  constructor(scene: Scene, sync: CoordinateSync) {
+    this.scene = scene;
+    this.sync = sync;
+
+    // GPU-instanced floating text system
+    this.floatingTextManager = new FloatingTextInstanceManager(scene, sync);
+
+    // GPU particle pools (creates Points, materials, atlas internally)
+    this.pools = new ParticlePoolManager(scene);
+
+    // Orbiting status-effect auras (frost + poison) — borrow from the pools
+    this.auras = new AuraRenderer(this.pools);
+
+    // Environmental VFX (HQ explosion, fire-flash, tower inner-fire)
+    this.environment = new EnvironmentEffectsRenderer(this.sync, this.pools);
+
+    // Combat & environment particle effects + instanced decal managers
+    this.particleEffects = new ParticleEffectsRenderer(this.scene, this.sync, this.pools);
+  }
+
+  /**
+   * Toggle between PointsMaterial and ShaderMaterial for trail particles.
+   * Use this to test shader-based particles with per-particle sizes.
+   *
+   * @param useShader - true to use ShaderMaterial, false for PointsMaterial
+   */
+  setUseShaderMaterial(useShader: boolean): void {
+    this.pools.setUseShaderMaterial(useShader);
+  }
+
+  /**
+   * Check if ShaderMaterial is currently active
+   */
+  isUsingShaderMaterial(): boolean {
+    return this.pools.isUsingShaderMaterial();
+  }
+
+  /** The trail pools' ShaderMaterials, for Points drawn outside the pools (frost burst, EMP pulse, orbital beam). */
+  get particleShaderMaterials(): ParticleShaderMaterials {
+    return this.pools.shaderMaterials;
+  }
+
+  /**
+   * Spawn blood splatter effect at a position
+   *
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Height above ground
+   * @param count - Number of particles (default 20)
+   * @param color - Colour as hex (EnemyTypeConfig.bloodColor), red when unset
+   */
+  spawnBloodSplatter(lat: number, lon: number, height: number, count = 20, color?: number): string {
+    return this.particleEffects.spawnBloodSplatter(lat, lon, height, count, color);
+  }
+
+  /**
+   * Spawn a persistent blood decal on the ground
+   * NOW USES GPU INSTANCING - much better performance!
+   *
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Height (terrain height)
+   * @param size - Diameter of the round decal in meters, ±20 %
+   *   (ParticleEffectsRenderer default 2.0)
+   * @param color - Colour as hex, dark red when unset
+   * @returns Decal ID
+   */
+  spawnBloodDecal(lat: number, lon: number, height: number, size?: number, color?: number): string {
+    return this.particleEffects.spawnBloodDecal(lat, lon, height, size, color);
+  }
+
+  /** A killed ooze's splash on the ground, see ParticleEffectsRenderer.spawnGooDecal. @returns Decal ID */
+  spawnGooDecal(lat: number, lon: number, height: number, splash: Readonly<GooSplash>): string {
+    return this.particleEffects.spawnGooDecal(lat, lon, height, splash);
+  }
+
+  /**
+   * Stop a fire effect
+   */
+  stopFire(id: string): void {
+    this.particleEffects.stopFire(id);
+  }
+
+  /**
+   * Stop all fire effects
+   */
+  stopAllFires(): void {
+    this.particleEffects.stopAllFires();
+  }
+
+  /**
+   * Stop a fire effect immediately (no fade)
+   */
+  stopFireImmediate(id: string): void {
+    this.particleEffects.stopFireImmediate(id);
+  }
+
+  // =====================================================
+  // TOWER INNER FIRE - Dedicated pool for Fire Tower
+  // =====================================================
+
+  /** Spawn persistent inner fire for a Fire Tower (dedicated pool). */
+  spawnTowerInnerFire(
+    towerId: string,
+    localPosition: Vector3,
+    fireHeight = 3.0,
+    intensity = 0.5
+  ): string {
+    return this.environment.spawnTowerInnerFire(towerId, localPosition, fireHeight, intensity);
+  }
+
+  /** Stop tower inner fire immediately. */
+  stopTowerInnerFire(towerId: string): void {
+    this.environment.stopTowerInnerFire(towerId);
+  }
+
+  /** Stop all tower inner fires. */
+  stopAllTowerFires(): void {
+    this.environment.stopAllTowerFires();
+  }
+
+  /** Check if tower has active inner fire. */
+  hasTowerFire(towerId: string): boolean {
+    return this.environment.hasTowerFire(towerId);
+  }
+
+  // =====================================================
+  // FROST AURA - Orbiting ice particles for slowed enemies
+  // =====================================================
+
+  /**
+   * Spawn frost aura around a slowed enemy.
+   * Creates 3 orbiting cyan/white particles from the additive trail pool.
+   *
+   * @param enemyId - Unique enemy ID
+   * @param localPosition - Current local position of the enemy
+   * @returns Enemy ID (same as input)
+   */
+  // ── Status-effect auras (frost + poison) — delegated to AuraRenderer ──
+
+  /** Spawn orbiting cyan ice particles around a slowed enemy. */
+  spawnFrostAura(enemyId: string, localPosition: Vector3): string {
+    return this.auras.spawnFrostAura(enemyId, localPosition);
+  }
+
+  /** Update frost aura position to follow a moving enemy. */
+  updateFrostAuraPosition(enemyId: string, localPosition: Vector3): void {
+    this.auras.updateFrostAuraPosition(enemyId, localPosition);
+  }
+
+  /** Stop frost aura on an enemy (slow expired). */
+  stopFrostAura(enemyId: string): void {
+    this.auras.stopFrostAura(enemyId);
+  }
+
+  /** Check if an enemy has an active frost aura. */
+  hasFrostAura(enemyId: string): boolean {
+    return this.auras.hasFrostAura(enemyId);
+  }
+
+  /** Still ice crystals around a frozen enemy (freeze), capped, see AuraRenderer. */
+  spawnIceCrystals(enemyId: string, localPosition: Vector3): void {
+    this.auras.spawnIceCrystals(enemyId, localPosition);
+  }
+
+  updateIceCrystalsPosition(enemyId: string, localPosition: Vector3): void {
+    this.auras.updateIceCrystalsPosition(enemyId, localPosition);
+  }
+
+  stopIceCrystals(enemyId: string): void {
+    this.auras.stopIceCrystals(enemyId);
+  }
+
+  /** Spawn orbiting green poison particles around a poisoned enemy. */
+  spawnPoisonAura(enemyId: string, localPosition: Vector3): string {
+    return this.auras.spawnPoisonAura(enemyId, localPosition);
+  }
+
+  /** Update poison aura position to follow a moving enemy. */
+  updatePoisonAuraPosition(enemyId: string, localPosition: Vector3): void {
+    this.auras.updatePoisonAuraPosition(enemyId, localPosition);
+  }
+
+  /** Stop poison aura on an enemy (poison expired). */
+  stopPoisonAura(enemyId: string): void {
+    this.auras.stopPoisonAura(enemyId);
+  }
+
+  /**
+   * Spawn a single flame particle for beam effects.
+   * Used by FlameBeamRenderer for flamethrower streams.
+   */
+  spawnFlameParticle(
+    position: Vector3,
+    velocity: Vector3,
+    color: Color,
+    size: number,
+    maxLife: number
+  ): void {
+    this.particleEffects.spawnFlameParticle(position, velocity, color, size, maxLife);
+  }
+
+  /**
+   * Spawn a brief muzzle flash at a local position, sized by the firing
+   * tower's MUZZLE_FLASH_PROFILES entry.
+   *
+   * @param localX - Local X coordinate (tower shoot position)
+   * @param localY - Local Y coordinate (tower shoot position)
+   * @param localZ - Local Z coordinate (tower shoot position)
+   * @param profile - The firing tower's muzzle flash profile
+   */
+  spawnMuzzleFlash(localX: number, localY: number, localZ: number, profile: MuzzleFlashProfile): void {
+    this.particleEffects.spawnMuzzleFlash(localX, localY, localZ, profile);
+  }
+
+  /** Spawn a brief fire flash that fades away (HQ damage indicator, HP > 50%). */
+  spawnFireFlash(lat: number, lon: number, localY: number): void {
+    this.environment.spawnFireFlash(lat, lon, localY);
+  }
+
+  /**
+   * Spawn scaled permanent fire (for HP 1-50%)
+   * @param scale - 0.0 (small) to 1.0 (maximum inferno)
+   */
+  spawnScaledFire(lat: number, lon: number, localY: number, scale: number): string {
+    return this.particleEffects.spawnScaledFire(lat, lon, localY, scale);
+  }
+
+  /** Spawn the massive HQ destruction explosion (dramatic final explosion). */
+  spawnHQExplosion(lat: number, lon: number, localY: number): void {
+    this.environment.spawnHQExplosion(lat, lon, localY);
+  }
+
+  /**
+   * Spawn configurable trail particles based on TrailParticleConfig
+   * Generic method that uses config values instead of hardcoded parameters
+   * Automatically chooses additive or normal blending pool based on config.blending
+   * Supports 'spiral' trailType for railgun-style rotating particles
+   */
+  spawnConfigurableTrail(
+    localX: number,
+    localY: number,
+    localZ: number,
+    config: TrailParticleConfig
+  ): void {
+    this.particleEffects.spawnConfigurableTrail(localX, localY, localZ, config);
+  }
+
+  /**
+   * Spawn a two-stage fire-atlas explosion (fireball, then smoke) at a
+   * local position. Speeds and sprite sizes scale with `radius`, see
+   * EXPLOSION_LOOK.
+   *
+   * @param localX - Local X coordinate
+   * @param localY - Local Y coordinate (height)
+   * @param localZ - Local Z coordinate
+   * @param count - Fireball particles (default 25)
+   * @param radius - Blast radius in meters (default EXPLOSION_LOOK.referenceRadius)
+   * @param smokePuffs - Smoke puffs after the fireball (default 0)
+   */
+  spawnExplosion(localX: number, localY: number, localZ: number, count = 25, radius?: number, smokePuffs = 0): void {
+    this.particleEffects.spawnExplosion(localX, localY, localZ, count, radius, smokePuffs);
+  }
+
+  /**
+   * Spawn explosion at geo coordinates
+   * Convenience method that converts geo to local coordinates
+   *
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Height above ground
+   * @param count - Fireball particles (default 25)
+   * @param radius - Blast radius in meters (default EXPLOSION_LOOK.referenceRadius)
+   * @param smokePuffs - Smoke puffs after the fireball (default 0)
+   */
+  spawnExplosionAtGeo(lat: number, lon: number, height: number, count = 25, radius?: number, smokePuffs = 0): void {
+    this.particleEffects.spawnExplosionAtGeo(lat, lon, height, count, radius, smokePuffs);
+  }
+
+  /**
+   * Spawn ice explosion at geo coordinates
+   *
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Height above ground
+   * @param count - Number of particles (default 20)
+   */
+  spawnIceExplosionAtGeo(lat: number, lon: number, height: number, count = 20): void {
+    this.particleEffects.spawnIceExplosionAtGeo(lat, lon, height, count);
+  }
+
+  /** Spawn an impact spark burst (arcane, chaos, poison) in the given palette at geo coordinates. */
+  spawnBurstAtGeo(lat: number, lon: number, height: number, count: number, palette: BurstPalette): void {
+    this.particleEffects.spawnBurstAtGeo(lat, lon, height, count, palette);
+  }
+
+  /** Sparks out of a spawn portal's surface, see ParticleEffectsRenderer.spawnPortalSparks. */
+  spawnPortalSparks(
+    x: number,
+    y: number,
+    z: number,
+    forwardX: number,
+    forwardZ: number,
+    halfWidth: number,
+    height: number,
+    count: number,
+    palette: BurstPalette
+  ): void {
+    this.particleEffects.spawnPortalSparks(x, y, z, forwardX, forwardZ, halfWidth, height, count, palette);
+  }
+
+  /**
+   * Spawn ice decal on ground (frost patch)
+   * NOW USES GPU INSTANCING - much better performance!
+   *
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Terrain height
+   * @param size - Diameter of the round decal in meters, ±20 %
+   *   (ParticleEffectsRenderer default 2.8)
+   * @returns Decal ID
+   */
+  spawnIceDecal(lat: number, lon: number, height: number, size?: number): string {
+    return this.particleEffects.spawnIceDecal(lat, lon, height, size);
+  }
+
+  /** Route grid the scorch marks sit on (GlobalRouteGridService); null leaves none. */
+  setScorchGround(ground: ScorchGround | null): void {
+    this.particleEffects.setScorchGround(ground);
+  }
+
+  /**
+   * VFX settings: muzzle flashes, trail particles, impact effects and
+   * ground marks are not spawned while off, frost auras not shown.
+   */
+  setVfxSettings(settings: import('../vfx-settings').VfxSettings): void {
+    this.particleEffects.setVfxSettings(settings);
+    this.auras.setFrostEnabled(settings.freezeTint);
+  }
+
+  /** Whether ground marks are laid down; spares callers the terrain raycast for a decal. */
+  get groundMarksEnabled(): boolean {
+    return this.particleEffects.groundMarksEnabled;
+  }
+
+  /** Blood moon look at `amount` (BloodMoonLook): the ground marks take the mood's tint. */
+  setBloodMoon(amount: number, linearOutput: boolean): void {
+    this.particleEffects.setBloodMoon(amount, linearOutput);
+  }
+
+  /** The ground marks' blood moon tint uniform, for marks drawn outside the decal pools (the orbital beam's embers). */
+  get groundMarkTint(): IUniform<Vector3> {
+    return this.particleEffects.groundMarkTint;
+  }
+
+  /** Whether impact effects are spawned (VFX settings). */
+  get impactEffectsEnabled(): boolean {
+    return this.particleEffects.impactEffectsEnabled;
+  }
+
+  /**
+   * Burn a scorch mark on the ground below a local hit point, at most one
+   * per route cell (see SCORCH_DECAL_CONFIG).
+   */
+  markScorch(localX: number, localY: number, localZ: number, source: ScorchSource): void {
+    this.particleEffects.markScorch(localX, localY, localZ, source);
+  }
+
+  /**
+   * Spawn floating text at a position (e.g., for rewards, damage numbers, status messages)
+   *
+   * @param text - The text to display
+   * @param lat - Latitude
+   * @param lon - Longitude
+   * @param height - Height above ground
+   * @param config - Optional configuration
+   * @returns Floating text ID
+   */
+  spawnFloatingText(
+    text: string,
+    lat: number,
+    lon: number,
+    height: number,
+    config: FloatingTextConfig = {}
+  ): void {
+    this.floatingTextManager.spawn(text, lat, lon, height, config);
+  }
+
+  /**
+   * Update floating text billboard uniforms and reclaim expired instances.
+   * Must be called with the active camera for correct billboard orientation.
+   */
+  updateFloatingTexts(camera: Camera): void {
+    this.floatingTextManager.update(camera);
+  }
+
+  /**
+   * Update all active effects
+   *
+   * @param deltaTime - Time since last frame in milliseconds
+   */
+  update(deltaTime: number): void {
+    const now = performance.now();
+    const dt = deltaTime / 1000; // Convert to seconds
+
+    // (1-5) Combat/environment particle effects: activeEffects loop, blood +
+    // ice decal fading, and both trail particle pool update loops.
+    this.particleEffects.update(dt, now);
+
+    // (6) Update tower inner fires (HQ/environment VFX)
+    this.environment.update(dt);
+
+    // (7) Update orbiting status-effect auras (frost + poison)
+    this.auras.update(dt);
+
+    // (8) Update GPU buffers (free-list rebuild + GPU upload, skips idle pools)
+    this.pools.updateBuffers();
+  }
+
+  // Debug spheres for visualization
+  private debugSpheres: Mesh[] = [];
+
+  /**
+   * Spawn a debug sphere at a position (for debugging fire placement etc.)
+   * Uses localY directly (not geo height)
+   */
+  spawnDebugSphere(
+    lat: number,
+    lon: number,
+    localY: number,
+    radius = 2,
+    color = 0x00ff00
+  ): void {
+    const localXZ = this.sync.geoToLocalSimple(lat, lon, 0);
+
+    const geometry = new SphereGeometry(radius, 16, 16);
+    const material = new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.8,
+      depthTest: true,
+    });
+    const sphere = new Mesh(geometry, material);
+    sphere.position.set(localXZ.x, localY, localXZ.z);
+    sphere.renderOrder = 100;
+
+    this.scene.add(sphere);
+    this.debugSpheres.push(sphere);
+  }
+
+  /**
+   * Set visibility of all debug spheres
+   */
+  setDebugSpheresVisible(visible: boolean): void {
+    for (const sphere of this.debugSpheres) {
+      sphere.visible = visible;
+    }
+  }
+
+  /**
+   * Clear all debug spheres
+   */
+  clearDebugSpheres(): void {
+    for (const sphere of this.debugSpheres) {
+      this.scene.remove(sphere);
+      sphere.geometry.dispose();
+      (sphere.material as Material).dispose();
+    }
+    this.debugSpheres = [];
+  }
+
+  /**
+   * Clear all effects
+   */
+  clear(): void {
+    // Reset all GPU particle pools (kills particles, rebuilds free-lists + cursors)
+    this.pools.reset();
+
+    // Clear combat/environment particle effects + instanced decals
+    this.particleEffects.clear();
+
+    // Clear tower-fire tracking + status-effect auras
+    this.environment.clear();
+    this.auras.clear();
+
+    // Clear GPU-instanced floating texts
+    this.floatingTextManager.clear();
+
+    // Clear debug spheres
+    this.clearDebugSpheres();
+  }
+
+  /**
+   * Dispose resources
+   */
+  dispose(): void {
+    this.clear();
+
+    // Dispose GPU particle pools (Points, geometries, materials, atlas textures)
+    this.pools.dispose();
+
+    // Dispose instanced decal managers (removes them from the scene)
+    this.particleEffects.dispose();
+
+    // Dispose GPU-instanced floating texts
+    this.floatingTextManager.dispose();
+  }
+}

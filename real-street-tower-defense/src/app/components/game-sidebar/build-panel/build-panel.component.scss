@@ -1,0 +1,97 @@
+// Layout of the build section: the card grid scrolls, the research button
+// stays under it. Cards are td-card buttons; a card the player cannot afford
+// dims (is-locked), a locked one is a silhouette.
+
+.bp-matrix {
+  margin-left: auto;
+}
+
+.bp-hint {
+  text-align: center;
+}
+
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 0 6px;
+  font-size: var(--td-fs-body);
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.bp-preview {
+  display: block;
+  width: 100%;
+  height: 76px;
+}
+
+.bp-name {
+  padding: 4px 6px 0;
+  text-align: center;
+}
+
+.bp-cost {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+}
+
+/* Tier: brass diamonds top left */
+.bp-tier {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  display: flex;
+  gap: 3px;
+  pointer-events: none;
+}
+
+/* Anti-air: a small wind mark at the foot of the preview */
+.bp-aa {
+  position: absolute;
+  top: 56px;
+  left: 6px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--td-teal-light);
+  pointer-events: none;
+
+  &.is-only {
+    background: var(--td-teal-dark);
+    color: var(--td-text-primary);
+  }
+}
+
+/* Locked: a muted silhouette */
+.bp-card.bp-locked {
+  color: var(--td-text-muted);
+}
+
+.bp-silhouette {
+  filter: brightness(0) saturate(0);
+  opacity: 0.3;
+}
+
+.bp-lock {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--td-text-muted);
+}
+
+.bp-research {
+  flex: none;
+  justify-content: space-between;
+}

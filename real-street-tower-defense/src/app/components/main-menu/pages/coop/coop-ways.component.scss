@@ -1,0 +1,46 @@
+// Layout of the coop page: each way with its text left and its button right,
+// the room table's columns, the IP probe. The look comes from the td-* classes.
+
+.cw-name {
+  width: 220px;
+}
+
+// One way: its title and line left, its button right
+.cw-way {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--td-sp-5);
+}
+
+.cw-way-text {
+  gap: var(--td-sp-1);
+}
+
+.codein {
+  width: 130px;
+}
+
+.cw-rooms {
+  table-layout: fixed;
+
+  th:nth-child(2) { width: 120px; }
+  th:nth-child(3) { width: 70px; }
+  .cw-room-head > :last-child { width: 72px; text-align: right; }
+  td:last-child { text-align: right; }
+}
+
+.cw-room-name {
+  min-width: 0;
+}
+
+.cw-probe {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--td-sp-2);
+  max-width: 360px;
+}
+
+.cw-checks {
+  padding-left: 18px;
+}

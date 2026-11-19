@@ -1,0 +1,147 @@
+@if (windowService.performanceWindow().isOpen) {
+  <app-draggable-debug-panel
+    windowId="performance"
+    title="Performance"
+    icon="speed"
+    [position]="windowService.performanceWindow().position"
+    [zIndex]="windowService.performanceWindow().zIndex"
+    (closed)="windowService.close('performance')"
+    (positionChange)="windowService.updatePosition('performance', $event)"
+    (focused)="windowService.bringToFront('performance')"
+  >
+    @if (stats(); as s) {
+      <div class="perf-content">
+        <div class="td-group">
+          <span class="td-section">Overview</span>
+          <div class="td-kv">
+            <span>FPS</span>
+            <b [class.is-warn]="s.fps < 30" [class.is-error]="s.fps < 15">{{ s.fps }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Speed</span>
+            <b [class.is-error]="s.speed < s.speedSet - 0.05">{{ s.speed.toFixed(2) }} / {{ s.speedSet }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Main thread busy</span>
+            <b [class.is-hot]="s.bottleneck === 'main'">{{ s.mainBusyPct.toFixed(0) }}%</b>
+          </div>
+          <div class="td-kv">
+            <span>Worker busy</span>
+            <b [class.is-hot]="s.bottleneck === 'worker'">{{ s.workerLoadPct.toFixed(0) }}%</b>
+          </div>
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Main thread, ms per frame</span>
+          <div class="td-kv">
+            <span>Frame</span>
+            <b [class.is-warn]="s.frameMs > 12" [class.is-error]="s.frameMs > 16">{{ s.frameMs.toFixed(2) }}</b>
+          </div>
+          <div class="td-kv is-sub1">
+            <span>Game loop</span>
+            <b>{{ s.updateMs.toFixed(2) }}</b>
+          </div>
+          <div class="td-kv is-sub1">
+            <span>Draw (CPU)</span>
+            <b>{{ s.renderMs.toFixed(2) }}</b>
+          </div>
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Apply, ms per packet</span>
+          <div class="td-kv">
+            <span>Total</span>
+            <b>{{ s.apply.total.toFixed(2) }}</b>
+          </div>
+          <div class="td-kv is-sub1"><span>State</span><b>{{ s.apply.state.toFixed(2) }}</b></div>
+          <div class="td-kv is-sub1"><span>Ops</span><b>{{ s.apply.ops.toFixed(2) }}</b></div>
+          <div class="td-kv is-sub1"><span>Events</span><b>{{ s.apply.events.toFixed(2) }}</b></div>
+          <div class="td-kv is-sub1"><span>Present</span><b>{{ s.apply.present.toFixed(2) }}</b></div>
+          <div class="td-kv is-sub1"><span>Listeners</span><b>{{ s.apply.listeners.toFixed(2) }}</b></div>
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Simulation (worker), ms per tick</span>
+          <div class="td-kv">
+            <span>Ticks/s</span>
+            <b>{{ s.ticksPerS.toFixed(0) }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Sub-steps/tick</span>
+            <b [class.is-warn]="s.subStepsPerTick > 4">{{ s.subStepsPerTick.toFixed(1) }}</b>
+          </div>
+          @if (s.sim; as sim) {
+            <div class="td-kv">
+              <span>Tick</span>
+              <b>{{ sim.tickMs.toFixed(2) }}</b>
+            </div>
+            <div class="td-kv is-sub1"><span>Commands</span><b>{{ sim.commandsMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub1"><span>Sub-steps</span><b>{{ sim.updateMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub2"><span>Enemies</span><b>{{ sim.enemyMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub3"><span>Move</span><b>{{ sim.enemyMoveMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub3"><span>Grid</span><b>{{ sim.enemyGridMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub3"><span>Height</span><b>{{ sim.enemyHeightMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub2"><span>Combat</span><b>{{ sim.combatMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub2"><span>Projectiles</span><b>{{ sim.projectileMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub2"><span>Events</span><b>{{ sim.eventsMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub2"><span>Other</span><b>{{ sim.otherMs.toFixed(2) }}</b></div>
+            <div class="td-kv is-sub1"><span>Packet</span><b>{{ sim.packetMs.toFixed(2) }}</b></div>
+          } @else {
+            <div class="td-kv"><span>Parts</span><b class="is-muted">waiting for the worker</b></div>
+          }
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Rendering</span>
+          <div class="td-kv">
+            <span>Draw Calls</span>
+            <b>{{ s.drawCalls }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Triangles</span>
+            <b>{{ formatTris(s.triangles) }}</b>
+          </div>
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Entities</span>
+          <div class="td-kv">
+            <span>Enemies</span>
+            <b>{{ s.enemies }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Towers</span>
+            <b>{{ s.towers }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Projectiles</span>
+            <b>{{ s.projectiles }}</b>
+          </div>
+        </div>
+
+        <div class="td-group">
+          <span class="td-section">Memory</span>
+          <div class="td-kv">
+            <span>Geometries</span>
+            <b>{{ s.geometries }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Textures</span>
+            <b>{{ s.textures }}</b>
+          </div>
+          <div class="td-kv">
+            <span>Shader programs</span>
+            <b>{{ s.programs }}</b>
+          </div>
+        </div>
+
+        <div class="td-group">
+          <label class="td-check">
+            <input class="td-switch" type="checkbox" [checked]="profiler.consoleLogEnabled()" (change)="toggleConsoleLog()" />
+            <span>Console Log (2s)</span>
+          </label>
+        </div>
+      </div>
+    }
+  </app-draggable-debug-panel>
+}

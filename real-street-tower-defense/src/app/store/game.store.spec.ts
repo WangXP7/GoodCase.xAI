@@ -1,0 +1,279 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { GameStore } from './game.store';
+import { GAME_BALANCE } from '../configs/game-balance.config';
+import { Tower } from '../entities/tower.entity';
+
+describe('GameStore', () => {
+  let store: GameStore;
+
+  beforeEach(() => {
+    store = new GameStore();
+  });
+
+  describe('initial values', () => {
+    it('credits start at configured startCredits', () => {
+      expect(store.credits()).toBe(GAME_BALANCE.player.startCredits);
+    });
+
+    it('baseHealth starts at configured startHealth', () => {
+      expect(store.baseHealth()).toBe(GAME_BALANCE.player.startHealth);
+    });
+
+    it('phase starts as setup', () => {
+      expect(store.phase()).toBe('setup');
+    });
+
+    it('waveNumber starts at 0', () => {
+      expect(store.waveNumber()).toBe(0);
+    });
+
+    it('enemiesAlive starts at 0', () => {
+      expect(store.enemiesAlive()).toBe(0);
+    });
+
+    it('waveEnemyTotal and waveEnemiesLeft start at 0', () => {
+      expect(store.waveEnemyTotal()).toBe(0);
+      expect(store.waveEnemiesLeft()).toBe(0);
+    });
+
+    it('selectedTower starts as null', () => {
+      expect(store.selectedTower()).toBeNull();
+    });
+
+    it('towerCount starts at 0', () => {
+      expect(store.towerCount()).toBe(0);
+    });
+
+    it('showGameOverScreen starts as false', () => {
+      expect(store.showGameOverScreen()).toBe(false);
+    });
+
+    it('gameSpeed starts at 1.0', () => {
+      expect(store.gameSpeed()).toBe(1.0);
+    });
+
+    // NOTE: botEnabled, botSkillLevel, botAutoMode are owned by BotClientService
+
+    it('directorEnabled starts as true', () => {
+      // On by default since the wave director became rule-based: it needs no
+      // model and no network, so there is no startup window in which it cannot
+      // produce a wave. It previously defaulted to false and was switched on by
+      // an effect once a model had loaded — an effect that also re-fired on its
+      // own write and made the UI toggle inert.
+      expect(store.directorEnabled()).toBe(true);
+    });
+
+    it('waveExplanation starts as null', () => {
+      expect(store.waveExplanation()).toBeNull();
+    });
+
+    it('worldRegenerating starts as false', () => {
+      expect(store.worldRegenerating()).toBe(false);
+    });
+  });
+
+  describe('signal set/update', () => {
+    it('credits can be set and updated', () => {
+      store.credits.set(200);
+      expect(store.credits()).toBe(200);
+
+      store.credits.update(c => c + 50);
+      expect(store.credits()).toBe(250);
+    });
+
+    it('credits can be negative for edge-case scenarios', () => {
+      store.credits.set(-25);
+      expect(store.credits()).toBe(-25);
+    });
+
+    it('phase can be changed', () => {
+      store.phase.set('wave');
+      expect(store.phase()).toBe('wave');
+
+      store.phase.set('gameover');
+      expect(store.phase()).toBe('gameover');
+    });
+
+    it('baseHealth can be decremented', () => {
+      store.baseHealth.update(h => h - 10);
+      expect(store.baseHealth()).toBe(GAME_BALANCE.player.startHealth - 10);
+    });
+
+    it('waveNumber can be incremented', () => {
+      store.waveNumber.update(w => w + 1);
+      expect(store.waveNumber()).toBe(1);
+
+      store.waveNumber.update(w => w + 1);
+      expect(store.waveNumber()).toBe(2);
+    });
+
+    it('enemiesAlive tracks count', () => {
+      store.enemiesAlive.set(15);
+      expect(store.enemiesAlive()).toBe(15);
+
+      store.enemiesAlive.update(e => e - 1);
+      expect(store.enemiesAlive()).toBe(14);
+    });
+  });
+
+  describe('computed values', () => {
+    it('selectedTowerId returns null when no tower selected', () => {
+      expect(store.selectedTowerId()).toBeNull();
+    });
+
+    it('selectedTowerId returns the id of the selected tower', () => {
+      const tower = new Tower({ lat: 0, lon: 0, height: 0 }, 'archer');
+      store.selectedTower.set(tower);
+      expect(store.selectedTowerId()).toBe(tower.id);
+    });
+
+    it('waveActive is true when phase is wave', () => {
+      expect(store.waveActive()).toBe(false);
+      store.phase.set('wave');
+      expect(store.waveActive()).toBe(true);
+    });
+
+    it('waveActive is false for other phases', () => {
+      store.phase.set('setup');
+      expect(store.waveActive()).toBe(false);
+      store.phase.set('gameover');
+      expect(store.waveActive()).toBe(false);
+    });
+
+    it('isGameOver is true only when phase is gameover', () => {
+      expect(store.isGameOver()).toBe(false);
+      store.phase.set('gameover');
+      expect(store.isGameOver()).toBe(true);
+    });
+
+    it('gameStarted is false initially (setup, wave 0)', () => {
+      expect(store.gameStarted()).toBe(false);
+    });
+
+    it('gameStarted is true when waveNumber > 0', () => {
+      store.waveNumber.set(1);
+      expect(store.gameStarted()).toBe(true);
+    });
+
+    it('gameStarted is true when phase is not setup', () => {
+      store.phase.set('wave');
+      expect(store.gameStarted()).toBe(true);
+    });
+
+    it('healthPercent is 100 at full health', () => {
+      expect(store.healthPercent()).toBe(100);
+    });
+
+    it('healthPercent is 50 at half health', () => {
+      store.baseHealth.set(GAME_BALANCE.player.startHealth / 2);
+      expect(store.healthPercent()).toBe(50);
+    });
+
+    it("measures health against the run's maximum (a custom map's HQ health)", () => {
+      store.maxHealth.set(80);
+      store.baseHealth.set(40);
+      expect(store.healthPercent()).toBe(50);
+      store.baseHealth.set(20);
+      expect(store.healthCritical()).toBe(true);
+      store.baseHealth.set(21);
+      expect(store.healthCritical()).toBe(false);
+      store.resetGameState();
+      expect(store.baseHealth()).toBe(80);
+    });
+
+    it('healthPercent is 0 when health is 0', () => {
+      store.baseHealth.set(0);
+      expect(store.healthPercent()).toBe(0);
+    });
+
+    it('healthPercent can go below 0 for negative health values', () => {
+      store.baseHealth.set(-10);
+      const expected = Math.round((-10 / GAME_BALANCE.player.startHealth) * 100);
+      expect(store.healthPercent()).toBe(expected);
+    });
+
+    it('healthCritical is false at full health', () => {
+      expect(store.healthCritical()).toBe(false);
+    });
+
+    it('healthCritical is true at 25% health', () => {
+      store.baseHealth.set(GAME_BALANCE.player.startHealth * 0.25);
+      expect(store.healthCritical()).toBe(true);
+    });
+
+    it('healthCritical is true below 25% health', () => {
+      store.baseHealth.set(GAME_BALANCE.player.startHealth * 0.1);
+      expect(store.healthCritical()).toBe(true);
+    });
+
+    it('healthCritical is false at 26% health', () => {
+      store.baseHealth.set(GAME_BALANCE.player.startHealth * 0.26);
+      expect(store.healthCritical()).toBe(false);
+    });
+  });
+
+  describe('resetGameState', () => {
+    it('resets all game signals to initial values', () => {
+      store.credits.set(999);
+      store.baseHealth.set(10);
+      store.phase.set('gameover');
+      store.waveNumber.set(5);
+      store.enemiesAlive.set(20);
+      store.waveEnemyTotal.set(30);
+      store.waveEnemiesLeft.set(22);
+      store.towerCount.set(8);
+      store.showGameOverScreen.set(true);
+      store.waveExplanation.set({ summary: 'Wave 1: Zombie Horde | 20 enemies | HP ×0.50', reasons: [] });
+      store.paused.set(true);
+      store.autoWaveSecondsLeft.set(7);
+      store.mannedTowerId.set('tower-3');
+
+      store.resetGameState();
+
+      expect(store.credits()).toBe(GAME_BALANCE.player.startCredits);
+      expect(store.baseHealth()).toBe(GAME_BALANCE.player.startHealth);
+      expect(store.phase()).toBe('setup');
+      expect(store.waveNumber()).toBe(0);
+      expect(store.enemiesAlive()).toBe(0);
+      expect(store.waveEnemyTotal()).toBe(0);
+      expect(store.waveEnemiesLeft()).toBe(0);
+      expect(store.selectedTower()).toBeNull();
+      expect(store.towerCount()).toBe(0);
+      expect(store.showGameOverScreen()).toBe(false);
+      expect(store.waveExplanation()).toBeNull();
+      // A new game never starts frozen
+      expect(store.paused()).toBe(false);
+      expect(store.autoWaveSecondsLeft()).toBeNull();
+      // Nobody sits in a tower of the new run
+      expect(store.mannedTowerId()).toBeNull();
+    });
+
+    it('does NOT reset training timescale', () => {
+      store.gameSpeed.set(10);
+
+      store.resetGameState();
+
+      expect(store.gameSpeed()).toBe(10);
+    });
+  });
+
+  describe('resetAll', () => {
+    it('resets everything including training settings', () => {
+      store.credits.set(999);
+      store.phase.set('gameover');
+      store.gameSpeed.set(50);
+      store.directorEnabled.set(false);   // non-default, so the assert below bites
+      store.worldRegenerating.set(true);
+
+      store.resetAll();
+
+      expect(store.credits()).toBe(GAME_BALANCE.player.startCredits);
+      expect(store.phase()).toBe('setup');
+      expect(store.gameSpeed()).toBe(1.0);
+      // Set to the NON-default before the reset in the arrange block, so this
+      // fails if resetAll stops touching the field at all.
+      expect(store.directorEnabled()).toBe(true);
+      expect(store.worldRegenerating()).toBe(false);
+    });
+  });
+});

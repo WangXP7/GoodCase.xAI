@@ -1,0 +1,5815 @@
+import { apresentarJavaporcos } from './javaporcos_intro.js';
+import { sincronizarOpcoesJavaporcos } from './javaporcos_opcoes.js';
+import { equipeJavaporcos } from './javaporcos_equipe.js';
+import { nomeTimeJavaporcos, wallpaperJavaporcos } from './javaporcos_apresentacao.js';
+// Boot, menus, settings, logo, main loop.
+import * as THREE from 'three';
+import { estadoDaUrl, urlDoEstado, CHAVES_DE_TELA } from './rotas.js';
+import { ligarCompartilhar, linkCompartilhavel, textoDaPartida } from './compartilhar.js';
+import {initAccountEntry,mountProfilePreferences} from './account-entry.js';
+import {initLoginPrompt,noteLoginPromptMatch} from './login-prompt.js';
+import {analyticsAllowed} from './privacy-preferences.js';
+import { contagem } from './contagem.js';   // contagem agregada sem id, independe do consentimento
+import { clientUuid, getAnonId } from './client-id.js';
+import {initTretaStore,equippedTretaSkin,equippedTretaEyewear,equippedTretaGlove,equippedTretaWeaponSkin,equippedTretaPack,tretaSkinPresentation,tretaWeaponPresentation,tretaVitrine,tretaSkinsDoArmario,equiparTretaSkin,desequiparTretaSkin} from './treta-store.js';
+import {carregarPasse,trocarContaPasse,acompanharPartidaPasse,personagemTravado as travadoNoPasse,nivelDoPersonagem,PASSE_EVENTO} from './passe.js';
+import { passeDebugAtivo } from './passe-debug.js';
+/* QA local (passe-debug.js): só loopback + ?debug=1&passeDev=1 joga com o elenco do passe sem resgate. */
+const passeDev = passeDebugAtivo();
+const personagemTravado = (def) => !passeDev && travadoNoPasse(def);
+import {tretaPack} from './data/pack-definitions.js';
+import {retratoFontes} from './data/retratos.js';
+import {characterRelease} from './data/content-releases.js';
+import { initTextures, ajustarAnisotropia } from './textures.js';
+import { CHARACTERS, buildCharacter, charWeapon, ladosDe, podeNoLado } from './characters.js';
+import { EMOTES_ENABLED } from './emote-features.js';
+import { preloadEyewearAssets } from './eyewear.js';
+import { preloadCharacterAssets, preloadCosmeticAssets, getGloveHandle, buildCharacterModel, hasModel, GLB_CHARS , setEmoteDriver, GloveManifestUnavailable } from './glbchars.js';
+import { preloadFPArms } from './fparms.js';
+import { preloadMapProps, mapPropIds } from './mapprops.js';
+import { preloadMapAmbientLife } from './ambientlife.js';   // fauna do mapa (MAPS[id].ambience)
+import { apiUrl, fetchComRetry, versaoComOrigem } from './apibase.js';   // rotas /api de banco moram no backend (docs/APIS.md)
+import { MAPS, DEFAULT_MAP, ehMapaJavaporcos, resolveMapId, mapaDaSessao, mapasDoMenu, MAPAS_PARADOS, comMapaCarregado, defineSeedHavan } from './maps.js';
+import { PALETA } from './paleta.js';
+import { FACTIONS, faction as factionDefinition } from './factions.js';
+import { urlDoBrasao } from './brasoes_versao.js';
+import { preloadWeapons, WEAPON_IDS } from './weapons.js';
+import {preloadWeaponSkinCandidate} from './weapon-skins.js';
+import { preloadAuthoredFamilies, authoredBootFamilies } from './authoredvm.js';
+import { Sfx } from './audio.js';
+import { Game, confirmGate, CONFIRM_MAX_MS, pickMatchRoster, pickMatchWeapons, sanitizeRounds, ROUNDS_CUSTOM_MAX, aguardarPreloads, elencoDaEscolta } from './game.js';
+import { economiaLigada } from './economia-partida.js';
+import { VERSION } from './version.js';
+import { bindMapPreview, stopMapPreviews, previewRevision } from './amazonia_map_preview.js';
+import { mapPreviewPoster as escadaoMapPreviewPoster, bindMapPreviews, stopMapPreview } from './escadao_preview.js';
+const mapPreviewPoster = (id, version) => escadaoMapPreviewPoster(id, `${version}${previewRevision(id)}`);
+import { LANG, resolveGeoLang, translateDom, tr, frase } from './i18n.js';
+import { enableLightBloom } from './bloom.js';
+import { enableStylize } from './stylize.js';
+/* E/B são os dois times de gameplay; as demais chaves são grupos do elenco. */
+/* Rótulo de grupo no jogo é caixa alta, como os outros; o registro guarda o nome editorial ("Fora do Ar"). */
+const FACTION_NAME = { ...Object.fromEntries(FACTIONS.map((f) => [f.id, f.name.toLocaleUpperCase('pt-BR')])), P: 'POLÍTICOS' };
+import { resolveInspectionScreen } from './screenquery.js';
+import { LoadingCharacterStage } from './loading3d.js';
+import { MENU_MUSIC_ACTIVE_IDS } from './menu-music-selection.js';
+import { createMapPreview, VIDEO_MAPS } from './map_preview.js';
+/* Multiplayer. O game.js NÃO importa nada disto: o netcode é injetado por aqui
+   (`new Game({ mpFactory, net })`), e sem sessão de rede nenhuma linha dele executa. */
+import { NOS, NO_RE, ordenarNos, melhorNoParaJogar, parseConvite, linkDeConvite, httpDoNo } from './nos.js';
+import { mpUrls, sondarNos, listRooms, listMaps, createRoom, salaPorConvite } from './nos-rede.js';
+import { NetClient, resolvePlayerSide, ladoOnline, transitionSlot, decidirPersonagemMp } from './net.js';
+import { montarChatSala } from './chat-painel.js';
+import { planoPreload, segundosAteVirada, textoProximo } from './mp-proximo.js';
+import { makeNetcode } from './netgame.js';
+
+/* ---------------- settings & nickname ---------------- */
+const SETTINGS_KEY = 'awpbr_settings';
+const POINTER_COARSE = matchMedia('(pointer: coarse)').matches;
+const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+const AUTO_QUALITY_KEY = 'cs_quality_auto';
+const QUALITY_MARKER = localStorage.getItem(AUTO_QUALITY_KEY);
+const QUALITY_WAS_AUTOMATIC = QUALITY_MARKER === '1';
+/* Versões anteriores gravavam `low` ao detectar celular e depois o confundiam com escolha
+   manual. No coarse, esse legado volta a ser automático; uma nova escolha grava `manual`. */
+const QUALITY_WAS_MANUAL = QUALITY_MARKER === 'manual'
+  || (savedSettings.quality !== undefined && !QUALITY_WAS_AUTOMATIC
+    && !(POINTER_COARSE && savedSettings.quality === 'low'));
+const marcarQualidadeManual = () => { try { localStorage.setItem(AUTO_QUALITY_KEY, 'manual'); } catch { /* storage bloqueado */ } };
+if (savedSettings.invertY == null && savedSettings.invY != null) savedSettings.invertY = savedSettings.invY;
+/* FORMATO LIVRE DA PARTIDA: `bots` (N×N simétrico) virou `allyBots` (bots ao SEU lado,
+   sem contar você) + `enemyBots` — 1v4, solo vs 8, 5v5, o que o jogador montar.
+   Migração: quem tinha `bots` salvo começa no N×N equivalente. */
+if (savedSettings.allyBots == null && savedSettings.enemyBots == null) {
+  const n = Math.max(1, Math.min(8, Math.round(+savedSettings.bots) || 4));
+  savedSettings.allyBots = n - 1; savedSettings.enemyBots = n;
+}
+const settings = Object.assign({ sens: 1, sensToque: 1, invertY: false, vol: 0.7, menuMusic: true, quality: 'med', speech: true, map: DEFAULT_MAP, wpnMode: 'all', bots: 4, allyBots: 3, enemyBots: 4, pinnedChars: [], rounds: 5, ctfRounds: 3, difficulty: 'normal', fxFlash: 'normal', camView: 'first' }, savedSettings);
+if (!['first', 'third', 'shoulder'].includes(settings.camView)) settings.camView = 'first';
+/* Clamps defensivos: save antigo/corrompido não pode quebrar a composição da partida.
+   allyBots 0 = SOLO (você sozinho); enemyBots 1 = 1 adversário. */
+settings.allyBots = Math.max(0, Math.min(7, settings.allyBots | 0));
+settings.enemyBots = Math.max(1, Math.min(8, settings.enemyBots | 0));
+settings.pinnedChars = Array.isArray(settings.pinnedChars) ? settings.pinnedChars.filter((id) => typeof id === 'string') : [];
+/* Formato escolhido, UMA fonte para todos os rótulos (cartaz, resumo, chips). */
+const formatoPartida = () => `${1 + settings.allyBots} vs ${settings.enemyBots}`;
+let preferredQuality = null;
+const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+  ...settings,
+  quality: preferredQuality ?? settings.quality,
+}));
+// Ajustes da Treta Pop (tp/ajustes.js) gravam nas mesmas settings, senão o próximo save apagaria a escolha.
+if (document.documentElement.dataset.ui === 'v3') document.addEventListener('tp-ajuste', (e) => { settings[e.detail.chave] = e.detail.valor || undefined; if (e.detail.chave === 'quality') marcarQualidadeManual(); saveSettings(); });
+const NICK_KEY = 'awpbr_nick';
+// A coleta de jogadas exige consentimento explícito e persistente.
+const TRAIN_CONSENT_KEY = 'csbr_training_consent';
+const trainingEnabled = () => { try { return localStorage.getItem(TRAIN_CONSENT_KEY) === '1'; } catch { return false; } };
+const SOCIAL_KEY = 'awpbr_social';
+const STATS_KEY = 'awpbr_stats';   // declarado no bloco de storage: syncPlayState→renderPlayerPlate→loadStats roda ANTES da definição antiga (TDZ)
+const PLAYER_AVATAR_KEY = 'awpbr_player_avatar';
+
+/* Contexto declarado antes da música: picks de menu ficam sem gameType e nunca
+   herdam a partida anterior. */
+let telemetryGameContext = {
+  gameType: null, node: null, roomId: null, roomOfficial: null, createdRoom: null,
+};
+let _matchEventId = null;
+// Commit e coorte em toda telemetria; cohort só rotula, quem filtra é a consulta.
+// O backend ignora campo desconhecido (perf.ts): mandar antes da coluna existir é seguro.
+function sinaisDeBuild() {
+  let cohort = 'organico';
+  try {
+    if (navigator.webdriver) cohort = 'automacao';
+    else if (new URLSearchParams(location.search).has('qa') || localStorage.getItem('cs_qa') === '1') cohort = 'qa';
+  } catch { /* storage bloqueado: fica orgânico */ }
+  return { buildSha: String(window.__CS_BUILD?.sha || '') || null, cohort };
+}
+function clearTelemetryGameContext() {
+  telemetryGameContext = {
+    gameType: null, node: null, roomId: null, roomOfficial: null, createdRoom: null,
+  };
+  _matchEventId = null;
+}
+
+/* ---------------- renderer ---------------- */
+// Import extra (top-level, legal em ESM) em vez de mexer no bloco de imports lá de cima:
+// o tom do caminho SEM pós mora no bloom.js, que é o dono da tabela de exposição/piso por mapa.
+import { applyNoPostTone, ajustaPos } from './bloom.js';
+import { criaRenderer, avisaSemWebgl, avisaSoftware } from './glcontext.js';
+import { EscadaAdaptativa, DEGRAUS, LimitadorCadencia, PERFIL_MOBILE, perfilInicial, tetoTextura } from './qualidade-adaptativa.js';
+import { definirSombraDegrau, definirCorteVegetacao, aplicaSombraSol, aplicaSombraPalco } from './mapquality.js';
+const container = document.getElementById('game-container');
+const SAFE_MODE = new URLSearchParams(location.search).get('safe') === '1';
+const renderer = criaRenderer({}, { compatibility: SAFE_MODE });
+if (!renderer) {
+  avisaSemWebgl('WebGL indisponível neste navegador/driver');
+  throw new Error('sem_webgl');
+}
+/* `degraded` junta MSAA recusado, WebGL1, modo compatibilidade e renderizador de software —
+   e tratar os quatro igual rebaixava para o caminho mais leve do jogo uma GPU boa que só disse
+   não ao antialias. Aqui cada um custa o que custa (KNOWN-BUGS BUG-162). */
+const GLMETA = renderer.__csWebgl || {};
+const SOFTWARE = GLMETA.software === true;      // llvmpipe/swiftshader: 2 a 8 FPS medidos
+const COMPAT_MODE = SAFE_MODE || SOFTWARE || GLMETA.semWebgl2 === true || GLMETA.compat === true;
+if (COMPAT_MODE) { preferredQuality = settings.quality; settings.quality = 'low'; }
+/* AUTO-PERFIL PARA MÁQUINA FRACA: cai pra 'low' por padrão só se o jogador NUNCA escolheu
+   qualidade à mão (a escolha manual sempre vence). ?perfilauto=0 desliga a heurística. */
+const AUTO_PROFILE = new URLSearchParams(location.search).get('perfilauto') !== '0';
+const MOBILE_AUTO = !COMPAT_MODE && AUTO_PROFILE && !QUALITY_WAS_MANUAL && POINTER_COARSE;
+const HUB_ENABLED = new URLSearchParams(location.search).get('home') !== 'legacy';
+/* A tela mora no CAMINHO (public/js/rotas.js, ADR 0008): /jogar/multiplayer, /loja,
+   /comunidade/amigos... Parâmetro que não é tela (map, personagem, sala) segue na query. */
+const TELA = new Set([...CHAVES_DE_TELA, 'origem', 'perfil', 'aba']);
+// Perfil vira /u/<perfil> só na janela de cima: no iframe de /u um reload cairia na página SSR.
+const ROTA_OPCOES = { perfilNoCaminho: window.top === window.self };
+function hubNavigate(changes, replace = false) {
+  if (!HUB_ENABLED) return;
+  const estado = { ...(estadoDaUrl(location.href) || {}) };
+  // /configuracoes não guarda a seção de baixo: ao fechar, ela vem do hub na tela.
+  if (estado.janela === 'configuracoes' && changes.janela !== 'configuracoes') {
+    const menu = document.getElementById('main-menu')?.dataset || {};
+    if (menu.hubTab) estado.secao = menu.hubTab;
+    if (menu.hubTab === 'jogar' && menu.hubNet === 'mp') { estado.partida = 'multiplayer'; estado.servidor = menu.hubMpTab === 'private' ? 'privado' : 'publico'; }
+  }
+  for (const [key, value] of Object.entries(changes)) if (TELA.has(key)) { if (value == null) delete estado[key]; else estado[key] = value; }
+  const url = urlDoEstado(estado, location.href, ROTA_OPCOES);
+  for (const [key, value] of Object.entries(changes)) {
+    if (TELA.has(key)) continue;
+    if (value == null) url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
+  }
+  if (url.href !== location.href) history[replace ? 'replaceState' : 'pushState'](null, '', url);
+}
+function detectaHwFraco() {
+  const gpu = (renderer.__csWebgl?.renderer || '').toLowerCase();
+  const integrada = /intel|iris|uhd graphics|hd graphics|mesa|microsoft basic|swiftshader|llvmpipe|softpipe/.test(gpu);
+  const mem = navigator.deviceMemory;              // Chrome limita em 8; 4 GB reporta 4
+  const cores = navigator.hardwareConcurrency || 8;
+  return integrada || (typeof mem === 'number' && mem <= 4) || cores <= 4;
+}
+const WEAK_HW = !COMPAT_MODE && AUTO_PROFILE && !QUALITY_WAS_MANUAL && detectaHwFraco();
+const AUTO_LOW = WEAK_HW || MOBILE_AUTO;
+if (AUTO_LOW) {
+  settings.quality = 'low';
+  try { localStorage.setItem(AUTO_QUALITY_KEY, '1'); } catch { /* storage bloqueado */ }
+  try { console.info(`[perf] ${MOBILE_AUTO ? 'celular' : 'hardware modesto'} detectado — qualidade em BAIXA por padrão (mude em Configurações)`); } catch {}
+}
+const LEAN = COMPAT_MODE || AUTO_LOW;   // qualquer caminho leve: previews estáticos + DPR menor
+const TEXTURE_MAX = tetoTextura({ pointerCoarse: POINTER_COARSE, maxTextureSize: renderer.capabilities.maxTextureSize });
+if (TEXTURE_MAX) globalThis.__CS_TEXTURA_MAX__ = TEXTURE_MAX;
+if (SOFTWARE) avisaSoftware(GLMETA.renderer);   // contar é o que faltava; o jogo já se rebaixou
+const ASSET_CHECK = new URLSearchParams(location.search).get('assetcheck') === '1';
+let staticPreviews = LEAN && !ASSET_CHECK;
+renderer.setSize(innerWidth, innerHeight);
+// software já começa no degrau MÍNIMO: medir 8 s para descobrir o que o renderizador já disse
+// é gastar os únicos quadros que essa máquina tem. 0,5 = um quarto dos pixels de 1,0.
+renderer.setPixelRatio(SOFTWARE ? 0.5 : LEAN ? 0.75 : 1);
+renderer.shadowMap.enabled = settings.quality !== 'low' && !COMPAT_MODE;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Tonemap. Com o composer ligado three já força NoToneMapping nos materiais (só aplica
+// tonemap quando o alvo é null) e quem faz a curva é o AgX do bloom.js — deixamos
+// NoToneMapping EXPLÍCITO nesse caso pra não haver a menor chance de tonemap duplo.
+// Estes dois valores são só o ESTADO INICIAL: quem manda no caminho sem pós é o
+// applyNoPostTone() logo abaixo. Ver o bloco de comentário dele no bloom.js.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+container.appendChild(renderer.domElement);
+let contextLossTimer = null;
+let contextRetryTimers = [];
+let contextLostCount = 0;
+renderer.domElement.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault();
+  clearTimeout(contextLossTimer);
+  for (const t of contextRetryTimers) clearTimeout(t);
+  contextRetryTimers = [];
+  contextLostCount++;
+  console.warn(`[webgl] contexto perdido (recuperação ${contextLostCount})`);
+  // 16a22c40 (#297): browser mata o contexto sob pressão de GPU (comum ao ABRIR a
+  // arena — 53 personagens + mapa sobem juntos). O restore espontâneo raramente
+  // chega em 1,5 s; o Three tem forceContextRestore() pra PEDIR a volta. Pedimos
+  // em progressão (0,5 s → 1,5 s → 4 s) e o fatal só vem se nada voltou em 8 s.
+  const delays = [500, 1500, 4000];
+  delays.forEach((ms, i) => {
+    contextRetryTimers.push(setTimeout(() => {
+      try { renderer.forceContextRestore(); } catch (_) { /* ainda perdido */ }
+    }, ms));
+  });
+  contextLossTimer = setTimeout(() => window.__gameLaunch?.fail(new Error('contexto WebGL perdido'), 'webgl-context-lost'), 8000);
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  clearTimeout(contextLossTimer);
+  for (const t of contextRetryTimers) clearTimeout(t);
+  contextRetryTimers = [];
+  contextLossTimer = null;
+  console.warn('[webgl] contexto restaurado');
+  // pós-restore os render targets do composer/bloom nasceram mortos: um resize
+  // força a recriação dos mesmos (mesmo caminho de uma mudança de janela)
+  try { dispatchEvent(new Event('resize')); } catch (_) {}
+});
+// bloom leve (FASE 4) — ligado por padrão, pulado na qualidade 'low' ou com ?bloom=0
+// (escape hatch p/ GPUs/extensões que derrubam a aba — suspeita do "jogo fechar sozinho")
+{
+  const _qp = new URLSearchParams(location.search);
+  const _bloomOn = !COMPAT_MODE && settings.quality !== 'low' && _qp.get('bloom') !== '0';
+  // pipeline estilizado (cel+contorno) atrás de ?style=1 — prova de conceito reversível.
+  if (!COMPAT_MODE && _qp.get('style') === '1') enableStylize(renderer, { bloom: _bloomOn, quality: settings.quality });
+  else if (_bloomOn) {
+    enableLightBloom(renderer, { quality: settings.quality });
+    if (_qp.get('post') !== 'output') renderer.toneMapping = THREE.NoToneMapping;   // AgX manda
+  } else {
+    // 'low' / ?bloom=0: MESMA exposição por mapa e MESMO piso de ambiente do composite,
+    // aplicados dentro do material (zero passe fullscreen). Sem isso 'low' era outro jogo:
+    // ~1 stop mais escuro e com curva de tom diferente (ACES crusha a sombra que o piso do
+    // AgX segura). Kill-switch: ?lowtone=0 volta pro ACES puro.
+    applyNoPostTone(renderer);
+  }
+}
+
+ajustarAnisotropia(null, settings.quality);
+const textures = initTextures();
+const sfx = new Sfx(); sfx.vol = settings.vol;
+sfx.speechEnabled = settings.speech !== false;
+sfx.reverbOn = new URLSearchParams(location.search).get('reverb') === '1';   // reverb leve opt-in (default off)
+sfx.unlockOnGesture(document);   // deep-link (`?sala=`) entra sem clique: o 1º gesto destrava o ctx
+// sidechain da música do menu: cliques/SFX abaixam a trilha por ~150-250ms e ela volta suave
+sfx.onDuck = (amt, hold) => {
+  const m = menuMusic;
+  if (!m || m.paused || m.muted || musicFade) return;
+  m.volume = MENU_MUSIC_VOL * amt;
+  setTimeout(() => { if (menuMusic && !musicFade && !menuMusic.paused) menuMusic.volume = MENU_MUSIC_VOL; }, hold * 1000 + 220);
+};
+const sfxReady = sfx.loadManifest(VERSION);
+
+/* ---------------- selected map ---------------- */
+const urlMap = new URLSearchParams(location.search).get('map');
+/* Oficina (`?oficina=1`): devolve os mapas parados ao menu para retrabalho.
+   Contrato em docs/maps/MAPAS-PARADOS.md. */
+const oficina = new URLSearchParams(location.search).get('oficina') === '1';
+const MAPAS_MENU = mapasDoMenu(oficina);
+let currentMap = mapaDaSessao({ urlMap, savedMap: settings.map, pinned: settings.mapPinned, oficina });
+// sem save a rotação não avança; com ?map= o save pisaria a escolha fixada do jogador
+if (!urlMap) { settings.map = currentMap; saveSettings(); }
+
+/* ---------------- menu backdrop (orbiting map) ---------------- */
+let menuScene = new THREE.Scene();
+let menuBackdropWorld = null;
+
+const menuCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
+/* ---------------- loading real (barra via LoadingManager compartilhado) ---------------- */
+// GLTFLoader sem manager cai no THREE.DefaultLoadingManager — TODOS os GLBs (personagens,
+// props de mapa, braços FP, viewmodel) passam por ele. Cada fase faz snapshot do acumulado
+// (l0) e mede (loaded-l0)/(total-l0) → barra de progresso REAL, não spinner fake.
+const _lstat = { loaded: 0, total: 0, phase: null };
+THREE.DefaultLoadingManager.onProgress = (url, l, t) => {
+  _lstat.loaded = l; _lstat.total = t;
+  const ph = _lstat.phase;
+  if (ph) ph.set(Math.min(0.99, (l - ph.l0) / Math.max(1, t - ph.l0)));
+};
+/* `statusEl` é opcional: só o overlay de partida troca o texto conforme a barra
+   anda (o boot mantém a mensagem fixa, que já é curta). A escrita é condicionada a
+   ter MUDADO porque `set` é chamado a cada progresso do LoadingManager — escrever
+   textContent igual em toda chamada é layout à toa. */
+function _mkPhase(fillEl, pctEl, statusEl) {
+  const ph = {
+    l0: _lstat.loaded,
+    set(p) {
+      fillEl.style.width = (p * 100).toFixed(0) + '%';
+      pctEl.textContent = Math.round(p * 100) + '%';
+      if (statusEl) {
+        const t = _statusPorProgresso(p);
+        if (statusEl.textContent !== t) statusEl.textContent = t;
+      }
+    },
+  };
+  _lstat.phase = ph; ph.set(0); return ph;
+}
+/* Marcos do funil moram aqui porque disparam antes do testMode existir (TDZ) e antes da
+   checagem de privacidade: ficam guardados e só saem quando as duas existem (medição é ligada
+   por padrão; quem recusou e voltou a permitir recebe os marcos guardados). Régua: funil-lobby-check. */
+const _marcos = new Set();
+const _marcosEnviados = new Set();
+let _funilPronto = false;
+function marcoFunil(step) { _marcos.add(step); if (_funilPronto) _flushMarcos(); }
+/* Conta só tempo de aba VISÍVEL: em segundo plano mediria "deixou a aba aberta", não "ficou no
+   lobby". Saída por pagehide/visibilitychange, o único sinal que o celular garante. */
+const LOBBY_MARCOS = [[30_000, 'lobby_30s'], [120_000, 'lobby_120s']];
+// `_lobbyDesde` é null quando o relógio está parado: 0 é um instante válido de performance.now().
+let _lobbyDesde = null, _lobbyMs = 0, _lobbyTimer = 0, _noLobby = false;
+function _lobbyVisivelMs() { return _lobbyMs + (_lobbyDesde === null ? 0 : performance.now() - _lobbyDesde); }
+function _lobbyAgenda() {
+  clearTimeout(_lobbyTimer); _lobbyTimer = 0;
+  if (!_noLobby || document.hidden) return;   // relógio parado; volta no visibilitychange
+  const alvo = LOBBY_MARCOS.find(([ms]) => _lobbyVisivelMs() < ms);
+  if (!alvo) return;
+  _lobbyTimer = setTimeout(() => { marcoFunil(alvo[1]); _lobbyAgenda(); }, alvo[0] - _lobbyVisivelMs());
+}
+function _lobbyEntrou() {   // passou da splash: o lobby está de fato na tela
+  if (_noLobby) return;
+  _noLobby = true;
+  if (!document.hidden) _lobbyDesde = performance.now();
+  _lobbyAgenda();
+}
+function _lobbySaiuPraPartida() { _noLobby = false; _lobbyDesde = null; clearTimeout(_lobbyTimer); _lobbyTimer = 0; }
+function _lobbyEscondeu() {
+  if (_lobbyDesde !== null) { _lobbyMs += performance.now() - _lobbyDesde; _lobbyDesde = null; }
+  clearTimeout(_lobbyTimer); _lobbyTimer = 0;
+  if (_noLobby) marcoFunil('lobby_exit');   // `_marcos` é Set: uma saída por sessão, não por aba escondida
+}
+addEventListener('pagehide', _lobbyEscondeu);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { _lobbyEscondeu(); return; }
+  if (_noLobby && _lobbyDesde === null) { _lobbyDesde = performance.now(); _lobbyAgenda(); }
+});
+
+// fase de boot: props do cenário 3D do menu (carrega por baixo da splash)
+const _bootPhase = _mkPhase(document.getElementById('boot-bar-fill'), document.getElementById('boot-pct'));
+let _splashReady = false;
+/* JANELA DE ENTRADA: o gesto que tira a splash não é escolha de menu. Em máquina lenta ele
+   vazava para o item recém-focado e o JOGAR abria o submenu sozinho (régua ENTRADA1). */
+const ENTRADA_MS = 350;
+let _entradaEm = 0;
+let _splashPorFailsafe = false;
+let _menuBackdropBypass = null;
+function _splashSetReady() {
+  // Marco do funil: `assets_ready` é o caminho dos assets (menuBackdropReady), nunca o
+  // failsafe. splash_ready SEM assets_ready = o botão saiu por tempo, com a carga em pé.
+  if (!_splashPorFailsafe) marcoFunil('assets_ready');
+  if (_splashReady) return; _splashReady = true;
+  marcoFunil('splash_ready');
+  _bootPhase.set(1);
+  if (_lstat.phase === _bootPhase) _lstat.phase = null;
+  // G2-R10: o failsafe de 20s dispara DEPOIS da splash sair do DOM (debug/?auto= e
+  // fluxos rápidos) — sem guarda, crashava "textContent null" (banner vermelho).
+  const bs = document.getElementById('boot-status'), se = document.getElementById('splash-enter');
+  if (bs) bs.textContent = tr('ARENA PRONTA');
+  if (se) se.classList.remove('hidden');
+}
+// failsafe: nunca prende o jogador na splash. A bandeira separa "assets prontos" de "deu tempo".
+setTimeout(() => { _splashPorFailsafe = true; _splashSetReady(); _splashPorFailsafe = false; }, 20000);
+if (document.documentElement.dataset.ui === 'v3') {
+  import('./splash-v3.js').then((m) => m.ligarSplashV3()).catch(() => {});
+  import('./tp/ligar.js').then((m) => m.ligarTelas()).catch((e) => console.error('[treta-pop]', e));
+}
+// overlay de loading de partida/personagens (cobre a cena montando — sem "minecraft")
+const _lo = {
+  box: document.getElementById('load-overlay'), fill: document.getElementById('load-bar-fill'),
+  pct: document.getElementById('load-pct'), label: document.getElementById('load-label'), status: document.getElementById('load-status'),
+};
+const loadingStage = new LoadingCharacterStage(document.getElementById('load-character-3d'), { compatibility: LEAN });
+if (!LEAN) loadingStage.show('B').catch(() => {});   // celular: nenhum GLB/renderer 3D escondido atrás da splash
+function dockLoadingCharacter() {
+  const canvas = document.getElementById('load-character-3d');
+  const stage = document.getElementById('load-character-stage');
+  if (canvas && stage && canvas.parentElement !== stage) stage.prepend(canvas);
+}
+/* DICAS DO CARREGAMENTO. São de JOGO, não de marketing: cada uma diz algo que muda
+   a mão de quem lê. Passam pelo tr() como todo o resto da UI. */
+const _DICAS = [
+  'Andar com a arma no ombro (tecla F) é mais rápido do que andar mirando.',
+  'Segure TAB a qualquer momento para ver o placar e quem está vivo.',
+  'Agachar reduz o espalhamento do tiro — mas também a sua velocidade.',
+  'Tiro na cabeça mata em quase tudo. Mire alto no corredor.',
+  'A fumaça (tecla 4) corta a linha de visão dos bots, não só a sua.',
+  'O radar mostra parede: use ele para saber de onde o barulho vem.',
+  'Recarregar cancela o tiro. Não recarregue no meio da troca.',
+  'Cada personagem muda só a aparência — a mira é toda sua.',
+];
+let _dicaT = null;
+function _giraDica() {
+  const el = document.getElementById('load-tip');
+  if (!el) return;
+  el.textContent = tr(_DICAS[Math.floor(Math.random() * _DICAS.length)]);
+}
+/* Faixa de progresso -> status, como o handoff pede. O texto muda de verdade
+   conforme a barra anda, então ele não é enfeite: é o segundo sinal de vida da
+   tela (o primeiro é a própria barra). */
+function _statusPorProgresso(p) {
+  if (p < 0.34) return tr('CARREGANDO TEXTURAS…');
+  if (p < 0.72) return tr('POSICIONANDO OS BOTS…');
+  return tr('AQUECENDO A TRETA…');
+}
+function showLoading(label, status = 'CARREGANDO MODELOS 3D…', mapName = '') {
+  dockLoadingCharacter();
+  const kick = document.getElementById('load-kicker');
+  if (kick) kick.textContent = tr(label);   // o rótulo ("CARREGANDO <MAPA>") virou o kicker do topo (tela 00B)
+  _lo.label.textContent = ''; _lo.status.textContent = tr(status);
+  const mapEl = document.getElementById('load-map');
+  if (mapEl) mapEl.textContent = mapName;   // tela 00B: o mapa é o protagonista da espera
+  const metaEl = document.getElementById('load-meta');
+  if (metaEl) metaEl.innerHTML = mapName ? ($('map-meta').textContent || '').split('·').join('<span class="lo-sep">·</span>') : '';
+  // chip de confronto no topo à direita (tela 00B): seu lado × adversário, nas cores da facção
+  const vs = document.getElementById('load-versus');
+  if (vs) {
+    const a = $('load-vs-a'), b = $('load-vs-b');
+    if (mapName && currentEnemyFaction) {
+      a.textContent = tr(nomeTimeJavaporcos(ehMapaJavaporcos(currentMap) ? 'horde' : '', 'E') || FACTION_NAME[currentTeam] || ''); a.style.color = (PALETA[currentTeam] || {}).base || '#e0762a';
+      const ladoDele = currentTeam === 'B' ? 'E' : 'B';
+      b.textContent = tr(ehMapaJavaporcos(currentMap) && settings.javaporcos?.times === 3 ? 'TIME B × JAVAPORCOS' : nomeTimeJavaporcos(ehMapaJavaporcos(currentMap) ? 'horde' : '', 'B') || FACTION_NAME[ladoDele] || ''); b.style.color = (PALETA[ladoDele] || {}).base || '#8258d8';
+      vs.classList.remove('hidden');
+    } else vs.classList.add('hidden');
+  }
+  _lo.box.dataset.mode = ehMapaJavaporcos(currentMap) ? 'horde' : '';
+  _loadWallModoI = 0;
+  _loadWallFixa = (mapName && MAPS[currentMap]?.loadingWall) || loadingWallDoPersonagem(currentChar) || '';
+  try { _lo.box.style.setProperty('--loading-wall', _loadWallFixa ? `url('${_loadWallFixa}')` : loadingWallUrl(_loadWallI++)); } catch {}
+  _lo.box.classList.remove('hidden');
+  if (!LEAN) loadingStage.show(ehMapaJavaporcos(currentMap) ? 'J' : currentFaction).catch(() => {});   // mobile mantém a tela 2D; nenhum segundo renderer/GLB durante o boot
+  _giraDica();
+  clearInterval(_dicaT); _dicaT = setInterval(_giraDica, 5000);
+  _mkPhase(_lo.fill, _lo.pct, _lo.status);
+}
+function hideLoading() {
+  _lstat.phase = null;
+  clearInterval(_dicaT); _dicaT = null;   // sem isto o timer sobrevive à partida inteira
+  loadingStage.hide();
+  _lo.box.classList.add('hidden');
+}
+function rebuildMenuBackdrop(mapa) {
+  menuBackdropWorld?.ambience?.dispose?.();
+  menuBackdropWorld = null;
+  renderer.liberaPosDaCena?.(menuScene);
+  menuScene = new THREE.Scene();
+  menuBackdropWorld = mapa.build(menuScene, textures);
+  ajustarAnisotropia(menuScene, settings.quality);
+}
+function menuProps(mapa) {
+  const deferred = mapa.menuDeferredProps || [];
+  return mapPropIds(mapa).filter((id) => !deferred.includes(id));
+}
+let _menuLoadSeq = 0;
+async function loadMenuBackdrop() {
+  const id = currentMap, seq = ++_menuLoadSeq;
+  return comMapaCarregado(id, (mapa) => {
+    if (seq !== _menuLoadSeq || id !== currentMap) return;
+    // Monta uma vez assim que o construtor existe; props e fauna refinam a mesma arena.
+    rebuildMenuBackdrop(mapa);
+    const propsReady = preloadMapProps(menuProps(mapa));
+    const rebuildCurrent = () => {
+      if (seq === _menuLoadSeq && id === currentMap) rebuildMenuBackdrop(mapa);
+    };
+    /* Fauna pede DEPOIS dos props: em paralelo ela disputava banda (1.588 KB contra 4.083 KB)
+       com o que o portão da splash espera. O lobby final é o mesmo, só fica alcançável antes. */
+    return propsReady.then(() => {
+      rebuildCurrent();
+      preloadMapAmbientLife(mapa).then(rebuildCurrent).catch(() => {});
+    });
+  });
+}
+// Rotas compartilhadas, inclusive na query antiga, carregam o cenário em fundo.
+// No perfil móvel, o wallpaper 2D evita baixar e compilar uma arena coberta pelo menu.
+// Em máquinas lentas, o gesto após o failsafe libera o módulo sem cancelar o cenário.
+const directRoute = document.documentElement.hasAttribute('data-direct-route')
+  || Object.keys(estadoDaUrl(location.href) || {}).length > 0;
+const menuBackdropReady = MOBILE_AUTO ? Promise.resolve() : loadMenuBackdrop();
+const menuBackdropSettled = menuBackdropReady.catch((error) => {
+  console.warn('[menu-background]', error);
+});
+if (MOBILE_AUTO) _splashSetReady();
+else void menuBackdropSettled.then(_splashSetReady);
+/* RÉGUA:boot-module-sequencing início */
+const moduleSequencingReady = MOBILE_AUTO || directRoute ? Promise.resolve() : Promise.race([
+  menuBackdropSettled,
+  new Promise((resolve) => { _menuBackdropBypass = resolve; }),
+]);
+/* RÉGUA:boot-module-sequencing fim */
+
+/* ---------------- screens ---------------- */
+const screens = ['main-menu', 'map-screen', 'team-select', 'char-select', 'settings-panel', 'howto-panel', 'ranking-panel', 'mp-panel', 'feedback-panel', 'support-panel', 'pause-menu', 'match-end'];
+function show(id) {
+  const hubMpRoute = HUB_ENABLED && id === 'mp-panel';
+  if (hubMpRoute) {
+    const menu = document.getElementById('main-menu');
+    menu.dataset.hubTab = 'jogar'; menu.dataset.hubNet = 'mp';
+    document.getElementById('hub-play').hidden = false;
+    for (const pane of ['hub-ranking', 'hub-community', 'hub-about', 'hub-feedback', 'hub-support']) document.getElementById(pane).hidden = true;
+    for (const tab of document.querySelectorAll('.hub-tabs [data-hub-tab]')) {
+      const active = tab.dataset.hubTab === 'jogar';
+      tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
+    }
+    document.getElementById('hub-sp').setAttribute('aria-pressed', 'false');
+    document.getElementById('hub-mp').setAttribute('aria-pressed', 'true');
+    document.getElementById('hub-multiplayer-entry').hidden = false;
+    id = 'main-menu';
+  }
+  if (HUB_ENABLED && id === 'char-select') returnPreviewToSelection();
+  stopMapPreviews();
+  for (const s of screens) document.getElementById(s).classList.toggle('hidden', s !== id);
+  if (!id) for (const s of screens) document.getElementById(s).classList.add('hidden');
+  clearCompactPreviews();
+  stopHiddenPreview();
+  if (id !== 'char-select') pvStopVideo();
+  if (id !== 'map-screen') stopMapPreview();
+  // ao navegar pra qualquer tela, fecha o painel de setup do menu CS (não fica aberto after)
+  // EXCEÇÃO: map-screen é EXTENSÃO do setup (abre pelo cartaz do mapa) — o painel fica
+  // aberto embaixo e o VOLTAR cai de volta nele, com mapa/modo/bots intactos.
+  if (id !== 'main-menu' && id !== 'map-screen') { const ms = document.getElementById('menu-setup'); if (ms) ms.classList.remove('open'); }
+  else { applyHomeWall(); if (musicArmed) startMenuMusic(); }   // volta pra home: wallpaper + música de menu
+  if (id === 'main-menu') {
+    if (HUB_ENABLED) { $('menu-setup').classList.add('open'); syncHomeCharacter(); }
+    setTimeout(focusMenu, 40);   // teclado: ↑/↓ navegam assim que a home aparece
+    if (HUB_ENABLED && $('main-menu').dataset.hubNet === 'mp' && $('main-menu').dataset.hubTab === 'jogar') {
+      $('mp-panel').classList.remove('hidden');
+      if (!hubMpRoute) void abrirMultiplayer();
+    }
+  }
+}
+const $ = id => document.getElementById(id);
+const TEAM_ART_URLS = ['/img/faccoes/time-e.webp', '/img/faccoes/time-b.webp'];
+const teamArtImages = TEAM_ART_URLS.map((src) => {
+  const image = new Image();
+  image.decoding = 'async';
+  image.src = src;
+  return image;
+});
+const factionArtReady = Promise.all(teamArtImages.map((image) => (
+  image.decode ? image.decode() : new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = reject;
+  })
+))).catch((error) => console.warn('[times] preload parcial', error));
+
+/* Wallpapers rotativos (wall-10..28): 1 por tela no fluxo home→setup→lado→personagem, sem
+   repetir; o offset rotaciona a cada acesso (localStorage) pra variar entre visitas.
+
+   Estes arrays são fallback do primeiro quadro. A fonte de verdade é
+   public/img/walls.json, gerado por `npm run media` a partir do disco. O manifesto
+   recalcula a rotação quando chega; falha de rede mantém este fallback.
+
+   Servidos em .webp desde 07/08: os PNG de 2–2,6 MB viraram ~250 KB (ffmpeg libwebp q85,
+   comparado lado a lado antes da troca — texto do cartaz e grão idênticos). Os .png ficam
+   na pasta como fonte; wallpaper novo entra como PNG e vira .webp no mesmo commit.
+   wall-27 saiu em 25/09: a Cuca não existe no elenco. */
+const WALLS = ['/img/wall-10.webp', '/img/wall-11.webp', '/img/wall-12.webp', '/img/wall-13.webp',
+  '/img/wall-14.webp', '/img/wall-15.webp', '/img/wall-16.webp', '/img/wall-17.webp',
+  '/img/wall-18.webp', '/img/wall-19.webp', '/img/wall-20.webp', '/img/wall-21.webp',
+  '/img/wall-22.webp', '/img/wall-23.webp', '/img/wall-24.webp', '/img/wall-25.webp',
+  '/img/wall-26.webp', '/img/wall-28.webp', '/img/wall-29.webp', '/img/wall-30.webp',
+  '/img/wall-31.webp', '/img/wall-32.webp', '/img/wall-33.webp', '/img/wall-34.webp',
+  '/img/wall-35.webp', '/img/wall-36.webp', '/img/wall-37.webp', '/img/wall-38.webp',
+  '/img/wall-39.webp', '/img/wall-40.webp', '/img/wall-41.webp', '/img/wall-42.webp',
+  '/img/wall-43.webp', '/img/wall-44.webp', '/img/wall-45.webp', '/img/wall-46.webp',
+  '/img/wall-47.webp'];
+let _wallVisit = 0;
+try {
+  _wallVisit = parseInt(localStorage.getItem('cs_wallK') || '-1', 10) + 1;
+  if (!Number.isFinite(_wallVisit)) _wallVisit = 0;
+  localStorage.setItem('cs_wallK', String(_wallVisit));
+} catch {}
+let _wallK = _wallVisit % WALLS.length;
+const wallPath = (i) => WALLS[(_wallK + i) % WALLS.length];
+const wallUrl = (i) => `url('${wallPath(i)}')`;
+const wall3x2Url = (i) => `url('${wallPath(i).replace('/img/', '/img/walls-3x2/')}')`;
+let HOME_WALL = wallUrl(0), SETUP_WALL = wallUrl(1), TEAM_WALL = wallUrl(2), CHAR_WALL = wallUrl(3);
+let HOME_WALL_3X2 = wall3x2Url(0), SETUP_WALL_3X2 = wall3x2Url(1);
+// No hub o #menu-setup fica .open na home; o slot aplicado é quem diz qual arte está na tela.
+let _menuWallSlot = 0;
+// Splash e espera do mapa compartilham o lote loading-* do manifesto.
+const LOADING_WALLS = ['/img/loading-20.webp', '/img/loading-21.webp', '/img/loading-22.webp',
+  '/img/loading-23.webp', '/img/loading-24.webp', '/img/loading-25.webp', '/img/loading-26.webp',
+  '/img/loading-27.webp', '/img/loading-28.webp', '/img/loading-29.webp', '/img/loading-30.webp',
+  '/img/loading-31.webp', '/img/loading-32.webp', '/img/loading-33.webp', '/img/loading-34.webp',
+  '/img/loading-35.webp', '/img/loading-36.webp', '/img/loading-37.webp', '/img/loading-38.webp'];
+let _loadWallI = 4, _loadWallFixa = '', _loadWallModoI = 0;
+const loadingWallUrl = (i) => `url('${LOADING_WALLS[i % LOADING_WALLS.length]}')`;
+/* Arte do lote que retrata o personagem escolhido: a espera mostra QUEM você vai jogar. Sem
+   isto a rotação sorteava qualquer um — "o loading me mostrou a Maria Bonita e abriu o
+   Lampião" (dono, 09/11). Só os Míticos têm arte no lote; os demais seguem na rotação. */
+const LOADING_WALL_BY_CHAR = Object.freeze({
+  lobisomem: 20, mariabonita: 21, lampiao: 22, bandeirante: 23, boto: 24,
+  zumbi: 25, saci: 26, curupira: 27, caipora: 28,
+});
+const loadingWallDoPersonagem = (charId) => LOADING_WALL_BY_CHAR[charId] ? `/img/loading-${LOADING_WALL_BY_CHAR[charId]}.webp` : '';
+function applySplashWallpaper() {
+  const splash = $('boot-splash');
+  if (splash) splash.style.setProperty('--loading-wall', loadingWallUrl(_wallK));
+}
+void moduleSequencingReady.then(() => {
+  applySplashWallpaper();
+  return fetch(`/img/walls.json?v=${VERSION}`)
+    .then((response) => (response.ok ? response.json() : null))
+    .then((manifest) => {
+      if (!manifest) return;
+      if (Array.isArray(manifest.walls) && manifest.walls.length) WALLS.splice(0, WALLS.length, ...manifest.walls);
+      if (Array.isArray(manifest.loading) && manifest.loading.length) LOADING_WALLS.splice(0, LOADING_WALLS.length, ...manifest.loading);
+      _wallK = _wallVisit % WALLS.length;
+      refreshWallpapers();
+      applySplashWallpaper();
+    });
+}).catch(() => {});
+function refreshWallpapers() {
+  HOME_WALL = wallUrl(0); SETUP_WALL = wallUrl(1); TEAM_WALL = wallUrl(2); CHAR_WALL = wallUrl(3);
+  HOME_WALL_3X2 = wall3x2Url(0); SETUP_WALL_3X2 = wall3x2Url(1);
+  if (_menuWallSlot) applySetupWall(); else applyHomeWall();
+  $('team-select')?.style.setProperty('--wall', TEAM_WALL);
+  $('char-select')?.style.setProperty('--wall', CHAR_WALL);
+}
+function applyHomeWall() {
+  _menuWallSlot = 0;
+  const w = document.querySelector('#main-menu .cs-wallpaper');
+  if (w) { w.style.setProperty('--menu-wall', HOME_WALL); w.style.setProperty('--menu-wall-3x2', HOME_WALL_3X2); }
+}
+function applySetupWall() {
+  _menuWallSlot = 1;
+  const w = document.querySelector('#main-menu .cs-wallpaper');
+  if (w) { w.style.setProperty('--menu-wall', SETUP_WALL); w.style.setProperty('--menu-wall-3x2', SETUP_WALL_3X2); }
+}
+void moduleSequencingReady.then(() => {
+  applyHomeWall();
+  const team = $('team-select'); if (team) team.style.setProperty('--wall', TEAM_WALL);
+  const character = $('char-select'); if (character) character.style.setProperty('--wall', CHAR_WALL);
+});
+import { startVisibleRotation } from './media-rotation.js';
+void moduleSequencingReady.then(() => {
+  startVisibleRotation(async () => {
+    const next = (_wallK + 1) % WALLS.length;
+    const offset = !$('char-select').classList.contains('hidden') ? 3
+      : !$('team-select').classList.contains('hidden') ? 2
+      : _menuWallSlot;
+    const preload = new Image();
+    const selected = WALLS[(next + offset) % WALLS.length];
+    preload.src = offset < 2 && matchMedia('(min-aspect-ratio:37/25) and (max-aspect-ratio:38/25)').matches
+      ? selected.replace('/img/', '/img/walls-3x2/') : selected;
+    await preload.decode();
+    _wallK = next;
+    try { localStorage.setItem('cs_wallK', String(_wallK)); } catch {}
+    refreshWallpapers();
+  /* Rotação de wallpaper fora do char-select (dono, 31/10): fundo girando sob o preview lê como flicker. */
+  }, () => !MOBILE_AUTO && ['main-menu', 'team-select'].some(id => !$(id)?.classList.contains('hidden')));
+  startVisibleRotation(async () => {
+    const next = (_loadWallI + 1) % LOADING_WALLS.length;
+    const preload = new Image();
+    const horde = $('load-overlay')?.dataset.mode === 'horde';
+    preload.src = horde ? wallpaperJavaporcos(_loadWallModoI + 1) : LOADING_WALLS[next];
+    await preload.decode();
+    _loadWallI = next;
+    $('boot-splash')?.style.setProperty('--loading-wall', loadingWallUrl(_loadWallI));
+    if (horde) {
+      _loadWallFixa = wallpaperJavaporcos(++_loadWallModoI);
+      $('load-overlay')?.style.setProperty('--loading-wall', `url('${_loadWallFixa}')`);
+    } else if (!_loadWallFixa) $('load-overlay')?.style.setProperty('--loading-wall', loadingWallUrl(_loadWallI));
+  }, () => !MOBILE_AUTO && ['boot-splash', 'load-overlay'].some(id => {
+    const element = $(id);
+    return element && !element.classList.contains('gone') && !element.classList.contains('hidden');
+  }));
+});
+
+// Música de menu (loop, volume baixo). Toca só nas telas de menu; some quando a partida
+// começa e volta ao voltar pro menu. Chrome bloqueia autoplay COM som até o 1º gesto do
+// usuário — contorno: a faixa toca MUDA desde o load (permitido) e desmuta com fade no 1º
+// gesto, então já está rolando quando o som entra. Se o arquivo não existir, falha em silêncio.
+// ATENÇÃO: use uma faixa CC0/licenciada — NÃO usar música protegida (ex.: YouTube/MPB) no
+// build público (risco de copyright, igual aos sons da Valve a trocar).
+const MENU_MUSIC_VOL = 0.3;
+const MENU_MUSIC_REVIEW_PARAMS = new URLSearchParams(location.search);
+const MENU_MUSIC_REVIEW = MENU_MUSIC_REVIEW_PARAMS.get('menumusiclab') === '1';
+const _menuMusicRequested = /^m(\d{2})$/.exec(MENU_MUSIC_REVIEW_PARAMS.get('menutrack') || '');
+let menuMusicReviewIndex = _menuMusicRequested ? Math.max(0, Number(_menuMusicRequested[1]) - 1) : 0;
+// Trilhas do menu (public/audio/menu-music/mNN.mp3 — trims de ~105s normalizados via ffmpeg,
+// ver HANDOFF). Uma aleatória POR VISITA ao menu; troca a cada partida/retorno.
+//
+// A curadoria aprovada é nominal para a remoção de uma faixa não deslocar as demais.
+// O laboratório mantém o catálogo completo; o jogo normal e o release usam só a seleção.
+const MENU_REVIEW_TRACKS = Array.from({ length: 26 }, (_, i) => `/audio/menu-music/m${String(i + 1).padStart(2, '0')}.mp3`);
+const MENU_TRACKS = (MENU_MUSIC_REVIEW ? MENU_REVIEW_TRACKS : MENU_MUSIC_ACTIVE_IDS.map((id) => `/audio/menu-music/${id}.mp3`));
+void moduleSequencingReady.then(() => fetch(`/audio/manifest.json?v=${VERSION}`)
+  .then((response) => (response.ok ? response.json() : null))
+  .then((manifest) => {
+    if (MENU_MUSIC_REVIEW) return;
+    const active = new Set(MENU_MUSIC_ACTIVE_IDS);
+    const list = manifest && Array.isArray(manifest.menuMusic)
+      ? manifest.menuMusic.filter((url) => active.has(_menuTrackId(url))) : null;
+    if (!list || !list.length) return;
+    // manifest grava caminho relativo (`audio/...`); a URL do <Audio> é absoluta (`/audio/...`).
+    const novas = list.map((u) => (u.startsWith('/') ? u : `/${u}`));
+    if (novas.join('|') === MENU_TRACKS.join('|')) return;
+    MENU_TRACKS.splice(0, MENU_TRACKS.length, ...novas);
+    tracksTrocadas = true;
+    /* Manifesto chegou DEPOIS do primeiro gesto (crítica estraga-codigo no lote
+       02/11): o player tocava a faixa padrão e a lista curada nunca virava a faixa
+       corrente. Recria o player com o catálogo real — interrompe a faixa uma única
+       vez, na troca padrão→curada (o próprio startMenuMusic já respeita o toggle). */
+    if (musicArmed && menuMusic) startMenuMusic();
+  })).catch(() => {});
+let menuMusic = null, musicArmed = false, musicFade = null, tracksTrocadas = false;
+function syncMenuMusicToggle() {
+  const button = $('hub-music-toggle');
+  if (!button) return;
+  const enabled = settings.menuMusic !== false;
+  button.setAttribute('aria-pressed', String(enabled));
+  button.setAttribute('aria-label', tr(enabled ? 'Desligar música do menu' : 'Ligar música do menu'));
+  button.title = button.getAttribute('aria-label');
+}
+const _menuTrackId = (url) => url.match(/([^/]+)\.\w+$/)?.[1] || 'desconhecida';
+function _ensureMusic() {
+  if (menuMusic && !tracksTrocadas) return menuMusic;
+  if (menuMusic) { menuMusic.pause(); menuMusic = null; }
+  tracksTrocadas = false;
+  { const _mi = MENU_MUSIC_REVIEW
+      ? Math.max(0, Math.min(MENU_TRACKS.length - 1, menuMusicReviewIndex))
+      : (Math.random() * MENU_TRACKS.length) | 0;
+    const _url = MENU_TRACKS[_mi];
+    // O laboratório pode trocar a fonte local mantendo o mesmo mNN; o sufixo evita que o
+    // browser reutilize no A/B um MP3 antigo que já estava em cache sob a mesma URL.
+    menuMusic = new Audio(MENU_MUSIC_REVIEW ? `${_url}?review=${encodeURIComponent(VERSION)}` : _url);
+    // rótulo vem do NOME do arquivo, não do índice: com lista vinda da pasta o índice pode
+    // não casar mais com o número da faixa (some uma no meio e o telemetry mentiria).
+    if (!MENU_MUSIC_REVIEW) _pick('musica', _menuTrackId(_url)); }
+  menuMusic.loop = true; menuMusic.volume = MENU_MUSIC_VOL;
+  menuMusic.addEventListener('canplaythrough', () => { window.__csMusicaPronta = true; window.dispatchEvent(new Event('cs-musica-pronta')); }, { once: true });
+  window.__mm = menuMusic;   // hook de debug/teste (estado da música do menu)
+  return menuMusic;
+}
+function startMenuMusic() {
+  if (settings.menuMusic === false) return;
+  // O player nasce ao entrar no menu ou ligar a música; o laboratório tem acionamento próprio.
+  if (!musicArmed && !MENU_MUSIC_REVIEW) return;
+  const m = _ensureMusic();
+  if (musicFade) { clearInterval(musicFade); musicFade = null; }
+  if (!musicArmed) {
+    // tenta autoplay COM SOM (Chrome libera se o site tem Media Engagement Index alto pro
+    // usuário — é por isso que o YouTube consegue). Se rejeitar (NotAllowedError), cai no
+    // fluxo atual: mudo no load + desmute com fade no 1º gesto. Sem promise não tratada.
+    m.muted = false; m.volume = MENU_MUSIC_VOL;
+    const p = m.play();
+    if (p && p.then) p.then(() => { musicArmed = true; if (settings.menuMusic === false) m.pause(); }, () => {
+      if (settings.menuMusic !== false && m.paused) { m.muted = true; m.play().catch(() => {}); }   // fallback gracioso
+    });
+    // o play() do boot nem sempre "gruda" (rede/dev server lento, readyState 0) —
+    // re-tenta quando houver dados, enquanto a intenção for tocar no menu
+    if (!m._cpHook) { m._cpHook = 1; m.addEventListener('canplay', () => { if (settings.menuMusic !== false && menuMusic === m && m.paused) m.play().catch(() => {}); }); }
+    return;
+  }
+  m.muted = false; m.volume = MENU_MUSIC_VOL;
+  m.play().catch(() => {});   // silencioso se arquivo ausente
+}
+function stopMenuMusic() {   // fade rápido pra não cortar seco ao entrar na partida
+  if (!menuMusic) return;
+  if (musicFade) clearInterval(musicFade);
+  musicFade = setInterval(() => {
+    menuMusic.volume = Math.max(0, menuMusic.volume - 0.05);
+    if (menuMusic.volume <= 0.001) { clearInterval(musicFade); musicFade = null; menuMusic.pause(); }
+  }, 40);
+}
+// O primeiro gesto com a splash pronta inicia a faixa e seu fade-in.
+const _armMusic = () => {
+  if (musicArmed || (!_splashReady && !MENU_MUSIC_REVIEW)) return;
+  musicArmed = true;
+  if (settings.menuMusic === false) return;
+  const m = _ensureMusic();
+  if (musicFade) { clearInterval(musicFade); musicFade = null; }
+  m.muted = false;
+  let v = 0.02; m.volume = v;
+  m.play().catch(() => {});
+  musicFade = setInterval(() => { v += 0.04; m.volume = Math.min(MENU_MUSIC_VOL, v); if (v >= MENU_MUSIC_VOL) { clearInterval(musicFade); musicFade = null; } }, 40);
+};
+// SPLASH DE BOOT ("pressione para entrar"): o gesto que sai da splash é GARANTIDO, então
+// destrava o áudio COM SOM na hora — sem fallback mudo e sem fade atrapalhado. Registrado
+// em capture ANTES do _armMusic, que vira no-op (musicArmed já true).
+/* RÉGUA:boot-splash-dismiss início */
+function dismissSplash(e) {
+  if (document.querySelector('#javaporcos-intro:modal')) return;
+  const sp = document.getElementById('boot-splash');
+  if (!sp || !_splashReady || sp.classList.contains('gone')) return;
+  if (e?.target?.closest?.('[data-splash-fica]')) return;
+  if (sp.dataset.csEntradaPendente) return;   // o gesto será consumido depois de finishBoot
+  e?.preventDefault?.(); e?.stopPropagation?.();   // bloqueia ANTES da anti-reentrada: 2º gesto preso na splash não vaza atalho para o lobby
+  if (sp.dataset.csEntrada) return;   // splash presa aguardando anúncio/import: 2º gesto não reprocessa
+  sp.dataset.csEntrada = '1';
+  _entradaEm = performance.now();
+  loadingStage.hide();
+  dockLoadingCharacter();
+  window.__gameLaunch?.ready('entrada');
+  contagem.evento('splash_enter');
+  // O anúncio deve fechar antes de contar a entrada no lobby; convites e testes
+  // preservam o caminho direto. O gesto inicial continua destravando o áudio.
+  let lobbyMarcado = false;
+  const entrarNoLobby = () => {
+    if (lobbyMarcado) return; lobbyMarcado = true;
+    marcoFunil('splash_enter');   // funil (084): o lobby ficou visível de verdade
+    _lobbyEntrou();
+    setTimeout(focusMenu, 120);
+  };
+  const soltaSplash = () => {   // splash some SÓ com anúncio aberto de verdade ou lobby liberado — nunca no limbo
+    sp.classList.add('gone');
+    setTimeout(() => sp.remove(), 480);
+  };
+  if (inspectionScreen || testMode || params.get('sala')) { entrarNoLobby(); soltaSplash(); }
+  else {
+    const menuIds = mapasDoMenu().map((m) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
+    let prazo = setTimeout(() => { prazo = null; entrarNoLobby(); soltaSplash(); }, 2500); // prazo operacional curto: libera UMA vez; o import em si NÃO é cancelado
+    import('./mode-announcements.js')   // dinâmico: o módulo só baixa quando há o que anunciar
+      .then((m) => {
+        if (prazo) { clearTimeout(prazo); prazo = null; }
+        if (lobbyMarcado) { soltaSplash(); return; }   // timeout/jogo já mudaram de fase: anúncio tardio não abre
+        if (m.mostrarNovidadesModos({ mapIds: menuIds, onDone: entrarNoLobby })) soltaSplash();
+        else { soltaSplash(); entrarNoLobby(); }
+      })
+      .catch(() => { if (prazo) { clearTimeout(prazo); prazo = null; } soltaSplash(); entrarNoLobby(); });   // módulo falhou: lobby liberado como no fluxo atual, splash nunca presa
+  }
+  musicArmed = true;
+  if (musicFade) { clearInterval(musicFade); musicFade = null; }
+  startMenuMusic();
+}
+/* RÉGUA:boot-splash-dismiss fim */
+/* Foco no 1º item visível do menu CS: o handler de setas vive no #cs-menu e só dispara com
+   o foco lá dentro. Guardas: não rouba foco de campo de texto nem do painel de setup. */
+function focusMenu() {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+  const menu = document.getElementById('main-menu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  if (HUB_ENABLED) { document.querySelector('.hub-tabs [aria-selected="true"]')?.focus(); return; }
+  const ms = document.getElementById('menu-setup');
+  if (ms && ms.classList.contains('open')) return;
+  const first = [...document.querySelectorAll('.cs-item')].find((b) => b.offsetParent !== null);
+  if (first) first.focus();
+}
+/* RÉGUA:boot-main-ready início */
+if (!MOBILE_AUTO && !directRoute) {
+  const aceitaEntradaDuranteBackdrop = (e) => {
+    const sp = document.getElementById('boot-splash');
+    if (!sp || !_splashReady || sp.dataset.csEntradaPendente) return;
+    if (e?.target?.closest?.('[data-splash-fica]')) return;
+    e?.preventDefault?.(); e?.stopPropagation?.();
+    sp.dataset.csEntradaPendente = '1';
+    _armMusic();
+    _menuBackdropBypass?.();
+  };
+  const encerraFallbackDoBackdrop = () => {
+    _menuBackdropBypass = null;
+    window.removeEventListener('pointerdown', aceitaEntradaDuranteBackdrop, true);
+    window.removeEventListener('keydown', aceitaEntradaDuranteBackdrop, true);
+    window.__CS_BOOT_FALLBACK_ARMED__ = false;
+  };
+  window.__CS_BOOT_FALLBACK_ARMED__ = true;
+  window.addEventListener('pointerdown', aceitaEntradaDuranteBackdrop, true);
+  window.addEventListener('keydown', aceitaEntradaDuranteBackdrop, true);
+  void moduleSequencingReady.then(encerraFallbackDoBackdrop, encerraFallbackDoBackdrop);
+}
+window.addEventListener('pointerdown', dismissSplash, true);
+window.addEventListener('keydown', dismissSplash, true);
+/* RÉGUA:boot-main-ready fim */
+window.addEventListener('pointerdown', _armMusic);
+window.addEventListener('keydown', _armMusic);
+const menuMusicToggle = $('hub-music-toggle');
+if (menuMusicToggle) menuMusicToggle.onclick = () => {
+  settings.menuMusic = settings.menuMusic === false;
+  saveSettings();
+  syncMenuMusicToggle();
+  if (settings.menuMusic) { musicArmed = true; startMenuMusic(); }
+  else {
+    if (musicFade) { clearInterval(musicFade); musicFade = null; }
+    if (menuMusic) { menuMusic.pause(); menuMusic.muted = true; }
+  }
+};
+syncMenuMusicToggle();
+// Desktop e toque aguardam a entrada no menu para baixar e tocar a faixa.
+
+/* Laboratório local de curadoria (?menumusiclab=1). O jogo normal continua escolhendo uma
+   faixa aleatória por visita; aqui a escolha é determinística e o veredito fica somente no
+   localStorage. Assim dá para ouvir no contexto real do menu sem apagar um MP3 por engano. */
+function mountMenuMusicReview() {
+  if (!MENU_MUSIC_REVIEW || document.getElementById('menu-music-review')) return;
+  const host = document.getElementById('main-menu');
+  if (!host) return;
+  const key = 'csbr-menu-music-review-v1';
+  let verdicts = {};
+  try { verdicts = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { verdicts = {}; }
+  const lab = document.createElement('aside');
+  lab.id = 'menu-music-review';
+  lab.setAttribute('aria-label', 'Revisão das músicas do menu');
+  lab.innerHTML = `
+    <span class="mmr-kicker">CURADORIA LOCAL</span>
+    <strong id="mmr-track">FAIXA</strong>
+    <span id="mmr-progress"></span>
+    <div class="mmr-row">
+      <button id="mmr-prev" type="button" title="Faixa anterior">‹ ANTERIOR</button>
+      <button id="mmr-restart" type="button" title="Ouvir esta faixa desde o início">REOUVIR</button>
+      <button id="mmr-next" type="button" title="Próxima faixa">PRÓXIMA ›</button>
+    </div>
+    <div class="mmr-row mmr-verdicts">
+      <button id="mmr-keep" type="button">MANTER</button>
+      <button id="mmr-reject" type="button">REMOVER</button>
+      <button id="mmr-clear" type="button">LIMPAR</button>
+    </div>
+    <span class="mmr-catalog-title">CATÁLOGO · CLIQUE PARA OUVIR</span>
+    <div id="mmr-list" class="mmr-list" aria-label="Lista das músicas do menu"></div>
+    <button id="mmr-copy" class="mmr-copy" type="button">COPIAR RESULTADO</button>`;
+  host.appendChild(lab);
+
+  const byId = (id) => document.getElementById(id);
+  const normalizeIndex = (i) => (i + MENU_TRACKS.length) % MENU_TRACKS.length;
+  const currentId = () => _menuTrackId(MENU_TRACKS[menuMusicReviewIndex]);
+  const catalog = byId('mmr-list');
+  catalog.innerHTML = MENU_TRACKS.map((url, index) => {
+    const id = _menuTrackId(url);
+    return `<button type="button" class="mmr-list-item" data-track-index="${index}" data-track-id="${id}" title="Ouvir ${id.toUpperCase()}"><span>${id.toUpperCase()}</span><b aria-hidden="true">?</b></button>`;
+  }).join('');
+  const sync = () => {
+    const id = currentId();
+    const atuais = MENU_TRACKS.map(_menuTrackId).map((track) => verdicts[track]);
+    const keep = atuais.filter((v) => v === 'manter').length;
+    const reject = atuais.filter((v) => v === 'remover').length;
+    byId('mmr-track').textContent = `${id.toUpperCase()} · ${menuMusicReviewIndex + 1}/${MENU_TRACKS.length}`;
+    byId('mmr-progress').textContent = `MANTER ${keep} · REMOVER ${reject} · PENDENTES ${MENU_TRACKS.length - keep - reject}`;
+    lab.dataset.verdict = verdicts[id] || 'pendente';
+    for (const item of catalog.querySelectorAll('[data-track-index]')) {
+      const verdict = verdicts[item.dataset.trackId] || 'pendente';
+      item.dataset.verdict = verdict;
+      item.classList.toggle('current', Number(item.dataset.trackIndex) === menuMusicReviewIndex);
+      item.querySelector('b').textContent = verdict === 'manter' ? '✓' : verdict === 'remover' ? '×' : '?';
+    }
+  };
+  const play = (index, restart = false) => {
+    menuMusicReviewIndex = normalizeIndex(index);
+    tracksTrocadas = true;
+    const m = _ensureMusic();
+    if (restart) m.currentTime = 0;
+    musicArmed = true; m.muted = false; m.volume = MENU_MUSIC_VOL;
+    m.play().catch(() => {});
+    const url = new URL(location.href);
+    url.searchParams.set('menutrack', currentId());
+    history.replaceState(null, '', url);
+    sync();
+  };
+  const mark = (verdict) => {
+    const id = currentId();
+    if (verdict) verdicts[id] = verdict; else delete verdicts[id];
+    localStorage.setItem(key, JSON.stringify(verdicts));
+    sync();
+    if (verdict) play(menuMusicReviewIndex + 1);
+  };
+  byId('mmr-prev').onclick = () => play(menuMusicReviewIndex - 1);
+  byId('mmr-next').onclick = () => play(menuMusicReviewIndex + 1);
+  byId('mmr-restart').onclick = () => play(menuMusicReviewIndex, true);
+  byId('mmr-keep').onclick = () => mark('manter');
+  byId('mmr-reject').onclick = () => mark('remover');
+  byId('mmr-clear').onclick = () => mark(null);
+  for (const item of catalog.querySelectorAll('[data-track-index]')) {
+    item.onclick = () => play(Number(item.dataset.trackIndex));
+  }
+  byId('mmr-copy').onclick = async () => {
+    const list = (v) => MENU_TRACKS.map(_menuTrackId).filter((id) => verdicts[id] === v);
+    const text = `MANTER: ${list('manter').join(', ') || '(nenhuma)'}\nREMOVER: ${list('remover').join(', ') || '(nenhuma)'}`;
+    try { await navigator.clipboard.writeText(text); byId('mmr-copy').textContent = 'COPIADO'; }
+    catch { prompt('Copie o resultado:', text); }
+  };
+  sync();
+}
+mountMenuMusicReview();
+
+const isMobile = POINTER_COARSE || innerWidth < 820;
+/* TOUCH = aparelho de toque DE VERDADE (dedo, sem mouse). Separado do isMobile porque este
+   inclui "janela estreita" — um desktop com a janela apertada NÃO deve entrar em modo toque
+   (perderia o mouse-look). Só o TOUCH liga os controles de dedo e a trava de orientação. */
+const TOUCH = POINTER_COARSE;
+let settingsReturn = 'main-menu';
+let howtoReturn = 'main-menu';   // CONTROLES aberto pelo pause volta pro pause, pelo menu volta pro menu
+
+/* ---------------- 3D character preview ---------------- */
+let pv = null, pvDrag = null;
+/* Retrato hero só para quem tem arquivo (data/retratos.js; 18 ids não têm); senão o
+   recorte/busto. Uma função alimenta prévia estática, snapshot 3D e qualidade baixa. */
+const portraitUrl = (def) => {
+  const skin=tretaSkinPresentation(def.skinId,def.id);
+  return skin?(skin.poster?`${skin.poster}?v=${VERSION}`:null):`${retratoFontes(def.id)[0]}?v=${VERSION}`;
+};
+/* Rede de segurança: a fonte seguinte da mesma lista, nunca a que acabou de falhar. */
+const portraitFallbackUrl = (def) => { const f=retratoFontes(def.id); return `${f[1]||f[0]}?v=${VERSION}`; };
+/* VÍDEO DO PERSONAGEM (tela 03 do redesign): captura do próprio modelo, rig e clipe
+   do jogo por tools/eval/char-native-vids.mjs. Falha de rede mantém o canvas/GLB. */
+let pvVidToken = 0;
+let pvImageToken = 0;
+let pvCompactToken = 0;
+let pvStaticKey = '';
+let pvPosterFailure = null;
+const pvReducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+pvReducedMotion.addEventListener?.('change',event=>{if(event.matches){pvStopVideo();pv?.ctrl?.pararEmote?.();}if(pv)pv.renderDirty=true;sincronizaBarraEmotes();});
+const pvCompact=matchMedia('(pointer: coarse) and (max-height: 560px)');
+const pvNarrow=matchMedia('(max-width: 760px)');
+pvCompact.addEventListener?.('change',()=>refreshMenuEquipment());
+pvNarrow.addEventListener?.('change',()=>refreshMenuEquipment());
+function resolvePreviewCharacter(def) {
+  const skinId=Object.prototype.hasOwnProperty.call(def,'skinId')?def.skinId:equippedTretaSkin(def.id);
+  return {...def,skinId:tretaSkinPresentation(skinId,def.id)?.id || null,eyewearId:equippedTretaEyewear()};
+}
+function previewVideoVisible() {
+  return document.querySelector('.char-preview-box')?.classList.contains('has-video') === true;
+}
+function previewModelActive(selectionOpen,hubOpen) {
+  return !pvCompact.matches && (selectionOpen || (hubOpen && !pvNarrow.matches)) && !$('char-preview')?.classList.contains('hidden') && !previewVideoVisible();
+}
+function previewUsesStills() {
+  return staticPreviews || pvCompact.matches || (pvNarrow.matches && !$('main-menu')?.classList.contains('hidden'));
+}
+function previewHeroVisible() {
+  const selection=$('char-select')?.classList.contains('hidden')===false;
+  const hub=previewHubVisible();
+  return !pvCompact.matches && (selection || (hub && !pvNarrow.matches)) && document.querySelector('.char-preview-box')?.checkVisibility?.()!==false;
+}
+function previewHubVisible() {
+  const menu=$('main-menu');
+  return menu?.classList.contains('hidden')===false && menu.dataset.hubTab==='jogar' && menu.dataset.hubNet==='sp';
+}
+function clearCompactPreviews() {
+  for(const prefix of ['hub-character','char-select']){
+    const image=$(prefix+'-portrait'),label=$(prefix+'-equipment');
+    if(image){image.dataset.previewKey='';image.dataset.previewToken='';image.onload=image.onerror=null;image.removeAttribute('src');image.hidden=true;}
+    if(label)label.hidden=true;
+  }
+}
+function pvSetFailureUi(active) {
+  // R65-S1: o hub esconde .pv-equipment por CSS; só a classe de erro expõe o aviso.
+  document.querySelector('.char-preview-box')?.classList.toggle('preview-failure', active && !previewVideoVisible());
+}
+function clearStaticPreview({finishPending=false}={}) {
+  const my=++pvImageToken;pvStaticKey='';pvPosterFailure=null;pvSetFailureUi(false);
+  const image=$('char-preview-static');
+  if(image){
+    const release=()=>{if(my!==pvImageToken)return;image.onload=image.onerror=null;image.removeAttribute('src');};
+    image.onload=image.onerror=null;image.classList.add('hidden');
+    // Na troca para o GLB, conclui o pedido já iniciado. Sair da tela cancela na hora.
+    if(finishPending && image.src && !image.complete)image.onload=image.onerror=release;
+    else release();
+  }
+  for(const id of ['char-preview-skin','char-preview-weapon']){const label=$(id);if(label){label.hidden=true;label.textContent='';}}
+}
+function stopHiddenPreview() {
+  if(previewHeroVisible())return;
+  clearStaticPreview();pvStopVideo();
+}
+const previewCopy = (pt, en) => LANG === 'en' ? en : pt;
+const previewUnavailableCaption = name => `${previewCopy('Prévia indisponível', 'Preview unavailable')}: ${name}`;
+function previewPaintCaption(weapon, paint) {
+  const names = { ak:'AK-47', m4:'M4', scar:'SCAR', pistol:previewCopy('Pistola', 'Pistol') };
+  return `${previewCopy('Pintura', 'Paint')}: ${names[weapon.weaponId] || weapon.weaponId} · ${paint.name}`;
+}
+function pvStopVideo() {
+  pvVidToken++;
+  const box = document.querySelector('.char-preview-box');
+  const video = $('char-preview-video');
+  if (!video) return;
+  video.onloadeddata=null;video.onerror=null;
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  video.classList.add('hidden');
+  box?.classList.remove('has-video');
+  const label=$('char-preview-skin');
+  if(label && pvPosterFailure){label.hidden=false;label.textContent=previewUnavailableCaption(pvPosterFailure);}
+  pvSetFailureUi(Boolean(pvPosterFailure));
+}
+function pvSetVideo(def) {
+  const box = document.querySelector('.char-preview-box');
+  const video = $('char-preview-video'), hints = document.querySelector('.pv-hints');
+  if (!box || !video) return;
+  def=resolvePreviewCharacter(def);
+  const skin=tretaSkinPresentation(def.skinId,def.id);
+  const src=skin?(skin.video?.webm || skin.video?.mp4):`/video/chars/${def.id}.webm`;
+  if(!src || pvReducedMotion.matches || !previewHeroVisible()){pvStopVideo();return;}
+  const url=`${src}?v=${VERSION}`;
+  if(video.dataset.previewSrc===url && video.onloadeddata)return;
+  pvStopVideo();
+  const my = pvVidToken;
+  video.dataset.previewSrc=url;
+  box.classList.remove('has-video');
+  video.classList.add('hidden');
+  // no modo estático (sem WebGL) as dicas de GIRAR/ZOOM nunca aparecem — nem quando o vídeo falta
+  if (hints) hints.classList.toggle('hidden', staticPreviews);
+  video.onerror = () => {if(my===pvVidToken)pvStopVideo();};
+  video.onloadeddata = async () => {
+    if (my !== pvVidToken) return;
+    try{await video.play();}catch{if(my===pvVidToken)pvStopVideo();return;}
+    if(my!==pvVidToken)return;
+    box.classList.add('has-video');
+    pvSetFailureUi(false);
+    video.classList.remove('hidden');
+    const label=$('char-preview-skin');if(label){label.textContent=skin?.name || '';label.hidden=!skin;}
+    if (hints) hints.classList.add('hidden');
+  };
+  video.src = url;
+  video.load();
+}
+function showStaticPreview(def) {
+  const canvas = $('char-preview'), image = $('char-preview-static'), hints = document.querySelector('.pv-hints');
+  const skin=tretaSkinPresentation(def.skinId,def.id),label=$('char-preview-skin'),weaponLabel=$('char-preview-weapon');
+  const weapon=armaDoPreview(def.id),paint=tretaWeaponPresentation(weapon.weaponId,weapon.weaponSkinId);
+  const key=JSON.stringify([def.id,def.skinId,skin?.poster,skin?.name,skin?.video,def.eyewearId,weapon,paint?.name]);
+  if(key===pvStaticKey)return;
+  pvStaticKey=key;pvPosterFailure=null;pvStopVideo();pvSetFailureUi(false);
+  if(label){label.textContent=skin?.name || '';label.hidden=!skin;}
+  if(weaponLabel){weaponLabel.textContent=paint?previewPaintCaption(weapon,paint):'';weaponLabel.hidden=!paint;}
+  if (canvas) canvas.classList.add('hidden');
+  if (image) {
+    const my=++pvImageToken;
+    image.onload=image.onerror=null;image.removeAttribute('src');image.classList.add('hidden');
+    const unavailable=()=>{pvPosterFailure=skin?.name || def.name;image.classList.add('hidden');pvSetFailureUi(true);if(label && !previewVideoVisible()){label.hidden=false;label.textContent=previewUnavailableCaption(pvPosterFailure);}};
+    const src=portraitUrl(def);
+    image.alt = skin?.name || def.name;
+    if(src){
+      image.onload=()=>{if(my!==pvImageToken)return;image.classList.remove('hidden');pvPosterFailure=null;pvSetFailureUi(false);if(label && !previewVideoVisible()){label.textContent=skin?.name || '';label.hidden=!skin;}};
+      image.onerror = () => {if(my!==pvImageToken)return;image.onerror=null;if(skin)unavailable();else{image.onerror=()=>{if(my===pvImageToken)unavailable();};image.src=portraitFallbackUrl(def);}};
+      image.src=src;
+    }else unavailable();
+  }
+  if (hints) hints.classList.add('hidden');
+}
+function syncCompactPreview(def) {
+  const skin=tretaSkinPresentation(def.skinId,def.id),weapon=armaDoPreview(def.id);
+  const paint=tretaWeaponPresentation(weapon.weaponId,weapon.weaponSkinId);
+  const caption=[skin?.name,paint?previewPaintCaption(weapon,paint):null].filter(Boolean).join(' · ');
+  const src=portraitUrl(def),key=JSON.stringify([def.id,def.skinId,src,caption]);
+  const hub=(pvCompact.matches || pvNarrow.matches) && previewHubVisible();
+  const selection=pvCompact.matches && $('char-select')?.classList.contains('hidden')===false;
+  for(const [imageId,labelId,active] of [['hub-character-portrait','hub-character-equipment',hub],['char-select-portrait','char-select-equipment',selection]]){
+    const image=$(imageId),label=$(labelId);if(!image || !label)continue;
+    if(!active){
+      image.dataset.previewKey='';image.dataset.previewToken='';image.onload=image.onerror=null;image.removeAttribute('src');image.hidden=true;
+      const desktopHub=imageId==='hub-character-portrait' && previewHubVisible();
+      label.textContent=desktopHub?caption:'';label.hidden=!desktopHub || !caption;continue;
+    }
+    if(image.dataset.previewKey===key)continue;
+    image.dataset.previewKey=key;const my=String(++pvCompactToken);image.dataset.previewToken=my;let fallback=false;
+    image.onload=image.onerror=null;image.removeAttribute('src');image.hidden=true;
+    label.textContent=caption;label.hidden=!caption;image.alt=skin?.name || def.name;
+    const unavailable=()=>{image.hidden=true;label.hidden=false;label.textContent=`${previewUnavailableCaption(skin?.name || def.name)}${paint?` · ${paint.name}`:''}`;};
+    if(src){
+      image.onload=()=>{if(image.dataset.previewToken!==my)return;image.hidden=false;label.textContent=caption;label.hidden=!caption;};
+      image.onerror=()=>{if(image.dataset.previewToken!==my)return;if(!skin && !fallback){fallback=true;image.src=portraitFallbackUrl(def);}else unavailable();};
+      image.src=src;
+    }else unavailable();
+  }
+}
+function ensurePreview() {
+  if (previewUsesStills()) return null;
+  if (pv) return pv;
+  const canvas = $('char-preview');
+  const r = criaRenderer({ canvas, alpha: true }, { optional: true });
+  if (!r) { staticPreviews = true; return null; }
+  // 640² de backing pro preview GIGANTE da tela nova (era 400² pra 380 CSS px).
+  // O downscale continua dando borda limpa em qualquer tamanho de exibição.
+  r.setSize(640, 640, false);
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  // Sombra de contato: sem ela o personagem flutua no palco. Só a key projeta, com o mapa
+  // que aplicaSombraPalco libera e frustum colado no boneco — custo fixo por quadro.
+  r.shadowMap.enabled = true;
+  r.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffe6c0, 0x5a4a38, 1.1));
+  // Key alta e quase frontal (era 2,4,3 = 42° de elevação): a 42° a sombra virava um rastro
+  // de 1,6 m que a caixa do palco cortava reto. A 64° ela fica sob os pés, como na referência.
+  const key = new THREE.DirectionalLight(0xffe0b3, 2.1); key.position.set(0.7, 6, 2.8); scene.add(key);
+  key.castShadow = true;
+  aplicaSombraPalco(key);
+  key.shadow.bias = -0.0012; key.shadow.normalBias = 0.02;
+  // Frustum maior que o plano: fora dele o mapa é amostrado na borda e a sombra ganha corte reto.
+  const sombraCam = key.shadow.camera;
+  sombraCam.left = -1.6; sombraCam.right = 1.6; sombraCam.top = 1.6; sombraCam.bottom = -1.6;
+  sombraCam.near = 4.4; sombraCam.far = 7.9; sombraCam.updateProjectionMatrix();
+  // Rim de recorte: medido na referência, a borda do ombro fica em (36,38,37) sobre fundo
+  // (26,21,10) — luz quase neutra e +17 de luminância. Era 0x88aaff a 0,55 e sumia.
+  const rim = new THREE.DirectionalLight(0xe6eeff, 1.6); rim.position.set(-2.4, 3.2, -2.6); scene.add(rim);
+  // Chão invisível: o ShadowMaterial só pinta onde a sombra cai, então o canvas segue
+  // transparente e a poça de luz lima do CSS continua aparecendo por baixo.
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.ShadowMaterial({ opacity: 0.68 }));
+  chao.rotation.x = -Math.PI / 2; chao.receiveShadow = true; scene.add(chao);
+  const cam = new THREE.PerspectiveCamera(34, 1, 0.1, 20);
+  cam.position.set(0, 1.3, 3.2); cam.lookAt(0, 0.92, 0);
+  pv = { r, scene, cam, model: null };
+  // GIRAR/ZOOM de verdade — a dica embaixo do canvas não pode ser enfeite.
+  // Arrastar gira o modelo; scroll aproxima.
+  canvas.addEventListener('pointerdown', e => {
+    pvDrag = { x: e.clientX, yaw: pv.model ? pv.model.rotation.y : 0 };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (pvDrag && pv.model) { pv.model.rotation.y = pvDrag.yaw + (e.clientX - pvDrag.x) * 0.012; pv.renderDirty = true; }
+  });
+  canvas.addEventListener('pointerup', () => { pvDrag = null; });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    pv.cam.position.z = Math.min(4.6, Math.max(2.2, pv.cam.position.z + e.deltaY * 0.002));
+    pv.renderDirty = true;
+  }, { passive: false });
+  return pv;
+}
+/* ---------- miniatura da lista de personagens ----------------------------------
+   BUG DO DONO: "nas miniaturas os bonecos aparecem cinzas/sem cor, o preview grande
+   tem cor". A luz e o material eram os MESMOS — o defeito era de ENQUADRAMENTO e de
+   composição, e ele acontecia três vezes:
+     1. a miniatura reusava a câmera do preview (corpo inteiro a 3,2 m + disco escuro):
+        num quadro de 96 px o personagem saía com ~40 px, e exibido a 52 px sobrava
+        ~28 px de boneco. Quase todo pixel da miniatura era FUNDO;
+     2. o downscale de 96 -> 52 misturava esses poucos pixels coloridos com o preto do
+        fundo, então o croma médio caía (medido no print do dono: S 0,35 na miniatura
+        contra 0,42 no preview grande, mesmo personagem, mesmo frame);
+     3. o PNG saía com alfa e ia compor sobre --bg-700, um segundo escurecimento.
+   Correção: câmera PRÓPRIA de retrato (o personagem ocupa a miniatura inteira),
+   supersampling (render a 400² -> grava a 128²), disco fora do quadro e fundo OPACO
+   pintado antes do drawImage. Mesma luz, mesmo material, mesma cena: consistência. */
+// Kill-switch: ?thumbcam=0 volta a gravar a miniatura com a câmera larga do preview
+// (o comportamento antigo), caso o retrato corte mal algum personagem fora do padrão.
+// (URLSearchParams próprio: o `params` global só é declarado mais abaixo no arquivo)
+const THUMB_PORTRAIT = new URLSearchParams(location.search).get('thumbcam') !== '0';
+const THUMB_PX = 128;
+let _thumbCam = null;
+function thumbCam() {
+  if (!THUMB_PORTRAIT) return ensurePreview().cam;
+  if (_thumbCam) return _thumbCam;
+  // Retrato: da cintura pra cima. A altura visível a essa distância é ~1,15 m contra os
+  // 1,72 m do personagem — é o recorte que faz camisa, pele e cabelo lerem a 56 px.
+  const c = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+  c.position.set(0, 1.30, 2.15); c.lookAt(0, 1.24, 0);
+  _thumbCam = c;
+  return c;
+}
+function snapThumb(obj, fallbackUrl) {
+  const p = ensurePreview();
+  if (!p) return fallbackUrl;
+  const prevVis = p.model ? p.model.visible : false;
+  if (p.model) p.model.visible = false;
+  p.scene.add(obj);
+  p.r.render(p.scene, thumbCam());
+  const c = document.createElement('canvas'); c.width = c.height = THUMB_PX;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1c1812';              // = var(--bg-700): a miniatura já nasce composta
+  x.fillRect(0, 0, THUMB_PX, THUMB_PX);
+  x.drawImage(p.r.domElement, 0, 0, THUMB_PX, THUMB_PX);   // backing 640² -> 128²: downscale = antialias de graça
+  p.scene.remove(obj);
+  if (p.model) p.model.visible = prevVis;
+  p.renderDirty = true;
+  return c.toDataURL();
+}
+// Each character shows off a weapon that fits their vibe (not everyone with an AK).
+// CHAR_WEAPON/charWeapon live in characters.js, shared with game.js (initial loadout).
+/* O personagem do lobby segura a arma EQUIPADA pelo jogador, com a pintura dela (pedido do
+   dono, 20/10). Sem skin equipada vale a arma de vibe do personagem (charWeapon). */
+const ORDEM_ARMA_EQUIPADA = ['ak', 'm4', 'scar', 'pistol'];
+function armaDoPreview(charId) {
+  const pack = tretaPack(equippedTretaPack());
+  const skinDe = (weaponId) => pack?.weaponSkins?.[weaponId] || equippedTretaWeaponSkin(weaponId);
+  const daVibe = charWeapon(charId);
+  // Preferência: a arma do personagem, se ela mesma tiver pintura equipada.
+  const luva = pack?.gloveSkin || equippedTretaGlove();
+  if (skinDe(daVibe)) return { weaponId: daVibe, weaponSkinId: skinDe(daVibe), gloveSkinId: luva };
+  const comSkin = ORDEM_ARMA_EQUIPADA.find((weaponId) => skinDe(weaponId));
+  return comSkin ? { weaponId: comSkin, weaponSkinId: skinDe(comSkin), gloveSkinId: luva }
+    : { weaponId: daVibe, weaponSkinId: null, gloveSkinId: luva };
+}
+let pvToken = 0;
+/* Enquadramento de QA (skins-gauntlet): mão direita no quadro inteiro e idle congelado.
+   Fica atrás de ?pvcam=maos - sem a flag, nada muda para o jogador. */
+const PV_CAM_MAOS = new URLSearchParams(location.search).get('pvcam') === 'maos';
+function enquadrarMaos(p, m) {
+  let mao = null;
+  m.group.traverse((o) => { if (!mao && o.isBone && /right.?hand|hand.?r\b|rhand|r_hand/i.test(o.name)) mao = o; });
+  if (!mao) return;
+  // mede a pose que o loop() de fato desenha: ctrl (idle+IK) restaura o overlay que mixer.update(0) desfaz
+  if (p.ctrl) p.ctrl.update(0, 0, false, 0); else if (p.mixer) p.mixer.update(0);
+  if (p.mixer) p.mixer.timeScale = 0;
+  m.group.updateMatrixWorld(true);
+  const alvo = new THREE.Vector3().setFromMatrixPosition(mao.matrixWorld);
+  p.cam.position.set(alvo.x + 0.42, alvo.y + 0.12, alvo.z + 0.52);
+  p.cam.lookAt(alvo);
+  p.cam.updateProjectionMatrix();
+  p.travado = true;    // o loop() não devolve o giro automático nem o zoom padrão
+}
+/* EMOTES do lobby: `js/emotes.js` entra por import() DINÂMICO no clique em DANÇAR —
+   boot não paga nada (régua eval:emotes, EM5). Decisões: docs/EMOTES-BR.md. */
+let emotesMod = null, emotesMontados = false;
+async function carregaEmotes() {
+  if (emotesMod) return emotesMod;
+  const m = await import('./emotes.js');
+  setEmoteDriver(m.EMOTE_DRIVER);
+  emotesMod = m;
+  return m;
+}
+function sincronizaBarraEmotes() {
+  const barra = document.getElementById('pv-emotes');
+  if (!barra) return;
+  const temBoneco = !staticPreviews && !pvReducedMotion.matches && !!(pv && pv.ctrl);
+  barra.hidden = !temBoneco;
+  if (!temBoneco) { emotesMontados = false; barra.innerHTML = '<button id="pv-emote-abrir" class="pv-emote-btn pv-emote-abrir" type="button">DANÇAR</button>'; religaAbrirEmotes(); }
+}
+function religaAbrirEmotes() {
+  if (!EMOTES_ENABLED) return;
+  const b = document.getElementById('pv-emote-abrir');
+  if (b) b.onclick = montaBarraEmotes;
+}
+function pvTocaEmote(id, botao) {
+  const ctrl = pv && pv.ctrl;
+  if (!ctrl || pvReducedMotion.matches) return;
+  const barra = document.getElementById('pv-emotes');
+  const ligado = ctrl.emoteAtual() === id;
+  barra?.querySelectorAll('.pv-emote-btn[aria-pressed]')?.forEach((b) => b.setAttribute('aria-pressed', 'false'));
+  if (ligado) { ctrl.pararEmote(); return; }        // clicar de novo no mesmo passo: para
+  ctrl.emote(id);
+  if (botao) botao.setAttribute('aria-pressed', 'true');
+}
+async function montaBarraEmotes() {
+  const barra = document.getElementById('pv-emotes');
+  if (!barra || emotesMontados) return;
+  barra.classList.add('carregando');
+  const m = await carregaEmotes();
+  emotesMontados = true;
+  barra.classList.remove('carregando');
+  barra.innerHTML = '';
+  for (const e of m.EMOTES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pv-emote-btn';
+    b.dataset.emote = e.id;
+    b.textContent = e.nome;
+    b.title = e.origem;                // a origem da dança fica à mão de quem joga
+    b.setAttribute('aria-pressed', 'false');
+    b.onclick = () => pvTocaEmote(e.id, b);
+    barra.appendChild(b);
+  }
+  // o primeiro clique em DANÇAR já põe o boneco pra dançar: ninguém clica pra ver lista
+  const primeiro = barra.querySelector('.pv-emote-btn');
+  if (primeiro) pvTocaEmote(primeiro.dataset.emote, primeiro);
+}
+religaAbrirEmotes();
+
+function pvSetChar(def) {
+  def = resolvePreviewCharacter(def);
+  const my = ++pvToken;
+  syncCompactPreview(def);
+  if(!previewHeroVisible()){
+    clearStaticPreview();pvStopVideo();
+    $('char-preview')?.classList.add('hidden');sincronizaBarraEmotes();return;
+  }
+  if (previewUsesStills()) { showStaticPreview(def); sincronizaBarraEmotes(); return; }
+  const p = ensurePreview();
+  if (!p) { showStaticPreview(def); return; }
+  const showCanvas=()=>{
+    p.renderDirty = true;
+    clearStaticPreview({finishPending:true});pvStopVideo();
+    $('char-preview')?.classList.remove('hidden');$('char-preview-static')?.classList.add('hidden');
+    document.querySelector('.pv-hints')?.classList.remove('hidden');
+    for(const id of ['char-preview-skin','char-preview-weapon']){const label=$(id);if(label)label.hidden=true;}
+  };
+  showStaticPreview(def);
+  // Swap to the real rigged GLB (idle) once loaded, if this is still the selection.
+  const showBox = () => {   // procedural fallback (only when there's no GLB at all)
+    if (p.model) p.scene.remove(p.model);
+    p.mixer = null; p.ctrl = null;
+    p.model = buildCharacter(def).group;
+    p.model.rotation.y = -0.4;
+    p.scene.add(p.model);
+    showCanvas();
+  };
+  // ?nav=1 mantém o preview procedural; web-assets.spec.js cobre o GLB real.
+  if (navOnly) { showBox(); return; }
+  if (GLB_CHARS.has(def.id)) {
+    // O retrato mantém a identidade selecionada enquanto o GLB carrega ou falha.
+    const arma = armaDoPreview(def.id);
+    Promise.all([preloadCharacterAssets([def.id], { weapons:[arma.weaponId] }),preloadCosmeticAssets([def.skinId]),preloadEyewearAssets([def.eyewearId]),
+      preloadWeapons([arma.weaponId]),preloadWeaponSkinCandidate(arma.weaponSkinId)])
+      .then(() => {
+        const pending = arma.gloveSkinId ? getGloveHandle(def.id, def.skinId)?.preload() : null;
+        return pending?.catch((e) => { if (!(e instanceof GloveManifestUnavailable)) throw e; e.warn(); });
+      }).then(() => {
+      if (my !== pvToken || !previewHeroVisible()) return;
+      // preview: porte de EXIBIÇÃO — arma atravessada no peito (estilo vitrine do CS) em
+      // vez do porte funcional que aponta o cano pra câmera e esconde a silhueta da arma
+      // (era o "posturas bizarras" de 05/08). Ângulos por classe em glbchars.js. No jogo,
+      // nada muda.
+      const m = hasModel(def.id, def.skinId) ? buildCharacterModel(def, { weaponId: arma.weaponId, weaponSkinId: arma.weaponSkinId, gloveSkinId: arma.gloveSkinId, preview: true }) : null;
+      if (!m) return;
+      showCanvas();
+      if (p.model) p.scene.remove(p.model);
+      // Evidência do que foi montado na mão (régua LB20): os valores saem do objeto 3D,
+      // não da intenção - canvas não se lê e intenção não prova nada.
+      const cv = $('char-preview');
+      let armaNaMao = null, pinturaNaMao = '', luvaNaMao = '';
+      m.group.traverse((o) => {
+        if (!armaNaMao && (o.name === 'arma-glb' || o.name === 'arma-caixa')) armaNaMao = o;
+        if (!pinturaNaMao && o.userData?.weaponSkin) pinturaNaMao = o.userData.weaponSkin;
+        if (!luvaNaMao && o.userData?.gloveSkin) luvaNaMao = o.userData.gloveSkin;
+      });
+      cv.dataset.glb = '1';
+      cv.dataset.skin = m.skinId || '';
+      cv.dataset.arma = armaNaMao ? arma.weaponId : '';
+      cv.dataset.armaSkin = pinturaNaMao;
+      cv.dataset.luva = luvaNaMao;
+      m.group.rotation.y = -0.4;
+      const emoteAnterior = p.ctrl?.emoteAtual?.() || null;
+      p.model = m.group; p.mixer = m.mixer; p.ctrl = m.ctrl;
+      // trocar de personagem com a dança ligada mantém a dança (o passo é do jogador,
+      // não do boneco) — sem isso o emote morre calado a cada clique na lista
+      if (emoteAnterior && m.ctrl) m.ctrl.emote(emoteAnterior);
+      sincronizaBarraEmotes();
+      p.scene.add(m.group);
+      // ?pvcam=maos (régua): câmera na mão e idle congelado - com o preview animando, duas
+      // capturas do MESMO equipamento já saem diferentes e nenhuma comparação vale.
+      if (PV_CAM_MAOS) enquadrarMaos(p, m);
+    }).catch(() => { if (my === pvToken && previewHeroVisible()) showStaticPreview(def); });
+  } else {
+    showBox();
+  }
+}
+function pvThumb(def) {
+  if (previewUsesStills()) return portraitUrl(def);
+  // Box-only thumbnail (tiny icon) — never triggers a GLB load.
+  // Passa pelo MESMO snapThumb do GLB: antes esta versão ainda destruía o preview
+  // grande (p.model = null) e gravava com outro enquadramento — duas miniaturas com
+  // duas aparências na mesma lista é exatamente o tipo de inconsistência que o dono vê.
+  const box = buildCharacter(def).group; box.rotation.y = 0.55;
+  return snapThumb(box, portraitUrl(def));
+}
+
+/* ---------------- game lifecycle ---------------- */
+const routeChar = HUB_ENABLED ? new URLSearchParams(location.search).get('personagem') : null;
+const routeCharacterId = routeChar && CHARACTERS.some((c) => c.id === routeChar) ? routeChar : null;
+const storedCharacterId = localStorage.getItem('csbr-home-character');
+const rememberedChar = routeCharacterId || storedCharacterId;
+const rememberedSide = localStorage.getItem('csbr-home-side') === 'B' ? 'B' : 'E';
+const randomInitialCharacter = () => {
+  const eligible = CHARACTERS.filter((character) => podeNoLado(character, rememberedSide) && !personagemTravado(character));
+  if (!eligible.length) return CHARACTERS.find((character) => !personagemTravado(character)) || CHARACTERS[0];
+  const seed = new Uint32Array(1);
+  crypto.getRandomValues(seed);
+  return eligible[seed[0] % eligible.length];
+};
+const rememberedDef = CHARACTERS.find((c) => c.id === rememberedChar);
+const initialChar = rememberedDef || randomInitialCharacter();
+if (!routeCharacterId && !rememberedDef) {
+  try { localStorage.setItem('csbr-home-character', initialChar.id); } catch {}
+}
+const ladoValido = (def, lado) => (podeNoLado(def, lado) ? lado : ladosDe(def)[0]);
+/* Passe Sessão da Treta (passe.js): personagem do passe só joga com o inventário do SERVIDOR dizendo
+   que está destravado. A escolha salva fica guardada; até o servidor confirmar, entra um livre do lado. */
+const personagemLivre = (def, lado) => (def && !personagemTravado(def) ? def
+  : CHARACTERS.find((c) => !personagemTravado(c) && podeNoLado(c, lado || ladosDe(def)[0])) || CHARACTERS.find((c) => !personagemTravado(c)));
+const ICONE_CADEADO_PASSE = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const initialSide = ladoValido(initialChar, rememberedSide);
+let game = null, currentTeam = initialSide, currentFaction = initialSide, currentChar = initialChar.id, selChar = null, tretaStoreReady = Promise.resolve();
+function returnPreviewToSelection() {
+  const box = document.querySelector('.char-preview-box');
+  const marker = $('char-preview-return');
+  if (box && marker && box.parentElement !== marker.parentElement) marker.parentElement.insertBefore(box, marker.nextSibling);
+}
+function syncHomeCharacter() {
+  if (!HUB_ENABLED || $('main-menu')?.classList.contains('hidden') || $('main-menu')?.dataset.hubTab !== 'jogar' || $('main-menu')?.dataset.hubNet !== 'sp') return;
+  const box = document.querySelector('.char-preview-box');
+  const host = $('hub-character');
+  if (box && host && box.parentElement !== host) host.appendChild(box);
+  const def = personagemLivre(CHARACTERS.find((c) => c.id === currentChar) || CHARACTERS[0], currentTeam);
+  const lado = ladoValido(def, currentTeam);
+  $('hub-character-name').textContent = `${tr(FACTION_NAME[lado])} · ${def.name}`;
+  $('hub-character-crest').src = '/' + urlDoBrasao(factionDefinition(lado).crest);
+  $('hub-change-character').style.setProperty('--hub-faction', PALETA[lado]?.base || '#b4d92e');
+  pvSetChar(def);
+}
+function refreshMenuEquipment() {
+  if(selChar && !$('char-select')?.classList.contains('hidden')){pvSetChar(selChar);if(staticPreviews)pvSetVideo(selChar);}
+  else syncHomeCharacter();
+  if(!$('hub-roster-modal')?.hidden)hubRosterRender?.();
+}
+let hubMapReturnQuick = false;
+let hubRosterLado = 'E', hubRosterCat = null;
+function closeHubMap(updateRoute = true) {
+  $('hub-map-modal').hidden = true;
+  if (hubMapReturnQuick) { hubMapReturnQuick = false; openHubQuick(updateRoute); }
+  else $('hub-map-change').focus();
+  if (updateRoute && $('hub-quick').hidden) hubNavigate({ janela: null, origem: null });
+}
+function openHubMap(fromQuick = false, updateRoute = true) {
+  hubMapReturnQuick = fromQuick;
+  $('hub-quick').hidden = true;
+  const filters = $('hub-map-filters');
+  const grid = $('hub-map-grid');
+  const render = (category) => {
+    filters.replaceChildren(); grid.replaceChildren();
+    const categories = ['TODOS', 'OFICIAIS', 'COMUNIDADE'];
+    for (const name of categories) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = name;
+      button.setAttribute('aria-pressed', String(name === category));
+      button.onclick = () => render(name);
+      filters.appendChild(button);
+    }
+    const ids = MAPAS_MENU.filter((id) => category === 'TODOS' ||
+      (category === 'COMUNIDADE') === catsDe(id).includes('COMUNIDADE'));
+    for (const id of ids) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.setAttribute('aria-pressed', String(id === currentMap));
+      const poster = document.createElement('img'); poster.src = mapPreviewPoster(id, VERSION);
+      poster.alt = ''; poster.loading = 'lazy';
+      const name = document.createElement('span'); name.textContent = MAPS[id].name;
+      button.append(poster, name);
+      button.onclick = () => { ui.click(); gotoMap(MAPAS_MENU.indexOf(id), false); closeHubMap(false); hubNavigate({ map: id, janela: fromQuick ? 'confirmar' : null, origem: null }); };
+      grid.appendChild(button);
+    }
+  };
+  render('TODOS'); $('hub-map-modal').hidden = false; $('hub-map-close').focus();
+  if (updateRoute) hubNavigate({ secao: 'jogar', partida: 'singleplayer', janela: 'mapas', origem: fromQuick ? 'confirmar' : null });
+}
+function closeHubRoster(updateRoute = true) {
+  $('hub-roster-modal').hidden = true; $('hub-change-character').focus();
+  if (updateRoute) hubNavigate({ janela: null });
+}
+/* A loja responde DEPOIS do boot: o modal aberto por link direto (/jogar/personagens)
+   precisa redesenhar quando o armário chega. Ponte para o listener já existente. */
+let hubRosterRender = null;
+function openHubRoster(updateRoute = true) {
+  hubRosterLado = ladoValido(CHARACTERS.find((c) => c.id === currentChar) || CHARACTERS[0], currentTeam);
+  const temPoliticos = (lado) => CHARACTERS.some((c) => c.team === 'P' && podeNoLado(c, lado));
+  hubRosterCat = temPoliticos(hubRosterLado) ? 'P' : null;
+  const lados = $('hub-roster-lados'), filters = $('hub-roster-factions'), grid = $('hub-roster-grid');
+  const render = () => {
+    lados.replaceChildren(); filters.replaceChildren(); grid.replaceChildren();
+    for (const lado of ['E', 'B']) {
+      const button = document.createElement('button'); button.type = 'button'; button.setAttribute('role', 'tab');
+      const crest = document.createElement('img'); crest.src = '/' + urlDoBrasao(factionDefinition(lado).crest); crest.alt = '';
+      button.append(crest, tr(FACTION_NAME[lado]));
+      button.style.setProperty('--lado', PALETA[lado].base);
+      button.setAttribute('aria-selected', String(lado === hubRosterLado));
+      button.onclick = () => { hubRosterLado = lado; hubRosterCat = temPoliticos(lado) ? 'P' : null; render(); };
+      lados.appendChild(button);
+    }
+    const doLado = CHARACTERS.filter((c) => podeNoLado(c, hubRosterLado));
+    const cats = [...new Set(doLado.map((c) => c.team))];
+    // Políticos abre primeiro e já vem filtrado quando há elenco político para este lado.
+    const orderedCats = cats.includes('P')
+      ? ['P', ...cats.filter((cat) => cat !== 'P'), null]
+      : [null, ...cats];
+    for (const cat of orderedCats) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.textContent = cat ? tr(FACTION_NAME[cat] || cat) : tr('TODOS');
+      button.setAttribute('aria-pressed', String(cat === hubRosterCat));
+      button.onclick = () => { hubRosterCat = cat; render(); };
+      filters.appendChild(button);
+    }
+    /* Armário: skin de personagem comprada é personagem selecionável aqui (dono, 23/10).
+       Sem conta ou sem skin aprovada a lista vem vazia e a grade fica como sempre foi. */
+    const armario = tretaSkinsDoArmario();
+    const escolher = (id) => {
+      currentChar = id; currentTeam = hubRosterLado; currentFaction = hubRosterLado;
+      currentEnemyFaction = null;
+      localStorage.setItem('csbr-home-character', currentChar);
+      localStorage.setItem('csbr-home-side', currentTeam);
+      syncHomeCharacter(); closeHubRoster(false);
+      hubNavigate({ personagem: currentChar, janela: null });
+    };
+    for (const def of doLado.filter((c) => !hubRosterCat || c.team === hubRosterCat)) {
+      const skinsDoChar = armario.filter((s) => s.character === def.id);
+      const equipada = skinsDoChar.find((s) => s.equipped) || null;
+      /* Célula = card (escolhe SEU personagem, como sempre) + chip ＋ (trava quem entra).
+         Papel do escalado: pode no seu lado = aliado, senão inimigo; montagem re-filtra. */
+      const travado = personagemTravado(def), nivel = nivelDoPersonagem(def);
+      /* escolhido de fato: com a escolha salva ainda travada pelo passe, é o livre que o lobby mostra */
+      const efetivo = personagemLivre(CHARACTERS.find((c) => c.id === currentChar) || CHARACTERS[0], currentTeam)?.id;
+      const cell = document.createElement('div'); cell.className = 'hub-roster-cell';
+      if (travado) cell.classList.add('hub-roster-cell--travado');
+      const button = document.createElement('button'); button.type = 'button';
+      button.setAttribute('aria-pressed', String(!travado && def.id === efetivo && !equipada));
+      const avatar = document.createElement('img'); avatar.src = `/img/chars/avatars/${def.id}.webp`;
+      avatar.alt = ''; avatar.loading = 'lazy';
+      const name = document.createElement('span'); name.textContent = def.name;
+      button.append(avatar, name);
+      /* Passe: cadeado e o nível onde destrava; o clique só explica, quem decide é o servidor. */
+      if (travado) {
+        const trava = document.createElement('b'); trava.className = 'hub-roster-trava';
+        trava.dataset.passeNivel = String(nivel || '');
+        trava.innerHTML = ICONE_CADEADO_PASSE;
+        trava.append(frase('passeTravado', nivel || '?'));
+        button.setAttribute('aria-disabled', 'true');
+        button.title = frase('passeTravadoAviso', def.name, nivel || '?');
+        button.append(trava);
+      }
+      button.onclick = async () => {
+        ui.click();
+        if (personagemTravado(def)) { $('hub-roster-selected').textContent = frase('passeTravadoAviso', def.name, nivel || '?'); return; }
+        // Voltar ao personagem base com skin equipada TIRA a skin no servidor antes de trocar.
+        if (equipada) {
+          try { if (!await desequiparTretaSkin()) throw new Error('unequip_recusado'); }
+          catch { $('hub-roster-selected').textContent = frase('skinTirarErro'); return; }
+        }
+        escolher(def.id);
+      };
+      cell.appendChild(button);
+      if (def.id !== efetivo) {
+        const pin = document.createElement('button'); pin.type = 'button';
+        const ehPin = settings.pinnedChars.includes(def.id);
+        const papel = podeNoLado(def, currentTeam) ? tr('ALIADO') : tr('INIMIGO');
+        pin.className = 'hub-roster-pin';
+        pin.setAttribute('aria-pressed', String(ehPin));
+        pin.title = ehPin ? frase('pinTituloTravado', papel) : frase('pinTituloEscalar', papel);
+        pin.textContent = ehPin ? papel : '＋';
+        pin.onclick = (ev) => {
+          ev.stopPropagation();
+          /* Escalar personagem travado como bot = jogar com ele de graça: recusa como a escolha,
+             com o mesmo aviso. Tirar um escalado antigo continua valendo. */
+          if (!ehPin && personagemTravado(def)) { ui.click(); $('hub-roster-selected').textContent = frase('passeTravadoAviso', def.name, nivel || '?'); return; }
+          settings.pinnedChars = ehPin
+            ? settings.pinnedChars.filter((id) => id !== def.id)
+            : [...settings.pinnedChars, def.id];
+          saveSettings(); ui.click(); render();
+        };
+        cell.appendChild(pin);
+      }
+      grid.appendChild(cell);
+      for (const skin of skinsDoChar) {
+        const skinCell = document.createElement('div'); skinCell.className = 'hub-roster-cell hub-roster-cell--skin';
+        const skinButton = document.createElement('button'); skinButton.type = 'button';
+        skinButton.setAttribute('aria-pressed', String(skin.equipped && def.id === currentChar));
+        const skinArt = document.createElement('img'); skinArt.src = skin.poster;
+        skinArt.alt = ''; skinArt.loading = 'lazy';
+        const skinName = document.createElement('span'); skinName.textContent = skin.name;
+        skinButton.append(skinArt, skinName);
+        skinButton.onclick = async () => {
+          ui.click();
+          try { if (!await equiparTretaSkin(skin.id)) throw new Error('equip_recusado'); }
+          catch { $('hub-roster-selected').textContent = frase('skinEquiparErro'); return; }
+          escolher(def.id);
+        };
+        skinCell.appendChild(skinButton);
+        grid.appendChild(skinCell);
+      }
+    }
+    const selected = personagemLivre(CHARACTERS.find((c) => c.id === currentChar) || CHARACTERS[0], currentTeam);
+    const skinAtual = armario.find((s) => s.equipped && s.character === selected.id) || null;
+    $('hub-roster-selected').textContent = frase('selecionado', tr(FACTION_NAME[ladoValido(selected, currentTeam)]), selected.name, skinAtual ? skinAtual.name : '');
+    /* ESCALAÇÃO travada: contagem por papel contra as VAGAS do formato escolhido —
+       passar do limite não quebra nada (pickMatchRoster corta), mas o jogador vê. */
+    const papelDe = (id) => { const c = CHARACTERS.find((x) => x.id === id); return c && podeNoLado(c, currentTeam) ? 'ally' : 'enemy'; };
+    const nAlly = settings.pinnedChars.filter((id) => papelDe(id) === 'ally').length;
+    const nEnemy = settings.pinnedChars.filter((id) => papelDe(id) === 'enemy').length;
+    const linha = $('hub-roster-escalacao');
+    if (linha) {
+      linha.textContent = nAlly || nEnemy
+        ? frase('escalacaoVagas', Math.min(nAlly, settings.allyBots), settings.allyBots, Math.min(nEnemy, settings.enemyBots), settings.enemyBots, nAlly > settings.allyBots || nEnemy > settings.enemyBots)
+        : frase('escalacaoAuto');
+    }
+    const limpar = $('hub-roster-clear');
+    if (limpar) {
+      limpar.hidden = !(nAlly || nEnemy);
+      limpar.onclick = () => { settings.pinnedChars = []; saveSettings(); ui.click(); render(); };
+    }
+  };
+  hubRosterRender = render;
+  render(); $('hub-roster-modal').hidden = false; $('hub-roster-close').focus();
+  if (updateRoute) hubNavigate({ secao: 'jogar', partida: 'singleplayer', janela: 'personagens' });
+}
+let currentEnemyFaction = null;
+let submitted = true;   // stats da partida atual já enviados?
+
+/* RÉGUA:launch-race início — extraído por `tools/eval/launch-race-check.mjs` */
+let _lancamento = 0;
+/* Lançar partida é CORRIDA: saída pelo menu, queda de socket e remontagem do servidor chegam
+   no meio de um `await` de `_startGame`. Quem perdeu a corrida desiste (#608/#609). */
+const novoLancamento = () => ++_lancamento;
+const lancamentoPerdeu = (n) => n !== _lancamento;
+function soltarPartida() {
+  game = null; window.__game = null;
+  _lancamento++;
+  window.__javaporcosIntroAbort?.abort();
+  /* A tela de loading morre COM a partida: `show()` não mexe no overlay, e uma queda no meio
+     do preload deixava o menu atrás de um "CARREGANDO MODELOS 3D…" eterno. */
+  try { hideLoading(); } catch { /* overlay ainda não existe */ }
+}
+/* RÉGUA:launch-race fim */
+
+/* ---------------- TELEMETRIA ANÔNIMA (contrato em tools/eval/telemetry-check) --------------
+   O ranking está desligado (src/lib/site.ts, RANKING_ON) mas a MEDIÇÃO não: o dono
+   quer saber quanto tempo se joga e em que mapa.
+
+   POR QUE UM ID PRÓPRIO E NÃO O NICK: `recordMatchStats` só fala com o backend dentro
+   de `if (nick && !testMode)`. Quem entra e joga sem digitar nick — que é o caminho
+   de menor atrito, e por isso o mais comum — não registra, não manda heartbeat e não
+   submete: é invisível. Medir só quem se registrou enviesa a amostra exatamente para
+   o jogador mais engajado, que é o contrário do que serve pra decidir mapa.
+
+   `anonId` identifica NAVEGADOR, não pessoa: UUID no localStorage, some quando o
+   jogador limpa o storage. O nick vai junto quando existe, só pra cruzar com `stats`
+   quando o ranking voltar.
+
+   Os eventos usam fetch keepalive: sobrevive ao unload e permite `credentials: omit`.
+   Isto importa porque sendBeacon força credenciais e, com JSON cross-origin, depende de
+   um preflight credenciado perfeito no Cloud Run. */
+const SESSION_KEY = 'cs_session';
+function getSessionId() {
+  let s = sessionStorage.getItem(SESSION_KEY);
+  if (!s) { s = clientUuid(); sessionStorage.setItem(SESSION_KEY, s); }
+  return s;
+}
+function sendJsonKeepalive(path, payload) {
+  try {
+    void fetch(apiUrl(path), {
+      method: 'POST',
+      keepalive: true,
+      credentials: 'omit',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+    return true;
+  } catch { return false; }
+}
+function modoTelemetria(g) {
+  if (g?.arena) return 'arena';
+  return g?.ctf ? 'ctf' : 'rounds';
+}
+let telemetrySent = true;
+function sendTelemetry() {
+  if (!analyticsAllowed()) return;
+  if (telemetrySent || testMode || !game) return;
+  telemetrySent = true;   // uma partida = uma linha, mesmo com quit + beforeunload juntos
+  const g = game;
+  const payload = {
+    anonId: getAnonId(),
+    map: g._mapId || currentMap,
+    mode: modoTelemetria(g),
+    seconds: Math.round(g.time || 0),
+    rounds: (g.roundsWon?.E || 0) + (g.roundsWon?.B || 0),
+    nick: registeredNick || null,
+    event: 'match_end', gameType: telemetryGameContext.gameType, matchEventId: _matchEventId,
+  };
+  sendJsonKeepalive('/api/telemetry', payload);
+}
+/* Início no NOSSO banco (antes só na Vercel Analytics): DAU conta quem começou e fechou a aba. */
+function sendGameStarted() {
+  if (!analyticsAllowed()) return;
+  if (testMode || !game) return;
+  sendJsonKeepalive('/api/telemetry', {
+    anonId: getAnonId(), map: game._mapId || currentMap, mode: modoTelemetria(game),
+    nick: registeredNick || null,
+    event: 'game_started', gameType: telemetryGameContext.gameType, matchEventId: _matchEventId,
+  });
+}
+let registeredNick = ''; // nick canônico devolvido pelo registro do UID
+let rankingBloqueado = ''; // erro do register da sessão (nick de outro dono, charset…) — vira aviso claro no fim da partida
+let contaNick = '';  // nick da CONTA autenticada (quem logou já participa do ranking)
+const RANKING_PAGINA = 25;   // página do servidor: api/social.ts chama social_ranking com p_limit=25
+let heartbeatOff = false;
+
+/* CONTADOR "N ONLINE" no topo do menu. GET /api/online lê a view online_now
+   (heartbeat < 2 min). Fica `hidden` até ter resposta autoritativa e volta a sumir
+   em qualquer falha, sem manter número velho. Atualiza a cada 60 s só no menu. */
+// O idioma por país atualiza todo consumidor quando a consulta iniciada no <head> termina.
+// Sem top-level await: Safari 14 entende módulos, mas rejeita essa sintaxe.
+window.__CS_LANG_READY__ = moduleSequencingReady.then(() => resolveGeoLang()).then(() => {
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'pt-BR';
+  translateDom(document.body);
+  if (LANG === 'en') for (const a of document.querySelectorAll('.menu-footer a')) {
+    const GEMEA = { '/personagens': '/characters', '/como-jogar': '/how-to-play', '/armas': '/weapons', '/mapas': '/maps', '/sobre': '/about', '/changelog': '/whats-new', '/docs/': '/docs/en/' };
+    const h = a.getAttribute('href');
+    if (GEMEA[h]) a.setAttribute('href', GEMEA[h]);
+  }
+  window.dispatchEvent(new Event('cs-lang-ready'));
+});
+syncMenuMusicToggle();
+// seletor de idioma em CONFIGURAÇÕES: grava e recarrega (o dicionário aplica no boot)
+{ const sel = document.getElementById('set-lang');
+  if (sel) {
+    let salvo = null; try { salvo = localStorage.getItem('cs_lang'); } catch {}
+    sel.value = salvo || 'auto';
+    sel.onchange = () => {
+      try { salvo = sel.value === 'auto' ? localStorage.removeItem('cs_lang') : localStorage.setItem('cs_lang', sel.value); } catch {}
+      location.reload();
+    };
+  } }
+/* PICKS — "o que as pessoas escolhem" (dono, 06/08). keepalive: nunca atrasa nem
+   quebra o jogo; o servidor conta por (kind, key) na picks_daily (migration 013). */
+function _pick(kind, key) {
+  if (!analyticsAllowed()) return;
+  try {
+    sendJsonKeepalive('/api/pick', {
+      kind, key, eventId: clientUuid(), anonId: getAnonId(), sessionId: getSessionId(),
+      matchEventId: telemetryGameContext.gameType ? _matchEventId : null,
+      ...telemetryGameContext,
+    });
+  } catch { /* pode rodar antes do bootstrap da telemetria; nunca quebra o menu */ }
+}
+function _picks(lote) {
+  if (!analyticsAllowed()) return;
+  try {
+    sendJsonKeepalive('/api/pick', {
+      anonId: getAnonId(), sessionId: getSessionId(),
+      matchEventId: telemetryGameContext.gameType ? _matchEventId : null,
+      ...telemetryGameContext,
+      picks: lote.map((pick) => ({ ...pick, eventId: clientUuid() })),
+    });
+  } catch { /* fail-silent */ }
+}
+/* PRESENÇA ANÔNIMA — o que o "N online" do rodapé passou a contar (07/08).
+   Antes o único sinal de presença era o `/api/heartbeat`, que exige nick + token e
+   só dispara com `game && registeredNick`: jogador REGISTRADO e DENTRO de partida.
+   Com o site no ar, a Vercel Analytics mostrava 8 pessoas e o rodapé mostrava
+   nada — as duas medidas certas, contando coisas diferentes, e a maioria nunca
+   digita nick.
+
+   `anonId` é o MESMO UUID da telemetria (navegador, não pessoa). Só pinga com a
+   aba VISÍVEL: aba de fundo esquecida por horas inflaria o contador, e número
+   inflado num rodapé de social proof é pior que número pequeno.
+   45 s contra a janela de 2 min da view (migration 014): perder um pacote não
+   apaga ninguém da conta. */
+async function _pingPresenca(aguardar = false) {
+  if (!analyticsAllowed()) return;
+  if (testMode) return false;
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return false;
+  const payload = JSON.stringify({ anonId: getAnonId() });
+  if (aguardar) {
+    try {
+      const response = await fetch(apiUrl('/api/presence'), {
+        method: 'POST', keepalive: true, credentials: 'omit',
+        headers: { 'content-type': 'application/json' }, body: payload,
+      });
+      if (response.ok) return true;
+    } catch { /* o beacon abaixo ainda tenta entregar */ }
+  }
+  sendJsonKeepalive('/api/presence', JSON.parse(payload));
+  return false;
+}
+
+/* ============ TELEMETRIA NOVA (feat/telemetria: funil · aquisição · perf · match) ============
+ * Quatro sinais que SAIAM do Vercel Analytics (plano grátis não filtra propriedade de
+ * evento) e passam a morar no NOSSO backend, lidos pelo painel admin. Mesma regra das
+ * irmãs: fetch keepalive, fail-silent, anônimas por anonId (UUID de localStorage), sem IP.
+ * Contrato: /api/{match,funnel,perf,acquisition} e tools/eval/telemetry-check.mjs. */
+function _clientSessionContext() {
+  const ua = navigator.userAgent || '';
+  const ipadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const mobile = TOUCH && (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || ipadOS);
+  const deviceClass = mobile
+    ? (ipadOS || /iPad|Tablet/i.test(ua) || Math.min(screen.width, screen.height) >= 600 ? 'tablet' : 'phone')
+    : 'desktop';
+  return {
+    anonId: getAnonId(), sessionId: getSessionId(),
+    version: versaoComOrigem(VERSION), ...sinaisDeBuild(),
+    mobile, touch: TOUCH, deviceClass,
+    orientation: innerWidth >= innerHeight ? 'landscape' : 'portrait',
+    vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio || null,
+    dprEfetivo: (() => { try { return renderer.getPixelRatio(); } catch { return null; } })(),
+    qualityStep: window.__escada?.escada?.degrau ?? null,
+  };
+}
+// FUNIL (017): land → menu → match_start → match_end → quit. Converte "chegou a jogar?".
+// Automação não é jogador: headless enchia `land` e achatava a conversão (dono, 25/10).
+const _automacao = () => { try { return navigator.webdriver === true; } catch { return false; } };
+/* O tipo da partida (083) vai explícito: telemetryGameContext só marca 'multiplayer', e o
+   funil precisa saber que o resto é solo para o painel separar as duas conversões. */
+function _funnel(step, gameType = null) {
+  if (!analyticsAllowed()) return;
+  if (testMode || _automacao()) return;
+  sendJsonKeepalive('/api/funnel', {
+    step,
+    ..._clientSessionContext(),
+    ...telemetryGameContext,
+    ...(gameType ? { gameType } : {}),
+    ...(step === 'match_start' || step === 'match_end' ? { matchEventId: _matchEventId } : {}),
+  });
+}
+const _tipoDaPartida = () => (telemetryGameContext.gameType === 'multiplayer' ? 'multiplayer' : 'single_player');
+// AQUISIÇÃO (019): 1x por navegador. referrer vira host (URL inteira pode carregar query
+// sensível); UTM e ?ref= lidos da URL de entrada. first-touch-wins no servidor.
+// A origem fica só em memória até a checagem de privacidade: o menu reescreve a URL antes dela.
+const _landingOrigem = (() => {
+  const u = new URLSearchParams(location.search);
+  let referrer = null;
+  try { referrer = document.referrer ? new URL(document.referrer).host || null : null; } catch {}
+  return Object.freeze({
+    referrer,
+    utmSource: u.get('utm_source'), utmMedium: u.get('utm_medium'), utmCampaign: u.get('utm_campaign'),
+    utmContent: u.get('utm_content'), ref: u.get('ref') || u.get('treta'), landing: location.pathname,
+  });
+})();
+let _acqSent = false;
+async function _sendAcquisition() {
+  if (!analyticsAllowed()) return;
+  if (testMode || _acqSent) return;
+  try { if (localStorage.getItem('cs_acq')) { _acqSent = true; return; } } catch {}
+  const payload = { anonId: getAnonId(), ..._landingOrigem };
+  try {
+    /* fetch + keepalive, e NÃO sendBeacon: aqui a RESPOSTA importa. sendBeacon
+       não devolve resposta — marcar cs_acq sem saber se o servidor gravou
+       aposentava a 1ª aquisição para sempre num 503/stored:false (P1 da review,
+       PR #92). keepalive mantém a entrega mesmo se a aba fechar no meio. */
+    const resp = await fetch(apiUrl('/api/acquisition'), {
+      method: 'POST', keepalive: true, credentials: 'omit',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const dados = await resp.json().catch(() => null);
+    if (!analyticsAllowed() || !resp.ok || !dados || dados.stored !== true) return; // próxima visita retenta
+    try { localStorage.setItem('cs_acq', '1'); } catch {}
+    _acqSent = true;
+  } catch { /* fail-silent */ }
+}
+// PERF (018): 1x por sessão, EM PARTIDA. fps = contagem de frames em 1s de rAF
+// ~4s após o state==='live' (fora da janela de compile de shader); bootMs = tempo
+// até JOGÁVEL; loadMs = carga do módulo (o que bootMs media antes — sinal mantido).
+// Até 15/08 a janela de fps media o 1º segundo de vida da página: main thread
+// parseando JS e compilando shader não roda rAF, e o painel vendia esse jank de
+// BOOT como "FPS P50" (98% < 30 FPS no print do dono) — número que media outra coisa.
+let _perfSent = false;
+const _perfLoadMs = Math.round(performance.now());
+function _sendPerf() {
+  if (!analyticsAllowed()) return;
+  if (testMode || _perfSent) return;
+  _perfSent = true;
+  const aguardaLive = () => {
+    const g = window.__game;
+    if (!g || g.state !== 'live') {
+      if (performance.now() - _perfLoadMs < 120000) setTimeout(aguardaLive, 250);
+      return;
+    }
+    const bootMs = Math.round(performance.now());
+    setTimeout(() => _perfMedeFps(bootMs), 4000);
+  };
+  aguardaLive();
+}
+function _perfMedeFps(bootMs) {
+  if (!analyticsAllowed()) return;
+  let frames = 0; const t0 = performance.now();
+  const tick = () => { if (!analyticsAllowed()) return; frames++; if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else _perfFinish(bootMs, frames); };
+  requestAnimationFrame(tick);
+}
+function _perfFinish(bootMs, frames) {
+  if (!analyticsAllowed()) return;
+  let rendererStr = null;
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    rendererStr = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null;
+  } catch { /* GPU info é melhor-esforço */ }
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const payload = {
+    ..._clientSessionContext(), ...telemetryGameContext,
+    fps: frames, bootMs, loadMs: _perfLoadMs,
+    cores: navigator.hardwareConcurrency || null,
+    memoryGb: navigator.deviceMemory || null,
+    renderer: rendererStr,
+    software: window.__csWebgl?.softwareEstado || 'desconhecido',
+    glTier: window.__csWebgl?.tier || null,
+    vw: window.innerWidth, vh: window.innerHeight,
+    connection: conn?.effectiveType || null,
+    quality: settings.quality || null,
+    // sinais do ops.js (boot, FPS p50/p5, falhas de carga, sessão anterior); o backend descarta o que não conhece
+    ops: (() => { try { return window.__csbOps?.resumoBeacon?.() || null; } catch { return null; } })(),
+  };
+  sendJsonKeepalive('/api/perf', payload);
+}
+// MATCH EVENT (016): evento RICO por partida (anônimo), carrega arma/personagem/placar/
+// resultado. Complementa o submit-match (só registrado) e a telemetria agregada (012).
+// _wperf vem do game.js (abates por arma, zerado por partida no construtor).
+let _matchEventSent = false;
+function sendMatchEvent(result) {
+  if (!analyticsAllowed()) return;
+  if (_matchEventSent || testMode || !game) return;
+  _matchEventSent = true;
+  game._flushTraining?.();   // BOTBRAIN: envia o resto dos frames ao sair/abandonar (idempotente)
+  const g = game, p = g.player, wk = g._wperf || {};
+  const top = Object.entries(wk).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const payload = {
+    anonId: getAnonId(),
+    sessionId: getSessionId(), eventId: _matchEventId, version: versaoComOrigem(VERSION),
+    ...telemetryGameContext, ...sinaisDeBuild(),
+    map: currentMap, mode: modoTelemetria(g), weaponMode: settings.wpnMode || 'all',
+    /* O corpo que jogou, não o do lobby (currentChar muda no lobby e no MP); a skin vai à parte para o perfil mostrar o retrato dela. */
+    character: g.playerDef?.id || g.playerCharId || currentChar, skin: g.playerDef?.skinId || null,
+    team: g.arena ? g.player.team : g.playerTeam,
+    faction: g.playerFaction || currentFaction,
+    result: result || 'quit',
+    kills: p.kills || 0, deaths: p.deaths || 0, headshots: p.headshots || 0,
+    bestStreak: g.mk?.best || 0,
+    rounds: (g.roundsWon?.E || 0) + (g.roundsWon?.B || 0),
+    seconds: Math.round(g.time || 0),
+    topWeapon: top, weaponKills: wk, botCount: g.bots?.length || 0,
+    nick: registeredNick || null,
+  };
+  sendJsonKeepalive('/api/match', payload);
+}
+function sendTrainingFrames(blob) {
+  if (!analyticsAllowed()) return;
+  if (testMode || !blob || !registeredNick || !trainingEnabled()) return;
+  try {
+    api('/api/train-frames', {
+      uid: getAnonId(), token: getToken(), ...blob,
+    });
+  } catch { /* coleta nunca interrompe a partida */ }
+}
+/* AS CHAMADAS MORAM DEPOIS DO `const testMode` — e isto não é estilo, é o que fazia o jogo
+   não abrir (07/08, medido em produção). `_pingPresenca` lê `testMode` na primeira linha;
+   `const` não é hoisted como `var`: chamar a função ANTES da linha 498 lança
+   `ReferenceError: Cannot access 'testMode' before initialization` — no ESCOPO DO MÓDULO,
+   ou seja a avaliação inteira de `main.js` morre ali. Tudo que é ligado depois nunca
+   acontece: medido no navegador, `#btn-jogar` existia e o `onclick` dele (linha ~779) era
+   `null`. O botão JOGAR do site no ar estava inerte, e o console mostrava UMA linha.
+   Régua: `tools/eval/boot-check.mjs`. */
+
+async function _refreshOnline() {
+  const box = document.querySelector('.hub-online'), n = document.getElementById('hub-online-n');
+  const hide = () => { if (box) box.hidden = true; if (n) { n.textContent = ''; delete n.dataset.online; } };
+  try {
+    const r = await fetchComRetry(apiUrl('/api/online'));
+    const { online } = await r.json();
+    if (!r.ok || !Number.isSafeInteger(online) || online < 0) { hide(); return; }
+    if (n) { n.textContent = online.toLocaleString('pt-BR'); n.dataset.online = String(online); }
+    if (box) box.hidden = false;
+  } catch { hide(); }
+}
+const params = new URLSearchParams(location.search);
+const inspectionScreen = resolveInspectionScreen(params);
+// A curadoria é uma sessão de teste, mas mantemos a expressão canônica abaixo porque
+// screenquery-check também prova a integração do modo de inspeção por query.
+if (MENU_MUSIC_REVIEW) params.set('debug', '1');
+/* `oficina` entra aqui: retrabalho é sessão de teste, senão cada volta de conserto
+   viraria partida no ranking e linha de telemetria. */
+const testMode = params.get('debug') === '1' || !!inspectionScreen || oficina;
+if (testMode) contagem.desligar();
+// ?nav=1 isola transições de tela; web-assets.spec.js cobre preload e render 3D.
+const navOnly = params.get('nav') === '1';
+
+/* Presença: as chamadas descem para CÁ, depois de `testMode` existir (ver o comentário na
+   linha em que elas moravam). O intervalo e o comportamento são os mesmos — o que muda é
+   só a ordem, que era o defeito. */
+async function _iniciaPresencaOnline() {
+  await _pingPresenca(true);
+  await _refreshOnline();
+}
+if (window.__CS_LANG_READY__) void window.__CS_LANG_READY__.then(_iniciaPresencaOnline);
+else void _iniciaPresencaOnline();
+setInterval(_pingPresenca, 45_000);
+setInterval(_refreshOnline, 60_000);
+
+/* Telemetria nova (feat/telemetria) — depois de `testMode` existir (mesma lição do BUG-34).
+   Aquisição e 'land' saem na carga (medição ligada por padrão) ou quando quem recusou volta a permitir; régua: consent-funnel-check. */
+let _landFuneled = false;
+function _funnelLand() {
+  if (_landFuneled || !analyticsAllowed()) return;
+  _landFuneled = true;
+  _sendAcquisition();   // aquisição 1x por navegador (019)
+  _funnel('land');      // funil: chegou (017)
+  _flushMarcos();       // marcos de boot já atingidos saem junto com o land (083)
+}
+/* Os marcos de boot/lobby esperam DUAS coisas: a telemetria existir (o `const testMode` acima)
+   e o consentimento. Enquanto faltar uma, ficam guardados em `_marcos` e não vão para a rede. */
+function _flushMarcos() {
+  if (!_funilPronto || !analyticsAllowed()) return;
+  for (const step of _marcos) {
+    if (_marcosEnviados.has(step)) continue;
+    _marcosEnviados.add(step);
+    _funnel(step);
+  }
+}
+addEventListener('cs-privacy-change', _funnelLand);
+// Convite de login (login-prompt.js) no mesmo pipeline do funil; o consentimento é conferido lá.
+function _loginPromptTrack(step, data) {
+  if (!analyticsAllowed()) return;
+  if (testMode) return;
+  sendJsonKeepalive('/api/funnel', { step, ..._clientSessionContext(), ...data });
+}
+const _iniciaAnaliticas = () => {
+  _funnelLand();
+  _funilPronto = true;
+  _flushMarcos();
+  _sendPerf();
+};
+if (window.__CS_LANG_READY__) void window.__CS_LANG_READY__.then(_iniciaAnaliticas);
+else _iniciaAnaliticas();
+// funil 'menu': 1ª interação real com medição liberada — o clique que religa a medição não conta como uso.
+let _menuFuneled = false;
+const _menuOnce = () => { if (_menuFuneled || !_landFuneled || !analyticsAllowed()) return; _menuFuneled = true; _funnel('menu'); removeEventListener('pointerdown', _menuOnce); removeEventListener('keydown', _menuOnce); };
+addEventListener('pointerdown', _menuOnce);
+addEventListener('keydown', _menuOnce);
+
+async function startGame(team, charId, enemyFaction, online = false) {
+  const meuLancamento = novoLancamento();
+  window.__javaporcosIntroAbort?.abort();
+  const introAbort = new AbortController();
+  window.__javaporcosIntroAbort = introAbort;
+  const continuaPartida = online && telemetryGameContext.gameType === 'multiplayer'
+    && telemetryGameContext.roomId === (mpSessao?.net?.meta?.room || mpSessao?.sala?.id || mpSessao?.sala?.room || null) && game?._mapId === currentMap;
+  if (introAbort.signal.aborted || lancamentoPerdeu(meuLancamento)) return;
+  /* #241: em rede lenta o preload dos GLBs passa de 60 s COM progresso andando
+     (_lstat.loaded sobe a cada arquivo do DefaultLoadingManager). O watchdog
+     renova enquanto há movimento e só falha se o progresso PARAR — travamento
+     de verdade continua sendo pego. */
+  /* RÉGUA:launch-watchdog início — extraído por `tools/eval/launch-watchdog-check.mjs` */
+  let _wp = _lstat.loaded;
+  window.__gameLaunch?.begin('partida', 60000, function () {
+    const g = window.__game;
+    /* Conclusão é QUADRO (`time` só anda no update() do rAF), não o sub-estado `live`, que
+       falta em countdown/roundEnd. Antes da rede lenta. BUG-167, `eval:launchwatchdog`. */
+    if (g && g.time > 0) return true;
+    if (_lstat.loaded > _wp) { _wp = _lstat.loaded; return 'rede-lenta'; }
+    return false;
+  });
+  /* RÉGUA:launch-watchdog fim */
+  try {
+    await _startGame(meuLancamento, team, charId, enemyFaction, online, introAbort);
+    window.__gameLaunch?.ready('partida');
+  } catch (e) {
+    /* RÉGUA:launch-race queda início — extraído por `tools/eval/launch-race-check.mjs` */
+    /* Só quem ainda é o lançamento corrente limpa a tela: o `catch` de uma abertura velha
+       derrubava a partida NOVA que já estava subindo por cima dela. */
+    if (!lancamentoPerdeu(meuLancamento)) {
+      try { if (game) game.dispose(); } catch {}
+      soltarPartida();
+      try { if (document.pointerLockElement) document.exitPointerLock(); } catch {}
+      try { if (document.fullscreenElement) document.exitFullscreen()?.catch?.(() => {}); } catch {}
+      try { show('main-menu'); } catch {}
+      /* O modal de falha é IRRECUPERÁVEL (só "TENTAR DE NOVO", que recarrega) e o `fail`
+         desarma o watchdog: abrir isso por cima da partida que assumiu é pior que o #609. */
+      window.__gameLaunch?.fail(e, 'main.js:startGame');
+    }
+    /* O relatório segue saindo nos dois casos — `console.error` é coletado
+       (`index.astro:426`). Mesma disciplina do BUG-170: corta o modal, nunca a telemetria. */
+    console.error('falha ao abrir a partida', e);
+    /* RÉGUA:launch-race queda fim */
+  }
+}
+async function _startGame(meuLancamento, team, charId, enemyFaction, online = false, introAbort) {
+  const sessao = online ? mpSessao : null;
+  const metaMp = sessao?.net?.meta || {};
+  pingPresencaConta();   // posse navegador→conta + last_active desde o 1º segundo de jogo
+  const salaMp = sessao?.sala || {};
+  // Trocar de vaga/espectador na MESMA partida online remonta o jogo, mas não é partida nova.
+  const continuaPartida = online && telemetryGameContext.gameType === 'multiplayer'
+    && telemetryGameContext.roomId === (metaMp.room || salaMp.id || salaMp.room || null) && game?._mapId === currentMap;
+  if (!continuaPartida) sendTelemetry();   // revanche/reinício e mapa girando no MP fecham a anterior
+  if (!continuaPartida) noteLoginPromptMatch();   // convite de login recusado volta depois de N partidas
+  telemetryGameContext = online ? {
+    gameType: 'multiplayer',
+    node: String(metaMp.regiao || sessao?.no?.ticketNode || sessao?.no?.id || '').toLowerCase() || null,
+    roomId: metaMp.room || salaMp.id || salaMp.room || null,
+    roomOfficial: !!(metaMp.oficial ?? salaMp.oficial),
+    createdRoom: !!metaMp.createdRoom,
+  } : {
+    gameType: 'single_player', node: null, roomId: null, roomOfficial: null, createdRoom: null,
+  };
+  // Nasce ANTES dos picks: pick_event.match_event_id passa a ligar a escolha ao
+  // resultado/duração exatos desta partida, não apenas à aba do navegador.
+  _matchEventId = clientUuid();
+  // MOBILE: não bloqueia mais — entra com controles de toque. No retrato o overlay
+  // "gire o celular" (CSS) cobre a tela até deitar.
+  // Offline a identidade visual é o próprio lado (E Esquerda, B Direita) e o adversário é o
+  // lado oposto; online a facção ainda vem da sala do servidor.
+  if (sessao) team = ladoOnline(team, sessao.net);
+  /* Passe: personagem travado não entra em partida offline, venha de onde vier (rota, armário local,
+     troca no M). Online o corpo é o que o servidor da sala deu. */
+  const escolhidoDef = CHARACTERS.find(c => c.id === charId);
+  if (!online && escolhidoDef && personagemTravado(escolhidoDef)) charId = personagemLivre(escolhidoDef, team).id;
+  const charDef = CHARACTERS.find(c => c.id === charId) || {};
+  if (!online && !podeNoLado(charDef, team)) team = ladosDe(charDef)[0];
+  if (!online && ehMapaJavaporcos(currentMap)) team = 'E';
+  let faction = charDef.team || team || 'E';
+  const side = resolvePlayerSide(team, faction, online);
+  if (!online) faction = side;
+  const enemyFac = online ? (enemyFaction || currentEnemyFaction || (side === 'B' ? 'E' : 'B')) : (side === 'B' ? 'E' : 'B');
+  currentFaction = faction; currentTeam = side; currentChar = charId; currentEnemyFaction = enemyFac;
+  // o lote de escolha da partida — 5 contadores numa chamada (ver /api/pick)
+  _picks([
+    { kind: 'mapa', key: currentMap },
+    { kind: 'modo', key: modoEfetivoAtual() },
+    { kind: 'faccao', key: faction },
+    { kind: 'personagem', key: charId || 'aleatorio' },
+    { kind: 'arma', key: settings.wpnMode || 'all' },
+  ]);
+  stopMenuMusic();   // música é só do menu — some (fade) quando a partida começa
+  if (game) game.dispose();
+  show(null);
+  /* TELA CHEIA PEDIDA AQUI, E O LUGAR É O QUE IMPORTA. Ela é pré-requisito da Keyboard
+     Lock API, que é a única coisa que impede Ctrl+W de fechar a aba no meio da partida
+     (ver `_travaAtalhos` no game.js). `requestFullscreen` exige gesto do usuário, e o
+     gesto é o clique que chamou este `startGame` — mas logo abaixo vem `await sfxReady` e
+     o `Promise.all` dos GLBs, que levam segundos e queimam a ativação transiente. Pedir
+     depois dos awaits falha calado. Aqui em cima o clique ainda vale.
+     Falhar é ACEITÁVEL: sem tela cheia não há trava de atalho, e a confirmação de saída
+     do `beforeunload` cobre o caso. Por isso nada de await e nada de erro na tela. */
+  if (!testMode) {
+    try {
+      const fs = document.documentElement.requestFullscreen?.();
+      // trava de orientação só depois da tela cheia (a API exige fullscreen). Android respeita;
+      // WebKit REJEITA a promessa, e sem o catch a rejeição derrubava o launch (#431/#432).
+      if (TOUCH && fs?.then) fs.then(() => { try { screen.orientation?.lock?.('landscape')?.catch?.(() => {}); } catch {} }).catch(() => {});
+      else fs?.catch?.(() => {});
+    } catch {}
+  }
+  loadingStage.hide(); dockLoadingCharacter();
+  const _sp = document.getElementById('boot-splash'); if (_sp) _sp.remove();   // fluxo ?auto= pula a splash
+  // LOADING REAL da partida: overlay opaco cobre TUDO enquanto os GLBs entram e o mundo
+  // é construído — nada de cena parcial/"minecraft" aparecendo aos poucos
+  showLoading(frase('carregando', MAPS[currentMap].name.toUpperCase()), 'CARREGANDO MODELOS 3D…', MAPS[currentMap].name.toUpperCase());
+  let mapaPartida;
+  if (currentMap === 'loja_h') {
+    const seedMapa = sessao ? (sessao.net.meta.mapSeed ?? 1) : (Math.random() * 1e9) | 0;
+    mapaPartida = await defineSeedHavan(seedMapa);
+  } else {
+    mapaPartida = await comMapaCarregado(currentMap, (mapa) => mapa);
+  }
+  await sfxReady;   // make sure voice/CS samples are registered before round 1 sounds
+  // Preload real GLB character models + shared animation clips (bots). Falls back to
+  // procedural box meshes for any archetype that isn't modeled yet. Map props (statues)
+  // load in parallel and are optional — the map renders fine if they're missing.
+  /* SÓ OS PERSONAGENS DA PARTIDA: o roster é sorteado ANTES do preload e só esses GLBs sobem
+     (jogador + times montados). Filtro vazio = rede de segurança: elenco inteiro. Régua: PL1. */
+  /* FORMATO: no multiplayer o tamanho vem do SERVIDOR, nunca do ajuste local (senão sobram
+     corpos e o casamento de ids fica adivinhando). No single player é LIVRE: bots do seu
+     lado + bots inimigos (1v4, solo vs 8, 5v5…). */
+  const tamanhoTime = sessao ? sessao.net.meta.teamSize : 0;
+  const cooperativo = sessao?.net.meta.cooperative === true;
+  const settingsDaPartida = sessao
+    ? {...settings, bots: tamanhoTime, allyBots: Math.max(0, tamanhoTime - 1), enemyBots: cooperativo ? 0 : tamanhoTime,
+      javaporcos: {...settings.javaporcos, coop: cooperativo}}
+    : ehMapaJavaporcos(currentMap) ? equipeJavaporcos(settings) : settings;
+  /* ELENCO: no multiplayer ele vem PRONTO do servidor (welcome.roster). Sortear o próprio faria
+     cada jogador da mesma sala ver bonecos diferentes, e o nome do killfeed não bateria com o
+     rosto que apareceu na tela. Fora do multiplayer, sorteio normal — com a ESCALAÇÃO do
+     jogador (pinnedChars da tela de escalação) entrando primeiro. Papel do escalado: do lado
+     do jogador = aliado; senão inimigo (pickMatchRoster re-filtra por lado). Escalado travado pelo
+     passe (pin salvo antes da trava ou sem o servidor ter destravado) fica de fora da partida. */
+  const _podeNoLadoSp = (id) => { const c = CHARACTERS.find((x) => x.id === id); return !!(c && podeNoLado(c, side)); };
+  const _escalados = sessao ? [] : settings.pinnedChars.filter((id) => id !== charId && !personagemTravado(CHARACTERS.find((c) => c.id === id)));
+  const _pinned = sessao ? null : {
+    ally: _escalados.filter(_podeNoLadoSp),
+    enemy: _escalados.filter((id) => !_podeNoLadoSp(id)),
+  };
+  const matchRoster = sessao
+    ? rosterDoServidor(side, charId)
+    : pickMatchRoster(faction, enemyFac, { allies: settingsDaPartida.allyBots, enemies: settingsDaPartida.enemyBots }, charId, false, _pinned);
+  // Operação Flávio: VIP é corpo a mais em B; Zero Um escolhido no B é o próprio VIP. Só
+  // offline — online o elenco do servidor já traz o VIP.
+  if (!sessao && currentMap === 'operacao_flavio') elencoDaEscolta(matchRoster, side, charId);
+  /* Treta Pop: o carregamento VS mostra o elenco sorteado; o global cobre o ?auto=, que lança antes de tp/ligar.js chegar */
+  if (document.documentElement.dataset.ui === 'v3') {
+    window.__tpElenco = {
+      javaporcosTimes: cooperativo ? 2 : sessao || settingsDaPartida.javaporcos?.times === 3 ? 3 : 2,
+      lado: side, eu: CHARACTERS.find((c) => c.id === charId), aliados: matchRoster.allyDefs, inimigos: matchRoster.enemyDefs,
+      online: !!sessao, tamanho: tamanhoTime || 0, ctf: modoEfetivoAtual() === 'ctf', arena: !sessao && !MAPS[currentMap].objectiveMode && matchMode === 'arena', rounds: sessao ? sanitizeRounds(sessao.net.meta.roundsMax) : matchRounds(),
+      mapa: MAPS[currentMap].name, desc: MAP_DESC[currentMap] || '', arte: mapPreviewPoster(currentMap, VERSION) };
+    window.dispatchEvent(new CustomEvent('tp:elenco', { detail: window.__tpElenco }));
+  }
+  await tretaStoreReady.catch(()=>{});
+  if (lancamentoPerdeu(meuLancamento)) return;
+  const playerSkinId = sessao
+    ? sessao.net.meta.roster.find(r=>r.id===sessao.net.yourEnt)?.skinId || null
+    : equippedTretaSkin(charId);
+  const playerEyewearId = sessao ? sessao.net.meta.roster.find(r=>r.id===sessao.net.yourEnt)?.eyewearId || null : equippedTretaEyewear();
+  const playerPack = tretaPack(equippedTretaPack());
+  const playerGloveId = playerPack?.gloveSkin || equippedTretaGlove();
+  const playerWeaponSkins = Object.fromEntries(['ak','pistol','m4','scar']
+    .map((weaponId)=>[weaponId,playerPack?.weaponSkins[weaponId] || equippedTretaWeaponSkin(weaponId)])
+    .filter(([,skinId])=>skinId));
+  const playerKnifeSkinId = playerPack?.knifeSkin || equippedTretaWeaponSkin('knife') || null;
+  const matchEyewear = [playerEyewearId,...matchRoster.allyDefs.map(d=>d.eyewearId),...matchRoster.enemyDefs.map(d=>d.eyewearId)];
+  const matchSkins = [playerSkinId, ...matchRoster.allyDefs.map(d=>d.skinId), ...matchRoster.enemyDefs.map(d=>d.skinId)];
+  const _rosterGlb = [charId, ...matchRoster.allyDefs, ...matchRoster.enemyDefs]
+    .map((d) => (typeof d === 'string' ? d : d.id))
+    .filter((id, i, a) => GLB_CHARS.has(id) && a.indexOf(id) === i);
+  // Fallback sem roster GLB: só o acervo legado. Release do Studio só carrega quando está
+  // na partida; aqui baixaria todos os pacotes fixados sem ninguém usá-los.
+  const _charsToLoad = _rosterGlb.length ? _rosterGlb : [...GLB_CHARS].filter((id) => !characterRelease(id));
+  /* Armas da partida sorteadas aqui pelo mesmo motivo do roster: as 26 custavam 164 MB de VRAM
+     e 7,5 MB de download numa partida que usa ~9. O resto chega em ocioso. Régua: ARM1. */
+  /* Armas: no multiplayer também são do servidor (ele é dono do estado de arma de cada corpo).
+     Pré-carregar as erradas faria a arma certa chegar como caixa procedural no meio do tiroteio.
+     No SP o sorteio cobre TODOS os corpos da partida (jogador + aliados + inimigos). */
+  const matchWeapons = sessao
+    ? sessao.net.meta.roster.map((r) => r.weapon).filter(Boolean)
+    : pickMatchWeapons({ mode: settings.wpnMode || 'all', teamSize: Math.max(1, Math.ceil((1 + settings.allyBots + settings.enemyBots) / 2)) });
+  // A sonda de QA do viewmodel inclui a arma pedida no preload; sem isso a HUD podia
+  // selecionar uma arma de teste cujo GLB não tinha entrado nesta partida reduzida.
+  const _qaVmWeapon = testMode && WEAPON_IDS.includes(params.get('vmweapon')) ? params.get('vmweapon') : null;
+  // TRETA$ da partida: todo mundo nasce de pistola, então ela entra no preload junto com as sorteadas
+  /* MP: quem autoriza a loja é o NÓ (`meta.economia` do welcome — rollout servidor-primeiro);
+     sala online é sempre 'all' (o seletor de Armas é da partida local). Nó velho = loadout de
+     hoje. VS BOTS: regra de sempre, e o mapa Javaporcos fica sem loja (armas grátis no chão). */
+  const economia = sessao
+    ? economiaLigada({ busca: location.search, online: true, meta: sessao.net?.meta || null, wpnMode: 'all', mapa: currentMap })
+    : economiaLigada({ busca: location.search, wpnMode: settings.wpnMode, mapa: currentMap });
+  const _armasDaPartida = [...new Set([charWeapon(charId), ...matchWeapons, _qaVmWeapon, economia ? 'pistol' : null])].filter(Boolean);
+  const _vmStartWeapon = _qaVmWeapon || (sessao
+    ? sessao.net.meta.roster.find((r) => r.id === sessao.net.yourEnt)?.weapon || charWeapon(charId)
+    : economia ? 'pistol' : settings.wpnMode === 'awp' ? 'awp' : settings.wpnMode === 'knife' ? 'knife'
+      : settings.wpnMode === 'pistols' ? 'pistol' : charWeapon(charId));
+  const _vmBootWeapons = POINTER_COARSE ? [_vmStartWeapon] : _armasDaPartida;
+  try {
+    if (!navOnly) {
+      const bodyPreloads = Promise.allSettled([
+        preloadCharacterAssets(_charsToLoad, { weapons: _armasDaPartida }),
+        preloadCosmeticAssets(matchSkins),
+      ]).then((rs) => {
+        rs.forEach((r) => { if (r.status === 'rejected') console.error('preload da partida falhou parcialmente', r.reason); });
+        return rs;
+      });
+      await aguardarPreloads([
+        bodyPreloads,
+        preloadEyewearAssets(matchEyewear),
+        bodyPreloads.then(() => playerGloveId ? getGloveHandle(charId, playerSkinId)?.preload() : null),
+        ...Object.values(playerWeaponSkins).map(preloadWeaponSkinCandidate),
+        playerKnifeSkinId ? preloadWeaponSkinCandidate(playerKnifeSkinId) : null,
+        sfx.preloadWeaponSamples(_armasDaPartida),
+        ehMapaJavaporcos(currentMap) ? sfx.preloadJavaporcos().catch(e => console.warn('JAV-AUDIO: preload falhou', e)) : null,
+        preloadMapProps(mapPropIds(mapaPartida)),
+        preloadMapAmbientLife(mapaPartida, { mobileAuto: MOBILE_AUTO }),
+        mapaPartida.preload ? mapaPartida.preload() : null,
+        preloadFPArms(),   // braços FP dedicados (falha → fallback procedural, sem bloquear)
+        preloadAuthoredFamilies(authoredBootFamilies(_vmBootWeapons, playerWeaponSkins)),
+      ]);
+    }
+  } catch (e) { console.error('preload da partida falhou parcialmente', e); }
+  if (lancamentoPerdeu(meuLancamento)) return;
+  if (sessao) await preloadMapProps(mapaPartida.props || [], { required: true });
+  if (introAbort.signal.aborted || lancamentoPerdeu(meuLancamento)) return;
+  if (ehMapaJavaporcos(currentMap) && !continuaPartida && (!testMode || params.get('hordeintro') === '1')) {
+    window.__gameLaunch?.ready('partida');
+    hideLoading();
+    await apresentarJavaporcos(introAbort.signal);
+    if (introAbort.signal.aborted || lancamentoPerdeu(meuLancamento)) return;
+  }
+  /* RÉGUA:launch-race nascimento início — extraído por `tools/eval/launch-race-check.mjs` */
+  /* O preload leva segundos: sem esta saída, uma queda de socket no meio dele fazia nascer um
+     Game zumbi por cima do menu que a desconexão já havia aberto. */
+  if (lancamentoPerdeu(meuLancamento)) return;
+  if (_lstat.phase) _lstat.phase.set(1);
+  game = new Game({
+    /* MP: o servidor manda no tamanho — sobrescreve AMBOS os campos do formato local
+       (o allyBots/enemyBots do save não pode vencer o teamSize da sala). */
+    settings: settingsDaPartida,
+    renderer, textures, sfx,
+    playerCharId: charId, playerSkinId, playerEyewearId, playerGloveId, playerWeaponSkins, playerKnifeSkinId, playerTeam: side, playerFaction: faction, enemyFaction: enemyFac, mapId: currentMap,
+    nickname: $('nick-input').value, testMode, mobile: TOUCH, matchRoster, matchWeapons, economia,
+    ctf: MAPS[currentMap].objectiveMode ? false : matchMode === 'ctf',
+    arena: !sessao && !MAPS[currentMap].objectiveMode && matchMode === 'arena',
+    /* `mpFactory`+`net` ligam a autoridade do servidor. Espectador roda `dedicated`, senão
+       sobrariam nove corpos locais para dez entidades e um jogador ficaria invisível. */
+    mpFactory: sessao ? makeNetcode : null,
+    net: sessao ? sessao.net : null,
+    dedicated: !!(sessao && sessao.net.espectador),
+    /* online: o teto é o da sala (meta.roundsMax do servidor; nó antigo sem o campo = padrão
+       5 / 3) e o fim vem do servidor; o teto local (1–15) só vale offline. */
+    roundsMax: ehMapaJavaporcos(currentMap) ? 1 : (sessao ? (sanitizeRounds(sessao.net.meta.roundsMax) || undefined) : matchRounds()),
+    onMatchEnd: recordMatchStats,
+    recordTraining: trainingEnabled(),
+    onTrainingFrames: sendTrainingFrames,
+  });
+  window.__game = game;
+  /* RÉGUA:launch-race nascimento fim */
+  if (ADAPTATIVA && escada.degrau) aplicaDegrau(escada.degrau);   // Game.applySettings não pode desfazer o perfil móvel
+  /* Resto das armas em ocioso no desktop usa malha real em cada drop. Mobile conserva
+     o fallback jogável porque o preload de catálogo durante a partida causava travadas. */
+  if (!navOnly && !MOBILE_AUTO && params.get('armaslazy') !== '0') {
+    const meuJogo = game;
+    let tentativas = 0;
+    const espera = setInterval(() => {
+      if (window.__game !== meuJogo || ++tentativas > 240) { clearInterval(espera); return; }
+      if (meuJogo.state !== 'live') return;
+      clearInterval(espera);
+      /* rIC sem teto morre de fome quando todo frame renderiza em máquina lenta: o teto
+         de 5 s garante o preload das armas restantes mesmo sem folga de idle (ARM5). */
+      const ocioso = window.requestIdleCallback
+        ? (f) => window.requestIdleCallback(f, { timeout: 5000 })
+        : (f) => setTimeout(f, 1200);
+      ocioso(async () => {
+        try {
+          await preloadWeapons();
+          if (window.__game === meuJogo) { meuJogo.refreshPickupModels(); meuJogo._applyVmVisibility?.(); }   // + viewmodel da arma na mão, se chegou agora
+        } catch { /* disponibilidade: o fallback procedural continua jogável */ }
+      });
+    }, 250);
+  }
+  submitted = false;
+  telemetrySent = false;   // partida nova = uma linha nova de telemetria
+  _matchEventSent = false;   // partida nova = um evento rico novo (feat/telemetria)
+  _funnel('match_start', _tipoDaPartida());    // funil: começou a jogar (017), separado por tipo
+  _lobbySaiuPraPartida();    // funil (084): quem entrou em partida não é mais "parado no lobby"
+  if (!continuaPartida) sendGameStarted();
+  if (!continuaPartida) contagem.partidaIniciada({ map: currentMap, mode: modoEfetivoAtual(), game: sessao ? 'mp' : 'sp' });
+  retryPending();
+  armSwitchHook();
+  game.onOpenSettings = () => { game.setPaused(true); settingsReturn = 'pause-menu'; show('settings-panel'); };
+  game.onCamViewChange = (mode) => { settings.camView = mode; $('set-camera').value = mode; saveSettings(); };
+  // pausa nova = botão destrutivo desarmado (senão um "CLIQUE DE NOVO" velho sobrevive
+  // até a pausa seguinte e o primeiro clique já confirmaria)
+  /* `applyCinematicScreen` morreu no 495a6d889 e a chamada ficou: o `ReferenceError` dentro
+     de `setPaused(true)` matava o M em partida (pilha no BUG-179, item 7). */
+  game.onPauseChange = () => { resetConfirms(); if (!game.paused && $('main-menu').dataset.socialPaused === 'true') { delete $('main-menu').dataset.socialPaused; $('hub-social-resume').hidden = true; show(null); } };
+  // chat de sala (#686): Y/U do game.js abrem o compositor; a troca de cena fecha e guarda o rascunho
+  if (sessao?.chat) { game.onAbrirChat = (ch) => sessao.chat.abrir(ch); sessao.chat.aoTrocarJogo(game); }
+  game.onToggleSpeech = () => {
+    settings.speech = !settings.speech;
+    sfx.speechEnabled = settings.speech;
+    saveSettings();
+    $('set-speech').checked = settings.speech;
+    return settings.speech;
+  };
+  /* RÉGUA:launch-race cauda início — extraído por `tools/eval/launch-race-check.mjs` */
+  game.start();
+  // esconde o loading só depois do 1º frame REAL da partida renderizado
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  /* Nestes dois quadros cabe uma saída, uma queda ou uma remontagem: quem perdeu a corrida não
+     toca em `game` (era nulo em #608/#609) nem na tela do lançamento que assumiu. */
+  if (lancamentoPerdeu(meuLancamento)) return;
+  hideLoading();
+  // registra nick no ranking global (silencioso se a API não estiver no ar)
+  const nick = $('nick-input').value.trim();
+  registeredNick = nick; heartbeatOff = false; rankingBloqueado = '';
+  if (nick && !testMode) {
+    api('/api/register', {
+      nick, token: getToken(),
+      uid: getAnonId(),
+      socials: socials.filter(s => s.handle),
+    }).then((reg) => {
+      if (!reg) return;
+      if (reg.error) { rankingBloqueado = String(reg.message || reg.error); return; }
+      if (typeof reg.nick === 'string' && reg.nick) {
+        registeredNick = reg.nick;
+        if (nickEl.value.trim() !== reg.nick) {
+          nickEl.value = reg.nick;
+          localStorage.setItem(NICK_KEY, reg.nick);
+          updateAvatarVisibility(); renderPlayerPlate();
+        }
+      }
+      if (game && !game.online) {
+        const currentGame = game;
+        api('/api/clans', { action: 'me', uid: getAnonId(), token: getToken() }).then(result => {
+          if (game === currentGame && !game.online) game.player.clanTag = result?.clan?.tag || null;
+        });
+      }
+    });
+  }
+  /* `mode` faltava, e sem ele metade da pergunta não tem resposta: dá para saber QUE MAPA
+     as pessoas escolhem, não SE escolhem captura ou rodadas. O `match_end` manda os quatro
+     com os mesmos nomes — é o que permite comparar quem começa com quem termina. */
+  try { window.va?.('event', { name: 'game_start', data: { team, character: charId, map: currentMap, mode: activeModeId(game) } }); } catch {}
+  /* UM FUNIL SÓ pra "assumir o input". Isto era um `requestPointerLock` duplicado do que
+     o `game._requestLock()` já fazia — e a duplicata é que deixava a trava de atalhos sem
+     lugar pra morar no começo da partida (o RETOMAR passava pelo funil, o COMEÇAR não). */
+  if (!testMode) game._requestLock();
+  /* RÉGUA:launch-race cauda fim */
+}
+function quitToMenu() {
+  // corta a vinheta de round ao sair da partida (pedido do dono): o teto de 25 s do
+  // audio.js e o corte no _startRound cobrem a partida em andamento, mas nenhum dos dois
+  // roda quando o jogador VAI EMBORA — a vinheta seguia tocando por cima da música do menu
+  try { sfx.stopRound(); } catch {}
+  /* `match_abandon` — o evento que faltava para o número que mais dói. O painel mostra
+     1.1K `game_start` para 215 `match_end`: oito em cada dez partidas não terminam, e
+     NENHUM evento dizia por quê nem em qual mapa. Sai daqui (SAIR PRO MENU) com os mesmos
+     nomes de propriedade dos outros dois, mais `seconds`, que é o que separa "não gostou
+     do mapa" (sai em 20 s) de "não tinha mais tempo" (sai em 6 min).
+     ISTO NÃO COBRE FECHAR A ABA: `beforeunload` não garante entrega de evento de
+     analytics, e prometer que cobre seria pior que não medir. O que este evento mede é
+     saída DELIBERADA pelo menu; a diferença entre ele e o `game_start` continua sendo a
+     soma de "fechou a aba" com "travou". */
+  try {
+    if (game) {
+      window.va?.('event', { name: 'match_abandon', data: {
+        map: game._mapId, mode: activeModeId(game),
+        character: game.playerCharId, seconds: Math.round(game.time || 0),
+      } });
+      sendMatchEvent('quit');   // evento rico: abandonou pelo menu (feat/telemetria, 016)
+      _funnel('quit', _tipoDaPartida());           // funil: saiu deliberado (017)
+    }
+  } catch {}
+  switchMode = false;   // never carry an in-match team-switch into the menu
+  mpEncerrarSessao();
+  clearTelemetryGameContext();
+  // dispose protegido: se a limpeza da partida falhar, o menu volta MESMO assim
+  // (antes, uma exceção aqui deixava o botão "SAIR PRO MENU" morto e o jogo zumbi)
+  try { if (game) game.dispose(); } catch (e) { console.error('dispose falhou ao sair pro menu', e); }
+  soltarPartida();
+  if (document.pointerLockElement) document.exitPointerLock();
+  // a tela cheia era da PARTIDA (pré-requisito da trava de Ctrl+W); no menu ela não serve
+  // pra nada e prender o jogador nela é rude. O `dispose()` acima já soltou os atalhos.
+  try { if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {}); } catch {}
+  show('main-menu');
+}
+
+/* ---------------- presença da CONTA (sessão social) ---------------- */
+/* O jogo envia no login e no início da partida. O pulso único de 30 s continua em
+   community.js, carregado também quando o painel está oculto. */
+function pingPresencaConta() {
+  if (!contaNick || testMode) return;
+  void api('/api/social', { action: 'presence', uid: getAnonId() });
+}
+
+/* ---------------- heartbeat (presença/mapa) ---------------- */
+
+setInterval(async () => {
+  if (!game || !registeredNick || testMode || heartbeatOff) return;
+  const res = await api('/api/heartbeat', { uid: getAnonId(), nick: registeredNick, token: getToken() });
+  if (res && res.error) heartbeatOff = true;
+}, 30_000);
+
+/* ---------------- avatar upload (UID seleciona; token autentica) ---------------- */
+function fallbackPlayerAvatar(seed) {
+  let h = 2166136261;
+  for (const ch of `${getAnonId()}|${seed || ''}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const character = CHARACTERS[h % CHARACTERS.length] || CHARACTERS[0];
+  return `/img/chars/avatars/${character.id}.webp?v=${VERSION}`;
+}
+function applyPlayerAvatar(el, seed) {
+  if (!el) return;
+  let custom = '';
+  try { custom = localStorage.getItem(PLAYER_AVATAR_KEY) || ''; } catch {}
+  el.style.backgroundImage = `url("${custom || fallbackPlayerAvatar(seed)}")`;
+  el.textContent = '';
+}
+$('avatar-btn').onclick = () => $('avatar-file').click();
+$('avatar-file').onchange = async e => {
+  const f = e.target.files[0];
+  let nick = registeredNick || (nickEl.value || '').trim();
+  if (!f || !nick) return;
+  $('avatar-note').textContent = 'enviando…';
+  try {
+    if (!registeredNick) {
+      const reg = await api('/api/register', {
+        nick, token: getToken(), uid: getAnonId(), socials: socials.filter(s => s.handle),
+      });
+      if (!reg || reg.error) throw new Error(reg?.message || reg?.error || 'cadastro indisponível');
+      registeredNick = typeof reg.nick === 'string' && reg.nick ? reg.nick : nick;
+      nick = registeredNick;
+    }
+    const bmp = await createImageBitmap(f);
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    const s = Math.min(bmp.width, bmp.height);
+    x.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, 128, 128);
+    const dataUrl = c.toDataURL('image/png');
+    const res = await api('/api/avatar', { uid: getAnonId(), nick, token: getToken(), image: dataUrl });
+    if (res && res.ok && res.url) {
+      localStorage.setItem(PLAYER_AVATAR_KEY, res.url);
+      renderPlayerPlate();
+      $('avatar-note').textContent = 'foto atualizada! ✓';
+    } else $('avatar-note').textContent = 'falhou: ' + (res?.message || res?.error || 'sem conexão');
+  } catch (error) { $('avatar-note').textContent = `falhou: ${error?.message || 'tente outra imagem'}`; }
+  e.target.value = '';
+};
+
+/* ---------------- menu CS 1.6 (Coro Solto) ---------------- */
+/* Som de UI: mover, confirmar e voltar usam contratos distintos do manifest.
+   O Sfx preserva synth como fallback quando o laboratorio local nao esta instalado. */
+const ui = {
+  click() { try { sfx.uiClick(); } catch {} },
+  hover() { try { sfx.uiHover(); } catch {} },
+  back()  { try { sfx.uiBack(); } catch {} },
+};
+let matchMode = 'rounds';   // 'rounds' | 'ctf' | 'arena' — lido em startGame
+const modoObjetivoAtual = () => MAPS[currentMap]?.objectiveMode || '';
+const rotuloObjetivoAtual = () => ({ horde: 'HORDAS', escort: 'ESCOLTA' })[modoObjetivoAtual()]
+  || modoObjetivoAtual().toUpperCase();
+const resumoObjetivoAtual = () => modoObjetivoAtual() === 'horde' ? 'INVASÃO · DISPUTA TERRITORIAL'
+  : modoObjetivoAtual() === 'escort' ? `ESCOLTA · MELHOR DE ${matchRounds()}` : rotuloObjetivoAtual();
+/* MODO EFETIVO (contrato ctf/rounds): mapa de objetivo usa rounds. A preferência
+   `matchMode` fica intacta para o retorno a um mapa normal. */
+const modoEfetivoAtual = () => (modoObjetivoAtual() ? 'rounds' : matchMode);
+function activeModeId(g = game) {
+  if (g) return g.arena ? 'arena' : (g.ctf ? 'ctf' : 'rounds');
+  return modoEfetivoAtual();
+}
+const modeLabel = (mode = matchMode) => mode === 'arena' ? tr('VIRA-CASACA') : (mode === 'ctf' ? tr('CAPTURE THE FLAG') : tr('MATA-MATA'));
+/* O JOGADOR JÁ DISSE QUAL MODO QUER? (defeito: "esse mapa está como CAPTURA, mas eu
+   selecionei single player — e esse erro se repete em outros mapas")
+   O `ctfMode` do mapa é PADRÃO, não ordem. Só que `gotoMap` reescrevia `matchMode` a cada
+   troca de mapa, INCONDICIONALMENTE — e o carrossel de mapas fica DEPOIS da escolha do modo
+   no fluxo do menu. Quem clicava em SINGLE PLAYER e depois navegava até a Loja H ou o Ferro
+   Velho tinha a escolha dele apagada no caminho e caía em CTF; e quem clicava em CAPTURE THE
+   FLAG e navegava até os outros três caía em rounds. A invariante MOD1 não pegava isso: ela
+   só conferia que `ctfOnly` não existe mais no registro de mapas, que é outra coisa (o mapa
+   não FORÇA o modo — quem forçava era o menu).
+   Esta bandeira é a diferença entre PADRÃO e ESCOLHA: enquanto ninguém escolheu, o mapa
+   manda; depois que alguém escolheu, o mapa não encosta mais. Medida em tools/eval/mode-check.mjs
+   (invariante MOD2), que executa o CÓDIGO REAL destas funções nos 10 casos (5 mapas × 2 modos). */
+let modoEscolhido = false;
+if (MAPS[currentMap].ctfMode) matchMode = 'ctf';   // Loja H / Ferro Velho ABREM em CTF (geometria feita em volta das bandeiras), mas dá pra trocar
+const menuSetup = $('menu-setup');
+const csItems = [...document.querySelectorAll('.cs-item')];
+const singlePlayerButton = $('cs-menu').querySelector('[data-act="single-player"]');
+const modeMenu = $('cs-modos');
+function toggleModeMenu() {
+  const open = modeMenu.hidden;
+  modeMenu.hidden = !open;
+  singlePlayerButton.setAttribute('aria-expanded', String(open));
+}
+// Kill-switch de UI: ?ui=legacy volta o scrim do menu e o HUD ao visual da rodada 1
+// (vinheta de coluna inteira, HUD sem plaquinha nem scrim de canto). Serve de degradação
+// segura se o tratamento novo regredir em algum wallpaper/mapa.
+if (params.get('ui') === 'legacy') document.documentElement.dataset.ui = 'legacy';
+// aria-current = "o painel aberto veio DAQUI". Antes nenhum item tinha estado de seleção.
+function markCurrent(act) {
+  for (const it of csItems) {
+    const on = !!act && it.dataset.act === act;
+    if (on) it.setAttribute('aria-current', 'true'); else it.removeAttribute('aria-current');
+  }
+}
+/* O setup tem DOIS passos no mesmo painel (data-step):
+     'match'   = PASSO 1, escolher a partida — o mapa é o protagonista;
+     'profile' = passo à parte, o perfil (nick/redes/foto), que o dono pediu pra tirar
+                 da primeira tela ("o primeiro menu com o mapa não precisa ter o nick").
+   Um container só = a máquina de estados do menu (ESC, clique fora, VOLTAR, o seletor
+   :has(.cs-setup.open) do CSS) continua valendo pros dois sem duplicação. */
+let setupTitle = 'MATA-MATA';
+function setSetupStep(step) {
+  menuSetup.dataset.step = step;
+  const st = $('setup-step'), tt = $('setup-title');
+  if (step === 'profile') {
+    if (st) st.textContent = tr('PASSO À PARTE · NOME NA CAMISA');
+    if (tt) tt.textContent = tr('SEU PERFIL');
+  } else {
+    if (st) st.textContent = tr(matchMode === 'arena' ? 'PASSO 1 · VIRA-CASACA' : (matchMode === 'ctf' ? 'PASSO 1 · A PARTIDA (CTF)' : 'PASSO 1 · A PARTIDA'));
+    if (tt) tt.textContent = tr(setupTitle);
+  }
+}
+const openSetup = (mode, title, act) => {
+  if (mode) { matchMode = mode; modoEscolhido = true; }   // veio de SINGLE PLAYER/CAPTURE THE FLAG = escolha explícita
+  setupTitle = title;
+  markCurrent(act);
+  menuSetup.classList.add('open');
+  setMapMode();
+  setSetupStep('match');   // abrir o menu SEMPRE cai no passo da partida, nunca no perfil
+  applySetupWall();   // "escolher mapa/config" usa o wallpaper da posição 2 do fluxo
+};
+function openModeMap(mode, title, act) {
+  openSetup(mode, title, act);
+  renderMapScreen();
+  show('map-screen');
+}
+/* Multiplayer abre direto. Single Player abre os modos locais; a escolha de mata-mata ou
+   CTF ainda usa os mesmos caminhos que levam à seleção de mapas. */
+csItems.forEach((it) => {
+  it.onmouseenter = () => ui.hover();
+  it.onclick = () => {
+    if (performance.now() - _entradaEm < ENTRADA_MS) return;
+    ui.click();
+    switch (it.dataset.act) {
+      case 'single-player': toggleModeMenu(); break;
+      case 'sp':    openModeMap('rounds', 'MATA-MATA', 'sp'); break;
+      case 'ctf':   openModeMap('ctf', 'CAPTURE THE FLAG', 'ctf'); break;
+      case 'arena': openModeMap('arena', 'VIRA-CASACA', 'arena'); break;
+      case 'mp':    markCurrent('mp'); abrirMultiplayer(); break;
+      /* MAPA saiu (mapa se escolhe no fluxo de partida); FEEDBACK entrou (07/08) */
+      case 'feedback': markCurrent('feedback'); show('feedback-panel'); break;
+      case 'apoie': markCurrent('apoie'); showSupport(); break;
+      case 'config': markCurrent('config'); show('settings-panel'); break;
+      case 'ranking': markCurrent('ranking'); showRanking(); break;
+      case 'sobre': markCurrent('sobre'); howtoReturn = 'main-menu'; show('howto-panel'); break;
+    }
+  };
+});
+/* FEEDBACK saiu da lista principal e virou link de rodapé — o painel e a rota
+   (/api/feedback, migration 013) são os mesmos, só o ponto de entrada mudou. */
+const mfFeedback = $('mf-feedback');
+if (mfFeedback) mfFeedback.onclick = () => { ui.click(); markCurrent('feedback'); show('feedback-panel'); };
+
+// Navegação por teclado no menu (↑↓ / Home / End). Num FPS de PC não navegar no teclado
+// é falha de acessibilidade E de sensação — CS2/Valorant fazem tudo sem mouse.
+$('cs-menu').addEventListener('keydown', (e) => {
+  /* Só os VISÍVEIS entram na roda. Com o submenu de modos recolhido, indexar o
+     array estático mandava o foco para um botão dentro de [hidden]: a seta
+     "engolia" um passo e o leitor de tela anunciava item que não existe na tela.
+     offsetParent é null para qualquer ancestral com display:none/[hidden]. */
+  const itens = csItems.filter((b) => b.offsetParent !== null);
+  if (!itens.length) return;
+  const i = itens.indexOf(document.activeElement);
+  let n = -1;
+  if (e.key === 'ArrowDown') n = (i < 0 ? 0 : (i + 1) % itens.length);
+  else if (e.key === 'ArrowUp') n = (i < 0 ? itens.length - 1 : (i - 1 + itens.length) % itens.length);
+  else if (e.key === 'Home') n = 0;
+  else if (e.key === 'End') n = itens.length - 1;
+  if (n < 0) return;
+  e.preventDefault(); itens[n].focus(); ui.hover();
+});
+// Fechar o setup tinha UMA saída só: o botão VOLTAR. Enquanto ele estava aberto a coluna
+// da esquerda ficava inerte (ver style.css, bloco `:has(.cs-setup.open)`), então quem
+// clicasse em SINGLE PLAYER ficava preso ali. Agora são três saídas — botão, ESC e clique
+// fora — e a nav continua clicável. `back` = tocar o som só quando foi gesto do jogador.
+function closeSetup(back) {
+  if (!menuSetup.classList.contains('open')) return false;
+  if (back) ui.back();
+  menuSetup.classList.remove('open');
+  markCurrent(null);
+  applyHomeWall();
+  return true;
+}
+$('setup-back').onclick = () => { closeSetup(true); };
+/* passo do perfil: entra pelo botão PERFIL e volta pro passo da partida (nunca fecha o
+   menu inteiro — voltar um passo é voltar UM passo). */
+function openProfileStep(focusNick) {
+  ui.click();
+  setSetupStep('profile');
+  if (HUB_ENABLED) hubNavigate({ secao: 'jogar', partida: 'singleplayer', janela: 'perfil', origem: null });
+  void mountProfilePreferences($('profile-preferences'));
+  if (focusNick) setTimeout(() => nickEl.focus(), 60);
+}
+$('btn-profile').onclick = () => openProfileStep(true);
+$('profile-back').onclick = () => { ui.back(); setSetupStep('match'); hubNavigate({ janela: null }); };
+$('profile-feedback').onclick = () => { $('profile-back').click(); if (HUB_ENABLED) document.querySelector('[data-hub-tab="feedback"]')?.click(); else $('mf-feedback').click(); };
+$('profile-ok').onclick = async () => {
+  ui.click();
+  const nick = nickEl.value.trim();
+  const note = $('profile-save-note');
+  if (!nick) {
+    note.textContent = 'Escolha um nick para salvar o perfil.';
+    nickEl.focus();
+    return;
+  }
+  const button = $('profile-ok');
+  button.disabled = true;
+  note.textContent = 'Salvando perfil…';
+  try {
+    if (!testMode) {
+      const selectedSocials = socials.filter(s => s.handle).map(s => ({ net: s.net, handle: s.handle }));
+      const submittedSocials = JSON.stringify(selectedSocials);
+      const submittedClear = socialsClearRequested;
+      const reg = await api('/api/register', {
+        nick, uid: getAnonId(), token: getToken(), socials: selectedSocials,
+        saveSocials: true,
+        clearSocials: selectedSocials.length === 0 && submittedClear,
+      });
+      if (!reg?.ok) {
+        note.textContent = reg?.message || 'Não foi possível salvar o perfil agora. Tente de novo.';
+        return;
+      }
+      // Só a resposta confirmada pode tornar um rascunho elegível para remoção
+      // remota. Um 503 seguido de recarga nunca deve criar clearSocials.
+      if (selectedSocials.length || submittedClear) {
+        confirmedSocials = selectedSocials;
+        localStorage.setItem(SOCIALS_CONFIRMED_KEY, submittedSocials);
+      }
+      const socialsChanged = JSON.stringify(socials.filter(s => s.handle).map(s => ({ net: s.net, handle: s.handle }))) !== submittedSocials || socialsClearRequested !== submittedClear;
+      if (socialsChanged) {
+        // A resposta gravou o snapshot anterior. Se a edição atual ficou vazia,
+        // o próximo salvamento deve substituir esse snapshot mesmo após recarga.
+        socialsClearRequested = confirmedSocials.length > 0 && !socials.some(s => s.handle);
+        if (socialsClearRequested) localStorage.setItem(SOCIALS_CLEAR_KEY, '1');
+        else localStorage.removeItem(SOCIALS_CLEAR_KEY);
+      }
+      if (nickEl.value.trim() !== nick || socialsChanged) {
+        note.textContent = 'O perfil mudou durante o salvamento. Salve novamente.';
+        return;
+      }
+      registeredNick = reg.nick || nick;
+      nickEl.value = registeredNick;
+      localStorage.setItem(NICK_KEY, registeredNick);
+      socialsClearRequested = false;
+      localStorage.removeItem(SOCIALS_CLEAR_KEY);
+      updateAvatarVisibility();
+      renderPlayerPlate();
+      if (registeredNick !== nick) {
+        note.textContent = `Este perfil já usa o nick ${registeredNick}. As redes foram salvas; o nick não pode ser alterado aqui.`;
+        return;
+      }
+    }
+    saveSettings();
+    note.textContent = '';
+    setSetupStep('match');
+    hubNavigate({ janela: null });
+  } catch {
+    note.textContent = 'Não foi possível salvar o perfil agora. Tente de novo.';
+  } finally {
+    button.disabled = false;
+  }
+};
+// ESC no menu = voltar um passo. Num jogo de PC, ESC é o botão de voltar universal;
+// não ter isso no menu é inconsistente com o próprio jogo (ESC pausa a partida).
+// no window (não no #main-menu): depois de um clique no wallpaper o foco volta pro <body>
+// e um listener preso ao container nunca receberia a tecla.
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  // ESC na map screen = o VOLTAR dela (cai de volta no setup, estado intacto)
+  if (!$('map-screen').classList.contains('hidden')) { e.preventDefault(); ui.back(); show('main-menu'); return; }
+  if ($('main-menu').classList.contains('hidden')) return;
+  if (HUB_ENABLED) {
+    if (menuSetup.dataset.step === 'profile') {
+      e.preventDefault(); ui.back(); setSetupStep('match'); hubNavigate({ janela: null }); $('hub-account-login').focus();
+    }
+    return;
+  }
+  // ESC no passo do perfil volta pro passo da partida — só o segundo ESC fecha o painel.
+  if (menuSetup.classList.contains('open') && menuSetup.dataset.step === 'profile') {
+    e.preventDefault(); ui.back(); setSetupStep('match'); return;
+  }
+  if (closeSetup(true)) { e.preventDefault(); csItems[0]?.focus(); }
+});
+// Clique no wallpaper (fora do painel e fora da nav) também fecha — comportamento de
+// qualquer painel docado; sem isso o jogador tenta e não acontece nada.
+$('main-menu').addEventListener('pointerdown', (e) => {
+  if (HUB_ENABLED && e.target === menuSetup && menuSetup.dataset.step === 'profile') {
+    ui.back(); setSetupStep('match'); hubNavigate({ janela: null }); $('hub-account-login').focus(); return;
+  }
+  if (e.target.closest('.cs-setup') || e.target.closest('.cs-left')) return;
+  closeSetup(true);
+});
+
+/* ---------------- menu wiring ---------------- */
+// JOGAR nunca depende de cadastro: sem nick, a partida usa o perfil anônimo local.
+// O perfil continua disponível como escolha, não como pedágio para entrar na arena.
+function syncPlayState() {
+  const nick = (nickEl.value || '').trim();
+  const b = $('btn-jogar'); if (b) b.setAttribute('aria-disabled', 'false');
+  // o botão do passo de perfil mostra o nick de verdade: o jogador sabe com que nome
+  // vai entrar sem ter que abrir o passo pra conferir
+  const p = $('btn-profile');
+  if (p) {
+    p.dataset.empty = nick ? '0' : '1';
+    const s = $('profile-name');
+    if (s) s.textContent = nick || 'PÔR O NOME NA CAMISA';
+  }
+  renderPlayerPlate();   // nick do card do menu acompanha a digitação
+}
+$('btn-jogar').onclick = async () => {
+  sfx.uiClick();
+  await factionArtReady;
+  setTeamStep('side');
+  show('team-select');
+  window.__gameLaunch?.ready('menu');
+  ensureTeamPreviews();   // thumbnails 3D dos times (async, cacheia no card)
+};
+let restoreHubRoute = () => {};
+// Atribuída junto com o hub: o ranking usa a mesma porta que os links de perfil.
+let abrirPerfilNoHub = () => false;
+if (HUB_ENABLED) {
+  document.documentElement.dataset.homeUi = 'hub';
+  $('hub-ui').hidden = false;
+  const legacySocialLinks = document.querySelector('.menu-footer .mf-social');
+  if (legacySocialLinks) $('hub-footer-social').appendChild(legacySocialLinks);
+  if (!directRoute) {
+    $('main-menu').dataset.hubTab = 'jogar';
+    $('main-menu').dataset.hubNet = 'sp';
+    $('main-menu').dataset.hubMpTab = 'public';
+  }
+  menuSetup.classList.add('open');
+  const mpPanel = $('mp-panel');
+  $('hub-mp-host').appendChild(mpPanel);
+  if (!mpPanel.querySelector('.tp-srv')) {
+    mpPanel.querySelector('.mp-corpo').prepend($('mp-quick'));
+    $('mp-quick').after($('mp-amigos'));   // nas duas abas (pública e privada), logo no topo
+    mpPanel.querySelector('.mp-corpo').appendChild(mpPanel.querySelector('.mp-criar'));
+  }
+  const tabs = [...document.querySelectorAll('.hub-tabs [data-hub-tab]')];
+  const panes = { jogar: $('hub-play'), loja: $('hub-shop'), ranking: $('hub-ranking'), comunidade: $('hub-community'), sobre: $('hub-about'), feedback: $('hub-feedback'), apoie: $('hub-support') };
+  const updateHubTip = () => {
+    const tab = $('main-menu').dataset.hubTab;
+    const tips = {
+      loja: 'Junte TRETA$, escolha uma skin e vista sua próxima treta.',
+      comunidade: 'Encontre sua turma, compare o placar e combine a próxima treta.',
+      ranking: 'Acompanhe suas partidas e consulte a disponibilidade do placar global.',
+      sobre: 'Conheça os grupos do elenco, os mapas e as últimas novidades do jogo.',
+      feedback: 'Descreva o bug ou a ideia; a mensagem chega à equipe do jogo.',
+      apoie: 'Apoiar o jogo não dá vantagem dentro da partida.',
+    };
+    $('hub-tip-text').textContent = tips[tab] || ($('main-menu').dataset.hubNet === 'mp'
+      ? 'Escolha um servidor público ou crie uma sala privada para seus amigos.'
+      : 'Clique nos cartões para ajustar modo, armas, bots e rounds antes de jogar.');
+  };
+  const setHubTab = (tab, updateRoute = true) => {
+    if ($('main-menu').dataset.socialPaused === 'true' && tab !== 'comunidade') return;
+    $('main-menu').dataset.hubTab = tab;
+    clearCompactPreviews();
+    stopHiddenPreview();
+    updateHubTip();
+    if (tab !== 'jogar' && menuSetup.dataset.step === 'profile') setSetupStep('match');
+    for (const button of tabs) {
+      const active = button.dataset.hubTab === tab;
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    }
+    for (const [name, pane] of Object.entries(panes)) pane.hidden = name !== tab;
+    mpPanel.classList.toggle('hidden', tab !== 'jogar' || $('main-menu').dataset.hubNet !== 'mp');
+    if (tab === 'ranking') void renderHubRanking();
+    if (tab === 'comunidade') {
+      // Voltar do navegador para /comunidade/amigos reabre a aba certa, não a última vista.
+      const naUrl = estadoDaUrl(location.href);
+      document.dispatchEvent(new CustomEvent('cs-community-open', naUrl?.secao === 'comunidade' ? { detail: { tab: naUrl.social || 'profile', perfil: naUrl.perfil } } : undefined));
+    }
+    if (tab === 'loja') document.dispatchEvent(new CustomEvent('cs-shop-open'));
+    if (tab === 'jogar') {
+      syncHomeCharacter();
+      if ($('main-menu').dataset.hubNet === 'mp') void abrirMultiplayer();
+    }
+    const mp = tab === 'jogar' && $('main-menu').dataset.hubNet === 'mp';
+    if (updateRoute) hubNavigate({ secao: tab, janela: null, origem: null, partida: mp ? 'multiplayer' : null, servidor: mp ? ($('main-menu').dataset.hubMpTab === 'private' ? 'privado' : 'publico') : null });
+  };
+  tabs.forEach((button, index) => {
+    button.onclick = () => { ui.click(); setHubTab(button.dataset.hubTab); };
+    button.onkeydown = (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      const next = tabs[(index + step + tabs.length) % tabs.length];
+      next.focus(); next.click();
+    };
+  });
+  $('btn-pause-community').onclick = () => {
+    if (!game?.paused) return;
+    sfx.uiClick();
+    $('main-menu').dataset.socialPaused = 'true';
+    $('hub-social-resume').hidden = false;
+    setHubTab('comunidade', false);
+    show('main-menu');
+    document.dispatchEvent(new CustomEvent('cs-community-open', { detail: { tab: 'friends' } }));
+  };
+  $('hub-social-resume').onclick = () => { sfx.uiClick(); game?.resume(); };
+  /* Links de comunidade e de perfil (/u/<id>) abrem na COMUNIDADE do hub, sem sair do jogo.
+     O "ABRIR PERFIL PÚBLICO" (data-public-profile) continua indo para a página pública. */
+  abrirPerfilNoHub = (href) => {
+    const url = new URL(href, location.href);
+    if (url.origin !== location.origin) return false;
+    const perfil = url.pathname.match(/^\/u\/([a-z][a-z0-9_]{2,23}|[0-9a-f-]{36})(?:\/|$)/i)?.[1];
+    if (!perfil) return false;
+    const paused = $('main-menu').dataset.socialPaused === 'true';
+    if (!paused) hubNavigate({ secao: 'comunidade', social: 'profile', perfil, aba: null, janela: null, origem: null });
+    setHubTab('comunidade', false);
+    if (paused) document.dispatchEvent(new CustomEvent('cs-community-open', { detail: { tab: 'profile', perfil } }));
+    return true;
+  };
+  document.addEventListener('click', event => {
+    const anchor = event.target.closest('a[href]');
+    if (!anchor || event.defaultPrevented || anchor.target === '_blank' || anchor.dataset.publicProfile === 'true' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const url = new URL(anchor.href, location.href);
+    if (url.origin !== location.origin) return;
+    // Perfil em QUALQUER lugar do documento: a restrição ao #main-menu deixava o link da
+    // ficha SSR e o do rodapé recarregarem o jogo inteiro só para trocar de perfil.
+    if (abrirPerfilNoHub(url.href)) { event.preventDefault(); return; }
+    const destino = estadoDaUrl(url.href);
+    if (destino?.secao !== 'comunidade') return;
+    event.preventDefault();
+    const tab = destino.social || 'profile';
+    const paused = $('main-menu').dataset.socialPaused === 'true';
+    if (!paused) hubNavigate({ secao: 'comunidade', social: tab, perfil: destino.perfil || null, aba: null, janela: null, origem: null });
+    setHubTab('comunidade', false);
+    if (paused) document.dispatchEvent(new CustomEvent('cs-community-open', { detail: { tab, perfil: destino.perfil } }));
+  });
+  const setHubNet = (net, updateRoute = true) => {
+    $('main-menu').dataset.hubNet = net;
+    clearCompactPreviews();
+    stopHiddenPreview();
+    updateHubTip();
+    if (net === 'mp' && menuSetup.dataset.step === 'profile') setSetupStep('match');
+    $('hub-sp').setAttribute('aria-pressed', String(net === 'sp'));
+    $('hub-mp').setAttribute('aria-pressed', String(net === 'mp'));
+    $('hub-multiplayer-entry').hidden = net !== 'mp';
+    if (net === 'sp') { mpPanel.classList.add('hidden'); syncHomeCharacter(); }
+    else if (updateRoute && $('main-menu').dataset.hubTab === 'jogar') void abrirMultiplayer();
+    if (updateRoute) hubNavigate({ secao: 'jogar', partida: net === 'mp' ? 'multiplayer' : 'singleplayer', servidor: net === 'mp' ? ($('main-menu').dataset.hubMpTab === 'private' ? 'privado' : 'publico') : null, janela: null, origem: null });
+  };
+  $('hub-sp').onclick = () => { ui.click(); setHubNet('sp'); };
+  $('hub-mp').onclick = () => { ui.click(); setHubNet('mp'); };
+  const setHubMpTab = (tab, updateRoute = true) => {
+    $('main-menu').dataset.hubMpTab = tab;
+    $('hub-mp-public').setAttribute('aria-selected', String(tab === 'public'));
+    $('hub-mp-private').setAttribute('aria-selected', String(tab === 'private'));
+    $('mp-panel').querySelector('.mp-criar').open = tab === 'private';
+    $('mp-privada').checked = tab === 'private';
+    $('mp-senha-wrap').hidden = tab !== 'private';
+    if (updateRoute) hubNavigate({ secao: 'jogar', partida: 'multiplayer', servidor: tab === 'private' ? 'privado' : 'publico', janela: null, origem: null });
+  };
+  $('hub-mp-public').onclick = () => { ui.click(); setHubMpTab('public'); };
+  $('hub-mp-private').onclick = () => { ui.click(); setHubMpTab('private'); };
+  $('hub-change-character').onclick = () => { ui.click(); openHubRoster(); };
+  $('hub-map-change').onclick = () => { ui.click(); openHubMap(); };
+  $('hub-map-close').onclick = closeHubMap;
+  $('hub-roster-close').onclick = closeHubRoster;
+  $('hub-map-modal').onclick = (event) => { if (event.target === $('hub-map-modal')) closeHubMap(); };
+  $('hub-roster-modal').onclick = (event) => { if (event.target === $('hub-roster-modal')) closeHubRoster(); };
+  $('hub-profile').onclick = () => { setHubTab('jogar', false); setHubNet('sp', false); openProfileStep(true); hubNavigate({ secao: 'jogar', partida: 'singleplayer', servidor: null, janela: 'perfil', origem: null }); };
+  $('hub-rank-profile').onclick = () => $('hub-profile').click();
+  $('hub-settings').onclick = () => { ui.click(); settingsReturn = 'main-menu'; show('settings-panel'); hubNavigate({ janela: 'configuracoes', origem: null }); };
+  const factionGrid = $('hub-factions');
+  // Grupos saem do elenco jogável: grupo novo em characters.js aparece aqui sem lista à mão.
+  // Políticos não têm brasão próprio e jogam pelos dois lados, então mostram os dois.
+  const groupOrder = FACTIONS.map((fac) => fac.id);
+  groupOrder.splice(2, 0, 'P');
+  const groups = [...new Set(CHARACTERS.map((c) => c.team))]
+    .sort((a, b) => (groupOrder.indexOf(a) + 1 || 99) - (groupOrder.indexOf(b) + 1 || 99));
+  for (const fac of groups) {
+    const item = document.createElement('div');
+    item.dataset.faction = fac;
+    item.style.setProperty('--hub-faction', PALETA[fac]?.base || (fac === 'P' ? '#d6b55a' : '#b4d92e'));
+    const crests = document.createElement('span'); crests.className = 'hub-faction-crests';
+    for (const crestId of fac === 'P' ? ['e', 'b'] : [factionDefinition(fac).crest]) {
+      const crest = document.createElement('img'); crest.src = '/' + urlDoBrasao(crestId); crest.alt = ''; crests.appendChild(crest);
+    }
+    const name = document.createElement('span'); name.textContent = tr(FACTION_NAME[fac] || fac);
+    item.append(crests, name); factionGrid.appendChild(item);
+  }
+  $('btn-jogar').onclick = () => {
+    ui.click(); openHubQuick();
+  };
+  const closeQuick = (updateRoute = true) => { $('hub-quick').hidden = true; $('btn-jogar').focus(); if (updateRoute) hubNavigate({ janela: null, origem: null }); };
+  $('hub-quick-close').onclick = closeQuick;
+  $('hub-quick').onclick = (event) => { if (event.target === $('hub-quick')) closeQuick(); };
+  addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !$('hub-map-modal').hidden) { event.preventDefault(); event.stopImmediatePropagation(); closeHubMap(); return; }
+    if (event.key === 'Escape' && !$('hub-roster-modal').hidden) { event.preventDefault(); event.stopImmediatePropagation(); closeHubRoster(); return; }
+    const activeModal = ['hub-map-modal', 'hub-roster-modal', 'hub-quick'].map($).find((modal) => !modal.hidden);
+    if (!activeModal) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); closeQuick(); return; }
+    if (event.key !== 'Tab') return;
+    const controls = [...activeModal.querySelectorAll('button:not([disabled])')];
+    if (!controls.length) return;
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }, { capture: true });
+  $('hub-quick-confirm').onclick = () => {
+    $('hub-quick').hidden = true;
+    hubNavigate({ janela: null, origem: null }, true);
+    void startGame(currentTeam, currentChar, currentEnemyFaction);
+  };
+  $('hub-quick-change-map').onclick = () => { ui.click(); openHubMap(true); };
+  for (const button of document.querySelectorAll('#hub-fb-types button')) button.onclick = () => {
+    ui.click();
+    for (const choice of document.querySelectorAll('#hub-fb-types button'))
+      choice.setAttribute('aria-pressed', String(choice === button));
+  };
+  $('hub-fb-send').onclick = () => submitFeedbackFor('hub-fb');
+  restoreHubRoute = () => {
+    const query = new URLSearchParams(location.search);
+    const lida = estadoDaUrl(location.href);
+    const rota = lida || {};
+    // Link antigo (/?secao=loja) vira o caminho novo (/loja) sem recarregar.
+    const nova = lida && urlDoEstado(lida, location.href, ROTA_OPCOES);
+    if (nova && nova.href !== location.href) history.replaceState(history.state, '', nova);
+    const section = rota.secao;
+    const tab = Object.prototype.hasOwnProperty.call(panes, section) ? section : 'jogar';
+    const net = rota.partida === 'multiplayer' ? 'mp' : 'sp';
+    const server = rota.servidor === 'privado' ? 'private' : 'public';
+    const modal = rota.janela;
+    $('hub-quick').hidden = true;
+    $('hub-map-modal').hidden = true;
+    $('hub-roster-modal').hidden = true;
+    hubMapReturnQuick = false;
+    if (modal !== 'configuracoes' && $('settings-panel').classList.contains('hidden') === false
+      && settingsReturn === 'main-menu' && (!game || !['live', 'roundEnd', 'countdown'].includes(game.state))) show('main-menu');
+    const map = query.get('map');
+    if (map && MAPAS_MENU.includes(map) && map !== currentMap) gotoMap(MAPAS_MENU.indexOf(map), false);
+    const char = CHARACTERS.find((c) => c.id === query.get('personagem'));
+    if (char && char.id !== currentChar) { currentChar = char.id; currentTeam = ladoValido(char, currentTeam); currentFaction = currentTeam; currentEnemyFaction = null; }
+    setHubNet(net, false);
+    setHubMpTab(server, false);
+    setHubTab(tab, false);
+    if (modal === 'configuracoes') { settingsReturn = 'main-menu'; show('settings-panel'); return; }
+    if (tab !== 'jogar') return;
+    if (net === 'sp' && modal === 'perfil') setSetupStep('profile');
+    else if (net === 'sp' && modal === 'mapas') openHubMap(rota.origem === 'confirmar', false);
+    else if (net === 'sp' && modal === 'personagens') openHubRoster(false);
+    else if (net === 'sp' && modal === 'confirmar') openHubQuick(false);
+    else if (menuSetup.dataset.step === 'profile') setSetupStep('match');
+  };
+  addEventListener('popstate', restoreHubRoute);
+}
+function openHubQuick(updateRoute = true) {
+  const def = CHARACTERS.find((c) => c.id === currentChar) || CHARACTERS[0];
+  $('hub-quick-map-img').src = `/img/map-previews/${currentMap}.jpg`;
+  $('hub-quick-map-img').alt = `Prévia do mapa ${MAPS[currentMap].name}`;
+  const fields = [
+    ['TIPO', 'SINGLEPLAYER'],
+    ['MAPA', MAPS[currentMap].name],
+    ['MODO', modoObjetivoAtual() ? rotuloObjetivoAtual() : modeLabel()],
+    ['ARMAS', tr(WPN_MODE_LABEL[settings.wpnMode || 'all'] || 'TODAS')],
+    ['FORMATO', formatoPartida()],
+    ['ROUNDS', String(matchRounds())],
+    ['VOCÊ', `${tr(FACTION_NAME[def.team] || def.team)} · ${def.name}`],
+  ];
+  const summary = $('hub-quick-summary'); summary.replaceChildren();
+  for (const [label, value] of fields) {
+    const row = document.createElement('div');
+    const name = document.createElement('span'); name.textContent = label;
+    const selected = document.createElement('strong'); selected.textContent = value;
+    row.append(name, selected); summary.appendChild(row);
+  }
+  $('hub-quick').hidden = false;
+  $('hub-quick-close').focus();
+  if (updateRoute) hubNavigate({ secao: 'jogar', partida: 'singleplayer', janela: 'confirmar', origem: null });
+}
+$('btn-ranking').onclick = () => { sfx.uiClick(); showRanking(); };
+// Pontos de compartilhar do hub (ADR 0008): fim de partida e ranking. Sala e skin ligam onde nascem.
+ligarCompartilhar($('btn-share-match'), () => ({ titulo: 'CORO SOLTO', texto: textoDaPartida({ venceu: $('match-end').classList.contains('win'), mapa: MAPS[currentMap]?.name || 'CORO SOLTO' }), url: linkCompartilhavel(`/?map=${encodeURIComponent(currentMap)}`, 'fim-de-partida') }));
+ligarCompartilhar($('hub-rank-share'), () => ({ titulo: 'Ranking do CORO SOLTO', texto: 'Quem manda na treta essa semana? Olha o ranking do CORO SOLTO.', url: linkCompartilhavel('/comunidade/ranking', 'ranking') }));
+$('ranking-back').onclick = () => { ui.back(); markCurrent(null); show('main-menu'); };
+/* FEEDBACK: email + consentimento obrigatórios ANTES de enviar — a tabela é a
+   semente da newsletter (migration 013), então não entra linha sem os dois. */
+$('fb-back').onclick = () => { ui.back(); markCurrent(null); show('main-menu'); };
+$('support-back').onclick = () => { ui.back(); markCurrent(null); show('main-menu'); };
+const supportLink = $('support-link');
+const supportNote = $('support-region-note');
+/* URLs vêm RESOLVIDAS do servidor (index.astro injeta window.__SUPPORT a partir do
+   mesmo site.ts do /apoie) — o jogo é zero-build e não lê import.meta.env. O literal
+   aqui é só fallback para arquivo aberto direto do disco. */
+const SUPPORT_URL_BR = window.__SUPPORT?.br || 'https://meapoia.com/vaquinhas/ajude-a-manter-o-coro-solto-online';
+const SUPPORT_URL_INTL = window.__SUPPORT?.intl || 'https://ko-fi.com/corosolto';
+function showSupport(region) {
+  const browserLocale = String(navigator.language || '').toLowerCase();
+  const timezone = String(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+  const br = region ? region === 'br' : browserLocale === 'pt-br' || timezone === 'America/Sao_Paulo';
+  supportLink.href = br ? SUPPORT_URL_BR : SUPPORT_URL_INTL;
+  supportLink.textContent = br ? 'ABRIR ME APOIA' : 'OPEN INTERNATIONAL SUPPORT';
+  supportNote.textContent = br
+    ? 'Você será levado ao MeApoia. O Pix da campanha fica na página de apoio.'
+    : 'You will be taken to the international support page. Choose the option that works in your country.';
+  const botaoBr = $('support-br'), botaoIntl = $('support-intl');
+  botaoBr.setAttribute('aria-pressed', String(br));
+  botaoIntl.setAttribute('aria-pressed', String(!br));
+  botaoBr.classList.toggle('active', br);
+  botaoIntl.classList.toggle('active', !br);
+  show('support-panel');
+}
+$('support-br').onclick = () => showSupport('br');
+$('support-intl').onclick = () => showSupport('intl');
+async function submitFeedbackFor(prefix) {
+  ui.click();
+  const msgEl = $(`${prefix}-msg`), emailEl = $(`${prefix}-email`), newsEl = $(`${prefix}-news`);
+  const sendEl = $(`${prefix}-send`), st = $(`${prefix}-status`);
+  const msg = msgEl.value.trim(), email = emailEl.value.trim();
+  const type = prefix === 'hub-fb' ? document.querySelector('#hub-fb-types [aria-pressed="true"]')?.dataset.hubFbType : null;
+  const message = type ? `[${type}] ${msg}`.slice(0, 2000) : msg;
+  const news = newsEl.checked;
+  const falha = (t, campo) => { st.textContent = t; st.classList.add('erro'); campo?.classList.add('invalid');
+    setTimeout(() => campo?.classList.remove('invalid'), 600); };
+  st.classList.remove('erro');
+  if (msg.length < 3) return falha(tr('escreve o feedback primeiro'), msgEl);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return falha(tr('preenche um email válido'), emailEl);
+  if (!news) return falha(tr('marca o aceite da newsletter pra enviar'), null);
+  sendEl.disabled = true; st.textContent = tr('enviando…');
+  const res = await api('/api/feedback', { email, newsletter: news, message, map: currentMap, version: VERSION });
+  sendEl.disabled = false;
+  if (res && res.ok) { st.textContent = tr('valeu! feedback enviado.'); msgEl.value = ''; }
+  else falha(res?.error === 'rate_limited' ? tr('calma — muitos envios, tenta daqui a pouco') : tr('não deu pra enviar agora, tenta de novo mais tarde'), null);
+}
+$('fb-send').onclick = () => submitFeedbackFor('fb');
+// carrossel de mapas: setas ‹ › trocam o mapa E o fundo 3D do menu + thumbnail real do mapa
+const mapNameEl = $('map-name');
+const mapThumb = $('map-thumb');
+const mapPreviewHost = $('map-preview');
+const mapPreview = mapPreviewHost ? createMapPreview(mapPreviewHost, {
+  id: currentMap, version: VERSION, isActive: () => $('menu-setup').classList.contains('open'),
+}) : null;
+let mapCardPreviews = [];
+if (mapThumb) {
+  mapThumb.decoding = 'async';   // decode fora da thread principal
+  mapThumb.onload = () => { mapThumb.style.opacity = '1'; };
+  mapThumb.onerror = () => { mapThumb.style.opacity = '0'; };   // sem captura ainda → some limpo
+}
+function setMapThumb() {
+  if (!mapThumb) return;
+  mapPreview?.setMap(currentMap);
+  mapThumb.style.opacity = '0';
+  mapThumb.src = mapPreviewPoster(currentMap, VERSION);
+  bindMapPreview(mapThumb.parentElement, currentMap);
+  mapThumb.alt = MAPS[currentMap].name;
+}
+// Badge de modo + pontinhos de posição: o carrossel não dizia onde o jogador estava
+// (quantos mapas existem, qual é este) nem que Havan/Ferro Velho SÃO CTF por natureza.
+// Rótulos dos modos de arma em UM lugar (WPN_MODES lá embaixo é derivado daqui): a
+// ficha do cartaz e o dropdown têm que dizer a mesma coisa com as mesmas palavras.
+const WPN_MODE_LABEL = { all: 'TODAS', pistols: 'SÓ PISTOLAS', knife: 'SÓ FACA', awp: 'SÓ AWP' };
+function matchRounds() {
+  if (ehMapaJavaporcos(currentMap)) return 1;
+  if (!modoObjetivoAtual() && matchMode === 'arena') return 1;
+  // Effective mode owns its own round setting.
+  const modo = modoEfetivoAtual();   // objetivo ativo = rounds (não herda ctfRounds por preferência escondida)
+  const fallback = modo === 'ctf' ? 3 : 5;
+  return sanitizeRounds(modo === 'ctf' ? settings.ctfRounds : settings.rounds) || fallback;
+}
+// Ficha da partida IMPRESSA NO CARTAZ (modo · formato · armas). O dono pediu "maior dimensão
+// pro mapa" com "nome, modo, bots" — então o resumo mora sobre a arte, e não numa coluna
+// de formulário ao lado dela.
+const hubSels = [];
+function syncHubSels() { for (const s of hubSels) s.sync(); }
+function setMapMeta() {
+  sfx.setGameMode(ehMapaJavaporcos(currentMap) ? 'horde' : '');
+  const el = $('map-meta'); if (!el) return;
+  const modo = modoObjetivoAtual() ? resumoObjetivoAtual()
+    : matchMode === 'arena' ? `${tr('VIRA-CASACA')} · ${tr('PARTIDA ÚNICA')}`
+    : frase(matchMode === 'ctf' ? 'ctfMelhorDeN' : 'melhorDeN', matchRounds());
+  el.textContent = ehMapaJavaporcos(currentMap)
+    ? `${modo} · ${equipeJavaporcos(settings).javaporcos.defensores} DEFENSORES (VOCÊ + BOTS) × JAVAPORCOS`
+    : frase('resumoPartida', modo, 1 + settings.allyBots, settings.enemyBots, tr(WPN_MODE_LABEL[settings.wpnMode || 'all'] || 'TODAS'));
+  syncHubSels();
+}
+function setMapMode() {
+  const objetivo = modoObjetivoAtual();
+  const m = $('map-mode');
+  if (m) {
+    m.textContent = objetivo ? rotuloObjetivoAtual() : modeLabel();
+    m.dataset.mode = objetivo || (matchMode === 'arena' ? 'arena' : matchMode);
+    m.disabled = !!objetivo;
+  }
+  const d = $('map-dots');
+  if (d) d.innerHTML = MAPAS_MENU.map((_, i) => `<i class="${i === mapIdx ? 'on' : ''}"></i>`).join('');
+  if (HUB_ENABLED) {
+    $('hub-mode-rounds').setAttribute('aria-pressed', String(!objetivo && matchMode === 'rounds'));
+    $('hub-mode-ctf').setAttribute('aria-pressed', String(!objetivo && matchMode === 'ctf'));
+    $('hub-mode-rounds').disabled = !!objetivo;
+    $('hub-mode-ctf').disabled = !!objetivo;
+    $('hub-mode-rounds').querySelector('small').textContent = objetivo ? rotuloObjetivoAtual() : `MELHOR DE ${settings.rounds || 5}`;
+    $('hub-mode-ctf').querySelector('small').textContent = objetivo ? 'INDISPONÍVEL NESTE MAPA' : `MELHOR DE ${settings.ctfRounds || 3}`;
+    $('hub-rounds-value').textContent = !objetivo && matchMode === 'arena' ? tr('ÚNICA') : String(matchRounds());
+    $('hub-mode-arena').setAttribute('aria-pressed', String(!objetivo && matchMode === 'arena'));
+    $('hub-mode-arena').disabled = !!objetivo;
+    $('hub-rounds').disabled = !!objetivo || matchMode === 'arena';
+  }
+  setMapMeta();
+}
+// O badge percorre os três modos locais. Mapas só definem o padrão inicial; a escolha
+// explícita do jogador continua estável ao trocar de mapa.
+function selectMatchMode(mode, sound = true) {
+  if (modoObjetivoAtual() || !['rounds', 'ctf', 'arena'].includes(mode)) return;
+  matchMode = mode;
+  modoEscolhido = true;
+  setupTitle = mode === 'arena' ? 'VIRA-CASACA' : (mode === 'ctf' ? 'CAPTURE THE FLAG' : 'MATA-MATA');
+  if (sound) ui.click();
+  setMapMode();
+  setSetupStep('match');
+  renderMapScreen();
+}
+{
+  const mm = $('map-mode');
+  if (mm) mm.addEventListener('click', () => {
+    if (modoObjetivoAtual()) return;
+    const modos = ['rounds', 'ctf', 'arena'];
+    selectMatchMode(modos[(modos.indexOf(matchMode) + 1) % modos.length]);
+  });
+}
+if (HUB_ENABLED) {
+  $('hub-mode-rounds').onclick = () => selectMatchMode('rounds');
+  $('hub-mode-ctf').onclick = () => selectMatchMode('ctf');
+  $('hub-mode-arena').onclick = () => selectMatchMode('arena');
+  $('hub-rounds').onclick = () => {
+    /* ciclo pelos ÍMPARES de 1–15 (o "melhor de N" usual); os pares ficam pro select da
+       tela de mapa. Do valor atual, salta pro próximo ímpar MAIOR (valor par vindo do
+       select não volta pro 1 à toa) e fecha a volta em 1. */
+    const atual = matchRounds();
+    const next = [1, 3, 5, 7, 9, 11, 13, 15].find((n) => n > atual) ?? 1;
+    settings[modoEfetivoAtual() === 'ctf' ? 'ctfRounds' : 'rounds'] = next;
+    saveSettings(); ui.click(); setMapMode(); renderMapScreen();
+  };
+}
+let mapIdx = Math.max(0, MAPAS_MENU.indexOf(currentMap));
+function gotoMap(i, updateRoute = true) {
+  mapIdx = (i + MAPAS_MENU.length) % MAPAS_MENU.length;
+  currentMap = resolveMapId(MAPAS_MENU[mapIdx]);
+  settings.map = currentMap; settings.mapPinned = true; saveSettings();   // escolha explícita sai da rotação
+  mapNameEl.textContent = MAPS[currentMap].name;
+  setMapThumb();
+  // Mapas objetivos só substituem o modo efetivo enquanto estão ativos. A escolha explícita
+  // fica preservada para o jogador reencontrá-la ao voltar a um mapa de rounds/CTF.
+  if (!modoObjetivoAtual() && !modoEscolhido) matchMode = MAPS[currentMap].ctfMode ? 'ctf' : 'rounds';
+  setMapMode();
+  void loadMenuBackdrop();
+  renderMapScreen();   // se a tela cheia estiver aberta, ela acompanha o carrossel
+  if (updateRoute) hubNavigate({ map: currentMap });
+}
+function stepMap(dir, ids = MAPAS_MENU) {
+  const pool = ids.length ? ids : MAPAS_MENU;
+  const nextId = pool[(Math.max(0, pool.indexOf(currentMap)) + dir + pool.length) % pool.length];
+  ui.click(); gotoMap(MAPAS_MENU.indexOf(nextId));
+}
+mapNameEl.textContent = MAPS[currentMap].name;
+setMapThumb();
+setMapMode();
+$('map-prev').onclick = () => stepMap(-1);
+$('map-next').onclick = () => stepMap(1);
+[$('map-prev'), $('map-next')].forEach(b => b && (b.onmouseenter = () => ui.hover()));
+
+/* ---------------- map screen (escolha de mapa em tela cheia) ----------------
+   Abre pelo cartaz do mapa no setup. Lê o MESMO estado do carrossel (currentMap/mapIdx) —
+   trocar aqui troca lá, e vice-versa. CONTINUAR segue o fluxo normal (nick → facção). */
+const MAP_DESC = {
+  amazonia: 'Comunidade ribeirinha: palafitas com interiores, janelas de cobertura e travessias sobre o igarapé.',
+  praca_poderes: 'O coração do poder vira arena: rampas do Planalto, espelho d\'água e linhas de tiro longas entre os ministérios.',
+  piscina_treta: 'Salão fechado, eco de tiro e briga de faca no raso. Quem controla a borda controla o round.',
+  loja_h: 'Estacionamento de megastore: corredores de vaga, mezanino de sniper e a estátua te olhando atirar.',
+  ferro_velho: 'Um ferro velho gigantesco onde tudo pode ser arma e toda sombra pode esconder um traira.',
+  quebrada: 'Rua de baile: muros baixos, beco cego e o paredão marcando o compasso do round.',
+  posto_treta: 'Posto de combustível na beira da BR: loja de conveniência, bombas de cobertura e treta no fluorescente.',
+  atacadao_treta: 'Galpão de atacado em guerra: gôndolas apertadas, caixas de cobertura e o estacionamento disputado carrinho por carrinho.',
+  campomorro: 'Campo de várzea cercado pelo morro: oito becos, arquibancada com torcida e galpão do baile.',
+  parque_treta: 'Um parque de diversões em guerra de confete: carrossel no centro, roda-gigante, castelo colorido e três rotas de ataque.',
+  velho_oeste: 'Duelo na cidade empoeirada: saloon, banco, carroças e tumbleweeds cruzando três rotas entre casas de madeira.',
+  distrito_rural: 'Defenda fazendas e depósitos de ração. Entre nos celeiros e procure abrigo nas coberturas.',
+  vila_da_mata: 'Defenda uma vila de casas portuguesas. Explore a praça, os sobrados e as ruelas da encosta.',
+  invasao_javaporcos: 'Dispute a cidade contra bandos que saem da mata por seis frentes. Retome setores, explore o pasto e mantenha seu time vivo. Escolha defesa contra a horda ou três times em disputa.',
+  operacao_flavio: 'Escolte Flávio pelo escritório, corredor de segurança e hangar até o avião antes que o aeroporto seja bloqueado.',
+  penitenciaria: 'Rebelião no pátio: celas abertas, concreto gasto, guaritas e barricadas policiais entre três rotas de confronto.',
+  upa_24h: 'Pronto-socorro lotado: salas de verdade, corredor em cruz e treta no fluorescente — 100% interno.',
+  obras_prefeitura: 'Canteiro de obra eterna: terreno ondulado, buracos de escavação, tapumes e a treta do desvio de verba.',
+};
+/* Catálogo de mapas (categoria/autoria/data): fonte única em mapcat.js — o servidor do
+   multiplayer importa a MESMA tabela para as rotações das salas oficiais. */
+import { MAP_CATS, MAP_AUTOR, MAP_DATA, CAT_DESC, AUTOR_CASA, catsDe, autorDe, oficialDe } from './mapcat.js';
+let mapCategory = 'TODOS';
+let mapAutorFiltro = 'TODOS';
+function autoresDeComunidade() {
+  return [...new Set(MAPAS_MENU.filter((id) => catsDe(id).includes('COMUNIDADE')).map(autorDe))].sort();
+}
+/* Quantas vezes cada mapa foi escolhido, do contador que o /api/pick alimenta desde
+   06/08 (picks_daily). Chega TARDE, por rede, e pode nunca chegar: a tela abre sem ele,
+   e quando chega redesenha. Nada aqui pode depender do número existir. */
+let mapPlays = {};
+const playsDe = (id) => mapPlays[id] || 0;
+void window.__CS_LANG_READY__.then(() => fetchComRetry(apiUrl('/api/map-plays'))
+  .then((r) => (r.ok ? r.json() : null))
+  .then((j) => {
+    if (!j || !j.plays || typeof j.plays !== 'object') return;
+    mapPlays = j.plays;
+    if (!$('map-screen')?.classList.contains('hidden')) renderMapScreen();
+  })
+  .catch(() => { /* sem banco/rede: a tela fica sem a estatística, e é só isso */ }));
+function visibleMapIds() {
+  /* TODOS = o acervo inteiro, ordenado do mais jogado pro menos (empate: ordem do catálogo,
+     que é estável — `sort` sem desempate deixava a lista dançar entre renders).
+     OFICIAIS e COMUNIDADE são recortes por categoria e mantêm a ordem do catálogo. */
+  if (mapCategory === 'TODOS') {
+    return MAPAS_MENU.slice().sort((a, b) => playsDe(b) - playsDe(a) || MAPAS_MENU.indexOf(a) - MAPAS_MENU.indexOf(b));
+  }
+  if (mapCategory === 'OFICIAIS') return MAPAS_MENU.filter((id) => !catsDe(id).includes('COMUNIDADE'));
+  return MAPAS_MENU.filter((id) => catsDe(id).includes(mapCategory));
+}
+function renderMapScreen() {
+  stopMapPreviews();
+  stopMapPreview();
+  const img = $('ms-bg-img'); if (!img) return;
+  /* O mapa em foco manda na aba: se não pertence à aba atual, troca pra aba que o contém.
+     Trocas manuais de aba já re-ancoram o mapa antes, então isto não briga com elas. */
+  if (!visibleMapIds().includes(currentMap)) {
+    mapCategory = catsDe(currentMap).includes('COMUNIDADE') ? 'COMUNIDADE' : 'OFICIAIS';
+  }
+  const continuar = $('ms-continue')?.querySelector('span');
+  if (continuar) continuar.textContent = frase('continuarSetup');
+  img.decoding = 'async';   // decode fora da thread principal — não trava a UI da tela de mapas
+  img.src = mapPreviewPoster(currentMap, VERSION);
+  /* O palco é o MESMO wallpaper do menu principal, não esta preview: a foto do mapa em
+     foco já está no card selecionado, e em tela cheia ela brigava com a grade. O `src`
+     acima continua sendo escrito porque é dele que a sonda de tela lê o mapa em foco. */
+  const palco = document.querySelector('#map-screen .ms-bg');
+  if (palco) { palco.style.setProperty('--wall', HOME_WALL); palco.style.setProperty('--wall-3x2', HOME_WALL_3X2); }
+  $('ms-name').textContent = MAPS[currentMap].name;
+  // separadores da ficha em verde (referência 04): texto continua o mesmo do cartaz
+  $('ms-meta').innerHTML = ($('map-meta').textContent || '').split('·').join('<span class="ms-sep">·</span>');
+  $('ms-desc').textContent = tr(MAP_DESC[currentMap] || '');
+  syncMapOptions();
+  const cats = catsDe(currentMap);
+  const catEl = $('ms-cat');
+  catEl.innerHTML = cats.map((c) => `<span data-cat="${c}">${tr(c)}</span>`).join('<span class="ms-sep">·</span>');
+  const byline = $('ms-byline');
+  /* Crachá EM OBRAS: sem ele o mapa parado fica indistinguível do jogável na oficina. */
+  const parado = MAPAS_PARADOS.has(currentMap);
+  if (byline) byline.innerHTML = `${tr('por')} <strong>${autorDe(currentMap)}</strong> · ${MAP_DATA[currentMap] || ''}` +
+    (oficialDe(currentMap) ? ` <span class="ms-badge-oficial">${tr('OFICIAL')}</span>` : ` <span class="ms-badge-comunidade">${tr('COMUNIDADE')}</span>`) +
+    (parado ? ` <span class="ms-badge-parado">${tr('EM OBRAS')}</span>` : '');
+  const desc = $('ms-cat-desc');
+  if (desc) desc.textContent = CAT_DESC[mapCategory] ? tr(CAT_DESC[mapCategory]) : '';
+  $('ms-count').textContent = `${tr('MAPA')} ${MAPAS_MENU.indexOf(currentMap) + 1} ${tr('DE')} ${MAPAS_MENU.length}`;
+  /* Estatística de partidas: só aparece quando o número EXISTE. Escrever "0 PARTIDAS"
+     num mapa que ninguém mediu é afirmar o que não se sabe — sem o contador, o crachá some. */
+  const plays = $('ms-plays');
+  if (plays) {
+    const n = playsDe(currentMap);
+    plays.hidden = !n;
+    plays.textContent = n ? `${n.toLocaleString('pt-BR')} ${tr(n === 1 ? 'PARTIDA' : 'PARTIDAS')}` : '';
+  }
+  const shown = visibleMapIds();
+  mapCardPreviews.forEach(preview => preview.dispose());
+  mapCardPreviews = [];
+  $('ms-strip').style.setProperty('--map-count', shown.length);
+  $('ms-strip').innerHTML = shown.map((id) =>
+      `<button class="ms-thumb${id === currentMap ? ' on' : ''}" data-id="${id}" aria-pressed="${id === currentMap}" type="button">` +
+      `<span class="ms-thumb-media"><img class="ms-thumb-img" loading="lazy" decoding="async" src="${mapPreviewPoster(id, VERSION)}" alt=""></span>` +
+      `<span class="ms-thumb-copy"><span class="ms-thumb-name">${MAPS[id].name}</span>` +
+      `<span class="ms-thumb-sub"><span class="ms-thumb-cat" data-cat="${catsDe(id)[0]}">${catsDe(id).map((c) => tr(c)).join('·')}</span>` +
+      (playsDe(id) ? `<span class="ms-thumb-plays">${playsDe(id).toLocaleString('pt-BR')}</span>` : '') +
+      `</span></span>` +
+      `${id === currentMap ? '<i class="ms-diamond" aria-hidden="true"></i>' : ''}</button>`).join('');
+  document.querySelectorAll('.ms-tab').forEach((tab) => {
+    const on = tab.dataset.cat === mapCategory;
+    tab.classList.toggle('on', on);
+    tab.setAttribute('aria-selected', on);
+  });
+  // A tira é uma grid que mostra TODOS os mapas de uma vez (sem scroll nem página). Os "dots"
+  // de paginação eram falsos — marcavam páginas que não existem. Removidos.
+  $('ms-dashes').innerHTML = '';
+  $('ms-strip').querySelectorAll('.ms-thumb').forEach(b => {
+    const stopOtherPreview = () => b.dataset.id === 'escadao' ? stopMapPreviews() : stopMapPreview();
+    b.addEventListener('pointerenter', stopOtherPreview);
+    b.addEventListener('focusin', stopOtherPreview);
+    bindMapPreview(b, b.dataset.id);
+    b.onclick = () => { ui.click(); gotoMap(MAPAS_MENU.indexOf(b.dataset.id)); };
+    b.onmouseenter = () => ui.hover();
+    if (VIDEO_MAPS.has(b.dataset.id)) mapCardPreviews.push(createMapPreview(b, {
+      id: b.dataset.id, version: VERSION, media: b.querySelector('.ms-thumb-media'),
+    }));
+  });
+  bindMapPreviews($('ms-strip'));
+  requestAnimationFrame(() => $('ms-strip').querySelector('.ms-thumb.on')?.scrollIntoView({ block: 'nearest', inline: 'center' }));
+}
+mapPreviewHost.title = HUB_ENABLED ? 'Trocar mapa' : tr('Ver mapa em tela cheia');
+mapPreviewHost.onclick = () => {
+  ui.click();
+  if (HUB_ENABLED) openHubMap();
+  else { renderMapScreen(); show('map-screen'); }
+};
+$('ms-back').onclick = () => { ui.back(); show('main-menu'); };
+$('ms-prev').onclick = () => stepMap(-1, visibleMapIds());
+$('ms-next').onclick = () => stepMap(1, visibleMapIds());
+document.querySelectorAll('.ms-tab').forEach((tab) => {
+  tab.onclick = () => {
+    ui.click(); mapCategory = tab.dataset.cat || 'TODOS';
+    const first = visibleMapIds()[0];
+    if (first && !visibleMapIds().includes(currentMap)) gotoMap(MAPAS_MENU.indexOf(first));
+    else renderMapScreen();
+  };
+});
+// CONTINUAR = o JOGAR de sempre: ele decide o próximo passo (perfil se falta nick, facção se não)
+$('ms-continue').onclick = () => { show('main-menu'); $('btn-jogar').click(); };
+// ← → trocam de mapa com a tela cheia aberta (ESC fecha — ver o handler de ESC do menu)
+addEventListener('keydown', (e) => {
+  if ($('map-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); stepMap(-1, visibleMapIds()); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); stepMap(1, visibleMapIds()); }
+});
+const wpnSel = { value: settings.wpnMode || 'all' };
+// dropdown de modo de armas: renders REAIS de /img/weapons (o dono reprovou os glifos)
+const _wpnImg = (id) => `<img class="dd-ico" src="/img/weapons/${id}.webp" alt="" width="44" height="17" loading="lazy">`;
+const WPN_ICONS = {
+  all: `<span class="dd-ico-all">${_wpnImg('ak')}${_wpnImg('pistol')}</span>`,
+  pistols: _wpnImg('pistol'),
+  knife: _wpnImg('knife'),
+  awp: _wpnImg('awp'),
+};
+const WPN_MODES = Object.entries(WPN_MODE_LABEL).map(([id, label]) => ({ id, label }));
+const wpnDdBtn = $('wpn-dd-btn'), wpnDdList = $('wpn-dd-list'), wpnDdLabel = $('wpn-dd-label');
+function wpnLabel(id) {
+  const m = WPN_MODES.find(m => m.id === id);
+  wpnDdLabel.innerHTML = `<span class="dd-cur">${WPN_ICONS[id]}<span>${tr(m ? m.label : id)}</span></span>`;
+}
+wpnDdList.innerHTML = WPN_MODES.map(m =>
+  `<button class="dd-item" data-id="${m.id}" type="button">${WPN_ICONS[m.id]}<span>${tr(m.label)}</span></button>`).join('');
+wpnLabel(wpnSel.value);
+/* Dropdowns custom (mesma cara do de armas — o <select> nativo abria o menu default do
+   navegador, fora do estilo do resto do setup). Cada botão fecha os IRMÃOS antes de
+   abrir o seu: são três listas soltas na mesma faixa. */
+const FECHAR_DDS = (menosBtn) => {
+  for (const [b, l] of [[wpnDdBtn, wpnDdList], [allyDdBtn, allyDdList], [enemyDdBtn, enemyDdList]]) {
+    if (b !== menosBtn) { l?.classList.add('hidden'); b?.classList.remove('open'); }
+  }
+};
+wpnDdBtn.onclick = e => { e.stopPropagation(); FECHAR_DDS(wpnDdBtn); wpnDdList.classList.toggle('hidden'); wpnDdBtn.classList.toggle('open'); };
+document.addEventListener('click', () => { for (const [b, l] of [[wpnDdBtn, wpnDdList], [allyDdBtn, allyDdList], [enemyDdBtn, enemyDdList]]) { l?.classList.add('hidden'); b?.classList.remove('open'); } });
+wpnDdList.querySelectorAll('.dd-item').forEach(b => b.onclick = () => {
+  settings.wpnMode = b.dataset.id; saveSettings();
+  wpnLabel(settings.wpnMode); setMapMeta(); sfx.uiClick();
+});
+/* FORMATO DA PARTIDA: dois dropdowns no lugar do "N vs N" único — bots do SEU lado
+   (0 = SOLO) e bots INIMIGOS. 1v4, solo vs 8, 5v5… o jogador monta. */
+const allyDdBtn = $('ally-dd-btn'), allyDdList = $('ally-dd-list'), allyDdLabel = $('ally-dd-label');
+const enemyDdBtn = $('enemy-dd-btn'), enemyDdList = $('enemy-dd-list'), enemyDdLabel = $('enemy-dd-label');
+const botsLabel = (n) => (n === 0 ? tr('SOLO') : `${n} BOT${n > 1 ? 'S' : ''}`);
+const ddFormato = (btn, list, labelEl, aplicar) => {
+  if (!(btn && list && labelEl)) return;
+  labelEl.innerHTML = `<span class="dd-cur"><span>${botsLabel(aplicar.get())}</span></span>`;
+  list.innerHTML = aplicar.range.map(n =>
+    `<button class="dd-item" data-n="${n}" type="button"><span>${botsLabel(n)}</span></button>`).join('');
+  btn.onclick = e => { e.stopPropagation(); FECHAR_DDS(btn); list.classList.toggle('hidden'); btn.classList.toggle('open'); };
+  document.addEventListener('click', () => { list.classList.add('hidden'); btn.classList.remove('open'); });
+  list.querySelectorAll('.dd-item').forEach(b => b.onclick = () => {
+    aplicar.set(+b.dataset.n); saveSettings();
+    labelEl.innerHTML = `<span class="dd-cur"><span>${botsLabel(aplicar.get())}</span></span>`;
+    setMapMeta(); syncMapOptions(); sfx.uiClick();
+  });
+};
+ddFormato(allyDdBtn, allyDdList, allyDdLabel, {
+  range: [0, 1, 2, 3, 4, 5, 6, 7],
+  get: () => settings.allyBots, set: (n) => { settings.allyBots = n; },
+});
+ddFormato(enemyDdBtn, enemyDdList, enemyDdLabel, {
+  range: [1, 2, 3, 4, 5, 6, 7, 8],
+  get: () => settings.enemyBots, set: (n) => { settings.enemyBots = n; },
+});
+const msWpnMode = $('ms-wpn-mode'), msAlly = $('ms-ally-bots'), msEnemy = $('ms-enemy-bots'), msRounds = $('ms-rounds');
+/* ROUNDS 1–15 e FORMATO (bots por lado): options nascem AQUI, não no astro — o diff-select
+   já usa o mesmo padrão. O valor salvo manda; se veio de save antigo, o clamp do boot garante. */
+if (msRounds) for (let n = 1; n <= ROUNDS_CUSTOM_MAX; n++) { const o = document.createElement('option'); o.value = String(n); o.textContent = String(n); msRounds.appendChild(o); }
+if (msAlly) for (let n = 0; n <= 7; n++) { const o = document.createElement('option'); o.value = String(n); o.textContent = botsLabel(n); msAlly.appendChild(o); }
+if (msEnemy) for (let n = 1; n <= 8; n++) { const o = document.createElement('option'); o.value = String(n); o.textContent = botsLabel(n); msEnemy.appendChild(o); }
+function syncMapOptions() {
+  const horda = ehMapaJavaporcos(currentMap);
+  sincronizarOpcoesJavaporcos($('ms-match-options'), horda, settings, () => {saveSettings(); setMapMeta();});
+  if (msRounds?.parentElement) msRounds.parentElement.hidden = horda;
+  if (msEnemy?.parentElement) msEnemy.parentElement.hidden = horda;
+  if (msAlly?.parentElement) msAlly.parentElement.hidden = horda;
+  if (msWpnMode) msWpnMode.value = settings.wpnMode || 'all';
+  if (msAlly) msAlly.value = String(settings.allyBots);
+  if (msEnemy) msEnemy.value = String(settings.enemyBots);
+  if (msRounds) msRounds.value = String(matchRounds());
+}
+if (msWpnMode) msWpnMode.onchange = () => {
+  settings.wpnMode = msWpnMode.value; saveSettings(); wpnLabel(settings.wpnMode); setMapMeta(); renderMapScreen(); sfx.uiClick();
+};
+if (msAlly) msAlly.onchange = () => {
+  settings.allyBots = Math.max(0, Math.min(7, msAlly.value | 0)); saveSettings();
+  allyDdLabel.innerHTML = `<span class="dd-cur"><span>${botsLabel(settings.allyBots)}</span></span>`;
+  setMapMeta(); renderMapScreen(); sfx.uiClick();
+};
+if (msEnemy) msEnemy.onchange = () => {
+  settings.enemyBots = Math.max(1, Math.min(8, msEnemy.value | 0)); saveSettings();
+  enemyDdLabel.innerHTML = `<span class="dd-cur"><span>${botsLabel(settings.enemyBots)}</span></span>`;
+  setMapMeta(); renderMapScreen(); sfx.uiClick();
+};
+if (msRounds) msRounds.onchange = () => {
+  if (!modoObjetivoAtual() && matchMode === 'arena') { msRounds.value = '1'; return; }
+  settings[modoEfetivoAtual() === 'ctf' ? 'ctfRounds' : 'rounds'] = sanitizeRounds(msRounds.value) || (modoEfetivoAtual() === 'ctf' ? 3 : 5);
+  saveSettings(); setMapMeta(); setMapMode(); renderMapScreen(); sfx.uiClick();   // setMapMode: o chip de ROUNDS do setup acompanha o select
+};
+const diffSel = $('diff-select');
+syncMapOptions();
+/* Home: cada opção da partida é um select que abre, na cara do card de ROUNDS (dono, 13/10).
+   Delegam aos controles de sempre; régua: tools/eval/home-selects-browser.mjs. */
+function montarHubSels() {
+  const host = $('hub-sels');
+  if (!host) return;
+  const fechar = (menos) => { for (const s of hubSels) if (s !== menos) s.abrir(false); };
+  const montar = (id, rotulo, opcoes, atual, escolher) => {
+    const box = document.createElement('div'); box.className = 'hub-sel'; box.id = `hub-sel-${id}`;
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'hub-sel-btn';
+    btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `<small>${tr(rotulo)}</small><strong></strong>`;
+    const lista = document.createElement('div'); lista.className = 'hub-sel-list'; lista.hidden = true; lista.id = `hub-sel-${id}-lista`; btn.setAttribute('aria-controls', lista.id);
+    lista.setAttribute('role', 'listbox'); lista.setAttribute('aria-label', tr(rotulo));
+    box.append(btn, lista); host.appendChild(box);
+    const sel = {
+      sync() {
+        const horda = ehMapaJavaporcos(currentMap);
+        box.hidden = horda && (id === 'inimigos' || id === 'rounds');
+        btn.disabled = horda && id === 'modo';
+        btn.querySelector('small').textContent = tr(horda && id === 'time' ? 'DEFENSORES' : rotulo);
+        lista.setAttribute('aria-label', tr(horda && id === 'time' ? 'DEFENSORES' : rotulo));
+        if (box.hidden || btn.disabled) sel.abrir(false);
+        const v = atual(), op = opcoes().find((o) => o.v === v);
+        btn.querySelector('strong').textContent = op ? op.t : v;
+      },
+      abrir(on) {
+        lista.hidden = !on; btn.setAttribute('aria-expanded', String(on));
+        if (!on) return;
+        const v = atual();
+        lista.replaceChildren(...opcoes().map((o) => {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-sel-opt';
+          b.setAttribute('role', 'option'); b.setAttribute('aria-selected', String(o.v === v)); b.dataset.v = o.v;
+          if (o.img) { const im = document.createElement('img'); im.src = o.img; im.alt = ''; im.loading = 'lazy'; b.appendChild(im); }
+          b.append(o.t);
+          b.onclick = (e) => { e.stopPropagation(); sel.abrir(false); if (o.v !== atual()) escolher(o.v); else ui.click(); btn.focus(); };
+          return b;
+        }));
+        /* A lista sai do #menu-setup (que rola e cortava) e mora no body, presa ao botão;
+           no celular vira folha na base da tela. */
+        if (lista.parentElement !== document.body) document.body.appendChild(lista);
+        const r = btn.getBoundingClientRect(), folha = matchMedia('(max-width: 760px)').matches;
+        lista.classList.toggle('folha', folha);
+        lista.style.minWidth = `${r.width}px`;
+        lista.style.bottom = `${Math.round(innerHeight - r.top + 4)}px`;
+        lista.style.left = `${Math.round(Math.max(14, Math.min(r.left, innerWidth - 14 - Math.max(r.width, lista.offsetWidth))))}px`;
+        (lista.querySelector('[aria-selected="true"]') || lista.firstChild)?.focus();
+      },
+    };
+    btn.onclick = (e) => { e.stopPropagation(); fechar(sel); ui.click(); sel.abrir(lista.hidden); };
+    // Foco que sai para outro elemento fecha; relatedTarget nulo é clique, e o clique fora já fecha.
+    const sair = (e) => { const a = e.relatedTarget; if (!lista.hidden && a && !box.contains(a) && !lista.contains(a)) sel.abrir(false); };
+    box.addEventListener('focusout', sair); lista.addEventListener('focusout', sair);
+    lista.onkeydown = box.onkeydown = (e) => {
+      if (e.key === 'Escape' && !lista.hidden) { e.preventDefault(); e.stopPropagation(); sel.abrir(false); btn.focus(); return; }
+      if (lista.hidden || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+      e.preventDefault();
+      const ops = [...lista.children], i = ops.indexOf(document.activeElement);
+      ops[(i + (e.key === 'ArrowDown' ? 1 : -1) + ops.length) % ops.length]?.focus();
+    };
+    hubSels.push(sel);
+  };
+  const faixa = (de, ate, rot) => Array.from({ length: ate - de + 1 }, (_, k) => ({ v: String(de + k), t: rot(de + k) }));
+  montar('mapa', 'MAPA', () => MAPAS_MENU.map((id) => ({ v: id, t: MAPS[id].name, img: mapPreviewPoster(id, VERSION) })),
+    () => currentMap, (v) => { ui.click(); gotoMap(MAPAS_MENU.indexOf(v)); });
+  montar('modo', 'MODO', () => modoObjetivoAtual()
+    ? [{ v: ehMapaJavaporcos(currentMap) ? 'horde' : 'rounds', t: ehMapaJavaporcos(currentMap) ? 'CAÇA AO JAVAPORCO' : tr('ESCOLTA') }]
+    : [{ v: 'rounds', t: tr('MATA-MATA') }, { v: 'ctf', t: tr('CAPTURA') }, { v: 'arena', t: tr('VIRA-CASACA') }],
+    () => ehMapaJavaporcos(currentMap) ? 'horde' : modoEfetivoAtual(),
+    (v) => { if (!modoObjetivoAtual()) $(`hub-mode-${v}`)?.click(); });
+  montar('armas', 'ARMAS', () => WPN_MODES.map((m) => ({ v: m.id, t: tr(m.label) })),
+    () => settings.wpnMode || 'all', (v) => { msWpnMode.value = v; msWpnMode.onchange(); });
+  montar('time', 'SEU TIME', () => ehMapaJavaporcos(currentMap) ? faixa(4,8,n=>`${n} · VOCÊ + BOTS`) : faixa(0, 7, botsLabel),
+    () => String(ehMapaJavaporcos(currentMap) ? equipeJavaporcos(settings).javaporcos.defensores : settings.allyBots), (v) => {
+      if (ehMapaJavaporcos(currentMap)) {
+        settings.javaporcos = {...settings.javaporcos,defensores:Number(v)};
+        saveSettings(); syncMapOptions(); setMapMeta(); ui.click();
+      } else { msAlly.value = v; msAlly.onchange(); }
+    });
+  montar('inimigos', 'INIMIGOS', () => faixa(1, 8, botsLabel), () => String(settings.enemyBots), (v) => { msEnemy.value = v; msEnemy.onchange(); });
+  montar('rounds', 'ROUNDS', () => faixa(1, ROUNDS_CUSTOM_MAX, String), () => String(matchRounds()), (v) => { msRounds.value = v; msRounds.onchange(); });
+  document.addEventListener('click', () => fechar(null));
+  addEventListener('resize', () => fechar(null));
+  menuSetup.addEventListener('scroll', () => fechar(null), { passive: true });
+  syncHubSels();
+}
+if (HUB_ENABLED) montarHubSels();
+/* Treta Pop (public/js/tp/modos.js): lê o estado da partida e troca o mapa pela mesma máquina do menu. */
+if (document.documentElement.dataset.ui === 'v3') window.__tpModos = {
+  mapas: () => MAPAS_MENU.map((id) => ({ id, nome: MAPS[id].name, poster: mapPreviewPoster(id, VERSION), cats: catsDe(id), data: MAP_DATA[id] || '', desc: tr(MAP_DESC[id] || ''), parado: MAPAS_PARADOS.has(id), horda: ehMapaJavaporcos(id) })),
+  estado: () => ({ mapa: currentMap, modo: modoEfetivoAtual(), objetivo: modoObjetivoAtual(), armas: settings.wpnMode || 'all', aliados: settings.allyBots, inimigos: settings.enemyBots, rounds: matchRounds(), dificuldade: settings.difficulty || 'normal', escalados: [...settings.pinnedChars], javaporcos: {...settings.javaporcos} }),
+  opcoesJavaporcos: (host, mudou) => sincronizarOpcoesJavaporcos(host, ehMapaJavaporcos(currentMap), settings, () => { saveSettings(); syncMapOptions(); setMapMeta(); mudou?.(); }),
+  irMapa: (id) => { if (MAPAS_MENU.includes(id)) gotoMap(MAPAS_MENU.indexOf(id)); },
+};
+if (diffSel) {
+  [['easy', 'FÁCIL'], ['normal', 'NORMAL'], ['hard', 'DIFÍCIL'], ['insane', 'INSANO']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; diffSel.appendChild(o); });
+  diffSel.value = settings.difficulty || 'normal';
+  diffSel.onchange = () => { settings.difficulty = diffSel.value; saveSettings(); sfx.uiClick(); };
+}
+$('btn-howto').onclick = () => { sfx.uiClick(); howtoReturn = 'main-menu'; show('howto-panel'); };
+$('howto-back').onclick = () => { ui.back(); markCurrent(null); const r = howtoReturn; howtoReturn = 'main-menu'; show(r); };
+$('btn-settings').onclick = () => { sfx.uiClick(); settingsReturn = 'main-menu'; show('settings-panel'); };
+const closeSettings = () => {
+  ui.back(); saveSettings();
+  if (game) game.applySettings();
+  if (settingsReturn === 'main-menu') markCurrent(null);
+  show(settingsReturn);
+  if (HUB_ENABLED && settingsReturn === 'main-menu') hubNavigate({ janela: null });
+};
+$('settings-back').onclick = closeSettings;
+$('settings-close').onclick = closeSettings;
+$('settings-apply').onclick = () => { ui.click(); saveSettings(); if (game) game.applySettings(); };
+$('settings-restore').onclick = () => {
+  ui.click();
+  settings.quality = 'med'; marcarQualidadeManual(); settings.sens = 1; settings.sensToque = 1; settings.invertY = false; settings.vol = 0.7; settings.menuMusic = true; settings.speech = true; settings.xhair = '#4fe8e0'; settings.camView = 'first';
+  $('set-quality').value = settings.quality; $('set-sens').value = settings.sens; if ($('set-sens-toque')) $('set-sens-toque').value = settings.sensToque; $('set-vol').value = settings.vol;
+  $('set-speech').checked = true; $('set-invert-y').checked = false; $('set-xhair').value = settings.xhair; $('set-camera').value = 'first';
+  if (game) game.setCamView('first');
+  sfx.speechEnabled = true; sfx.setVolume(settings.vol); applyXhair(); updLabels(); saveSettings(); syncMenuMusicToggle();
+  if (settingsReturn === 'main-menu') startMenuMusic();
+  if (game) game.applySettings();
+};
+// Abas das configurações: troca o pane visível; os inputs nunca são re-criados,
+// então o wiring de persistência abaixo vale pra todos os panes.
+document.querySelectorAll('.set-tab').forEach(tab => {
+  tab.onclick = () => {
+    sfx.uiClick();
+    $('settings-panel').dataset.activeTab = tab.dataset.tab;
+    document.querySelectorAll('.set-tab').forEach(t => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on);
+    });
+  };
+});
+$('team-back').onclick = () => { ui.back(); setEnemyPickMode(false); setTeamStep('side'); show('main-menu'); };
+$('char-back').onclick = () => {
+  ui.back();
+  if (switchMode && game) {
+    switchMode = false;
+    currentTeam = game.playerTeam; currentFaction = game.playerFaction;
+    currentEnemyFaction = game.enemyFaction; currentChar = game.playerCharId;
+    show(null); game.resume(); return;
+  }
+  show('team-select');
+};
+// Setas do filmstrip: movem a SELEÇÃO (não só o scroll) e garantem a linha visível.
+const stripStep = (dir) => {
+  const rows = [...document.querySelectorAll('.char-row')];
+  if (!rows.length) return;
+  const i = Math.max(0, rows.findIndex(r => r.classList.contains('sel')));
+  const next = rows[(i + dir + rows.length) % rows.length];
+  next.click();
+  next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+};
+$('strip-up').onclick = () => { ui.click(); stripStep(-1); };
+$('strip-down').onclick = () => { ui.click(); stripStep(1); };
+// Contador de personagens disponíveis nos dois cards de time.
+for (const f of ['e', 'b']) {
+  const lado = f.toUpperCase();
+  const n = CHARACTERS.filter(c => podeNoLado(c, lado)).length;
+  const card = $('btn-team-' + f);
+  if (!card) continue;
+  const chip = document.createElement('span');
+  chip.className = 'team-count';
+  chip.textContent = `${n} ${tr('PERSONAGENS')}`;
+  if (!n) chip.textContent = tr('INDISPONÍVEL');
+  card.appendChild(chip);
+  /* PRONTIDÃO = TER ELENCO, não `dataset.ready` (atributo que o index.astro da main não
+     escreve): com ele o card nascia desabilitado para sempre — BUG-179 em KNOWN-BUGS. */
+  card.setAttribute('aria-disabled', String(!(n > 0)));
+  card.addEventListener('focus', () => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+}
+/* O dossiê lateral antigo saiu com o redesign; ficaram só as chamadas seguras. */
+for (const [id, direction] of [['team-prev', -1], ['team-next', 1]]) {
+  const button = $(id);
+  if (!button) continue;
+  button.onclick = () => {
+    ui.click();
+    const rail = document.querySelector('.team-row');
+    rail?.scrollBy({ top: direction * Math.max(92, rail.clientHeight * .56), behavior: 'smooth' });
+  };
+}
+$('btn-team-e').onclick = () => { sfx.uiClick(); pickTeam('E'); };
+$('btn-team-b').onclick = () => { sfx.uiClick(); pickTeam('B'); };
+$('btn-resume').onclick = () => { sfx.uiClick(); game?.resume(); };
+$('btn-pause-settings').onclick = () => { sfx.uiClick(); settingsReturn = 'pause-menu'; show('settings-panel'); };
+$('btn-pause-controls').onclick = () => { sfx.uiClick(); howtoReturn = 'pause-menu'; show('howto-panel'); };
+/* ---- AÇÕES QUE DESTROEM A PARTIDA EM ANDAMENTO: DOIS TOQUES ----------------
+   "pela quinta vez o jogo reiniciou sozinho, eu estava no meio de uma partida e ele foi
+   pro menu principal sozinho" (dono, 04/08).
+
+   Não havia caminho automático: `quitToMenu()` só é chamado por estes dois `onclick`.
+   O clique era REAL — o menu de pausa cai debaixo da MIRA quando o pointer lock some
+   sozinho (alt-tab, ESC, notificação), e o tiro que já estava saindo apertava o botão.
+   Medido com o pause aberto em 1536×1024: centro da tela = CONFIGURAÇÕES,
+   centro+100 px = REINICIAR PARTIDA, centro+150 px = SAIR PRO MENU — a coluna inteira
+   fica na linha de tiro. Ver PAUSE_ARM_MS em game.js e tools/eval/pause-check.mjs.
+
+   A janela de guarda do game.js resolve o tiro em voo; esta trava resolve o resto:
+   NENHUM clique único tira o jogador da partida. A REGRA do segundo toque
+   (`confirmGate`) mora no game.js e é medida em node — ver a cláusula PAUSA6 de
+   tools/eval/pause-check.mjs, que nasceu de uma rajada de 8 cliques a 60 ms que
+   atravessou a primeira versão desta trava e saiu pro menu. */
+const confirmables = [];
+function needsConfirm(btn, run) {
+  const label = btn.textContent;
+  let armedAt = 0, t = null;
+  // o aviso é INLINE de propósito: style.css é território de outra frente nesta rodada, e
+  // um estado que só existe como classe sem regra seria um botão que muda de texto e não
+  // avisa NADA — o jogador tem que ver que o próximo clique é o que vale
+  const reset = () => {
+    if (t) clearTimeout(t); t = null; armedAt = 0;
+    btn.textContent = label; btn.classList.remove('confirming');
+    btn.style.color = ''; btn.style.borderColor = '';
+  };
+  confirmables.push(reset);
+  btn.onclick = () => {
+    const now = performance.now();
+    const acao = confirmGate(now, armedAt);
+    if (acao === 'confirma') { reset(); run(); return; }
+    if (acao === 'arma') sfx.uiClick();
+    armedAt = now;   // 'rearma' (rajada) cai aqui também: o relógio volta ao zero
+    btn.textContent = 'CLIQUE DE NOVO PRA CONFIRMAR';
+    btn.classList.add('confirming');
+    btn.style.color = 'var(--am, #ffc93f)'; btn.style.borderColor = 'var(--am, #ffc93f)';
+    if (t) clearTimeout(t);
+    t = setTimeout(reset, CONFIRM_MAX_MS);
+  };
+}
+const resetConfirms = () => { for (const r of confirmables) r(); };
+// Mesma chamada da REVANCHE do match-end: recomeça a partida com time/personagem/adversário atuais.
+needsConfirm($('btn-restart'), () => startGame(currentTeam, currentChar, undefined, !!mpSessao));
+needsConfirm($('btn-quit'), () => {
+  sendTelemetry();   // fora do `if (pl)`: partialPayload() devolve null sem nick, telemetria não depende disso
+  const pl = partialPayload();
+  if (pl) { submitted = true; submitGlobal(pl); }
+  quitToMenu();
+});
+$('btn-again').onclick = () => { sfx.uiClick(); startGame(currentTeam, currentChar, undefined, !!mpSessao); };
+$('btn-menu').onclick = () => { sfx.uiClick(); quitToMenu(); };
+// M in-game: escolhe o personagem do novo time antes de trocar
+let switchMode = false;
+function armSwitchHook() {
+  game.onRequestSwitch = () => {
+    if (mpSessao) return abrirTrocaOnline();
+    game.setPaused(true);
+    switchMode = true;
+    pickTeam(game._factionOf(game.player.team === 'E' ? 'B' : 'E'));
+  };
+}
+// Online o lado é do servidor: M só troca o personagem, e só se o servidor aceitar.
+function abrirTrocaOnline() {
+  if (!mpSessao.net?.aceitaPersonagem?.() || mpSessao.net.espectador) return;
+  game.setPaused(true);
+  switchMode = 'mp';
+  pickTeam(currentTeam);
+}
+$('char-confirm').onclick = () => {
+  sfx.uiClick();
+  if (!selChar || personagemTravado(selChar)) return;
+  // Only take the in-match "switch team" path when there's a live game to switch;
+  // a stale switchMode flag (e.g. backed out of M) must NOT hit game._switchTeam on a
+  // disposed game — that used to throw and leave the next match unable to load.
+  if (switchMode === 'mp' && game && mpSessao) {
+    switchMode = false;
+    localStorage.setItem('csbr-home-character', selChar.id);
+    if (escolhaSpAntesDoMp) escolhaSpAntesDoMp.char = selChar.id;
+    mpSessao.net.pedirPersonagem(selChar.id);
+    show(null); game.resume();
+    return;
+  }
+  if (switchMode && game) {
+    switchMode = false;
+    currentChar = selChar.id;
+    if (HUB_ENABLED) localStorage.setItem('csbr-home-character', currentChar);
+    show(null);
+    try {
+      game._switchTeam(selChar.id);
+      currentTeam = game.playerTeam; currentFaction = game.playerFaction;
+      currentEnemyFaction = game.enemyFaction; currentChar = game.playerCharId;
+    } catch (e) { console.error('switch team failed', e); }
+    game.resume();   // unpause + re-request pointer lock (fixes "M opens but game won't resume")
+  } else if (HUB_ENABLED) {
+    switchMode = false;
+    currentChar = selChar.id;
+    currentTeam = ladoValido(selChar, currentTeam);
+    currentFaction = currentTeam;
+    currentEnemyFaction = null;
+    localStorage.setItem('csbr-home-character', currentChar);
+    localStorage.setItem('csbr-home-side', currentTeam);
+    show('main-menu');
+  } else {
+    switchMode = false;
+    // O adversário é sempre o outro lado: o personagem confirmado já começa a partida.
+    currentChar = selChar.id;
+    currentTeam = ladoValido(selChar, currentTeam);
+    currentFaction = currentTeam;
+    startGame(currentTeam, currentChar, null);
+  }
+};
+
+// A tela tem somente os dois times de gameplay.
+function setEnemyPickMode(on, myFaction) {
+  for (const f of ['e', 'b']) {
+    const b = $('btn-team-' + f);
+    if (b) b.classList.toggle('hidden', !!(on && f.toUpperCase() === myFaction));
+  }
+}
+/* A mesma tela serve escolha do time e, no fluxo antigo, do adversário. */
+function setTeamStep(step, myFaction) {
+  const ts = $('team-select'); if (ts) ts.dataset.step = step;
+  const st = $('team-step'), tt = $('team-title'), hint = $('team-hint');
+  if (step === 'enemy') {
+    if (st) st.textContent = tr('PASSO 4 · O ADVERSÁRIO');
+    if (tt) tt.textContent = tr('QUEM VAI LEVAR O CORO?');
+    if (hint) hint.textContent = frase('escolhaAdversario', tr(FACTION_NAME[myFaction] || 'o seu time'));
+  } else {
+    if (st) st.textContent = tr('PASSO 2 · O SEU TIME');
+    if (tt) tt.textContent = tr('ESCOLHA SEU TIME');
+    if (hint) hint.textContent = tr('Toda partida é Time E contra Time B.');
+  }
+}
+
+const nickEl = $('nick-input');
+nickEl.value = localStorage.getItem(NICK_KEY) || '';
+nickEl.oninput = () => localStorage.setItem(NICK_KEY, nickEl.value);
+const SOCIAL_NET_KEY = 'awpbr_social_net'; // legado (migração pro multi-redes)
+function sanitizeHandle(v) { return v.replace(/^@+/, '').replace(/[^a-zA-Z0-9._-]/g, ''); }
+function extractFromUrl(v) {
+  const m = v.match(/(?:x\.com|twitter\.com|github\.com|instagram\.com|tiktok\.com\/@|youtube\.com\/@|linkedin\.com\/in)\/?@?([A-Za-z0-9._-]+)/i);
+  return m ? m[1] : null;
+}
+
+/* ---------------- multi-redes sociais (até 3, sem login) ---------------- */
+const SOCIALS_KEY = 'awpbr_socials';
+const SOCIALS_CLEAR_KEY = 'awpbr_socials_clear_pending';
+const SOCIALS_CONFIRMED_KEY = 'awpbr_socials_confirmed';
+const NETS = [['x', 'X / Twitter'], ['github', 'GitHub'], ['instagram', 'Instagram'],
+  ['linkedin', 'LinkedIn'], ['tiktok', 'TikTok'], ['youtube', 'YouTube'], ['site', 'Site próprio']];
+let socials = [];
+let confirmedSocials = [];
+try { confirmedSocials = JSON.parse(localStorage.getItem(SOCIALS_CONFIRMED_KEY) || '[]'); } catch {}
+if (!Array.isArray(confirmedSocials)) confirmedSocials = [];
+let socialsClearRequested = confirmedSocials.length > 0 && localStorage.getItem(SOCIALS_CLEAR_KEY) === '1';
+const storedSocials = localStorage.getItem(SOCIALS_KEY);
+try { socials = JSON.parse(storedSocials || '[]'); } catch {}
+// migração do campo único antigo
+if (storedSocials === null) {
+  const oldNet = localStorage.getItem(SOCIAL_NET_KEY), oldHandle = localStorage.getItem(SOCIAL_KEY);
+  if (oldNet && oldHandle) socials = [{ net: oldNet, handle: oldHandle }];
+  localStorage.setItem(SOCIALS_KEY, JSON.stringify(socials));
+}
+localStorage.removeItem(SOCIAL_NET_KEY);
+localStorage.removeItem(SOCIAL_KEY);
+function removedSavedSocial(s) { return Boolean(s?.handle && confirmedSocials.length > 0); }
+function saveSocials(clearRequested = false) {
+  localStorage.setItem(SOCIALS_KEY, JSON.stringify(socials));
+  socialsClearRequested ||= clearRequested && confirmedSocials.length > 0;
+  if (socialsClearRequested) localStorage.setItem(SOCIALS_CLEAR_KEY, '1');
+  updateAvatarVisibility();
+}
+function updateAvatarVisibility() {
+  const nick = registeredNick || nickEl.value || '';
+  $('avatar-row').classList.toggle('hidden', !nick.trim());
+}
+function renderSocials() {
+  const list = $('social-list');
+  list.innerHTML = '';
+  socials.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'pc-row social-item';
+    row.innerHTML =
+      `<select>${NETS.map(([v, l]) => `<option value="${v}"${v === s.net ? ' selected' : ''}>${l}</option>`).join('')}</select>` +
+      `<input maxlength="40" placeholder="usuário" value="${String(s.handle).replace(/"/g, '&quot;')}">` +
+      `<button class="social-del" title="remover" type="button">✕</button>`;
+    const sel = row.querySelector('select'), inp = row.querySelector('input'), del = row.querySelector('.social-del');
+    sel.onchange = () => { s.net = sel.value; saveSocials(); };
+    inp.oninput = () => {
+      const hadHandle = Boolean(s.handle);
+      let v = extractFromUrl(inp.value) || inp.value;
+      v = sanitizeHandle(v);
+      if (v !== inp.value) inp.value = v;
+      s.handle = v; saveSocials(hadHandle && !v && confirmedSocials.length > 0);
+    };
+    del.onclick = () => { const [removed] = socials.splice(i, 1); saveSocials(removedSavedSocial(removed)); renderSocials(); };
+    list.appendChild(row);
+  });
+  $('social-add').classList.toggle('hidden', socials.length >= 3);
+}
+$('social-add').onclick = () => { socials.push({ net: 'x', handle: '' }); saveSocials(); renderSocials(); };
+nickEl.addEventListener('input', updateAvatarVisibility);
+nickEl.addEventListener('input', syncPlayState);
+syncPlayState();   // estado inicial do botão JOGAR (nick vem do localStorage)
+renderSocials(); updateAvatarVisibility();
+
+/* ---------------- global ranking API (via /api/* do site) ---------------- */
+const TOKEN_KEY = 'awpbr_token';
+function getToken() {
+  let t = localStorage.getItem(TOKEN_KEY);
+  if (!t) { t = clientUuid(); localStorage.setItem(TOKEN_KEY, t); }
+  return t;
+}
+async function api(path, body) {
+  try {
+    const r = await fetch(apiUrl(path), body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+      : undefined);
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? j : { error: j.error || `http_${r.status}`, message: j.message };
+  } catch { return null; }
+}
+function submitNote(msg) {
+  console.warn('[ranking]', msg);
+}
+function traduErroSubmit(msg) {
+  if (/identity|identidade|token|uid/i.test(msg) || rankingBloqueado)
+    return rankingBloqueado || 'não foi possível recuperar seu jogador; recarregue e tente de novo';
+  return msg;
+}
+
+// stats parciais quando o jogador abandona a partida (sair pro menu / fechar aba)
+/* "Tem partida viva agora?" — uma definição só, usada pelo payload de abandono E pela
+   confirmação de saída. Eram a mesma condição escrita duas vezes, e duas cópias de uma
+   condição é como uma delas fica pra trás. */
+function emPartida() {
+  return !!game && !testMode && ['live', 'roundEnd', 'countdown'].includes(game.state);
+}
+function partialPayload() {
+  if (!emPartida() || submitted) return null;
+  const g = game, p = g.player;
+  const rounds = g.roundsWon.E + g.roundsWon.B;
+  if (!p.kills && !p.deaths && !rounds && g.time < 30) return null;
+  const nick = registeredNick || (nickEl.value || '').trim();
+  if (!nick) return null;
+  /* `mode` VAI TAMBÉM NO ABANDONO, e é aqui que ele mais importa (issue #87): este
+     payload é o mais CURTO que o jogo produz — vencer a 1ª rodada de captura por
+     dominação e fechar a aba manda `rounds: 1` com `seconds` de poucas dezenas. Sem o
+     modo, o servidor aplicava o piso do ABATE (80 s/rodada) e recusava. */
+  return {
+    uid: getAnonId(), nick, token: getToken(), won: false, kills: p.kills, deaths: p.deaths,
+    headshots: p.headshots || 0, bestStreak: g.mk.best || 0, rounds, team: g.playerTeam,
+    faction: g.playerFaction || currentFaction,
+    seconds: Math.round(g.time), character: g.playerDef?.id || g.playerCharId || currentChar, skin: g.playerDef?.skinId || null,
+    mode: modoEfetivoAtual(),
+  };
+}
+addEventListener('beforeunload', (e) => {
+  sendTelemetry();   // aba fechando no meio da partida ainda conta como tempo jogado
+  if (emPartida()) { sendMatchEvent('quit'); _funnel('quit', _tipoDaPartida()); }   // feat/telemetria
+  const pl = partialPayload();
+  if (pl) sendJsonKeepalive('/api/submit-match', pl);
+  /* SEGUNDA CAMADA CONTRA O CTRL+W (relato do Daniel Diniz: *"quando fica muito tempo com
+     a tecla Control pressionada a página fecha"* — é agachar + andar pra frente formando
+     Ctrl+W no Windows). A trava de atalho do game.js resolve de verdade, mas é Chromium e
+     exige tela cheia; no Firefox, no Safari e quando a tela cheia não pega, o que sobra é
+     o navegador PERGUNTAR antes de fechar. Perder a partida com um diálogo é chato;
+     perder sem aviso é o defeito.
+
+     `emPartida()` é o gate, e ele é a metade que importa: no menu nada disso arma, então
+     quem quer só fechar a aba fecha a aba. Uma confirmação que aparece sempre vira praga e
+     em duas semanas alguém arranca ela inteira — e leva o conserto junto. Cláusula CW3 da
+     `tools/eval/ctrlw-check.mjs` existe pra cobrar exatamente esse silêncio no menu. */
+  if (emPartida()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ---------------- fila de reenvio (rate limit do servidor) ---------------- */
+const PENDING_KEY = 'awpbr_pending_submit';
+function isSubmitCooldown(res) {
+  const error = typeof res?.error === 'string' ? res.error : '';
+  const message = typeof res?.message === 'string' ? res.message : '';
+  return error === 'submit_cooldown' || /aguarde/i.test(error) || /aguarde/i.test(message);
+}
+async function submitGlobal(pl) {
+  const res = await api('/api/submit-match', pl);
+  if (isSubmitCooldown(res)) {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(pl));
+    setTimeout(retryPending, 95_000);   // reenvia sozinho quando a janela abrir
+  }
+  return res;
+}
+async function retryPending() {
+  const raw = localStorage.getItem(PENDING_KEY);
+  if (!raw) return;
+  const res = await api('/api/submit-match', JSON.parse(raw));
+  if (res && !res.error) localStorage.removeItem(PENDING_KEY);
+  else if (isSubmitCooldown(res)) setTimeout(retryPending, 95_000);
+}
+
+/* ---------------- local stats (espelhados pro ranking global) ----------------
+   STATS_KEY mora no bloco de storage lá em cima (TDZ: renderPlayerPlate roda antes daqui). */
+function loadStats() {
+  return Object.assign({ matches: 0, wins: 0, kills: 0, deaths: 0, headshots: 0, bestStreak: 0 },
+    JSON.parse(localStorage.getItem(STATS_KEY) || '{}'));
+}
+async function recordMatchStats(s) {
+  document.dispatchEvent(new CustomEvent('cs-match-end', { detail: { mode: mpSessao ? 'multiplayer' : 'singleplayer' } }));
+  submitted = true;
+  sendTelemetry();   // ANTES do guard de nick lá embaixo: telemetria cobre quem não registrou
+  sendMatchEvent(s?.won ? 'won' : 'lost');   // evento rico anônimo (feat/telemetria, 016)
+  _funnel('match_end', _tipoDaPartida());      // funil: terminou (017), separado por tipo
+  contagem.partidaTerminada({ map: game?._mapId || currentMap, mode: activeModeId(game), game: telemetryGameContext.gameType === 'multiplayer' ? 'mp' : 'sp' });
+  const st = loadStats();
+  const previousXp = playerXp(st);
+  st.matches++; if (s.won) st.wins++;
+  st.kills += s.kills; st.deaths += s.deaths; st.headshots += s.headshots;
+  st.playSeconds = (st.playSeconds || 0) + (s.seconds || 0);
+  st.rounds = (st.rounds || 0) + s.roundsP + s.roundsB;
+  st.bestStreak = Math.max(st.bestStreak, s.bestStreak);
+  localStorage.setItem(STATS_KEY, JSON.stringify(st));
+  const nextXp = playerXp(st);
+  const previousLevel = Math.floor(previousXp / 2000) + 1, nextLevel = Math.floor(nextXp / 2000) + 1;
+  if (nextLevel > previousLevel) showLevelUp(nextLevel);
+  // espelha pro ranking global (avisa na tela se falhar)
+  const nick = registeredNick || (nickEl.value || '').trim();
+  if (nick && !testMode) {
+    const res = await submitGlobal({
+      uid: getAnonId(), nick, token: getToken(), won: s.won, kills: s.kills, deaths: s.deaths,
+      headshots: s.headshots, bestStreak: s.bestStreak,
+      rounds: s.roundsP + s.roundsB, team: s.team, faction: currentFaction, seconds: s.seconds || 0,
+      character: s.character, skin: s.skin || null, mode: modoEfetivoAtual(),
+    });
+    if (!res) submitNote('ranking global indisponível');
+    else if (res.error) submitNote(res.message || traduErroSubmit(res.error));
+  }
+  renderPlayerPlate();   // XP/nível do card do menu sobem junto com os stats
+}
+
+/* ---------------- player plate (card do jogador no menu principal) ----------------
+   Nível/XP derivados dos MESMOS stats locais do ranking — uma fonte só de verdade.
+   2.000 XP por nível: kill 100 · headshot 25 · vitória 500 · partida 50. */
+function playerXp(st) { return st.kills * 100 + st.headshots * 25 + st.wins * 500 + st.matches * 50; }
+function showLevelUp(level) {
+  document.querySelector('[data-level-up]')?.remove();
+  const popup = document.createElement('div');
+  popup.className = 'level-up-popup';
+  popup.dataset.levelUp = String(level);
+  popup.setAttribute('role', 'status');
+  popup.setAttribute('aria-live', 'polite');
+  const title = document.createElement('strong');
+  title.textContent = `${tr('NÍVEL')} ${level}`;
+  popup.append(title, document.createTextNode(tr('Novo nível alcançado')));
+  document.body.append(popup);
+  sfx.levelUp();
+  setTimeout(() => { if (popup.isConnected) popup.remove(); }, 6000);
+}
+function renderPlayerPlate() {
+  const el = $('player-plate'); if (!el) return;
+  const st = loadStats();
+  const xp = playerXp(st);
+  const level = Math.floor(xp / 2000) + 1;
+  const into = xp % 2000;
+  const nick = (nickEl.value || '').trim();
+  applyPlayerAvatar($('pp-avatar'), nick);
+  $('pp-nick').textContent = nick || tr('SEM NICK');
+  if (HUB_ENABLED) {
+    applyPlayerAvatar($('hub-avatar'), nick);
+    $('hub-nick').textContent = nick || tr('SEM NICK');
+  }
+  $('pp-level').textContent = `${tr('NÍVEL')} ${level}`;
+  $('xp-fill').style.width = (into / 20) + '%';
+  $('xp-num').textContent = `${into.toLocaleString('pt-BR')} / 2.000 XP`;
+  el.dataset.empty = nick ? '0' : '1';
+  espelhaBarraMenu();
+}
+
+/* A barra inferior do menu MOSTRA a escolha da partida; quem a MUDA continua sendo
+   o setup. Espelhar em vez de duplicar o controle: dois lugares editando o mesmo
+   estado é como se perde a sincronia entre eles. Se o setup ainda não montou, o
+   traço fica — é o mesmo placeholder que o #map-name usa antes de escolher. */
+function espelhaBarraMenu() {
+  const sub = $('pp-sub');
+  if (sub) {
+    const s = (typeof socialList !== 'undefined' && socialList && socialList[0]) ? socialList[0] : null;
+    sub.textContent = s ? `@${s.handle} · EDITAR PERFIL` : 'EDITAR PERFIL';
+  }
+  const armas = $('mf-armas-val'), mapa = $('mf-mapa-val');
+  const caret = '<span class="caret" aria-hidden="true">▼</span>';
+  if (armas) {
+    const v = ($('wpn-dd-label') || {}).textContent;
+    armas.innerHTML = `${(v || 'TODAS').trim()} ${caret}`;
+  }
+  if (mapa) {
+    const v = ($('map-name') || {}).textContent;
+    mapa.innerHTML = `${(v || '—').trim()} ${caret}`;
+  }
+}
+
+// o plate abre o passo de perfil do setup (onde nick/avatar se editam de verdade)
+$('player-plate').onclick = () => { openSetup(null, 'SEU PERFIL', null); openProfileStep(true); };
+/* ARMAS e MAPA levam ao MESMO passo do setup — é lá que a escolha existe. Sem
+   `markCurrent`, porque nenhum item da lista principal foi acionado. */
+for (const [id, titulo] of [['mf-armas', 'MATA-MATA'], ['mf-mapa', 'MATA-MATA']]) {
+  const b = $(id);
+  if (b) b.onclick = () => { ui.click(); openSetup('rounds', titulo, 'sp'); };
+}
+function showRanking() {
+  const st = loadStats();
+  const kd = st.deaths ? (st.kills / st.deaths).toFixed(2) : st.kills.toFixed(2);
+  const fmt = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m}min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}min` : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`; };
+  const secs = st.playSeconds || 0;
+  const tempo = secs > 0 ? fmt(secs)
+    : (st.rounds || 0) > 0 ? `~${fmt(st.rounds * 99)}`
+    : st.matches > 0 ? `~${fmt(st.matches * 297)}` : '0min';
+  const nick = (nickEl.value || 'VOCÊ').trim();
+  const social = socials.find(s => s.handle);
+  $('rank-local').innerHTML =
+    `<div style="grid-column:1/-1;text-align:center;color:var(--cs);font-size:18px">${nick}` +
+    (social ? ` · <span style="color:#8a8064;font-size:12px">${social.net}/${social.handle.replace(/</g, '&lt;')}</span>` : '') + `</div>` +
+    `<div><b>${st.matches}</b>partidas</div><div><b>${st.wins > 0 ? st.wins : "—"}</b>vitórias</div><div><b>${kd}</b>K/D</div><div><b>${tempo}</b>arena</div>` +
+    `<div><b>${st.kills}</b>kills</div><div><b>${st.deaths}</b>mortes</div><div><b>${st.headshots}</b>headshots</div><div><b>${st.rounds || 0}</b>rounds</div>`;
+  show('ranking-panel');
+  renderGlobal(nick);
+}
+async function renderHubRanking() {
+  const stats = loadStats();
+  /* Conta logada JÁ TEM nick: o convite é só para quem joga sem nick nenhum (dono, 24/10). */
+  $('hub-rank-profile').hidden = Boolean(registeredNick || contaNick);
+  const cards = $('hub-rank-local');
+  cards.replaceChildren();
+  for (const [label, value] of [
+    ['KILLS', stats.kills], ['MORTES', stats.deaths], ['VITÓRIAS', stats.wins], ['PARTIDAS', stats.matches],
+  ]) {
+    const card = document.createElement('div');
+    const number = document.createElement('b'); number.textContent = String(value);
+    card.append(number, document.createTextNode(label)); cards.appendChild(card);
+  }
+  /* 21 dos 25 do ranking não têm foto (medido 22/10): sem avatar_url entra a arte do último
+     personagem jogado, e a inicial fica só pra quem não tem nem foto nem personagem. */
+  const rostoDoJogador = (p) => {
+    const caixa = document.createElement('span'); caixa.className = 'ranking-avatar';
+    const inicial = document.createElement('span');
+    inicial.textContent = (Array.from(p.nick || '?')[0] || '?').toUpperCase();
+    caixa.append(inicial);
+    const arte = /^[a-z0-9][a-z0-9_-]{0,31}$/.test(p.last_character || '') ? `/img/chars/avatars/${p.last_character}.webp` : '';
+    const fonte = (typeof p.avatar_url === 'string' && p.avatar_url) || arte;
+    if (!fonte) return caixa;
+    const img = document.createElement('img');
+    img.src = fonte; img.width = 36; img.height = 36; img.loading = 'lazy'; img.alt = '';
+    if (fonte === arte) img.dataset.arte = '1';
+    img.onerror = () => { if (arte && img.dataset.arte !== '1') { img.dataset.arte = '1'; img.src = arte; return; } img.hidden = true; };
+    caixa.append(img); return caixa;
+  };
+  /* A linha inteira leva ao perfil: role+tabindex no <tr> porque <a> não embrulha linha de
+     tabela, e aninhar link dentro de link quebra o teclado e o leitor de tela. */
+  const linhaDoJogador = (p, i) => {
+    const linha = document.createElement('tr');
+    const perfil = playerProfilePath(p) || '';
+    const posicao = document.createElement('td'); posicao.textContent = `#${p.position ?? i + 1}`;
+    const quem = document.createElement('td');
+    const dupla = document.createElement('div'); dupla.className = 'ranking-player';
+    const dados = document.createElement('div');
+    const nome = document.createElement(perfil ? 'a' : 'span');
+    nome.className = 'hub-rank-nick'; nome.textContent = p.nick || '—';
+    if (perfil) { nome.href = perfil; nome.setAttribute('tabindex', '-1'); }
+    dados.append(nome);
+    const selo = accountVerifiedBadge(p.account_verified); if (selo) dados.append(selo);
+    const patente = careerRankBadge(p.career_points ?? p.points); if (patente) dados.append(patente);
+    dupla.append(rostoDoJogador(p), dados); quem.append(dupla);
+    linha.append(posicao, quem);
+    for (const valor of [p.points, p.kills, p.kd, p.matches]) {
+      const cel = document.createElement('td'); cel.textContent = valor == null ? '—' : String(valor); linha.append(cel);
+    }
+    if (!perfil) return linha;
+    linha.setAttribute('role', 'link'); linha.setAttribute('tabindex', '0');
+    linha.dataset.href = perfil;
+    linha.setAttribute('aria-label', `${tr('Ver perfil de')} ${p.nick || ''}`.trim());
+    // Sem recarregar o jogo: o perfil é tela do hub. Só cai em location.assign sem o hub.
+    const irAoPerfil = () => { if (!abrirPerfilNoHub(perfil)) location.assign(perfil); };
+    linha.onclick = (e) => { if (!e.target?.closest?.('a')) irAoPerfil(); };
+    linha.onkeydown = (e) => { if (e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault(); irAoPerfil(); };
+    return linha;
+  };
+  const global = $('hub-rank-global');
+  global.textContent = 'Carregando o ranking global…';
+  /* Fonte verificada (22/10): /api/social?action=ranking é a única que filtra ranking_exclusion;
+     /api/leaderboard devolve pontos de carreira/legado e mostrava quem foi excluído. */
+  const data = await api('/api/social?action=ranking&scope=global&period=all&mode=all&game_type=all&team=all');
+  if (data?.disabled) {
+    global.textContent = 'O ranking global está desligado enquanto a pontuação competitiva não for validada pelo servidor.';
+    return;
+  }
+  if (!Array.isArray(data?.players)) { global.textContent = 'Ranking global indisponível no momento.'; return; }
+  if (!data.players.length) { global.textContent = 'Ainda não há jogadores no ranking.'; return; }
+  const tabela = document.createElement('table'); tabela.className = 'social-table';
+  const cabeca = document.createElement('thead'); const linhaCabeca = document.createElement('tr');
+  for (const rotulo of ['POS.', 'JOGADOR', 'PONTOS', 'KILLS', 'K/D', 'PARTIDAS']) {
+    const th = document.createElement('th'); th.textContent = tr(rotulo); linhaCabeca.append(th);
+  }
+  cabeca.append(linhaCabeca); tabela.append(cabeca);
+  const corpo = document.createElement('tbody');
+  for (const [i, p] of data.players.entries()) corpo.append(linhaDoJogador(p, i));
+  tabela.append(corpo);
+  global.replaceChildren();
+  if (data.own) global.append(Object.assign(document.createElement('p'), { className: 'hub-rank-own', textContent: `Sua posição: #${data.own.position} · ${data.own.points} pontos.` }));
+  global.append(tabela);
+  /* Rolagem infinita: o servidor serve 25 por página (p_limit fixo em api/social.ts), então a
+     próxima página é pedida por offset. O botão é o mecanismo REAL — o observador só o aciona
+     quando ele aparece na tela, e sem IntersectionObserver (ou sem mouse) ele continua clicável. */
+  if (data.players.length < RANKING_PAGINA) return;
+  const mais = document.createElement('button');
+  mais.type = 'button'; mais.id = 'hub-rank-mais'; mais.className = 'hub-rank-profile';
+  mais.textContent = tr('CARREGAR MAIS');
+  let carregando = false, observador = null;
+  const encerrar = () => { observador?.disconnect(); mais.remove(); };
+  const proximaPagina = async () => {
+    if (carregando) return;
+    carregando = true; mais.disabled = true; mais.textContent = tr('CARREGANDO…');
+    const pagina = await api(`/api/social?action=ranking&scope=global&period=all&mode=all&game_type=all&team=all&offset=${corpo.children.length}`);
+    const vieram = Array.isArray(pagina?.players) ? pagina.players : null;
+    if (!vieram) { mais.disabled = false; carregando = false; mais.textContent = tr('TENTAR DE NOVO'); return; }
+    for (const [i, p] of vieram.entries()) corpo.append(linhaDoJogador(p, corpo.children.length + i));
+    if (vieram.length < RANKING_PAGINA) { encerrar(); return; }
+    carregando = false; mais.disabled = false; mais.textContent = tr('CARREGAR MAIS');
+  };
+  mais.onclick = proximaPagina;
+  global.append(mais);
+  if (typeof IntersectionObserver !== 'function') return;
+  observador = new IntersectionObserver((entradas) => { if (entradas.some((e) => e.isIntersecting)) void proximaPagina(); });
+  observador.observe(mais);
+}
+async function renderGlobal(nick) {
+  const box = $('rank-global');
+  box.innerHTML = '<h3>RANKING GLOBAL</h3><div class="rg-off">carregando…</div>';
+  const data = await api('/api/leaderboard');
+  /* `disabled` é escolha, `indisponível` é defeito — e o jogador lê a diferença.
+     A flag mora só no servidor (src/lib/site.ts, RANKING_ON); aqui a gente só
+     reage à resposta, pra não existirem duas fontes de verdade que divergem. */
+  if (data && data.disabled) {
+    box.innerHTML = '<h3>RANKING GLOBAL</h3>' +
+      '<div class="rg-off">desligado por enquanto. Seus stats deste navegador continuam contando, ali em cima.</div>' +
+      '<div class="rg-links"><a href="/mapa" target="_blank" style="color:var(--cs)">MAPA AO VIVO ↗</a></div>';
+    return;
+  }
+  if (!Array.isArray(data?.players)) {
+    box.innerHTML = '<h3>RANKING GLOBAL</h3><div class="rg-off">indisponível no momento</div>';
+    return;
+  }
+  box.innerHTML = '<h3>RANKING GLOBAL (top 10)</h3>';
+  if(data.players.length){const wrap=document.createElement('div');wrap.className='social-table-wrap';wrap.appendChild(rankingTable(data.players.slice(0,10),{nick}));box.appendChild(wrap);}
+  else {const empty=document.createElement('p');empty.textContent='Ainda vazio — seja o primeiro!';box.appendChild(empty);}
+  const links=document.createElement('div');links.className='rg-links';
+  const own=data.players.find(p=>p.nick===nick);
+  for(const [label,href] of [['RANKING COMPLETO ↗','/ranking'],...(nick?[['MEU PERFIL ↗',playerProfilePath(own || {}) || `/u/${encodeURIComponent(nick)}`]]:[]),['MAPA AO VIVO ↗','/mapa']]){const a=document.createElement('a');a.textContent=label;a.href=href;a.target='_blank';a.rel='noopener noreferrer';links.appendChild(a);}
+  box.appendChild(links);
+}
+
+// GLB idle thumbnail (no weapon), rendered off the shared preview renderer.
+function glbThumb(def) {
+  if (previewUsesStills()) return portraitUrl(def);
+  if (!hasModel(def.id)) return null;
+  const m = buildCharacterModel(def, { weapon: false });
+  if (!m) return null;
+  m.group.rotation.y = 0.5;
+  for (let i = 0; i < 42; i++) m.mixer.update(1 / 60); // settle into the idle pose
+  return snapThumb(m.group, portraitUrl(def));
+}
+/* Previews 3D dos dois times: quatro personagens disponíveis por lado, cacheados
+   uma vez por visita. Grupos do catálogo não ganham cards nesta tela. */
+const teamPreviewsDone = new Set();
+const teamPreviewsPending = new Set();
+function ensureTeamPreviews() {
+  for (const [btn, lado] of [['btn-team-e', 'E'], ['btn-team-b', 'B']]) {
+    const box = document.querySelector(`#${btn} .team-chars`);
+    if (!box || !(box.checkVisibility?.() ?? box.getClientRects().length > 0)) continue;
+    if (teamPreviewsDone.has(lado) || teamPreviewsPending.has(lado)) continue;
+    const chars = CHARACTERS.filter(c => podeNoLado(c, lado) && GLB_CHARS.has(c.id) && !personagemTravado(c)).slice(0, 4);
+    if (!chars.length) continue;
+    teamPreviewsPending.add(lado);
+    box.innerHTML = chars.map(() => '<span class="tc-slot"></span>').join('');
+    const slots = [...box.children];
+    const ready = previewUsesStills() ? Promise.resolve() : preloadCharacterAssets(chars.map(c => c.id));
+    ready.then(() => {
+      chars.forEach((c, i) => {
+        const url = glbThumb(c);
+        if (url && slots[i]) slots[i].innerHTML = `<img src="${url}" alt="${c.name}" title="${c.name}">`;
+      });
+      teamPreviewsDone.add(lado);
+    }).catch(() => {}).finally(() => teamPreviewsPending.delete(lado));
+  }
+}
+function pickTeam(faction) {
+  const lado = faction === 'E' || faction === 'B' ? faction : null;
+  /* Time ou grupo sem elenco disponível não abre lista vazia. */
+  if (!CHARACTERS.some(c => lado ? podeNoLado(c, lado) : c.team === faction)) { ui.back(); return; }
+  currentTeam = lado || currentTeam;
+  currentFaction = currentTeam;
+  // estado de seleção persistente nos cards: ao voltar do personagem, a tela diz qual é o SEU lado
+  for (const f of ['e', 'b']) {
+    const b = $('btn-team-' + f);
+    if (b) b.setAttribute('aria-pressed', String(f.toUpperCase() === faction));
+  }
+  const chars = CHARACTERS.filter(c => (lado ? podeNoLado(c, lado) : c.team === faction));
+  // ?nav=1 pula o preload 3D do roster (lento) — thumbnails caem no fallback pvThumb, que
+  // nunca dispara GLB. A transição #char-select é o que o smoke de navegação quer provar.
+  const mountCharList = () => {
+    hideLoading();
+    const list = $('char-list');
+    list.innerHTML = '';
+    let firstRow = null, firstChar = null;
+    chars.forEach((c) => {
+      const row = document.createElement('button');
+      row.className = 'char-row';
+      // Avatar = busto cortado da ARTE APROVADA (molde/neutro), não do GLB low-poly —
+      // referência 03: a coluna da esquerda é uma fileira de retratos, não de modelos 3D.
+      const thumb0 = `/img/chars/avatars/${c.id}.webp?v=${VERSION}`;
+      row.type = 'button'; row.setAttribute('role', 'option'); row.setAttribute('aria-selected', 'false'); row.title = c.name;
+      row.innerHTML = `<img src="${thumb0}" alt="${c.name}" loading="lazy"><span>${c.name}</span>`;
+      if (personagemTravado(c)) {
+        row.classList.add('char-row--travado'); row.setAttribute('aria-disabled', 'true');
+        const trava = document.createElement('b'); trava.className = 'hub-roster-trava';
+        trava.dataset.passeNivel = String(nivelDoPersonagem(c) || '');
+        trava.innerHTML = ICONE_CADEADO_PASSE; trava.append(frase('passeTravado', nivelDoPersonagem(c) || '?'));
+        row.append(trava);
+      }
+      row.onmouseenter = () => ui.hover();
+      // A faixa é horizontal, mas ↑↓ continuam aceitos para quem já usava o fluxo antigo.
+      row.onkeydown = (e) => {
+        const rows = [...list.children];
+        const k = rows.indexOf(row);
+        let n = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') n = (k + 1) % rows.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') n = (k - 1 + rows.length) % rows.length;
+        if (n < 0) return;
+        e.preventDefault(); rows[n].focus(); rows[n].click();
+      };
+      row.onclick = () => {
+        if (personagemTravado(c)) { $('char-info-blurb').textContent = frase('passeTravadoAviso', c.name, nivelDoPersonagem(c) || '?'); return; }
+        selectCharacterFromAvatar(c, row, chars);
+      };
+      list.appendChild(row);
+      if (!firstRow && !personagemTravado(c)) { firstRow = row; firstChar = c; }
+    });
+    // seleciona DEPOIS de gerar todos os thumbs — senão o preview fica com o último
+    show('char-select');
+    if (firstRow) selectChar(firstChar, firstRow);
+  };
+  if (navOnly || previewUsesStills()) { mountCharList(); return; }
+  // LOADING REAL da seleção de personagem: os GLBs do roster entram ANTES da tela abrir —
+  // nada de thumbnails de caixa montando aos poucos (o "minecraft" que o dono viu)
+  showLoading('CARREGANDO PERSONAGENS…');
+  /* Travado pelo passe não é escolhível (o clique só explica o nível): a fileira usa o avatar
+     estático e o pack Studio dele não é baixado aqui. */
+  preloadCharacterAssets(chars.filter(c => !personagemTravado(c)).map(c => c.id)).catch(() => {}).then(mountCharList);
+}
+/* Ficha do personagem (tela de seleção): raridade + atributos derivados da arma inicial
+   (charWeapon) e de um hash estável do id. É FLAVOR de apresentação no estilo CS2/Valorant —
+   NÃO afeta gameplay (vida/velocidade reais são iguais pra todo mundo). */
+const ATTR_BY_WPN = {
+  awp: [2, 2, 5], mosin: [2, 2, 5], deagle: [2, 3, 4], revolver38: [2, 3, 4], pistol: [2, 4, 3],
+  ak: [3, 3, 3], m4: [3, 3, 4], md97: [3, 3, 3], scar: [3, 3, 4],
+  mp5: [2, 4, 3], uzi: [2, 5, 2], p90: [2, 4, 2], shotgun: [4, 3, 1], lmg: [5, 1, 2],
+};
+/* Especialidade: flavor derivado da arma inicial (mesma fonte dos atributos).
+   É o "papel" do personagem na tela de seleção, estilo agente de Valorant. */
+const SPEC_BY_WPN = {
+  awp: ['FRANCO-ATIRADOR', 'Um tiro, uma história. Domina as linhas longas do mapa.'],
+  mosin: ['FRANCO-ATIRADOR', 'Ferrolho de guerra: lento, mas cada bala conta uma lenda.'],
+  deagle: ['DUELISTA', 'Canhão de mão. Recompensa mira fria e pavio curto.'],
+  revolver38: ['DUELISTA', 'Seis tiros de pura confiança. Não precisa de mais.'],
+  pistol: ['CORINGA', 'Leve e rápido: ganha no giro, na economia e na esperteza.'],
+  ak: ['SOLDADO', 'Dano bruto por bala. Controla o recuo, controla a treta.'],
+  m4: ['SOLDADO', 'Precisão consistente em qualquer distância.'],
+  md97: ['SOLDADO', 'O fuzil da pátria: equilibrado em tudo, ruim em nada.'],
+  scar: ['SOLDADO', 'Pesada e estável — tiroteio longo é com ela mesma.'],
+  mp5: ['BATEDOR', 'Mobilidade e cadência: entra, resolve, sai.'],
+  uzi: ['BATEDOR', 'A mais rápida do pedaço: o mapa inteiro é dela.'],
+  p90: ['BATEDOR', '50 balas de pressão constante no corredor.'],
+  shotgun: ['QUEBRA-PORTA', 'De perto não tem conversa. Nem round pro outro lado.'],
+  lmg: ['PAREDE', 'Fogo de supressão: segura o corredor sozinho.'],
+};
+const RARITIES = [['COMUM', 'var(--ink-300)'], ['RARO', 'var(--sys)'], ['ÉPICO', '#b47aff'], ['LENDÁRIO', 'var(--br-faixa)']];
+function renderCharAttrs(c) {
+  let h = 0; for (const ch of c.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const wpn = charWeapon(c.id);
+  const [vida, velo, prec] = ATTR_BY_WPN[wpn] || [3, 3, 3];
+  const meme = 1 + (h % 5);
+  const r = h % 10, tier = r < 5 ? 0 : r < 8 ? 1 : r < 9 ? 2 : 3;   // 50% comum / 30% raro / 10% épico / 10% lendário
+  const rEl = $('char-rarity');
+  rEl.textContent = tr(RARITIES[tier][0]);
+  rEl.style.color = RARITIES[tier][1];
+  const [specName, specDesc] = SPEC_BY_WPN[wpn] || ['SOLDADO', 'Equilíbrio em tudo.'];
+  $('char-spec-name').textContent = tr(specName);
+  $('char-spec-desc').textContent = tr(specDesc);
+  $('char-attrs').innerHTML = [['VIDA', vida], ['VELOCIDADE', velo], ['PRECISÃO', prec], ['MEME', meme]]
+    .map(([l, v]) => `<div class="attr"><span>${tr(l)}</span><div class="attr-bar"><i style="width:${v * 20}%"></i></div><b>${v}</b></div>`).join('');
+}
+function selectChar(c, row) {
+  selChar = c;
+  // aria-selected além da classe: estado de seleção legível por teclado/leitor de tela
+  document.querySelectorAll('.char-row').forEach(r => { r.classList.remove('sel'); r.setAttribute('aria-selected', 'false'); });
+  row.classList.add('sel'); row.setAttribute('aria-selected', 'true');
+  pvSetChar(c);
+  if (staticPreviews) pvSetVideo(c); else pvStopVideo();
+  // Grupo editorial do personagem; Time E/Time B já foi escolhido na etapa anterior.
+  const tagEl = $('char-faction-tag');
+  const nGrupo = CHARACTERS.filter(x => x.team === c.team).length;
+  if (tagEl) tagEl.innerHTML = `<span class="cft-fac">${tr(FACTION_NAME[c.team] || '')}</span>`
+    + `<span class="cft-sep"> · </span><span class="cft-count">${nGrupo} ${tr('PERSONAGENS')}</span>`;
+  $('char-info-name').textContent = c.name;
+  $('char-info-blurb').textContent = tr(c.blurb);
+  renderCharAttrs(c);
+  sfxReady.then(() => {
+    if (selChar?.id === c.id) sfx.characterVoice(c.id, 'select', { fallbackFaction: c.team, interrupt: true });
+  });
+}
+
+function selectCharacterFromAvatar(c, row, roster) {
+  ui.click();
+  selectChar(c, row);
+  void sfxReady.then(() => {
+    if (selChar?.id === c.id) sfx.characterSelectVoice(c.id, c.team, roster.map((entry) => entry.id));
+  });
+}
+
+/* ---------------- settings wiring ---------------- */
+const sensEl = $('set-sens'), invertEl = $('set-invert-y'), volEl = $('set-vol'), qualEl = $('set-quality');
+/* Sensibilidade do TOQUE: escala própria (o polegar não é o mouse), linha visível só em
+   ponteiro grosso, lida pelo `_touchLook` do game.js. */
+const sensToqueEl = $('set-sens-toque');
+const cameraEl = $('set-camera');
+sensEl.value = settings.sens; volEl.value = settings.vol; qualEl.value = settings.quality;
+if (sensToqueEl) sensToqueEl.value = settings.sensToque;
+cameraEl.value = settings.camView;
+cameraEl.onchange = () => {
+  if (game) game.setCamView(cameraEl.value);
+  else { settings.camView = cameraEl.value; saveSettings(); }
+  ui.click();
+};
+invertEl.checked = settings.invertY === true;
+if (COMPAT_MODE) { qualEl.disabled = true; qualEl.title = 'Modo compatibilidade usa qualidade baixa nesta sessão'; }
+const updLabels = () => {
+  $('set-sens-val').textContent = Number(settings.sens).toFixed(1);
+  $('set-vol-val').textContent = Math.round(settings.vol * 100) + '%';
+  sensEl.style.setProperty('--set-pct', `${Math.round((Number(settings.sens) - 0.2) / 2.8 * 100)}%`);
+  volEl.style.setProperty('--set-pct', `${Math.round(Number(settings.vol) * 100)}%`);
+  if (sensToqueEl) {
+    $('set-sens-toque-val').textContent = Number(settings.sensToque).toFixed(1);
+    sensToqueEl.style.setProperty('--set-pct', `${Math.round((Number(settings.sensToque) - 0.4) / 2.1 * 100)}%`);
+  }
+};
+sensEl.oninput = () => { settings.sens = +sensEl.value; updLabels(); saveSettings(); };
+if (sensToqueEl) sensToqueEl.oninput = () => { settings.sensToque = +sensToqueEl.value; updLabels(); saveSettings(); };
+invertEl.onchange = () => { settings.invertY = invertEl.checked; saveSettings(); ui.click(); };
+volEl.oninput = () => { settings.vol = +volEl.value; sfx.setVolume(settings.vol); updLabels(); saveSettings(); };
+qualEl.onchange = () => { settings.quality = qualEl.value; try { localStorage.setItem('cs_quality_auto', 'manual'); } catch { /* storage bloqueado */ } saveSettings(); ajustarAnisotropia(menuScene, settings.quality); if (game) game.applySettings(); };
+// Clarão dos tiros (BUG-174): mesma disciplina da qualidade - persiste e aplica AO VIVO,
+// porque quem reclama do clarão está COM A ARMA NA MÃO quando procura o ajuste.
+const fxFlashEl = $('set-fxflash');
+if (fxFlashEl) {
+  fxFlashEl.value = settings.fxFlash || 'normal';
+  if (!fxFlashEl.value) fxFlashEl.value = 'normal';
+  fxFlashEl.onchange = () => { settings.fxFlash = fxFlashEl.value; saveSettings(); if (game) game.applySettings(); ui.click(); };
+}
+// Cor da mira: a mira sai do sistema de cor do HUD (ciano = sistema, âmbar = objetivo,
+// vermelho = crítico) e passa a ser escolha do jogador — puro CSS var, sem custo por frame.
+// PADRÃO = CIANO, não branco. O branco foi medido em 1,28:1 contra a parede clara do
+// praca_poderes (janela de 44×42 px em volta da mira) — invisível. O ciano é o único matiz que
+// nenhum dos 4 cenários ocupa. Mantido em UM lugar só (XHAIR_DEF) pra não divergir do CSS.
+const XHAIR_DEF = '#4fe8e0';
+const xhairEl = $('set-xhair');
+function applyXhair() {
+  document.documentElement.style.setProperty('--xhair', settings.xhair || XHAIR_DEF);
+}
+if (xhairEl) {
+  xhairEl.value = settings.xhair || XHAIR_DEF;
+  if (!xhairEl.value) xhairEl.value = XHAIR_DEF;   // valor salvo fora da lista (ex.: o ciano antigo #39d6e0) → volta pro padrão
+  xhairEl.onchange = () => { settings.xhair = xhairEl.value; applyXhair(); saveSettings(); ui.click(); };
+}
+applyXhair();
+const speechEl = $('set-speech');
+speechEl.checked = settings.speech !== false;
+speechEl.onchange = () => {
+  settings.speech = speechEl.checked;
+  sfx.speechEnabled = settings.speech;
+  saveSettings();
+  if (game?.el?.hudSpeech) game.el.hudSpeech.textContent = settings.speech ? '🔊' : '🔇';
+};
+// Consentimento da coleta persiste separado das preferências visuais.
+const trainEl = $('set-training');
+if (trainEl) {
+  trainEl.checked = trainingEnabled();
+  trainEl.onchange = () => {
+    try { localStorage.setItem(TRAIN_CONSENT_KEY, trainEl.checked ? '1' : '0'); } catch { /* paciência */ }
+    if (game) game._recordEnabled = trainEl.checked && !testMode && !!game._recorder;
+  };
+}
+updLabels();
+
+/* ---------------- logo ---------------- */
+(function drawLogo() {
+  // O splash mostrava um wordmark TERMINAL/SCI-FI (soundwave ciano + aberração cromática)
+  // e 3 segundos depois o menu mostrava a key art com o logo REAL do jogo: letreiramento
+  // de brush, vermelho/amarelo/branco, graffiti brasileiro. Duas marcas em 3 segundos — o
+  // primeiro frame do jogo mentia sobre o produto. Este desenho passa a falar a MESMA
+  // língua da key art: wordmark empilhado, tinta de pincel, borda comida, respingo, faixa
+  // amarelo/preto de sinaleiro. Sem ciano, sem moldura de HUD.
+  const c = $('logo-canvas') || $('splash-logo'); if (!c) return;   // splash de boot (o menu usa o logo do wallpaper)
+  const x = c.getContext('2d');
+  const W = 900, H = 360;
+  const CAL = '#f4f1e8', AMAR = '#ffc93f', SINAL = '#e2402c', TINTA = '#0b0f13';
+  x.clearRect(0, 0, W, H);
+  // ruído determinístico (mulberry-ish): o mesmo logo em todo boot, sem flicker entre sessões
+  let seed = 20260731;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+
+  // camada offscreen: a erosão do pincel usa destination-out e não pode comer o fundo
+  const off = document.createElement('canvas'); off.width = W; off.height = H;
+  const o = off.getContext('2d');
+  o.textAlign = 'center'; o.lineJoin = 'round'; o.textBaseline = 'alphabetic';
+
+  // três linhas empilhadas, levemente rotacionadas — pintura de caminhão/lambe-lambe
+  const LINES = [
+    { t: 'CORO',  y: 104, col: CAL,   sx: 1.00, rot: -0.020 },
+    { t: 'SOLTO', y: 196, col: AMAR,  sx: 1.06, rot: 0.014 },
+    { t: 'TRETA', y: 288, col: SINAL, sx: 1.02, rot: -0.010 },
+  ];
+  for (const L of LINES) {
+    o.save();
+    o.translate(W / 2, L.y); o.rotate(L.rot); o.scale(L.sx, 1);
+    o.font = '900 96px "Arial Black",Impact,"Haettenschweiler",sans-serif';
+    o.lineWidth = 16; o.strokeStyle = TINTA; o.strokeText(L.t, 0, 0);   // contorno de tinta grossa
+    o.lineWidth = 5;  o.strokeStyle = 'rgba(0,0,0,.55)'; o.strokeText(L.t, 3, 4);
+    o.fillStyle = L.col; o.fillText(L.t, 0, 0);
+    o.restore();
+  }
+  // borda comida: mordidas irregulares no miolo das letras (pincel seco em tapume)
+  o.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 320; i++) {
+    const bx = 90 + rnd() * (W - 180), by = 40 + rnd() * 262;
+    o.beginPath(); o.ellipse(bx, by, 1 + rnd() * 5, 1 + rnd() * 3, rnd() * 3, 0, 7); o.fill();
+  }
+  o.globalCompositeOperation = 'source-over';
+  // respingo de spray ao redor (só onde já não há letra: fica atrás no composite final)
+  for (let i = 0; i < 90; i++) {
+    const bx = 60 + rnd() * (W - 120), by = 30 + rnd() * 300;
+    o.fillStyle = [CAL, AMAR, SINAL][(rnd() * 3) | 0];
+    o.globalAlpha = 0.18 + rnd() * 0.5;
+    o.beginPath(); o.arc(bx, by, 0.7 + rnd() * 2.2, 0, 7); o.fill();
+  }
+  o.globalAlpha = 1;
+
+  // Fundo: brilho quente de tinta atrás do bloco.
+  // BUG CONSERTADO (R2): era um createLinearGradient HORIZONTAL pintado num
+  // fillRect(-400,-142,800,284) girado -0,02 rad. Um gradiente 1D só esmaece no eixo em
+  // que ele existe — no eixo vertical o alpha era constante até a borda do retângulo, e o
+  // retângulo tinha aresta dura. Resultado visível em menu-00-splash.png: um painel
+  // retangular INCLINADO atrás do wordmark, com topo e base marcados.
+  // Agora é um gradiente RADIAL: o alpha cai em todas as direções e chega a 0 (raio 400 →
+  // 168px no eixo Y depois do scale) ANTES da borda do fillRect (176px), então não existe
+  // nenhuma aresta pra ver. A rotação saiu junto: sem aresta, ela não tinha o que inclinar.
+  x.save();
+  x.translate(W / 2, 180); x.scale(1, 0.42);   // scale = elipse deitada (canvas só faz radial circular)
+  const hz = x.createRadialGradient(0, 0, 30, 0, 0, 400);
+  hz.addColorStop(0, 'rgba(255,201,63,.17)');
+  hz.addColorStop(.55, 'rgba(255,201,63,.075)');
+  hz.addColorStop(1, 'rgba(255,201,63,0)');
+  x.fillStyle = hz; x.fillRect(-420, -420, 840, 840);
+  x.restore();
+  x.drawImage(off, 0, 0);
+
+  // subtítulo: "SUPREMA" entre réguas, como carimbo de placa
+  x.textAlign = 'center';
+  x.font = '900 26px "Arial Black",Impact,sans-serif';
+  x.fillStyle = CAL; x.globalAlpha = .92;
+  x.fillText('S U P R E M A', W / 2, 336);
+  x.globalAlpha = 1;
+  x.strokeStyle = 'rgba(255,201,63,.75)'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(W / 2 - 250, 329); x.lineTo(W / 2 - 120, 329);
+  x.moveTo(W / 2 + 120, 329); x.lineTo(W / 2 + 250, 329); x.stroke();
+})();
+
+/* ---------------- loop ---------------- */
+function aplicarResize() {
+  renderer.setSize(innerWidth, innerHeight);
+  menuCam.aspect = innerWidth / innerHeight; menuCam.updateProjectionMatrix();
+  if (game) game.onResize();
+}
+addEventListener('resize', aplicarResize);
+/* iOS (WebKit): ao girar, o 1º 'resize' vem com dimensão velha (o viewport assenta com atraso)
+   — por isso os re-disparos. visualViewport cobre a barra de endereço que aparece/some. */
+addEventListener('orientationchange', () => { aplicarResize(); setTimeout(aplicarResize, 250); setTimeout(aplicarResize, 600); });
+if (window.visualViewport) visualViewport.addEventListener('resize', aplicarResize);
+const clock = new THREE.Clock();
+let menuAngle = 0;
+/* #295: o clamp de 50 ms é teto POR PASSO, não por frame. Como teto por frame ele
+   descartava metade do tempo real abaixo de 20 FPS e o jogo virava câmera lenta.
+   Fatia o frame em passos de ≤ 50 ms (mesma semântica por passo) com teto de
+   fatias — máquina que não acompanha descarta o excesso em vez de acumular
+   dívida (espiral da morte). */
+const PASSO_TETO = 4;
+
+/* ESCADA ADAPTATIVA. A detecção de máquina fraca roda uma vez no boot; mapa caro, partida
+   cheia e fumaça acontecem depois. Ver docs/QUALIDADE-ADAPTATIVA.md. */
+const ADAPTATIVA = new URLSearchParams(location.search).get('adaptativa') !== '0';
+let degrauMobileSalvo = null;
+if (MOBILE_AUTO) {
+  try { degrauMobileSalvo = localStorage.getItem(PERFIL_MOBILE.chaveDegrau); } catch { /* storage bloqueado */ }
+}
+const degrauInicial = perfilInicial({ pointerCoarse: MOBILE_AUTO, software: SOFTWARE, degrauSalvo: degrauMobileSalvo });
+const escada = new EscadaAdaptativa({
+  orcamentoMs: 1000 / PERFIL_MOBILE.fpsJogo,
+  degrau: degrauInicial,
+});
+const dprBase = MOBILE_AUTO ? 1 : renderer.getPixelRatio();
+function aplicaDegrau(i) {
+  const d = DEGRAUS[i];
+  renderer.setPixelRatio(dprBase * d.dpr);   // o composer acompanha (bloom.js, cp._dpr)
+  ajustaPos({ ssao: d.ssao, aa: d.aa, charmask: d.charmask });
+  definirSombraDegrau(d.sombra === 'baixa' ? 'baixa' : null);
+  definirCorteVegetacao(d.mato ?? 1);
+  game?.aplicarEfeitosAdaptativos?.(d.efeitos ?? 1);
+  if (MOBILE_AUTO) {
+    try { localStorage.setItem(PERFIL_MOBILE.chaveDegrau, String(i)); } catch { /* storage bloqueado */ }
+  }
+  if (game?.world?.sun) aplicaSombraSol(game.world.sun);
+  try { console.info(`[perf] qualidade adaptativa → ${d.nome}`); } catch { /* console mudo */ }
+}
+if (escada.degrau) aplicaDegrau(escada.degrau);
+// mesmo precedente de `__mpConvite`: gancho de sonda/captura, nunca caminho de jogo
+const cadencia = new LimitadorCadencia();
+window.__escada = { escada, aplicaDegrau, DEGRAUS, dprBase, renderer, cadencia };
+
+function loop(agoraMs = performance.now()) {
+  requestAnimationFrame(loop);
+  if (POINTER_COARSE && !cadencia.aceita(agoraMs, game?.state === 'live' ? PERFIL_MOBILE.fpsJogo : PERFIL_MOBILE.fpsMenu)) return;
+  const dtReal = clock.getDelta();
+  // só mede com partida VIVA: menu e tela de carregamento têm outro custo e enganariam a escada
+  if (ADAPTATIVA && game && game.state === 'live') {
+    const novo = escada.quadro(dtReal * 1000);
+    if (novo !== null) aplicaDegrau(novo);
+  }
+  loadingStage.update(Math.min(0.05, dtReal));
+  // BUG-177: sem #char-select no DOM (extensão/tradutor que reescreve o body) o `loop`
+  // lançava a cada quadro e congelava o jogo — ausente conta como fechada.
+  const csOpen = $('char-select')?.classList.contains('hidden') === false;
+  const splashAtiva = (() => { const splash = $('boot-splash'); return !!splash && !splash.classList.contains('gone'); })();
+  // A troca com M pausa a partida; o preview 3D visível continua animando nesse estado.
+  if (game && !csOpen) {
+    let resto = dtReal;
+    for (let n = 0; n < PASSO_TETO && resto > 1e-6; n++) {
+      const passo = Math.min(0.05, resto);
+      resto -= passo;
+      game.update(passo, resto <= 1e-6 || n === PASSO_TETO - 1);   // só o último passo desenha, inclusive ao esgotar o teto
+    }
+  } else if (!game) {
+    if (!splashAtiva) {
+      menuAngle += Math.min(0.05, dtReal) * 0.07;
+      menuCam.position.set(Math.sin(menuAngle) * 34, 17 + Math.sin(menuAngle * 0.6) * 4, Math.cos(menuAngle) * 34);
+      menuCam.lookAt(0, 1, 0);
+      renderer.render(menuScene, menuCam);
+    }
+  }
+  const hubMenu = $('main-menu');
+  const hubPreviewOpen = HUB_ENABLED && hubMenu?.classList.contains('hidden') === false
+    && hubMenu?.dataset.hubTab === 'jogar' && hubMenu?.dataset.hubNet === 'sp';
+  if (!splashAtiva) {
+    if (pv && pv.model && previewModelActive(csOpen,hubPreviewOpen)) {
+      const pvDt = pv.travado || pvReducedMotion.matches ? 0 : Math.min(0.05, dtReal);   // ?pvcam=maos congela pose e giro
+      // ctrl.update (idle + IK da mão de apoio) quando há GLB; mixer cru só no fallback box
+      if (!pv.travado && !pvReducedMotion.matches) {
+        if (pv.ctrl) pv.ctrl.update(pvDt, 0, false, 0); else if (pv.mixer) pv.mixer.update(pvDt);
+      }
+      if (pvReducedMotion.matches && pv.renderDirty === false) return;
+      pv.renderDirty = false;
+      pv.r.render(pv.scene, pv.cam);
+    }
+  }
+}
+loop();
+
+function showInspectionResult(won, character) {
+  const end = $('match-end');
+  end.classList.toggle('win', won);
+  end.classList.toggle('lose', !won);
+  $('match-title').textContent = won ? tr('VITÓRIA') : tr('DERROTA');
+  const winnerName = tr(FACTION_NAME[won ? currentFaction : currentEnemyFaction] || 'TIME ADVERSÁRIO');
+  $('match-sub').textContent = won ? frase('venceu', winnerName) : frase('perdeu', winnerName);
+  const playerRounds = won ? 4 : 1;
+  const enemyRounds = won ? 1 : 4;
+  const playerOnE = currentTeam === 'E';
+  const roundsE = playerOnE ? playerRounds : enemyRounds;
+  const roundsB = playerOnE ? enemyRounds : playerRounds;
+  $('match-stats').innerHTML = frase('statsFim', roundsE, roundsB, won ? 16 : 7, nickEl.value || 'JOGADOR', won ? 5 : 12);
+  $('me-hero').style.setProperty('--me-art', `url("/img/resultado/${character.id}-${won ? 'vitoria' : 'derrota'}.webp")`);
+  show('match-end');
+}
+async function openInspectionScreen(target) {
+  document.documentElement.dataset.inspectScreen = target.screen;
+  if (target.screen === 'splash') return;
+  loadingStage.hide(); dockLoadingCharacter();
+  document.getElementById('boot-splash')?.remove();
+  const faction = target.faction;
+  const character = CHARACTERS.find((c) => c.id === target.character && c.team === faction)
+    || CHARACTERS.find((c) => c.team === faction) || CHARACTERS[0];
+  currentFaction = faction;
+  currentTeam = faction === 'B' ? 'B' : 'E';
+  currentChar = character.id;
+  currentEnemyFaction = faction === 'B' ? 'E' : 'B';
+  /* `?tela=…&map=` é uma SEGUNDA porta para o mapa e precisa da mesma guarda do `?map=`:
+     sem ela o mapa parado abria pela tela de inspeção (medido no smoke de 25/09). */
+  if (target.map) currentMap = mapaDaSessao({ urlMap: target.map, oficina });
+  mapIdx = Math.max(0, MAPAS_MENU.indexOf(currentMap));
+
+  if (target.screen === 'menu') { show('main-menu'); return; }
+  if (target.screen === 'maps') { renderMapScreen(); show('map-screen'); return; }
+  if (target.screen === 'faction') {
+    await factionArtReady;
+    setEnemyPickMode(false); setTeamStep('side'); show('team-select'); ensureTeamPreviews(); return;
+  }
+  if (target.screen === 'character') {
+    pickTeam(faction);
+    if (target.character) {
+      for (let i = 0; i < 180 && $('char-select')?.classList.contains('hidden') !== false; i++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      const roster = CHARACTERS.filter((c) => c.team === faction);
+      const row = [...$('char-list').children][roster.findIndex((c) => c.id === character.id)];
+      if (row) selectChar(character, row);
+    }
+    return;
+  }
+  if (target.screen === 'loading') {
+    show(null);
+    showLoading(frase('carregando', MAPS[currentMap].name.toUpperCase()), 'CARREGANDO MODELOS 3D…', MAPS[currentMap].name.toUpperCase());
+    return;
+  }
+  if (target.screen === 'victory' || target.screen === 'defeat') {
+    showInspectionResult(target.screen === 'victory', character);
+    return;
+  }
+  if (target.screen === 'settings') {
+    settingsReturn = 'main-menu';
+    $('set-quality').value = 'high'; show('settings-panel'); return;
+  }
+  await startGame(currentTeam, character.id, currentEnemyFaction);
+  if (target.hp != null && game?.player) { game.player.hp = target.hp; game._updateHud(); }
+  if (target.screen === 'scoreboard') {
+    game.roundNum = 4; game.ctf = false; game._inspectionTotalRounds = 5;
+    game.roundsWon.E = 2; game.roundsWon.B = 1; game.timeLeft = 92;
+    game.paused = true; game.keys = {}; game.el.pause.classList.add('hidden'); game._showScoreboard(true); return;
+  }
+  if (target.screen === 'pause') game?.setPaused(true);
+}
+
+/* MULTIPLAYER — navegador de servidores, salas e sessão de rede. Aqui só se escolhe ONDE e
+   EM QUE sala; a autoridade é do servidor. Desenho e decisões: docs/MULTIPLAYER.md. */
+
+/* `matchRoster` a partir do elenco do servidor. Personagem desconhecido cai no fallback em
+   vez de sumir e desalinhar o casamento de ids. */
+function rosterDoServidor(lado, charId) {
+  const roster = mpSessao.net.meta.roster || [];
+  const meu = mpSessao.net.yourEnt;
+  const def = (r) => ({...(CHARACTERS.find((c) => c.id === r.char) || CHARACTERS[0]), skinId:r.skinId || null,eyewearId:r.eyewearId || null});
+  return {
+    allyDefs: roster.filter((r) => r.team === lado && r.id !== meu).map(def),
+    enemyDefs: roster.filter((r) => r.team !== lado && r.team !== 'J' && !r.objectiveNpc).map(def),
+  };
+}
+
+/* Sessão de rede em curso. `null` = single-player, e é o estado normal: nada de rede roda
+   até alguém entrar numa sala. */
+let mpSessao = null;
+/* A sala MP escreve mapa e modo; o SP é do jogador: guarda na entrada, devolve em toda saída.
+   Causa e régua: tools/eval/mapa-sp-pos-mp-check.mjs. */
+let escolhaSpAntesDoMp = null;
+function mpGuardarEscolhaSp() {
+  if (!escolhaSpAntesDoMp) escolhaSpAntesDoMp = {
+    map: currentMap, mode: matchMode, escolhido: modoEscolhido,
+    char: currentChar, team: currentTeam, faction: currentFaction, enemyFaction: currentEnemyFaction,
+  };
+}
+function mpDevolverEscolhaSp() {
+  const e = escolhaSpAntesDoMp; escolhaSpAntesDoMp = null;
+  if (!e) return;
+  currentMap = e.map; matchMode = e.mode; modoEscolhido = e.escolhido;
+  mapIdx = Math.max(0, MAPAS_MENU.indexOf(currentMap));
+  setMapMode();
+  currentChar = e.char; currentTeam = e.team; currentFaction = e.faction; currentEnemyFaction = e.enemyFaction;
+  syncHomeCharacter();
+}
+// O personagem do jogador: dentro do MP é o guardado na entrada (a sala só empresta o corpo).
+// Passe travado: pede o mesmo livre que o lobby mostra (personagemLivre), sem apagar a escolha salva.
+function personagemEscolhido() {
+  const id = escolhaSpAntesDoMp ? escolhaSpAntesDoMp.char : currentChar;
+  const def = CHARACTERS.find((c) => c.id === id);
+  return def ? personagemLivre(def, escolhaSpAntesDoMp?.team || currentTeam) : null;
+}
+let mpNoAtual = null;
+let mpConectando = false;   // trava de reentrada do mpEntrar (BUG-88)
+let mpNos = [];
+let mpTimerLista = null;
+let mpTicketIdentityUid = null;
+let mpIdentityTimer = null;
+
+function mpLimparIdentidade() {
+  clearTimeout(mpIdentityTimer);
+  mpIdentityTimer = null;
+  mpAvisoPersonagem(null);
+  for (const id of ['mp-identity-toast', 'mp-identity-pause']) {
+    const card = document.getElementById(id);
+    if (card) card.hidden = true;
+  }
+}
+
+function mpMostrarIdentidade(estado) {
+  mpLimparIdentidade();
+  const espectador = !!estado.espectador || estado.yourEnt == null;
+  const roster = Array.isArray(estado.roster) ? estado.roster : [];
+  const corpo = espectador ? null : roster.find((r) => r && r.id === estado.yourEnt && r.team === estado.yourTeam);
+  const def = corpo ? CHARACTERS.find((c) => c.id === corpo.char) : null;
+  // O personagem usado para preload é um fallback técnico; não anunciá-lo como atribuição.
+  const nome = espectador ? 'Espectador' : def?.name || 'Personagem não identificado';
+  const detalhe = espectador ? 'Aguardando vaga em um time'
+    : def ? tr(FACTION_NAME[corpo.team] || corpo.team) : 'O servidor ainda não informou seu personagem';
+  for (const id of ['mp-identity-toast', 'mp-identity-pause']) {
+    const card = document.getElementById(id);
+    if (!card) continue;
+    const img = card.querySelector('.mp-identity-portrait');
+    card.querySelector('small').textContent = espectador ? 'SUA POSIÇÃO NA PARTIDA' : 'SEU PERSONAGEM NO MULTIPLAYER';
+    card.querySelector('strong').textContent = nome;
+    card.querySelector('.mp-identity-copy > span').textContent = detalhe;
+    img.hidden = !def;
+    img.removeAttribute('src');
+    if (def) {
+      img.onerror = () => {
+        if (img.src.includes('/chars-hero/')) img.src = portraitFallbackUrl(def);
+        else { img.onerror = null; img.hidden = true; }
+      };
+      img.src = portraitUrl(def);
+    }
+    card.hidden = false;
+  }
+  mpIdentityTimer = setTimeout(() => { const toast = document.getElementById('mp-identity-toast'); if (toast) toast.hidden = true; }, 5000);
+}
+
+async function obterMpTicket(action, no = mpNoAtual) {
+  /* Um ?mp= pode apontar a staging ou a um nó oficial. Só o nó de teste selecionado
+     dispensa ticket público; trocar para BR/US/EU na lista exige ticket normalmente. */
+  const localMp = new URLSearchParams(location.search).get('mp') || '';
+  if (localMp && no?.id === 'url' && !NOS.some((oficial) => oficial.url === no.url)) return '';
+  const node = String(no?.ticketNode || no?.id || '').toLowerCase();
+  if (!NO_RE.test(node)) return '';   // forma do id em nos.js; 'br2' é nó, não erro de digitação
+  const uid = getAnonId();
+  const token = getToken();
+  const nick = (nickEl.value || '').trim();
+  if (nick && mpTicketIdentityUid !== uid) {
+    const reg = await api('/api/register', { uid, nick, token });
+    if (reg?.ok) {
+      mpTicketIdentityUid = uid;
+      if (reg.nick) registeredNick = reg.nick;
+    } else if (reg?.error) rankingBloqueado = String(reg.message || reg.error);
+  }
+  const r = await fetch(apiUrl('/api/mp-ticket'), {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ node, action, anonId: uid, sessionId: getSessionId(), token }),
+  });
+  if (!r.ok) throw new Error(`ticket_${r.status}`);
+  const body = await r.json();
+  if (!body.ticket) throw new Error('ticket_ausente');
+  return body.ticket;
+}
+
+const mpEl = (id) => document.getElementById(id);
+// Treta Pop (tp/servidores.js) desenha a mesma lista; o último estado fica para quem liga depois.
+const tpMp = (tipo, detail) => { if (document.documentElement.dataset.ui !== 'v3') return; (window.__tpMp ||= {})[tipo] = detail; document.dispatchEvent(new CustomEvent(tipo, { detail })); };
+function mpErro(msg, comRetry = false) {
+  const e = mpEl('mp-erro'); if (!e) return;
+  e.hidden = !msg; e.textContent = msg || '';
+  /* erro com saída, não beco: quando a falha é de rede o botão TENTAR DE NOVO refaz a
+     sondagem inteira — sem ele a única saída era VOLTAR e entrar de novo no painel. */
+  if (msg && comRetry) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mp-retry'; b.textContent = 'TENTAR DE NOVO';
+    b.onclick = () => { ui.click(); abrirMultiplayer(); };
+    e.appendChild(b);
+  }
+}
+
+/* Nó que ainda serve mapa PARADO é nó por atualizar (o pin CLIENT_REF do backend).
+   Recusa em vez de trocar o mapa: substituir dessincroniza do servidor. */
+function noServeMapaParado(id, net) {
+  if (oficina || !MAPAS_PARADOS.has(resolveMapId(id))) return false;
+  try { net?.close?.(); } catch { /* fechar é cortesia; a recusa vale de qualquer jeito */ }
+  mpSessao?.chat?.destruir();
+  mpSessao = null;
+  mpDevolverEscolhaSp();
+  mpErro(`Este servidor sorteou "${MAPS[resolveMapId(id)]?.name || id}", que saiu do jogo para retrabalho. `
+    + 'O nó ainda não foi atualizado — escolha outra sala ou outra região.', true);
+  return true;
+}
+/* Chip de estado da conexão (#mp-estado). Um lugar só e sempre visível: "medindo",
+   "online em tal região", "conectando na sala" e "fora do ar" são estados diferentes
+   e a tela antiga não distinguia nenhum deles de "travou". */
+function mpEstado(s, txt) {
+  const e = mpEl('mp-estado'); if (!e) return;
+  e.dataset.s = s; e.textContent = txt;
+}
+// Faixas de ping: o limiar não é gosto — acima de ~120 ms o tiro passa a depender de
+// lag compensation pra tudo, e é aí que começa o "morri atrás da parede".
+const mpQualidade = (ms) => (ms == null ? 'ruim' : ms <= 60 ? 'bom' : ms <= 120 ? 'medio' : 'ruim');
+
+async function abrirMultiplayer() {
+  if (HUB_ENABLED) mpEl('mp-panel').classList.remove('hidden');
+  else show('mp-panel');
+  mpErro('');
+  mpMontarFormulario();
+  mpEstado('sondando', 'MEDINDO O PING…');
+  const nos = mpEl('mp-nos');
+  if (nos) nos.innerHTML = '<div class="mp-vazio">medindo o ping dos servidores…</div>';
+  mpEl('mp-salas').innerHTML = '';
+  tpMp('tp-mp-nos', { nos: [], medindo: true });
+  mpNos = await sondarNos(NOS);
+  // o servidor do jogador tem que ser o PRIMEIRO da lista, não o do dono (regra em nos.js)
+  mpNos = ordenarNos(mpNos);
+  const local = new URLSearchParams(location.search).get('mp');
+  if (local) {
+    // ?mp=1 é a máquina local; ?mp=host:porta é um servidor apontado à mão (não confundir os dois).
+    const u = mpUrls(local);
+    const nome = local === '1' ? 'LOCAL (desenvolvimento)' : `SERVIDOR DA URL · ${local}`;
+    const sonda = await sondarNos([{ id: 'url', nome, url: u.ws }]);
+    mpNos.unshift(sonda[0]);
+  }
+  mpDesenharNos();
+  const primeiro = mpNos.find((n) => n.online) || mpNos[0];
+  if (primeiro && primeiro.online) mpSelecionarNo(primeiro);
+  else {
+    mpEstado('erro', 'SERVIDORES FORA DO AR');
+    mpErro('Nenhum servidor respondeu. Pode ser a sua conexão, ou os servidores estão fora do ar.', true);
+    if (primeiro) mpSelecionarNo(primeiro);
+  }
+}
+
+/* Bandeiras REAIS (dono, 31/08: "seria legal se fossem as REAIS, é só baixar e por"):
+   WebP local dos SVGs oficiais do Commons — procedência em public/img/flags/FONTE.md. */
+const MP_BANDEIRAS = {
+  br: { img: 'br', pais: 'Brasil' },
+};
+function mpCartaoNoHTML(n) {
+  const q = n.online ? mpQualidade(n.ping) : 'ruim';
+  const ping = n.online ? `${n.ping} ms` : 'fora do ar';
+  /* medidor de sinal: 3 barras (bom) / 2 (médio) / 1 (ruim) — o número em ms é exato,
+     as barras são a leitura de longe, mesma faixa do limiar do mpQualidade */
+  const acesas = q === 'bom' ? 3 : q === 'medio' ? 2 : 1;
+  const barras = [1, 2, 3].map((i) => `<i class="${i <= acesas ? 'on' : ''}"></i>`).join('');
+  const band = MP_BANDEIRAS[n.id];
+  const flag = band
+    ? `<img class="mp-flag" src="/img/flags/${band.img}.webp" width="30" height="20" alt="${band.pais}">`
+    : '<span class="mp-flag" aria-hidden="true"></span>';   // nó fora do mapa (ex.: ?mp=1 local)
+  return flag
+    + `<span class="mp-no-info"><span class="mp-no-nome">${n.nome}</span>`
+    + `<span class="mp-no-sub">${n.jogadores} jogando · ${n.salas} sala(s)</span></span>`
+    + `<span class="mp-sinal" data-q="${q}" aria-hidden="true">${barras}</span>`
+    + `<span class="mp-ping" data-q="${q}">${ping}</span>`;
+}
+
+/* Mapas da sala escolhidos a dedo. A grade sai do `/maps` DO NÓ, não do catálogo local — o
+   servidor simula uma versão fixada do jogo (docs/MULTIPLAYER.md, "Pool de mapas"). */
+let mpMapasDoNo = [];
+let mpMapasEscolhidos = new Set();
+
+/* Operação Flávio (escolta) só roda em rounds com 2+ por time — o servidor recusa
+   CTF/X1, e a grade não pode deixar marcado o que a sala criada vai derrubar. */
+const mpMapaCompativel = (id) => MAPS[id]?.objectiveMode !== 'escort'
+  || (mpEl('mp-modo')?.value !== 'ctf' && +(mpEl('mp-teamsize')?.value || 5) >= 2);
+
+function mpPintarMapas() {
+  const grade = mpEl('mp-mapas-grade'), conta = mpEl('mp-mapas-conta');
+  if (!grade || !conta) return;
+  const ctf = mpEl('mp-modo') && mpEl('mp-modo').value === 'ctf';
+  for (const id of [...mpMapasEscolhidos]) if (!mpMapaCompativel(id)) mpMapasEscolhidos.delete(id);
+  grade.innerHTML = mpMapasDoNo.map((id) => {
+    const on = mpMapasEscolhidos.has(id);
+    const travado = !mpMapaCompativel(id);
+    return `<button class="mp-mapa${on ? ' on' : ''}" type="button" data-id="${id}"${travado ? ' disabled' : ''} aria-pressed="${on}" title="${travado ? 'Operação Flávio exige rounds e pelo menos 2 por time' : MAPS[id].name}">`
+      + `<img class="mp-mapa-img" loading="lazy" decoding="async" src="${mapPreviewPoster(id, VERSION)}" alt="">`
+      // o crachá CAPTURA só informa quando o modo É captura; senão é ruído em quase todo cartão
+      + (ctf && MAPS[id].ctfMode ? '<span class="mp-mapa-ctf">CAPTURA</span>' : '')
+      + `<span class="mp-mapa-nome">${MAPS[id].name}</span></button>`;
+  }).join('');
+  grade.querySelectorAll('.mp-mapa').forEach((b) => {
+    b.onmouseenter = () => ui.hover();
+    b.onclick = () => {
+      ui.click();
+      const id = b.dataset.id;
+      if (mpMapasEscolhidos.has(id)) mpMapasEscolhidos.delete(id); else mpMapasEscolhidos.add(id);
+      mpPintarMapas();
+    };
+  });
+  const n = mpMapasEscolhidos.size;
+  const fora = MAPAS_MENU.filter((id) => !mpMapasDoNo.includes(id)).length;
+  const flavioTravado = mpMapasDoNo.some((id) => !mpMapaCompativel(id));
+  conta.textContent = (!mpMapasDoNo.length ? 'esse servidor não respondeu a lista de mapas'
+    : n === 0 ? 'marque pelo menos um mapa'
+      : n === 1 ? 'só 1 mapa: a sala não gira, joga sempre nele'
+        : `${n} mapas na fila, sorteados a cada partida`)
+    + (fora ? ` · ${fora} do jogo ainda não estão neste servidor` : '')
+    + (flavioTravado ? ' · Operação Flávio exige rounds e pelo menos 2 por time' : '');
+}
+
+function mpNoPermitePvp(no) {
+  return !!no && no.nodeMode !== 'horde' && no.roomCreation !== false;
+}
+
+async function mpCarregarMapasDoNo() {
+  if (!mpNoAtual) return;
+  // Mapa PARADO não entra na grade do multiplayer nem se o nó ainda o servir: fora da
+  // oficina ele não existe para o jogador, e um nó desatualizado não pode reintroduzi-lo.
+  try { mpMapasDoNo = (await listMaps(mpNoAtual.http)).filter((id) => MAPS[id] && MAPAS_MENU.includes(id) && MAPS[id].objectiveMode !== 'horde'); }
+  catch { mpMapasDoNo = []; }
+  // mapa que o nó não tem não pode continuar marcado de uma seleção feita noutra região
+  for (const id of [...mpMapasEscolhidos]) if (!mpMapasDoNo.includes(id)) mpMapasEscolhidos.delete(id);
+  mpPintarMapas();
+}
+
+function mpSincronizarMapas() {
+  const rot = mpEl('mp-rotacao'), caixa = mpEl('mp-mapas');
+  if (!rot || !caixa) return;
+  const aDedo = rot.value === 'escolher';
+  caixa.hidden = !aDedo;
+  if (!aDedo) return;
+  if (mpMapasDoNo.length) mpPintarMapas(); else mpCarregarMapasDoNo();
+}
+
+function mpDesenharNos() {
+  const box = mpEl('mp-nos'); if (!box) return;
+  box.innerHTML = '';
+  for (const n of mpNos) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mp-no'; b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(mpNoAtual && mpNoAtual.id === n.id));
+    b.dataset.online = n.online ? '1' : '0';
+    b.innerHTML = mpCartaoNoHTML(n);
+    b.onclick = () => { ui.click(); mpSelecionarNo(n); };
+    box.appendChild(b);
+  }
+  tpMp('tp-mp-nos', { nos: mpNos, atual: mpNoAtual });
+}
+
+function mpSelecionarNo(no) {
+  mpNoAtual = no;
+  mpMapasDoNo = [];              // cada nó tem o catálogo DELE; recarrega ao abrir a grade
+  mpSincronizarMapas();
+  if (no.online) mpEstado('on', `ONLINE · ${no.nome.split('·')[0].trim()} · ${no.ping} ms`);
+  mpDesenharNos();
+  mpAtualizarSalas();
+  // a lista se refaz sozinha: lotação muda o tempo todo e uma lista velha manda o jogador
+  // pra uma sala que já encheu.
+  clearInterval(mpTimerLista);
+  mpTimerLista = setInterval(() => { if (!document.getElementById('mp-panel').classList.contains('hidden')) mpAtualizarSalas(); }, 5000);
+}
+
+async function mpAtualizarSalas() {
+  const box = mpEl('mp-salas'); if (!box || !mpNoAtual) return;
+  let salas;
+  try { salas = await listRooms(mpNoAtual.http); }
+  catch { box.innerHTML = '<div class="mp-vazio">não deu pra falar com esse servidor.</div>'; tpMp('tp-mp-salas', { erro: true, no: mpNoAtual }); return; }
+  if (!salas.length) { box.innerHTML = '<div class="mp-vazio">nenhuma sala aberta. crie a sua abaixo.</div>'; tpMp('tp-mp-salas', { salas, no: mpNoAtual }); return; }
+  // oficiais primeiro, depois as mais cheias (sala com gente é sala boa de entrar)
+  salas.sort((a, b) => (b.oficial - a.oficial) || (b.players - a.players));
+  box.innerHTML = '';
+  for (const r of salas) {
+    const div = document.createElement('div');
+    div.className = 'mp-sala';
+    /* sem emoji (regra do redesign): PRIVADA e espectador viram texto/tag */
+    const tags = (r.oficial ? '<span class="mp-tag" data-t="oficial">OFICIAL</span>' : '')
+      + (r.private ? '<span class="mp-tag" data-t="privada">PRIVADA</span>' : '')
+      + (r.ctf ? '<span class="mp-tag">CTF</span>' : '')
+      + (r.mode === 'horde' ? '<span class="mp-tag">JAVAPORCOS · 4–8</span>' : '');
+    /* lotação como BARRA além do número: sala meio cheia e sala lotada se distinguem
+       de longe, sem ler fração nenhuma */
+    const frac = r.max ? Math.min(1, r.players / r.max) : 0;
+    div.innerHTML =
+      `<div class="mp-sala-top"><div class="mp-sala-nome">${r.name}${tags}</div>`
+      + `<div class="mp-lot"><span class="mp-lot-bar"><i style="width:${Math.round(frac * 100)}%"></i></span>`
+      + `<b>${r.players}</b>/${r.max}${r.spectators ? `<span class="mp-lot-spec">+${r.spectators} assistindo</span>` : ''}</div></div>`
+      + `<div class="mp-sala-sub">${r.mapNome || MAPS[r.map]?.name || r.map} · ${r.cooperative ? 'DEFENSORES × JAVAPORCOS' : `${FACTION_NAME.E} × ${FACTION_NAME.B}`}`
+      + (r.cooperative && r.waitingForPlayers ? ` · aguardando ${Math.max(0,4-r.players)} defensor(es)` : '')
+      + (Array.isArray(r.mapas) && r.mapas.length
+        ? ` · ${r.mapas.length === 1 ? 'mapa fixo' : `${r.mapas.length} mapas na fila`}` : '')
+      + '</div>'
+      + `<div class="mp-acoes"></div>`;
+    const acoes = div.querySelector('.mp-acoes');
+    /* UM BOTÃO POR LADO, e não um "ENTRAR" que balanceia sozinho: o jogador quer escolher com
+       quem joga, e a facção é metade da graça do jogo. O número é a vaga daquele lado — lado
+       cheio apaga em vez de sumir, senão a sala parece ter menos opção do que tem. */
+    for (const lado of r.cooperative ? ['E'] : ['E', 'B']) {
+      const livres = (r.livre && r.livre[lado]) || 0;
+      const b = document.createElement('button');
+      b.className = 'mp-entrar'; b.type = 'button';
+      b.dataset.lado = lado;
+      b.textContent = `${r.cooperative ? 'DEFENDER A CIDADE' : FACTION_NAME[lado]} ${livres}`;
+      b.title = livres ? `Entrar no ${FACTION_NAME[lado]} (${livres} vaga(s))` : 'Esse time está cheio';
+      b.disabled = !livres;
+      b.onclick = () => { ui.click(); mpEntrar(r, lado); };
+      acoes.appendChild(b);
+    }
+    const assistir = document.createElement('button');
+    assistir.className = 'mp-assistir'; assistir.type = 'button'; assistir.textContent = 'ASSISTIR';
+    assistir.title = 'Entrar como espectador — dá pra ir pro time depois, quando abrir vaga';
+    assistir.onclick = () => { ui.click(); mpEntrar(r, 'spec'); };
+    const convite = document.createElement('button');
+    convite.className = 'mp-convite-chip'; convite.type = 'button'; convite.textContent = r.convite || 'CONVITE';
+    convite.title = 'Copiar o link de convite desta sala';
+    convite.onclick = () => { ui.click(); mpCopiarConvite(r.convite, convite); };
+    acoes.append(assistir, convite);
+    box.appendChild(div);
+  }
+  tpMp('tp-mp-salas', { salas, no: mpNoAtual });
+}
+
+/* Copia o link e CONFIRMA na própria etiqueta. Botão de copiar sem retorno visual é o caso
+   clássico de a pessoa clicar três vezes sem saber se funcionou. */
+async function mpCopiarConvite(convite, botao) {
+  if (!convite) return;
+  const link = linkDeConvite(convite);
+  const antes = botao ? botao.textContent : '';
+  try { await navigator.clipboard.writeText(link); if (botao) botao.textContent = 'COPIADO!'; }
+  catch { if (botao) botao.textContent = convite; mpErro(`Copie à mão: ${link}`); }
+  if (botao) setTimeout(() => { botao.textContent = antes; }, 1600);
+}
+
+/* MODAL "SALA CRIADA" (dono, 31/08): o convite nasce aqui e se copia ANTES de entrar.
+   Fechar (ESC/clique fora) não desfaz a criação — a lista é atualizada pra provar. */
+function mpModalSalaCriada(sala, senha = '') {
+  const m = mpEl('mp-modal');
+  if (!m || !sala.convite) return mpEntrar(sala, 'auto', senha);   // sem modal ou sem código, o fluxo antigo vale
+  mpEl('mp-modal-convite').textContent = sala.convite;
+  /* a sala só por convite NÃO está na lista (o nó a esconde): a nota não pode prometer "na lista" */
+  const nota = m.querySelector('.mp-modal-nota');
+  if (nota) nota.textContent = tr(sala.private && sala.senha === false
+    ? 'ESC ou clique fora só fecham este aviso - a sala continua criada. Ela não aparece na lista: só entra quem tem o código.'
+    : 'ESC ou clique fora só fecham este aviso - a sala continua criada, na lista.');
+  const lot = mpEl('mp-modal-lot');
+  if (lot) lot.textContent = `${sala.players | 0}/${sala.max || 10} na sala · ${sala.name || 'SALA'}`;
+  const fecha = () => {
+    m.classList.add('hidden');
+    removeEventListener('keydown', escFecha, true);
+    mpAtualizarSalas();   // a sala nova aparece na lista = prova de que fechar não cancelou
+  };
+  const escFecha = (e) => {
+    if (e.key !== 'Escape' || m.classList.contains('hidden')) return;
+    e.preventDefault(); e.stopPropagation(); ui.back(); fecha();
+  };
+  /* capture=true: o ESC do modal tem de vencer os outros atalhos de ESC do menu */
+  addEventListener('keydown', escFecha, true);
+  m.onpointerdown = (e) => { if (!e.target.closest('.mp-modal-card')) { ui.back(); fecha(); } };
+  const rotula = (b, txt) => { const antes = b.textContent; b.textContent = txt; setTimeout(() => { b.textContent = antes; }, 1600); };
+  const codigo = mpEl('mp-modal-copiar-codigo');
+  if (codigo) codigo.onclick = async () => {
+    ui.click();
+    try { await navigator.clipboard.writeText(sala.convite); rotula(codigo, 'COPIADO!'); }
+    catch { mpErro(`Copie à mão: ${sala.convite}`); fecha(); }
+  };
+  const link = mpEl('mp-modal-copiar-link');
+  if (link) link.onclick = async () => {
+    ui.click();
+    try { await navigator.clipboard.writeText(linkDeConvite(sala.convite)); rotula(link, 'COPIADO!'); }
+    catch { mpErro(`Copie à mão: ${linkDeConvite(sala.convite)}`); fecha(); }
+  };
+  /* WhatsApp: `wa.me/?text=` abre o app no celular e o WhatsApp Web no computador, com a
+     mensagem pronta e o link dentro — sem pedir número, a pessoa escolhe o grupo lá. */
+  ligarCompartilhar(mpEl('mp-modal-compartilhar'), () => ({ titulo: 'Sala no CORO SOLTO', texto: `Entra na minha sala ${sala.convite} no CORO SOLTO.`, url: linkDeConvite(sala.convite) }));
+  const zap = mpEl('mp-modal-zap');
+  if (zap) {
+    zap.href = `https://wa.me/?text=${encodeURIComponent(frase('conviteZap', linkDeConvite(sala.convite)))}`;
+    zap.onclick = () => ui.click();
+  }
+  const entrar = mpEl('mp-modal-entrar');
+  if (entrar) entrar.onclick = () => { ui.click(); fecha(); mpEntrar(sala, 'auto', senha); };
+  m.classList.remove('hidden');
+  entrar?.focus();
+}
+window.__mpModalSala = mpModalSalaCriada;   // sonda/captura, mesmo precedente do __mpConvite
+
+/* Entrada por LINK (?sala=BR-7K3M). É o caminho de quem recebeu o convite no zap: abre o jogo
+   já dentro da sala, sem passar pela lista. Sala privada ainda pede senha — o link diz ONDE é
+   a sala, não que você tem permissão. */
+async function mpEntrarPorConvite(txt) {
+  const alvo = parseConvite(txt);
+  show('mp-panel'); mpMontarFormulario();
+  if (!alvo) return mpErro(`Convite inválido: "${txt}". O formato é REGIÃO-CÓDIGO, tipo BR-7K3M.`);
+  mpEstado('conectando', `PROCURANDO ${alvo.convite}…`);
+  const http = httpDoNo(alvo.no);
+  mpNoAtual = { ...alvo.no, http, ticketNode: alvo.no.id };
+  let sala;
+  try { sala = await salaPorConvite(http, alvo.codigo); }
+  catch (e) {
+    await abrirMultiplayer();
+    return mpErro(String(e && e.message || '').includes('http_429')
+      ? 'Calma aí: muitas tentativas seguidas. Espere um minuto antes de abrir outro convite.'
+      : 'Não deu pra procurar a sala agora. Tente novamente em instantes.');
+  }
+  if (!sala) { await abrirMultiplayer(); return mpErro(`A sala ${alvo.convite} não existe mais. Escolha outra abaixo.`); }
+  mpEntrar(sala, 'auto');
+}
+window.__mpConvite = mpEntrarPorConvite;
+
+// Rewarded solo uses the same authoritative simulation and signed identity as MP.
+// Local practice remains accessible from JOGAR.
+let tretaSoloStarting = false;
+document.addEventListener('cs-treta-multiplayer', () => {
+  document.querySelector('[data-hub-tab="jogar"]')?.click();
+  void abrirMultiplayer();
+});
+document.addEventListener('cs-treta-solo', async () => {
+  if (mpConectando || tretaSoloStarting) return;
+  tretaSoloStarting = true;
+  show('mp-panel');
+  mpEstado('conectando', 'PREPARANDO SUA PARTIDA SOLO…');
+  try {
+    if (ehMapaJavaporcos(currentMap)) return mpErro('Javaporcos tem partida cooperativa na lista de salas. Para treinar sozinho, use JOGAR.');
+    mpNos = ordenarNos(await sondarNos(NOS));
+    const no = mpNos.find(n => n.online && n.soloVerified && mpNoPermitePvp(n));
+    if (!no) return mpErro('Nenhum servidor de partidas solo premiadas está disponível agora. Você pode jogar no menu JOGAR.');
+    mpSelecionarNo(no);
+    const ticket = await obterMpTicket('create');
+    const senha = clientUuid();
+    const ctf = modoEfetivoAtual() === 'ctf';
+    const sala = await createRoom(no.http, {
+      name: 'SOLO TRETA$', solo: true, private: true, password: senha,
+      mapId: currentMap, mapas: [currentMap], ctf, mode: ctf ? 'ctf' : 'rounds',
+      teamSize: Math.max(2, settings.bots || 4), creatorNick: (nickEl.value || '').trim(),
+    }, ticket);
+    await mpEntrar({...sala, id: sala.room || sala.id}, 'E', senha);
+  } catch { mpErro('Não deu para abrir a partida solo agora. Tente novamente em instantes.'); }
+  finally { tretaSoloStarting = false; }
+});
+
+function mpMontarFormulario() {
+  const priv = mpEl('mp-privada'), wrap = mpEl('mp-senha-wrap');
+  if (priv && wrap) priv.onchange = () => { wrap.hidden = !priv.checked; };
+  const rot = mpEl('mp-rotacao');
+  if (rot && !rot._ok) {
+    rot._ok = true;
+    rot.onchange = () => { ui.click(); mpSincronizarMapas(); };
+    mpEl('mp-modo').addEventListener('change', () => mpSincronizarMapas());   // o crachá CAPTURA e o travamento do Flávio dependem do modo
+    mpEl('mp-teamsize').addEventListener('change', () => mpSincronizarMapas());   // Flávio exige rounds com 2+ por time
+    mpEl('mp-mapas-todos').onclick = () => { ui.click(); mpMapasEscolhidos = new Set(mpMapasDoNo.filter(mpMapaCompativel)); mpPintarMapas(); };
+    mpEl('mp-mapas-limpar').onclick = () => { ui.click(); mpMapasEscolhidos.clear(); mpPintarMapas(); };
+  }
+  mpSincronizarMapas();
+  const criar = mpEl('mp-criar');
+  if (criar) criar.onclick = async () => {
+    ui.click(); mpErro('');
+    if (!mpNoAtual) return mpErro('Escolha um servidor primeiro.');
+    if (!mpNoPermitePvp(mpNoAtual)) return mpErro('Este servidor não cria salas PvP. Escolha outro servidor.');
+    const privada = mpEl('mp-privada').checked;
+    const senha = mpEl('mp-senha').value.trim();
+    if (privada && !senha) return mpErro('Sala privada precisa de senha.');
+    const aDedo = mpEl('mp-rotacao').value === 'escolher';
+    const escolhidos = [...mpMapasEscolhidos];
+    if (aDedo && (!escolhidos.length || escolhidos.some((id) => !mpMapasDoNo.includes(id) || !MAPS[id] || MAPS[id].objectiveMode === 'horde'))) return mpErro('Escolha pelo menos um mapa disponível para sua sala.');
+    if (aDedo && escolhidos.some((id) => !mpMapaCompativel(id)))
+      return mpErro('Operação Flávio exige rounds e pelo menos 2 por time. Ajuste modo/tamanho ou desmarque o mapa.');
+    const ctf = mpEl('mp-modo').value === 'ctf';
+    try {
+      const ticket = await obterMpTicket('create');
+      const sala = await createRoom(mpNoAtual.http, {
+        name: mpEl('mp-nome').value.trim(),
+        // com a lista a dedo a rotação vira só o plano B do servidor (lista inválida = recorte)
+        rotacao: aDedo ? 'todos' : mpEl('mp-rotacao').value,
+        ...(aDedo ? { mapas: escolhidos, mapId: escolhidos[0] } : {}),
+        ctf, mode: ctf ? 'ctf' : 'rounds', private: privada, password: senha, maxPlayers: 10,
+        teamSize: +mpEl('mp-teamsize').value || 5,   // teamSize do criador: 1 = X1 sem bots (backend #29, relato 21/09)
+        creatorNick: ($('nick-input').value || '').trim() || null,
+      }, ticket);
+      let cheia = { ...sala, id: sala.room || sala.id };
+      /* o convite pode não vir no POST — a lista é a fonte que já o carrega; busca a sala
+         recém-criada lá antes de mostrar o modal, que existe PARA o copy do código */
+      if (!cheia.convite) {
+        try {
+          const daLista = (await listRooms(mpNoAtual.http)).find((r) => r.id === cheia.id);
+          if (daLista) cheia = { ...daLista, ...cheia, convite: daLista.convite };
+        } catch { /* sem lista, o modal mostra a sala sem código */ }
+      }
+      mpModalSalaCriada(cheia, senha);
+    } catch (err) {
+      mpErro(err && err.message === 'http_429'
+        ? 'Esse servidor está no limite de salas. Tente outra região.'
+        : 'Não deu pra criar a sala. Tente de novo.');
+    }
+  };
+  /* JOGAR COM AMIGOS: sala privada SEM senha (o código é a chave, backend#62) com o padrão de
+     quem não quer configurar nada, direto no modal do convite. Escolher fica no MAIS OPÇÕES. */
+  const amigos = mpEl('mp-amigos');
+  if (amigos) amigos.onclick = async () => {
+    ui.click(); mpErro('');
+    if (amigos.disabled) return;
+    if (!mpNoAtual) return mpErro(tr('Escolha um servidor primeiro.'));
+    /* nó sem `salaConvite` listaria a sala com o código e abriria pelo id: só nó que anuncia;
+       nenhum = o formulário, que exige senha */
+    const no = mpNoAtual.salaConvite && mpNoPermitePvp(mpNoAtual) ? mpNoAtual : mpNos.find((n) => n.online && n.salaConvite && mpNoPermitePvp(n));
+    if (!no) {
+      const criar = mpEl('mp-panel').querySelector('.mp-criar');
+      if (criar) criar.open = true;
+      return mpErro(tr('Este servidor ainda não cria sala só com convite. Use MAIS OPÇÕES e crie com senha.'));
+    }
+    if (no !== mpNoAtual) mpSelecionarNo(no);
+    const nick = ($('nick-input').value || '').trim();
+    amigos.disabled = true;   // dois cliques não criam duas salas
+    try {
+      const ticket = await obterMpTicket('create');
+      const sala = await createRoom(mpNoAtual.http, {
+        // vazio = o nó dá nome ("SALA R7"); o tamanho de time fica no padrão do servidor
+        name: nick ? `SALA DE ${nick}`.toUpperCase().slice(0, 24) : '',
+        rotacao: 'todos',
+        ctf: false, mode: 'rounds', private: true, password: '', maxPlayers: 10,
+        creatorNick: nick || null,
+      }, ticket);
+      mpModalSalaCriada({ ...sala, id: sala.room || sala.id });
+    } catch (err) {
+      mpErro(err && err.message === 'http_429'
+        ? tr('Esse servidor está no limite de salas. Tente outra região.')
+        : tr('Não deu pra criar a sala. Tente de novo.'));
+    } finally {
+      amigos.disabled = false;
+    }
+  };
+  const at = mpEl('mp-atualizar'); if (at) at.onclick = () => { ui.click(); mpAtualizarSalas(); };
+  const back = mpEl('mp-back'); if (back) back.onclick = () => { ui.click(); clearInterval(mpTimerLista); show('main-menu'); };
+  /* JOGO RÁPIDO: a melhor sala aberta do nó de menor ping — oficiais primeiro, depois as
+     mais cheias (mesmo critério da lista). Sem sala com vaga, CRIA uma pública padrão:
+     "rápido" que devolve "não achei nada" não é rápido, é beco. */
+  const quick = mpEl('mp-quick');
+  if (quick) quick.onclick = async () => {
+    ui.click(); mpErro('');
+    if (!mpNoAtual || !mpNoAtual.online) return mpErro('Nenhum servidor online agora.');
+    // Quem clica em QUICK PLAY não quer o menor ping, quer gente: sonda de novo (a lotação da
+    // lista pode ter minutos) e vai para o nó onde há alguém, até o teto de 150 ms.
+    mpEstado('conectando', 'PROCURANDO GENTE…');
+    try { mpNos = ordenarNos(await sondarNos(NOS)); mpDesenharNos(); } catch { /* segue com a lista que tem */ }
+    const alvo = melhorNoParaJogar(mpNos.filter(mpNoPermitePvp));
+    if (!alvo) return mpErro('Nenhum servidor de salas PvP está disponível agora.');
+    if (alvo.id !== mpNoAtual.id) mpSelecionarNo(alvo); else mpNoAtual = alvo;
+    mpEstado('conectando', 'PROCURANDO SALA…');
+    let salas = [];
+    try { salas = await listRooms(mpNoAtual.http); } catch { /* lista fora = cria sala */ }
+    const aberta = salas
+      .filter((r) => !r.private && r.mode !== 'horde' && r.cooperative !== true && MAPS[r.mapId || r.map]?.objectiveMode !== 'horde' && ((r.livre?.E || 0) + (r.livre?.B || 0)) > 0)
+      .sort((a, b) => (b.oficial - a.oficial) || (b.players - a.players))[0];
+    if (aberta) return mpEntrar(aberta, 'auto');
+    try {
+      const ticket = await obterMpTicket('create');
+      const sala = await createRoom(mpNoAtual.http, {
+        name: 'TRETA RÁPIDA', rotacao: 'todos',
+        ctf: false, mode: 'rounds', private: false, password: '', maxPlayers: 10,
+        creatorNick: ($('nick-input').value || '').trim() || null,
+      }, ticket);
+      mpEntrar({ ...sala, id: sala.room || sala.id }, 'auto');
+    } catch {
+      mpEstado('on', `ONLINE · ${mpNoAtual.nome.split('·')[0].trim()} · ${mpNoAtual.ping} ms`);
+      mpErro('Não deu pra entrar agora. Tente uma sala da lista.');
+    }
+  };
+  /* entrada por CÓDIGO (BR-7K3M): o caminho de quem recebeu convite fora do link */
+  const form = mpEl('mp-convite-form');
+  if (form && !form._ok) {
+    form._ok = true;
+    form.onsubmit = (e) => {
+      e.preventDefault(); ui.click();
+      const txt = (mpEl('mp-convite-in')?.value || '').trim();
+      if (!txt) return mpErro('Digite o código do convite (formato REGIÃO-CÓDIGO, tipo BR-7K3M).');
+      mpEntrarPorConvite(txt);
+    };
+  }
+}
+
+/* Abre o socket e SÓ ENTÃO começa a partida. A ordem importa: o welcome traz o mapa, as
+   facções e o modo que o servidor está rodando — é ele que manda, não o que estava
+   escolhido no menu. Começar antes seria carregar o mapa errado e trocar na cara do jogador. */
+async function mpEntrar(sala, team = 'auto', senha = '') {
+  if (mpConectando) return;   // dois cliques em ENTRAR não podem abrir dois sockets
+  mpErro('');
+  const nick = ($('nick-input').value || '').trim();
+  /* sala só por convite (`senha: false`, backend#62): entra pelo CÓDIGO, sem senha; pelo id o
+     nó responde que ela não existe. Nó antigo não manda `senha` e a privada segue pedindo. */
+  const soConvite = sala.private && sala.senha === false && !!sala.codigo;
+  if (sala.private && !soConvite && !senha) {
+    senha = (prompt('Essa sala é privada. Senha:') || '').trim();
+    if (!senha) return;
+  }
+  mpEstado('conectando', `CONECTANDO · ${sala.name || sala.convite || 'SALA'}…`);
+  mpConectando = true;
+  // Autorização inicial, renovação e sessão pertencem ao mesmo nó, mesmo se a lista mudar.
+  const no = mpNoAtual;
+  let ticket;
+  try { ticket = await obterMpTicket('connect', no); }
+  catch {
+    mpConectando = false;
+    return mpErro('Não deu para autorizar a conexão. Tente novamente.');
+  }
+  const net = new NetClient(no.url.replace(/\/ws.*$/, '') + '/ws', {
+    nome: nick || null, room: sala.id, codigo: soConvite ? sala.codigo : null, pw: senha, team, ticket,
+    refreshTicket: () => obterMpTicket('connect', no),
+    csha: String(window.__CS_BUILD?.sha || ''),   // mp_session grava o build do navegador (backend#22)
+  });
+  /* Espera COM feedback: o connect pode levar segundos numa região longe, e tela parada sem
+     mensagem lê como "cliquei e não aconteceu nada" (BUG-88). O prazo é do net.connect(). */
+  mpErro(`Conectando na sala ${sala.name || sala.id}…`);
+  let welcome;
+  try { welcome = await net.connect(); }
+  catch (err) {
+    mpConectando = false;
+    const m = String(err && err.message || '');
+    if (mpNoAtual.online) mpEstado('on', `ONLINE · ${mpNoAtual.nome.split('·')[0].trim()} · ${mpNoAtual.ping} ms`);
+    else mpEstado('erro', 'SERVIDORES FORA DO AR');
+    if (m.includes('versao_incompativel')) {
+      // Nó simulando outra versão do jogo (incidente da frota, 11/09). Recarregar resolve
+      // quando é cache do jogador; quando é o nó, a mensagem diz as duas versões.
+      const d = err?.detalhe || {};
+      return mpErro(`Este servidor roda outra versão do jogo (nó ${d.no || '?'} · você ${d.jogo || '?'}). `
+        + 'Recarregue a página; se continuar, escolha outra região.', true);
+    }
+    return mpErro(m.includes('bad_password') ? 'Senha errada.'
+      : m.includes('room_full') ? 'Sala cheia.'
+      : m.includes('room_not_found') ? 'Essa sala não existe mais.'
+      : m.includes('muitas_tentativas') ? 'Muitas tentativas seguidas. Espere um minuto e tente de novo.'
+      : m.includes('protocolo_incompativel') ? 'Este servidor fala uma versão antiga do jogo. Recarregue a página; se continuar, escolha outra região.'
+      : m.includes('timeout') ? 'O servidor demorou demais pra responder. Tente de novo ou escolha outra região.'
+      : 'Não deu pra conectar nesse servidor.');
+  }
+  mpConectando = false;
+  mpErro('');
+  mpEstado('on', `NA SALA · ${sala.name || sala.convite || ''}`);
+  clearInterval(mpTimerLista);
+  mpSessao = { net, sala, no };
+  // chat de sala (#686): inerte sem welcome.chat; vive na sessão, não no Game, então sobrevive à troca de mapa
+  mpSessao.chat = montarChatSala({ net, obterJogo: () => game, tr, frase, convite: sala.convite || sala.id || '', toque: TOUCH });
+  /* O SERVIDOR dita o cenário. `currentMap`/`matchMode` são as variáveis que o startGame lê.
+     Nó desatualizado ainda sorteia mapa PARADO: recusar é a única saída honesta — trocar o
+     mapa por conta própria dessincroniza do servidor. Contrato: docs/maps/MAPAS-PARADOS.md. */
+  if (noServeMapaParado(welcome.map, net)) return;
+  mpGuardarEscolhaSp();
+  if (MAPS[welcome.map]) currentMap = welcome.map;
+  matchMode = welcome.ctf ? 'ctf' : 'rounds';
+  modoEscolhido = true;
+  contagem.entrouNoMp({ map: currentMap, mode: matchMode });
+  net.onClose = () => mpDesconectou();
+  net.onSlot = async (m) => {
+    if (mpSessao?.net === net) mpSessao.chat?.aoMudarSlot(m);
+    await transitionSlot(m, net.meta, {
+      team: currentTeam, faction: currentFaction, enemyFaction: currentEnemyFaction, char: currentChar,
+    }, (id) => CHARACTERS.some((c) => c.id === id), async (next) => {
+      currentTeam = next.team; currentFaction = next.faction;
+      currentEnemyFaction = next.enemyFaction; currentChar = next.char;
+      mpAtualizarBarraSpec(m);
+      if (mpSessao?.net === net) await startGame(currentTeam, currentChar, currentEnemyFaction, true);
+      if (mpSessao?.net === net && net.yourEnt === m.yourEnt && game?.online) {
+        mpMostrarIdentidade({ ...net.meta, ...m });
+        mpPedirPersonagemPreferido(net, m.motivo);
+      }
+    });
+  };
+  net.onPersonagem = (m) => {
+    if (m.ent !== net.yourEnt) return;
+    currentChar = m.char;
+    if (mpSessao?.net === net && game?.online) mpMostrarIdentidade({
+      ...net.meta, yourEnt: net.yourEnt, yourTeam: net.yourTeam, espectador: net.espectador,
+    });
+  };
+  // Próximo mapa anunciado no início do placar: pré-carrega enquanto o placar está na tela.
+  net.onProximo = (m) => {
+    if (mpSessao?.net !== net) return;
+    // erro síncrono aqui não pode subir: no WebTransport ele derrubaria o laço de leitura
+    try { mpPreCarregarProximo(m); } catch (e) { console.warn('[mp] próximo mapa falhou (a virada carrega):', e && e.message); }
+  };
+  // Nova partida no servidor (mapa girou): mesmo conteúdo do welcome, remonta por cima.
+  // Sem isto o cliente ficava no mapa velho com ids mortos — BUG-112 (KNOWN-BUGS.md).
+  net.onPartida = async (m) => {
+    if (mpSessao?.net !== net) return;
+    // o nó segura o round 1 até o `pronto` (teto de 10 s lá): ele sai por qualquer caminho
+    try {
+      mpPararContagemProximo();
+      mpSessao.chat?.aoMudarMeta(net.meta);
+      if (noServeMapaParado(m.map, net)) return;
+      mpGuardarEscolhaSp();
+      if (MAPS[m.map]) currentMap = m.map;
+      matchMode = m.ctf ? 'ctf' : 'rounds';
+      await mpMontarPartida(net, m);
+    } finally { if (mpSessao?.net === net) net.avisarPronto(m.partida); }
+  };
+  await mpMontarPartida(net, welcome);
+}
+
+/* PRÓXIMO MAPA NO PLACAR: os mesmos carregadores essenciais do _startGame, em segundo
+   plano, com os ids anunciados pelo nó; o perfil móvel adia fauna e armas não equipadas. A tela de fim mostra nome e contagem; VOLTAR AO MENU segue ao lado. */
+let mpContagemProximo = null;
+function mpPararContagemProximo() {
+  clearInterval(mpContagemProximo); mpContagemProximo = null;
+  // partida seguinte sem `proximo` (nó antigo) não pode herdar o nome do mapa de agora
+  const rotulo = $('match-next');
+  if (rotulo) rotulo.textContent = tr('PRÓXIMO MAPA CARREGANDO…');
+}
+function mpPreCarregarProximo(m) {
+  const plano = planoPreload(m, { maps: MAPS, glbChars: GLB_CHARS, weaponIds: WEAPON_IDS });
+  if (!plano) return;
+  const nome = tr(m.mapNome || MAPS[plano.mapId].name || plano.mapId);
+  const rotulo = $('match-next');
+  const pinta = () => { if (rotulo) rotulo.textContent = textoProximo(nome, segundosAteVirada(m), LANG); };
+  mpPararContagemProximo();
+  pinta();
+  mpContagemProximo = setInterval(pinta, 250);
+  const armas = [...new Set([charWeapon(currentChar), ...plano.weapons])].filter(Boolean);
+  const mapaReady = plano.mapId === 'loja_h' && plano.seed != null
+    ? defineSeedHavan(plano.seed)
+    : comMapaCarregado(plano.mapId, (mapa) => mapa);
+  Promise.all([
+    plano.chars.length ? preloadCharacterAssets(plano.chars, { weapons: armas }) : null,
+    sfx.preloadWeaponSamples(armas),
+    ehMapaJavaporcos(plano.mapId) ? sfx.preloadJavaporcos().catch(e => console.warn('JAV-AUDIO: preload falhou', e)) : null,
+    mapaReady.then((mapa) => preloadMapProps(mapPropIds(mapa))),
+    mapaReady.then((mapa) => preloadMapAmbientLife(mapa, { mobileAuto: MOBILE_AUTO })),
+    mapaReady.then((mapa) => mapa.preload ? mapa.preload() : null),
+    preloadAuthoredFamilies(authoredBootFamilies(POINTER_COARSE ? [] : armas)),
+  ]).catch((e) => console.warn('[mp] pré-carga do próximo mapa falhou (a virada carrega):', e && e.message));
+}
+
+/* Monta (ou remonta) a partida a partir de um welcome/partida: lado, facções e personagem
+   são do CORPO que o servidor deu; espectador usa qualquer um da facção (preload não vazio). */
+async function mpMontarPartida(net, m) {
+  // o lado do jogador vem do servidor; a facção também (a sala LIVRE sorteia)
+  const lado = m.yourTeam === 'B' ? 'B' : 'E';
+  const faccaoMinha = lado === 'B' ? m.faccaoB : m.faccaoE;
+  const faccaoDele = lado === 'B' ? m.faccaoE : m.faccaoB;
+  const meuNoRoster = (m.roster || []).find((r) => r.id === m.yourEnt);
+  const personagem = (meuNoRoster && CHARACTERS.some((c) => c.id === meuNoRoster.char) ? meuNoRoster.char : null)
+    || (CHARACTERS.find((c) => c.team === faccaoMinha) || CHARACTERS[0]).id;
+  await startGame(lado, personagem, faccaoDele, true);
+  if (mpSessao?.net === net && net.yourEnt === m.yourEnt && game?.online) {
+    mpAtualizarBarraSpec(m);
+    mpMostrarIdentidade(m);
+    mpPedirPersonagemPreferido(net);
+  }
+}
+
+/* O personagem escolhido vale no multiplayer: o servidor troca o corpo herdado do bot.
+   Fora do lado, avisa e oferece a troca (docs/adr/0007-personagem-escolhido.md). */
+function mpPedirPersonagemPreferido(net, motivo = null) {
+  const escolhido = personagemEscolhido();
+  const d = decidirPersonagemMp({
+    escolhido, atual: currentChar, lado: net.yourTeam, espectador: net.espectador,
+    aceita: net.aceitaPersonagem(), podeNoLado,
+  });
+  mpAvisoPersonagem(null);
+  if (d.acao === 'pedir') net.pedirPersonagem(d.id);
+  else if (d.acao === 'avisar-servidor') mpAvisoPersonagem(`${escolhido.name}: este servidor ainda não troca o personagem.`);
+  else if (d.acao === 'avisar-lado') {
+    const nomeLado = (l) => FACTION_NAME[l] || 'TIME';
+    const cheio = motivo === 'lado_cheio' ? ` O ${nomeLado(d.outroLado)} está cheio agora.` : '';
+    mpAvisoPersonagem(`${escolhido.name} não joga no ${nomeLado(net.yourTeam)}.${cheio}`, {
+      ir: `IR PARA O ${nomeLado(d.outroLado)}`,
+      onIr: () => { ui.click(); net.pedirTime(d.outroLado); game?.resume(); },
+    });
+  }
+}
+function mpAvisoPersonagem(texto, oferta = null) {
+  for (const id of ['mp-identity-toast', 'mp-identity-pause']) {
+    const el = document.querySelector(`#${id} .mp-identity-aviso`);
+    if (el) { el.textContent = (texto || '') + (oferta && id === 'mp-identity-toast' ? ' ESC para trocar.' : ''); el.hidden = !texto; }
+  }
+  const acoes = $('mp-personagem-acoes');
+  if (!acoes) return;
+  acoes.hidden = !oferta;
+  if (!oferta) return;
+  $('mp-personagem-ir').textContent = oferta.ir;
+  $('mp-personagem-ir').onclick = oferta.onIr;
+  $('mp-personagem-outro').onclick = () => { ui.click(); if (mpSessao) abrirTrocaOnline(); };
+  if (texto) {
+    const toast = $('mp-identity-toast');
+    if (toast) { toast.hidden = false; clearTimeout(mpIdentityTimer); mpIdentityTimer = setTimeout(() => { toast.hidden = true; }, 9000); }
+  }
+}
+
+/* Queda de conexão: o servidor reserva o slot por 45 s e o cliente tenta
+ * reconectar antes de mostrar a opção de entrar novamente. */
+let mpReconectando = false;
+function mpDesconectou() {
+  if (!mpSessao) return;
+  if (mpReconectando) return;   // desconectou DURANTE tentativa de reconexão — o loop cuida
+  const sessao = mpSessao;
+  const { sala, no } = sessao;
+  const team = sessao.net?._lastTeam || 'auto';
+  /* A instância local termina aqui mesmo quando o servidor preserva o slot para reconexão.
+   * Conta este trecho antes de descartar o jogo; uma reconexão cria a próxima sessão local. */
+  try { sendTelemetry(); } catch { /* diagnóstico não bloqueia a reconexão */ }
+  mpPararContagemProximo();
+  sessao.chat?.destruir();
+  mpSessao = null;
+  mpDevolverEscolhaSp();
+  clearTelemetryGameContext();
+  mpFecharBarraSpec();
+  try { if (game) game.dispose(); } catch { /* já foi */ }
+  soltarPartida();
+  try { if (document.pointerLockElement) document.exitPointerLock(); } catch { /* sem lock */ }
+  show('mp-panel');
+  mpTentarReconectar(sala, no, team);
+}
+
+async function mpTentarReconectar(sala, no, team) {
+  const PRAZO = 45_000, INTERVALO = 2000, inicio = Date.now();
+  mpReconectando = true;
+  let tentativa = 0;
+  while (Date.now() - inicio < PRAZO) {
+    tentativa += 1;
+    mpEstado('conectando', `RECONNECTING · tentativa ${tentativa}…`);
+    const restante = PRAZO - (Date.now() - inicio);
+    await new Promise((r) => setTimeout(r, Math.min(tentativa === 1 ? 600 : INTERVALO, restante)));
+    if (!document.getElementById('mp-panel') || document.getElementById('mp-panel').hidden) {
+      mpReconectando = false; return;   // jogador navegou para fora — cancela
+    }
+    if (Date.now() - inicio >= PRAZO) break;
+    mpNoAtual = no;
+    mpConectando = false;   // mpEntrar guarda com este flag — reseta da tentativa anterior
+    try {
+      await mpEntrar(sala, team);
+      if (mpSessao) { mpReconectando = false; return; }   // reconectou
+    } catch { /* tenta de novo até SLOT_IDLE_MS */ }
+  }
+  mpReconectando = false;
+  /* saiu de todas — agora sim o quit de telemetria e a mensagem honesta */
+  try { sendTelemetry(); sendMatchEvent('quit'); } catch { /* diagnóstico não bloqueia */ }
+  abrirMultiplayer().then(() => mpErro('A conexão com o servidor caiu. Entre de novo.'));
+}
+
+/* Barra do espectador: quem está assistindo tem que saber que está assistindo, de quem é a
+   visão, e como entrar em campo quando abrir vaga. Sem ela o modo espectador é
+   indistinguível de "o jogo travou olhando pro outro". */
+function mpAtualizarBarraSpec(estado) {
+  if (!mpSessao) return;
+  const espectando = !!(estado && estado.espectador);
+  let bar = document.getElementById('mp-spec-bar');
+  if (!espectando) { mpFecharBarraSpec(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'mp-spec-bar';
+    bar.innerHTML = '<span>ASSISTINDO <b id="mp-spec-quem">—</b></span>'
+      + '<button id="mp-spec-prev" type="button">◂ ANTERIOR</button>'
+      + '<button id="mp-spec-next" type="button">PRÓXIMO ▸</button>'
+      + '<button id="mp-spec-e" type="button">ENTRAR NO TIME E</button>'
+      + '<button id="mp-spec-b" type="button">ENTRAR NO TIME B</button>'
+      + '<button id="mp-spec-sair" type="button">SAIR</button>';
+    document.body.appendChild(bar);
+    bar.querySelector('#mp-spec-prev').onclick = () => window.__game?._mp?.trocarAlvo(-1);
+    bar.querySelector('#mp-spec-next').onclick = () => window.__game?._mp?.trocarAlvo(1);
+    bar.querySelector('#mp-spec-e').onclick = () => mpSessao?.net.pedirTime('E');
+    bar.querySelector('#mp-spec-b').onclick = () => mpSessao?.net.pedirTime('B');
+    bar.querySelector('#mp-spec-sair').onclick = () => { mpSair(); };
+    /* Atualiza a lotação dos botões pelo SNAPSHOT (é o servidor que diz se há vaga). Um botão
+       "ENTRAR" que está sempre aceso e não faz nada é pior que um botão apagado. */
+    bar._timer = setInterval(() => {
+      const mp = window.__game?._mp;
+      const vagas = mp?.vagas;
+      const quem = document.getElementById('mp-spec-quem');
+      if (quem) quem.textContent = mp?.nomeAlvo || '—';
+      const be = document.getElementById('mp-spec-e'), bb = document.getElementById('mp-spec-b');
+      const meta = mpSessao?.net?.meta || {};
+      const nomeE = meta.nomeE || 'ESQUERDA', nomeB = meta.nomeB || 'DIREITA';
+      if (be) { be.disabled = !(vagas && vagas.E > 0); be.textContent = `ENTRAR: ${nomeE}${vagas ? ` (${vagas.E})` : ''}`; }
+      if (bb) { bb.disabled = !(vagas && vagas.B > 0); bb.textContent = `ENTRAR: ${nomeB}${vagas ? ` (${vagas.B})` : ''}`; }
+    }, 400);
+  }
+}
+function mpFecharBarraSpec() {
+  const bar = document.getElementById('mp-spec-bar');
+  if (bar) { clearInterval(bar._timer); bar.remove(); }
+}
+function mpEncerrarSessao() {
+  const s = mpSessao; mpSessao = null;
+  mpDevolverEscolhaSp();
+  mpLimparIdentidade();
+  s?.chat?.destruir();
+  mpFecharBarraSpec();
+  try { s?.net.close(); } catch { /* já fechado */ }
+}
+/* Sair da partida online. Fecha o socket ANTES de derrubar o jogo: o servidor precisa
+   liberar o corpo (senão fica um manequim segurando vaga até o heartbeat derrubar). */
+function mpSair() {
+  try { if (game) { sendTelemetry(); sendMatchEvent('quit'); } } catch { /* diagnóstico não bloqueia a saída */ }
+  mpEncerrarSessao();
+  clearTelemetryGameContext();
+  try { if (game) game.dispose(); } catch { /* já foi */ }
+  soltarPartida();
+  try { if (document.pointerLockElement) document.exitPointerLock(); } catch { /* sem lock */ }
+  show('main-menu');
+}
+
+/* ---------------- boot ---------------- */
+/* Guarda igual à da linha de baixo, e não é zelo: esta escrita roda em escopo de
+   módulo DUAS linhas antes do `show()`. Se o redesign mexer na única `.footnote`
+   do documento (index.astro, dentro do #pause-menu), o TypeError acontece ANTES
+   de qualquer tela aparecer — o sintoma seria "o menu não abre", que não parece
+   com "alguém renomeou uma classe no pause". */
+function finishBoot() {
+  const fn = document.querySelector('.footnote');
+  if (fn) fn.textContent =
+    `v${VERSION} · Sátira política fictícia. Nenhum político real foi consultado (ou poupado).`;
+  const sv = document.getElementById('splash-ver'); if (sv) sv.textContent = `v${VERSION}`;
+  // Boot no fim do módulo: `restoreHubRoute()` pode abrir o multiplayer, que lê `mpEl`/`mpNos` (#707).
+show('main-menu');   // mobile agora entra no menu normal (fase 1: controles de toque)
+  if (HUB_ENABLED) {
+    if (!location.pathname.startsWith('/u/')) hubNavigate({ map: currentMap, personagem: currentChar }, true); // /u/<perfil> fica limpo para compartilhar
+    restoreHubRoute();
+  }
+  /* RÉGUA:boot-pending-entry início */
+window.__CS_MAIN_READY__ = true;
+window.__gameLaunch?.ready('boot');
+contagem.evento('game_loaded');
+  const entradaPendente = document.getElementById('boot-splash');
+  if (entradaPendente?.dataset.csEntradaPendente) {
+    delete entradaPendente.dataset.csEntradaPendente;
+    dismissSplash();
+  }
+  /* RÉGUA:boot-pending-entry fim */
+  // Convite de sala e perfil compartilhado (/u/<perfil>) chegam com destino: nem o convite de conta nem o da loja cobrem esse destino.
+  // /u/<perfil> é o hub (SSR); ?perfil= é o link antigo.
+const perfilCompartilhado = Boolean(params.get('perfil') || estadoDaUrl(location.href)?.perfil);
+  void initAccountEntry({skipPrompt:Boolean(inspectionScreen || testMode || params.get('sala') || perfilCompartilhado),onSession:auth=>{contaNick=auth?.profile?.nick || '';if(auth?.profile){nickEl.value=auth.profile.nick;nickEl.readOnly=true;}else{nickEl.value=localStorage.getItem(NICK_KEY) || '';nickEl.readOnly=false;}syncPlayState();},onReady:ready=>initLoginPrompt({...ready,skip:Boolean(inspectionScreen || testMode || params.get('sala') || perfilCompartilhado),track:_loginPromptTrack})});
+  // Logar com a aba RANKING aberta tira o convite de nick na hora, sem refazer a lista.
+  document.addEventListener('cs-account-change',(e)=>{const nick=e.detail?.profile?.nick || '';const mudou=Boolean(nick && nick!==contaNick);contaNick=nick;const convite=$('hub-rank-profile');if(convite)convite.hidden=Boolean(registeredNick || contaNick);if(mudou)pingPresencaConta();});
+  tretaStoreReady=Promise.resolve(initTretaStore({skipPrompt:Boolean(inspectionScreen || testMode || params.get('sala') || perfilCompartilhado),onEquipped:skin=>{currentChar=skin.character;const def=CHARACTERS.find(c=>c.id===currentChar);currentTeam=ladoValido(def,currentTeam);currentFaction=currentTeam;localStorage.setItem('csbr-home-character',currentChar);localStorage.setItem('csbr-home-side',currentTeam);syncHomeCharacter();hubNavigate({personagem:currentChar},true);}}));
+  document.addEventListener('cs-treta-inventory-change',refreshMenuEquipment);
+  /* Passe Sessão da Treta: o GET com conta também registra o login do dia no servidor. Conta trocada
+     esquece o status anterior (o id do perfil separa a memória de novidades de cada conta); fim de
+     partida liquida de novo depois que o resultado foi enviado (acompanharPartidaPasse, passe.js). */
+  if(!testMode){
+    void carregarPasse();
+    document.addEventListener('cs-account-change',(e)=>{void trocarContaPasse(e.detail?.authenticated?e.detail.profile?.id:null);});
+    document.addEventListener('cs-match-end',()=>{acompanharPartidaPasse();});
+  }
+  document.addEventListener(PASSE_EVENTO,refreshMenuEquipment);
+  // Vitrine SKINS NOVAS: o módulo só baixa quando a loja responde com skin à venda.
+  if (directRoute) document.getElementById('boot-splash')?.remove();
+  const abrirVitrine=()=>{if(!tretaVitrine()?.length)return;document.removeEventListener('cs-treta-state',abrirVitrine);void import('./treta-vitrine.js').then(m=>m.iniciarVitrine()).catch(()=>{});};
+  document.addEventListener('cs-treta-state',abrirVitrine);
+  if (inspectionScreen) {
+    void openInspectionScreen(inspectionScreen).catch((error) => window.__gameLaunch?.fail(error, 'screen-query'));
+  } else if (testMode && params.get('auto')) {
+    const [team, char] = params.get('auto').split(',');
+    startGame(team || 'E', char || CHARACTERS[0].id);
+  } else if (params.get('sala')) {
+    /* Chegou por LINK de convite (/sala/BR-7K3M redireciona pra cá). Espera a splash sair antes
+       de abrir a rede: sem gesto do usuário o áudio nem inicia e o jogo abre mudo. */
+    const entrarQuandoPuder = () => window.__mpConvite?.(params.get('sala'));
+    if (document.getElementById('boot-splash')) document.addEventListener('click', entrarQuandoPuder, { once: true });
+    else entrarQuandoPuder();
+  }
+  /* QA MOBILE (qa-mobile.js, contrato em tools/eval/qa-mobile-check.mjs): import DINÂMICO atrás
+     do portão — sessão normal não baixa o arquivo. `__CS_QA__` é a injeção do app de loja. */
+  if (params.get('qa') === 'mobile' || window.__CS_QA__) {
+    void import('./qa-mobile.js').then((m) => m.ligarQaMobile()).catch(() => { /* QA não derruba partida */ });
+  }
+}
+void window.__CS_LANG_READY__.then(finishBoot).catch((error) => window.__gameLaunch?.fail(error, 'boot'));
+import {rankingTable,playerProfilePath} from './ranking-player.js';
+import {accountVerifiedBadge} from './account-verified.js';
+import {careerRankBadge} from './career-rank.js';

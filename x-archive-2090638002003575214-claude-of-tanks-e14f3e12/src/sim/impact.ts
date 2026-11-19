@@ -1,0 +1,472 @@
+/**
+ * impact.ts — speed-based collision damage shared by the solo step (game/state.ts) and the network authority
+ * (sim/authoritativeMatch.ts): hard-obstacle impacts, fall damage, the tank-on-tank ram split and the momentum
+ * exchange of a ram. Owner 2026-09-25: "add more speed based damage — running into something hard super fast
+ * like a rock or building or other tank, fall damage, etc."
+ *
+ * Every law is energy based. A hull's kinetic energy above the threshold speed, ½ · m · (v − v_min)² in
+ * kilojoules, becomes hull hit points through the ruleset's hp-per-kJ rate (sim/matchRuleset.ts RulesetPhysics),
+ * so a heavier hull takes more from the same speed, the onset at the threshold is smooth and a mode tunes the
+ * whole curve with two numbers. The face that struck matters: a glacis takes 70 % of a broadside, a stern 85 %.
+ * Modules follow the shape of the crash (tracks and suspension first, the engine on a frontal hit, crew shock
+ * above a high closing speed); every draw is deterministic through the caller's seeded RNG.
+ *
+ * Pure and DOM-free — runs under plain node; allocates only on an event that actually deals damage.
+ */
+import { hullDamageTaken, setModuleHp, type CombatState, type ModuleStateName } from './damage.ts';
+import type { ModuleId } from './moduleCatalog.ts';
+import { ramDamage } from './damage.ts';
+import type { RulesetPhysics } from './matchRuleset.ts';
+
+import * as detMath from './detMath.ts';
+export type HullImpactKind = 'impact' | 'fall';
+
+interface ImpactModuleHit {
+  module: ModuleId;
+  newState: ModuleStateName;
+  dmg: number;
+}
+
+export interface HullImpactResult {
+  kind: HullImpactKind;
+  /** Hull hit points lost, after the ruleset's damage-taken scale. */
+  damage: number;
+  destroyed: boolean;
+  modulesHit: ImpactModuleHit[];
+  crewHit: string[];
+}
+
+/** The slice of a combat state an impact writes (damage.ts CombatState and the authority's state both satisfy it). */
+type ImpactCombatState = Pick<CombatState, 'hp' | 'maxHp' | 'destroyed' | 'modules' | 'crew' | 'modeDamageTakenScale' | 'modeCriticalDamage' | 'modeModuleOnlyDamage'>;
+
+interface HullImpactInput {
+  combat: ImpactCombatState;
+  massTons: number;
+  physics: RulesetPhysics;
+  kind: HullImpactKind;
+  /** Closing speed along the contact normal (an obstacle) or against the ground (a landing), m/s. For a crash
+   * spread over consecutive ticks the caller passes the ACCUMULATED closing speed here. */
+  closingMps: number;
+  /** The part of closingMps a previous tick of the same crash already priced (0 for a new blow). */
+  priorClosingMps?: number;
+  /** +1 square on the glacis, −1 square on the stern, 0 broadside (impacts only; a landing reads 0). */
+  faceForward: number;
+  /** Which track carries the blow: +1 right, −1 left, 0 both (impacts only). */
+  sideSign: number;
+  /** Landing attitude factor from fallAttitudeFactor (falls only; an impact reads 1). */
+  attitudeFactor: number;
+  /** Seeded RNG for the crew-shock draw (the caller's combat RNG keeps replay order). */
+  rng: () => number;
+}
+
+/** A glacis takes this share of a broadside's damage; a stern this share. */
+const FRONT_ZONE_FACTOR = 0.7;
+const REAR_ZONE_FACTOR = 0.85;
+/** Attitude factor: a nose-first landing (20° off the ground plane) costs up to +60 %, a tilted one +30 %, an
+ * inverted one +50 % — the load lands on one end, one side, or the roof instead of the running gear. */
+const NOSE_LANDING_GAIN = 0.6;
+const TILT_LANDING_GAIN = 0.3;
+const INVERTED_LANDING_GAIN = 0.5;
+const ATTITUDE_FULL_RAD = 0.35;
+const INVERTED_UP_Y = 0.55;
+/** Module shares of the hull damage. Tracks and suspension first; the engine on a frontal crash or a hard landing. */
+const IMPACT_NEAR_TRACK_SHARE = 0.8;
+const IMPACT_FAR_TRACK_SHARE = 0.3;
+const IMPACT_HEAD_ON_TRACK_SHARE = 0.6;
+const IMPACT_ENGINE_SHARE = 0.35;
+const FALL_TRACK_SHARE = 0.5;
+const FALL_ENGINE_SHARE = 0.15;
+/** A head-on contact (|faceForward| past this) loads both tracks and the engine. */
+const HEAD_ON_FACE = 0.7;
+/** Crew shock: above these closing speeds one crew member may be knocked out with this chance. */
+export const CREW_SHOCK_IMPACT_MPS = 16;
+export const CREW_SHOCK_FALL_MPS = 14;
+const CREW_SHOCK_CHANCE = 0.4;
+/** A blow under half a hit point is not an event. */
+const MIN_REPORTED_DAMAGE = 0.5;
+/** The rammer's discount on its own share scales with how much of the closing speed it brought. */
+const RAM_AGGRESSOR_DISCOUNT = 0.35;
+
+function clamp(value: number, lo: number, hi: number): number {
+  return value < lo ? lo : value > hi ? hi : value;
+}
+
+/** Kinetic energy of a hull in kilojoules: ½ · tons · 1000 kg/t · v² / 1000 J/kJ = ½ · tons · v². */
+export function impactEnergyKj(massTons: number, speedMps: number): number {
+  const tons = massTons > 0 ? massTons : 40;
+  const v = Math.abs(Number(speedMps)) || 0;
+  return 0.5 * tons * v * v;
+}
+
+/** Energy above the threshold speed: the square of the excess, so damage starts from zero at the threshold. */
+export function excessEnergyKj(massTons: number, closingMps: number, minMps: number): number {
+  const c = Math.abs(Number(closingMps)) || 0;
+  if (!(c > minMps)) return 0;
+  return impactEnergyKj(massTons, c - minMps);
+}
+
+/**
+ * Which face struck, from the contact normal in the hull frame: +1 square on the glacis (frontal armour and the
+ * hull's long axis take the load), −1 square on the stern, 0 broadside (the tracks and side plates fold).
+ */
+export function impactZoneFactor(faceForward: number): number {
+  const f = clamp(Number(faceForward) || 0, -1, 1);
+  return f >= 0 ? 1 - (1 - FRONT_ZONE_FACTOR) * f : 1 - (1 - REAR_ZONE_FACTOR) * -f;
+}
+
+/** Hull hit points a hard-obstacle impact costs before the ruleset's damage-taken scale. */
+export function hardImpactDamage(
+  physics: RulesetPhysics,
+  massTons: number,
+  closingMps: number,
+  faceForward: number,
+): number {
+  return excessEnergyKj(massTons, closingMps, physics.impactMinMps) * physics.impactHpPerKj * impactZoneFactor(faceForward);
+}
+
+/**
+ * Landing attitude factor: how far the hull's pitch and roll sit from the ground plane at touchdown and whether it
+ * came down on its side or roof. 1 for a flat landing on the tracks.
+ */
+export function fallAttitudeFactor(pitchErrorRad: number, rollErrorRad: number, upY: number): number {
+  const nose = Math.min(1, Math.abs(Number(pitchErrorRad) || 0) / ATTITUDE_FULL_RAD);
+  const tilt = Math.min(1, Math.abs(Number(rollErrorRad) || 0) / ATTITUDE_FULL_RAD);
+  const inverted = Number.isFinite(upY) && upY < INVERTED_UP_Y ? 1 : 0;
+  return 1 + NOSE_LANDING_GAIN * nose + TILT_LANDING_GAIN * tilt + INVERTED_LANDING_GAIN * inverted;
+}
+
+/** Hull hit points a landing costs before the ruleset's damage-taken scale. */
+export function fallDamage(
+  physics: RulesetPhysics,
+  massTons: number,
+  landingMps: number,
+  attitudeFactor = 1,
+): number {
+  const factor = Number.isFinite(attitudeFactor) && attitudeFactor > 0 ? attitudeFactor : 1;
+  return excessEnergyKj(massTons, landingMps, physics.fallMinMps) * physics.fallHpPerKj * factor;
+}
+
+function damageModule(
+  combat: ImpactCombatState,
+  name: ModuleId,
+  amount: number,
+  out: ImpactModuleHit[],
+): void {
+  const module = combat.modules[name];
+  if (!module || !(amount > 0) || module.hp <= 0) return;
+  // the module law is damage.ts's (its stage and the repair count-up), never a copy of it here
+  out.push({ module: name, newState: setModuleHp(module, module.hp - amount), dmg: Math.round(amount) });
+}
+
+/** Module damage in the shape of the crash. */
+function applyImpactModules(
+  combat: ImpactCombatState,
+  kind: HullImpactKind,
+  hullDamage: number,
+  faceForward: number,
+  sideSign: number,
+  out: ImpactModuleHit[],
+): void {
+  if (kind === 'fall') {
+    damageModule(combat, 'trackL', hullDamage * FALL_TRACK_SHARE, out);
+    damageModule(combat, 'trackR', hullDamage * FALL_TRACK_SHARE, out);
+    damageModule(combat, 'engine', hullDamage * FALL_ENGINE_SHARE, out);
+    return;
+  }
+  const headOn = Math.abs(faceForward) >= HEAD_ON_FACE;
+  if (headOn || sideSign === 0) {
+    damageModule(combat, 'trackL', hullDamage * IMPACT_HEAD_ON_TRACK_SHARE, out);
+    damageModule(combat, 'trackR', hullDamage * IMPACT_HEAD_ON_TRACK_SHARE, out);
+  } else {
+    const near: ModuleId = sideSign > 0 ? 'trackR' : 'trackL';
+    const far: ModuleId = sideSign > 0 ? 'trackL' : 'trackR';
+    damageModule(combat, near, hullDamage * IMPACT_NEAR_TRACK_SHARE, out);
+    damageModule(combat, far, hullDamage * IMPACT_FAR_TRACK_SHARE, out);
+  }
+  if (faceForward >= HEAD_ON_FACE) damageModule(combat, 'engine', hullDamage * IMPACT_ENGINE_SHARE, out);
+}
+
+/** Crew shock: one draw above the threshold; the driver first, then the roster in order. */
+function applyCrewShock(
+  combat: ImpactCombatState,
+  kind: HullImpactKind,
+  closingMps: number,
+  rng: () => number,
+  out: string[],
+): void {
+  const threshold = kind === 'fall' ? CREW_SHOCK_FALL_MPS : CREW_SHOCK_IMPACT_MPS;
+  if (!(closingMps >= threshold) || !combat.crew) return;
+  if (rng() >= CREW_SHOCK_CHANCE) return;
+  if (combat.crew.driver === true) {
+    combat.crew.driver = false;
+    out.push('driver');
+    return;
+  }
+  for (const name of Object.keys(combat.crew)) {
+    if (combat.crew[name] !== true) continue;
+    combat.crew[name] = false;
+    out.push(name);
+    return;
+  }
+}
+
+/**
+ * Resolve one hull impact or landing against a combat state: hull hit points through the ruleset's damage-taken
+ * scale, then modules and crew when the ruleset breaks them (Turbo Ball keeps every system intact). A wreck takes
+ * nothing (it keeps its momentum, that is all). Returns null when the blow is under the threshold.
+ */
+export function resolveHullImpact(input: HullImpactInput): HullImpactResult | null {
+  const { combat, physics, kind } = input;
+  if (!combat || combat.destroyed) return null;
+  const prior = input.priorClosingMps ?? 0;
+  // a crash priced across ticks: only the energy the new closing speed adds over what was already charged
+  const raw = kind === 'fall'
+    ? fallDamage(physics, input.massTons, input.closingMps, input.attitudeFactor)
+    : hardImpactDamage(physics, input.massTons, input.closingMps, input.faceForward) -
+      (prior > 0 ? hardImpactDamage(physics, input.massTons, prior, input.faceForward) : 0);
+  const damage = hullDamageTaken(combat, raw);
+  const moduleDamage = combat.modeModuleOnlyDamage ? Math.max(0, raw) : damage;
+  if (!(moduleDamage >= MIN_REPORTED_DAMAGE)) return null;
+  combat.hp = Math.max(0, combat.hp - damage);
+  let destroyed = !combat.modeModuleOnlyDamage && combat.hp <= 0;
+  if (destroyed) combat.destroyed = true;
+  const modulesHit: ImpactModuleHit[] = [];
+  const crewHit: string[] = [];
+  if (combat.modeCriticalDamage !== false) {
+    applyImpactModules(combat, kind, moduleDamage, input.faceForward, input.sideSign, modulesHit);
+    applyCrewShock(combat, kind, input.closingMps, input.rng, crewHit);
+  }
+  if (combat.modeModuleOnlyDamage && Object.values(combat.crew).length > 0 && Object.values(combat.crew).every(alive => !alive)) {
+    combat.destroyed = true; combat.hp = 0; destroyed = true;
+  }
+  return { kind, damage, destroyed, modulesHit, crewHit };
+}
+
+/** A hull's crash memory: the closing speed a crash still resolving has priced, and when it began (both drivers). */
+export interface HullCrashMemory {
+  _impactAccumMps?: number;
+  _impactAccumT?: number;
+}
+
+/**
+ * Forget the crash a hull's previous life was resolving: every life starts here on both drivers (a battle's seat and a
+ * mode's revive), so a revive inside the 0.3 s crash window (a Turbo Ball goal revives every hull) never prices the old
+ * life's closing speed into its first blow (2026-11-02 audit M6).
+ */
+export function resetHullCrashMemory(hull: HullCrashMemory): void {
+  hull._impactAccumMps = 0;
+  hull._impactAccumT = -1e9;
+}
+
+// ---- tank on tank -----------------------------------------------------------------------------------------
+
+/** The slice of a movement state a ram reads and shoves. */
+interface RamBodyState {
+  yaw: number;
+  speed: number;
+  _spring: { recoilVX: number; recoilVZ: number };
+}
+
+/** A hull's velocity component along a world XZ direction: the drive along its heading plus the decaying shove. */
+export function hullVelocityAlong(state: RamBodyState, nx: number, nz: number): number {
+  const fx = detMath.sin(state.yaw), fz = detMath.cos(state.yaw);
+  return (fx * state.speed + state._spring.recoilVX) * nx + (fz * state.speed + state._spring.recoilVZ) * nz;
+}
+
+/**
+ * Change a hull's velocity along a world direction: the part along its heading joins the drive speed (the tracks
+ * carry it), the lateral remainder rides the decaying translation shove (tracks resist sliding sideways).
+ */
+export function shiftHullVelocityAlong(state: RamBodyState, nx: number, nz: number, delta: number): void {
+  if (!(Math.abs(delta) > 1e-9)) return;
+  const fx = detMath.sin(state.yaw), fz = detMath.cos(state.yaw);
+  const along = fx * nx + fz * nz;
+  state.speed += delta * along;
+  state._spring.recoilVX += delta * (nx - along * fx);
+  state._spring.recoilVZ += delta * (nz - along * fz);
+}
+
+/** How much of a contact's closing speed one hull brought: 0 for a hull that was hit standing, 1 for the rammer. */
+export function ramAggression(closingMps: number, ownApproachMps: number): number {
+  if (!(closingMps > 0)) return 0;
+  return clamp(Math.max(0, ownApproachMps) / closingMps, 0, 1);
+}
+
+/**
+ * Ram damage split for a tank-tank contact under a ruleset: the kinetic pool of damage.ts ramDamage (closing speed
+ * squared × reduced mass × the progressive speed gain) times the mode's ram scale, shared by mass (the heavier hull
+ * deals more and takes less), discounted for each hull by how much of the closing speed it brought (a deliberate
+ * ram stays a tactic; a head-on meeting discounts both a little) and weighted by the face each hull took the blow on.
+ * @param aggressionA / aggressionB share of the closing speed each hull brought (ramAggression)
+ * @param faceForwardA / faceForwardB the face each hull was struck on (+1 glacis, −1 stern, 0 broadside)
+ */
+export function ramShares(
+  physics: RulesetPhysics,
+  massAT: number,
+  massBT: number,
+  closingMps: number,
+  aggressionA: number,
+  aggressionB: number,
+  faceForwardA: number,
+  faceForwardB: number,
+): { total: number; toA: number; toB: number } {
+  const pool = ramDamage(massAT, massBT, closingMps);
+  const total = pool.total * (physics.ramScale > 0 ? physics.ramScale : 1);
+  if (!(total > 0)) return { total: 0, toA: 0, toB: 0 };
+  const mA = massAT > 0 ? massAT : 40;
+  const mB = massBT > 0 ? massBT : 40;
+  const sum = mA + mB;
+  const toA = total * (mB / sum) * (1 - RAM_AGGRESSOR_DISCOUNT * clamp(aggressionA, 0, 1)) * impactZoneFactor(faceForwardA);
+  const toB = total * (mA / sum) * (1 - RAM_AGGRESSOR_DISCOUNT * clamp(aggressionB, 0, 1)) * impactZoneFactor(faceForwardB);
+  return { total, toA, toB };
+}
+
+/**
+ * Momentum exchange of a horizontal ram: with n the contact normal from B to A and vAn / vBn the two hulls'
+ * velocity components along n BEFORE the contact (closing = vBn − vAn > 0), the pair leaves at the centre-of-mass
+ * velocity plus a rebound of `restitution` × closing split by mass — momentum is conserved and kinetic energy never
+ * grows. The targets are written against each hull's current velocity, so the drive-blocked bleed the movement
+ * already applied to the rammer is folded in rather than doubled.
+ */
+export function exchangeRamMomentum(
+  a: RamBodyState,
+  b: RamBodyState,
+  nx: number,
+  nz: number,
+  massAT: number,
+  massBT: number,
+  vAn: number,
+  vBn: number,
+  restitution: number,
+): boolean {
+  const closing = vBn - vAn;
+  if (!(closing > 1e-6) || !(nx * nx + nz * nz > 0.5)) return false;
+  const mA = massAT > 0 ? massAT : 40;
+  const mB = massBT > 0 ? massBT : 40;
+  const sum = mA + mB;
+  const e = clamp(Number(restitution) || 0, 0, 1);
+  const centre = (mA * vAn + mB * vBn) / sum;
+  const targetA = centre + e * closing * (mB / sum);
+  const targetB = centre - e * closing * (mA / sum);
+  shiftHullVelocityAlong(a, nx, nz, targetA - hullVelocityAlong(a, nx, nz));
+  shiftHullVelocityAlong(b, nx, nz, targetB - hullVelocityAlong(b, nx, nz));
+  return true;
+}
+
+// ---- the ram's damage: one rule for both drivers ----------------------------------------------------------------
+
+/** A hull as a ram's damage reads and writes it (the solo step's and the authority's entities both satisfy it). */
+export interface RamPairHull {
+  readonly team: string;
+  readonly spec: { readonly weightTons: number };
+  readonly state: { readonly yaw: number; readonly pos: { readonly x: number; readonly z: number } };
+  readonly combat: ImpactCombatState;
+}
+
+/** One tank-on-tank contact the movement queued (the push on `a` along n from b to a; a roof landing is vertical). */
+export interface RamPairContact {
+  readonly a: RamPairHull;
+  readonly b: RamPairHull;
+  readonly closing: number;
+  nx: number;
+  nz: number;
+  readonly vAn: number;
+  readonly vBn: number;
+  readonly vertical: boolean;
+}
+
+export interface RamModuleHit {
+  module: ModuleId;
+  newState: 'red';
+  dmg: number;
+}
+
+export interface RamPairDamage {
+  /** The pair are teammates: the contact is reported (its sound, the crew's call, the cab's jolt) and deals nothing. */
+  friendly: boolean;
+  damageA: number;
+  damageB: number;
+  /** What the contact priced on each hull through its damage-taken scale: the damage itself between enemies, the cab's
+   * jolt alone between teammates. */
+  joltA: number;
+  joltB: number;
+  /** b was a wreck before the ram (it takes nothing, and its death is not this ram's). */
+  bWasDestroyed: boolean;
+  aModulesHit: RamModuleHit[];
+  bModulesHit: RamModuleHit[];
+}
+
+/** A contact with no normal (a roof landing queued without one) takes the line between the two hulls, from b to a. */
+export function normalizeRamContact(contact: RamPairContact): void {
+  if (contact.nx * contact.nx + contact.nz * contact.nz >= 1e-6) return;
+  contact.nx = contact.b.state.pos.x - contact.a.state.pos.x;
+  contact.nz = contact.b.state.pos.z - contact.a.state.pos.z;
+  const inverseLength = 1 / Math.max(1e-6, detMath.hypot(contact.nx, contact.nz));
+  contact.nx *= inverseLength;
+  contact.nz *= inverseLength;
+}
+
+/**
+ * A lethal hull collision physically disables the struck running gear and the nearest drivetrain module: the track on the
+ * side the blow came from and the transmission (the engine where the hull has none) go red. Authoritative damage state,
+ * not a kill-cam decoration: the wreck's drive reads it (it skids instead of rolling on), and both drivers publish each
+ * hit as a module-state event with source 'ram' (solo `module:state`, the authority's `module_state`, which a client
+ * re-emits) before the destruction, so the replay, the thrown-track visual and the HUD read the same receipts.
+ * (2026-11-02 audit M6: this was the solo step's alone; the authority's ram left the wreck's tracks whole.)
+ * `normalX/Z` is the push on this hull.
+ */
+export function applyLethalRamModuleDamage(hull: RamPairHull, normalX: number, normalZ: number): RamModuleHit[] {
+  const combat = hull.combat;
+  if (!combat?.destroyed || !combat.modules || !hull.state) return [];
+  const rightDot = normalX * detMath.cos(hull.state.yaw) - normalZ * detMath.sin(hull.state.yaw);
+  const nearTrack: ModuleId = rightDot >= 0 ? 'trackR' : 'trackL';
+  const drivetrain: ModuleId = combat.modules.transmission ? 'transmission' : 'engine';
+  const hits: RamModuleHit[] = [];
+  for (const name of [nearTrack, drivetrain]) {
+    const module = combat.modules[name];
+    if (!module || module.state === 'red') continue;
+    const hpBefore = Math.max(0, module.hp || 0);
+    setModuleHp(module, 0);
+    hits.push({ module: name, newState: 'red', dmg: Math.round(hpBefore) });
+  }
+  return hits;
+}
+
+/**
+ * The damage one ram pair deals, written onto both hulls (both drivers call this after their pair cooldown): the
+ * ruleset's pool split by mass, aggression and struck face (ramShares), through each hull's damage-taken scale, then the
+ * lethal ram's module damage. A wreck rams nothing. Teammates separate physically and their contact is still a ram the
+ * drivers report (`friendly`: the crunch, the crew's friendly_ram call, the cab's jolt), but it never becomes
+ * friendly-fire damage, a module hit or a kill credit (the authority's rule; the solo step priced it, 2026-11-02 audit M6).
+ * Returns null when the contact is under the ram threshold (the caller starts no cooldown and reports nothing).
+ */
+export function resolveRamPairDamage(physics: RulesetPhysics, contact: RamPairContact): RamPairDamage | null {
+  const { a, b } = contact;
+  if (!a.combat || !b.combat || a.combat.destroyed) return null;
+  normalizeRamContact(contact);
+  const afx = detMath.sin(a.state.yaw), afz = detMath.cos(a.state.yaw);
+  const bfx = detMath.sin(b.state.yaw), bfz = detMath.cos(b.state.yaw);
+  const damage = ramShares(
+    physics, a.spec.weightTons, b.spec.weightTons, contact.closing,
+    ramAggression(contact.closing, -contact.vAn), ramAggression(contact.closing, contact.vBn),
+    contact.vertical ? 0 : -(contact.nx * afx + contact.nz * afz),
+    contact.vertical ? 0 : contact.nx * bfx + contact.nz * bfz,
+  );
+  if (damage.total <= 0) return null;
+  const bWasDestroyed = b.combat.destroyed;
+  const joltA = hullDamageTaken(a.combat, damage.toA);
+  const joltB = bWasDestroyed ? 0 : hullDamageTaken(b.combat, damage.toB);
+  if (a.team === b.team) {
+    return { friendly: true, damageA: 0, damageB: 0, joltA, joltB, bWasDestroyed, aModulesHit: [], bModulesHit: [] };
+  }
+  const damageA = joltA, damageB = joltB;
+  a.combat.hp = Math.max(0, a.combat.hp - damageA);
+  if (!bWasDestroyed) b.combat.hp = Math.max(0, b.combat.hp - damageB);
+  a.combat.destroyed = a.combat.hp <= 0;
+  if (!bWasDestroyed) b.combat.destroyed = b.combat.hp <= 0;
+  return {
+    friendly: false, damageA, damageB, joltA, joltB, bWasDestroyed,
+    aModulesHit: a.combat.destroyed ? applyLethalRamModuleDamage(a, contact.nx, contact.nz) : [],
+    bModulesHit: b.combat.destroyed && !bWasDestroyed ? applyLethalRamModuleDamage(b, -contact.nx, -contact.nz) : [],
+  };
+}

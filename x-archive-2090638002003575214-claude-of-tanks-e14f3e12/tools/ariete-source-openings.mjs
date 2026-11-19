@@ -1,0 +1,480 @@
+// Independent source scalar calipers, not source topology or runtime geometry.
+// See docs/tank-generation/history/ariete-rear-openings-20260921.md for evidence and limits.
+import {isLatticeCellCenter,latticeSubpixelCenter,scanMatchesLatticeCells} from './contig-grid.mjs';
+// The approved rear-coupler air as hull-frame lattice cells [kx, kz] of the §B2 raster (tools/contig-grid.mjs:
+// cell k spans [k, k + 1) x 6 cm from the tank root, never from the AABB), per scan quality.
+// Measured 2026-10-17 on main 16aeab482 from the page's own gate scans (C1 high and LOW read the same cells).
+// Through 226 the pin carried the AABB-framed raster's gridW/gridH/bounds, so any change that moved the AABB
+// invalidated the approved opening whether or not the coupler changed (C2's AABB on main 16aeab482 reaches
+// 9.7 cm further to +x than when it was pinned).
+// C2 carries C1's retained rear coupler under the same registration and witness set, so its approved cells
+// are C1's. On main 16aeab482 C2's native coupler is partly filled (hullDetail under the C at y 0.80, interior fill in
+// the lower hook throat, the ghillie hull net 2.6 cm proud of the flared root): its raster reads 1 of the 4 cells and
+// four witnesses fail, an inherited red the vehicle lanes own (hidden-gaps.md, guards 227).
+export const ARIETE_OPENING_RASTERS = {"c1_ariete":{"high":{"cells":[[-2,-70],[-1,-70],[0,-70],[-1,-71]]},"low":{"cells":[[-2,-70],[-1,-70],[0,-70],[-1,-71]]}},"c2_ariete":{"high":{"cells":[[-2,-70],[-1,-70],[0,-70],[-1,-71]]},"low":{"cells":[[-2,-70],[-1,-70],[0,-70],[-1,-71]]}}};
+const ARIETE_REAR_WITNESSES = [
+  {
+    "key": "upper-head-0",
+    "origin": [
+      0.03696000000000001,
+      2.4640000000000004,
+      -4.262720000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8289544582366946,
+    "tolerance": 0.002
+  },
+  {
+    "key": "upper-head-1",
+    "origin": [
+      0.09856000000000002,
+      2.4640000000000004,
+      -4.1888000000000005
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8279183983802796,
+    "tolerance": 0.002
+  },
+  {
+    "key": "upper-head-2",
+    "origin": [
+      -0.17248000000000005,
+      2.4640000000000004,
+      -4.164160000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8121068485017737,
+    "tolerance": 0.002
+  },
+  {
+    "key": "upper-head-3",
+    "origin": [
+      -0.17248000000000005,
+      2.4640000000000004,
+      -4.225760000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8289544582366946,
+    "tolerance": 0.002
+  },
+  {
+    "key": "flat-head-underside",
+    "origin": [
+      0.03696000000000001,
+      1.6016000000000004,
+      -4.262720000000001
+    ],
+    "direction": [
+      0,
+      1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.7833600878715516,
+    "tolerance": 0.002
+  },
+  {
+    "key": "right-hinge",
+    "origin": [
+      0.24640000000000006,
+      1.8048800000000005,
+      -3.9547200000000005
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 0,
+    "value": 0.08911619484424592,
+    "tolerance": 0.002
+  },
+  {
+    "key": "C-inner-air",
+    "origin": [
+      -0.024640000000000006,
+      2.4640000000000004,
+      -4.176480000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "air"
+  },
+  {
+    "key": "C-left-air",
+    "origin": [
+      -0.14784000000000003,
+      2.4640000000000004,
+      -4.176480000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "air"
+  },
+  {
+    "key": "throat-air",
+    "origin": [
+      -0.14168000000000003,
+      1.8061120000000002,
+      -4.176480000000001
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 0.022176,
+    "expect": "air"
+  },
+  {
+    "key": "ear-upper-underside",
+    "origin": [
+      -0.17248000000000005,
+      1.8159680000000002,
+      -4.225760000000001
+    ],
+    "direction": [
+      0,
+      1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.817555832862854,
+    "tolerance": 0.002
+  },
+  {
+    "key": "ear-lower-jaw",
+    "origin": [
+      -0.17248000000000005,
+      1.7937920000000003,
+      -4.225760000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.7926863312721253,
+    "tolerance": 0.002
+  },
+  {
+    "key": "lower-hook-or-deck-0",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -4.135824000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.1783974288949193,
+    "tolerance": 0.002
+  },
+  {
+    "key": "lower-hook-or-deck-1",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -4.11488
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.2045702099354574,
+    "tolerance": 0.002
+  },
+  {
+    "key": "lower-hook-or-deck-2",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -4.0902400000000005
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.1246717558225,
+    "tolerance": 0.002
+  },
+  {
+    "key": "lower-hook-throat",
+    "origin": [
+      0.0,
+      1.1704,
+      -4.077920000000001
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 0.11088,
+    "expect": "air"
+  },
+  {
+    "key": "upper-lock-jaw",
+    "origin": [
+      0.0,
+      1.2812800000000002,
+      -4.1888000000000005
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 2,
+    "value": -4.032845321269465,
+    "tolerance": 0.002
+  },
+  {
+    "key": "flared-right-root",
+    "origin": [
+      0.09240000000000001,
+      1.8233600000000003,
+      -4.065600000000001
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 2,
+    "value": -3.894789466618932,
+    "tolerance": 0.002
+  },
+  {
+    "key": "cross-pin-head-top",
+    "origin": [
+      -0.07392000000000001,
+      2.4640000000000004,
+      -4.288973920000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8289544582366946,
+    "tolerance": 0.002
+  },
+  {
+    "key": "cross-pin-head-under",
+    "origin": [
+      -0.07392000000000001,
+      1.6016000000000004,
+      -4.288973920000001
+    ],
+    "direction": [
+      0,
+      1,
+      0
+    ],
+    "far": 12.320000000000002,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.7833600878715516,
+    "tolerance": 0.002
+  },
+  {
+    "key": "receiver--0.18-1.46",
+    "origin": [
+      -0.22176,
+      1.7987200000000003,
+      -4.065600000000001
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 0.24640000000000006,
+    "expect": "stock",
+    "axis": 2,
+    "value": -3.8900256633758548,
+    "tolerance": 0.002
+  },
+  {
+    "key": "pin-aft--0.1-1.464",
+    "origin": [
+      -0.12320000000000003,
+      1.8036480000000001,
+      -4.336640000000001
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "far": 0.09856000000000002,
+    "expect": "stock",
+    "axis": 2,
+    "value": -4.298995908442659,
+    "tolerance": 0.002
+  },
+  {
+    "key": "neck--3.26",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -4.01632
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 2.2,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8273505506419423,
+    "tolerance": 0.002
+  },
+  {
+    "key": "neck--3.25",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -4.004000000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 2.2,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8272273595758535,
+    "tolerance": 0.002
+  },
+  {
+    "key": "neck--3.24",
+    "origin": [
+      0.0,
+      2.4640000000000004,
+      -3.991680000000001
+    ],
+    "direction": [
+      0,
+      -1,
+      0
+    ],
+    "far": 2.2,
+    "expect": "stock",
+    "axis": 1,
+    "value": 1.8270597265316506,
+    "tolerance": 0.002
+  }
+];
+// This authority covers only the retained rear coupler. It cannot authorize
+// roof equipment or give the derived C2 a source-comparison score.
+export const ARIETE_OPENING_INPUTS = Object.freeze({
+  "public/models/community-candidates/ariete_c1_x_source.glb": "1f33b3966189c876c8e507a57c59def5e6f3a70334d42315e0366911aedb6177",
+  "docs/history/research/second-wave-registrations/ariete_c1_x-tier10-20260921.json": "a94040de976c7ee8d3f17bb65fd5791892a332c9d5f79996aa4e343662cd7c79",
+  "docs/history/research/second-wave-registrations/ariete_c1_x-tier10-20260921.receipt.json": "8f3d5f29561dd121b309f27aee0ac9105421408e9cb38106eb8fdfde2cb5dec5"
+});
+const SOURCE = Object.freeze({path:Object.keys(ARIETE_OPENING_INPUTS)[0],sha256:Object.values(ARIETE_OPENING_INPUTS)[0]});
+const REGISTRATION = Object.freeze({
+  originalSha256:'02043219575d2ac02c9846666efca20c8087727808e4c51245a28588242e26b4',
+  axes:['x','y','z'],scale:0.026320365106272007,translation:[0.0, 0.003108704626582337, 0.9377925283609337],
+  ownerRequestedEnlargement:1.2320000000000002,
+});
+export function isArieteOpeningTarget(id) { return Object.hasOwn(ARIETE_OPENING_RASTERS,id); }
+export function arieteOpeningConfiguration(id) {
+  return isArieteOpeningTarget(id) ? {id,scope:'retained-rear-coupler-only',source:SOURCE,
+    registration:REGISTRATION,inputs:ARIETE_OPENING_INPUTS} : null;
+}
+export function arieteOpeningSourceReceipt(id,inputs) {
+  return {id,...SOURCE,scope:'retained-rear-coupler-only',inputs,
+    verified:isArieteOpeningTarget(id) && Object.entries(ARIETE_OPENING_INPUTS).every(([p,h])=>inputs?.[p]===h)};
+}
+export function validArieteOpeningSource(id,configuration,receipt) {
+  const expected=arieteOpeningConfiguration(id);
+  return expected!==null && JSON.stringify(configuration)===JSON.stringify(expected)
+    && receipt?.verified===true && receipt.id===id && receipt.path===SOURCE.path && receipt.sha256===SOURCE.sha256
+    && receipt.scope===expected.scope && arieteOpeningSourceReceipt(id,receipt.inputs).verified;
+}
+function cells(id,quality) { return ARIETE_OPENING_RASTERS[id]?.[quality]?.cells; }
+export function validArieteOpeningRaster(id,scan,quality='high') {
+  return scanMatchesLatticeCells(scan,cells(id,quality));
+}
+export function arieteOpeningCell(id,x,z,quality='high') {
+  return isLatticeCellCenter(x,z,cells(id,quality));
+}
+export function arieteOpeningWitnesses(id,quality='high') {
+  const expected=cells(id,quality);if(!expected)return [];
+  // Every page pixel centre of every pinned cell must be air in the complete source and the native build.
+  const air=expected.flatMap((cell,i)=>Array.from({length:9},(_,p)=>{
+    const [x,z]=latticeSubpixelCenter(cell,p%3,Math.floor(p/3));
+    return {key:`raster-${i}-subpixel-${p}`,origin:[x,6,z],direction:[0,-1,0],far:20,expect:'air'};
+  }));
+  return [...ARIETE_REAR_WITNESSES,...air];
+}

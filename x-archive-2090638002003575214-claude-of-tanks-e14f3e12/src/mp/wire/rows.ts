@@ -1,0 +1,507 @@
+/**
+ * Entity row codec: one varint group mask, then the present groups in bit
+ * order. Keyframe rows carry every group except the two with a defined
+ * default (GUN_RELOAD mirrors RELOAD, ERA empty); delta rows carry only the
+ * groups that differ from the viewer's acknowledged baseline row.
+ */
+import type { ByteReader, ByteWriter } from './bytes.ts';
+import { WireError, utf8ByteLength } from './bytes.ts';
+import {
+  ENTITY_FLAG_BITS, MAX_ENTITIES, MAX_ERA_PER_ROW, MAX_POS_REL_MM, MAX_TILT_REL_UNITS, ROW_GROUP, ROW_GROUP_MASK_MAX,
+  STATUS_FLAGS_SHIFT, STATUS_GUN_RELOAD_KIND_SHIFT, STATUS_GUN_RELOAD_MIRRORS, STATUS_RELOAD_KIND_SHIFT,
+  STATUS_SHELL_SLOT_SHIFT, STATUS_WORD_MAX, WRECK_BODY_Q_SCALE,
+} from './constants.ts';
+import type { EntityRow, EntityRowPatch, WreckBodyRow } from './messages.ts';
+import { angleUnitsDelta } from './quantize.ts';
+
+const FLAGS_MASK = (1 << ENTITY_FLAG_BITS) - 1;
+const KEYFRAME_GROUPS = ROW_GROUP.POS_ABS | ROW_GROUP.VEL | ROW_GROUP.YAW | ROW_GROUP.TILT_ABS |
+  ROW_GROUP.TURRET | ROW_GROUP.HP | ROW_GROUP.MAX_HP | ROW_GROUP.RELOAD | ROW_GROUP.MAGAZINE |
+  ROW_GROUP.AMMO | ROW_GROUP.STATUS;
+
+export function zeroEntityRow(entityId: number): EntityRow {
+  return {
+    entityId, tick: 0, x: 0, y: 0, z: 0, speed: 0, verticalSpeed: 0,
+    yaw: 0, pitch: 0, roll: 0, turretYaw: 0, gunPitch: 0,
+    hp: 0, maxHp: 1, reload: 0, reloadTotal: 0, reloadKind: 0,
+    gunReload: 0, gunReloadTotal: 0, gunReloadKind: 0,
+    magazineRounds: 0, magazineCapacity: 0, shellSlot: 0,
+    ammo0: 0, ammo1: 0, ammo2: 0, flags: 0, eraSpent: [],
+  };
+}
+
+export function cloneEntityRow(row: EntityRow): EntityRow {
+  return { ...row, eraSpent: row.eraSpent.slice() };
+}
+
+function gunReloadMirrors(row: EntityRow): boolean {
+  return row.gunReload === row.reload && row.gunReloadTotal === row.reloadTotal &&
+    row.gunReloadKind === row.reloadKind;
+}
+
+export function packStatus(row: EntityRow): number {
+  return (row.reloadKind & 3) << STATUS_RELOAD_KIND_SHIFT |
+    (row.gunReloadKind & 3) << STATUS_GUN_RELOAD_KIND_SHIFT |
+    (row.shellSlot & 3) << STATUS_SHELL_SLOT_SHIFT |
+    (gunReloadMirrors(row) ? STATUS_GUN_RELOAD_MIRRORS : 0) |
+    (row.flags & FLAGS_MASK) << STATUS_FLAGS_SHIFT;
+}
+
+function sameWreckBody(a: WreckBodyRow | null | undefined, b: WreckBodyRow | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  return a.x === b.x && a.y === b.y && a.z === b.z && a.qx === b.qx && a.qy === b.qy && a.qz === b.qz && a.qw === b.qw
+    && a.asleep === b.asleep;
+}
+
+function sameEra(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index++) if (a[index] !== b[index]) return false;
+  return true;
+}
+
+/** Indices in `next` missing from `base`, or null when `next` is not a superset. */
+function eraAdditions(base: readonly number[], next: readonly number[]): number[] | null {
+  if (next.length < base.length) return null;
+  const added: number[] = [];
+  let cursor = 0;
+  for (const index of next) {
+    if (cursor < base.length && base[cursor] === index) { cursor++; continue; }
+    added.push(index);
+  }
+  return cursor === base.length ? added : null;
+}
+
+/**
+ * The AGE group a row needs in a packet at `packetTick`: none for a row captured at that tick (or one with no tick,
+ * a fixture), the age otherwise. A row from the future is a producer error.
+ */
+function ageGroup(row: EntityRow, packetTick: number): number {
+  const tick = row.tick;
+  if (tick === undefined || tick === packetTick) return 0;
+  if (!(tick < packetTick)) throw new WireError('range', `row ${row.entityId} captured at tick ${tick} after packet tick ${packetTick}`);
+  return ROW_GROUP.AGE;
+}
+
+/**
+ * Decide the groups a row needs against its baseline (null = keyframe) in a packet at `packetTick`. A delta row whose
+ * fields equal the baseline's is empty (mask 0) whatever its tick: the viewer keeps the baseline row and its tick — the
+ * pose is unchanged, so the older sample time is exact for it.
+ */
+export function diffEntityRow(row: EntityRow, base: EntityRow | null, packetTick: number): EntityRowPatch {
+  const fields: EntityRowPatch['fields'] = {};
+  let mask = 0;
+  let era: number[] | null = null;
+  const status = packStatus(row);
+  if ((row.auxiliaryJson || '') !== (base?.auxiliaryJson || '')) {
+    mask |= ROW_GROUP.AUXILIARY; fields.auxiliaryJson = row.auxiliaryJson || '';
+  }
+  if (row.tick !== undefined) fields.tick = row.tick;
+  // a wreck's turret body: on a keyframe while it has one, on a delta when it moved, slept or went
+  if (base ? !sameWreckBody(row.wreckBody, base.wreckBody) : !!row.wreckBody) {
+    mask |= ROW_GROUP.WRECK_BODY; fields.wreckBody = row.wreckBody ?? null;
+  }
+  if (!base) {
+    mask |= KEYFRAME_GROUPS | ageGroup(row, packetTick);
+    fields.x = row.x; fields.y = row.y; fields.z = row.z;
+    fields.speed = row.speed; fields.verticalSpeed = row.verticalSpeed;
+    fields.yaw = row.yaw; fields.pitch = row.pitch; fields.roll = row.roll;
+    fields.turretYaw = row.turretYaw; fields.gunPitch = row.gunPitch;
+    fields.hp = row.hp; fields.maxHp = row.maxHp;
+    fields.reload = row.reload; fields.reloadTotal = row.reloadTotal;
+    fields.magazineRounds = row.magazineRounds; fields.magazineCapacity = row.magazineCapacity;
+    fields.ammo0 = row.ammo0; fields.ammo1 = row.ammo1; fields.ammo2 = row.ammo2;
+    if (!(status & STATUS_GUN_RELOAD_MIRRORS)) {
+      mask |= ROW_GROUP.GUN_RELOAD;
+      fields.gunReload = row.gunReload; fields.gunReloadTotal = row.gunReloadTotal;
+    }
+    if (row.eraSpent.length) { mask |= ROW_GROUP.ERA_RESET; era = row.eraSpent.slice(); }
+    return {
+      entityId: row.entityId, mask, fields: { ...fields, ...statusFields(status) },
+      mirrors: (status & STATUS_GUN_RELOAD_MIRRORS) !== 0, era,
+    };
+  }
+  if (row.x !== base.x || row.y !== base.y || row.z !== base.z) {
+    const dx = row.x - base.x, dy = row.y - base.y, dz = row.z - base.z;
+    if (Math.abs(dx) <= MAX_POS_REL_MM && Math.abs(dy) <= MAX_POS_REL_MM && Math.abs(dz) <= MAX_POS_REL_MM) {
+      mask |= ROW_GROUP.POS_REL;
+    } else mask |= ROW_GROUP.POS_ABS;
+    fields.x = row.x; fields.y = row.y; fields.z = row.z;
+  }
+  if (row.speed !== base.speed || row.verticalSpeed !== base.verticalSpeed) {
+    mask |= ROW_GROUP.VEL; fields.speed = row.speed; fields.verticalSpeed = row.verticalSpeed;
+  }
+  if (row.yaw !== base.yaw) { mask |= ROW_GROUP.YAW; fields.yaw = row.yaw; }
+  if (row.pitch !== base.pitch || row.roll !== base.roll) {
+    const dp = angleUnitsDelta(base.pitch, row.pitch), dr = angleUnitsDelta(base.roll, row.roll);
+    mask |= Math.abs(dp) <= MAX_TILT_REL_UNITS && Math.abs(dr) <= MAX_TILT_REL_UNITS
+      ? ROW_GROUP.TILT_REL : ROW_GROUP.TILT_ABS;
+    fields.pitch = row.pitch; fields.roll = row.roll;
+  }
+  if (row.turretYaw !== base.turretYaw || row.gunPitch !== base.gunPitch) {
+    mask |= ROW_GROUP.TURRET; fields.turretYaw = row.turretYaw; fields.gunPitch = row.gunPitch;
+  }
+  if (row.hp !== base.hp) { mask |= ROW_GROUP.HP; fields.hp = row.hp; }
+  if (row.maxHp !== base.maxHp) { mask |= ROW_GROUP.MAX_HP; fields.maxHp = row.maxHp; }
+  if (row.reload !== base.reload || row.reloadTotal !== base.reloadTotal) {
+    mask |= ROW_GROUP.RELOAD; fields.reload = row.reload; fields.reloadTotal = row.reloadTotal;
+  }
+  if (!(status & STATUS_GUN_RELOAD_MIRRORS) &&
+      (row.gunReload !== base.gunReload || row.gunReloadTotal !== base.gunReloadTotal)) {
+    mask |= ROW_GROUP.GUN_RELOAD; fields.gunReload = row.gunReload; fields.gunReloadTotal = row.gunReloadTotal;
+  }
+  if (row.magazineRounds !== base.magazineRounds || row.magazineCapacity !== base.magazineCapacity) {
+    mask |= ROW_GROUP.MAGAZINE; fields.magazineRounds = row.magazineRounds; fields.magazineCapacity = row.magazineCapacity;
+  }
+  if (row.ammo0 !== base.ammo0 || row.ammo1 !== base.ammo1 || row.ammo2 !== base.ammo2) {
+    mask |= ROW_GROUP.AMMO; fields.ammo0 = row.ammo0; fields.ammo1 = row.ammo1; fields.ammo2 = row.ammo2;
+  }
+  let mirrors: boolean | null = null;
+  if (status !== packStatus(base)) {
+    mask |= ROW_GROUP.STATUS;
+    Object.assign(fields, statusFields(status));
+    mirrors = (status & STATUS_GUN_RELOAD_MIRRORS) !== 0;
+  }
+  if (!sameEra(row.eraSpent, base.eraSpent)) {
+    const added = eraAdditions(base.eraSpent, row.eraSpent);
+    if (added) { mask |= ROW_GROUP.ERA_ADD; era = added; }
+    else { mask |= ROW_GROUP.ERA_RESET; era = row.eraSpent.slice(); }
+  }
+  if (mask !== 0) mask |= ageGroup(row, packetTick);
+  return { entityId: row.entityId, mask, fields, mirrors, era };
+}
+
+function varintBytes(value: number): number {
+  let bytes = 1;
+  while (value >= 0x80) { value = Math.floor(value / 0x80); bytes++; }
+  return bytes;
+}
+
+/** Whether `next` holds every index of `base` (both strictly increasing): its additions are then an ERA_ADD list. */
+function eraSuperset(base: readonly number[], next: readonly number[]): boolean {
+  if (next.length < base.length) return false;
+  let cursor = 0;
+  for (const index of next) if (cursor < base.length && base[cursor] === index) cursor++;
+  return cursor === base.length;
+}
+
+/** An index list's bytes (writeIndexList): the count, then each gap. `skip` leaves out `base`'s members (an ERA_ADD list). */
+function indexListBytes(indices: readonly number[], skip: readonly number[] | null): number {
+  let count = 0, bytes = 0, previous = -1, cursor = 0;
+  for (const index of indices) {
+    if (skip && cursor < skip.length && skip[cursor] === index) { cursor++; continue; }
+    bytes += varintBytes(index - previous - 1);
+    previous = index;
+    count++;
+  }
+  return varintBytes(count) + bytes;
+}
+
+/** writeIndexList over `indices` without `skip`'s members, without building the list. */
+function writeIndexListSkipping(writer: ByteWriter, indices: readonly number[], skip: readonly number[] | null, max: number): void {
+  const count = skip ? indices.length - skip.length : indices.length;
+  if (count > max) throw new WireError('too_many', `index list exceeds ${max}`);
+  writer.varint(count);
+  let previous = -1, cursor = 0;
+  for (const index of indices) {
+    if (skip && cursor < skip.length && skip[cursor] === index) { cursor++; continue; }
+    if (!Number.isInteger(index) || index <= previous) throw new WireError('range', 'index list must be strictly increasing non-negative integers');
+    writer.varint(index - previous - 1);
+    previous = index;
+  }
+}
+
+/**
+ * One row against `base` (null: a keyframe row) in a packet at `packetTick`, written straight into `writer` with the
+ * groups diffEntityRow chooses and the bytes writeEntityRowPatch writes, without building the patch (mp-scale-251: the
+ * host encodes every viewer's frame on every snapshot). A delta row whose fields equal its baseline's writes nothing.
+ * With a null writer it writes nothing and returns the bytes the row takes: the snapshot budget's weigher.
+ */
+export function writeEntityRowDelta(writer: ByteWriter | null, row: EntityRow, base: EntityRow | null, packetTick: number): number {
+  const status = packStatus(row);
+  const mirrors = (status & STATUS_GUN_RELOAD_MIRRORS) !== 0;
+  const auxiliary = row.auxiliaryJson || '';
+  let mask = 0;
+  let eraAdd = false;
+  if (auxiliary !== (base?.auxiliaryJson || '')) mask |= ROW_GROUP.AUXILIARY;
+  if (base ? !sameWreckBody(row.wreckBody, base.wreckBody) : !!row.wreckBody) mask |= ROW_GROUP.WRECK_BODY;
+  if (!base) {
+    mask |= KEYFRAME_GROUPS | ageGroup(row, packetTick);
+    if (!mirrors) mask |= ROW_GROUP.GUN_RELOAD;
+    if (row.eraSpent.length) mask |= ROW_GROUP.ERA_RESET;
+  } else {
+    if (row.x !== base.x || row.y !== base.y || row.z !== base.z) {
+      mask |= Math.abs(row.x - base.x) <= MAX_POS_REL_MM && Math.abs(row.y - base.y) <= MAX_POS_REL_MM && Math.abs(row.z - base.z) <= MAX_POS_REL_MM
+        ? ROW_GROUP.POS_REL : ROW_GROUP.POS_ABS;
+    }
+    if (row.speed !== base.speed || row.verticalSpeed !== base.verticalSpeed) mask |= ROW_GROUP.VEL;
+    if (row.yaw !== base.yaw) mask |= ROW_GROUP.YAW;
+    if (row.pitch !== base.pitch || row.roll !== base.roll) {
+      mask |= Math.abs(angleUnitsDelta(base.pitch, row.pitch)) <= MAX_TILT_REL_UNITS && Math.abs(angleUnitsDelta(base.roll, row.roll)) <= MAX_TILT_REL_UNITS
+        ? ROW_GROUP.TILT_REL : ROW_GROUP.TILT_ABS;
+    }
+    if (row.turretYaw !== base.turretYaw || row.gunPitch !== base.gunPitch) mask |= ROW_GROUP.TURRET;
+    if (row.hp !== base.hp) mask |= ROW_GROUP.HP;
+    if (row.maxHp !== base.maxHp) mask |= ROW_GROUP.MAX_HP;
+    if (row.reload !== base.reload || row.reloadTotal !== base.reloadTotal) mask |= ROW_GROUP.RELOAD;
+    if (!mirrors && (row.gunReload !== base.gunReload || row.gunReloadTotal !== base.gunReloadTotal)) mask |= ROW_GROUP.GUN_RELOAD;
+    if (row.magazineRounds !== base.magazineRounds || row.magazineCapacity !== base.magazineCapacity) mask |= ROW_GROUP.MAGAZINE;
+    if (row.ammo0 !== base.ammo0 || row.ammo1 !== base.ammo1 || row.ammo2 !== base.ammo2) mask |= ROW_GROUP.AMMO;
+    if (status !== packStatus(base)) mask |= ROW_GROUP.STATUS;
+    if (!sameEra(row.eraSpent, base.eraSpent)) {
+      eraAdd = eraSuperset(base.eraSpent, row.eraSpent);
+      mask |= eraAdd ? ROW_GROUP.ERA_ADD : ROW_GROUP.ERA_RESET;
+    }
+    if (mask === 0) return 0;
+    mask |= ageGroup(row, packetTick);
+  }
+  if (!Number.isInteger(row.entityId) || row.entityId < 1 || row.entityId > MAX_ENTITIES) throw new WireError('range', `entity id out of range: ${row.entityId}`);
+  if (mask > ROW_GROUP_MASK_MAX) throw new WireError('range', 'row mask exceeds 19 bits');
+  if (!writer) {
+    let bytes = 1 + varintBytes(mask);
+    if (mask & ROW_GROUP.POS_ABS) bytes += 12;
+    if (mask & ROW_GROUP.POS_REL) bytes += 6;
+    if (mask & ROW_GROUP.VEL) bytes += 4;
+    if (mask & ROW_GROUP.YAW) bytes += 2;
+    if (mask & ROW_GROUP.TILT_ABS) bytes += 4;
+    if (mask & ROW_GROUP.TILT_REL) bytes += 2;
+    if (mask & ROW_GROUP.TURRET) bytes += 4;
+    if (mask & ROW_GROUP.HP) bytes += 2;
+    if (mask & ROW_GROUP.MAX_HP) bytes += 2;
+    if (mask & ROW_GROUP.RELOAD) bytes += 4;
+    if (mask & ROW_GROUP.GUN_RELOAD) bytes += 4;
+    if (mask & ROW_GROUP.MAGAZINE) bytes += 2;
+    if (mask & ROW_GROUP.AMMO) bytes += varintBytes(row.ammo0) + varintBytes(row.ammo1) + varintBytes(row.ammo2);
+    if (mask & ROW_GROUP.STATUS) bytes += varintBytes(status);
+    if (mask & (ROW_GROUP.ERA_ADD | ROW_GROUP.ERA_RESET)) bytes += indexListBytes(row.eraSpent, eraAdd ? base!.eraSpent : null);
+    if (mask & ROW_GROUP.AGE) bytes += varintBytes(packetTick - row.tick!);
+    if (mask & ROW_GROUP.AUXILIARY) { const length = utf8ByteLength(auxiliary); bytes += varintBytes(length) + length; }
+    if (mask & ROW_GROUP.WRECK_BODY) bytes += row.wreckBody ? 21 : 1;
+    return bytes;
+  }
+  const start = writer.length;
+  writer.u8(row.entityId);
+  writer.varint(mask);
+  if (mask & ROW_GROUP.POS_ABS) { writer.i32(row.x); writer.i32(row.y); writer.i32(row.z); }
+  if (mask & ROW_GROUP.POS_REL) { writer.i16(row.x - base!.x); writer.i16(row.y - base!.y); writer.i16(row.z - base!.z); }
+  if (mask & ROW_GROUP.VEL) { writer.i16(row.speed); writer.i16(row.verticalSpeed); }
+  if (mask & ROW_GROUP.YAW) writer.u16(row.yaw);
+  if (mask & ROW_GROUP.TILT_ABS) { writer.u16(row.pitch); writer.u16(row.roll); }
+  if (mask & ROW_GROUP.TILT_REL) { writer.i8(angleUnitsDelta(base!.pitch, row.pitch)); writer.i8(angleUnitsDelta(base!.roll, row.roll)); }
+  if (mask & ROW_GROUP.TURRET) { writer.u16(row.turretYaw); writer.u16(row.gunPitch); }
+  if (mask & ROW_GROUP.HP) writer.u16(row.hp);
+  if (mask & ROW_GROUP.MAX_HP) writer.u16(row.maxHp);
+  if (mask & ROW_GROUP.RELOAD) { writer.u16(row.reload); writer.u16(row.reloadTotal); }
+  if (mask & ROW_GROUP.GUN_RELOAD) { writer.u16(row.gunReload); writer.u16(row.gunReloadTotal); }
+  if (mask & ROW_GROUP.MAGAZINE) { writer.u8(row.magazineRounds); writer.u8(row.magazineCapacity); }
+  if (mask & ROW_GROUP.AMMO) { writer.varint(row.ammo0); writer.varint(row.ammo1); writer.varint(row.ammo2); }
+  if (mask & ROW_GROUP.STATUS) writer.varint(status);
+  if (mask & (ROW_GROUP.ERA_ADD | ROW_GROUP.ERA_RESET)) writeIndexListSkipping(writer, row.eraSpent, eraAdd ? base!.eraSpent : null, MAX_ERA_PER_ROW);
+  if (mask & ROW_GROUP.AGE) writer.varint(packetTick - row.tick!);
+  if (mask & ROW_GROUP.AUXILIARY) writer.string(auxiliary, 512);
+  if (mask & ROW_GROUP.WRECK_BODY) {
+    const body = row.wreckBody;
+    writer.u8(body ? (1 | (body.asleep ? 2 : 0)) : 0);
+    if (body) {
+      writer.i32(body.x); writer.i32(body.y); writer.i32(body.z);
+      writer.i16(body.qx); writer.i16(body.qy); writer.i16(body.qz); writer.i16(body.qw);
+    }
+  }
+  return writer.length - start;
+}
+
+/**
+ * The bytes `row` takes against `base` (null: a keyframe row), exactly what writeEntityRowDelta writes (mp-scale-251:
+ * the snapshot budget weighs each due row before the frame is encoded, against the row the viewer holds, which its
+ * acknowledged baseline may trail).
+ */
+export function estimateEntityRowBytes(row: EntityRow, base: EntityRow | null): number {
+  return writeEntityRowDelta(null, row, base, row.tick ?? 0);
+}
+
+function statusFields(status: number): Pick<EntityRow, 'reloadKind' | 'gunReloadKind' | 'shellSlot' | 'flags'> {
+  return {
+    reloadKind: (status >> STATUS_RELOAD_KIND_SHIFT) & 3,
+    gunReloadKind: (status >> STATUS_GUN_RELOAD_KIND_SHIFT) & 3,
+    shellSlot: (status >> STATUS_SHELL_SLOT_SHIFT) & 3,
+    flags: (status >> STATUS_FLAGS_SHIFT) & FLAGS_MASK,
+  };
+}
+
+function statusFromPatch(patch: EntityRowPatch): number {
+  const fields = patch.fields;
+  for (const key of ['reloadKind', 'gunReloadKind', 'shellSlot', 'flags'] as const) {
+    if (fields[key] == null) throw new WireError('invalid_message', `status group needs ${key}`);
+  }
+  if (patch.mirrors == null) throw new WireError('invalid_message', 'status group needs the mirror bit');
+  return (fields.reloadKind! & 3) << STATUS_RELOAD_KIND_SHIFT |
+    (fields.gunReloadKind! & 3) << STATUS_GUN_RELOAD_KIND_SHIFT |
+    (fields.shellSlot! & 3) << STATUS_SHELL_SLOT_SHIFT |
+    (patch.mirrors ? STATUS_GUN_RELOAD_MIRRORS : 0) |
+    (fields.flags! & FLAGS_MASK) << STATUS_FLAGS_SHIFT;
+}
+
+/** Gap-coded sorted index list: count, first index, then strictly positive gaps. */
+export function writeIndexList(writer: ByteWriter, indices: readonly number[], max: number): void {
+  if (indices.length > max) throw new WireError('too_many', `index list exceeds ${max}`);
+  writer.varint(indices.length);
+  let previous = -1;
+  for (const index of indices) {
+    if (!Number.isInteger(index) || index <= previous) {
+      throw new WireError('range', 'index list must be strictly increasing non-negative integers');
+    }
+    writer.varint(index - previous - 1);
+    previous = index;
+  }
+}
+
+export function readIndexList(reader: ByteReader, max: number): number[] {
+  const count = reader.count(max);
+  const out: number[] = new Array(count);
+  let previous = -1;
+  for (let position = 0; position < count; position++) {
+    const index = previous + 1 + reader.varint();
+    if (index > 0xffffffff) throw new WireError('range', 'index list overflow');
+    out[position] = index;
+    previous = index;
+  }
+  return out;
+}
+
+/** Write one patch for a packet at `packetTick` (the AGE group is the row's distance behind it). */
+export function writeEntityRowPatch(writer: ByteWriter, patch: EntityRowPatch, base: EntityRow | null, packetTick: number): void {
+  const { mask, fields } = patch;
+  if (!Number.isInteger(patch.entityId) || patch.entityId < 1 || patch.entityId > MAX_ENTITIES) {
+    throw new WireError('range', `entity id out of range: ${patch.entityId}`);
+  }
+  if (mask > ROW_GROUP_MASK_MAX) throw new WireError('range', 'row mask exceeds 19 bits');
+  if ((mask & ROW_GROUP.POS_ABS) && (mask & ROW_GROUP.POS_REL)) throw new WireError('invalid_message', 'both position groups set');
+  if ((mask & ROW_GROUP.TILT_ABS) && (mask & ROW_GROUP.TILT_REL)) throw new WireError('invalid_message', 'both tilt groups set');
+  if ((mask & ROW_GROUP.ERA_ADD) && (mask & ROW_GROUP.ERA_RESET)) throw new WireError('invalid_message', 'both era groups set');
+  writer.u8(patch.entityId);
+  writer.varint(mask);
+  if (mask & ROW_GROUP.POS_ABS) { writer.i32(fields.x!); writer.i32(fields.y!); writer.i32(fields.z!); }
+  if (mask & ROW_GROUP.POS_REL) {
+    if (!base) throw new WireError('missing_baseline', 'relative position without a baseline');
+    writer.i16(fields.x! - base.x); writer.i16(fields.y! - base.y); writer.i16(fields.z! - base.z);
+  }
+  if (mask & ROW_GROUP.VEL) { writer.i16(fields.speed!); writer.i16(fields.verticalSpeed!); }
+  if (mask & ROW_GROUP.YAW) writer.u16(fields.yaw!);
+  if (mask & ROW_GROUP.TILT_ABS) { writer.u16(fields.pitch!); writer.u16(fields.roll!); }
+  if (mask & ROW_GROUP.TILT_REL) {
+    if (!base) throw new WireError('missing_baseline', 'relative tilt without a baseline');
+    writer.i8(angleUnitsDelta(base.pitch, fields.pitch!)); writer.i8(angleUnitsDelta(base.roll, fields.roll!));
+  }
+  if (mask & ROW_GROUP.TURRET) { writer.u16(fields.turretYaw!); writer.u16(fields.gunPitch!); }
+  if (mask & ROW_GROUP.HP) writer.u16(fields.hp!);
+  if (mask & ROW_GROUP.MAX_HP) writer.u16(fields.maxHp!);
+  if (mask & ROW_GROUP.RELOAD) { writer.u16(fields.reload!); writer.u16(fields.reloadTotal!); }
+  if (mask & ROW_GROUP.GUN_RELOAD) { writer.u16(fields.gunReload!); writer.u16(fields.gunReloadTotal!); }
+  if (mask & ROW_GROUP.MAGAZINE) { writer.u8(fields.magazineRounds!); writer.u8(fields.magazineCapacity!); }
+  if (mask & ROW_GROUP.AMMO) { writer.varint(fields.ammo0!); writer.varint(fields.ammo1!); writer.varint(fields.ammo2!); }
+  if (mask & ROW_GROUP.STATUS) writer.varint(statusFromPatch(patch));
+  if (mask & (ROW_GROUP.ERA_ADD | ROW_GROUP.ERA_RESET)) writeIndexList(writer, patch.era || [], MAX_ERA_PER_ROW);
+  if (mask & ROW_GROUP.AGE) {
+    const tick = fields.tick;
+    if (tick === undefined || !Number.isInteger(tick) || tick >= packetTick || tick < 0) throw new WireError('range', 'age group needs a row tick before the packet tick');
+    writer.varint(packetTick - tick);
+  }
+  if (mask & ROW_GROUP.AUXILIARY) writer.string(fields.auxiliaryJson || '', 512);
+  if (mask & ROW_GROUP.WRECK_BODY) {
+    const body = fields.wreckBody;
+    writer.u8(body ? (1 | (body.asleep ? 2 : 0)) : 0);
+    if (body) {
+      writer.i32(body.x); writer.i32(body.y); writer.i32(body.z);
+      writer.i16(body.qx); writer.i16(body.qy); writer.i16(body.qz); writer.i16(body.qw);
+    }
+  }
+}
+
+/**
+ * Read one patch of a packet at `packetTick`. Relative groups are resolved
+ * against `base` here so the decoded patch already carries absolute field
+ * values; the caller supplies the baseline row (or null for a keyframe, which
+ * never uses relative groups). The patch's `tick` is the packet's unless the
+ * AGE group says the row is older.
+ */
+export function readEntityRowPatch(reader: ByteReader, resolveBase: (entityId: number) => EntityRow | null, packetTick: number): EntityRowPatch {
+  const entityId = reader.u8();
+  if (entityId < 1 || entityId > MAX_ENTITIES) throw new WireError('range', `entity id out of range: ${entityId}`);
+  const mask = reader.varint();
+  if (mask > ROW_GROUP_MASK_MAX) throw new WireError('range', 'row mask exceeds 19 bits');
+  if ((mask & ROW_GROUP.POS_ABS) && (mask & ROW_GROUP.POS_REL)) throw new WireError('invalid_message', 'both position groups set');
+  if ((mask & ROW_GROUP.TILT_ABS) && (mask & ROW_GROUP.TILT_REL)) throw new WireError('invalid_message', 'both tilt groups set');
+  if ((mask & ROW_GROUP.ERA_ADD) && (mask & ROW_GROUP.ERA_RESET)) throw new WireError('invalid_message', 'both era groups set');
+  const fields: EntityRowPatch['fields'] = {};
+  let era: number[] | null = null;
+  let mirrors: boolean | null = null;
+  if (mask & ROW_GROUP.POS_ABS) { fields.x = reader.i32(); fields.y = reader.i32(); fields.z = reader.i32(); }
+  if (mask & ROW_GROUP.POS_REL) {
+    const base = resolveBase(entityId);
+    if (!base) throw new WireError('missing_baseline', `relative position for entity ${entityId} without a baseline`);
+    fields.x = base.x + reader.i16(); fields.y = base.y + reader.i16(); fields.z = base.z + reader.i16();
+  }
+  if (mask & ROW_GROUP.VEL) { fields.speed = reader.i16(); fields.verticalSpeed = reader.i16(); }
+  if (mask & ROW_GROUP.YAW) fields.yaw = reader.u16();
+  if (mask & ROW_GROUP.TILT_ABS) { fields.pitch = reader.u16(); fields.roll = reader.u16(); }
+  if (mask & ROW_GROUP.TILT_REL) {
+    const base = resolveBase(entityId);
+    if (!base) throw new WireError('missing_baseline', `relative tilt for entity ${entityId} without a baseline`);
+    fields.pitch = (base.pitch + reader.i8() + 65536) & 0xffff;
+    fields.roll = (base.roll + reader.i8() + 65536) & 0xffff;
+  }
+  if (mask & ROW_GROUP.TURRET) { fields.turretYaw = reader.u16(); fields.gunPitch = reader.u16(); }
+  if (mask & ROW_GROUP.HP) fields.hp = reader.u16();
+  if (mask & ROW_GROUP.MAX_HP) fields.maxHp = reader.u16();
+  if (mask & ROW_GROUP.RELOAD) { fields.reload = reader.u16(); fields.reloadTotal = reader.u16(); }
+  if (mask & ROW_GROUP.GUN_RELOAD) { fields.gunReload = reader.u16(); fields.gunReloadTotal = reader.u16(); }
+  if (mask & ROW_GROUP.MAGAZINE) { fields.magazineRounds = reader.u8(); fields.magazineCapacity = reader.u8(); }
+  if (mask & ROW_GROUP.AMMO) { fields.ammo0 = reader.count(0xffff); fields.ammo1 = reader.count(0xffff); fields.ammo2 = reader.count(0xffff); }
+  if (mask & ROW_GROUP.STATUS) {
+    // wire 10: a varint (TUMBLING and STACKED took the word past 16 bits)
+    const status = reader.varint();
+    if (status > STATUS_WORD_MAX) throw new WireError('range', `status word out of range: ${status}`);
+    Object.assign(fields, statusFields(status));
+    mirrors = (status & STATUS_GUN_RELOAD_MIRRORS) !== 0;
+  }
+  if (mask & (ROW_GROUP.ERA_ADD | ROW_GROUP.ERA_RESET)) era = readIndexList(reader, MAX_ERA_PER_ROW);
+  if (mask & ROW_GROUP.AGE) {
+    const age = reader.varint();
+    if (age < 1 || age > packetTick) throw new WireError('range', `row age out of range: ${age}`);
+    fields.tick = packetTick - age;
+  } else fields.tick = packetTick;
+  if (mask & ROW_GROUP.AUXILIARY) fields.auxiliaryJson = reader.string(512);
+  if (mask & ROW_GROUP.WRECK_BODY) {
+    const flags = reader.u8();
+    if (flags & ~3) throw new WireError('range', `wreck body flags out of range: ${flags}`);
+    if (flags & 1) {
+      const x = reader.i32(), y = reader.i32(), z = reader.i32();
+      const qx = reader.i16(), qy = reader.i16(), qz = reader.i16(), qw = reader.i16();
+      if (Math.max(Math.abs(qx), Math.abs(qy), Math.abs(qz), Math.abs(qw)) > WRECK_BODY_Q_SCALE) {
+        throw new WireError('range', 'wreck body quaternion out of range');
+      }
+      fields.wreckBody = { x, y, z, qx, qy, qz, qw, asleep: (flags & 2) !== 0 };
+    } else fields.wreckBody = null;
+  }
+  return { entityId, mask, fields, mirrors, era };
+}
+
+/** Merge a patch onto its baseline row (null baseline = keyframe defaults). */
+export function applyEntityRowPatch(patch: EntityRowPatch, base: EntityRow | null): EntityRow {
+  const row = base ? cloneEntityRow(base) : zeroEntityRow(patch.entityId);
+  const mirroredBefore = base ? gunReloadMirrors(base) : true;
+  Object.assign(row, patch.fields);
+  row.entityId = patch.entityId;
+  if (patch.mask & ROW_GROUP.ERA_RESET) row.eraSpent = (patch.era || []).slice();
+  else if (patch.mask & ROW_GROUP.ERA_ADD) {
+    const merged = new Set(row.eraSpent);
+    for (const index of patch.era || []) merged.add(index);
+    row.eraSpent = [...merged].sort((a, b) => a - b);
+  }
+  // The encoder sets the status mirror bit exactly when both reload channels
+  // agree; an absent STATUS group leaves the baseline's bit in force.
+  const mirrors = patch.mirrors ?? mirroredBefore;
+  if (mirrors) {
+    row.gunReload = row.reload; row.gunReloadTotal = row.reloadTotal; row.gunReloadKind = row.reloadKind;
+  }
+  return row;
+}

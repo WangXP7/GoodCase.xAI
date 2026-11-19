@@ -1,0 +1,316 @@
+# Multiplayer v2 wire (`src/mp/wire`)
+
+The one binary schema the browser client (`src/mp/*`) and the match server
+(`server/match/*`) share. Pure TypeScript: no DOM, no `three`, no Node
+built-ins; it runs unchanged in both. Import from `src/mp/wire/index.ts`.
+
+Every frame is one binary message (a WebSocket frame or an RTCDataChannel
+message): `u8 WIRE_VERSION`, `u8 type`,
+then the fixed layout below. Integers are little-endian; `varint` is unsigned
+LEB128 (≤ 5 bytes); `string` is `varint byteLength` + UTF-8 bytes with a
+per-field bound. Angles are `u16` turns (1/65536 of a revolution), positions
+`i32` millimetres, tank velocities `i16` cm/s, shell velocities `i16` dm/s,
+reload timers `u16` in 2 ms steps (rounded up so a positive remainder never
+reads as ready). `quantize.ts` holds the conversions; round trips are
+bit-exact on the integer side.
+
+## API the client must use
+
+| Export | Purpose |
+|---|---|
+| `encodeMessage(message, baseline?)` | Any `WireMessage` → `Uint8Array` (throws `WireError` on invalid producer input). A delta `SnapshotPacket` needs the baseline `SnapshotFrame` it was built against. |
+| `decodeMessage(bytes, { maxBytes?, resolveBaseline? })` | Never throws. Returns `{ ok: true, message, bytes }` or `{ ok: false, error: WireError, bytes }`. `resolveBaseline(tick)` supplies the acked frame so relative row groups decode; without it a delta with relative groups is rejected as `missing_baseline`. |
+| `buildSnapshotPacket(frame, baseline)` | Server side: full `SnapshotFrame` + the viewer's acked frame (or `null` for a keyframe) → `SnapshotPacket`. |
+| `applySnapshotPacket(packet, baseline)` | Client side: packet + the frame at `packet.baseTick` → full `SnapshotFrame`. Throws `WireError('missing_baseline')` when the delta's base is unknown; wait for the next keyframe (the server sends one when the acked baseline is missing). |
+| `peekMessageType(bytes)` | The type byte without decoding, or `null`. |
+| `quantize*` / `dequantize*`, `wrapAngle`, `angleUnitsDelta` | Unit conversions (`quantize.ts`). |
+| `eraPlateNames(armor)`, `eraPlateIndices(armor)` | ERA cassette index ↔ plate name (see ERA below). |
+| `shellTypeName(index)`, `shellTypeIndex(name)` | `ShellRow.shellType` ↔ shell type string. |
+| `ByteWriter`, `ByteReader`, `WireError` | Primitives for tooling and tests. |
+| `constants.ts` | `MESSAGE_TYPE`, `CLOSE_REASON`(+`_NAMES`), `TEAM`, `PHASE`, `VERDICT`, `ENTITY_FLAGS`, `CONTROL_FLAGS`, `ACTION_BITS`, `ROW_GROUP`, `HELLO_CAPABILITY`, `EVENT_KIND_NAMES`, every limit and scale. |
+| `messages.ts` | The TypeScript shape of every message, row, patch and frame. |
+
+Entity ids are `1..MAX_ENTITIES (64)`; `0` (`NO_ENTITY`) is a spectator
+viewer. Seats are `0..63`; `255` (`NO_SEAT`) marks a bot. `NO_TICK`
+(`0xffffffff`) is "none" in every u32 tick field.
+
+## Messages
+
+Client → server
+
+| Type | Layout |
+|---|---|
+| `HELLO` (1) | `u16 protocolVersion`, `u32 capabilities` (`HELLO_CAPABILITY` bits), `string token ≤ 1024`, `string clientBuild ≤ 64` |
+| `INPUT` (2) | `u32 clientTick` (tick of the newest control), `u32 snapshotAckTick` (newest assembled snapshot or `NO_TICK`), `u8 interpDelayMs` (the client's interpolation delay, used for lag compensation), `u8 count` (1..3), then `count` controls oldest first; control `i` is for tick `clientTick − count + 1 + i`. Control: `i8 throttle`, `i8 steer` (±127 = ±1), `u8 flags` (`CONTROL_FLAGS`: FIRE_HELD, BRAKE, AIM_LOCKED), `u16 aimYaw` (turn), `i16 aimPitch` (±32767 = ±π/2), `u16 aimDistance` (5 cm units), `u8 shellSlot` (0..2), `u16 fireSeq`, `u16 actionSeq`, `u16 actionBits` (`ACTION_BITS`, thirteen bits). 16 B per control; a full frame is 60 B (3.6 KB/s at 60 frames/s, 1.8 KB/s at 30). |
+| `SNAPSHOT_ACK` (3) | `u32 tick` — the newest assembled snapshot, or `NO_TICK` to drop the baseline and request a keyframe (for viewers that send no INPUT, and for any client recovering from a missing delta baseline). |
+| `PING` (4) | `u32 clientTimeMs`, `u32 snapshotAckTick` |
+| `CHAT` (5) | `string text ≤ 960 B` (≤ 240 chars after the server's normalization) |
+| `LEAVE` (6) | `u8 reason` (`CLOSE_REASON`) |
+| `RESUME_HINT` (7) | `u32 tick`, `3 × i32` position mm, `2 × i16` speed / vertical speed cm/s, `5 × u16` yaw, pitch, roll, turretYaw, gunPitch (turns). Sent once after the HELLO of a resumed link (a host migration): the viewer's own newest authority row from the host it lost. The actor applies it only to a hull it restored from the sealed migration keyframe, only when the row is newer than the restored one, and only within the distance the hull could have driven since — its pose and its body bits (the flags below) alone, never combat state; a client never places itself (protocol 2, P3b). Then `varint flags` (protocol 12, round 3 A14): the row's body bits (`ENTITY_FLAGS` AIRBORNE, OVERTURNED, AUTO_RIGHTING, TUMBLING, STACKED; at most `ENTITY_FLAG_BITS` bits); the actor seats the hint's ground contact and body mode from them as it seats a row's (`authorityRow.ts applyAuthorityRow`). |
+
+Server → client
+
+| Type | Layout |
+|---|---|
+| `WELCOME` (16) | `u16 protocolVersion`, `u8 tickHz` (60), `u8 snapshotHz` (the host's rate for the near tier: 20 by default, any divisor of the tick rate — the client adopts it), `u8 seat`, `u8 entityId` (`NO_ENTITY` for spectators), `u8 team`, `u32 serverTick`, `u32 serverTimeMs`, `u32 seed`, `u32 capabilities` (the subset the server honours), `string roomId`, `string mapId`, `string mode`, `string rulesetJson ≤ 4096` (the `MatchRuleset` the match plays by), `u8 rosterCount`, roster entries: `u8 entityId`, `u8 seat`, `u8 team`, `u8 flags` (bit0 bot, bit1 connected, bit2 a bot wearing AUTO paint: the authority's roll, `sim/camoPaint.ts` botCamoRoll; a bot without it wears its stock scheme, a seat never sets it), `string playerId`, `string name`, `string specId`. Then `u32 battleId` (protocol 12, round 3 A3): the battle this host plays, 0 for a match's first battle, kept by every host that resumes it (the sealed keyframe carries it), new when a host restarts it from its spawns; a client that followed another battle id drops what it retained of that battle. |
+| `SNAPSHOT` (17) | See below. |
+| `EVENT` (18) | `u32 tick`, `u8 count ≤ 64`, entries: `u8 kind` (`EVENT_KIND_NAMES` index, or 255 followed by `string kind ≤ 64`), then the payload: wire 8, `varint length ≤ 4096` and a tagged binary object (`eventPayload.ts`, below); wire 7 and before, `string json ≤ 4096`. Reliable one-shots: the authority's `shell_fired`, `shell_hit`, `shell_impact`, `tank_destroyed`, `tank_spotted`, `module_state`, `world_prop_destroyed`, `match_*`, ammo/consumable/magazine/special-action denials and the server's `chat`, `roster` and `admin` events. Payloads are the authority's event records (ids are the roster's `playerId` strings), each decoding to exactly the object `JSON.parse` gives for it serialized with its numbers at four decimals. |
+| `PONG` (19) | `u32 clientTimeMs` (echo), `u32 serverTimeMs`, `u32 serverTick` |
+| `CLOSE` (20) / `ERROR` (21) | `u8 reason` (`CLOSE_REASON`), `string detail ≤ 240`. CLOSE precedes the socket close; ERROR is non-fatal (a rejected input or chat). |
+| `HOLD` (22) | `u32 holdMs` (protocol 12, round 3 B1/X6). Before the WELCOME: the host holds this seat's HELLO (through its boot, or a migrated host's resume hold) and answers within `holdMs` from now. The seat's stall clock waits that long and a release margin more (`HOLD_RELEASE_MARGIN_MS`, the WELCOME's way out through the host's main thread; 33 s at most) before it counts; a later notice replaces an earlier one. During the boot, until its actor runs, the host runtime tells every link, its own seat's and each peer's, from the main thread whatever its Worker is doing (`matchHost.ts bootHoldNotice`: what is left of its boot bound, then the hold, `hostProtocol.ts bootHoldNoticeMs`; round 4 F0); in the resume hold the core tells what is left of it (`matchHostCore.ts noticeHeld`). A dedicated server never sends it. |
+
+## SNAPSHOT
+
+```
+u32 tick, u32 serverTimeMs, u8 flags (SNAPSHOT_FLAGS: KEYFRAME, HAS_VIEWER, HAS_MODE_STATE, HAS_VERDICT, HAS_DESTRUCTION, HAS_UNSEEN_SHELLS, HAS_DESTROYED_FALLS)
+u32 baseTick (NO_TICK on keyframes), u32 ackedInputTick, u16 ackedFireSeq, u16 ackedActionSeq
+i8 inputMarginTicks (how many ticks early the newest input arrived; negative = late; 127 = unknown)
+u8 phase, u16 countdownMs, u32 battleTimeMs, u8 verdict, [string verdictReason if HAS_VERDICT], u32 destructibleRevision,
+varint smokeLength (UTF-8 bytes + 1 ≤ 32769; 0 = the baseline's smoke text, wire 12: below), smoke UTF-8
+destroyed set (keyframe: every destroyed obstacle index; delta: indices destroyed since the baseline; wire 6: below)
+u8 entityCount, entity rows ...
+u8 removedCount, u8 entityId ... (entities in the baseline that are hidden now)
+u16 shellCount, shells: u16 id, u8 shooterEntityId, 3 × i32 pos mm, 3 × i16 vel dm/s, u8 shellType, u8 flags (GUIDED)
+[HAS_UNSEEN_SHELLS] varint count (1..256), u16 shell id ... strictly ascending (wire 11: below)
+[HAS_VIEWER] viewer section, [HAS_MODE_STATE] varint length ≤ 8192 (0 = the baseline's mode state, wire 12: below), modeStateJson UTF-8
+[HAS_DESTRUCTION] u32 destructionBase, destruction log entries (destructionLog.ts)
+[HAS_DESTROYED_FALLS] u8 fall per index the destroyed set names, in its order (wire 11: below; always the last field)
+```
+
+An *index list* is `varint count`, then the first index and the gaps
+(`index − previous − 1`) as varints: sorted, strictly increasing.
+
+A *destroyed set* (wire 6, 2026-10-13, `destroyedSet.ts`) is `u8 form`, then either form 0, an index list without a
+cap (indices 0..65535), or form 1, `varint byteLength` and a bitset (bit `i & 7` of byte `i >> 3` per destroyed index,
+the last byte holding a set bit) — whichever is smaller; at most 8,195 B for any legal set (the set alone: the destroyed
+falls below take only the room a frame leaves). Wire 5 wrote an index list capped at 4,096 and its encoder threw past it
+(below Monsoon's 9,119 crushable props), failing every later keyframe.
+
+The *viewer section*'s movement checkpoint (wire 7, 2026-10-15, the MP stream): `u8 movementVersion` with its high bit
+(0x80) set marks a masked checkpoint, written only on a delta whose baseline frame holds a viewer on the same checkpoint
+version and length: `u16 movementFlags`, `u8 count`, a `ceil(count / 8)`-byte mask (bit `i & 7` of byte `i >> 3` = value
+`i` changed since the baseline's, compared as f32), then the changed values as `f32` in index order; an unchanged value
+is the baseline's. A keyframe, or a baseline the mask cannot follow, writes every value as before; a masked checkpoint
+whose baseline viewer is missing decodes as `missing_baseline` (the client asks for a keyframe). The 63-value
+checkpoint cost 253 bytes on every snapshot to its seat; masked, a driving hull's is ~150 and a stopped one's ~90
+(`viewerMask.selftest`).
+
+The destroyed list is settled state, not a stream of falls (world state audit, 2026-10-01): a client lays a listed
+prop it has not seen fall at its final pose, silently, and leaves a prop whose `world_prop_destroyed` it still owes
+the presentation to that event. A host that resumes a match from a migration keyframe restores the keyframe's list
+into its own world and continues `destructibleRevision` from the keyframe's value; the revision never restarts at
+zero inside a match.
+
+The *destroyed falls* (wire 11, round 2 of the 2026-11-02 audit, U27; `destroyedSet.ts writeDestroyedFalls`) are the
+frame's last field, behind `SNAPSHOT_FLAGS.HAS_DESTROYED_FALLS`: one fall byte per index the frame's set names, in the set's
+ascending order (a keyframe's whole list, a delta's additions). The flag is clear, and nothing follows, when every fall is
+none or when the falls would carry the frame past `MAX_MESSAGE_BYTES`: falls are presentation only and `none` is a legal
+fall, so they take only the room the frame leaves and never stop a keyframe that encodes without them (the C3 hazard the
+destruction log's budget answers). A fall byte (`src/sim/obstacleFall.ts`) is the cause in bits 6–7 (0 none, 1 ram, 2 shell;
+a blast fells as a shell) and the heading of the fall, `atan2(dx, dz)` in 64ths of a turn, in bits 0–5 (0 with none). A
+client that did not see a prop fall lays it with its fall instead of a ram toward +Z. The authority withholds a fall from
+a viewer as it withholds the live `world_prop_destroyed` event's cause and direction: a hull source's fall reads only to
+that hull's team (and to spectators), the other team reads none. A none lays the prop as a ram along its own heading
+(`obstacleFall.ts withheldObstacleFall`: a fixed hash of its index, the same on every seat), the lay the withheld live
+event gets too, so a seat that watched the fall and a seat that joined after it lay the prop alike; never direction
+(0, 0), which the world's hinge (`src/world/topple.ts`) lays toward +Z. A list restored from a migration keyframe carries
+none (the keyframe names indices only).
+
+The *unseen shells* (wire 11, U31) are the rounds this viewer was shown that left its view while the authority still flies
+them: the authority hides a round with its shooter, and a view holds at most 256, so a round's absence alone cannot tell
+an end from a spotting loss. The actor names each one for `UNSEEN_SHELL_MARK_TICKS` (half a second) from the frame it left,
+whatever becomes of it, so a lost snapshot loses no mark and the mark never tells a hidden round's end; a round that ended
+is never named, and a round in view again is named no longer. A frame names at most 256 (`MAX_SHELLS`, the list's
+bound; round 3 A13, `server/match/unseenShellMarks.ts`): a round that leaves while 256 are named takes the place of the
+mark made longest ago (ties: the lowest id), so a burst of departures can end a mark before its half second, but every
+round that leaves in flight is named at least in the frame it left. The client's presentation reports a named exit to
+the effects as `shell:unseen`, which hold the round out of view for three seconds (a tracer's belt place, a missile's
+trail and wire, a drone's airframe) instead of ending it. A drone whose hold runs out while it is still unseen is dropped
+where it was, with no flight home (round 3 A13, `src/fx/dronePresentation.ts` `held`): its end went unseen.
+
+**Entity row** = `u8 entityId`, `varint mask` (`ROW_GROUP` bits), then the
+present groups in bit order:
+
+| Bit | Group | Bytes | Content |
+|---|---|---|---|
+| 0 | POS_ABS | 12 | x, y, z `i32` mm |
+| 1 | POS_REL | 6 | x, y, z as `i16` mm deltas from the baseline row |
+| 2 | VEL | 4 | `i16` speed cm/s along the hull yaw (signed), `i16` vertical speed cm/s |
+| 3 | YAW | 2 | `u16` turn |
+| 4 | TILT_ABS | 4 | pitch, roll `u16` turns |
+| 5 | TILT_REL | 2 | pitch, roll `i8` turn-unit deltas from the baseline |
+| 6 | TURRET | 4 | turretYaw, gunPitch `u16` turns |
+| 7 | HP | 2 | `u16` |
+| 8 | MAX_HP | 2 | `u16` |
+| 9 | RELOAD | 4 | remaining, total `u16` (2 ms units) |
+| 10 | GUN_RELOAD | 4 | remaining, total of the gun channel; absent when the status mirror bit is set |
+| 11 | MAGAZINE | 2 | rounds `u8`, capacity `u8` (the reticle's multi-round indicator) |
+| 12 | AMMO | 3–6 | three varints |
+| 13 | STATUS | 1–3 | `varint` (wire 10; `u16` before): bits 0–1 reloadKind, 2–3 gunReloadKind, 4–5 shellSlot, 6 gunReloadMirrors, 7–17 `ENTITY_FLAGS` (bit 16 TUMBLING, the hull's rigid phase; bit 17 STACKED, the hull supported by another hull or elevated above its own static support) |
+| 14 | ERA_ADD | var | index list of ERA cassettes spent since the baseline |
+| 15 | ERA_RESET | var | index list replacing the spent set (keyframes; a revive) |
+| 16 | AGE | var | `varint` packet tick − the tick the row was captured at; present only when the row predates its packet (protocol 2, P3b interest tiers) |
+
+A keyframe row carries groups 0, 2, 3, 4, 6–9, 11–13 (43 B for a typical
+tank), plus GUN_RELOAD when the gun channel differs from the main reload
+channel and ERA_RESET when cassettes are spent. A delta row carries only the
+groups that changed against the baseline row (a tank driving on rough ground
+with its turret slewing costs 16–20 B); relative groups fall back to the
+absolute ones when a delta overflows (|Δpos| > 32.767 m, |Δtilt| > 127 units).
+Horizontal velocity is `speed` along `yaw`: `vx = sin(yaw)·speed`,
+`vz = cos(yaw)·speed`. When STATUS says the gun channel mirrors the main
+channel, the client copies reload → gunReload after applying the row.
+
+**Viewer section** (only for a seated player, about its own tank): `u8 entityId`,
+`u32 modules` (2 bits per each of the fifteen `VIEWER_MODULES` entries: 0 ok, 1 yellow, 2 red),
+`u8 crewBits` (`VIEWER_CREW`), 5 × `u16` equipment multipliers ×1000
+(`VIEWER_EQUIPMENT`), `u16 modeSpeedMultiplier` ×1000, `u16 modeGravityScale`
+×1000, `u8 movementVersion` (0 = none) and, when present, `u16 movementFlags`,
+`u8 count`, `count × f32` — the movement integrator checkpoint of
+`src/sim/movementPredictionState.ts` (`{ version, values, flags }`) that the
+prediction replay restores before re-applying unacknowledged inputs.
+
+**Interest management** is the server's: a viewer receives rows for its own
+team and for enemies while they are spotted; a hidden enemy is simply absent
+(and listed in `removed` when it was in the baseline). Hidden coordinates never
+leave the server.
+
+**Interest tiers and the row tick (protocol 2, P3b, 2026-09-29;
+`server/match/interestTiers.ts`, docs/MULTIPLAYER-V2.md §13.9).** Every row
+carries `EntityRow.tick`, the authority tick it was captured at. The host
+refreshes a visible entity's row for a viewer every snapshot when it is within
+100 m of the viewer's hull, engaged with it (a hit either way, a shell landing
+within 15 m, a ram — for 4 s) or the viewer's own; every second snapshot out to
+300 m; every third beyond. A row that is not refreshed is the one the viewer
+already holds: on a delta it is no patch at all (the viewer keeps the row and
+its tick), on a keyframe it carries AGE. A patched row without AGE was captured
+at the packet's tick; a row a delta leaves untouched keeps its baseline tick —
+including a fresh capture whose fields did not change, whose older tick is
+then still an exact pose. The client interpolates each entity between its own
+distinct samples (`src/mp/match/interpolation.ts`) and never reads a held row
+as a fresh pose. Spectators, who have no hull to measure from, receive every
+entity at full rate. Events are never tiered.
+
+**Baselines.** Deltas are built against the viewer's last acknowledged
+snapshot (`snapshotAckTick` in INPUT/PING/SNAPSHOT_ACK). A keyframe goes every
+2 s and whenever the server has no acked baseline it still holds. After a
+`missing_baseline`, acknowledge `NO_TICK` (in the next INPUT or PING, or as a
+`SNAPSHOT_ACK`) — the server drops the viewer's baseline and the very next
+snapshot is a keyframe; keep sampling the previous frames until it arrives.
+Acknowledging `NO_TICK` while holding no baseline is harmless, so a client may
+send it until its first keyframe assembles.
+
+**Edge baselines.** The first control the server applies after admission (or
+a seat replacement) seeds `fireSeq` / `actionSeq` without an edge: a reconnect
+never fires a stray shot. A new `actionSeq` skips bits the previous sequence
+already applied within the last 500 ms, so a union of two un-acknowledged
+presses applies each action once.
+
+**Input edges.** `fireSeq` increments once per trigger press and every later
+frame repeats the current value; the server fires once per new value (and
+holds fire while FIRE_HELD is set). `actionSeq` increments once per action
+press and `actionBits` carries the union of un-acknowledged presses; the server
+applies the bits once per new sequence value. `ackedFireSeq` / `ackedActionSeq`
+in the snapshot tell the client which edges have been consumed, so a lost frame
+can never lose a press. `ackedInputTick` is the newest applied control tick;
+`inputMarginTicks` says how early the newest control arrived — keep it in
+1..3 ticks by adjusting the client's lead.
+
+## ERA cassettes
+
+`EntityRow.eraSpent` is a sorted list of indices into the vehicle's spec-order
+ERA plate list: every plate with `kind === 'era'` in `armor.hullPlates`
+followed by `armor.turretPlates`, in authored order (`eraPlateNames`). Both
+sides own the same first-party spec, so names never travel. Duplicate names
+share the first index (the armor model keys `eraSpent` by name).
+
+## Event payloads (wire 8, mp-scale-251)
+
+An event's payload is one tagged value, an object at the top: `u8 tag`, then by tag `0` null, `1` false, `2` true,
+`3` an integer as a zigzag varint (|v| < 2^31), `4` a decimal as a zigzag varint of `round(v × 10^4)` (|v| < 214,748),
+`5` any other finite number as `f64` (rounded to four decimals), `6` a string (`varint length ≤ 4096`, UTF-8), `7` an
+array (`varint count ≤ 1024`, values), `8` an object (`varint count ≤ 1024`, then per member `u8 key` from
+`EVENT_PAYLOAD_KEYS` or 255 and an inline `string ≤ 64`, then its value), `9` a value that is no plain data (a typed
+array, a `Date`) as its JSON string. Undefined members are dropped, non-finite numbers are null and nesting stops at
+16, as JSON has it. The key table lists the battle's keys most frequent first; it is part of the layout (append only,
+with a `WIRE_VERSION` change). A host encodes a payload once for every viewer that receives it (`WireEvent.encoded`).
+A 14v14 battle's payloads take 40 % of their rounded JSON (`eventPayload.selftest.mjs`).
+
+## Versions
+
+`WIRE_VERSION` 1 is the frame layout; `PROTOCOL_VERSION` 2 (P3b, 2026-09-29)
+adds the row tick / AGE group and `RESUME_HINT`. The layout of every frame a
+protocol-1 peer could send is unchanged, so a mismatch between builds is caught
+at the handshake (`CLOSE_REASON.PROTOCOL_VERSION`), never as a malformed frame.
+
+## Receipts
+
+`node src/mp/wire/wire.selftest.mjs` — round trips of every message type and
+2,400 delta snapshots (bit-exact), the gun-reload mirror transitions, the §4
+size budget (full row mean ≤ 48 B, typical moving delta row ≤ 20 B, 28-entity
+keyframe with the viewer section ≤ 1.5 KB), every truncated prefix and
+malformed class rejected with typed `WireError` codes, held rows (AGE on a
+keyframe at two bytes, nothing on a delta, the tick preserved, a row from the
+future refused, an 18-bit mask rejected), the resume hint, quantization
+resolutions. `node src/mp/wire/wireFuzz.selftest.mjs` — 10,000 random byte
+strings and 10,000 mutated valid frames decode to a typed result, never throw,
+never reach the `internal` code.
+
+### Weapon-module snapshot revision (2026-10-01)
+
+Current `WIRE_VERSION` is 3 and `PROTOCOL_VERSION` is 4. Viewer module health
+uses a 32-bit word, preserving the first seven indices and appending missile
+rack, weapon feed, roof gun, autoloader, ammo rack, fuel, radio and optics.
+This adds two bytes per viewer record. Older peers fail the version check;
+clients and hosts must be updated together. The earlier version descriptions
+above are historical migration notes.
+
+### Binary event payloads, snapshot encode and apply (wire 8, 2026-10-24, mp-scale-251)
+
+`WIRE_VERSION` 8: an event's payload is the tagged binary value above, length-prefixed, instead of a JSON string.
+Nothing else in the layout moved. The snapshot encoder writes the same bytes from the frames directly
+(`codec.ts encodeSnapshotFrame`, `rows.ts writeEntityRowDelta`), and a client merges sorted patches into its baseline
+without maps (`applySnapshotPacket`), with the same frames. Receipts: `eventPayload.selftest.mjs`, and in
+`wire.selftest.mjs` the direct encoder against the packet path and the merged apply against the general algorithm.
+
+### The tumbling and stacked row flags (wire 10, 2026-11-02, audit M8)
+
+`WIRE_VERSION` 10, `PROTOCOL_VERSION` 11: `ENTITY_FLAGS` gains `TUMBLING` (bit 9), the hull's rigid phase
+(`src/sim/hullBodyMode.ts`; `OVERTURNED` and `AUTO_RIGHTING` are its sub-states), and `STACKED` (bit 10), the hull
+bearing on another hull (`tankBodyContacts.ts hullBearsOnBody`: a roof rest, the contact pass's support, or riding above
+its own static support). The row's STATUS word, now 18 bits, is a varint (1 byte for a row with no flags, 2 up to
+`AIRBORNE`, 3 with a body-mode or stack bit; the `u16` took 2 always). Before, a client rebuilt the tumble as
+overturned-or-righting and judged a stack from a support cache its copy of the hull never filled (zero, from the copy's
+creation at the origin), so the prediction world's tank contacts and the authority's split the same pair: a plain tumble
+or a roof rest below 0.5 m of world height was a supported hull to the client, and any hull standing higher was a stack,
+hill traffic included. `src/mp/match/hullBodyRow.ts` packs the bits on the authority and restores them onto every client
+copy. Receipt: `src/mp/match/hullBodyRow.selftest.mjs`. `STACKED` is the dynamic-contact term (`hullBearsOnBody`), so a
+plain jump more than 0.5 m up sets it as well.
+
+### Destroyed falls and unseen shells (wire 11, 2026-11-05, round 2 of the 2026-11-02 audit)
+
+`WIRE_VERSION` 11, `PROTOCOL_VERSION` 12: `SNAPSHOT_FLAGS.HAS_DESTROYED_FALLS` ends a frame with its destroyed set's falls,
+and `SNAPSHOT_FLAGS.HAS_UNSEEN_SHELLS` adds the unseen-shells list after the shells (both described under SNAPSHOT above).
+A keyframe costs one byte per listed prop when any fall is readable and the falls fit what the frame leaves (Monsoon's
+whole crushable field: 8,928 B); a delta costs a byte per prop it adds; a frame with no readable fall or no unseen round
+costs nothing for it. `destroyedSet.selftest` builds the worst keyframes: Monsoon with every fall readable beside a full
+destruction log, mode state, shell and unseen list carries its falls, and every legal index down sends none and still
+encodes. Receipts: `src/mp/presentation/settledFalls.selftest.mjs`,
+`src/mp/presentation/unseenRounds.selftest.mjs`.
+
+### A mode state or smoke text kept from the baseline (wire 12, 2026-11-13, improve-271 plan 020)
+
+`WIRE_VERSION` 12, `PROTOCOL_VERSION` 13: a delta whose mode-state JSON or smoke text equals the acknowledged baseline's
+does not resend it. With `HAS_MODE_STATE` the mode state's varint length 0 means "the baseline's" (a mode state is a JSON
+object, never empty: an empty one is refused at encode); the meta's smoke text is written with its UTF-8 length plus one,
+so 1 is no smoke and 0 is "the baseline's". No flag bit is spent (wire 11 took bits 5 and 6; bit 7 stays free) and the two
+strings are independent. The decoder copies a kept string from the baseline it resolved for the delta: `missing_baseline`
+when that baseline is absent (the client asks for a keyframe), `invalid_message` on a keyframe or when the baseline has no
+such string. Both encoders (`writeSnapshot` and `encodeSnapshotFrame`) compare each string with the baseline the delta is
+written against, never the previous frame, so a viewer that missed a snapshot still ends with the right strings. Every
+mode but Standard sent its whole mode state to every viewer in every snapshot, 20 times a second, and smoke rode every
+snapshot while a screen was live; `tools/mp-scale-bench.mjs --mode=<id>` prints the share of each actually sent. The host
+counts the strings it expects to send against the viewer's row budget (`interestTiers.ts snapshotRowBudgetBytes`,
+`blobBytes`). Modes whose state changes every snapshot (Air Support's clock) gain nothing. Receipt: in `wire.selftest.mjs`
+the kept strings restored, changed strings sent, a keyframe carrying both, a delta against an older acknowledged
+baseline, a kept string without its baseline, and forged markers refused.

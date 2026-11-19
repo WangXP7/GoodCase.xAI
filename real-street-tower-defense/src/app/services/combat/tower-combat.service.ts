@@ -1,0 +1,1020 @@
+import { Injectable, inject } from '@angular/core';
+import { Vector3 } from 'three';
+import { GlobalRouteGridService } from '../world/global-route-grid.service';
+import { SpatialGridService } from '../world/spatial-grid.service';
+import { CombatEffectService } from './combat-effect.service';
+import { NO_RESEARCH, type SimResearch } from '../../managers/research.manager';
+import { Enemy } from '../../entities/enemy.entity';
+import { Tower } from '../../entities/tower.entity';
+import { TowerManager } from '../../managers/tower.manager';
+import { METERS_PER_DEGREE_LAT, DEG_TO_RAD, geoHeading } from '../../utils/geo-utils';
+import { getEnemyAimOffsetY } from '../../utils/enemy-aim.util';
+import { COMBAT_TUNING } from '../../configs/combat-tuning.config';
+import { upgradeFactor } from '../../configs/tower-types.config';
+import { GAME_BALANCE } from '../../configs/game-balance.config';
+import { ProjectileManager } from '../../managers/projectile.manager';
+import type { GeoPosition } from '../../models/game.types';
+import { ROUTE_BODY_AIM_HEIGHT_M, type RouteBodyContact } from '../../utils/route-body';
+import { bodyPointInCone, coneContains, type Cone } from '../../utils/body-cone';
+import { BodyAim, type BodyAimPoint } from './body-aim';
+import { TOWER_CONTROL } from '../../configs/tower-control.config';
+import { aimDirectionInto, eyeBackAt, eyeInto, rayHitDistance } from '../../utils/manual-aim';
+import { aimAt, aimIdle, aimPitch, aimPitchTowards, isAimAligned, releaseAim } from '../../entities/tower-aim';
+import { DetMath } from '../../utils/det-math';
+import { SimCoords } from '../../sim/core/sim-coords';
+import { SimOps, opVec, type OpVec3, type SimSink } from '../../sim/core/sim-sink';
+
+/** A fire tower's flame as the renderer shows it this frame, see TowerCombatService.flushBeams */
+interface BeamFrame {
+  source: OpVec3;
+  target: OpVec3;
+  length: number;
+  width: number;
+}
+
+/** A shot of the manned tower: at `target`, or a miss when null */
+export interface ManualShot {
+  tower: Tower;
+  target: Enemy | null;
+}
+
+/**
+ * TowerCombatService - Handles tower targeting, rotation, and shooting
+ *
+ * Extracted from GameStateManager to reduce god object complexity.
+ * Manages:
+ * - Tower targeting with GlobalRouteGrid optimization
+ * - Turret rotation towards targets
+ * - Firing and projectile spawning
+ * - Guard heading between waves (turnTowersToGuard)
+ */
+@Injectable()
+export class TowerCombatService {
+  private readonly globalRouteGrid = inject(GlobalRouteGridService);
+  private readonly spatialGrid = inject(SpatialGridService);
+  private readonly combatEffectService = inject(CombatEffectService);
+  private readonly coords = inject(SimCoords);
+  private readonly sink: SimSink = inject(SimOps).sink;
+
+  /** The game's ResearchManager once initialized */
+  private research: SimResearch = NO_RESEARCH;
+
+  // Throttle blood effects for beam damage (per-enemy, game time)
+  private lastBeamBloodEffect = new Map<string, number>();
+  private readonly BEAM_BLOOD_EFFECT_INTERVAL = COMBAT_TUNING.beamBloodEffectIntervalMs;
+
+  /**
+   * The flames burning now by tower, and the ones put out since the last
+   * flushBeams: the renderer gets one startBeam per frame and tower, the
+   * last of the frame's sub-steps, not one per sub-step.
+   */
+  private readonly beams = new Map<string, BeamFrame>();
+  private readonly beamsStopped = new Set<string>();
+  private beamsCleared = false;
+
+  // Reusable vectors for cone collision
+  private readonly tempDirection = new Vector3();
+  private readonly _cone: Cone = { x: 0, y: 0, z: 0, dirX: 0, dirY: 0, dirZ: 1, length: 0, cosHalfAngle: 1 };
+  private readonly _coneContact: RouteBodyContact = { station: 0, offset: 0, distance: 0 };
+  private readonly groundAt = (x: number, z: number): number | null => this.globalRouteGrid.getGroundLocalYAt(x, z);
+
+  // Reused scratch buffers to avoid per-tower / per-sub-step allocations.
+  // Safe to share across the four update*Towers methods: each consumes its
+  // candidate list within one tower iteration before the next runs, and
+  // nested grid queries (splash/chain damage) allocate their own arrays.
+  private readonly _candidateScratch: Enemy[] = [];
+  private readonly _coneScratch: Enemy[] = [];
+  private readonly _losScratch = new Vector3();
+  private readonly _coneEnemyPos = new Vector3();
+  // Tower position for the wake check and the fallback radius query. Only
+  // read right after it is written, never across a call.
+  private readonly _towerLocalScratch = new Vector3();
+  private readonly _beamSourceScratch = new Vector3();
+  private readonly _beamTargetScratch = new Vector3();
+
+  // Enemies whose body lies along the route (the ooze): every tower aims at
+  // the nearest point of the body it sees, see BodyAim. Started per tower
+  // turn by beginBodyAim(); `_aimPoint` is read right after it is written.
+  private readonly bodyAim = new BodyAim(this.globalRouteGrid);
+  private readonly bodyDistSq = (enemy: Enemy): number => this.bodyAim.distSq(enemy);
+  private readonly _aimPoint: BodyAimPoint = { lat: 0, lon: 0, height: 0, x: 0, y: 0, z: 0 };
+
+  // The manned tower (updateMannedTower): what its crosshair is on, and scratch
+  /** The enemy each manned tower's crosshair is on, by tower id, see mannedAimTargetOf */
+  private readonly mannedAimTargets = new Map<string, Enemy | null>();
+  private readonly _mannedMuzzle = new Vector3();
+  private readonly _mannedEye = new Vector3();
+  private readonly _mannedDir = new Vector3();
+  private readonly _mannedEnemyPos = new Vector3();
+  // Scratch of aimPitch
+  private readonly _pitchTarget = new Vector3();
+  private readonly _pitchMuzzle = new Vector3();
+
+  /**
+   * Initialize with the research the combat reads
+   */
+  initialize(research: SimResearch): void {
+    this.research = research;
+  }
+
+  /**
+   * Build a per-enemy LoS predicate for a tower. Air enemies resolve against
+   * air-LoS, ground enemies against ground-LoS: the tower's answer in
+   * cell.airVisibility / cell.towerVisibility of the cell the enemy stands
+   * in (its LosMask). No answer (off the corridor, beyond the reach) counts
+   * as not visible; there is no raycast (D2 in SIMULATOR_PLAN.md).
+   */
+  private buildLosCheck(tower: Tower): (enemy: Enemy) => boolean {
+    const sync = this.coords.sync;
+    // Shared reusable vector — avoids both a per-enemy AND a per-predicate
+    // Vector3 allocation. Safe because predicates are built and consumed
+    // sequentially per tower (never retained across tower iterations).
+    const pos = this._losScratch;
+    return (enemy: Enemy) => {
+      // A body along the route: its aim point is one the tower sees
+      if (enemy.body) return this.bodyAim.distSq(enemy) < Infinity;
+      sync.geoToLocalSimpleInto(
+        enemy.position.lat,
+        enemy.position.lon,
+        enemy.transform.terrainHeight,
+        pos,
+      );
+      return enemy.typeConfig.isAirUnit
+        ? this.globalRouteGrid.isAirPositionVisibleFromTower(tower.id, pos.x, pos.z)
+        : this.globalRouteGrid.isPositionVisibleFromTower(tower.id, pos.x, pos.z);
+    };
+  }
+
+  /**
+   * Wake check for a sleeping tower, at most once per
+   * towerSleepCheckIntervalMs game-time. Uses the SpatialGrid O(k) query
+   * instead of brute-force O(n) over all enemies. Returns true once an enemy
+   * is near and the tower is awake again; false means skip it this sub-step.
+   */
+  private tryWakeTower(tower: Tower, gameTimeMs: number): boolean {
+    if (gameTimeMs - tower.lastSleepCheck < COMBAT_TUNING.towerSleepCheckIntervalMs) return false;
+    tower.lastSleepCheck = gameTimeMs;
+
+    const towerLocal = this.coords.sync.geoToLocalSimpleInto(
+      tower.position.lat,
+      tower.position.lon,
+      0,
+      this._towerLocalScratch,
+    );
+    const radius = tower.combat.range * COMBAT_TUNING.rangeMargin.standard;
+    // A body along the route is in the route grid's body list, not the spatial grid
+    const hasNearby =
+      this.spatialGrid.hasEnemyInRadius(towerLocal.x, towerLocal.z, radius) ||
+      this.globalRouteGrid.hasBodyWithin(towerLocal.x, towerLocal.z, radius);
+    if (!hasNearby) return false;
+    tower.isSleeping = false;
+    return true;
+  }
+
+  /**
+   * Candidate enemies for one tower, written into `_candidateScratch`:
+   * the enemies of its visibleCells from the GlobalRouteGrid. findTarget
+   * does the exact range check afterwards. Works for ground, air-only and
+   * dual-targeting towers: visibleCells is the union of ground + air visible
+   * cells, so a "blue-only" cell still produces candidates and buildLosCheck
+   * filters them per enemy. A tower that sees no cell has no candidates: an
+   * enemy anywhere else has no answer of the tower and would not pass
+   * buildLosCheck.
+   *
+   * Enemies whose body lies along the route are in no cell: each living one
+   * is added, findTarget measures it at the tower's aim point (BodyAim).
+   */
+  private collectCandidates(tower: Tower): Enemy[] {
+    const out = this.globalRouteGrid.getEnemiesForTower(tower.visibleCells, this._candidateScratch);
+    if (tower.visibleCells.length === 0) return out;
+    for (const enemy of this.globalRouteGrid.getBodyEnemies()) {
+      if (enemy.alive) out.push(enemy);
+    }
+    return out;
+  }
+
+  /**
+   * Start `tower`'s turn in BodyAim while an enemy with a body along the
+   * route is on the map. Its distance and aim point depend on the tower.
+   */
+  private beginBodyAim(tower: Tower): void {
+    if (this.globalRouteGrid.getBodyEnemies().length === 0) {
+      this.bodyAim.endTurn();
+      return;
+    }
+    const local = this.coords.sync.geoToLocalSimpleInto(
+      tower.position.lat,
+      tower.position.lon,
+      0,
+      this._towerLocalScratch,
+    );
+    this.bodyAim.beginTower(tower, local.x, local.z);
+  }
+
+  /**
+   * What the tower turns to: the target's position, or for a body along the
+   * route its aim point (BodyAim). The aim point is a shared scratch: read
+   * it right away.
+   */
+  private targetPoint(target: Enemy): GeoPosition {
+    if (target.body && this.bodyAim.aim(target, this._aimPoint)) return this._aimPoint;
+    return target.position;
+  }
+
+  /**
+   * Where a beam, a strike or a bolt meets `target`, local: a body's aim
+   * point (BodyAim, which also puts the body's hit there) or the model's
+   * visual centre.
+   */
+  private aimLocalPosition(target: Enemy): Vector3 {
+    return this.aimLocalInto(target, new Vector3());
+  }
+
+  /** aimLocalPosition() into `out`, without allocating. */
+  private aimLocalInto(target: Enemy, out: Vector3): Vector3 {
+    const sync = this.coords.sync;
+    if (target.body && this.bodyAim.aim(target, this._aimPoint)) {
+      const p = this._aimPoint;
+      return sync.geoToLocalSimpleInto(p.lat, p.lon, p.height + ROUTE_BODY_AIM_HEIGHT_M, out);
+    }
+    sync.geoToLocalSimpleInto(
+      target.position.lat,
+      target.position.lon,
+      target.transform.terrainHeight + target.heightOffset,
+      out,
+    );
+    out.y += getEnemyAimOffsetY(target); // aim at the model's visual centre
+    return out;
+  }
+
+  /** Tilt the guns of a tower with pitchNodes towards `target` (only the model shows it). */
+  private aimPitch(tower: Tower, target: Enemy): void {
+    if (!tower.typeConfig.pitchNodes) return;
+    const point = this.aimLocalInto(target, this._pitchTarget);
+    const muzzle = this.muzzleLocal(tower, this._pitchMuzzle);
+    const dx = point.x - muzzle.x;
+    const dz = point.z - muzzle.z;
+    aimPitchTowards(tower.aim, point.y - muzzle.y, Math.sqrt(dx * dx + dz * dz));
+  }
+
+  /** Where a shot at a body along the route flies to (its aim point); undefined for any other target. */
+  private projectileAim(target: Enemy): GeoPosition | undefined {
+    if (!target.body || !this.bodyAim.aim(target, this._aimPoint)) return undefined;
+    const p = this._aimPoint;
+    return { lat: p.lat, lon: p.lon, height: p.height + ROUTE_BODY_AIM_HEIGHT_M };
+  }
+
+  /**
+   * Turn every tower to its guard heading, where the route enters its range
+   * (`Tower.guardHeading`). Called once a wave is over: during the wave a
+   * tower that loses its target keeps its heading instead. Towers without a
+   * guard heading keep theirs as well.
+   */
+  turnTowersToGuard(towerManager: TowerManager): void {
+    for (const tower of towerManager.getAllActive()) {
+      this.turnToGuardHeading(tower);
+    }
+  }
+
+  /** turnTowersToGuard for a single tower. */
+  turnToGuardHeading(tower: Tower): void {
+    if (tower.guardHeading === null) return;
+    aimIdle(tower.aim, tower.guardHeading);
+  }
+
+  /**
+   * Update tower shooting — find targets and spawn projectiles.
+   * Called once per gameplay sub-step (~16ms game-time) from GameStateManager.
+   *
+   * `gameTimeMs` is the engine's monotonic game-clock; sleep / LOS / target
+   * timestamps all live in this clock. No timescale compensation is needed
+   * because the sub-step loop already discretises wall-clock × timescale into
+   * fixed game-time chunks.
+   */
+  updateTowerShooting(
+    gameTimeMs: number,
+    deltaTime: number,
+    towerManager: TowerManager,
+    projectileManager: ProjectileManager,
+  ): void {
+
+    for (const tower of towerManager.getAllActive()) {
+      // Skip non-projectile towers (beam, melee, chain) — they have their
+      // own update methods. MUST happen before combat.update so the cooldown
+      // is only ticked once per sub-step (by the matching method) — otherwise
+      // each tower gets its cooldown drained N× per sub-step, with N = number
+      // of update*Towers methods, which inflates the effective fire rate.
+      if (tower.typeConfig.attackType && tower.typeConfig.attackType !== 'projectile') continue;
+      // The player aims and fires it, and its cooldown ticks there (updateMannedTower)
+      if (tower.manned) continue;
+
+      // Advance per-tower fire cooldown in game-time
+      tower.combat.update(deltaTime);
+
+      // Skip towers with pending LOS computation (progressive registration not yet complete)
+      if (!tower.losReady || !tower.isBuilt(gameTimeMs)) continue;
+
+      if (tower.isSleeping && !this.tryWakeTower(tower, gameTimeMs)) continue;
+
+      // losCheck dispatches per-enemy on isAirUnit so air targets resolve
+      // against air-LoS and ground targets against ground-LoS, the tower's
+      // answers in cell.airVisibility / cell.towerVisibility.
+      const candidates = this.collectCandidates(tower);
+      this.beginBodyAim(tower);
+      const losCheck = this.buildLosCheck(tower);
+
+      // Fast path: get cached target or find new one
+      let target = tower.findTarget(candidates, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq);
+
+      if (target) {
+        // Target found - update sleep tracking (game-time)
+        tower.lastTargetTime = gameTimeMs;
+        tower.isSleeping = false;
+
+        // Always rotate turret towards target (rotation advances per sub-step)
+        const heading = this.calculateHeading(tower.position, this.targetPoint(target));
+        aimAt(tower.aim, heading);
+        this.aimPitch(tower, target);
+
+        // Fire if cooldown is ready AND turret is aligned
+        if (tower.combat.canFire() && isAimAligned(tower.aim)) {
+          // Periodic LOS recheck (throttled to max ~3/sec per tower) — runs
+          // for air targets too now that tall buildings can break air LOS.
+          if (tower.needsLosRecheck(gameTimeMs)) {
+            tower.markLosChecked(gameTimeMs);
+            if (!losCheck(target)) {
+              // Target no longer visible - find new target
+              tower.clearTarget();
+              target = tower.findTarget(candidates, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq);
+              if (!target) {
+                releaseAim(tower.aim);
+                continue;
+              }
+              // Update rotation to new target, don't fire this sub-step
+              const newHeading = this.calculateHeading(tower.position, this.targetPoint(target));
+              aimAt(tower.aim, newHeading);
+              this.aimPitch(tower, target);
+              continue;
+            }
+          }
+
+          // Single fire per sub-step: no tower fires faster than once a sub-step
+          // (GameClock.FIXED_STEP_MS); the cooldown carries what was over (CombatComponent).
+          tower.combat.fire();
+          projectileManager.spawn(tower, target, heading, this.projectileAim(target));
+        }
+      } else {
+        // No target - check if tower should sleep (game-time)
+        if (gameTimeMs - tower.lastTargetTime > Tower.SLEEP_DELAY) {
+          tower.isSleeping = true;
+        }
+        // Keep the heading. The next enemy mostly comes from the same side,
+        // and a turret that swung back to a rest pose had to turn round again
+        // (up to 1 s) before it was aligned and allowed to fire. The turn to
+        // the guard heading waits for the end of the wave.
+        releaseAim(tower.aim);
+      }
+    }
+  }
+
+  /**
+   * The tower the player sits in (Tower.manned, docs/TOWER_CONTROL.md), once
+   * per sub-step instead of updateTowerShooting. The turret turns to the
+   * player's aim at its own speed. It fires while the trigger is held, also
+   * between waves (at nothing, or at debug enemies), by the tower's rules: its fire rate, the turret close
+   * to the aim (TOWER_CONTROL.alignToleranceRad), its projectile, damage and
+   * upgrades. The shot goes to the first enemy the aim ray passes that the
+   * tower may attack (Tower.mayEngage: air or ground, range, sight); with
+   * none on it, it is a miss: the same projectile, flying along the aim to
+   * the tower's range and gone there without a hit (ProjectileManager.fireBlank).
+   *
+   * @returns the shot, null when it did not fire this sub-step
+   */
+  updateMannedTower(
+    tower: Tower,
+    gameTimeMs: number,
+    deltaTime: number,
+    projectileManager: ProjectileManager,
+  ): ManualShot | null {
+    tower.combat.update(deltaTime);
+    const { heading, pitch } = tower.manualAim;
+    aimAt(tower.aim, heading);
+    // The guns tilt with the aim, as far as they go (types without pitchNodes keep 0)
+    aimPitch(tower.aim, pitch);
+
+    const aimTarget = tower.losReady ? this.manualTarget(tower) : null;
+    this.mannedAimTargets.set(tower.id, aimTarget);
+    if (!tower.losReady || !tower.isBuilt(gameTimeMs) || !tower.triggerHeld || !tower.combat.canFire()) return null;
+
+    // The held trigger fires at the tower's rate, wherever the turret points:
+    // a turret that trails a fast swing used to hold fire until it caught up
+    // within the tolerance, so swinging fired next to nothing. Close to the
+    // crosshair the shot goes for its enemy; further off it flies along the
+    // turret's own heading and hits nothing.
+    tower.combat.fire();
+    tower.lastTargetTime = gameTimeMs;
+    const aligned = isAimAligned(tower.aim, TOWER_CONTROL.alignToleranceRad);
+    const target = aligned ? aimTarget : null;
+    const shotHeading = aligned ? heading : tower.aim.current;
+    if (target) {
+      projectileManager.spawn(tower, target, heading, this.projectileAim(target));
+    } else {
+      projectileManager.fireBlank(tower, this.freeShotEnd(tower, shotHeading), shotHeading);
+    }
+    return { tower, target };
+  }
+
+  /**
+   * Where a manned tower's miss flies: the point on the aim ray at the
+   * tower's range from the eye, so it passes the crosshair; with `heading`
+   * the turret's own, while it still trails the crosshair. Geo, relative
+   * to the muzzle (METERS_PER_DEGREE_LAT at the tower's latitude, as the
+   * projectile moves).
+   */
+  private freeShotEnd(tower: Tower, heading = tower.manualAim.heading): GeoPosition {
+    const { pitch } = tower.manualAim;
+    const muzzleHeight = (tower.position.height ?? 0) + tower.typeConfig.heightOffset + tower.typeConfig.shootHeight;
+    const range = tower.combat.range;
+    const dir = aimDirectionInto(heading, pitch, this._mannedDir);
+    const eye = this.mannedEyeInto(tower, this._mannedEye);
+    const muzzle = this.muzzleLocal(tower, this._mannedMuzzle);
+    const dx = dir.x * range + eye.x - muzzle.x;
+    const dy = dir.y * range + eye.y - muzzle.y;
+    const dz = dir.z * range + eye.z - muzzle.z;
+    const mPerDegLon = METERS_PER_DEGREE_LAT * DetMath.cos(tower.position.lat * DEG_TO_RAD);
+    return {
+      lat: tower.position.lat + dz / METERS_PER_DEGREE_LAT,
+      lon: tower.position.lon - dx / mPerDegLon,
+      height: muzzleHeight + dy,
+    };
+  }
+
+  /**
+   * The enemy the crosshair of manned tower `towerId` is on and it may shoot,
+   * from the last sub-step; null for none. The HUD colours the crosshair by it.
+   */
+  mannedAimTargetOf(towerId: string): Enemy | null {
+    return this.mannedAimTargets.get(towerId) ?? null;
+  }
+
+  /**
+   * The player's eye in `tower` (utils/manual-aim.ts eyeInto), local. The
+   * camera sits there and the aim ray starts there: over the muzzle, and at
+   * least TOWER_CONTROL.eyeOverModelM over the top of the model
+   * (TowerTypeConfig.modelTop), so it is never inside a roof.
+   *
+   * `aim` is the tower's (the simulation's) unless given: the camera passes
+   * the player's own, which in coop runs ahead of the tower's by a tick and
+   * the way over the relay; with the tower's the eye trailed the view and
+   * jumped at each aim command (PLAYTEST T19).
+   */
+  mannedEyeInto(tower: Tower, out: Vector3, aim: { heading: number; pitch: number } = tower.manualAim): Vector3 {
+    const muzzle = this.muzzleLocal(tower, this._mannedMuzzle);
+    const { heading, pitch } = aim;
+    const back = eyeBackAt(pitch, TOWER_CONTROL.pitchMin, TOWER_CONTROL.eyeBackM, TOWER_CONTROL.eyeForwardDownM);
+    const config = tower.typeConfig;
+    // The model's top over the muzzle: both stand on the tower's foot
+    const topOverMuzzle = config.modelTop - config.heightOffset - config.shootHeight;
+    const up = Math.max(TOWER_CONTROL.eyeUpM, topOverMuzzle + TOWER_CONTROL.eyeOverModelM);
+    eyeInto(muzzle, heading, up, back, out);
+    return out;
+  }
+
+  /**
+   * First enemy along the aim ray of the manned tower within its hit radius
+   * that the tower may attack. Candidates as for its automatic fire.
+   */
+  private manualTarget(tower: Tower): Enemy | null {
+    const candidates = this.collectCandidates(tower);
+    this.beginBodyAim(tower);
+    const losCheck = this.buildLosCheck(tower);
+
+    const eye = this.mannedEyeInto(tower, this._mannedEye);
+    const dir = aimDirectionInto(tower.manualAim.heading, tower.manualAim.pitch, this._mannedDir);
+    let best: Enemy | null = null;
+    let bestAlong = Infinity;
+    for (const enemy of candidates) {
+      if (!enemy.alive) continue;
+      const point = this.rayTestPoint(enemy, this._mannedEnemyPos);
+      if (!point) continue;
+      const radius = enemy.body
+        ? TOWER_CONTROL.bodyHitRadiusM
+        : Math.min(TOWER_CONTROL.hitRadiusMaxM, Math.max(TOWER_CONTROL.hitRadiusMinM, getEnemyAimOffsetY(enemy)))
+          + TOWER_CONTROL.hitAssistM;
+      const along = rayHitDistance(eye, dir, point, radius);
+      if (along >= bestAlong) continue;
+      // The rules last: they are the most work per enemy
+      if (!tower.mayEngage(enemy, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq)) continue;
+      best = enemy;
+      bestAlong = along;
+    }
+    return best;
+  }
+
+  /**
+   * Where the aim ray of the manned tower tests `enemy`, local: the model's
+   * visual centre, for a body along the route the tower's aim point on it
+   * (BodyAim.peekLocal, which leaves the body's hit alone: the test runs
+   * every sub-step, the shot is not fired yet). Null for a body without one.
+   */
+  private rayTestPoint(enemy: Enemy, out: Vector3): Vector3 | null {
+    if (!enemy.body) return this.aimLocalInto(enemy, out);
+    if (!this.bodyAim.peekLocal(enemy, out)) return null;
+    out.y += ROUTE_BODY_AIM_HEIGHT_M;
+    return out;
+  }
+
+  /** The player left the tower: its crosshair is on nothing. */
+  clearMannedAim(towerId: string): void {
+    this.mannedAimTargets.delete(towerId);
+  }
+
+  /** Where a tower's shots start, local: its position at muzzle height (as ProjectileManager.spawn). */
+  private muzzleLocal(tower: Tower, out: Vector3): Vector3 {
+    const height = (tower.position.height ?? 0) + tower.typeConfig.heightOffset + tower.typeConfig.shootHeight;
+    return this.coords.sync.geoToLocalSimpleInto(tower.position.lat, tower.position.lon, height, out);
+  }
+
+  /**
+   * Calculate heading angle from one geo position to another
+   */
+  calculateHeading(
+    from: { lat: number; lon: number },
+    to: { lat: number; lon: number }
+  ): number {
+    return geoHeading(from, to);
+  }
+
+  // =====================================================
+  // BEAM TOWER COMBAT (Fire Tower Flamethrower)
+  // =====================================================
+
+  /**
+   * Update beam towers — continuous damage in a cone area.
+   * Called once per gameplay sub-step (~16ms game-time).
+   */
+  updateBeamTowers(
+    deltaTime: number,
+    towerManager: TowerManager,
+    gameTimeMs: number,
+  ): void {
+    // deltaTime is sub-step game-time ms — convert to seconds for DPS math.
+    const dt = deltaTime / 1000;
+
+    for (const tower of towerManager.getAllActive()) {
+      // Skip towers with pending LOS computation
+      if (!tower.losReady || !tower.isBuilt(gameTimeMs)) continue;
+      // Skip non-beam towers
+      if (tower.typeConfig.attackType !== 'beam') continue;
+
+      // The flame is exactly as long as the tower's range, upgrades included,
+      // so findTarget only acquires what the cone reaches. Detection used to
+      // be 25 m against a 20 m flame: the tower aimed at enemies it could not
+      // burn, and range upgrades widened that ring instead of the flame.
+      // The beam margin covers the cone's hit tolerance past its length.
+      const beamLength = tower.combat.range;
+      const candidates = this.collectCandidates(tower);
+
+      // Find primary target (closest/lowest HP in range). Same LOS predicate
+      // as the projectile/melee/chain paths — beam towers must not acquire
+      // targets behind buildings either.
+      this.beginBodyAim(tower);
+      const losCheck = this.buildLosCheck(tower);
+      let target = tower.findTarget(candidates, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq);
+
+      // Periodic LOS recheck (throttled, same interval as the projectile
+      // path). A beam HOLDS its target: findTarget's fast path keeps the
+      // cached target without a LOS check, and unlike projectile towers
+      // there is no canFire gate where the recheck would naturally run —
+      // without this, a target drifting behind a building kept burning.
+      if (target && tower.needsLosRecheck(gameTimeMs)) {
+        tower.markLosChecked(gameTimeMs);
+        if (!losCheck(target)) {
+          tower.clearTarget();
+          target = tower.findTarget(candidates, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq);
+        }
+      }
+
+      if (target) {
+        // Rotate turret towards target
+        const heading = this.calculateHeading(tower.position, this.targetPoint(target));
+        aimAt(tower.aim, heading);
+
+        // Get local positions
+        const terrainHeight = tower.position.height ?? 0;
+        // Scratch vectors: every sub-step of every beam tower, and all readers copy them
+        const towerLocalPos = this.coords.sync.geoToLocalSimpleInto(
+          tower.position.lat,
+          tower.position.lon,
+          terrainHeight,
+          this._beamSourceScratch
+        );
+        const shootHeight = tower.typeConfig.shootHeight ?? 4.0;
+        towerLocalPos.y += tower.typeConfig.heightOffset + shootHeight;
+
+        const targetLocalPos = this.aimLocalInto(target, this._beamTargetScratch);
+
+        // Start/update flame beam visual (and its loop sound, on the main thread)
+        const beamWidth = this.getEffectiveBeamWidth(tower);
+        this.beams.set(tower.id, {
+          source: opVec(towerLocalPos),
+          target: opVec(targetLocalPos),
+          length: beamLength,
+          width: beamWidth,
+        });
+
+        // Apply DPS to all enemies in cone. A share of it is dealt as burn
+        // instead of directly: in the cone the total stays the tower's DPS,
+        // and an enemy that leaves it keeps burning for the burn duration.
+        const dps = this.getEffectiveDPS(tower);
+        const burnDps = dps * GAME_BALANCE.effects.burn.beamDpsShare;
+        const damageThisFrame = (dps - burnDps) * dt;
+
+        const enemiesInCone = this.getEnemiesInCone(
+          towerLocalPos,
+          targetLocalPos,
+          beamLength,
+          beamWidth,
+          candidates
+        );
+
+        for (const enemy of enemiesInCone) {
+          // Throttle blood effects per enemy
+          const lastBlood = this.lastBeamBloodEffect.get(enemy.id) ?? -Infinity;
+          const showBlood = gameTimeMs - lastBlood > this.BEAM_BLOOD_EFFECT_INTERVAL;
+          if (showBlood) {
+            this.lastBeamBloodEffect.set(enemy.id, gameTimeMs);
+          }
+
+          this.combatEffectService.applyBeamDamage(
+            enemy,
+            damageThisFrame,
+            tower.typeConfig.damageType,
+            tower.id,
+            showBlood
+          );
+          // The throttle is keyed per enemy: drop the entry once the beam has
+          // killed it instead of carrying it until wave end.
+          if (!enemy.alive) {
+            this.lastBeamBloodEffect.delete(enemy.id);
+            continue;
+          }
+          this.combatEffectService.applyBurn(enemy, burnDps, tower.id);
+        }
+      } else {
+        // No target - stop beam and sound, the turret keeps its heading
+        this.stopBeam(tower.id);
+        releaseAim(tower.aim);
+      }
+    }
+
+    // Flame-beam shader animation is NOT advanced here: the renderer ticks
+    // it once per render frame on the main thread.
+  }
+
+  /**
+   * Get effective DPS for a beam tower (with upgrades applied)
+   */
+  private getEffectiveDPS(tower: Tower): number {
+    const dps = tower.typeConfig.damagePerSecond ?? 30;
+
+    // 'damage' upgrades multiply damagePerSecond for beam towers
+    const damageUpgrade = tower.typeConfig.upgrades.find(u => u.id === 'damage');
+    if (!damageUpgrade) return dps;
+    return dps * upgradeFactor(damageUpgrade, tower.getUpgradeLevel('damage'));
+  }
+
+  /**
+   * Get effective beam width for a tower (with upgrades applied)
+   */
+  private getEffectiveBeamWidth(tower: Tower): number {
+    const width = tower.typeConfig.beamWidth ?? 8;
+
+    const beamWidthUpgrade = tower.typeConfig.upgrades.find(u => u.effect.stat === 'beamWidth');
+    if (!beamWidthUpgrade) return width;
+    return width * upgradeFactor(beamWidthUpgrade, tower.getUpgradeLevel(beamWidthUpgrade.id));
+  }
+
+  /**
+   * Get all enemies within a cone from source to target
+   *
+   * @param source - Cone origin (tower shoot position)
+   * @param target - Cone direction target
+   * @param maxLength - Maximum cone length
+   * @param endWidth - Cone diameter at the end
+   * @param candidates - Enemy candidates to check
+   */
+  private getEnemiesInCone(
+    source: Vector3,
+    target: Vector3,
+    maxLength: number,
+    endWidth: number,
+    candidates: Enemy[]
+  ): Enemy[] {
+    const sync = this.coords.sync;
+    // Cone from the source toward the target. Half-angle: endWidth is the
+    // diameter, tan(angle) = (endWidth/2) / coneLength
+    const dir = this.tempDirection.subVectors(target, source).normalize();
+    const cone = this._cone;
+    cone.x = source.x;
+    cone.y = source.y;
+    cone.z = source.z;
+    cone.dirX = dir.x;
+    cone.dirY = dir.y;
+    cone.dirZ = dir.z;
+    cone.length = Math.min(source.distanceTo(target), maxLength);
+    cone.cosHalfAngle = DetMath.cos(DetMath.atan2(endWidth / 2, cone.length));
+
+    const result = this._coneScratch;
+    result.length = 0;
+
+    for (const enemy of candidates) {
+      // Skip air units for fire tower (ground only)
+      if (enemy.typeConfig.isAirUnit) continue;
+
+      // Get enemy local position (reuse scratch — runs per candidate per beam)
+      let p: Vector3;
+      if (enemy.body) {
+        // A body along the route: the point this tower aims at on it, where
+        // its hit then lands
+        if (!this.bodyAim.aim(enemy, this._aimPoint)) continue;
+        p = sync.geoToLocalSimpleInto(
+          this._aimPoint.lat,
+          this._aimPoint.lon,
+          this._aimPoint.height + ROUTE_BODY_AIM_HEIGHT_M,
+          this._coneEnemyPos
+        );
+        if (coneContains(cone, p.x, p.y, p.z)) {
+          result.push(enemy);
+          continue;
+        }
+        // The flame is on another target and may still cross the body
+        const body = enemy.body;
+        const groundY = bodyPointInCone(
+          body,
+          cone,
+          this.groundAt,
+          enemy.transform.terrainHeight - body.stations.originHeight,
+          ROUTE_BODY_AIM_HEIGHT_M,
+          this._coneContact,
+        );
+        if (groundY !== null) {
+          body.setHit(this._coneContact.station, this._coneContact.offset, groundY);
+          result.push(enemy);
+        }
+        continue;
+      }
+
+      p = sync.geoToLocalSimpleInto(
+        enemy.position.lat,
+        enemy.position.lon,
+        enemy.transform.terrainHeight + enemy.heightOffset,
+        this._coneEnemyPos
+      );
+      p.y += getEnemyAimOffsetY(enemy); // model's visual centre
+      if (coneContains(cone, p.x, p.y, p.z)) result.push(enemy);
+    }
+
+    return result;
+  }
+
+  /**
+   * Stop a specific tower's flame beam and sound (called when fire tower is sold)
+   */
+  stopTowerBeam(towerId: string): void {
+    this.stopBeam(towerId);
+  }
+
+  /**
+   * Stop all active beams (called on wave end)
+   */
+  stopAllBeams(): void {
+    this.beams.clear();
+    this.beamsStopped.clear();
+    this.beamsCleared = true;
+    this.lastBeamBloodEffect.clear();
+  }
+
+  private stopBeam(towerId: string): void {
+    if (this.beams.delete(towerId)) this.beamsStopped.add(towerId);
+  }
+
+  /**
+   * The flames for the renderer, once per frame (sim/core/packet-writer.ts):
+   * a clear if all were put out, every beam put out since, then every
+   * burning beam as the last sub-step left it.
+   */
+  flushBeams(sink: SimSink = this.sink): void {
+    if (this.beamsCleared) sink.flameBeams.clear();
+    this.beamsCleared = false;
+    for (const towerId of this.beamsStopped) sink.flameBeams.stopBeam(towerId);
+    this.beamsStopped.clear();
+    for (const [towerId, beam] of this.beams) {
+      sink.flameBeams.startBeam(towerId, beam.source, beam.target, beam.length, beam.width);
+    }
+  }
+
+  // =====================================================
+  // MELEE TOWER COMBAT (Tentacle Tower)
+  // =====================================================
+
+  /**
+   * Update melee towers — single-target direct damage with cooldown.
+   * Called once per gameplay sub-step (game-time).
+   */
+  updateMeleeTowers(
+    deltaTime: number,
+    towerManager: TowerManager,
+    gameTimeMs: number,
+  ): void {
+    for (const tower of towerManager.getAllActive()) {
+      // Type-filter MUST be before combat.update — see comment in
+      // updateTowerShooting for the cooldown-double-tick bug.
+      if (tower.typeConfig.attackType !== 'melee') continue;
+
+      tower.combat.update(deltaTime);
+
+      if (!tower.losReady || !tower.isBuilt(gameTimeMs)) continue;
+
+      // Wake check (game-time, no timescale compensation needed thanks to sub-stepping)
+      if (tower.isSleeping && !this.tryWakeTower(tower, gameTimeMs)) continue;
+
+      const candidates = this.collectCandidates(tower);
+      this.beginBodyAim(tower);
+      const losCheck = this.buildLosCheck(tower);
+      const target = tower.findTarget(candidates, this.research.airTargetingFor(tower.ownerId), losCheck, this.bodyDistSq);
+
+      if (target) {
+        tower.lastTargetTime = gameTimeMs;
+        tower.isSleeping = false;
+
+        const heading = this.calculateHeading(tower.position, this.targetPoint(target));
+        aimAt(tower.aim, heading);
+
+        if (tower.combat.canFire()) {
+          tower.combat.fire();
+
+          // Before the damage: on a body it also puts the hit where the strike lands
+          const targetLocalPos = this.aimLocalPosition(target);
+          this.combatEffectService.applyMeleeDamage(
+            target,
+            tower.combat.damage,
+            tower.typeConfig.damageType,
+            tower.id,
+            tower.typeConfig.meleeSlam,
+          );
+
+          const at = opVec(targetLocalPos);
+          this.sink.tentacles.startStrike(tower.id, at);
+          this.sink.spatialAudio.playAt('tentacle-grab', at);
+        }
+      } else {
+        if (gameTimeMs - tower.lastTargetTime > Tower.SLEEP_DELAY) {
+          tower.isSleeping = true;
+        }
+        releaseAim(tower.aim);
+      }
+    }
+  }
+
+  /**
+   * Stop all active melee visuals (called on wave end)
+   * Resets tentacles to idle — they stay visible as part of the tower
+   */
+  stopAllMelee(): void {
+    this.sink.tentacles.resetAllToIdle();
+  }
+
+  // =====================================================
+  // CHAIN TOWER COMBAT (Lightning Tower)
+  // =====================================================
+
+  /**
+   * Update chain-attack towers — hitscan primary + N jumps with damage falloff.
+   * Called once per gameplay sub-step (game-time).
+   */
+  updateChainTowers(
+    deltaTime: number,
+    towerManager: TowerManager,
+    gameTimeMs: number,
+  ): void {
+    for (const tower of towerManager.getAllActive()) {
+      // Type-filter MUST be before combat.update — see comment in
+      // updateTowerShooting for the cooldown-double-tick bug.
+      if (tower.typeConfig.attackType !== 'chain') continue;
+
+      tower.combat.update(deltaTime);
+
+      if (!tower.losReady || !tower.isBuilt(gameTimeMs)) continue;
+
+      // Wake check
+      if (tower.isSleeping && !this.tryWakeTower(tower, gameTimeMs)) continue;
+
+      const candidates = this.collectCandidates(tower);
+      this.beginBodyAim(tower);
+      const losCheck = this.buildLosCheck(tower);
+      const airTargeting = this.research.airTargetingFor(tower.ownerId);
+      let target = tower.findTarget(candidates, airTargeting, losCheck, this.bodyDistSq);
+
+      if (!target) {
+        if (gameTimeMs - tower.lastTargetTime > Tower.SLEEP_DELAY) {
+          tower.isSleeping = true;
+        }
+        continue;
+      }
+
+      tower.lastTargetTime = gameTimeMs;
+      tower.isSleeping = false;
+
+      if (!tower.combat.canFire()) continue;
+      // The periodic line-of-sight recheck the other towers run before they
+      // fire: findTarget keeps a target without asking again, so the bolt went
+      // on into the alley the enemy had walked into (TODO E43). No turret to
+      // turn, so the bolt goes to the new target at once.
+      if (tower.needsLosRecheck(gameTimeMs)) {
+        tower.markLosChecked(gameTimeMs);
+        if (!losCheck(target)) {
+          tower.clearTarget();
+          target = tower.findTarget(candidates, airTargeting, losCheck, this.bodyDistSq);
+          if (!target) continue;
+        }
+      }
+      tower.combat.fire();
+
+      // Build chain hit list: primary + up to maxJumps additional unique targets
+      const maxJumps = tower.typeConfig.maxJumps ?? 0;
+      const jumpRange = tower.typeConfig.jumpRange ?? 15;
+      const hits: Enemy[] = [target];
+      const hitIds = new Set<string>([target.id]);
+      // Where the bolt is: a body's aim point, so a jump off it starts there
+      const first = this.targetPoint(target);
+      const at = { lat: first.lat, lon: first.lon };
+
+      for (let i = 0; i < maxJumps; i++) {
+        const next = this.findNearestUnhit(at, candidates, hitIds, jumpRange, losCheck);
+        if (!next) break;
+        hits.push(next);
+        hitIds.add(next.id);
+        const p = this.targetPoint(next);
+        at.lat = p.lat;
+        at.lon = p.lon;
+      }
+
+      // Apply damage with falloff per jump
+      const falloff = tower.typeConfig.chainFalloff ?? 1.0;
+      const baseDamage = tower.combat.damage;
+      const damageType = tower.typeConfig.damageType;
+      for (let i = 0; i < hits.length; i++) {
+        const dmg = baseDamage * DetMath.pow(falloff, i);
+        // A body's hit goes on the aim point the bolt strikes
+        if (hits[i].body) this.bodyAim.aim(hits[i], this._aimPoint);
+        this.combatEffectService.applyChainDamage(hits[i], dmg, damageType, tower.id);
+      }
+
+      // The bolt through the hits; the main thread starts it at the tower's tip
+      this.sink.main.chainLightning(tower.id, hits.map((hit) => opVec(this.aimLocalPosition(hit))));
+    }
+  }
+
+  /**
+   * Find the nearest enemy (in flat-earth meters) to `from` that has not been
+   * hit yet by the current chain and is within `maxDist` meters. A body along
+   * the route counts at the tower's aim point on it. Returns null if no
+   * candidate qualifies.
+   *
+   * `losCheck` is the tower's sight by the enemy's kind: the candidates come
+   * from every cell the tower sees on the ground OR in the air, so without
+   * it a bolt jumped to a ground enemy in an alley under open sky (TODO E43).
+   */
+  private findNearestUnhit(
+    from: { lat: number; lon: number },
+    candidates: Enemy[],
+    hitIds: Set<string>,
+    maxDist: number,
+    losCheck?: (enemy: Enemy) => boolean,
+  ): Enemy | null {
+    const mPerDegLat = METERS_PER_DEGREE_LAT;
+    const mPerDegLon = METERS_PER_DEGREE_LAT * DetMath.cos(from.lat * DEG_TO_RAD);
+    let best: Enemy | null = null;
+    let bestSq = maxDist * maxDist;
+    for (const e of candidates) {
+      // A camouflaged enemy no scout sees is no jump target, as it is no target (Enemy.hidden)
+      if (hitIds.has(e.id) || !e.alive || e.hidden) continue;
+      // A body the tower has no point of in range and sight is not jumped to
+      let p: { lat: number; lon: number } = e.position;
+      if (e.body) {
+        if (!this.bodyAim.aim(e, this._aimPoint)) continue;
+        p = this._aimPoint;
+      }
+      const dx = (p.lat - from.lat) * mPerDegLat;
+      const dy = (p.lon - from.lon) * mPerDegLon;
+      const dSq = dx * dx + dy * dy;
+      // Sight last: it costs a lookup, the distance rules most out first
+      if (dSq < bestSq && (e.body || !losCheck || losCheck(e))) {
+        bestSq = dSq;
+        best = e;
+      }
+    }
+    return best;
+  }
+}

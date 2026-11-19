@@ -1,0 +1,44 @@
+/* The anchor, top right of the map, under the compass (12px from the top,
+   88px high) and under the build chip of the loading screen. The chip hangs
+   in the CDK overlay from here, above the loading screen, the game over
+   overlay and every dialog: a restart may be the way out of an error. */
+:host {
+  position: absolute;
+  top: 112px;
+  right: 12px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.uh {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 280px;
+  padding: 10px 14px 12px 12px;
+  pointer-events: auto;
+}
+
+.uh-icon {
+  margin-top: 2px;
+  color: var(--td-brass);
+}
+
+.uh-text {
+  gap: var(--td-sp-1);
+}
+
+.uh-notes {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
+.uh-more {
+  list-style: none;
+  margin-left: -16px;
+}
+
+.uh-actions {
+  margin-top: var(--td-sp-1);
+}

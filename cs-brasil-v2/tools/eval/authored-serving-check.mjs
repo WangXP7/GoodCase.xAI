@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+/* ============================================================================
+   authored-serving-check.mjs — O SERVIDOR REAL ENTREGA O QUE O ready PROMETE
+   ----------------------------------------------------------------------------
+   POR QUE EXISTE (achado do DONO, 29/08): public/private-assets/viewmodels é
+   symlink para fora da raiz; o dev server (Astro/Vite) pode devolver 403 após
+   um restart, o loadFamilyGltf cai no legado EM SILÊNCIO e todo mundo julga o
+   viewmodel errado sem saber. O check:vm rodava réguas via serve.mjs (outro
+   servidor) e por isso ficava verde enquanto o navegador do dono tomava 403 —
+   esta régua sobe o ASTRO DE VERDADE e cobra a resposta.
+   SV1 cada arma com portão aberto responde pela URL efetiva do runtime
+       (fábrica, golden ou família), com 200 e > 100 KB;
+   SV2 shared/ (9 texturas + general-runtime) e recoil.json respondem 200;
+   SV3 a família utilitária grenade responde 200;
+   SV4 só arma baked sem runtime:'family' tem GLB próprio (mesma rota de authoredvm.js).
+   Mutante: --mutante=familia-fantasma troca a família presente da granada por um
+   GLB inexistente e TEM que acusar.
+   Uso: node tools/eval/authored-serving-check.mjs [--porta=8163]
+   ============================================================================ */
+import { execSync, spawn } from 'node:child_process';
+import net from 'node:net';
+
+import { VM_FAMILY, VM_LAUNCH, VM_WEAPON } from '../../public/js/data/vmconfig.js';
+import { vmFonteDe } from '../../public/js/authoredvm.js';
+
+const arg = (n) => (process.argv.find((a) => a.startsWith(`--${n}=`)) || '').split('=')[1] || '';
+const MUT = arg('mutante');
+if (MUT && MUT !== 'familia-fantasma') throw new Error(`mutante desconhecido: ${MUT}`);
+// Uma porta fixa pode estar ocupada por Astro de OUTRO worktree. Nesse caso a
+// régua sondava esse servidor, acusava 404 falso e matava o processo que ela
+// tentou subir. Sem --porta explícita, reserve uma porta livre por execução.
+const portaLivre = () => new Promise((resolve, reject) => {
+  const server = net.createServer();
+  server.once('error', reject);
+  server.listen(0, '127.0.0.1', () => {
+    const porta = String(server.address().port);
+    server.close((error) => error ? reject(error) : resolve(porta));
+  });
+});
+const PORTA = arg('porta') || await portaLivre();
+
+// O astro deste repo é instância ÚNICA: se o servidor do dono está de pé, é ELE
+// que a régua sonda (mais fiel — é o servidor onde o defeito morde); sem nenhum
+// vivo, sobe o próprio na porta reserva.
+let BASE = '';
+let srv = null;
+try {
+  const status = execSync('npx astro dev status', { encoding: 'utf8', timeout: 20000 });
+  // `[\d.]+` só casa IP, e o astro anuncia `http://localhost:PORTA`. A régua
+  // ignorava o servidor do dono e tentava subir o dela — mas a instância é ÚNICA,
+  // o segundo não sobe, e TUDO respondia 404: o vermelho parecia defeito de
+  // serving quando era do instrumento.
+  const running = /running at (http:\/\/[\w.-]+:\d+)/.exec(status);
+  if (running) BASE = running[1];
+} catch { /* nenhum servidor vivo */ }
+if (!BASE) {
+  BASE = `http://127.0.0.1:${PORTA}`;
+  srv = spawn('npx', ['astro', 'dev', '--port', PORTA, '--host', '127.0.0.1'], {
+    stdio: 'ignore',
+    env: { ...process.env, PORT: PORTA },
+  });
+  process.on('exit', () => srv?.kill());
+}
+let up = false;
+for (let i = 0; i < 120; i++) {
+  try { if ((await fetch(`${BASE}/`)).ok) { up = true; break; } } catch { /* subindo */ }
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+if (!up) { console.error(`FALHA SV0: nenhum servidor respondeu em ${BASE}`); process.exit(1); }
+console.log(`sondando ${BASE}${srv ? ' (subido pela régua)' : ' (servidor do dono, vivo)'}`);
+
+let failures = 0;
+function check(ok, label, evidence = '') {
+  console.log(`${ok ? 'PASSA' : 'FALHA'} ${label}${evidence ? ` — ${evidence}` : ''}`);
+  if (!ok) failures += 1;
+}
+
+async function head(path, minBytes = 1) {
+  try {
+    const response = await fetch(`${BASE}${path}`, { method: 'HEAD' });
+    const bytes = Number(response.headers.get('content-length') || 0);
+    return { ok: response.status === 200 && bytes >= minBytes, status: response.status, bytes };
+  } catch (error) {
+    return { ok: false, status: String(error), bytes: 0 };
+  }
+}
+
+const armas = Object.keys(VM_WEAPON);
+for (const arma of armas) {
+  const { chave, url } = vmFonteDe(arma);
+  if (!chave && !VM_LAUNCH) { console.log(`N/A   SV1 ${arma}: legado com lançamento desligado`); continue; }
+  const resultado = url ? await head(url, 100 * 1024) : { ok: false, status: 'sem URL', bytes: 0 };
+  check(resultado.ok, `SV1 ${arma} (${chave || 'sem chave'}): GLB efetivo responde 200`,
+    `status ${resultado.status}, ${(resultado.bytes / 1048576).toFixed(1)} MiB`);
+}
+const familia = 'grenade';
+const alvo = MUT === 'familia-fantasma' ? 'fantasma' : familia;
+const granada = await head(`/private-assets/viewmodels/${alvo}/${alvo}-runtime.glb`, 100 * 1024);
+check(VM_FAMILY.grenade.ready === true && granada.ok, 'SV3 grenade: GLB responde 200',
+  `status ${granada.status}, ${(granada.bytes / 1048576).toFixed(1)} MiB`);
+
+// `runtime:'family'` usa o GLB da família mesmo com `baked:true` (authoredvm.js:urlForKey).
+for (const [arma, cfg] of Object.entries(VM_WEAPON)) {
+  if (cfg.baked !== true || cfg.runtime === 'family') continue;
+  const resultado = await head(`/private-assets/viewmodels/${cfg.family}/${arma}-baked-runtime.glb`, 500 * 1024);
+  check(resultado.ok, `SV4 ${arma} (baked): GLB responde 200`,
+    `status ${resultado.status}, ${(resultado.bytes / 1048576).toFixed(1)} MiB`);
+}
+
+const compartilhados = [
+  ['/private-assets/viewmodels/shared/general-runtime.glb', 500 * 1024],
+  ['/private-assets/viewmodels/recoil.json', 10 * 1024],
+  ...['T_Arm01_B', 'T_Arm01_N', 'T_Arm01_ORM', 'T_Cloth01_B', 'T_Cloth01_N', 'T_Cloth01_ORM',
+    'T_Glove01_B', 'T_Glove01_N', 'T_Glove01_ORM']
+    .map((name) => [`/private-assets/viewmodels/shared/${name}.webp`, 1024]),
+];
+for (const [path, minBytes] of compartilhados) {
+  const resultado = await head(path, minBytes);
+  check(resultado.ok, `SV2 ${path.split('/').pop()}: responde 200`, `status ${resultado.status}`);
+}
+
+if (srv) {
+  srv.kill();
+  // Astro sobe um daemon: matar só o processo npx deixa o servidor vivo.
+  try { execSync('npx astro dev stop', { stdio: 'ignore', timeout: 20000 }); } catch { /* já parou */ }
+}
+console.log(JSON.stringify({ mutante: MUT || null, armas: armas.length, failures }, null, 2));
+process.exit(failures ? 1 : 0);

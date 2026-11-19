@@ -1,0 +1,193 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { AUTHORING_SOURCE_WORLD_FRAMES, SOURCE_WORLD_BUILD_OFFSETS, SOURCE_WORLD_FRAMES, SOURCE_WORLD_PART_DEPARTURES,
+  buildOffsetFor, validateSourceWorldFrame } from './source-world-registration.mjs';
+import { VEHICLE_SIZE_FACTORS } from '../src/vehicles/vehicleSizePolicy.ts';
+
+// An owner-directed enlargement changes the entire frozen source frame,
+// including its ground translation. Moving just the mesh scale would drift
+// the source; moving just the candidate would silently invalidate the oracle.
+const originalAriete=JSON.parse(readFileSync(new URL('../docs/history/research/second-wave-registrations/ariete_c1_x.json',import.meta.url),'utf8'));
+const enlargedAriete=JSON.parse(readFileSync(new URL('../docs/history/research/second-wave-registrations/ariete_c1_x-tier10-20260921.json',import.meta.url),'utf8'));
+assert.equal(enlargedAriete.sourceSha256,originalAriete.sourceSha256,'same complete raw source');
+assert.deepEqual(enlargedAriete.axes,originalAriete.axes,'no new orientation fit');
+assert.equal(enlargedAriete.scale,originalAriete.scale*(1.12*1.10),'prescribed uniform enlargement');
+assert.deepEqual(enlargedAriete.translation,originalAriete.translation.map(v=>v*(1.12*1.10)),'ground frame scales with source');
+for(const key of ['includeRoots','exactDuplicateMeshes','omitIslandsBelowY','omitIslandsInside'])
+  assert.equal(enlargedAriete[key],undefined,'enlargement never drops source parts');
+assert.deepEqual(SOURCE_WORLD_FRAMES.c1_ariete.turret,[0,1.306227824,.328028885].map(v=>v*(1.12*1.10)));
+assert.deepEqual(SOURCE_WORLD_FRAMES.c1_ariete.gun,[0,1.651499209,1.3415539].map(v=>v*(1.12*1.10)));
+assert.equal(SOURCE_WORLD_FRAMES.c1_ariete.sha256,'1f33b3966189c876c8e507a57c59def5e6f3a70334d42315e0366911aedb6177');
+
+const certificate=SOURCE_WORLD_FRAMES.leo2a5;
+const frame=()=>({rootMatrix:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  hull:[0,0,0],turret:[...certificate.turret],gun:[...certificate.gun]});
+const sample=()=>({reference:frame(),procedural:frame()});
+const verify=frames=>validateSourceWorldFrame(certificate,certificate.sha256,frames);
+assert.deepEqual(verify(sample()).fixedReg,{dAlong:0,dy:0});
+assert.equal(validateSourceWorldFrame(certificate,'unverified',sample()).passed,false);
+for (const owner of ['reference','procedural']) {
+  for (const anchor of ['hull','turret','gun']) {
+    for (const axis of [0,1,2]) {
+      const frames=sample();frames[owner][anchor][axis]+=.10;
+      const result=verify(frames);
+      assert.equal(result.passed,false,`${owner}/${anchor}/${axis}: real 10 cm shift must fail`);
+      assert.equal(result.fixedReg,undefined,'failed certificates may not supply a fixed transform');
+    }
+  }
+  for (const index of [0,5,10,12,13,14]) {
+    const frames=sample();frames[owner].rootMatrix[index]+=.10;
+    assert.equal(verify(frames).passed,false,'scale/translation must not self-register away');
+  }
+}
+const missing=sample();delete missing.reference.gun;
+assert.equal(verify(missing).passed,false);
+const poisoned=sample();poisoned.procedural.gun[0]=NaN;
+assert.equal(verify(poisoned).passed,false);
+
+// Execute the authoritative page's exact scoring function, not a second copy.
+// Its mask extractor, 96 stations, coverage and 92 floor remain unchanged.
+const html=readFileSync(new URL('./procedural-fidelity.html',import.meta.url),'utf8');
+// Execute the real page selector/normalization branch in both modes. A small
+// outboard marking must not shrink certified structural geometry, while the
+// unverified legacy fleet keeps its existing fit behavior.
+const expression=html.match(/const sourceWorldCertificate = ([^;\n]+);/)?.[1];
+assert.ok(expression,'actual certificate selector exists');
+const select=Function('id','params','SOURCE_WORLD_FRAMES',`return ${expression};`);
+for(const id of Object.keys(SOURCE_WORLD_FRAMES))for(const query of ['', 'geo=1']) {
+  assert.equal(select(id,new URLSearchParams(query),SOURCE_WORLD_FRAMES),SOURCE_WORLD_FRAMES[id],
+    `${id}/${query}: fidelity and geometry use the same verified frame`);
+}
+assert.equal(select('m1a1_abrams_hc',new URLSearchParams(),SOURCE_WORLD_FRAMES),null);
+const fitStart=html.indexOf('if (!preservation && !sourceWorldCertificate) {');
+const fitEnd=html.indexOf('\n}',fitStart)+2;
+assert.ok(fitStart>=0&&fitEnd>fitStart);
+const fit=Function('preservation','sourceWorldCertificate','reference','procedural','safeScale',
+  'targetAnchor','refAnchor','procAnchor',html.slice(fitStart,fitEnd));
+const root=()=>({root:{scale:{value:1,multiplyScalar(n){this.value*=n;}}}});
+for(const certified of [true,false]) {
+  const ref=root(),proc=root();
+  fit(false,certified?SOURCE_WORLD_FRAMES.kf51_panther:null,ref,proc,(target,current)=>target/current,
+    3.5603123,3.5603123,3.56422358396);
+  assert.equal(ref.root.scale.value,1);
+  if(certified)assert.equal(proc.root.scale.value,1,'marking extent cannot rescale verified metre geometry');
+  else assert.ok(proc.root.scale.value<1,'legacy normalization remains unchanged');
+}
+const start=html.indexOf('  const curveScore = ')+21;
+const end=html.indexOf('\n  const sub =',start);
+assert.ok(start>21 && end>start,'authoritative curve scorer must remain discoverable');
+const score=Function(`return (${html.slice(start,end).trim().replace(/;$/,'')});`)();
+const source=Array.from({length:96},(_,i)=>{
+  const x=-1.7+i*.035;
+  return [x,2.5+(x>-.4&&x<1.1?.8:0),1.7+(x>1?.2:0)];
+});
+const fixed={dAlong:0,dy:0};
+assert.equal(score(source,source,3.2,fixed).score,100,'source-self must be exactly 100');
+const vertical=source.map(([x,t,b])=>[x,t+.10,b+.10]);
+assert.ok(score(source,vertical,3.2,fixed).score<92,'real vertical shape displacement must fail');
+const longitudinal=source.map(([x,t,b])=>[x+.10,t,b]);
+assert.ok(score(source,longitudinal,3.2,fixed).score<92,'real longitudinal outline displacement must fail');
+assert.ok(Math.abs(score(source,vertical,3.2).score-100)<1e-10,'legacy translation behavior is preserved');
+assert.equal(SOURCE_WORLD_FRAMES.m1a1_abrams_hc,undefined,'old fleet cannot silently change registration');
+// A declared build offset (the T-80U's ring race, 31235a8c85; SOURCE_WORLD_BUILD_OFFSETS): the build is held to the datums plus the raise,
+// the source's own anchors to the datums; the unraised build and any other move fail (negative controls).
+{
+  const cert=SOURCE_WORLD_FRAMES.t80u,offset=SOURCE_WORLD_BUILD_OFFSETS.t80u,raise=offset[1];
+  assert.ok(raise>0.06&&raise<0.07,'the T-80U build offset is its ring raise');
+  const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  const frames=(lift)=>({reference:{rootMatrix:identity,hull:[0,0,0],turret:[0,0,0],gun:[0,0,0]},
+    procedural:{rootMatrix:identity,hull:[0,0,0],turret:cert.turret.map((v,i)=>i===1?v+lift:v),gun:cert.gun.map((v,i)=>i===1?v+lift:v)}});
+  assert.equal(validateSourceWorldFrame(cert,cert.sha256,frames(raise),offset).passed,true,'the raised build passes');
+  assert.equal(validateSourceWorldFrame(cert,cert.sha256,frames(raise)).passed,false,'without its declared offset it fails');
+  assert.deepEqual(validateSourceWorldFrame(cert,cert.sha256,frames(0),offset).failures,
+    ['procedural: turret differs from the independent source datum','procedural: gun differs from the independent source datum'],
+    'the unraised build fails');
+  assert.equal(validateSourceWorldFrame(cert,cert.sha256,frames(raise+.02),offset).passed,false,'a further 20 mm fails');
+  assert.deepEqual(Object.keys(SOURCE_WORLD_BUILD_OFFSETS),['t80u','t90a_burlak_proto'],'two declared build offsets');
+}
+// The Burlak prototype's composite (267): the T-90A X source's hull under the Burlak X source's turret and gun, ring datum
+// seated on ring datum. Both certificates stay as they were; the composite's datums derive from them, at the owner's 1.05.
+{
+  const host=AUTHORING_SOURCE_WORLD_FRAMES.t90a,donor=AUTHORING_SOURCE_WORLD_FRAMES.t90a_burlak;
+  const composite=AUTHORING_SOURCE_WORLD_FRAMES.t90a_burlak_proto,cert=SOURCE_WORLD_FRAMES.t90a_burlak_proto;
+  const translation=host.turret.map((v,i)=>v-donor.turret[i]);
+  assert.equal(composite.sha256,host.sha256,'the hull source is the certificate the page hashes');
+  assert.deepEqual(composite.turret,host.turret,'the turret turns on the host ring');
+  assert.deepEqual(composite.graft,{sha256:donor.sha256,turret:donor.turret,gun:donor.gun,translation},'graft certified as its own source');
+  assert.deepEqual(composite.gun,donor.gun.map((v,i)=>v+translation[i]),'the grafted trunnion moves with its turret');
+  assert.ok(Math.abs(translation[1]+.0766)<1e-3&&Math.abs(translation[2]+.1186)<1e-3,'the Burlak ring drops 76.6 mm and moves 118.6 mm aft');
+  assert.equal(cert.ownerSizeFactor,VEHICLE_SIZE_FACTORS.t90a_burlak_proto,'the reference is installed at the build size');
+  assert.deepEqual(cert.turret,host.turret.map(v=>v*1.05));
+  const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],offset=SOURCE_WORLD_BUILD_OFFSETS.t90a_burlak_proto;
+  assert.deepEqual(buildOffsetFor(offset,'turret'),[0,0,0],'the turret seats on the certified ring');
+  const gun=buildOffsetFor(offset,'gun');
+  // the prototype's trunnion over the ring: 0.1251 m higher and 0.1351 m further forward than the production Burlak's
+  assert.ok(Math.abs(gun[1]/1.05-.1251)<5e-4&&Math.abs(gun[2]/1.05-.1351)<5e-4&&Math.abs(gun[0]/1.05+.0077)<5e-4,'declared gun departure');
+  const frames=(lift)=>({reference:{rootMatrix:identity,hull:[0,0,0],turret:[...cert.turret],gun:[...cert.gun]},
+    procedural:{rootMatrix:identity,hull:[0,0,0],turret:[...cert.turret],gun:cert.gun.map((v,i)=>v+gun[i]+(i===1?lift:0))}});
+  assert.equal(validateSourceWorldFrame(cert,cert.sha256,frames(0),offset).passed,true,'the declared prototype passes');
+  assert.deepEqual(validateSourceWorldFrame(cert,cert.sha256,frames(0)).failures,
+    ['procedural: gun differs from the independent source datum'],'undeclared, only its gun fails');
+  assert.equal(validateSourceWorldFrame(cert,cert.sha256,frames(.02),offset).passed,false,'a further 20 mm fails');
+  assert.deepEqual(validateSourceWorldFrame(cert,cert.sha256,frames(0),gun).failures,
+    ['procedural: turret differs from the independent source datum'],'one vector moves both pivots: the ring may not move');
+  assert.deepEqual(buildOffsetFor(SOURCE_WORLD_BUILD_OFFSETS.t80u,'gun'),buildOffsetFor(SOURCE_WORLD_BUILD_OFFSETS.t80u,'turret'));
+  assert.deepEqual(buildOffsetFor(undefined,'gun'),[0,0,0]);
+}
+// Declared part departures (267): every row is a certified id's, names one source node, a finite ruled top and the
+// ruling; the T-90A X deck cover and the Burlak prototype's composite (its hull is the same source) share theirs.
+{
+  for (const [id, rows] of Object.entries(SOURCE_WORLD_PART_DEPARTURES)) {
+    assert.ok(SOURCE_WORLD_FRAMES[id], `${id}: a part departure needs a certified source`);
+    for (const row of rows) {
+      assert.ok(typeof row.node === 'string' && row.node && Number.isFinite(row.top) && /owner/.test(row.ruling),
+        `${id}: ${JSON.stringify(row)} names a node, a top and the owner's ruling`);
+    }
+  }
+  assert.deepEqual(Object.keys(SOURCE_WORLD_PART_DEPARTURES), ['t90a', 't90a_burlak_proto']);
+  assert.equal(SOURCE_WORLD_PART_DEPARTURES.t90a[0].node, 'gear222');
+  assert.equal(SOURCE_WORLD_PART_DEPARTURES.t90a[0].top, 1.530, 'the release-240 cover top');
+  assert.equal(SOURCE_WORLD_PART_DEPARTURES.t90a_burlak_proto[0], SOURCE_WORLD_PART_DEPARTURES.t90a[0], 'one row, shared');
+  assert.equal(SOURCE_WORLD_FRAMES.t90a_burlak_proto.sha256, SOURCE_WORLD_FRAMES.t90a.sha256, 'the composite hull is the T-90A X file');
+}
+console.log('source-world-registration: hashes/datums fail closed; exact scorer self100, displaced geometry fails92, legacy preserved');
+
+// Mk3D's source file is already normalized. Preserve the measured source
+// datums and expose only this missing evaluator row, never all WEST overrides.
+const mk3Packet=JSON.parse(readFileSync(new URL('../docs/references/tanks/merkava3d_x.source-measurements.json',import.meta.url),'utf8'));
+const mk3=SOURCE_WORLD_FRAMES.merkava3d;
+assert.deepEqual(mk3,{sha256:'68aab556c5202455881862e5beae79fbe6b6dec4cf690ab3f1c73716e3bb3a5c',
+  fused:true,turret:mk3Packet.turretPivotM,gun:mk3Packet.gunAxisM});
+assert.deepEqual(mk3Packet.normalization,{translationM:[0,.02034,.2258175],uniformScale:1,axes:'+Y up, +Z forward'});
+const mk3Sample=()=>({reference:{rootMatrix:frame().rootMatrix,hull:[0,0,0],turret:[0,0,0],gun:[0,0,0]},
+  procedural:{rootMatrix:frame().rootMatrix,hull:[0,0,0],turret:[...mk3Packet.turretPivotM],gun:[...mk3Packet.gunAxisM]}});
+const mk3Verify=f=>validateSourceWorldFrame(mk3,mk3.sha256,f);
+assert.equal(mk3Verify(mk3Sample()).passed,true,'fused source has no fabricated articulated pivots');
+assert.equal(validateSourceWorldFrame(mk3,'unverified',mk3Sample()).passed,false,'Mk3 source bytes are mandatory');
+for(const owner of ['reference','procedural'])for(const anchor of ['hull','turret','gun']){
+  const f=mk3Sample();f[owner][anchor][2]+=.04;
+  assert.equal(mk3Verify(f).passed,false,`${owner}/${anchor}: real Mk3 shift cannot fit itself away`);
+}
+for(const owner of ['reference','procedural'])for(const index of [0,5,10,12,13,14]){
+  const f=mk3Sample();f[owner].rootMatrix[index]+=.01;
+  assert.equal(mk3Verify(f).passed,false,'No additional scale, centering or ground correction');
+}
+const evaluator=readFileSync(new URL('./visual-evaluator-page.html',import.meta.url),'utf8');
+assert.equal([...evaluator.matchAll(/^  c1_ariete: SECOND_WAVE_X_REFERENCE_OVERRIDES\.c1_ariete,$/gm)].length,1,
+  'the Ariete critic uses the same complete fused source as fidelity');
+const mk3Rows=[...evaluator.matchAll(/^  merkava3d: (.+),$/gm)];assert.equal(mk3Rows.length,1,'one explicit Mk3 evaluator route');
+const mk3Route=Function(`return (${mk3Rows[0][1]});`)();
+assert.deepEqual(mk3Route,{source:'glb',qualityBar:'exemplar',glb:{path:'/models/community-candidates/merkava3d_x_source.glb',fixedMount:true,componentMasks:false,paintUntextured:true}});
+assert.ok(!evaluator.includes('WEST_X_REFERENCE_OVERRIDES'),'This registration does not add unrelated WEST routes');
+console.log('Mk3D: pinned independent source datums, fused owner checks, explicit evaluator row and displaced/scaled/hash negatives PASS');
+
+// Owner-prescribed Griffin proportions have their own source-only receipt.
+const griffin=JSON.parse(readFileSync(new URL('../docs/history/research/griffin-proportions-20260921.receipt.json',import.meta.url),'utf8'));
+assert.equal(griffin.inputSha256,'1aef6401c01b5d9a6adfc65838c94d350f4aa39afa039709241c426371ca2003');
+assert.equal(griffin.hullLengthScale,1.1);assert.equal(griffin.turretScale,.9);
+assert.equal(griffin.removedTriangles,0);assert.equal(griffin.candidateGeometryUsed,false);
+assert.equal(griffin.meshes.length,25);
+assert.equal(SOURCE_WORLD_FRAMES.griffin50mm.sha256,griffin.outputSha256);
+assert.deepEqual(SOURCE_WORLD_FRAMES.griffin50mm.turret,[0,2.07,-.396].map(v=>v*.90));
+assert.deepEqual(SOURCE_WORLD_FRAMES.griffin50mm.gun,[0,2.547,.594].map(v=>v*.90));
+assert.equal(SOURCE_WORLD_FRAMES.griffin50mm.ownerSizeFactor,.90,'later whole-vehicle shrink retains earlier body/turret proportions');

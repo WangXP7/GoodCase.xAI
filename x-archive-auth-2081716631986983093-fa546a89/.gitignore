@@ -1,0 +1,18 @@
+node_modules
+dist
+verify
+*.log
+.DS_Store
+
+# Working notes are not part of the shared repository.
+#
+# `context/` holds the handover notes, the deployment runbook, the art-direction
+# critique brief and the original goal file — everything that is about BUILDING
+# this rather than about running it. It stays on disk and out of git.
+#
+# The one document that ships is `prompt.md`: the whole project came out of a
+# single prompt, and that prompt is the thing worth sharing.
+*.md
+!prompt.md
+!README.md
+context/

@@ -1,0 +1,30 @@
+/* The GRAVEYARD SHIFT wordmark (src/ui/wordmark.js builds it; the same markup works as plain HTML).
+   Two faces nothing else in the UI uses: a heavy slab for GRAVEYARD, a neon-tube script for Shift, with the
+   Nightjar canopy band (teal over a cream pinstripe, the bird at its end) between them.
+   Self-contained: every colour and stack has a fallback, so a bundle without ui.css (the loading screen) can use it.
+   Variables: --wm-size (type size of the GRAVEYARD line; everything else is in em), --wm-font-a, --wm-font-b,
+   --wm-ink, --wm-accent (tube glow), --wm-core (tube core), --wm-band, --wm-band-line, --wm-scale-b, --wm-tilt. */
+/* If Google Fonts is blocked, GRAVEYARD falls back to the boldest slab or serif the device has (a regular-weight
+   Rockwell or Georgia would read thin; Alfa Slab One has one weight, so asking for bold would smear it). */
+@font-face { font-family: 'GS Slab Fallback'; font-weight: 400; src: local('Rockwell Extra Bold'), local('Rockwell-ExtraBold'), local('Rockwell-Bold'), local('Rockwell Bold'), local('RobotoSlab-Bold'), local('Roboto Slab Bold'), local('Georgia-Bold'), local('Georgia Bold'), local('NotoSerif-Bold'), local('Noto Serif Bold'); }
+.gs-wm {
+  --wm-font-a: 'Alfa Slab One', 'GS Slab Fallback', Rockwell, Georgia, serif;
+  --wm-font-b: 'Yellowtail', 'Brush Script MT', 'Segoe Script', 'Snell Roundhand', 'Savoye LET', Georgia, serif;
+  --wm-ink: var(--ink, #ece6d6); --wm-accent: var(--accent, #ff4a3d); --wm-core: #fff0ec;
+  --wm-band: var(--teal, #17877d); --wm-band-line: var(--ink, #ece6d6);
+  --wm-scale-b: 2.05; --wm-tilt: -5deg;
+  margin: 0; display: inline-flex; flex-direction: column; align-items: flex-start; align-self: flex-start; width: max-content; max-width: 100%;
+  font-size: var(--wm-size, 64px); line-height: .9; white-space: nowrap;
+}
+.gs-wm-a { font-family: var(--wm-font-a); font-weight: 400; font-size: 1em; letter-spacing: .035em; text-transform: uppercase; color: var(--wm-ink);
+  text-shadow: 0 .035em 0 rgba(0, 0, 0, .6), 0 0 .45em rgba(0, 0, 0, .55); }
+.gs-wm-band { position: relative; display: block; align-self: stretch; height: .15em; margin: .13em 0 0; border-radius: .02em;
+  background: linear-gradient(to bottom, var(--wm-band) 0 60%, transparent 60% 74%, var(--wm-band-line) 74% 100%);
+  box-shadow: 0 0 .5em rgba(31, 165, 150, .3); }
+.gs-wm-bird { position: absolute; left: calc(100% + .1em); bottom: 10%; height: .34em; width: auto; overflow: visible; fill: var(--wm-band-line); filter: drop-shadow(0 .02em .04em rgba(0, 0, 0, .8)); }
+.gs-wm-b { font-family: var(--wm-font-b); font-weight: 400; font-size: calc(var(--wm-scale-b) * 1em); line-height: 1; letter-spacing: .01em;
+  margin: -.06em 0 0 .12em; padding: 0 .12em .06em 0; transform: rotate(var(--wm-tilt)); transform-origin: 0 60%; color: var(--wm-core);
+  text-shadow: 0 0 .03em #fff, 0 0 .1em var(--wm-accent), 0 0 .28em var(--wm-accent), 0 0 .7em color-mix(in srgb, var(--wm-accent) 55%, transparent), 0 .05em .12em rgba(0, 0, 0, .6);
+  animation: gs-wm-flicker 8s steps(1) infinite; }
+@keyframes gs-wm-flicker { 0%, 91%, 93%, 94.5%, 100% { opacity: 1; } 92% { opacity: .5; } 94% { opacity: .82; } 97% { opacity: .7; } 97.4% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .gs-wm-b { animation: none; } }

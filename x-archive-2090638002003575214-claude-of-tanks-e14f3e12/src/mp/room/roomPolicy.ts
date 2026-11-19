@@ -1,0 +1,710 @@
+import { planRoomBots, type RoomTeamNations } from './roomBots.ts';
+/**
+ * Room policy: the pure state machine every room host runs (charter §5).
+ * It encodes the first multiplayer's lobby rules (auto-balanced teams,
+ * capacity, readiness resets, co-op modes on Alpha, unique names, start
+ * gating, bot fill) with the v2 caps — 14 per side, 8 spectators — and with
+ * the host binding replaced by an admin role that migrates to the most senior
+ * connected seat. No transport, no clock reads, no randomness: callers pass
+ * timestamps and seeds in, so the Durable Object, the LAN service and the
+ * receipts drive the same code.
+ */
+import { BATTLE_MODE_IDS, normalizeGameMode } from '../../sim/matchModes.ts';
+import type { SerializedLobby } from './lobbyShape.ts';
+import { normalizeTeamArrangement, roomSizeRulesFor, type TeamArrangement } from '../../sim/matchRuleset.ts';
+import { resolveMapId } from '../../world/maps/mapIds.ts';
+import {
+  ROOM_CAMO_RE, ROOM_CAMPAIGN_RE, ROOM_CODE_RE, ROOM_DEV_MAX_TEAM_SIZE, ROOM_MAP_RE, ROOM_MAX_SEATS, ROOM_MAX_SPECTATORS,
+  ROOM_MAX_TEAM_SIZE, ROOM_MIN_TEAM_SIZE, ROOM_PROTOCOL_VERSION, ROOM_SPEC_RE, RoomError, cleanConsumables, cleanEquipment, cleanId, cleanSeatId, isRecord,
+  isRoomTeam, noElection, normalizePlayerName,
+} from './protocol.ts';
+import type {
+  RoomCreateSettings, RoomHostInfo, RoomLastResult, RoomMatchInfo, RoomMode, RoomPlayer, RoomResult, RoomSelection, RoomSettings,
+  RoomSnapshot, RoomTeam,
+} from './protocol.ts';
+
+// rooms host the battle modes only: a practice mode (the proving ground) is solo by definition (sim/matchModes.ts)
+const GAME_MODE_SET: ReadonlySet<string> = new Set(BATTLE_MODE_IDS);
+/** The battle mode a room plays for a requested id: an unknown or practice id falls back to Standard. */
+function roomGameMode(value: unknown) {
+  const gameMode = normalizeGameMode(value);
+  return GAME_MODE_SET.has(gameMode) ? gameMode : 'standard';
+}
+
+/** Cooperative modes: every human deploys on Alpha against authority-held defenders (the mode's room rules, matchRuleset.ts). */
+export function isCoopGameMode(gameMode: string | null | undefined): boolean {
+  return roomSizeRulesFor(gameMode).sides === 'coop';
+}
+
+export interface RoomPolicyGuards {
+  isVehicleAllowed(specId: string, player: RoomPlayer, room: RoomSnapshot): boolean;
+  isCamoAllowed(camo: string, player: RoomPlayer, room: RoomSnapshot): boolean;
+  isMapAllowed(mapId: string, room: RoomSnapshot): boolean;
+  /**
+   * (mp-scale-251) A team size past the mode's own (its room rules, matchRuleset.ts), up to ROOM_DEV_MAX_TEAM_SIZE: the
+   * LAN service's dev override for bot-filled test rooms (COT_ROOM_DEV_MAX_TEAM_SIZE). Versus modes only. The rooms
+   * Worker never sets it.
+   */
+  maxTeamSize?: number;
+}
+
+const OPEN_GUARDS: RoomPolicyGuards = {
+  isVehicleAllowed: () => true,
+  isCamoAllowed: () => true,
+  isMapAllowed: () => true,
+};
+
+/** The largest team the room may set in `gameMode`: the mode's rule, or the dev override's (never past ROOM_DEV_MAX_TEAM_SIZE). */
+function maxTeamSizeFor(gameMode: string, guards: Partial<RoomPolicyGuards>): number {
+  const rules = roomSizeRulesFor(gameMode);
+  const override = guards.maxTeamSize;
+  return rules.sides === 'versus' && Number.isInteger(override) && override! > rules.maxTeamSize
+    ? Math.min(ROOM_DEV_MAX_TEAM_SIZE, override!) : rules.maxTeamSize;
+}
+
+export interface CreateRoomOptions {
+  roomCode: string;
+  mode: RoomMode;
+  creator: { id: string; name: string };
+  selection?: Partial<RoomSelection> | null;
+  settings?: RoomCreateSettings | null;
+  /** Where this room's matches run (the host's `MatchHost.transport`); peer-to-peer by default. */
+  hostTransport?: RoomHostInfo['transport'];
+  /** The guards' `maxTeamSize` (the LAN dev override seats more than ROOM_MAX_TEAM_SIZE). */
+  maxTeamSize?: number;
+  now: number;
+}
+
+export interface JoinRoomOptions {
+  player: { id: string; name: string };
+  selection?: Partial<RoomSelection> | null;
+  team?: RoomTeam | null;
+  now: number;
+}
+
+/** A start plan: what the match host receives. Bots fill empty slots; disconnected seats are excluded. */
+export interface RoomStartPlan {
+  seats: Array<{ seat: number; playerId: string; name: string; team: RoomTeam; specId: string; equipment: string[]; consumables: string[]; camo: string }>;
+  bots: Array<{ playerId: string; name: string; team: 'alpha' | 'bravo'; specId: string }>;
+  mapId: string;
+  gameMode: string;
+  seed: number;
+  round: number;
+  /** TEAM NATIONS: the countries the bots were seated from and the fills (room/roomBots.ts). */
+  teamNations?: RoomTeamNations;
+}
+
+function cleanName(value: unknown): string {
+  const name = normalizePlayerName(value);
+  if (!name) throw new RoomError('invalid_name');
+  return name;
+}
+
+function uniqueName(room: RoomSnapshot, requested: string, excludingId: string | null): string {
+  const taken = new Set(room.players.filter((player) => player.id !== excludingId)
+    .map((player) => player.name.toLocaleLowerCase('en-US')));
+  if (!taken.has(requested.toLocaleLowerCase('en-US'))) return requested;
+  for (let number = 2; number < 1000; number++) {
+    const suffix = ` ${number}`;
+    const candidate = `${requested.slice(0, 24 - suffix.length)}${suffix}`;
+    if (!taken.has(candidate.toLocaleLowerCase('en-US'))) return candidate;
+  }
+  throw new RoomError('invalid_name', 'player name space is exhausted');
+}
+
+function cleanSpecId(value: unknown): string {
+  const id = String(value ?? '').trim();
+  if (!ROOM_SPEC_RE.test(id)) throw new RoomError('invalid_vehicle');
+  return id;
+}
+
+function cleanCamo(value: unknown): string {
+  const id = String(value ?? 'factory').trim() || 'factory';
+  if (!ROOM_CAMO_RE.test(id)) throw new RoomError('invalid_camo');
+  return id;
+}
+
+function cleanMap(value: unknown): string {
+  const id = String(value ?? 'random').trim() || 'random';
+  if (!ROOM_MAP_RE.test(id)) throw new RoomError('map_not_allowed');
+  return id;
+}
+
+function cleanTeamSize(value: unknown, maxTeamSize: number = ROOM_MAX_TEAM_SIZE): number {
+  const size = Number(value);
+  if (!Number.isInteger(size) || size < ROOM_MIN_TEAM_SIZE || size > maxTeamSize) throw new RoomError('invalid_team_size');
+  return size;
+}
+
+function readArrangement(value: unknown): TeamArrangement | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) throw new RoomError('invalid_arrangement');
+  const pick = (key: string): number | string | null => {
+    const field = value[key];
+    return field === undefined || field === null ? null : typeof field === 'number' || typeof field === 'string' ? field : null;
+  };
+  return {
+    allies: pick('allies') as number | null, enemies: pick('enemies') as number | null,
+    scoreTarget: pick('scoreTarget') as number | null, respawnS: pick('respawnS') as number | null,
+    waveStep: pick('waveStep') as number | null, holdS: pick('holdS') as number | null,
+    waveSize: pick('waveSize') as number | null, enemyNation: pick('enemyNation') as string | null,
+    juggernautRole: pick('juggernautRole') as TeamArrangement['juggernautRole'],
+    marsGravity: pick('marsGravity') as TeamArrangement['marsGravity'], marsCaches: pick('marsCaches') as TeamArrangement['marsCaches'],
+    // TEAM NATIONS (gameplay-modes-228): the host's choice rides the arrangement (normalize keeps only 'random')
+    teamNations: pick('teamNations') as TeamArrangement['teamNations'],
+  };
+}
+
+export function activePlayers(room: RoomSnapshot): RoomPlayer[] {
+  return room.players.filter((player) => player.team !== 'spectator');
+}
+
+export function countTeam(room: RoomSnapshot, team: RoomTeam, excluding: string | null = null): number {
+  let count = 0;
+  for (const player of room.players) if (player.id !== excluding && player.team === team) count++;
+  return count;
+}
+
+export function requirePlayer(room: RoomSnapshot, playerId: string): RoomPlayer {
+  const player = room.players.find((entry) => entry.id === playerId);
+  if (!player) throw new RoomError('unknown_player');
+  return player;
+}
+
+function assertWaiting(room: RoomSnapshot): void {
+  if (room.phase !== 'waiting') throw new RoomError('lobby_locked', 'the room is starting or playing');
+}
+
+function assertAdmin(room: RoomSnapshot, playerId: string): void {
+  if (room.adminId !== playerId) throw new RoomError('admin_only');
+}
+
+function assertEditable(player: RoomPlayer): void {
+  if (player.ready) throw new RoomError('vehicle_locked', 'unready before changing your vehicle or team');
+}
+
+/**
+ * Whether the room refuses a fresh join now (audit M2, 2026-11-02): the admin's `set_locked` switch (`adminLocked`), or
+ * a round that is starting or playing (its roster is frozen). The two used to share `settings.locked`, which the match
+ * lifecycle cleared at every match end and aborted start — an admin-locked room unlocked itself after each round.
+ */
+export function joinLocked(room: RoomSnapshot): boolean {
+  return room.settings.adminLocked === true || room.phase !== 'waiting';
+}
+
+function touch(room: RoomSnapshot, now: number): RoomSnapshot {
+  room.revision++;
+  room.touchedAt = Math.max(room.touchedAt, now);
+  // the wire's `locked` stays what every reader knew it as (no fresh join now), derived here and nowhere else
+  room.settings.locked = joinLocked(room);
+  return room;
+}
+
+function resetReadiness(room: RoomSnapshot): void {
+  for (const player of room.players) player.ready = false;
+}
+
+function nextSeat(room: RoomSnapshot): number {
+  const used = new Set(room.players.map((player) => player.seat));
+  for (let seat = 0; seat < ROOM_MAX_SEATS; seat++) if (!used.has(seat)) return seat;
+  throw new RoomError('room_full');
+}
+
+function nextJoinOrdinal(room: RoomSnapshot): number {
+  let max = -1;
+  for (const player of room.players) if (player.joinedAt > max) max = player.joinedAt;
+  return max + 1;
+}
+
+/** The lighter team, Alpha on ties; co-op modes always Alpha. */
+export function autoTeam(room: RoomSnapshot): 'alpha' | 'bravo' {
+  if (isCoopGameMode(room.settings.gameMode)) return 'alpha';
+  return countTeam(room, 'alpha') <= countTeam(room, 'bravo') ? 'alpha' : 'bravo';
+}
+
+function teamCapacity(room: RoomSnapshot, team: RoomTeam): number {
+  if (team === 'spectator') return room.settings.maxSpectators;
+  return roomSizeRulesFor(room.settings.gameMode).maxHumans ?? room.settings.teamSize;
+}
+
+function resolveJoinTeam(room: RoomSnapshot, requested: RoomTeam): RoomTeam {
+  if (requested === 'spectator') {
+    if (countTeam(room, 'spectator') >= room.settings.maxSpectators) throw new RoomError('spectators_full');
+    return 'spectator';
+  }
+  const active = activePlayers(room).length;
+  const rules = roomSizeRulesFor(room.settings.gameMode);
+  if (rules.sides === 'coop') {
+    if (active >= (rules.maxHumans ?? rules.maxTeamSize)) throw new RoomError('coop_capacity');
+    room.settings.teamSize = Math.max(room.settings.teamSize, Math.min(rules.maxTeamSize, active + 1));
+    return 'alpha';
+  }
+  if (active >= room.settings.teamSize * 2) throw new RoomError('room_full');
+  const target = countTeam(room, requested) >= room.settings.teamSize ? autoTeam(room) : requested;
+  if (countTeam(room, target) >= room.settings.teamSize) throw new RoomError('team_full');
+  return target;
+}
+
+function createPlayer(room: RoomSnapshot, {
+  id, name, team, selection, isAdmin, now,
+}: { id: string; name: string; team: RoomTeam; selection: Partial<RoomSelection> | null | undefined; isAdmin: boolean; now: number }): RoomPlayer {
+  void now;
+  return {
+    id,
+    name,
+    team,
+    seat: nextSeat(room),
+    specId: selection?.specId ? cleanSpecId(selection.specId) : null,
+    equipment: cleanEquipment(selection?.equipment),
+    consumables: cleanConsumables(selection?.consumables),
+    camo: cleanCamo(selection?.camo),
+    ready: false,
+    connected: true,
+    isAdmin,
+    joinedAt: nextJoinOrdinal(room),
+    hostDeclined: false,
+  };
+}
+
+export function defaultRoomSettings(settings: RoomCreateSettings | null | undefined, maxTeamSize?: number): RoomSettings {
+  const gameMode = roomGameMode(settings?.gameMode);
+  const rules = roomSizeRulesFor(gameMode);
+  // the mode's largest, or the host's guard (a versus room: the LAN dev override)
+  const limit = maxTeamSizeFor(gameMode, maxTeamSize === undefined ? {} : { maxTeamSize });
+  const teamSize = settings?.teamSize == null ? rules.defaultTeamSize : cleanTeamSize(settings.teamSize, Math.max(ROOM_MAX_TEAM_SIZE, limit));
+  const maxSpectators = settings?.maxSpectators == null ? ROOM_MAX_SPECTATORS : Number(settings.maxSpectators);
+  if (!Number.isInteger(maxSpectators) || maxSpectators < 0 || maxSpectators > ROOM_MAX_SPECTATORS) throw new RoomError('invalid_payload', 'maxSpectators');
+  return {
+    gameMode,
+    mapId: cleanMap(settings?.mapId),
+    teamSize: Math.min(teamSize, limit),
+    maxSpectators,
+    botsFill: settings?.botsFill == null ? true : !!settings.botsFill,
+    allowTeamSwitch: settings?.allowTeamSwitch == null ? true : !!settings.allowTeamSwitch,
+    locked: false,
+    arrangement: normalizeTeamArrangement(gameMode, readArrangement(settings?.arrangement)),
+    campaignOperationId: typeof settings?.campaignOperationId === 'string' && ROOM_CAMPAIGN_RE.test(settings.campaignOperationId)
+      ? settings.campaignOperationId : null,
+  };
+}
+
+/** A new room: the creator is the admin and the first (Alpha) seat; no host is elected before the first start. */
+export function createRoom({ roomCode, mode, creator, selection, settings, hostTransport = 'p2p', maxTeamSize, now }: CreateRoomOptions): RoomSnapshot {
+  if (!ROOM_CODE_RE.test(roomCode)) throw new RoomError('invalid_room_code');
+  if (mode !== 'private' && mode !== 'lan') throw new RoomError('invalid_payload', 'mode');
+  const id = cleanSeatId(creator.id);
+  const room: RoomSnapshot = {
+    v: ROOM_PROTOCOL_VERSION,
+    roomCode,
+    mode,
+    phase: 'waiting',
+    adminId: id,
+    revision: 0,
+    round: 0,
+    settings: defaultRoomSettings(settings, maxTeamSize),
+    players: [],
+    match: null,
+    lastResult: null,
+    host: noElection(now, hostTransport),
+    createdAt: now,
+    touchedAt: now,
+  };
+  room.players.push(createPlayer(room, { id, name: cleanName(creator.name), team: 'alpha', selection, isAdmin: true, now }));
+  return room;
+}
+
+/** Seat a new player (auto-balanced unless a team is requested and has room). */
+export function joinRoom(room: RoomSnapshot, { player, selection, team, now }: JoinRoomOptions): RoomPlayer {
+  if (joinLocked(room)) throw new RoomError('room_locked');
+  const id = cleanSeatId(player.id);
+  if (room.players.some((entry) => entry.id === id)) throw new RoomError('already_joined');
+  const requested: RoomTeam = isCoopGameMode(room.settings.gameMode) ? 'alpha' : (team && isRoomTeam(team) ? team : autoTeam(room));
+  const target = resolveJoinTeam(room, requested);
+  if (room.players.length >= ROOM_MAX_SEATS) throw new RoomError('room_full');
+  // 2026-09-30 (the lifecycle proofs): a room every seat has left keeps its code for the idle TTL, and the next seat
+  // to join owns it — the departed creator's id stayed admin before, so no joiner's snapshot validated (`readRoomSnapshot`
+  // requires the admin among the players) and the code was dead until it expired.
+  const first = room.players.length === 0;
+  const seated = createPlayer(room, {
+    id, name: uniqueName(room, cleanName(player.name), null), team: target, selection, isAdmin: first, now,
+  });
+  room.players.push(seated);
+  if (first) room.adminId = seated.id;
+  touch(room, now);
+  return seated;
+}
+
+/** The most senior connected seat, else the most senior seat of all; null in an empty room. */
+export function seniorPlayer(room: RoomSnapshot, excluding: string | null = null): RoomPlayer | null {
+  let best: RoomPlayer | null = null;
+  let bestConnected: RoomPlayer | null = null;
+  for (const player of room.players) {
+    if (player.id === excluding) continue;
+    if (!best || player.joinedAt < best.joinedAt) best = player;
+    if (player.connected && (!bestConnected || player.joinedAt < bestConnected.joinedAt)) bestConnected = player;
+  }
+  return bestConnected ?? best;
+}
+
+/** Hand the admin role to `next` (idempotent). Returns true when the admin changed. */
+export function assignAdmin(room: RoomSnapshot, next: RoomPlayer | null, now: number): boolean {
+  if (!next || room.adminId === next.id) return false;
+  for (const player of room.players) player.isAdmin = player.id === next.id;
+  room.adminId = next.id;
+  touch(room, now);
+  return true;
+}
+
+/** Explicit leave (or kick): the seat goes; an admin seat migrates at once. */
+export function removePlayer(room: RoomSnapshot, playerId: string, now: number): boolean {
+  const index = room.players.findIndex((player) => player.id === playerId);
+  if (index < 0) return false;
+  const [gone] = room.players.splice(index, 1);
+  if (gone && gone.isAdmin) assignAdmin(room, seniorPlayer(room), now);
+  touch(room, now);
+  return true;
+}
+
+/** Socket presence. A disconnected seat loses its readiness so it cannot hold a start hostage. */
+export function setPlayerConnected(room: RoomSnapshot, playerId: string, connected: boolean, now: number): boolean {
+  const player = requirePlayer(room, playerId);
+  if (player.connected === connected) return false;
+  player.connected = connected;
+  if (!connected && room.phase === 'waiting') player.ready = false;
+  touch(room, now);
+  return true;
+}
+
+/** The admin's socket has been gone longer than the grace: migrate to the most senior connected seat. */
+export function migrateAdminIfAbsent(room: RoomSnapshot, now: number): boolean {
+  const admin = room.players.find((player) => player.id === room.adminId);
+  if (!admin || admin.connected) return false;
+  const next = seniorPlayer(room, admin.id);
+  if (!next || !next.connected) return false;
+  return assignAdmin(room, next, now);
+}
+
+/** Commands a seated player may send (the admin ones check the role). */
+export interface RoomCommand extends Record<string, unknown> {
+  type?: unknown;
+}
+
+function applyTeam(room: RoomSnapshot, actor: RoomPlayer, target: RoomPlayer, team: unknown, byAdmin: boolean): void {
+  if (!isRoomTeam(team)) throw new RoomError('invalid_team');
+  if (!byAdmin) {
+    assertEditable(target);
+    if (!room.settings.allowTeamSwitch && !actor.isAdmin) throw new RoomError('team_switch_disabled');
+  }
+  if (isCoopGameMode(room.settings.gameMode) && team === 'bravo') throw new RoomError('cooperative_team');
+  if (team !== target.team && countTeam(room, team, target.id) >= teamCapacity(room, team)) {
+    throw new RoomError(team === 'spectator' ? 'spectators_full' : 'team_full');
+  }
+  target.team = team;
+  target.ready = false;
+}
+
+/**
+ * Apply one validated command. Policy is centralized here so the Durable
+ * Object, the LAN service and the loopback receipts cannot disagree.
+ */
+export function applyRoomCommand(
+  room: RoomSnapshot,
+  playerId: string,
+  raw: unknown,
+  now: number,
+  guards: Partial<RoomPolicyGuards> = {},
+): RoomSnapshot {
+  const { isVehicleAllowed, isCamoAllowed, isMapAllowed } = { ...OPEN_GUARDS, ...guards };
+  if (!isRecord(raw)) throw new RoomError('invalid_command');
+  const command: RoomCommand = raw;
+  const id = cleanId(playerId);
+  const player = requirePlayer(room, id);
+  const type = String(command.type ?? '');
+  // A finished match returns the room to `waiting`; only `start` is refused while one runs. A host preference may
+  // change at any time (the actor migrates a running p2p host that declines).
+  if (type !== 'set_name' && type !== 'kick' && type !== 'host_decline') assertWaiting(room);
+  switch (type) {
+    case 'set_name':
+      player.name = uniqueName(room, cleanName(command.name), id);
+      break;
+    case 'host_decline':
+      // `unable` (2026-09-30) is the actor's concern — a running host that cannot host at all with nobody left ends the match
+      if (typeof command.declined !== 'boolean' || (command.unable !== undefined && typeof command.unable !== 'boolean')) throw new RoomError('invalid_command');
+      player.hostDeclined = command.declined;
+      break;
+    case 'select_vehicle': {
+      assertEditable(player);
+      const specId = cleanSpecId(command.specId);
+      if (!isVehicleAllowed(specId, player, room)) throw new RoomError('vehicle_not_allowed');
+      player.specId = specId;
+      player.ready = false;
+      break;
+    }
+    case 'select_equipment':
+      assertEditable(player);
+      player.equipment = cleanEquipment(command.equipment);
+      // the consumables ride the same command (2026-10-26): an older client sends none and keeps what it had
+      if (Array.isArray(command.consumables)) player.consumables = cleanConsumables(command.consumables);
+      player.ready = false;
+      break;
+    case 'select_camo': {
+      assertEditable(player);
+      const camo = cleanCamo(command.camo);
+      if (!isCamoAllowed(camo, player, room)) throw new RoomError('camo_not_allowed');
+      player.camo = camo;
+      player.ready = false;
+      break;
+    }
+    case 'set_ready':
+      if (player.team !== 'spectator' && !player.specId) throw new RoomError('vehicle_required');
+      player.ready = !!command.ready;
+      break;
+    case 'set_team':
+      applyTeam(room, player, player, command.team, false);
+      break;
+    case 'move_player': {
+      assertAdmin(room, id);
+      const target = requirePlayer(room, cleanId(command.playerId, 'unknown_player'));
+      applyTeam(room, player, target, command.team, true);
+      break;
+    }
+    case 'kick': {
+      assertAdmin(room, id);
+      const target = cleanId(command.playerId, 'unknown_player');
+      if (target === id) throw new RoomError('invalid_command', 'the admin cannot kick itself');
+      if (!removePlayer(room, target, now)) throw new RoomError('unknown_player');
+      return room;
+    }
+    case 'set_game_mode': {
+      assertAdmin(room, id);
+      const gameMode = normalizeGameMode(command.gameMode);
+      if (!GAME_MODE_SET.has(gameMode)) throw new RoomError('invalid_command');
+      const rules = roomSizeRulesFor(gameMode);
+      if (rules.sides === 'coop') {
+        const active = activePlayers(room);
+        if (active.length > (rules.maxHumans ?? rules.maxTeamSize)) throw new RoomError('coop_capacity');
+        room.settings.teamSize = Math.max(1, Math.min(rules.maxTeamSize, Math.max(room.settings.teamSize, active.length)));
+        for (const entry of active) entry.team = 'alpha';
+      } else if (room.settings.teamSize > maxTeamSizeFor(gameMode, guards)) {
+        room.settings.teamSize = maxTeamSizeFor(gameMode, guards);
+      }
+      // a new mode drops the old mode's arrangement but keeps the host's TEAM NATIONS choice (it is no mode's setting)
+      if (gameMode !== room.settings.gameMode) {
+        const teamNations = room.settings.arrangement?.teamNations ?? null;
+        room.settings.arrangement = teamNations ? normalizeTeamArrangement(gameMode, { teamNations }) : null;
+      }
+      if (gameMode !== 'frontline_assault') room.settings.campaignOperationId = null;
+      room.settings.gameMode = gameMode;
+      resetReadiness(room);
+      break;
+    }
+    case 'set_team_size': {
+      assertAdmin(room, id);
+      // a co-op room takes any legal size and seats up to its mode's; a versus room up to its mode's (or the host guard's)
+      const rules = roomSizeRulesFor(room.settings.gameMode);
+      const size = cleanTeamSize(command.teamSize, rules.sides === 'coop' ? ROOM_MAX_TEAM_SIZE : maxTeamSizeFor(room.settings.gameMode, guards));
+      if (countTeam(room, 'alpha') > size || countTeam(room, 'bravo') > size) throw new RoomError('team_size_too_small');
+      room.settings.teamSize = rules.sides === 'coop' ? Math.min(size, rules.maxTeamSize) : size;
+      resetReadiness(room);
+      break;
+    }
+    case 'set_spectators': {
+      assertAdmin(room, id);
+      const max = Number(command.maxSpectators);
+      if (!Number.isInteger(max) || max < 0 || max > ROOM_MAX_SPECTATORS) throw new RoomError('invalid_command');
+      if (countTeam(room, 'spectator') > max) throw new RoomError('spectators_full');
+      room.settings.maxSpectators = max;
+      break;
+    }
+    case 'set_bots_fill':
+      assertAdmin(room, id);
+      room.settings.botsFill = !!command.botsFill;
+      resetReadiness(room);
+      break;
+    case 'set_arrangement':
+      assertAdmin(room, id);
+      room.settings.arrangement = normalizeTeamArrangement(normalizeGameMode(room.settings.gameMode),
+        readArrangement(command.arrangement === undefined ? null : command.arrangement));
+      resetReadiness(room);
+      break;
+    case 'set_campaign_operation': {
+      assertAdmin(room, id);
+      if (room.settings.gameMode !== 'frontline_assault') throw new RoomError('invalid_command');
+      const operation = command.campaignOperationId;
+      if (operation !== null && operation !== undefined && (typeof operation !== 'string' || !ROOM_CAMPAIGN_RE.test(operation))) {
+        throw new RoomError('invalid_command');
+      }
+      room.settings.campaignOperationId = typeof operation === 'string' ? operation : null;
+      resetReadiness(room);
+      break;
+    }
+    case 'set_map': {
+      assertAdmin(room, id);
+      const mapId = cleanMap(command.mapId);
+      if (!isMapAllowed(mapId, room)) throw new RoomError('map_not_allowed');
+      room.settings.mapId = mapId;
+      resetReadiness(room);
+      break;
+    }
+    case 'set_locked':
+      assertAdmin(room, id);
+      room.settings.adminLocked = !!command.locked;
+      break;
+    case 'start':
+      // The host's actor starts the match (`planStart`); the command only checks the right.
+      assertAdmin(room, id);
+      assertStartable(room);
+      break;
+    default:
+      throw new RoomError('invalid_command', `unknown room command: ${type}`);
+  }
+  return touch(room, now);
+}
+
+/** Every connected active player ready with a vehicle, and at least one of them. */
+export function assertStartable(room: RoomSnapshot): void {
+  const connected = activePlayers(room).filter((player) => player.connected);
+  if (connected.length === 0) throw new RoomError('players_not_ready', 'no connected player');
+  if (connected.some((player) => !player.ready || !player.specId)) throw new RoomError('players_not_ready');
+}
+
+export function canStart(room: RoomSnapshot): boolean {
+  try { assertStartable(room); return room.phase === 'waiting'; } catch { return false; }
+}
+
+/**
+ * Freeze the roster for a match: connected active players by seat, bots on the
+ * empty slots (co-op modes leave the other side to the authority's own rules),
+ * spectators seated as spectators. The room moves to `starting` and the round
+ * advances; the caller records the match once the host accepted it.
+ */
+export function planStart(room: RoomSnapshot, { seed, now, botSpecFallback = 'm1a1_abrams_hc' }: { seed: number; now: number; botSpecFallback?: string }): RoomStartPlan {
+  assertStartable(room);
+  if (room.phase !== 'waiting') throw new RoomError('match_running');
+  const seats: RoomStartPlan['seats'] = [];
+  for (const player of room.players) {
+    if (!player.connected) continue;
+    if (player.team !== 'spectator' && !player.specId) continue;
+    seats.push({
+      seat: player.seat, playerId: player.id, name: player.name, team: player.team,
+      specId: player.specId ?? botSpecFallback, equipment: player.equipment.slice(),
+      consumables: (player.consumables ?? []).slice(), camo: player.camo,
+    });
+  }
+  const bots: RoomStartPlan['bots'] = [];
+  // every bot seat (the symmetric fill, the asymmetric roles, the co-op hostiles) and its vehicle: room/roomBots.ts, the
+  // p2p host's derivation (host/hostPlan.planFromRoom) calls it with the same match seed
+  const teamNations: RoomTeamNations = planRoomBots(room.settings, seats, bots, seed >>> 0);
+  room.round += 1;
+  room.phase = 'starting';
+  touch(room, now);
+  // `random` (the room default) becomes a concrete battlefield here, from the match seed, so the match
+  // host, every seat's `match_start` and the room's match record name the same map (v1 resolved it the
+  // same way from the lobby's match seed in privateMatchHandoff.ts).
+  const mapId = resolveMapId(room.settings.mapId, seededUnit(seed >>> 0));
+  return { seats, bots, mapId, gameMode: room.settings.gameMode, seed: seed >>> 0, round: room.round, teamNations };
+}
+
+/** v1's seeded unit generator (privateMatchHandoff.ts), kept bit-identical so a seed picks the same map on both. */
+function seededUnit(seed: number): () => number {
+  let value = seed >>> 0;
+  return () => {
+    value |= 0;
+    value = (value + 0x6D2B79F5) | 0;
+    let out = Math.imul(value ^ (value >>> 15), 1 | value);
+    out = (out + Math.imul(out ^ (out >>> 7), 61 | out)) ^ out;
+    return ((out ^ (out >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** The host accepted the start: remember the match handle. */
+export function recordMatch(room: RoomSnapshot, match: Omit<RoomMatchInfo, 'status' | 'endedAt' | 'verdict'>, now: number): RoomSnapshot {
+  room.match = { ...match, status: 'starting', endedAt: null, verdict: null };
+  return touch(room, now);
+}
+
+export function markMatchPlaying(room: RoomSnapshot, now: number): boolean {
+  if (!room.match || room.match.status !== 'starting') return false;
+  room.match.status = 'playing';
+  room.phase = 'playing';
+  touch(room, now);
+  return true;
+}
+
+/** The start could not happen (host unavailable): back to `waiting`, readiness kept, the round returned. */
+export function abortStart(room: RoomSnapshot, now: number): RoomSnapshot {
+  if (room.phase === 'starting') {
+    // the aborted round's own record goes; an earlier round's result stays on record
+    if (room.match && room.match.round === room.round) room.match = null;
+    room.round = Math.max(0, room.round - 1);
+  }
+  room.phase = 'waiting';
+  return touch(room, now);
+}
+
+/** The verdict (or the loss of the host): the room returns to `waiting` with the result on record. */
+export function finishMatch(
+  room: RoomSnapshot,
+  outcome: { status: 'ended'; result: RoomResult; reason: string } | { status: 'lost'; reason: string },
+  now: number,
+): RoomLastResult | null {
+  if (!room.match) return null;
+  room.match.status = outcome.status;
+  room.match.endedAt = now;
+  room.match.verdict = outcome.status === 'ended' ? { result: outcome.result, reason: outcome.reason } : null;
+  room.lastResult = {
+    round: room.match.round,
+    result: outcome.status === 'ended' ? outcome.result : null,
+    reason: outcome.reason,
+  };
+  room.phase = 'waiting';
+  resetReadiness(room);
+  // A decline lasts the match it was made for (audit M2, 2026-11-02): a host that left its match, failed its boot or
+  // handed it on was read as declined for the rest of its seat's life, and the admin-hosts-first rule stopped holding
+  // after the first match. A seat that cannot host at all says so again (MatchSession.syncDecline) — before it can be
+  // ready again, so before any start that could elect it: readiness resets here too.
+  for (const player of room.players) player.hostDeclined = false;
+  touch(room, now);
+  return room.lastResult;
+}
+
+/** Plain data safe to send to every participant (a defensive copy). */
+export function serializeRoom(room: RoomSnapshot): RoomSnapshot {
+  return {
+    ...room,
+    settings: { ...room.settings, arrangement: room.settings.arrangement ? { ...room.settings.arrangement } : null },
+    players: room.players.map((player) => ({
+      ...player, equipment: player.equipment.slice(), consumables: (player.consumables ?? []).slice(),
+    })),
+    match: room.match ? { ...room.match, verdict: room.match.verdict ? { ...room.match.verdict } : null } : null,
+    lastResult: room.lastResult ? { ...room.lastResult } : null,
+    host: { ...room.host },
+  };
+}
+
+/** The v1 `SerializedLobby` shape the Play menu renders (hostId = admin, isHost = isAdmin). */
+export function roomToLobby(room: RoomSnapshot): SerializedLobby {
+  return {
+    roomCode: room.roomCode,
+    mode: room.mode,
+    gameMode: room.settings.gameMode,
+    phase: room.phase,
+    hostId: room.adminId,
+    maxPlayers: room.settings.teamSize * 2,
+    maxSpectators: room.settings.maxSpectators,
+    allowTeamSwitch: room.settings.allowTeamSwitch,
+    locked: room.settings.locked,
+    mapId: room.settings.mapId,
+    teamSize: room.settings.teamSize,
+    arrangement: room.settings.arrangement ? { ...room.settings.arrangement } : null,
+    campaignOperationId: room.settings.campaignOperationId,
+    revision: room.revision,
+    matchSeed: room.match?.seed ?? null,
+    round: room.round,
+    lastResult: room.lastResult ? { ...room.lastResult } : null,
+    players: room.players.map((player) => ({
+      id: player.id, name: player.name, team: player.team, specId: player.specId, equipment: player.equipment.slice(),
+      camo: player.camo, ready: player.ready, connected: player.connected, isHost: player.isAdmin, rating: null,
+    })),
+  };
+}

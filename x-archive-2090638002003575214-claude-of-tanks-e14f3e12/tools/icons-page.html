@@ -1,0 +1,1154 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tank asset generator</title></head>
+<body>
+<!-- 267: every catalog key the page asks for, read by genIcons and presentation-centering (tools/page-catalog-keys.mjs) -->
+<script>globalThis.__COT_CATALOG_READS = new Set();</script>
+<script type="module">
+// Offscreen studio for tools/genIcons.mjs. It renders the shipped model and
+// derives technical diagrams from the same armor/module data used in combat.
+import * as THREE from 'three';
+import { createTank } from '/src/vehicles/tankFactory.ts';
+import { verifyCarvedMuzzleBore } from '/src/vehicles/carvedMuzzleBore.ts';
+import { ensureInteriorFills } from '/src/vehicles/interiorFills.ts';
+import { physicalMuzzleRimSample, muzzleBoreLuminance, sampleMuzzleRingSeams } from '/tools/muzzle-seat-policy.mjs';
+import { ALL_TANK_IDS, DEVELOPMENT_TANK_IDS, getSpec } from '/src/vehicles/specs.ts';
+import {
+  TANK_ASSET_SCHEMA_VERSION, TANK_ASSET_VIEWS, exteriorFingerprint, metadataFingerprint,
+  requiredTankAssetFiles, tankAssetFile, tankAssetMetadata, technicalLabelsFile,
+} from '/src/vehicles/tankAssets.ts';
+import { auditTankAppearance } from '/src/vehicles/appearanceAudit.ts';
+import { drawVehicleDesignation } from '/src/vehicles/vehicleMarkings.ts';
+import { createInspectionOverlay } from '/src/gallery/overlays.ts';
+import { PORTRAIT_SIDE_RATIO, portraitSideRatios } from '/tools/portrait-camera.ts';
+import {
+  auditPortraitPixels,
+  directPortraitPlacement,
+  measurePortraitCoreBounds,
+  measurePortraitFullBounds,
+} from '/src/ui/portraitFraming.ts';
+import { isAntennaTag, roofFittingParts } from '/tools/body-height-parts.mjs';
+
+const BASE = 512;
+const SS = 2;
+const MARGIN = 1.07;
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: true, preserveDrawingBuffer: true,
+});
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x77818b, 1.55));
+const key = new THREE.DirectionalLight(0xfff6ea, 3.05);
+key.position.set(-4, 6, 5);
+const fill = new THREE.DirectionalLight(0xe8f0ff, 1.25);
+fill.position.set(5, 2.5, 1);
+const rim = new THREE.DirectionalLight(0xffffff, 1.55);
+rim.position.set(1.5, 4, -6);
+scene.add(key, fill, rim);
+
+function capture(cam, w, h) {
+  renderer.setSize(w * SS, h * SS, false);
+  renderer.render(scene, cam);
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const c = out.getContext('2d');
+  c.imageSmoothingEnabled = true;
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(renderer.domElement, 0, 0, w, h);
+  return out;
+}
+
+/**
+ * A WebP encoding of a transparent capture whose background keeps an alpha floor (2026-10-22, lane 240: "grey squares
+ * at antenna tips in 3/4 icons"). Chrome's lossy WebP encoder fills the colour of every fully transparent pixel in an
+ * 8 x 8 block that also holds a visible pixel with that block's average (libwebp's transparent-area cleanup): round a
+ * thin antenna tip the background took the antenna's grey, invisible wherever alpha is honoured but grey squares in any
+ * viewer or tool that drops alpha. A background pixel left at alpha 1/255 in black is no longer transparent to the
+ * encoder, so its colour is encoded as black; in every alpha-honouring view it adds 1/255 of black, below a step of the
+ * display. The portrait framing ignores it (portraitFraming.ts thresholds 8 and 48), and the canvas passed in is not
+ * changed (the audits read it as rendered).
+ */
+function encodeWebp(canvas, quality = 0.9) {
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const context = out.getContext('2d', { willReadFrequently: true });
+  context.drawImage(canvas, 0, 0);
+  const image = context.getImageData(0, 0, out.width, out.height);
+  const data = image.data;
+  for (let i = 3; i < data.length; i += 4) if (data[i] === 0) data[i] = 1;
+  context.putImageData(image, 0, 0);
+  return out.toDataURL('image/webp', quality);
+}
+
+function silhouette(srcCanvas, outW, outH) {
+  const full = document.createElement('canvas');
+  full.width = srcCanvas.width; full.height = srcCanvas.height;
+  const fc = full.getContext('2d');
+  fc.drawImage(srcCanvas, 0, 0);
+  const img = fc.getImageData(0, 0, full.width, full.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3];
+    d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+    d[i + 3] = a < 8 ? 0 : Math.min(255, a * 1.8);
+  }
+  fc.putImageData(img, 0, 0);
+  const out = document.createElement('canvas');
+  out.width = outW; out.height = outH;
+  const c = out.getContext('2d');
+  c.imageSmoothingEnabled = true;
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(full, 0, 0, outW, outH);
+  return out;
+}
+
+/**
+ * Give every garage portrait one presentation datum: the visible tank is
+ * centered horizontally and its track contact line lands on a shared
+ * baseline. The former square crop stayed centered on the camera frame, so
+ * antennas, searchlights and family-specific turret height moved otherwise
+ * related vehicles up/down or sideways inside identical roster cards.
+ */
+/** `placeBy`: the source whose core places the card (a whip-free twin is placed exactly as its card is). */
+function normalizeAnglePortrait(src, outSize, placeBy = src) {
+  const context = placeBy.getContext('2d');
+  const pixels = context.getImageData(0, 0, placeBy.width, placeBy.height).data;
+  const bounds = measurePortraitCoreBounds(pixels, placeBy.width, placeBy.height);
+  if (!bounds) return src;
+  const { x: dx, y: dy, scale } = directPortraitPlacement(bounds, outSize, outSize);
+  const drawWidth = src.width * scale;
+  const drawHeight = src.height * scale;
+  const out = document.createElement('canvas');
+  out.width = outSize; out.height = outSize;
+  const oc = out.getContext('2d');
+  oc.imageSmoothingEnabled = true;
+  oc.imageSmoothingQuality = 'high';
+  // A faint alpha-derived grounding shadow preserves the transparent icon
+  // contract while separating dark running gear from the garage card. The
+  // final pass adds only restrained tonal clarity; it does not recolor the
+  // authored camouflage.
+  oc.save();
+  oc.globalAlpha = 0.28;
+  oc.filter = 'brightness(0) blur(10px)';
+  oc.drawImage(src, dx, dy + 7, drawWidth, drawHeight);
+  oc.restore();
+  oc.save();
+  oc.filter = 'brightness(1.06) contrast(1.07) saturate(1.03)';
+  oc.drawImage(src, dx, dy, drawWidth, drawHeight);
+  oc.restore();
+  return out;
+}
+
+/** `frame`: the card's whip-free frame, [x0, y0, x1, y1] (portraitFraming.ts auditPortraitPixels). */
+function auditPortraitCanvas(canvas, frame = null) {
+  const pixels = canvas.getContext('2d', { willReadFrequently: true })
+    .getImageData(0, 0, canvas.width, canvas.height).data;
+  return auditPortraitPixels(pixels, canvas.width, canvas.height, undefined, undefined, undefined, frame);
+}
+
+// (270, Main 2026-11-06) thin whip antennas never set a card's frame, as tools/body-height-parts.mjs leaves them out of
+// every body measure: a card with whips is audited against its whip-free twin's frame, drawn from the same camera and
+// placed by the card's own core; the card itself, whips and all, must still be whole on the canvas.
+/** The build's whips: its antenna fittings and the antenna spans cut from merged meshes; null when it has none. */
+function portraitWhips(root) {
+  const { nodes, trimmed } = roofFittingParts(root, { isRenderNode: (o) => (o.isMesh || o.isSkinnedMesh || o.isInstancedMesh) && o.geometry });
+  const hidden = [...nodes].filter(([, tag]) => isAntennaTag(tag)).map(([node]) => node);
+  if (hidden.length || trimmed.size) return { hidden, trimmed };
+  return null;
+}
+
+/** `draw` with the whips out of the scene: their fittings hidden, their merged spans cut. */
+function withoutWhips(whips, draw) {
+  const shown = whips.hidden.map((node) => node.visible), merged = [...whips.trimmed.keys()].map((node) => node.geometry);
+  for (const node of whips.hidden) node.visible = false;
+  for (const [node, body] of whips.trimmed) node.geometry = body;
+  try { return draw(); } finally {
+    whips.hidden.forEach((node, index) => { node.visible = shown[index]; });
+    [...whips.trimmed.keys()].forEach((node, index) => { node.geometry = merged[index]; });
+  }
+}
+
+/** The card's frame without its whips, in the thumbnail's pixels: [x0, y0, x1, y1]. */
+function whipFreeFrame(whips, camera, cardSource) {
+  const source = withoutWhips(whips, () => capture(camera, BASE * 2, BASE * 2));
+  const thumb = normalizeAnglePortrait(source, BASE / 2, cardSource);
+  const bounds = measurePortraitFullBounds(thumb.getContext('2d', { willReadFrequently: true })
+    .getImageData(0, 0, thumb.width, thumb.height).data, thumb.width, thumb.height);
+  return bounds ? [bounds.x0, bounds.y0, bounds.x1, bounds.y1] : null;
+}
+
+function loadPortraitCanvas(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      resolve(canvas);
+    };
+    image.onerror = () => reject(new Error(`portrait failed to load: ${url}`));
+    image.src = url;
+  });
+}
+
+async function auditSavedPortraits(ids, sources = {}, frames = {}) {
+  const result = {};
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const file = tankAssetFile(id, 'angle');
+      const canvas = await loadPortraitCanvas(sources[id] || `/icons/thumbs/${file}`);
+      result[id] = auditPortraitCanvas(canvas, frames[id] ?? null);
+    } catch (error) {
+      result[id] = { error: String(error && error.stack || error), passes: false };
+    }
+  }));
+  return result;
+}
+
+/**
+ * Resolve the rendered body-mass center from a neutral top-down mask.
+ *
+ * A tank's rig origin, track-run midpoint and full bounding box are all useful
+ * engineering datums, but none of them certify the thing a player sees. This
+ * mask deliberately measures finished pixels. Rows narrower than 28% of the
+ * widest opaque row are rejected, which removes cannon tubes, antennas and
+ * tow cables without teaching the audit any vehicle-specific dimensions.
+ */
+function opaqueBodyCentroid(canvas) {
+  const pixels = canvas.getContext('2d', { willReadFrequently: true })
+    .getImageData(0, 0, canvas.width, canvas.height).data;
+  const rowWeights = new Float64Array(canvas.height);
+  let widestRow = 0;
+  for (let y = 0; y < canvas.height; y++) {
+    let weight = 0;
+    for (let x = 0; x < canvas.width; x++) {
+      const alpha = pixels[(y * canvas.width + x) * 4 + 3];
+      if (alpha > 8) weight += alpha / 255;
+    }
+    rowWeights[y] = weight;
+    widestRow = Math.max(widestRow, weight);
+  }
+
+  const minimumBodyRow = widestRow * 0.28;
+  let weightSum = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+  let acceptedRows = 0;
+  for (let y = 0; y < canvas.height; y++) {
+    if (rowWeights[y] < minimumBodyRow) continue;
+    acceptedRows++;
+    for (let x = 0; x < canvas.width; x++) {
+      const alpha = pixels[(y * canvas.width + x) * 4 + 3];
+      if (alpha <= 8) continue;
+      const weight = alpha / 255;
+      weightSum += weight;
+      weightedX += (x + 0.5) * weight;
+      weightedY += (y + 0.5) * weight;
+    }
+  }
+  if (!(weightSum > 0) || !(acceptedRows > 0)) {
+    throw new Error('empty presentation mask');
+  }
+  return {
+    pixelX: weightedX / weightSum,
+    pixelY: weightedY / weightSum,
+    bodyPixels: Math.round(weightSum),
+    acceptedRows,
+    widestRowPx: Number(widestRow.toFixed(1)),
+  };
+}
+
+function renderedPresentationCenter(visual) {
+  const root = visual.root;
+  root.updateMatrixWorld(true);
+  // This is the exact fit box inspectOne uses for the shipped orthographic
+  // assets. Keep it before the centroid-only visibility exclusions below.
+  const iconBox = new THREE.Box3().setFromObject(root);
+  const hidden = [];
+  root.traverse((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const renderless = materials.length > 0 && materials.every((material) => material
+      && (material.colorWrite === false || material.visible === false || material.opacity <= 0));
+    if (!object.userData?.authoredShadowProxy && !renderless) return;
+    hidden.push([object, object.visible]);
+    object.visible = false;
+  });
+
+  let canvas;
+  let boundsCenter;
+  let half;
+  try {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().makeEmpty();
+    root.traverse((object) => {
+      if (!(object.isMesh || object.isInstancedMesh) || !object.geometry
+          || !visibleInTree(object, root)) return;
+      if (object.isInstancedMesh) {
+        object.computeBoundingBox();
+        if (object.boundingBox && !object.boundingBox.isEmpty()) {
+          box.union(object.boundingBox.clone().applyMatrix4(object.matrixWorld));
+        }
+        return;
+      }
+      if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+      box.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
+    });
+    if (box.isEmpty()) throw new Error(`${visual.specId}: empty visible presentation bounds`);
+    boundsCenter = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    half = Math.max(size.x, size.z) * 0.5 * 1.025;
+    const cam = orthoCam(boundsCenter, size, [0, 1, 0], [0, 0, 1], half, half);
+    // Measure the same authored materials and transparency that ship in the
+    // top asset. A flat override hid small asymmetric alpha differences on a
+    // handful of vehicles (notably Marder 1A3 and Chieftain 5), allowing the
+    // synthetic mask to pass while the real icon still looked off-center.
+    canvas = capture(cam, BASE, BASE);
+  } finally {
+    for (const [object, visible] of hidden) object.visible = visible;
+  }
+
+  let body;
+  try {
+    body = opaqueBodyCentroid(canvas);
+  } catch (error) {
+    throw new Error(`${visual.specId}: ${error.message}`);
+  }
+  const { pixelX, pixelY } = body;
+  // With a downward camera and +Z as screen-up, screen-right maps to world
+  // -X. Preserve that handedness when converting the measured pixel centroid
+  // back into the vehicle's local presentation coordinates.
+  const xM = Number((boundsCenter.x - (pixelX / canvas.width - 0.5) * half * 2).toFixed(4));
+  const zM = Number((boundsCenter.z + (0.5 - pixelY / canvas.height) * half * 2).toFixed(4));
+  // The update writes this newly measured anchor. Compute the paired fit from
+  // that same rounded value, not from the previous generated anchor imported
+  // when the page started, or the projection lags every anchor change by one
+  // generation and the public manifest cannot match runtime exactly.
+  const iconProjection = assetProjection(iconBox, { xM, zM });
+  const assetAnchor = visual.assetPresentationAnchor || visual.presentationAnchor;
+  // Existing images use this anchor, not the newly proposed pixel centroid.
+  // Keep that capture fit separate from the full-generation proposal below.
+  const capturedProjection = assetProjection(iconBox, assetAnchor);
+  const anchorPixelX = canvas.width * (0.5
+    - (assetAnchor.xM - boundsCenter.x) / (half * 2));
+  const anchorPixelY = canvas.height * (0.5
+    - (assetAnchor.zM - boundsCenter.z) / (half * 2));
+  return {
+    xM,
+    zM,
+    currentAnchor: {
+      xM: Number(assetAnchor.xM.toFixed(4)),
+      zM: Number(assetAnchor.zM.toFixed(4)),
+    },
+    capturedProjection: {
+      centerYM: Number(capturedProjection.center.y.toFixed(4)),
+      topHalfM: Number(capturedProjection.topHalf.toFixed(4)),
+      sideHalfM: Number(capturedProjection.sideHalf.toFixed(4)),
+    },
+    residualPx: Number(Math.hypot(pixelX - anchorPixelX, pixelY - anchorPixelY).toFixed(2)),
+    deltaM: Number(Math.hypot(
+      xM - assetAnchor.xM,
+      zM - assetAnchor.zM,
+    ).toFixed(4)),
+    bodyPixels: body.bodyPixels,
+    acceptedRows: body.acceptedRows,
+    widestRowPx: body.widestRowPx,
+    projection: {
+      centerYM: Number(iconProjection.center.y.toFixed(4)),
+      topHalfM: Number(iconProjection.topHalf.toFixed(4)),
+      sideHalfM: Number(iconProjection.sideHalf.toFixed(4)),
+    },
+  };
+}
+
+async function exportedTopPresentationCenter(id) {
+  const image = new Image();
+  image.decoding = 'async';
+  image.src = `/icons/${id}_top.webp?presentation-audit=${Date.now()}`;
+  await image.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  canvas.getContext('2d', { willReadFrequently: true }).drawImage(image, 0, 0);
+  const body = opaqueBodyCentroid(canvas);
+  const deltaX = body.pixelX - canvas.width * 0.5;
+  const deltaY = body.pixelY - canvas.height * 0.5;
+  return {
+    residualPx: Number(Math.hypot(deltaX, deltaY).toFixed(2)),
+    deltaXPx: Number(deltaX.toFixed(2)),
+    deltaYPx: Number(deltaY.toFixed(2)),
+    bodyPixels: body.bodyPixels,
+    acceptedRows: body.acceptedRows,
+    widestRowPx: body.widestRowPx,
+  };
+}
+
+function orthoCam(center, size, dir, up, halfW, halfH) {
+  const dist = Math.max(size.x, size.y, size.z) * 2 + 6;
+  const cam = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, dist * 3);
+  cam.up.set(up[0], up[1], up[2]);
+  cam.position.set(center.x + dir[0] * dist, center.y + dir[1] * dist, center.z + dir[2] * dist);
+  cam.lookAt(center);
+  cam.updateMatrixWorld();
+  return cam;
+}
+
+function assetProjection(box, anchor) {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  center.x = anchor.xM;
+  center.z = anchor.zM;
+  const extentX = Math.max(center.x - box.min.x, box.max.x - center.x);
+  const extentZ = Math.max(center.z - box.min.z, box.max.z - center.z);
+  return {
+    center,
+    size,
+    extentX,
+    extentZ,
+    topHalf: Math.max(extentX, extentZ) * MARGIN,
+    sideHalf: Math.max(size.y / 2, extentZ / 2) * MARGIN,
+  };
+}
+
+// 253 (UI gauntlet: the diagrams' labels were baked at about 5 px and failed every critic's 11 px floor): the armour,
+// module and crew diagrams render at 2x and carry no text. Their labels are DOM text over the image, composed at
+// runtime in each locale from the <id>_technical.json sidecar this page writes beside them
+// (src/ui/technicalDiagramLabels.ts). The framing is the 1x composition's, scaled: the vehicle in the central opening,
+// the rails, header and legend bands left for the DOM labels.
+const TECHNICAL_WIDTH = BASE * 2;
+const TECHNICAL_HEIGHT = BASE;
+
+function sideInspectionCamera(center, size, extentZ) {
+  const halfHeight = Math.max(size.y / 2, extentZ / 2) * MARGIN;
+  return orthoCam(center, size, [-1, 0, 0], [0, 1, 0], halfHeight * 2, halfHeight);
+}
+
+function technicalInspectionCamera(id, center, size, extentZ, box) {
+  const insetIds = [
+    'merkava3d', 'merkava4', 'leo2a7v', 'leo2a6m', 'leo2a5m',
+    'leo2a5', 'k2_black_panther', 'kf51_panther', 't14_armata', 't90a', 't90a_vladimir',
+    't90m', 't90sm',
+    'm1a2_abrams', 'm1a2_abrams_tusk',
+    'm1a2_abrams_sepv2', 'm1a2_abrams_sepv3', 'ua_m1a2_abrams',
+  ];
+  if (!insetIds.includes(id)) {
+    return sideInspectionCamera(center, size, extentZ);
+  }
+  // These source X models' long guns enter the label rails in a full-canvas
+  // side camera; tall whips also meet the header or push bodies into the footer.
+  // Fit the complete vehicle to the actual 312×164 px content opening, not
+  // the outer 512×256 canvas (at the 1x size; 624×328 of 1024×512 since 253). Only this technical camera moves: presentation
+  // anchors, metadata dimensions, ordinary views and comparison rigs remain
+  // unchanged. Include the real whip tips, gun and lowest shoes in the fit.
+  const halfHeight = Math.max(size.y * 128 / 164, size.z * 128 / 312);
+  const target = box.getCenter(new THREE.Vector3());
+  target.y += 5 * halfHeight / 128; // opening center is Y133, not canvas Y128
+  return orthoCam(target, size, [-1, 0, 0], [0, 1, 0], halfHeight * 2, halfHeight);
+}
+
+function visibleInspectionBounds(object, root) {
+  const box = new THREE.Box3().makeEmpty();
+  object.updateMatrixWorld(true);
+  object.traverse((child) => {
+    if (!(child.isMesh || child.isInstancedMesh) || !child.geometry
+        || !visibleInTree(child, root)) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    const renderless = materials.length > 0 && materials.every((material) => material
+      && (material.colorWrite === false || material.visible === false || material.opacity <= 0));
+    if (renderless) return;
+    if (child.isInstancedMesh) {
+      child.computeBoundingBox();
+      if (child.boundingBox && !child.boundingBox.isEmpty()) {
+        box.union(child.boundingBox.clone().applyMatrix4(child.matrixWorld));
+      }
+      return;
+    }
+    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+    if (child.geometry.boundingBox) {
+      box.union(child.geometry.boundingBox.clone().applyMatrix4(child.matrixWorld));
+    }
+  });
+  return box;
+}
+
+function projectedInspectionBounds(box, camera) {
+  if (box.isEmpty()) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const x of [box.min.x, box.max.x]) {
+    for (const y of [box.min.y, box.max.y]) {
+      for (const z of [box.min.z, box.max.z]) {
+        const point = new THREE.Vector3(x, y, z).project(camera);
+        const px = (point.x + 1) * 0.5 * TECHNICAL_WIDTH;
+        const py = (1 - point.y) * 0.5 * TECHNICAL_HEIGHT;
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+    }
+  }
+  return {
+    anchor: [(minX + maxX) * 0.5, (minY + maxY) * 0.5],
+    weight: Math.max(1, (maxX - minX) * (maxY - minY)),
+  };
+}
+
+function inspectionPickerColor(picker) {
+  let color = null;
+  const visual = picker.userData?.inspectionVisual || picker;
+  visual.traverse((object) => {
+    if (color || (!object.isMesh && !object.isLineSegments)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const material = materials.find((entry) => entry?.color
+      && (entry.userData?.galleryAnatomyLine || entry.userData?.galleryAnatomyFill
+        || entry.colorWrite !== false));
+    if (material) color = `#${material.color.getHexString()}`;
+  });
+  return color || '#9dafbd';
+}
+
+function compactInspectionTitle(title) {
+  return String(title || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replaceAll('_', ' ')
+    .toUpperCase()
+    .slice(0, 13);
+}
+
+/** One label's data: the picker's projected centre and area, its colour, and the values its runtime text is composed
+ * from (src/ui/technicalDiagramLabels.ts technicalLabelText); no display string is baked. */
+function inspectionCallout(picker, camera, root, kind) {
+  const inspection = picker.userData?.inspection || {};
+  const visual = picker.userData?.inspectionVisual || picker;
+  const projected = projectedInspectionBounds(visibleInspectionBounds(visual, root), camera);
+  if (!projected) return null;
+  const callout = { key: String(inspection.id || ''), ...projected, color: inspectionPickerColor(picker) };
+  if (kind === 'armor') {
+    callout.keMm = Math.round(Number(inspection.keMm || 0));
+    callout.ceMm = Math.round(Number(inspection.ceMm || 0));
+    if (inspection.plateName) callout.plate = String(inspection.plateName);
+  } else if (kind === 'modules') {
+    callout.module = String(inspection.module || '');
+  } else {
+    callout.crew = String(inspection.crew || '');
+  }
+  if (inspection.title) callout.title = String(inspection.title);
+  return callout;
+}
+
+/** The inspection overlay's callouts for one kind, and (when `render`) the stage captured at the diagram's size. */
+function renderInspectionStage(spec, visual, camera, kind, render = true) {
+  const overlayMode = kind === 'modules' || kind === 'crew' ? kind : 'armor';
+  const overlays = [createInspectionOverlay(spec, visual, overlayMode)];
+  try {
+    visual.root.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const callouts = [];
+    for (const overlay of overlays) {
+      for (const picker of overlay.pickables) {
+        const callout = inspectionCallout(picker, camera, visual.root, kind);
+        if (callout) callouts.push(callout);
+      }
+    }
+    return {
+      canvas: render ? capture(camera, TECHNICAL_WIDTH, TECHNICAL_HEIGHT) : null,
+      callouts,
+    };
+  } finally {
+    for (let index = overlays.length - 1; index >= 0; index--) overlays[index].clear();
+  }
+}
+
+/** The diagram raster: the inspection stage on its gradient, no text and no label panels. */
+function technicalDiagram(stage) {
+  const out = document.createElement('canvas');
+  out.width = TECHNICAL_WIDTH;
+  out.height = TECHNICAL_HEIGHT;
+  const c = out.getContext('2d');
+  const background = c.createLinearGradient(0, 0, 0, out.height);
+  background.addColorStop(0, '#0c171f');
+  background.addColorStop(0.56, '#071118');
+  background.addColorStop(1, '#050a0e');
+  c.fillStyle = background;
+  c.fillRect(0, 0, out.width, out.height);
+  c.drawImage(stage.canvas, 0, 0);
+  return out;
+}
+
+/** Callouts kept per rail in the sidecar: the overlay shows six a rail at the 1x size and up to this many at large ones. */
+const TECHNICAL_LABELS_PER_RAIL = 10;
+const round4 = (value) => Number(value.toFixed(4));
+
+/** The <id>_technical.json sidecar (schema 1): each kind's heaviest callouts a rail, anchors as fractions of the raster
+ * (x right, y down), weights as fractions of its area. */
+function technicalLabelData(id, stages) {
+  const data = { schema: 1, id, size: [TECHNICAL_WIDTH, TECHNICAL_HEIGHT] };
+  for (const [kind, stage] of Object.entries(stages)) {
+    const rail = (left) => stage.callouts.filter((item) => (item.anchor[0] < TECHNICAL_WIDTH / 2) === left)
+      .sort((a, b) => b.weight - a.weight).slice(0, TECHNICAL_LABELS_PER_RAIL);
+    data[kind] = [...rail(true), ...rail(false)].map(({ anchor, weight, ...rest }) => ({
+      ...rest,
+      anchor: [round4(anchor[0] / TECHNICAL_WIDTH), round4(anchor[1] / TECHNICAL_HEIGHT)],
+      weight: round4(weight / (TECHNICAL_WIDTH * TECHNICAL_HEIGHT)),
+    }));
+  }
+  return `data:application/json;base64,${btoa(unescape(encodeURIComponent(`${JSON.stringify(data)}\n`)))}`;
+}
+
+function drawMarkingsDiagram(metadata) {
+  const out = document.createElement('canvas');
+  out.width = 256; out.height = 128;
+  const c = out.getContext('2d');
+  const g = c.createLinearGradient(0, 0, 256, 128);
+  g.addColorStop(0, '#111b23'); g.addColorStop(1, '#070c11');
+  c.fillStyle = g; c.fillRect(0, 0, 256, 128);
+  c.strokeStyle = 'rgba(182,198,210,.28)'; c.strokeRect(0.5, 0.5, 255, 127);
+  drawVehicleDesignation(c, metadata.markings, { x: 8, y: 24, width: 240, height: 88 });
+  c.fillStyle = '#dca652'; c.font = '800 9px system-ui, sans-serif';
+  c.fillText(metadata.markings.countryLabel.toUpperCase(), 12, 16);
+  c.textAlign = 'right'; c.fillStyle = '#9dafbd';
+  c.fillText(metadata.markings.designation, 244, 16);
+  c.textAlign = 'left';
+  return out;
+}
+
+function muzzleBoreCensus(root) {
+  // physicalRims (2026-09-22, owner: holes are added, not carved, to save triangles): a verified
+  // physical recess is its own rim, so its mouth carries only the shadow disc and counts here instead
+  // of through a fallback Rim mesh. Checks compare rims + physicalRims against the expected mouths.
+  const result = { tagged: 0, rims: 0, physicalRims: 0, physicalFloors: 0, discs: 0, authored: 0, fallback: 0 };
+  root.traverse((object) => {
+    for (let current = object; current; current = current.parent) {
+      if (!current.visible) return;
+      if (current === root) break;
+    }
+    if (object.userData && object.userData.cannonBore) result.tagged++;
+    if (object.userData && object.userData.cannonBore && object.userData.physicalMouth) {
+      const evidence=verifyCarvedMuzzleBore(root,object);
+      object.userData.muzzleSeatReceipt=Object.freeze({...object.userData.muzzleSeatReceipt,...evidence});
+      result.physicalRims++; result.physicalFloors++;
+    }
+    if (/muzzleBoreShadow(?:Fallback)?Rim/i.test(object.name || '')) result.rims++;
+    if (/muzzleBoreShadow(?:Fallback)?Disc/i.test(object.name || '')) result.discs++;
+    if (object.name === 'muzzleBoreShadowDisc') result.authored++;
+    if (object.name === 'muzzleBoreShadowFallback') result.fallback++;
+  });
+  return result;
+}
+
+function visibleInTree(object, root) {
+  if (!object) return false;
+  for (let current = object; current; current = current.parent) {
+    if (!current.visible) return false;
+    if (current === root) return true;
+  }
+  return false;
+}
+
+function visibleBorePart(root, pattern) {
+  let found = null;
+  root.traverse((object) => {
+    if (!found && pattern.test(object.name || '') && visibleInTree(object, root)) found = object;
+  });
+  return found;
+}
+
+function vehicleMarkingCensus(root) {
+  const result = {
+    total: 0,
+    insignia: 0,
+    designation: 0,
+    verifiedInsignia: 0,
+    verifiedDesignation: 0,
+    minimumVisibilityRatio: 1,
+    codes: [],
+  };
+  const codes = new Set();
+  root.traverse((object) => {
+    if (!object.userData?.vehicleMarking || !visibleInTree(object, root)) return;
+    result.total++;
+    const kind = object.userData.markingKind;
+    if (kind === 'insignia') result.insignia++;
+    if (kind === 'designation') result.designation++;
+    if (kind === 'insignia' && object.userData.visibilityVerified) result.verifiedInsignia++;
+    if (kind === 'designation' && object.userData.visibilityVerified) result.verifiedDesignation++;
+    if (Number.isFinite(object.userData.visibilityRatio)) {
+      result.minimumVisibilityRatio = Math.min(
+        result.minimumVisibilityRatio, object.userData.visibilityRatio);
+    }
+    if (object.userData.markingCode) codes.add(object.userData.markingCode);
+  });
+  result.codes = [...codes].sort();
+  return result;
+}
+
+function inspectOne(id, renderFiles, requestedViews = null) {
+  const visual = createTank(id, null, { camoSeed: 4100, quality: 'high' });
+  const root = visual.root;
+  scene.add(root);
+  try {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    // The full box is a fit envelope, not a body center. Long cannons and
+    // antennae influence zoom without dragging the hull away from the shared
+    // garage/gallery presentation anchor. The returned half-extents are also
+    // the ballistic-card projection receipt.
+    const assetAnchor = visual.assetPresentationAnchor || visual.presentationAnchor;
+    const projection = assetProjection(box, assetAnchor);
+    const { center, size, extentX, extentZ } = projection;
+    const spec = getSpec(id);
+    const metadata = tankAssetMetadata(spec);
+    // 244: the staleness key is the exterior fingerprint (what the camera draws); interior-only changes never stale a render
+    const geometryHash = exteriorFingerprint(root);
+    const presentationAnchor = {
+      xM: Number(assetAnchor.xM.toFixed(4)),
+      zM: Number(assetAnchor.zM.toFixed(4)),
+    };
+    const meta = {
+      ...metadata,
+      geometryHash,
+      metadataHash: metadataFingerprint(metadata),
+      presentationAnchor,
+      presentationHash: metadataFingerprint(presentationAnchor),
+      presentationProjection: {
+        centerYM: Number(projection.center.y.toFixed(4)),
+        topHalfM: Number(projection.topHalf.toFixed(4)),
+        sideHalfM: Number(projection.sideHalf.toFixed(4)),
+      },
+      appearance: auditTankAppearance(root),
+      muzzleBore: muzzleBoreCensus(root),
+      vehicleMarkings: vehicleMarkingCensus(root),
+      requiredFiles: requiredTankAssetFiles(id),
+    };
+    if (!renderFiles) return { files: {}, meta };
+
+    const files = {};
+    const wants = (view) => !requestedViews || requestedViews.includes(view);
+    if (wants('top') || wants('topSilhouette')) {
+      const topCam = orthoCam(center, size, [0, 1, 0], [0, 0, 1],
+        projection.topHalf, projection.topHalf);
+      const topCanvas = capture(topCam, BASE, BASE);
+      if (wants('top')) files[tankAssetFile(id, 'top')] = encodeWebp(topCanvas);
+      if (wants('topSilhouette')) files[tankAssetFile(id, 'topSilhouette')] = silhouette(topCanvas, 128, 128).toDataURL('image/png');
+    }
+
+    if (wants('side') || wants('sideSilhouette')) {
+      const sideCam = sideInspectionCamera(center, size, extentZ);
+      const sideCanvas = capture(sideCam, BASE, BASE / 2);
+      if (wants('side')) files[tankAssetFile(id, 'side')] = encodeWebp(sideCanvas);
+      if (wants('sideSilhouette')) files[tankAssetFile(id, 'sideSilhouette')] = silhouette(sideCanvas, 256, 128).toDataURL('image/png');
+    }
+    // Optional authoring-only orthographic front view. It is deliberately not
+    // part of the shipped tank-asset contract; geometry comparison tools can
+    // request it without expanding every vehicle's required public assets.
+    if (wants('front')) {
+      const frontHalf = Math.max(size.x, size.y) * 0.5 * MARGIN;
+      const frontCam = orthoCam(center, size, [0, 0, 1], [0, 1, 0], frontHalf, frontHalf);
+      files[`${id}_front.webp`] = encodeWebp(capture(frontCam, BASE, BASE));
+    }
+    if (wants('armorSide') || wants('modulesSide') || wants('crewSide')) {
+      const sideCam = technicalInspectionCamera(id, center, size, extentZ, box);
+      // every kind's callouts go into the sidecar whichever views render (a projection, not a capture)
+      const stages = {};
+      for (const [kind, view] of [['armor', 'armorSide'], ['modules', 'modulesSide'], ['crew', 'crewSide']]) {
+        stages[kind] = renderInspectionStage(spec, visual, sideCam, kind, wants(view));
+        if (wants(view)) files[tankAssetFile(id, view)] = technicalDiagram(stages[kind]).toDataURL('image/webp', 0.9);
+      }
+      files[technicalLabelsFile(id)] = technicalLabelData(id, stages);
+    }
+    if (wants('markings')) files[tankAssetFile(id, 'markings')] = drawMarkingsDiagram(metadata).toDataURL('image/png');
+
+    let portrait = null;
+    if (wants('angle')) {
+      const fov = 28;
+      const radius = Math.hypot(extentX,
+        Math.max(center.y - box.min.y, box.max.y - center.y), extentZ);
+      const dist = (radius * MARGIN) / Math.sin((fov / 2) * Math.PI / 180);
+      // The azimuth comes from the card (268, tools/portrait-camera.ts): the standard view unless its card leaves the
+      // fleet envelope, then the first ladder azimuth whose card fits, side-on before head-on. Tall source fittings remain intact; the
+      // comparison/technical cameras, the dense-core scale and the pixel gates do not change.
+      let angleSource = null, angleCanvas = null, thumbCanvas = null, portraitAudit = null, standardAudit = null, sideRatio = null;
+      const whips = portraitWhips(root);
+      const ladder = portraitSideRatios();
+      let frame = null;
+      const azimuthCamera = (ratio) => {
+        const dir = new THREE.Vector3(ratio, 0.34, 1.0).normalize();
+        const camera = new THREE.PerspectiveCamera(fov, 1, 0.1, dist * 4);
+        camera.position.copy(center).addScaledVector(dir, dist);
+        camera.lookAt(center);
+        camera.updateMatrixWorld();
+        return camera;
+      };
+      for (const ratio of ladder) {
+        const angleCam = azimuthCamera(ratio);
+        angleSource = capture(angleCam, BASE * 2, BASE * 2);
+        // Both sizes in the order the cards were always drawn: the browser resamples the thumbnail differently when
+        // it is drawn first, so a reordered pair would move every card by pixels.
+        angleCanvas = normalizeAnglePortrait(angleSource, BASE);
+        thumbCanvas = normalizeAnglePortrait(angleSource, BASE / 2);
+        frame = whips ? whipFreeFrame(whips, angleCam, angleSource) : null;
+        portraitAudit = auditPortraitCanvas(thumbCanvas, frame);
+        standardAudit ??= portraitAudit;
+        sideRatio = ratio;
+        if (portraitAudit.passes) break;
+      }
+      // the control (window.__PORTRAIT_CONTROL, tools/genIcons.mjs --portrait-control): the azimuth the ladder takes when the
+      // whips do set the frame, so a fleet run shows that only whip-equipped builds move
+      let ruleless = null;
+      if (window.__PORTRAIT_CONTROL) {
+        for (const ratio of ladder) {
+          const source = capture(azimuthCamera(ratio), BASE * 2, BASE * 2);
+          normalizeAnglePortrait(source, BASE);
+          if (auditPortraitCanvas(normalizeAnglePortrait(source, BASE / 2)).passes) { ruleless = ratio; break; }
+        }
+      }
+      for (const body of whips?.trimmed.values() ?? []) body.dispose();
+      if (!portraitAudit.passes) {
+        throw new Error(
+          `${id}: portrait framing outside fleet envelope at every azimuth `
+          + `(${standardAudit.displayedFullWidth.toFixed(1)}x`
+          + `${standardAudit.displayedFullHeight.toFixed(1)} card px at the standard ${PORTRAIT_SIDE_RATIO})`,
+        );
+      }
+      // the row records an off-standard azimuth (268) and a whip-equipped card's frame (270, tank-assets-check audits by it)
+      const offStandard = sideRatio !== PORTRAIT_SIDE_RATIO;
+      if (offStandard || frame || window.__PORTRAIT_CONTROL) portrait = {
+        ...(offStandard ? { sideRatio, standard: [+standardAudit.displayedFullWidth.toFixed(1), +standardAudit.displayedFullHeight.toFixed(1)] } : {}),
+        ...(frame ? { frame } : {}),
+        ...(window.__PORTRAIT_CONTROL ? { control: { azimuth: sideRatio, ruleless, whips: !!whips } } : {}),
+      };
+      const angleFile = tankAssetFile(id, 'angle');
+      // Full dossier art and the Garage thumbnail are one atomic output. New
+      // vehicle captures can no longer update one size while leaving the
+      // other stale or hand-resized.
+      files[angleFile] = encodeWebp(angleCanvas);
+      files[`thumbs/${angleFile}`] = encodeWebp(thumbCanvas);
+    }
+    return { files, meta, portrait };
+  } finally {
+    scene.remove(root);
+    visual.dispose();
+  }
+}
+
+function boreCaptureCamera(root, muzzle, spec, fallback, primaryRim, primaryDisc) {
+  const facePart = primaryRim || primaryDisc || (visibleInTree(fallback, root) ? fallback : muzzle);
+  const face = facePart.getWorldPosition(new THREE.Vector3());
+  const direction = muzzle.getWorldDirection(new THREE.Vector3()).normalize();
+  let radius = Math.max(0.014, (spec.armor.gunBarrel.radiusM || 0.04) * 0.92);
+  // A verified physical recess carries no fallback Rim (2026-09-22): frame its mouth
+  // from the measured outer radius its seat receipt publishes.
+  const seat = fallback?.userData?.muzzleSeatReceipt;
+  if (!primaryRim && Number.isFinite(seat?.outerRadiusM) && seat.outerRadiusM > 0.004) {
+    const scale=fallback.getWorldScale(new THREE.Vector3());
+    radius=seat.outerRadiusM*Math.max(Math.abs(scale.x),Math.abs(scale.y));
+  }
+  if (primaryRim?.geometry) {
+    primaryRim.geometry.computeBoundingSphere();
+    const scale = primaryRim.getWorldScale(new THREE.Vector3());
+    const measured = primaryRim.geometry.boundingSphere?.radius
+      // The mouth lives in the local XY plane. Several family builders
+      // stretch only the cannon's longitudinal Z axis; folding that into
+      // the radial scale overestimates the aperture and samples empty air.
+      * Math.max(Math.abs(scale.x), Math.abs(scale.y));
+    if (Number.isFinite(measured) && measured > 0.004) radius = measured;
+  }
+  const distance = Math.max(0.18, radius * 8);
+  const fov = 22;
+  const cam = new THREE.PerspectiveCamera(fov, 1, 0.002, distance * 8);
+  cam.position.copy(face).addScaledVector(direction, distance);
+  cam.up.set(0, 1, 0);
+  cam.lookAt(face);
+  cam.updateMatrixWorld(true);
+  return { direction, radius, distance, fov, cam };
+}
+
+function boreCenterHits(root, cam, direction, distance, mouth) {
+  const ray = new THREE.Raycaster(cam.position, direction.clone().negate(), 0, distance * 4);
+  const centerHits = ray.intersectObject(root, true).filter((hit) => {
+    for (let node = hit.object; node; node = node.parent) {
+      if (!node.visible) return false;
+      if (node === root) break;
+    }
+    const materials = Array.isArray(hit.object.material) ? hit.object.material : [hit.object.material];
+    return !materials.length || materials.some((material) => !material || material.colorWrite !== false);
+  }).slice(0, 6).map((hit) => {
+    const local=mouth?.worldToLocal(hit.point.clone());
+    const seat=mouth?.userData.muzzleSeatReceipt;
+    let bore = !!(mouth?.userData.physicalMouth && local
+      && Math.abs(local.z+seat.physicalBoreDepthM)<.001
+      && Math.hypot(local.x,local.y)<seat.physicalInnerRadiusM);
+    bore ||= /muzzleBoreShadow/i.test(hit.object.name || '');
+    for (let node = hit.object; node && !bore; node = node.parent) {
+      bore = !!(node.userData && node.userData.cannonBore);
+    }
+    return {
+      distance: Number(hit.distance.toFixed(4)),
+      name: hit.object.name || hit.object.type,
+      path: (() => {
+        const names = [];
+        for (let node = hit.object; node; node = node.parent) {
+          names.push(node.name || node.type);
+          if (node === root) break;
+        }
+        return names.reverse();
+      })(),
+      fallback: !!(hit.object.userData && hit.object.userData.cannonBoreFallbackPart),
+      bore,
+    };
+  });
+  return centerHits;
+}
+
+function boreRingSampleResult(hit, muzzle, fallback, pattern, allowPhysicalRim) {
+  const local = hit ? (fallback || muzzle).worldToLocal(hit.point.clone()) : null;
+  let gunOwned = false;
+  for (let part=hit?.object; part; part=part.parent) {
+    if (part===muzzle.parent) { gunOwned=true; break; }
+  }
+  const physicalWitness = local ? { radiusM:Math.hypot(local.x,local.y),zM:local.z,gunOwned } : null;
+  return {
+    pass: !!hit && (pattern.test(hit.object.name || '')
+      || (!allowPhysicalRim && fallback?.userData.physicalMouth && gunOwned && local
+        && Math.abs(local.z+fallback.userData.muzzleSeatReceipt.physicalBoreDepthM)<.001)
+      || (allowPhysicalRim
+      && physicalMuzzleRimSample(fallback?.userData.muzzleSeatReceipt,physicalWitness))),
+    physicalWitness: allowPhysicalRim ? physicalWitness : null,
+    name: hit?.object.name || null,
+    distance: hit ? Number(hit.distance.toFixed(4)) : null,
+  };
+}
+
+function boreLuminance(canvas, radius, distance, fov, physicalReceipt) {
+  const pixelsPerM = 256 / (2 * distance * Math.tan((fov / 2) * Math.PI / 180));
+  const radiusPx = Math.max(4, radius * pixelsPerM);
+  const data = canvas.getContext('2d').getImageData(0, 0, 256, 256).data;
+  return muzzleBoreLuminance(data, 256, 256, radiusPx, physicalReceipt);
+}
+
+function boreShotOne(id) {
+  const visual = createTank(id, null, { camoSeed: 4100, quality: 'high' });
+  const root = visual.root;
+  scene.add(root);
+  try {
+    root.updateMatrixWorld(true);
+    const muzzle = root.getObjectByName('rig_muzzle');
+    if (!muzzle) throw new Error('rig_muzzle missing');
+    const spec = getSpec(id);
+    const fallbackMouths = [];
+    root.traverse((object) => {
+      if (/^muzzleBoreShadowFallback(?:_\d+)?$/.test(object.name || '')
+          && visibleInTree(object, root)) fallbackMouths.push(object);
+    });
+    const fallback = fallbackMouths[0] || null;
+    const primaryRim = visibleBorePart(root, /muzzleBoreShadow(?:Fallback)?Rim$/i);
+    const primaryDisc = visibleBorePart(root, /muzzleBoreShadow(?:Fallback)?Disc$/i);
+    const { direction, radius, distance, fov, cam } = boreCaptureCamera(root, muzzle, spec, fallback, primaryRim, primaryDisc);
+    const centerHits = boreCenterHits(root, cam, direction, distance, fallback);
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+    const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+    const sampleBoreRing = (normalizedRadius, count, pattern, allowPhysicalRim = false, phaseOverride = null) => {
+      const samples = [];
+      for (let i = 0; i < count; i++) {
+        // Physical rings have coplanar radial seams; keep rays off those
+        // seams without reducing sample count or the full angular coverage.
+        const angle = i * Math.PI * 2 / count
+          + (phaseOverride ?? (fallback?.userData.physicalMouth ? .173 : 0));
+        const origin = cam.position.clone()
+          .addScaledVector(right, Math.cos(angle) * radius * normalizedRadius)
+          .addScaledVector(up, Math.sin(angle) * radius * normalizedRadius);
+        const sampleRay = new THREE.Raycaster(origin, direction.clone().negate(), 0, distance * 4);
+        const hit = sampleRay.intersectObject(root, true).find((candidate) => {
+          if (!visibleInTree(candidate.object, root)) return false;
+          const materials = Array.isArray(candidate.object.material)
+            ? candidate.object.material : [candidate.object.material];
+          return !materials.length || materials.some((material) => !material || material.colorWrite !== false);
+        });
+        samples.push(boreRingSampleResult(hit, muzzle, fallback, pattern, allowPhysicalRim));
+      }
+      return samples;
+    };
+    const physicalReceipt = fallback?.userData.physicalMouth
+      ? fallback.userData.muzzleSeatReceipt : null;
+    // An autocannon inside a wide brake may have a bore narrower than 30%
+    // of that brake. Sample the verified aperture, not the surrounding metal.
+    const innerSampleRadius = physicalReceipt
+      ? .6 * physicalReceipt.physicalInnerRadiusM / physicalReceipt.outerRadiusM : .30;
+    const discPattern = /muzzleBoreShadow(?:Fallback)?Disc$/i;
+    // CircleGeometry terminal discs have the same exact radial-edge rounding
+    // issue as physical recesses. Keep raw cardinal evidence, and require the
+    // off-seam ring plus BOTH seam flanks at the unchanged aperture radius.
+    // A finite hole or foreground obstruction still fails any affected ray.
+    const cardinalInnerSamples = sampleBoreRing(innerSampleRadius, 8, discPattern, false, 0);
+    const innerSamples = [
+      ...sampleBoreRing(innerSampleRadius, 8, discPattern, false, .173),
+      ...sampleBoreRing(innerSampleRadius, 8, discPattern, false, -.0001),
+      ...sampleBoreRing(innerSampleRadius, 8, discPattern, false, .0001),
+    ];
+    // Owner 2026-09-23 (M60A2 bore follow-up): a profile-declared mouth draws its true bore, so its
+    // gunmetal ring is a thin bevel outside the declared inner radius instead of the fleet's <= 0.72 R
+    // inner law that the fixed 0.83 R sample assumes. Sample such a ring at its own mid-radius; every
+    // fitted mouth keeps the 0.83 R sample.
+    const declaredSeat = fallback?.userData.muzzleSeatReceipt;
+    // Cut apertures may sit in rectangular or chamfered stock. Prove the
+    // continuous native metal immediately outside the aperture; an arbitrary
+    // fraction of the rectangular face's corner radius can lie outside it.
+    const rimSampleRadius = physicalReceipt
+      ? (physicalReceipt.physicalInnerRadiusM + Math.min(.002,
+          (physicalReceipt.supportOuterRadiusM-physicalReceipt.physicalInnerRadiusM)*.15)) / physicalReceipt.outerRadiusM
+      : declaredSeat?.mouthSource === 'declared-bore'
+        ? (declaredSeat.innerRadiusM + declaredSeat.outerRadiusM) / (2 * declaredSeat.outerRadiusM)
+        : .83;
+    const rimProof = sampleMuzzleRingSeams(phase => sampleBoreRing(rimSampleRadius, 16,
+      /muzzleBoreShadow(?:Fallback)?(?:Rim|Annulus)$/i, true, phase));
+    const rimSamples = rimProof.required;
+    // A verified physical recess carries no fallback Rim mesh (2026-09-22): its own annular face
+    // is the rim, and the bore group sits on the same axis, so concentricity is read against it.
+    const rimWorld = (primaryRim || (physicalReceipt ? fallback : null))?.getWorldPosition(new THREE.Vector3()) || null;
+    const discWorld = primaryDisc?.getWorldPosition(new THREE.Vector3())
+      || (physicalReceipt ? fallback.localToWorld(new THREE.Vector3(0,0,-physicalReceipt.physicalBoreDepthM)) : null);
+    let concentricOffsetM = null;
+    if (rimWorld && discWorld) {
+      const delta = discWorld.clone().sub(rimWorld);
+      delta.addScaledVector(direction, -delta.dot(direction));
+      concentricOffsetM = delta.length();
+    }
+    const oldColor = renderer.getClearColor(new THREE.Color()).clone();
+    const oldAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(0xaebac2, 1);
+    const canvas = capture(cam, 256, 256);
+    // A second view exposes real inner walls; a front-facing black mask can
+    // resemble a hole head-on but cannot provide this parallax.
+    const oblique=cam.clone();
+    oblique.position.addScaledVector(right,distance*.32).addScaledVector(up,distance*.16);
+    oblique.lookAt((fallback||muzzle).getWorldPosition(new THREE.Vector3()));
+    oblique.updateMatrixWorld(true);
+    const obliqueCanvas=capture(oblique,256,256);
+    renderer.setClearColor(oldColor, oldAlpha);
+
+    const luminance = boreLuminance(canvas, radius, distance, fov, physicalReceipt);
+    return {
+      image: canvas.toDataURL('image/png'),
+      obliqueImage: obliqueCanvas.toDataURL('image/png'),
+      ...luminance,
+      muzzleBore: muzzleBoreCensus(root),
+      boreDebug: {
+        fallbackZ: fallback?.position.z ?? null,
+        fallbackPosition: fallback?.position.toArray() ?? null,
+        fallbackWorld: fallback?.getWorldPosition(new THREE.Vector3()).toArray() ?? null,
+        authoredWorld: root.getObjectByName('muzzleBoreShadowDisc')?.getWorldPosition(new THREE.Vector3()).toArray() ?? null,
+        capOffsetM: fallback?.userData.capOffsetM ?? null,
+        muzzleSeatReceipts: fallbackMouths.map((mouth) => ({
+          name: mouth.name,
+          ...(mouth.userData.muzzleSeatReceipt || {}),
+          ...(mouth.userData.physicalMouth ? verifyCarvedMuzzleBore(root,mouth) : {}),
+          // Independent assembled-position witness, not the authored declaration.
+          physicalDiscDepthM: (() => {
+            const disc = mouth.children.find(part => /FallbackDisc/.test(part.name));
+            return disc ? -muzzle.worldToLocal(disc.getWorldPosition(new THREE.Vector3())).z : null;
+          })(),
+        })),
+        primaryRimWorld: rimWorld?.toArray() ?? null,
+        primaryDiscWorld: discWorld?.toArray() ?? null,
+        concentricOffsetM,
+        cardinalInnerSamples,
+        cardinalRimSamples: rimProof.cardinal,
+        innerSamples,
+        rimSamples,
+        centerHits,
+      },
+    };
+  } finally {
+    scene.remove(root);
+    visual.dispose();
+  }
+}
+
+function idsOrFleet(ids) {
+  return ids && ids.length ? ids : DEVELOPMENT_TANK_IDS;
+}
+
+window.__WARM = async (ids) => {
+  await ensureInteriorFills(idsOrFleet(ids));
+  for (const id of idsOrFleet(ids)) {
+    const visual = createTank(id, null, {
+      camoSeed: 4100, quality: 'high', staticPreview: true,
+    });
+    visual.dispose();
+  }
+  return true;
+};
+
+window.__GEN = (ids, views) => {
+  const result = { schemaVersion: TANK_ASSET_SCHEMA_VERSION, files: {}, tanks: {}, portraits: {} };
+  for (const id of idsOrFleet(ids)) {
+    try {
+      const one = inspectOne(id, true, views && views.length ? views : null);
+      Object.assign(result.files, one.files);
+      result.tanks[id] = one.meta;
+      if (one.portrait) result.portraits[id] = one.portrait;
+    } catch (error) {
+      result.files[`${id}.error`] = String(error && error.stack || error);
+    }
+  }
+  return result;
+};
+
+window.__AUDIT = (ids) => {
+  const auditIds = ids && ids.length ? ids : ALL_TANK_IDS;
+  const result = { schemaVersion: TANK_ASSET_SCHEMA_VERSION, requiredViews: Object.keys(TANK_ASSET_VIEWS), ids: [...ALL_TANK_IDS], tanks: {} };
+  for (const id of auditIds) {
+    try { result.tanks[id] = inspectOne(id, false).meta; }
+    catch (error) { result.tanks[id] = { error: String(error && error.stack || error) }; }
+  }
+  return result;
+};
+
+window.__AUDIT_PORTRAITS = (ids, sources, frames) => auditSavedPortraits(idsOrFleet(ids), sources, frames);
+
+window.__CENTER_AUDIT = (ids) => {
+  const result = {};
+  for (const id of idsOrFleet(ids)) {
+    const visual = createTank(id, null, { camoSeed: 4100, quality: 'high' });
+    scene.add(visual.root);
+    try { result[id] = renderedPresentationCenter(visual); }
+    catch (error) { result[id] = { error: String(error && error.stack || error) }; }
+    finally {
+      scene.remove(visual.root);
+      visual.dispose();
+    }
+  }
+  return result;
+};
+
+window.__TOP_ASSET_CENTER_AUDIT = async (ids) => {
+  const result = {};
+  await Promise.all(idsOrFleet(ids).map(async (id) => {
+    try { result[id] = await exportedTopPresentationCenter(id); }
+    catch (error) { result[id] = { error: String(error && error.stack || error) }; }
+  }));
+  return result;
+};
+
+window.__FLEET_IDS = [...DEVELOPMENT_TANK_IDS];
+window.__BORE_SHOTS = (ids) => {
+  const result = {};
+  for (const id of idsOrFleet(ids)) {
+    try { result[id] = boreShotOne(id); }
+    catch (error) { result[id] = { error: String(error && error.stack || error) }; }
+  }
+  return result;
+};
+
+window.__ICONS_READY = true;
+</script>
+</body>
+</html>

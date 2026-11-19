@@ -1,0 +1,122 @@
+@if (replayOffered) {
+  <section class="td-group" aria-labelledby="td-extras-replays">
+    <h3 class="td-section" id="td-extras-replays">Replays and runs</h3>
+    <ul class="td-rows">
+      <li>
+        <button class="td-row mp-row" type="button" [disabled]="!!cannotLoadReplay()" (click)="pickReplay()">
+          <span class="td-name mp-name">Load a replay file</span>
+          <span class="td-note mp-meta">{{ cannotLoadReplay() ?? '' }}</span>
+        </button>
+      </li>
+      <li>
+        <button class="td-row mp-row" type="button" [disabled]="!canSaveReplay() || busy()" (click)="saveReplay()">
+          <span class="td-name mp-name">Save the replay</span>
+          <span class="td-note mp-meta">{{ canSaveReplay() ? '' : 'after the first wave' }}</span>
+        </button>
+      </li>
+      <li>
+        <button class="td-row mp-row" type="button" (click)="openRuns()">
+          <span class="td-name mp-name">Runs</span>
+          <span class="td-note mp-meta">this browser's last runs</span>
+        </button>
+      </li>
+      <li>
+        <button class="td-row mp-row" type="button" (click)="exportRunLog()">
+          <span class="td-name mp-name">Save the run log</span>
+        </button>
+      </li>
+    </ul>
+    <input #replayInput class="mp-file" type="file" tabindex="-1" aria-hidden="true" hidden (change)="onReplayFile($event)">
+  </section>
+} @else {
+  <section class="td-group" aria-labelledby="td-extras-runs">
+    <h3 class="td-section" id="td-extras-runs">Runs</h3>
+    <ul class="td-rows">
+      <li>
+        <button class="td-row mp-row" type="button" (click)="openRuns()">
+          <span class="td-name mp-name">Runs</span>
+          <span class="td-note mp-meta">this browser's last runs</span>
+        </button>
+      </li>
+      <li>
+        <button class="td-row mp-row" type="button" (click)="exportRunLog()">
+          <span class="td-name mp-name">Save the run log</span>
+        </button>
+      </li>
+    </ul>
+  </section>
+}
+
+@if (status(); as s) {
+  <p class="td-note mp-status" [class.is-error]="s.bad" role="status">{{ s.text }}</p>
+}
+@if (replay?.elsewhere(); as there) {
+  <div class="td-actions is-start">
+    <button type="button" class="td-btn-primary" [disabled]="replay.goingThere()" (click)="playThere()">Go to {{ there.name }} and play</button>
+  </div>
+}
+
+<section class="td-group" aria-labelledby="td-extras-game">
+  <h3 class="td-section" id="td-extras-game">The game</h3>
+  <ul class="td-rows">
+    <li>
+      <button class="td-row mp-row" type="button" (click)="openWhatsNew()">
+        <span class="td-name mp-name">What's new</span>
+      </button>
+    </li>
+    <li>
+      <button class="td-row mp-row" type="button" (click)="openKeys()">
+        <span class="td-name mp-name">Keyboard shortcuts</span>
+        <kbd class="td-kbd">H</kbd>
+      </button>
+    </li>
+    <li>
+      <button class="td-row mp-row" type="button" (click)="openDamageMatrix()">
+        <span class="td-name mp-name">Damage vs armor</span>
+      </button>
+    </li>
+    @if (canBenchmark()) {
+      <li>
+        <button class="td-row mp-row" type="button" (click)="runBenchmark()" [attr.aria-expanded]="confirmBenchmark()">
+          <span class="td-name mp-name">Benchmark</span>
+          <span class="td-note mp-meta">about 3 minutes</span>
+        </button>
+        @if (confirmBenchmark()) {
+          <div class="td-stack ex-confirm" role="alertdialog" aria-labelledby="td-extras-bench">
+            <p class="td-note" id="td-extras-bench">
+              The page reloads into a test world and measures frame rate and simulation with up to 10,000 enemies.
+              The game under way ends. At the end you can copy the results.
+            </p>
+            <div class="td-actions">
+              <button class="td-btn-secondary td-btn-sm" type="button" (click)="confirmBenchmark.set(false)">Cancel</button>
+              <button class="td-btn-primary td-btn-sm" type="button" (click)="runBenchmark()">Run</button>
+            </div>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+</section>
+
+<section class="td-group" aria-labelledby="td-extras-about">
+  <h3 class="td-section" id="td-extras-about">About</h3>
+  <ul class="td-rows">
+    <li>
+      <button class="td-row mp-row" type="button" (click)="openAttributions()">
+        <span class="td-name mp-name">Attributions</span>
+      </button>
+    </li>
+    <li>
+      <a class="td-row mp-row" [href]="legalUrl" target="_blank" rel="noopener">
+        <span class="td-name mp-name">Legal &amp; privacy</span>
+        <td-icon class="td-muted" name="externalLink" [size]="14"></td-icon>
+      </a>
+    </li>
+    <li>
+      <a class="td-row mp-row" [href]="repoUrl" target="_blank" rel="noopener">
+        <span class="td-name mp-name">Source on GitHub</span>
+        <td-icon class="td-muted" name="externalLink" [size]="14"></td-icon>
+      </a>
+    </li>
+  </ul>
+</section>

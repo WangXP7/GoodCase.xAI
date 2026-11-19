@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Harvest fish, ore, plants, and meat inside Tiny World Builder's Tinyverse. Learn how nodes, hearts, cooldowns, and the tax economy work." />
+<title>Harvesting - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Harvest Resources</h1>
+        <p>Fish, mine, gather, and hunt to build your inventory. Every action costs a heart — manage them wisely.</p>
+      </div>
+    </section>
+
+    <section class="docs-section" aria-labelledby="resources-title">
+      <div class="section-head">
+        <h2 id="resources-title">The four resources</h2>
+        <p>Each resource comes from a different type of tile in the world.</p>
+      </div>
+      <div class="docs-grid">
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true" style="color:#3b82f6">
+            <svg viewBox="0 0 24 24" stroke-width="0" fill="currentColor">
+              <path d="M2 12c4-5 10-5 14 0-4 5-10 5-14 0z"/>
+              <path d="M16 12l5-3v6l-5-3z"/>
+            </svg>
+          </div>
+          <h3>Fish</h3>
+          <p>Cast a line in a water tile to catch fish. Each connected body of water shares one node with up to 4 charges. Charges refill one at a time over ~20 seconds each.</p>
+          <p style="margin-top:6px;font-size:13px;color:#6f695f">Action: <strong>Fish</strong> &nbsp;·&nbsp; Timer: 3 s</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true" style="color:#d97706">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l8 6-8 14-8-14 8-6z"/>
+              <path d="M4 8h16"/>
+              <path d="M12 2v20"/>
+            </svg>
+          </div>
+          <h3>Ore</h3>
+          <p>Mine stone cells for ore. Each stone tile is an independent node with 1–3 charges (tier randomised on world load). Depleted nodes respawn after ~90 seconds.</p>
+          <p style="margin-top:6px;font-size:13px;color:#6f695f">Action: <strong>Mine</strong> &nbsp;·&nbsp; Timer: 5 s</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true" style="color:#16a34a">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22V9"/>
+              <path d="M12 13C9 13 6 11 6 6c4 0 6 2 6 7z"/>
+              <path d="M12 11c2.6 0 5-1.6 5-6-3.6 0-5 1.6-5 6z"/>
+            </svg>
+          </div>
+          <h3>Plants</h3>
+          <p>Gather from crop, corn, wheat, pumpkin, carrot, and sunflower tiles. Each plant tile is one node with a single charge. After harvest it ripens again over ~2 minutes.</p>
+          <p style="margin-top:6px;font-size:13px;color:#6f695f">Action: <strong>Gather</strong> &nbsp;·&nbsp; Timer: 3 s</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true" style="color:#ef4444">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14.6 8.4a4.5 4.5 0 1 0-6.3 6.3L4 19l1.5.4.4 1.5 4.4-4.4a4.5 4.5 0 0 0 6.3-6.3z"/>
+            </svg>
+          </div>
+          <h3>Meat</h3>
+          <p>Hunt the animals that roam the world. At least 2 and up to 4 animals are always present — the world respawns them automatically after a hunt.</p>
+          <p style="margin-top:6px;font-size:13px;color:#6f695f">Action: <strong>Hunt</strong> &nbsp;·&nbsp; Timer: 1 s</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflow-section" aria-labelledby="how-title">
+      <div class="section-head">
+        <h2 id="how-title">How to harvest</h2>
+        <p>Every harvest follows the same four-step loop.</p>
+      </div>
+      <ol class="workflow-steps">
+        <li>
+          <span class="step-number">1</span>
+          <div>
+            <h3>Walk to the node</h3>
+            <p>Move your avatar within one cell of the resource. Water, stone, crop, and animal nodes each glow when you are in range.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <div>
+            <h3>Press the action button</h3>
+            <p>Hit Fish, Mine, Gather, or Hunt in the HUD at the bottom of the screen. The action must match the node type or it will be rejected.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <div>
+            <h3>Wait out the timer</h3>
+            <p>A progress bar fills over 1–5 seconds. You spend one heart and are locked in place for the duration. Moving cancels the action.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-number">4</span>
+          <div>
+            <h3>Collect your reward</h3>
+            <p>Resources land in your inventory with a pop-up reward and start a 5-second per-action cooldown. The HUD updates your tallies instantly.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="docs-section" aria-labelledby="hearts-title">
+      <div class="section-head">
+        <h2 id="hearts-title">Hearts and cooldowns</h2>
+        <p>Resource management that keeps harvesting tactical.</p>
+      </div>
+      <div class="docs-grid">
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true" style="color:#ef4444">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M12 20.7l-1.5-1.4C5.3 14.6 2 11.6 2 7.9 2 5.1 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9.9-1.2 2.4-1.9 4-1.9 2.7 0 4.8 2.1 4.8 4.9 0 3.7-3.3 6.7-8.3 11.4z"/>
+            </svg>
+          </div>
+          <h3>10 hearts max</h3>
+          <p>You start each session with a full bar. Each harvest costs exactly one heart regardless of the action type or node tier.</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3>1 heart per minute regen</h3>
+          <p>Hearts regenerate passively at one per minute. An empty bar fills back to ten in ten minutes, so time your sessions accordingly.</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18"/>
+              <path d="m6 6 12 12"/>
+            </svg>
+          </div>
+          <h3>5-second per-action cooldown</h3>
+          <p>After each harvest the used action button locks for 5 seconds. You can queue different action types back-to-back while you have hearts remaining.</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h3>Observer mode</h3>
+          <p>Players who join as observers can watch and chat but cannot harvest. Only players with the play role can interact with resource nodes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="docs-section" aria-labelledby="economy-title">
+      <div class="section-head">
+        <h2 id="economy-title">The tax economy</h2>
+        <p>World owners earn passively from every harvest in their world.</p>
+      </div>
+      <div class="docs-grid">
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/>
+              <path d="M12 6v12"/>
+              <path d="M14.6 8.6A3 3 0 0 0 11.6 7c-1.7 0-3 1-3 2.3 0 3 6 1.7 6 4.7 0 1.3-1.3 2.3-3 2.3a3 3 0 0 1-3-1.6"/>
+            </svg>
+          </div>
+          <h3>Owner tax cut</h3>
+          <p>Each harvest produces 3 units gross. The world owner's tax rate (1–100%) is applied before the harvester receives their share. Owners keep 100% in their own world.</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+              <path d="M12 12h.01"/>
+            </svg>
+          </div>
+          <h3>Durable inventory</h3>
+          <p>Resource balances are persisted to Postgres via a service-token flush after every harvest cycle. Your inventory survives disconnects and server restarts.</p>
+        </div>
+        <div class="docs-card">
+          <div class="docs-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <h3>Tax history</h3>
+          <p>Owners can see a breakdown of tax earned per resource per world via the resources API. Every paid-out unit is recorded in the tax ledger.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to start harvesting?</h2>
+        <p>Enter the tinyverse, pick a world, and fill your inventory.</p>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+        <a class="secondary-action" href="/worlds">
+          <span>Own a world</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

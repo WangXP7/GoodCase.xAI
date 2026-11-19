@@ -1,0 +1,622 @@
+import { addCombatHitboxes, createCombatFrames, type HitboxArmor } from './combatHitboxes.ts';
+import type { RuntimeValue } from '../runtimeTypes.ts';
+import * as THREE from 'three';
+import type { ExternalWeaponStock } from '../sim/armor.ts';
+import type { GunFaceSplit } from '../sim/gunFaceSplit.ts';
+import { t } from '../ui/i18n.ts';
+import { TECHNICAL_LEGENDS, technicalToneColor, technicalToneHex } from '../ui/technicalDiagramLegend.ts';
+import {
+  addInternalCrewModel,
+  addInternalDrivetrainModel,
+  addInternalModuleModel,
+  type AnatomyResource,
+  type AnatomyVolumePort,
+  type ArmorPlatePort,
+  type InternalArmorModelPort,
+  type InternalCrewVolumePort,
+  type InternalModuleVolumePort,
+} from '../vehicles/internalAnatomyVisuals.ts';
+
+type Vec3Tuple = readonly [number, number, number];
+export type InspectionMode = 'appearance' | 'armor' | 'modules' | 'crew';
+type OverlayResource = AnatomyResource;
+
+interface ArmorPlate extends ArmorPlatePort {
+  era?: RuntimeValue;
+  moduleLink?: string | null;
+  physicalMm?: number;
+  keMm?: number;
+  ceMm?: number;
+}
+
+interface CollisionFace {
+  internal?: boolean;
+  plate?: ArmorPlate;
+  indices?: readonly number[];
+  gunSplit?: GunFaceSplit<ArmorPlate>;
+}
+
+interface CollisionCell {
+  min: Vec3Tuple;
+  faces?: readonly CollisionFace[];
+  vertices?: readonly Vec3Tuple[];
+}
+
+interface AnatomyModuleVolume extends InternalModuleVolumePort {
+  layoutPlacement?: string;
+  layoutConfidence?: string;
+  layoutSources?: string[];
+  parts?: AnatomyVolumePort[];
+}
+
+interface AnatomyCrewVolume extends InternalCrewVolumePort {
+  layoutPlacement?: string;
+  layoutConfidence?: string;
+  layoutSources?: string[];
+}
+
+interface InspectionArmor extends InternalArmorModelPort, HitboxArmor {
+  externalWeapons?: readonly ExternalWeaponStock[];
+  hullPlates?: ArmorPlate[];
+  turretPlates?: ArmorPlate[];
+  modules?: AnatomyModuleVolume[];
+  crew?: AnatomyCrewVolume[];
+  collisionShells?: { hull?: readonly CollisionCell[]; turret?: readonly CollisionCell[] };
+}
+
+interface InspectionSpec {
+  era?: string;
+  gun?: { caliberMm?: number; shells?: Array<{ caliberMm?: number }> };
+  armor?: InspectionArmor;
+}
+
+interface InspectionVisual { root: THREE.Object3D }
+
+interface InspectionOverlay {
+  mode: InspectionMode;
+  count: number;
+  pickables: THREE.Mesh[];
+  emphasize(object: THREE.Mesh | null): void;
+  clear(): void;
+  update?(): void;
+}
+
+function overlayMaterial(object: THREE.Mesh): THREE.Material | null {
+  if (!object.material) return null;
+  return Array.isArray(object.material) ? object.material[0] || null : object.material;
+}
+
+function restoreOverlayEmphasis(object: THREE.Mesh): void {
+  if (setAnatomyEmphasis(object, false)) return;
+  const material = overlayMaterial(object);
+  if (material) material.opacity = object.userData.galleryBaseOpacity || 0.38;
+}
+
+function applyOverlayEmphasis(object: THREE.Mesh): void {
+  if (setAnatomyEmphasis(object, true)) return;
+  const material = overlayMaterial(object);
+  if (!material) return;
+  object.userData.galleryBaseOpacity ||= material.opacity;
+  material.opacity = Math.min(0.74, material.opacity + 0.28);
+}
+
+// 253: the palettes are the technical diagrams' tones (tokens.json diagramhue), the colours their DOM labels name
+const kebab = (name: string): string => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const MODULE_COLORS: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(
+  ['engine', 'fuelTank', 'ammoRack', 'roofGun', 'missileRack', 'autoloader', 'feedSystem', 'turretRing', 'gunMount', 'radio',
+    'optics', 'gun', 'transmission'].map((name) => [name, technicalToneColor(`module-${kebab(name)}`)])));
+
+const CREW_COLORS: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(
+  ['driver', 'gunner', 'commander', 'loader', 'radioOperator', 'assistantDriver', 'assistantLoader', 'weaponOperatorLeft',
+    'weaponOperatorRight'].map((name) => [name, technicalToneColor(`crew-${kebab(name)}`)])));
+
+function armorThicknessColor(plate: ArmorPlate): number {
+  if (plate.kind === 'era' || plate.era) return technicalToneColor('armor-era');
+  if (plate.kind === 'spaced') return technicalToneColor('armor-spaced');
+  if (plate.kind === 'external') return technicalToneColor('armor-external');
+  const ke = Number(plate.keMm ?? plate.physicalMm ?? 0);
+  return technicalToneColor(`armor-ke-${ke >= 650 ? 4 : ke >= 350 ? 3 : ke >= 180 ? 2 : ke >= 80 ? 1 : 0}`);
+}
+
+function plateGeometry(plate: ArmorPlate): THREE.BufferGeometry | null {
+  const vertices = (plate.verts || []).filter((point): point is Vec3Tuple =>
+    Array.isArray(point) && point.length >= 3 && point.every(Number.isFinite));
+  if (vertices.length < 3) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(
+    vertices.flatMap((point) => point.slice(0, 3)), 3,
+  ));
+  const indices: number[] = [];
+  for (let index = 1; index < vertices.length - 1; index += 1) indices.push(0, index, index + 1);
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function platePositions(byPlate: Map<ArmorPlate, number[]>, plate: ArmorPlate): number[] {
+  let positions = byPlate.get(plate);
+  if (!positions) {
+    positions = [];
+    byPlate.set(plate, positions);
+  }
+  return positions;
+}
+
+function appendCollisionFace(
+  byPlate: Map<ArmorPlate, number[]>,
+  cell: CollisionCell,
+  face: CollisionFace,
+  splits: Set<GunFaceSplit<ArmorPlate>>,
+): void {
+  if (face.internal || !face.plate) return;
+  // (265) a plane only partly over the gun: its pieces, each in the plate a round meets there (once for the plane)
+  if (face.gunSplit) {
+    if (splits.has(face.gunSplit)) return;
+    splits.add(face.gunSplit);
+    for (const piece of face.gunSplit.pieces) {
+      const piecePositions = platePositions(byPlate, piece.plate);
+      for (let index = 1; index + 1 < piece.points.length; index++) {
+        for (const point of [piece.points[0], piece.points[index], piece.points[index + 1]]) piecePositions.push(point[0], point[1], point[2]);
+      }
+    }
+    return;
+  }
+  const positions = platePositions(byPlate, face.plate);
+  for (const index of face.indices || []) {
+    const point = cell.vertices?.[index];
+    if (point) positions.push(point[0], point[1], point[2]);
+  }
+}
+
+function collisionGeometry(
+  plate: ArmorPlate,
+  positions: number[],
+): { plate: ArmorPlate; geometry: THREE.BufferGeometry } | null {
+  if (positions.length < 9 || positions.length % 9 !== 0) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return { plate, geometry };
+}
+
+function collisionPlateGeometry(cells?: readonly CollisionCell[]): Array<{
+  plate: ArmorPlate;
+  geometry: THREE.BufferGeometry;
+}> {
+  const byPlate = new Map<ArmorPlate, number[]>();
+  const splits = new Set<GunFaceSplit<ArmorPlate>>();
+  for (const cell of cells || []) {
+    for (const face of cell.faces || []) appendCollisionFace(byPlate, cell, face, splits);
+  }
+  const geometries: Array<{ plate: ArmorPlate; geometry: THREE.BufferGeometry }> = [];
+  for (const [plate, positions] of byPlate) {
+    const result = collisionGeometry(plate, positions);
+    if (result) geometries.push(result);
+  }
+  return geometries;
+}
+
+function inspectionMaterial(color: number, opacity: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity, depthWrite: false, depthTest: true,
+    side: THREE.DoubleSide, toneMapped: false, polygonOffset: true,
+    polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+}
+
+function lineMaterial(color: number, opacity = 0.92): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({
+    color, transparent: true, opacity, depthTest: false, toneMapped: false,
+  });
+}
+
+function dashedMaterial(color: number): THREE.LineDashedMaterial {
+  const material = new THREE.LineDashedMaterial({
+    color, transparent: true, opacity: 0.92, dashSize: 0.075, gapSize: 0.04,
+    depthTest: false, depthWrite: false, toneMapped: false,
+  });
+  material.userData.galleryAnatomyLine = true;
+  material.userData.galleryBaseOpacity = material.opacity;
+  return material;
+}
+
+function anatomyFillMaterial(color: number): THREE.MeshBasicMaterial {
+  const material = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.07, depthTest: false, depthWrite: false,
+    side: THREE.DoubleSide, toneMapped: false,
+  });
+  material.userData.galleryAnatomyFill = true;
+  material.userData.galleryBaseOpacity = material.opacity;
+  return material;
+}
+
+function attachContainer(owner: THREE.Object3D, name: string): THREE.Group {
+  const container = new THREE.Group();
+  container.name = name;
+  container.renderOrder = 80;
+  owner.add(container);
+  return container;
+}
+
+function addPlate(
+  container: THREE.Object3D,
+  plate: ArmorPlate,
+  index: number,
+  turretLocal: boolean,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  sourceGeometry: THREE.BufferGeometry | null = null,
+): void {
+  const geometry = sourceGeometry || plateGeometry(plate);
+  if (!geometry) return;
+  const color = armorThicknessColor(plate);
+  const material = inspectionMaterial(color, 0.38);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `gallery_armor_${turretLocal ? 'turret' : 'hull'}_${index}`;
+  mesh.renderOrder = 81;
+  mesh.userData.inspection = {
+    mode: 'armor',
+    plateName: plate.name,
+    module: plate.moduleLink,
+    id: `${turretLocal ? 'T' : 'H'}${String(index + 1).padStart(2, '0')}`,
+    title: String(plate.name || 'Armor plate').replaceAll('_', ' '),
+    kind: String(plate.kind || 'main'),
+    physicalMm: Number(plate.physicalMm || 0),
+    keMm: Number(plate.keMm ?? plate.physicalMm ?? 0),
+    ceMm: Number(plate.ceMm ?? plate.physicalMm ?? 0),
+    owner: turretLocal ? t('gallery.legend.owner.turret') : t('gallery.legend.owner.hull'),
+  };
+  container.add(mesh);
+  pickables.push(mesh);
+  resources.push(geometry, material);
+  const edgeGeometry = new THREE.EdgesGeometry(geometry, 12);
+  const edgeMaterial = lineMaterial(color);
+  const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+  edges.renderOrder = 82;
+  edges.raycast = () => {};
+  container.add(edges);
+  resources.push(edgeGeometry, edgeMaterial);
+}
+
+function addDashedLines(
+  model: THREE.Object3D,
+  color: number,
+  resources: OverlayResource[],
+): void {
+  const material = dashedMaterial(color);
+  resources.push(material);
+  const meshes: THREE.Mesh[] = [];
+  model.traverse((object: THREE.Object3D) => {
+    if (object instanceof THREE.Mesh) meshes.push(object);
+  });
+  const instanceMatrix = new THREE.Matrix4();
+  for (const mesh of meshes) {
+    mesh.renderOrder = 84;
+    const edges = new THREE.EdgesGeometry(mesh.geometry, 8);
+    resources.push(edges);
+    if (mesh instanceof THREE.InstancedMesh) {
+      for (let index = 0; index < mesh.count; index += 1) {
+        mesh.getMatrixAt(index, instanceMatrix);
+        const lines = new THREE.LineSegments(edges, material);
+        lines.matrix.copy(instanceMatrix);
+        lines.matrixAutoUpdate = false;
+        lines.renderOrder = 85;
+        lines.raycast = () => {};
+        lines.computeLineDistances();
+        mesh.parent?.add(lines);
+      }
+      continue;
+    }
+    const lines = new THREE.LineSegments(edges, material);
+    lines.position.copy(mesh.position);
+    lines.quaternion.copy(mesh.quaternion);
+    lines.scale.copy(mesh.scale);
+    lines.renderOrder = 85;
+    lines.raycast = () => {};
+    lines.computeLineDistances();
+    mesh.parent?.add(lines);
+  }
+  model.userData.galleryDashedAnatomy = true;
+}
+
+function volumeSize(volume: AnatomyVolumePort): THREE.Vector3 {
+  return new THREE.Vector3(
+    volume.max[0] - volume.min[0],
+    volume.max[1] - volume.min[1],
+    volume.max[2] - volume.min[2],
+  );
+}
+
+function addVolumePicker(
+  model: THREE.Object3D,
+  volume: AnatomyVolumePort,
+  index: number,
+  mode: 'modules' | 'crew',
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  partIndex = 0,
+  partCount = 1,
+): void {
+  const size = volumeSize(volume);
+  if (size.x <= 0 || size.y <= 0 || size.z <= 0) return;
+  const key = String(mode === 'modules' ? volume.module : volume.crew || 'volume');
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  const material = new THREE.MeshBasicMaterial({
+    transparent: true, opacity: 0, colorWrite: false,
+    depthWrite: false, depthTest: false,
+  });
+  const picker = new THREE.Mesh(geometry, material);
+  picker.name = `gallery_${mode}_${key}_${index}_${partIndex}`;
+  picker.userData.inspection = {
+    mode,
+    module: volume.module,
+    crew: volume.crew,
+    id: `${mode === 'modules' ? 'M' : 'C'}${String(index + 1).padStart(2, '0')}`
+      + (partCount > 1 ? `.${partIndex + 1}` : ''),
+    title: key.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' '),
+    owner: volume.turretLocal ? 'Turret-local model' : 'Hull-local model',
+    dimensionsM: size.toArray().map((value) => Number(value.toFixed(2))),
+    visualForm: volume.visualForm || 'kill-cam anatomy model',
+    station: volume.station || volume.layoutPlacement || null,
+    evidence: volume.layoutConfidence || null,
+    sourceIds: volume.layoutSources || [],
+  };
+  picker.userData.inspectionVisual = model;
+  model.add(picker);
+  pickables.push(picker);
+  resources.push(geometry, material);
+}
+
+function specCaliberMm(spec: InspectionSpec): number {
+  return Number(spec?.gun?.shells?.[0]?.caliberMm || spec?.gun?.caliberMm || 0);
+}
+
+function addModuleModels(
+  spec: InspectionSpec,
+  hullContainer: THREE.Object3D,
+  turretContainer: THREE.Object3D,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  gunContainer?: THREE.Object3D,
+): void {
+  const modules = spec.armor?.modules || [];
+  const caliberMm = specCaliberMm(spec);
+  modules.forEach((volume, index) => {
+    const parts = Array.isArray(volume.parts) && volume.parts.length ? volume.parts : [volume];
+    parts.forEach((part, partIndex) => {
+      const resolved = part === volume ? volume : { ...volume, min: part.min, max: part.max };
+      const color = MODULE_COLORS[volume.module || 'module'] || technicalToneColor('module-radio');
+      const fill = anatomyFillMaterial(color);
+      resources.push(fill);
+      const model = addInternalModuleModel(
+        resolved, fill, hullContainer, turretContainer, resources,
+        spec.era, caliberMm, fill, spec.armor, gunContainer,
+      );
+      if (!model) return;
+      addDashedLines(model, color, resources);
+      const visualBounds = model.userData.internalAnatomy.visualBounds as Partial<AnatomyVolumePort>;
+      addVolumePicker(model, { ...resolved, ...visualBounds }, index, 'modules', resources, pickables,
+        partIndex, parts.length);
+    });
+  });
+  const drivetrainColor = technicalToneColor('module-drivetrain');
+  const drivetrainFill = anatomyFillMaterial(drivetrainColor);
+  resources.push(drivetrainFill);
+  const drivetrain = addInternalDrivetrainModel(
+    spec.armor || {}, hullContainer, resources, drivetrainFill,
+  );
+  if (drivetrain) addDashedLines(drivetrain, drivetrainColor, resources);
+}
+
+function addCrewModels(
+  spec: InspectionSpec,
+  hullContainer: THREE.Object3D,
+  turretContainer: THREE.Object3D,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+): void {
+  const crew = spec.armor?.crew || [];
+  crew.forEach((volume, index) => {
+    const color = CREW_COLORS[volume.crew || 'crew'] || technicalToneColor('crew-other');
+    const fill = anatomyFillMaterial(color);
+    resources.push(fill);
+    const model = addInternalCrewModel(
+      volume, fill, hullContainer, turretContainer, resources, spec.armor,
+    );
+    addDashedLines(model, color, resources);
+    addVolumePicker(model, volume, index, 'crew', resources, pickables);
+  });
+}
+
+function addDetailedArmorPlates(
+  container: THREE.Object3D,
+  plates: readonly ArmorPlate[],
+  baseIndex: number,
+  turret: boolean,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  gunContainer?: THREE.Object3D,
+): void {
+  let detailIndex = 0;
+  for (const plate of plates) {
+    if ((plate.kind || 'main') === 'main' && !/_(?:cupola|hatch)_/i.test(plate.name || '')) continue;
+    addPlate(plate.gunFollow && gunContainer ? gunContainer : container,
+      plate, baseIndex + detailIndex, turret, resources, pickables);
+    detailIndex += 1;
+  }
+}
+
+function addArmorModels(
+  spec: InspectionSpec,
+  hullContainer: THREE.Object3D,
+  turretContainer: THREE.Object3D,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  gunContainer?: THREE.Object3D,
+): void {
+  const hullPlates = spec.armor?.hullPlates || [];
+  const turretPlates = spec.armor?.turretPlates || [];
+  const exactHull = collisionPlateGeometry(spec.armor?.collisionShells?.hull);
+  const exactTurret = collisionPlateGeometry(spec.armor?.collisionShells?.turret);
+  exactHull.forEach(({ plate, geometry }, index) =>
+    addPlate(hullContainer, plate, index, false, resources, pickables, geometry));
+  exactTurret.forEach(({ plate, geometry }, index) =>
+    addPlate(turretContainer, plate, index, true, resources, pickables, geometry));
+  addDetailedArmorPlates(hullContainer, hullPlates, exactHull.length, false, resources, pickables);
+  addDetailedArmorPlates(turretContainer, turretPlates, exactTurret.length, true, resources, pickables, gunContainer);
+}
+
+function addInspectionModels(
+  mode: InspectionMode,
+  spec: InspectionSpec,
+  hullContainer: THREE.Object3D,
+  turretContainer: THREE.Object3D,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  gunContainer?: THREE.Object3D,
+): void {
+  if (mode === 'armor') {
+    addArmorModels(spec, hullContainer, turretContainer, resources, pickables, gunContainer);
+  } else if (mode === 'modules') {
+    addModuleModels(spec, hullContainer, turretContainer, resources, pickables, gunContainer);
+  } else if (mode === 'crew') {
+    addCrewModels(spec, hullContainer, turretContainer, resources, pickables);
+  }
+  if (mode === 'armor' || mode === 'modules') {
+    addWeaponModels(mode, spec, hullContainer, turretContainer, resources, pickables, gunContainer);
+  }
+}
+
+function weaponInspectionGeometry(part: ExternalWeaponStock): THREE.BufferGeometry | null {
+  const positions: number[] = [];
+  for (const plate of part.plates) {
+    for (let i = 1; i < plate.verts.length - 1; i++) {
+      positions.push(...plate.verts[0], ...plate.verts[i], ...plate.verts[i + 1]);
+    }
+  }
+  if (!positions.length) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function weaponOwnerLabel(part: ExternalWeaponStock): string {
+  if (part.gunFollow) return 'Gun assembly';
+  return part.turretLocal ? 'Turret' : 'Hull';
+}
+
+function addWeaponModels(
+  mode: 'armor' | 'modules',
+  spec: InspectionSpec,
+  hullContainer: THREE.Object3D,
+  turretContainer: THREE.Object3D,
+  resources: OverlayResource[],
+  pickables: THREE.Mesh[],
+  gunContainer?: THREE.Object3D,
+): void {
+  for (const [index, part] of (spec.armor?.externalWeapons || []).entries()) {
+    const geometry = weaponInspectionGeometry(part);
+    if (!geometry) continue;
+    const material = inspectionMaterial(mode === 'modules'
+      ? MODULE_COLORS[part.module] : armorThicknessColor(part.plates[0]), .38);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = `gallery_${mode}_weapon_${index}`;
+    mesh.renderOrder = 82;
+    mesh.userData.inspection = { mode, id: `W${index + 1}`,
+      title: part.module === 'missileRack' ? 'Missile launcher / housing' : 'Launcher mechanism',
+      kind: 'external', module: part.module, physicalMm: part.plates[0].physicalMm,
+      keMm: part.plates[0].keMm, ceMm: part.plates[0].ceMm,
+      dimensionsM: part.max.map((value, axis) => Number((value - part.min[axis]).toFixed(3))),
+      owner: weaponOwnerLabel(part) };
+    const container = part.gunFollow && gunContainer ? gunContainer
+      : part.turretLocal ? turretContainer : hullContainer;
+    // Stationary turret stock is measured in the rigid combat frame. Avoid
+    // applying a presentation-only rig scale a second time (Warrior).
+    if (part.turretLocal && !part.gunFollow && turretContainer.parent) {
+      const scale = turretContainer.parent.scale;
+      mesh.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
+    }
+    container.add(mesh); pickables.push(mesh); resources.push(geometry, material);
+  }
+}
+
+function setAnatomyEmphasis(picker: THREE.Mesh | null, emphasized: boolean): boolean {
+  const model = picker?.userData?.inspectionVisual;
+  if (!(model instanceof THREE.Object3D)) return false;
+  model.traverse((object: THREE.Object3D) => {
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.LineSegments)) return;
+    const material = Array.isArray(object.material) ? object.material[0] : object.material;
+    if (material?.userData?.galleryAnatomyLine) {
+      material.opacity = emphasized ? 1 : material.userData.galleryBaseOpacity;
+    } else if (material?.userData?.galleryAnatomyFill) {
+      material.opacity = emphasized ? 0.18 : material.userData.galleryBaseOpacity;
+    }
+  });
+  return true;
+}
+
+export function createInspectionOverlay(
+  spec: InspectionSpec | null | undefined,
+  visual: InspectionVisual | null | undefined,
+  mode: InspectionMode,
+  hitboxes = false,
+): InspectionOverlay {
+  const resources: OverlayResource[] = [];
+  const pickables: THREE.Mesh[] = [];
+  const containers: THREE.Object3D[] = [];
+  if (!spec || !visual?.root || mode === 'appearance') {
+    return { mode, count: 0, pickables, emphasize() {}, clear() {} };
+  }
+  const root = visual.root;
+  const turret = root.getObjectByName('rig_turret') || root;
+  const hullContainer = attachContainer(root, `gallery_${mode}_hull`);
+  const turretContainer = attachContainer(turret, `gallery_${mode}_turret`);
+  containers.push(hullContainer, turretContainer);
+  const gun = root.getObjectByName('rig_gun');
+  let gunContainer: THREE.Object3D | undefined;
+  // Articulated anatomy is explicit. Legacy armor plates can carry gunFollow
+  // while their profile uses different rig datums; retain those established
+  // turret-owned overlays until their complete anatomy opts into this frame.
+  const articulatedAnatomy = spec.armor?.modules?.some(volume => volume.gunFollow === true)
+    || spec.armor?.externalWeapons?.some(part => part.gunFollow);
+  if (articulatedAnatomy && gun && spec.armor?.gunPivot) {
+    gunContainer = attachContainer(gun, `gallery_${mode}_gun`);
+    const pivot = spec.armor.gunPivot;
+    gunContainer.position.set(-pivot[0], -pivot[1], -pivot[2]);
+    containers.push(gunContainer);
+  }
+  let update: (() => void) | undefined;
+  if (hitboxes && (mode === 'modules' || mode === 'crew')) {
+    const frames = createCombatFrames(root, spec.armor || {});
+    containers.push(frames.hull); update = frames.update;
+    addCombatHitboxes(mode, spec.armor || {}, frames.hull, frames.turret, frames.gun, resources, pickables);
+    if (mode === 'modules') addWeaponModels(mode, spec, frames.hull, frames.turret, resources, pickables, frames.gun);
+  } else addInspectionModels(mode, spec, hullContainer, turretContainer, resources, pickables, gunContainer);
+
+  let emphasized: THREE.Mesh | null = null;
+  return {
+    mode,
+    count: pickables.length,
+    pickables,
+    update,
+    emphasize(object: THREE.Mesh | null) {
+      if (emphasized) restoreOverlayEmphasis(emphasized);
+      emphasized = object || null;
+      if (emphasized) applyOverlayEmphasis(emphasized);
+    },
+    clear() {
+      containers.forEach((container) => container.removeFromParent());
+      resources.forEach((resource) => resource.dispose?.());
+      resources.length = 0;
+      pickables.length = 0;
+      emphasized = null;
+    },
+  };
+}
+
+export function inspectionLegend(mode: InspectionMode): Array<readonly [string, string]> {
+  // one table with the technical diagrams' DOM legend (src/ui/technicalDiagramLegend.ts)
+  if (mode === 'armor' || mode === 'modules' || mode === 'crew') return TECHNICAL_LEGENDS[mode].map(([key, tone]) => [t(key), technicalToneHex(tone)] as const);
+  return [];
+}

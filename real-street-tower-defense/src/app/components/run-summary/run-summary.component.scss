@@ -1,0 +1,57 @@
+// Layout of the run's balance: the figures in a row of tiles, leaks per wave
+// as bars (height to the worst wave), the top towers as a table.
+
+.run-summary {
+  gap: var(--td-sp-4);
+}
+
+.run-figures {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+}
+
+.run-figure {
+  padding: 10px 8px;
+}
+
+.run-figure dd {
+  margin: 0;
+}
+
+.run-block {
+  gap: 6px;
+}
+
+.run-caption {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.run-leaks {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 36px;
+}
+
+.run-leak-bar {
+  flex: 1 1 0;
+  max-width: 14px;
+  min-height: 2px;
+  background: var(--td-hp-text);
+
+  &.run-leak-none {
+    height: 2px;
+    background: var(--td-line-dark);
+  }
+}
+
+.run-axis {
+  display: flex;
+  justify-content: space-between;
+}
+
+.run-rank {
+  width: 18px;
+}

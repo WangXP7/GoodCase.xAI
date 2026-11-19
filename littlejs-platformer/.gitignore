@@ -1,0 +1,22 @@
+# node files
+node_modules
+
+# local files
+local/
+
+# builds in progress, put in dist and docs when they are whole
+/dist.build
+/docs.build
+
+# release builds
+/LittleJS-*.zip
+
+# example builds
+examples/starter/build
+examples/starter/*.zip
+examples/typescript/build
+docs/superpowers/
+.claude/
+.vscode/
+# bench copies of older builds for comparisons
+bench/*.prev.js

@@ -1,0 +1,20 @@
+{
+  "name": "tria-prima",
+  "version": "1.1.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Tria Prima: a dark-fantasy alchemy adventure. First-person 3D, WebGL2, fully procedural.",
+  "scripts": {
+    "dev": "node tools/dev-server.mjs 8930",
+    "build": "node tools/build.mjs"
+  },
+  "dependencies": {
+    "cannon-es": "0.20.0",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@fontsource/cormorant-garamond": "5.1.0",
+    "esbuild": "0.24.0"
+  }
+}

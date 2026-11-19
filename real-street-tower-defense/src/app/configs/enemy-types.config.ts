@@ -1,0 +1,1449 @@
+/**
+ * Enemy Type Configuration System
+ *
+ * Central registry for all enemy types.
+ * Add new types here - no code changes needed elsewhere.
+ */
+
+import { ArmorType } from '../configs/combat/combat.types';
+import { TIMING } from './timing.config';
+import type { BossTraits } from '../managers/boss-traits';
+import {
+  GOLEM_FOOTSTEP,
+  type DeathSoundId,
+  type FootstepConfig,
+  type HitSoundId,
+  type WorldSoundId,
+} from './game-sounds.config';
+
+/**
+ * What an enemy splits into when a tower kills it (EnemyManager.kill). A leak
+ * at the HQ and the debug kill-all do not split. The children join the
+ * parent's path where it died and scale with its HP and speed multipliers.
+ */
+export interface SplitOnDeath {
+  /** Enemy type of the children */
+  type: EnemyTypeId;
+  /** Children per kill */
+  count: number;
+  /** Lateral spread between the children, a share of the corridor room around the parent's lane (0-1) */
+  spread: number;
+}
+
+/**
+ * A boss that walks as a chain of segments, Skarnax (managers/worm).
+ * Every segment is an enemy of the chained type with its own HP; the type's
+ * own model draws the head, `segmentModel` the body. One spawn of the type
+ * puts the whole chain on the route, the segments coming out one after
+ * another.
+ */
+export interface EnemyChain {
+  /** Type whose VAT pool draws the body segments (only its model is used) */
+  segmentModel: EnemyTypeId;
+  /** Type whose VAT pool draws the last segment of each worm once it is out (only its model is used) */
+  tailModel: EnemyTypeId;
+  /** Distance between two segments along the route centre line (m) */
+  spacing: number;
+  /** As many segments as fit the route, at least this many ... */
+  minSegments: number;
+  /** ... and at most this many, see WORM_MAX_SEGMENTS */
+  maxSegments: number;
+  /** Sideways sway, a share of the corridor room (0-1) */
+  sway: number;
+  /** Length of one sway along the route (m) */
+  swayWavelength: number;
+  /**
+   * The segment that leads a worm: its HP are the segment's times `hpFactor`
+   * and it wears `armorType`. After a cut the first segment behind the gap
+   * takes both over (WormChains), so a worm taken apart from the front meets
+   * a head at every step.
+   */
+  head: { hpFactor: number; armorType: ArmorType };
+  /**
+   * How much faster a worm gets as it shrinks: its speed times
+   * 1 + rush · (share of the spawned length it has lost). A last segment
+   * alone walks at 1 + rush times the base speed.
+   */
+  rush: number;
+}
+
+/**
+ * An enemy whose body lies along the route instead of standing on it (the
+ * ooze boss): its tip walks the path like any enemy, the tail stays at the
+ * portal until the body is `maxLengthM` long and follows the tip from then
+ * on. See entities/ooze-body.ts and managers/ooze-bodies.ts.
+ */
+export interface OozeConfig {
+  /**
+   * Longest the body grows along the route (m). Its leak damage
+   * (leakDamageOf) is spread over this length: each metre that enters costs
+   * its share, so a shorter body costs less.
+   */
+  maxLengthM: number;
+}
+
+export interface EnemyTypeConfig {
+  id: string;
+  name: string;
+  /**
+   * A boss's honorific, shown only on the intro card (smaller, under `name`)
+   * and nowhere `name` alone is already tight on space (boss bar, debug
+   * lists, tooltips, wave preview).
+   */
+  epithet?: string;
+  modelUrl: string;
+  scale: number;
+  /**
+   * Vertical extent of the model over every baked frame, unscaled, as the
+   * VAT bake measures it. The simulation aims at its middle and brings air
+   * units out of the portal with it (utils/enemy-aim.util.ts). A constant
+   * here rather than the bake's measure: the bake poses the skeleton with
+   * three.js, whose slerp calls native acos and sin, so two engines measure
+   * other last bits (TODO E28). Checked against the models by
+   * enemy-model-range.spec.ts. Unset for the ooze, whose body lies along the
+   * route.
+   */
+  modelRangeY?: { readonly min: number; readonly max: number };
+
+  // Combat
+  armorType: ArmorType; // Armor type for the damage matrix
+
+  // Stats
+  baseHp: number;
+  baseSpeed: number; // m/s
+
+  // Animation
+  hasAnimations: boolean;
+  walkAnimation?: string;
+  runAnimation?: string; // Alternative to walk animation (variation)
+  deathAnimation?: string;
+  /** Optional pool of death animations — one is picked at random per kill. Falls back to `deathAnimation` if empty/unset. */
+  deathAnimations?: string[];
+  /**
+   * Time from the kill to the removal in ms, while the death clip plays
+   * (enemyDeathDuration). Default TIMING.deathAnimationDuration; longer where
+   * a death clip is still moving then (tools/model-budget/death-rest.spec.ts).
+   */
+  deathDuration?: number;
+  animationSpeed?: number;
+  animationVariation?: boolean; // Switches between walk and run animation
+  runSpeedMultiplier?: number; // Speed multiplier for run animation (default: 1.0)
+  /**
+   * Metres of ground per loop of the walk clip. Set, the clip follows the
+   * distance the instance moves instead of the clock
+   * (EnemyInstanceManager.updateAnimations): the worm's legs step with the
+   * ground at any speed and timescale and stand still in the pause and while
+   * the worm stands. animationSpeed and randomAnimationStart do not apply.
+   */
+  gaitStride?: number;
+
+  // Audio (Spatial)
+  movingSound?: string; // Loop sound while moving (asset path)
+  movingSoundVolume?: number; // 0.0 - 1.0
+  movingSoundRefDistance?: number; // Distance for full volume (default: 30m)
+
+  // Random Sound (instead of loop)
+  randomSound?: string; // Sound played randomly
+  randomSoundMinInterval?: number; // Min game time between sounds (ms)
+  randomSoundMaxInterval?: number; // Max game time between sounds (ms)
+  randomSoundVolumeMin?: number; // Min volume (0.0 - 1.0)
+  randomSoundVolumeMax?: number; // Max volume (0.0 - 1.0)
+  randomSoundRefDistance?: number; // Distance for full volume
+
+  // Death, hit, split and steps (game-sounds.config.ts, GameSoundsService)
+  /** Played where a tower or the hero kills it; none on a leak. Unset: silent death. */
+  deathSound?: DeathSoundId;
+  /** Played on the hits of single shots (HIT_SOUND_PROJECTILES). Unset: silent hits (the ghosts). */
+  hitSound?: HitSoundId;
+  /** Played where a kill splits it (enemy:split), instead of its death sound */
+  splitSound?: WorldSoundId;
+  /** Heavy single steps as it walks, with a shake near the camera */
+  footstep?: FootstepConfig;
+
+  // Visual
+  heightOffset: number; // Model height above ground
+  healthBarOffset: number; // Health bar height above model
+  canBleed: boolean; // Whether blood effects are shown
+  bloodColor?: string; // Colour of its blood and blood decals as hex (default: dark red)
+  headingOffset?: number; // Rotation offset in radians (correct model orientation)
+  emissiveIntensity?: number; // Glow effect strength (0 = off, 0.1-0.5 = subtle, 1+ = strong)
+  emissiveColor?: string; // Glow color as hex (default: '#ffffff')
+  colorMultiplier?: number; // Overall brightness multiplier (0.0-1.0 = darken, default 1.0)
+  unlit?: boolean; // No lighting - shows original colors (for cartoon models)
+
+  // Boss / Special
+  healthBarColor?: string; // Fixed health bar color as hex (e.g. '#ff0000' for boss)
+  /**
+   * HQ HP it costs when it gets through, before the wave's scale, instead of
+   * the one its HP give (leakDamageOf). For a body that is meant to hurt more
+   * than its HP say, the worm.
+   */
+  leakDamage?: number;
+  /**
+   * A boss unit: the boss bar at the top centre shows it under its `name`,
+   * its death shakes the screen (bossDeath preset), and abilities take a
+   * smaller share of its max HP (the bossFraction of an effect in
+   * abilities.config.ts).
+   * Per type, so only types that appear as the boss and nowhere else carry it.
+   */
+  isBoss?: boolean;
+
+  // Randomness
+  randomAnimationStart?: boolean; // Start animation at random frame
+  randomSoundStart?: boolean; // Start sound at random position
+  lateralSpread?: number; // Share of the lateral room the route corridor leaves (0 = centre line, 1 = up to the edge margin)
+  heightVariation?: number; // Max random height deviation in meters (for waves)
+
+  /**
+   * Drawn with this type's model pool, at its own `scale` (one VAT for both
+   * types, a pool less to bake): a boss that is a bigger kin of a regular.
+   * The pool's model, clips, look and health bar height times the scale
+   * ratio; name, boss flag, health bar colour and stats are this type's.
+   */
+  renderAs?: EnemyTypeId;
+  /** A boss's rage (managers/boss-traits.ts) */
+  traits?: BossTraits;
+
+  // Air Unit
+  isAirUnit?: boolean; // true = air unit, only attackable by air towers
+
+  /**
+   * A machine, not a creature: electric effects that knock out machines
+   * (an EMP) hit it harder. Per type, like isBoss.
+   */
+  mechanical?: boolean;
+  /**
+   * Regen (MASTER_GAME_DESIGN §2.5): share of its max HP it heals a second,
+   * in steps of REGEN_INTERVAL_MS, never while it burns. Fire is the counter.
+   */
+  regenPerSecond?: number;
+  /** Phasing (§2.5): a slow does not take hold. Freeze and stun still do. */
+  immuneToSlow?: boolean;
+
+  // Spawning
+  /**
+   * Least time between two spawns next to one of this type, ms (spawnFloorMs,
+   * default DEFAULT_SPAWN_FLOOR_MS): enforced after the wave's spread, so a
+   * compressed wave keeps its large models apart (TODO E50).
+   */
+  spawnStartDelay?: number;
+  splitOnDeath?: SplitOnDeath; // What a kill splits this enemy into (none on a leak)
+  chain?: EnemyChain; // Walks as a chain of segments, each an enemy of this type (worm)
+  /** A body along the route instead of a model instance (the ooze), see OozeConfig */
+  ooze?: OozeConfig;
+  /**
+   * Left out of the enemy lists of Custom Wave and Enemy Debug
+   * (getDebugEnemyTypes): a model of another type's body that is no use to
+   * spawn on its own.
+   */
+  debugUnlisted?: boolean;
+
+  // Preview
+  previewScale?: number; // Override scale for model preview (sidebar)
+  previewCameraDistance?: number; // Camera distance for preview (default: 7)
+  previewCameraAngle?: number; // Camera pitch angle in radians for preview (default: Math.PI / 12)
+  previewOffsetY?: number; // Vertical offset for preview camera target (default: 0)
+  previewLight?: number; // Key light of the preview (default 1.3); dark models need more to read on the dark panel
+}
+
+/** What a worm head, segment or tail model sets; the rest of the type is shared. */
+type WormModel = Pick<
+  EnemyTypeConfig,
+  | 'modelUrl' | 'scale' | 'hasAnimations' | 'walkAnimation' | 'gaitStride'
+  | 'headingOffset' | 'heightOffset' | 'healthBarOffset'
+  | 'previewScale' | 'previewCameraDistance' | 'previewCameraAngle' | 'previewOffsetY'
+>;
+
+interface WormModels {
+  head: WormModel;
+  segment: WormModel;
+  tail: WormModel;
+  /** Chain spacing: segment length along the route less the overlap of the rings (m) */
+  spacing: number;
+}
+
+/**
+ * Metres per model unit of the worm: 7.2 m wide with the legs, 4.5 m high
+ * with the dorsal spikes, one ring every 2.5 m.
+ */
+const WORM_SCALE = 2.5;
+
+/**
+ * Metres a ring walks per loop of its Crawl clip. In the clip a leg steps
+ * WAVE = 0.25 of a loop after the leg one model unit in front of it
+ * (tools/blender/worm_boss.py), so the ring behind, 2.5 m further back, has
+ * to be 1 - 0.25 loops behind: 2.5 m / 0.75. Then the legs of the whole worm
+ * step as one wave from the tail to the head, four rings long, and a foot on
+ * the ground goes back about as fast as the ring walks.
+ */
+const WORM_GAIT_STRIDE = WORM_SCALE / 0.75;
+
+/** What segment and tail share: the ring with its legs */
+const WORM_RING = {
+  scale: WORM_SCALE,
+  hasAnimations: true,
+  walkAnimation: 'Crawl',
+  gaitStride: WORM_GAIT_STRIDE,
+  headingOffset: 0,
+  heightOffset: 0,
+  // Dorsal spikes up to 1.78 units, 4.45 m
+  healthBarOffset: 5.5,
+  previewScale: 2,
+  previewCameraDistance: 7,
+  previewCameraAngle: 0.26,
+  previewOffsetY: 1,
+} satisfies Omit<WormModel, 'modelUrl'>;
+
+/**
+ * The chitin head, ring and tail (tools/blender/worm_boss.py): skinned
+ * meshes with one base colour each (the head 1024², the others 512²),
+ * looking along +z, pivot on the ground under the ring centre. The rings
+ * follow each other at 1.0 model units (0.10 of overlap); the head sits on
+ * the front node of the chain like a ring, its collar over the first ring
+ * behind it, and the tail on the last node, its plates and cerci trailing
+ * 2.2 units behind its ring. Their clips follow the distance walked
+ * (gaitStride): the rings' legs step, the head's mandibles bite. Everything
+ * that depends on the models is here.
+ */
+const WORM_MODELS: WormModels = {
+  head: {
+    modelUrl: 'assets/models/enemies/worm_head.glb',
+    scale: WORM_SCALE,
+    hasAnimations: true,
+    // One bite of the mandibles, 1.6 s at the base speed of 4.5 m/s
+    walkAnimation: 'Jaws',
+    gaitStride: 7.2,
+    headingOffset: 0,
+    heightOffset: 0,
+    // Top of the head at 2.02 units, 5.05 m
+    healthBarOffset: 6,
+    previewScale: 2,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 1,
+  },
+  segment: { modelUrl: 'assets/models/enemies/worm_segment.glb', ...WORM_RING },
+  tail: { modelUrl: 'assets/models/enemies/worm_tail.glb', ...WORM_RING },
+  // PITCH in worm_boss.py, 1.0 model units
+  spacing: WORM_SCALE,
+};
+
+/**
+ * Most segments one worm has. At 2.5 m that is 600 m of worm, which fills a
+ * route up to that length; a longer route gets a worm of this length. Each
+ * segment is a whole enemy (targeting, health bar, kill-gold slot, a VAT
+ * instance of 634 vertices) and the worm takes 240 × 2.5 m / 4.5 m/s = 133 s
+ * to come out of the portal, near the director's 3-minute cap on a wave's
+ * spawn window.
+ */
+export const WORM_MAX_SEGMENTS = 240;
+
+/** Stats every worm segment has, head or body: one enemy type ('worm') for all of them. */
+const WORM_STATS = {
+  // Chitin: siege, lightning and magic get through, arrows and fire much less
+  armorType: 'heavy',
+  // Per segment. 400 seit dem 2026-09-22, vorher 35.
+  //
+  // Der Grund ist die Geometrie: Ein Choke Point trifft immer nur die
+  // vordersten Segmente. Bei 35 HP waren das rund 175 HP gleichzeitig
+  // angreifbar, gegen eine ausgebaute Stellung mit 1600 DPS eine Zehntel
+  // Sekunde — der Wurm wurde am Kopf rasiert, ohne je eine Aufgabe zu sein.
+  // Gemessen an einem menschlichen Lauf über 66 Wellen forderte eine
+  // Skarnax-Welle die Abwehr mit 427 DPS, eine gewöhnliche Welle mit 1622.
+  //
+  // 240 Segmente sind damit 96.000 HP bei Multiplikator 1, in der
+  // Größenordnung dessen, was eine normale späte Welle an Schaden auf sich
+  // zieht. Die Feinjustierung darüber macht das Budget der Welle über ihren
+  // HP-Multiplikator (sources/budget/budget.ts).
+  baseHp: 400,
+  baseSpeed: 4.5,
+  canBleed: true,
+  // Only the worm, only in its run plan rows, Custom Wave and Enemy Debug
+  isBoss: true,
+  randomAnimationStart: true,
+  // The chain sways the whole worm (EnemyChain.sway), no lane of its own
+  lateralSpread: 0,
+  // A segment lost while the worm lives on sounds as WORLD_SOUNDS.wormSegment,
+  // the last one as the boss's death (GameSoundsService)
+  deathSound: 'skarnax',
+  hitSound: 'stone',
+} satisfies Partial<EnemyTypeConfig>;
+
+/** The stone golem, also the body of the golem king. */
+const STONE_GOLEM: EnemyTypeConfig = {
+  id: 'stone-golem',
+  name: 'Stone Golem',
+  deathSound: 'golem',
+  hitSound: 'stone',
+  footstep: GOLEM_FOOTSTEP,
+  modelUrl: 'assets/models/enemies/stone_golem.glb',
+  scale: 7.312,
+  modelRangeY: { min: -0.4192, max: 1.8233 },
+
+  armorType: 'fortified',
+  baseHp: 480,
+  baseSpeed: 2.5,
+
+  hasAnimations: true,
+  walkAnimation: 'Casual_Walk',
+  deathAnimation: 'dying_backwards',
+  // dying_backwards (2.21 s of clip, 2.94 s at 0.75) drops between 1.1 and
+  // 1.4 s of clip time and settles its limbs until about 2 s; the default
+  // 2 s (1.5 s of clip) took the golem away before that. The whole clip
+  // plays (tools/model-budget/death-rest.spec.ts).
+  deathDuration: 3000,
+  animationSpeed: 0.75,
+
+  // Audio (Spatial) — heavy stone footstep loop while moving
+  movingSound: 'assets/sounds/enemies/golem/golem_walk_loop.mp3',
+  movingSoundVolume: 0.4,
+  movingSoundRefDistance: 45,
+
+  heightOffset: 0,
+  healthBarOffset: 15,
+  canBleed: false,
+  headingOffset: 0,
+
+  randomAnimationStart: true,
+  lateralSpread: 0.65,
+  spawnStartDelay: 1200,
+
+  previewScale: 2.149,
+  previewCameraDistance: 6,
+  previewCameraAngle: 0.26,
+  previewOffsetY: -0.1,
+};
+
+/** The dragon, also the body of the dragon matriarch. */
+const DRAGON: EnemyTypeConfig = {
+  id: 'dragon',
+  name: 'Dragon',
+  deathSound: 'dragon',
+  hitSound: 'flesh',
+  modelUrl: 'assets/models/enemies/dragon.glb',
+  scale: 2.5,
+  modelRangeY: { min: 0.2898, max: 4.8873 },
+  armorType: 'heavy',
+  baseHp: 450,
+  baseSpeed: 6,
+  hasAnimations: true,
+  walkAnimation: 'flying',
+  animationSpeed: 1.46,
+  // Rare dragon roar — every 12-35s
+  randomSound: 'assets/sounds/enemies/dragon/dragon01.mp3',
+  randomSoundMinInterval: 12000,
+  randomSoundMaxInterval: 35000,
+  randomSoundVolumeMin: 0.3,
+  randomSoundVolumeMax: 0.7,
+  randomSoundRefDistance: 50,
+  heightOffset: 20,
+  heightVariation: 4,
+  healthBarOffset: 14,
+  canBleed: true,
+  headingOffset: 0,
+  isAirUnit: true,
+  colorMultiplier: 1.3,
+  emissiveIntensity: 0.15,
+  emissiveColor: '#ccddff',
+  randomAnimationStart: true,
+  lateralSpread: 1.0,
+  spawnStartDelay: 1200,
+  previewScale: 1,
+  previewCameraDistance: 7,
+  previewCameraAngle: 0.26,
+  previewOffsetY: 0.6,
+};
+
+/**
+ * An elite (SpawnEntry.elite) is drawn this much bigger, and the simulation sizes it the same: where projectiles
+ * aim, how high it comes out of a portal.
+ */
+/**
+ * HP of a camouflaged enemy (Enemy.camo, TODO E100) against its kind: only towers near a scout hit it, so it
+ * comes with less, as the swift and regen mutators do.
+ */
+export const CAMO_HP_FACTOR = 0.75;
+
+export const ELITE_SIZE = 1.25;
+
+export const ENEMY_TYPES: Record<string, EnemyTypeConfig> = {
+  zombie: {
+    id: 'zombie',
+    name: 'Zombie',
+    deathSound: 'zombie',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/zombie.glb',
+    scale: 0.984,
+    modelRangeY: { min: -0.2759, max: 4.2728 },
+    armorType: 'unarmored',
+    baseHp: 80,
+    baseSpeed: 5,
+    hasAnimations: true,
+    walkAnimation: 'Armature|Walk',
+    deathAnimation: 'Armature|Die',
+    animationSpeed: 4.11,
+    movingSound: 'assets/sounds/enemies/zombie/ambient.mp3',
+    movingSoundVolume: 0.4,
+    movingSoundRefDistance: 25, // Zombies are quieter from distance
+    heightOffset: 0.5,
+    healthBarOffset: 5.5,
+    canBleed: true, // Zombies bleed
+    headingOffset: -0.349, // -20° rotation offset
+    randomAnimationStart: true, // Start animation at random frame
+    randomSoundStart: true, // Start sound at random position
+    lateralSpread: 1.0, // Up to the edge of the corridor
+    previewScale: 1
+  },
+
+  'zombie-v2': {
+    id: 'zombie-v2',
+    name: 'Zombie v2',
+    deathSound: 'zombie',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/zombie_v2.glb',
+    scale: 2.432,
+    modelRangeY: { min: -0.0828, max: 1.7475 },
+    armorType: 'unarmored',
+    baseHp: 80,
+    baseSpeed: 3,
+    hasAnimations: true,
+    walkAnimation: 'Unsteady_Walk',
+    // Electrocuted_Fall is cut to its fall, 3.0-5.0 s of the source clip.
+    deathAnimations: ['Dead', 'dying_backwards', 'Electrocuted_Fall'],
+    // Dead (2.96 s) hits the ground between 1.9 and 2.1 s and settles until
+    // about 2.9 s; removed after the default 2 s it vanished in mid-fall. The
+    // whole clip plays, the other two end or lie still before (read from the
+    // clips, tools/model-budget/death-rest.spec.ts).
+    deathDuration: 3000,
+    animationSpeed: 1,
+    movingSound: 'assets/sounds/enemies/zombie/ambient.mp3',
+    movingSoundVolume: 0.4,
+    movingSoundRefDistance: 25,
+    heightOffset: 0.0,
+    healthBarOffset: 5.5,
+    canBleed: true,
+    headingOffset: 0,
+    randomAnimationStart: true,
+    randomSoundStart: true,
+    lateralSpread: 1.0,
+    // Tuned live in the Enemy Debugger (playtest 515). The preview measures
+    // this model as 2 cm tall (mesh ahead of its bones, see MODEL_PREVIEW.md,
+    // Zentrierung) and aims at its feet; the offset lifts the aim into the
+    // figure, 8.5 m tall at preview scale 5. The debugger's Offset Y slider
+    // ends at 3, its number field takes 5.
+    previewScale: 5,
+    previewCameraDistance: 12.5,
+    previewCameraAngle: 0.12,
+    previewOffsetY: 0.7,
+  },
+
+  tank: {
+    id: 'tank',
+    name: 'Tank',
+    deathSound: 'mech',
+    hitSound: 'metal',
+    // Quaternius tank in metres, gun along +z, standing on the origin
+    // (tools/blender/optimize_enemy.py, recipe `tank`)
+    modelUrl: 'assets/models/enemies/tank.glb',
+    scale: 1,
+    modelRangeY: { min: -0.0011, max: 3.0489 },
+    armorType: 'heavy',
+    baseHp: 250, // Heavily armored (reduced from 500 for better early game balance)
+    baseSpeed: 3,
+    hasAnimations: true,
+    walkAnimation: 'TankArmature|Tank_Forward',
+    // The lower track run moves 0.81 m per clip second, so the tracks keep
+    // pace with the ground at 3 m/s
+    animationSpeed: 3.72,
+    randomAnimationStart: true,
+    movingSound: 'assets/sounds/enemies/tank/moving.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 50, // Tanks are louder (larger refDistance range)
+    heightOffset: 0,
+    healthBarOffset: 5.5,
+    canBleed: false, // Tanks don't bleed
+    headingOffset: 0,
+    mechanical: true,
+    randomSoundStart: true, // Start sound at random position
+    // 4.7 m wide (the old tank 3.7 m): 0.7 keeps it as far from the kerb of
+    // a 10 m road as 0.85 kept the old one
+    lateralSpread: 0.7,
+    spawnStartDelay: 800, // Larger gap between tanks (800ms instead of 300ms)
+    previewScale: 0.65,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0,
+  },
+
+  wallsmasher: {
+    id: 'wallsmasher',
+    name: 'Wallsmasher',
+    deathSound: 'wallsmasher',
+    hitSound: 'flesh',
+    // GLB in metres (the FBX was in centimetres, scale 0.037), only Walk, Run and Death.
+    modelUrl: 'assets/models/enemies/wallsmasher.glb',
+    scale: 3.7,
+    modelRangeY: { min: -0.1523, max: 1.7232 },
+    armorType: 'light',
+    baseHp: 200,
+    // Walks 4, runs 10 m/s half the time (rush): mean 7 m/s, the speed the
+    // wave campaign was tuned with while the rush was lost.
+    baseSpeed: 4,
+    hasAnimations: true,
+    walkAnimation: 'CharacterArmature|Walk',
+    runAnimation: 'CharacterArmature|Run',
+    deathAnimation: 'CharacterArmature|Death',
+    animationSpeed: 0.75, // 1.31 at 7 m/s, scaled by 4/7 so the stride still matches the ground speed
+    animationVariation: true,
+    runSpeedMultiplier: 2.5, // 2.5x speed when running
+    // No spawn sound (gameplay decision — wallsmasher rush should be visual surprise)
+    // Random sound while moving
+    randomSound: 'assets/sounds/enemies/wallsmasher/attack.mp3',
+    randomSoundMinInterval: 8000,
+    randomSoundMaxInterval: 25000,
+    randomSoundVolumeMin: 0.2,
+    randomSoundVolumeMax: 0.6,
+    randomSoundRefDistance: 35,
+    heightOffset: 0,
+    healthBarOffset: 9,
+    canBleed: true,
+    headingOffset: 0,
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    spawnStartDelay: 500,
+    previewScale: 1.5,
+    previewCameraDistance: 4,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0,
+  },
+
+  'stone-golem': STONE_GOLEM,
+
+  bat: {
+    id: 'bat',
+    name: 'Bat',
+    deathSound: 'bat',
+    hitSound: 'flesh',
+    movingSound: 'assets/sounds/enemies/bat/flap_loop.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 25,
+    randomSoundStart: true,
+    modelUrl: 'assets/models/enemies/bat.glb',
+    scale: 3.958,
+    modelRangeY: { min: -0.3542, max: 0.3268 },
+    armorType: 'light',
+    baseHp: 25,
+    baseSpeed: 8,
+    hasAnimations: true,
+    walkAnimation: 'fly.001',
+    animationSpeed: 2.79,
+    heightOffset: 15, // 15m above terrain
+    healthBarOffset: 3.5,
+    canBleed: true,
+    headingOffset: 0,
+    isAirUnit: true, // Only attackable by air towers
+    heightVariation: 3, // ±3m variation between enemies
+    lateralSpread: 0.65,
+    randomAnimationStart: true,
+    previewScale: 2.908,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0,
+  },
+
+  penguin: {
+    id: 'penguin',
+    name: 'Penguin',
+    deathSound: 'penguin',
+    hitSound: 'flesh',
+    randomSound: 'assets/sounds/enemies/penguin/call.mp3',
+    randomSoundMinInterval: 6000,
+    randomSoundMaxInterval: 18000,
+    randomSoundVolumeMin: 0.25,
+    randomSoundVolumeMax: 0.5,
+    randomSoundRefDistance: 25,
+    modelUrl: 'assets/models/enemies/penguin.glb',
+    scale: 0.005,
+    modelRangeY: { min: -24.136, max: 478.225 },
+    armorType: 'unarmored',
+    baseHp: 30,
+    baseSpeed: 9,
+    hasAnimations: true,
+    walkAnimation: 'Walk',
+    deathAnimation: 'Fall',
+    animationSpeed: 5.6,
+    heightOffset: 0.5,
+    healthBarOffset: 4.5,
+    canBleed: true,
+    unlit: true,
+    headingOffset: 0,
+    randomAnimationStart: true,
+    lateralSpread: 0.85,
+    previewScale: 0.008,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0,
+    previewOffsetY: 0,
+  },
+
+  herbert: {
+    id: 'herbert',
+    name: 'Herbert',
+    deathSound: 'herbert',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/herbert_optimized.glb',
+    scale: 2.625,
+    modelRangeY: { min: -0.0722, max: 1.6836 },
+    armorType: 'fortified',
+      // 4000 seit dem 2026-09-22, vorher 500. Herbert kommt zu bis zu hundert
+  // Stück; das waren 50.000 HP für eine Boss-Welle, während eine gewöhnliche
+  // späte Welle 380.000 Schaden auf sich zieht. Wie viele davon kommen,
+  // entscheidet weiter der Überlebbarkeits-Deckel: Zähere Gegner heißen
+  // automatisch weniger davon.
+  baseHp: 4000,
+    baseSpeed: 4,
+    hasAnimations: true,
+    walkAnimation: 'Armature|walking_man|baselayer',
+    animationSpeed: 1.0,
+    heightOffset: 0.5,
+    healthBarOffset: 7,
+    // Badly hurt he charges: faster, and the towers bite less
+    traits: { rage: { belowHp: 0.5, speed: 1.35, damageTaken: 0.75 } },
+    // Only in boss_herbert. Stone golem and dragon lead the later boss waves
+    // but also march in golem_squad and dragon_elite, so they stay regular.
+    isBoss: true,
+    canBleed: true,
+    headingOffset: -0.192, // ~-11° rotation offset
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    previewScale: 1.05,
+    previewCameraDistance: 3,
+    previewCameraAngle: 0,
+    previewOffsetY: -0.1,
+  },
+
+  'zombie-soldier': {
+    id: 'zombie-soldier',
+    name: 'Zombie Soldier',
+    deathSound: 'zombie_soldier',
+    hitSound: 'metal',
+    modelUrl: 'assets/models/enemies/zombie_soldier.glb',
+    scale: 2.492,
+    modelRangeY: { min: -0.1203, max: 1.7517 },
+    armorType: 'heavy',
+    baseHp: 160,
+    baseSpeed: 6,
+    hasAnimations: true,
+    walkAnimation: 'zombie_02_Run',
+    deathAnimation: 'zombie_02_Death',
+    // zombie_02_Death (4.5 s of clip, 3.26 s at 1.38) falls between 2.2 and
+    // 3.7 s of clip time; the default 2 s (2.76 s of clip) took the soldier
+    // away halfway down. The whole clip plays
+    // (tools/model-budget/death-rest.spec.ts).
+    deathDuration: 3300,
+    animationSpeed: 1.38,
+    movingSound: 'assets/sounds/enemies/zombie/ambient.mp3',
+    movingSoundVolume: 0.4,
+    movingSoundRefDistance: 25,
+    heightOffset: 0,
+    healthBarOffset: 5.5,
+    canBleed: true,
+    headingOffset: 0,
+    colorMultiplier: 1.3,
+    emissiveIntensity: 0.15,
+    emissiveColor: '#ccddff',
+    randomAnimationStart: true,
+    randomSoundStart: true,
+    lateralSpread: 0.85,
+    previewScale: 2.571,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0.3,
+    // Olive drab on a dark panel: at the default light it hardly read
+    previewLight: 5,
+  },
+
+  rat: {
+    id: 'rat',
+    name: 'Rat',
+    deathSound: 'rat',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/rat.glb',
+    scale: 1.5,
+    modelRangeY: { min: -0.2099, max: 0.2605 },
+    armorType: 'unarmored',
+    baseHp: 5,
+    baseSpeed: 10,
+    hasAnimations: true,
+    walkAnimation: 'Run',
+    animationSpeed: 2.0,
+    // Audio (Spatial) — swarm chittering loop while moving
+    movingSound: 'assets/sounds/enemies/rat/rat_swarm.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 25,
+    heightOffset: 0.3,
+    healthBarOffset: 2.5,
+    canBleed: true,
+    headingOffset: 1.449,
+    emissiveIntensity: 0.2,
+    randomAnimationStart: true,
+    randomSoundStart: true,
+    lateralSpread: 1.0,
+    spawnStartDelay: 150,
+    previewScale: 3.473,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0,
+    previewOffsetY: 0,
+  },
+
+  skeleton: {
+    id: 'skeleton',
+    name: 'Skeleton',
+    // A kill splits it: its split sound instead of a death
+    splitSound: 'skeletonSplit',
+    hitSound: 'bone',
+    movingSound: 'assets/sounds/enemies/skeleton/rattle_loop.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 25,
+    randomSoundStart: true,
+    // Kenney "character-skeleton" (CC0, Graveyard Kit): six rigid parts moved
+    // by node animation, baked through bakeObjectAnimVAT like mech and hornet.
+    // 0.70 units tall, about 2.8 m at scale 4 (the zombie stands about 4.4 m).
+    modelUrl: 'assets/models/enemies/skeleton.glb',
+    scale: 4,
+    modelRangeY: { min: -0.054, max: 0.9721 },
+    armorType: 'unarmored',
+    // Swarm between the rat (5 HP, 10 m/s) and the zombie (80 HP, 5 m/s).
+    baseHp: 20,
+    baseSpeed: 6,
+    hasAnimations: true,
+    walkAnimation: 'sprint',
+    // 0.33 s, clamped on its last frame; removal after
+    // TIMING.deathAnimationDuration (2 s) leaves the bones lying for 1.7 s.
+    deathAnimation: 'die',
+    // Sprint swings the legs ±90° (hip to sole 0.8 m at scale 4), about 3.2 m
+    // of stride per 0.5 s cycle: 0.93 puts the feet at the 6 m/s ground speed.
+    // Worked out from the model file; 1.25 ran them at about 8 m/s.
+    animationSpeed: 0.93,
+    heightOffset: 0,
+    healthBarOffset: 3.8,
+    canBleed: false, // Bones
+    headingOffset: 0,
+    emissiveIntensity: 0.15,
+    randomAnimationStart: true,
+    lateralSpread: 1.0, // Swarm: up to the edge of the corridor
+    spawnStartDelay: 150,
+    // A kill (not a leak) splits it into two minions where it died
+    splitOnDeath: { type: 'skeleton-minion', count: 2, spread: 0.3 },
+    previewScale: 2.5,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0.2,
+  },
+
+  'skeleton-minion': {
+    id: 'skeleton-minion',
+    name: 'Skeleton Minion',
+    deathSound: 'bone',
+    hitSound: 'bone',
+    movingSound: 'assets/sounds/enemies/skeleton/rattle_loop.mp3',
+    movingSoundVolume: 0.25,
+    movingSoundRefDistance: 20,
+    randomSoundStart: true,
+    // What a killed skeleton splits into (splitOnDeath): the same Kenney model
+    // at 0.6 of its size, about 1.7 m tall, in a VAT pool of its own.
+    modelUrl: 'assets/models/enemies/skeleton.glb',
+    scale: 2.4,
+    modelRangeY: { min: -0.054, max: 0.9721 },
+    armorType: 'unarmored',
+    // 30 % of the skeleton's HP and a bit faster. The split scales both by the
+    // parent's multipliers, so a wave's hpMult reaches the minions too. No
+    // splitOnDeath of its own: a minion does not split again.
+    baseHp: 6,
+    baseSpeed: 7,
+    hasAnimations: true,
+    walkAnimation: 'sprint',
+    deathAnimation: 'die',
+    // The skeleton's stride at 0.6 of its size, 1.92 m per 0.5 s cycle: 1.82
+    // puts the feet at 7 m/s (the skeleton's 0.9375 × 7/6 / 0.6).
+    animationSpeed: 1.82,
+    heightOffset: 0,
+    healthBarOffset: 2.3,
+    canBleed: false, // Bones
+    headingOffset: 0,
+    emissiveIntensity: 0.15,
+    randomAnimationStart: true,
+    lateralSpread: 1.0,
+    // Framed like the skeleton: the portrait is not a size comparison
+    previewScale: 2.5,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0.2,
+  },
+
+  spider: {
+    id: 'spider',
+    name: 'Spider',
+    deathSound: 'spider',
+    hitSound: 'flesh',
+    movingSound: 'assets/sounds/enemies/spider/skitter_loop.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 25,
+    randomSoundStart: true,
+    modelUrl: 'assets/models/enemies/spider.glb',
+    scale: 1.5,
+    modelRangeY: { min: -0.0367, max: 0.6469 },
+    armorType: 'light',
+    baseHp: 60,
+    baseSpeed: 9,
+    hasAnimations: true,
+    walkAnimation: 'Armature|Walk-Cycle-Basic',
+    animationSpeed: 2.0,
+    heightOffset: 0,
+    healthBarOffset: 3.5,
+    canBleed: true,
+    headingOffset: 0,
+    emissiveIntensity: 0.15,
+    randomAnimationStart: true,
+    lateralSpread: 0.5,
+    spawnStartDelay: 200,
+    previewScale: 1.901,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0,
+  },
+
+  mammoth: {
+    id: 'mammoth',
+    name: 'Mammoth',
+    deathSound: 'mammoth',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/mammoth.glb',
+    scale: 2.206,
+    modelRangeY: { min: -0.7034, max: 2.9834 },
+    armorType: 'fortified',
+    // Thick hide that closes again: fire stops it (2026-10-02)
+    regenPerSecond: 0.01,
+    baseHp: 400,
+    baseSpeed: 3,
+    hasAnimations: true,
+    walkAnimation: 'Walk',
+    deathAnimation: 'Die',
+    animationSpeed: 2.85,
+    // Random mammoth call — rare, every 15-40s
+    randomSound: 'assets/sounds/enemies/mammouth/mammouth01.mp3',
+    randomSoundMinInterval: 15000,
+    randomSoundMaxInterval: 40000,
+    randomSoundVolumeMin: 0.3,
+    randomSoundVolumeMax: 0.6,
+    randomSoundRefDistance: 50,
+    heightOffset: 0.5,
+    healthBarOffset: 9,
+    canBleed: true,
+    headingOffset: -1.71,
+    emissiveIntensity: 0.1,
+    randomAnimationStart: true,
+    lateralSpread: 0.85,
+    spawnStartDelay: 1000,
+    previewScale: 0.882,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0.26,
+    previewOffsetY: -0.3,
+  },
+
+  bear: {
+    id: 'bear',
+    name: 'Bear',
+    deathSound: 'bear',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/bear.glb',
+    scale: 0.1,
+    modelRangeY: { min: -2.9515, max: 36.9402 },
+    armorType: 'heavy',
+    baseHp: 300,
+    baseSpeed: 8,
+    hasAnimations: true,
+    walkAnimation: 'GltfAnimation 0',
+    animationSpeed: 2.0,
+    // Random bear growl — every 10-30s
+    randomSound: 'assets/sounds/enemies/bear/bear01.mp3',
+    randomSoundMinInterval: 10000,
+    randomSoundMaxInterval: 30000,
+    randomSoundVolumeMin: 0.3,
+    randomSoundVolumeMax: 0.7,
+    randomSoundRefDistance: 40,
+    heightOffset: 0.5,
+    healthBarOffset: 5,
+    canBleed: true,
+    headingOffset: -1.658,
+    // Darkened (playtest 2026-09-15: far too bright and yellow). Its texture
+    // is a light orange brown, about 2.5 times the mammoth's of the same set;
+    // 0.8 and a faint glow put it among the other creatures.
+    colorMultiplier: 0.8,
+    emissiveIntensity: 0.05,
+    emissiveColor: '#ccddff',
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    spawnStartDelay: 600,
+    previewScale: 0.075,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0.26,
+    previewOffsetY: -0.2,
+  },
+
+  dragon: DRAGON,
+
+  ghost: {
+    id: 'ghost',
+    name: 'Ghost',
+    deathSound: 'ghost',
+    movingSound: 'assets/sounds/enemies/ghost/wail_loop.mp3',
+    movingSoundVolume: 0.3,
+    movingSoundRefDistance: 30,
+    randomSoundStart: true,
+    modelUrl: 'assets/models/enemies/ghost.glb',
+    scale: 0.099,
+    modelRangeY: { min: 8.4685, max: 46.8947 },
+    armorType: 'ethereal',
+    baseHp: 120,
+    baseSpeed: 5,
+    hasAnimations: true,
+    walkAnimation: 'Take 001',
+    animationSpeed: 1.0,
+    heightOffset: 1,
+    healthBarOffset: 6.5,
+    canBleed: false,
+    headingOffset: 0,
+    emissiveIntensity: 0.2,
+    emissiveColor: '#ffffff',
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    spawnStartDelay: 400,
+    previewScale: 0.271,
+    previewCameraDistance: 15,
+    previewCameraAngle: 0,
+    // His body starts at 58 % of his height, so the camera aims below the middle of the box
+    previewOffsetY: 1.1,
+  },
+
+  hornet: {
+    id: 'hornet',
+    name: 'Hornet',
+    deathSound: 'hornet',
+    hitSound: 'flesh',
+    modelUrl: 'assets/models/enemies/hornet.glb',
+    scale: 0.063,
+    modelRangeY: { min: -18.9351, max: 22.9158 },
+    armorType: 'light',
+    baseHp: 80,
+    baseSpeed: 9,
+    hasAnimations: true,
+    walkAnimation: 'Take 001',
+    animationSpeed: 4.07,
+    // Audio (Spatial) — buzzing loop while flying
+    movingSound: 'assets/sounds/enemies/hornet/hornet.mp3',
+    movingSoundVolume: 0.45,
+    movingSoundRefDistance: 30,
+    heightOffset: 18,
+    heightVariation: 3,
+    healthBarOffset: 4.5,
+    canBleed: true,
+    headingOffset: 0,
+    isAirUnit: true,
+    colorMultiplier: 1.2,
+    randomAnimationStart: true,
+    lateralSpread: 0.85,
+    spawnStartDelay: 300,
+    previewScale: 0.122,
+    previewCameraDistance: 7,
+    previewCameraAngle: 0.26,
+    previewOffsetY: 0,
+  },
+
+  mech: {
+    id: 'mech',
+    name: 'Mech',
+    deathSound: 'mech',
+    hitSound: 'metal',
+    movingSound: 'assets/sounds/enemies/mech/servo_loop.mp3',
+    movingSoundVolume: 0.35,
+    movingSoundRefDistance: 30,
+    randomSoundStart: true,
+    modelUrl: 'assets/models/enemies/mech.glb',
+    scale: 0.885,
+    modelRangeY: { min: -0.0806, max: 13.2316 },
+    armorType: 'heavy',
+    baseHp: 500,
+    baseSpeed: 3,
+    hasAnimations: true,
+    walkAnimation: 'Armature|Walk',
+    animationSpeed: 0.7,
+    heightOffset: 0.5,
+    healthBarOffset: 14,
+    canBleed: false,
+    headingOffset: 0,
+    mechanical: true,
+    emissiveIntensity: 0.1,
+    emissiveColor: '#ffaa44',
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    spawnStartDelay: 1000,
+  },
+
+  wraith: {
+    id: 'wraith',
+    name: 'Wraith',
+    deathSound: 'wraith',
+    randomSound: 'assets/sounds/enemies/wraith/whisper.mp3',
+    randomSoundMinInterval: 7000,
+    randomSoundMaxInterval: 20000,
+    randomSoundVolumeMin: 0.3,
+    randomSoundVolumeMax: 0.6,
+    randomSoundRefDistance: 30,
+    modelUrl: 'assets/models/enemies/wraith.glb',
+    scale: 2.0,
+    modelRangeY: { min: -0.1292, max: 1.3724 },
+    armorType: 'ethereal',
+    // Phasing: half out of this world, a slow finds nothing to hold (2026-10-02)
+    immuneToSlow: true,
+    baseHp: 100,
+    baseSpeed: 8,
+    hasAnimations: true,
+    walkAnimation: 'Armature|RunFast|baselayer',
+    animationSpeed: 0.69,
+    heightOffset: 0.5,
+    healthBarOffset: 6,
+    canBleed: false,
+    headingOffset: 0,
+    emissiveIntensity: 0.15,
+    emissiveColor: '#ffffff',
+    randomAnimationStart: true,
+    lateralSpread: 0.65,
+    spawnStartDelay: 400,
+    previewScale: 2.732,
+    previewCameraDistance: 6.5,
+    previewCameraAngle: 0,
+    previewOffsetY: 0.1,
+  },
+
+  worm: {
+    id: 'worm',
+    modelRangeY: { min: 0.3254, max: 2.02 },
+    name: 'Skarnax',
+    epithet: 'The Thousand-Legged Calamity',
+    ...WORM_MODELS.head,
+    ...WORM_STATS,
+    // One spawn puts the whole worm on the route: as long as the route, one
+    // enemy per segment, the head drawn with this model, the body with
+    // worm-segment's (managers/worm)
+    chain: {
+      segmentModel: 'worm-segment',
+      tailModel: 'worm-tail',
+      spacing: WORM_MODELS.spacing,
+      minSegments: 16,
+      maxSegments: WORM_MAX_SEGMENTS,
+      // Gentle: the rings keep overlapping at the body on the sway. Sharp
+      // route corners can still open gaps on the outer side.
+      sway: 0.35,
+      swayWavelength: 40,
+      // Siege and magic crack the head, arrows, fire and lightning barely
+      head: { hpFactor: 5, armorType: 'fortified' },
+      rush: 1,
+    },
+    // 150 instead of the 50 its HP would give (MAX_LEAK_DAMAGE): spread over
+    // 240 segments a segment that got through cost 0.46 HP late in a run,
+    // so the boss was HP without a threat (the run of 2026-10-01). About
+    // 1.4 a segment at the late wave scale.
+    leakDamage: 150,
+  },
+
+  'worm-segment': {
+    // The body ring of the worm. The worm's segments are enemies of type
+    // 'worm' drawn from this pool; spawned on its own (Custom Wave, Enemy
+    // Debug) it is a single ring with the worm's stats, handy to tune the
+    // model.
+    id: 'worm-segment',
+    modelRangeY: { min: 0, max: 1.78 },
+    name: 'Skarnax Segment',
+    ...WORM_MODELS.segment,
+    ...WORM_STATS,
+  },
+
+  'worm-tail': {
+    // The last ring of a worm, with its tail plates and cerci: drawn from
+    // this pool once the worm's last segment is out (chain.tailModel), and
+    // for the segment in front of a gap. Not offered on its own in the
+    // debug lists; worm-segment is the ring to tune there.
+    id: 'worm-tail',
+    modelRangeY: { min: 0, max: 1.78 },
+    name: 'Skarnax Tail',
+    ...WORM_MODELS.tail,
+    ...WORM_STATS,
+    debugUnlisted: true,
+  },
+
+  ooze: {
+    id: 'ooze',
+    name: 'Ooze',
+    deathSound: 'ooze',
+    hitSound: 'slime',
+    // The body is a band of slime along the route, drawn by the engine's
+    // ooze renderer; no model instance spawns. The procedural blob
+    // (tools/slime-model) stands in for it in the sidebar preview.
+    modelUrl: 'assets/models/enemies/slime.glb',
+    scale: 1.6,
+    armorType: 'unarmored',
+    // One HP pool for the whole body, and every tower along it hits it at
+    // once: six Herberts, pinned by no template (not in AI_ENEMY_ORDER).
+      // 60.000 seit dem 2026-09-22, vorher 3.000. Der Ooze ist EIN Körper, auf
+  // den jeder Turm gleichzeitig feuert; gemessen forderte eine Ooze-Welle die
+  // Abwehr mit 241 DPS gegen 1622 einer gewöhnlichen Welle. Er soll ein
+  // Körper bleiben (Entscheidung des Users), also ist die HP der einzige
+  // Hebel, und er muss die Zahl der Türme aufwiegen, die gleichzeitig
+  // draufhalten.
+  baseHp: 60000,
+    baseSpeed: 3,
+    hasAnimations: true,
+    walkAnimation: 'Wobble',
+    animationSpeed: 0.6,
+    heightOffset: 0,
+    healthBarOffset: 3,
+    canBleed: true,
+    bloodColor: '#6fe021', // Slime, not blood
+    headingOffset: 0,
+    emissiveIntensity: 0.25,
+    emissiveColor: '#66ff22',
+    // Appears only as the boss, never in a template
+    isBoss: true,
+    // The tip keeps to the centre line; the body fills the corridor
+    lateralSpread: 0,
+    // 80 m of body at the HQ cost its leak damage (49 at wave scale 1), spread by the metre
+    ooze: { maxLengthM: 80 },
+    // A kill (not a leak) breaks it into clumps along its body, one per 4 m
+    // of body left (OozeBodies.splitCount). Until 2026-09-14 ten clumps of
+    // 30 HP, then twenty holding a tenth of its HP; since 2026-10-02 twenty
+    // holding three tenths: a second phase, fast and many, instead of a slow
+    // body that is done when it dies.
+    splitOnDeath: { type: 'slime-clump', count: 20, spread: 0.8 },
+    previewScale: 1.4,
+    previewCameraDistance: 6,
+    previewCameraAngle: 0.35,
+    previewOffsetY: 0.8,
+  },
+
+  'slime-clump': {
+    id: 'slime-clump',
+    name: 'Slime Clump',
+    deathSound: 'slime',
+    hitSound: 'slime',
+    movingSound: 'assets/sounds/enemies/slime/squelch_loop.mp3',
+    movingSoundVolume: 0.25,
+    movingSoundRefDistance: 20,
+    randomSoundStart: true,
+    // What a killed ooze breaks into (splitOnDeath): the procedural slime
+    // blob (tools/slime-model) hopping along, about 1.2 m tall at scale 0.9.
+    modelUrl: 'assets/models/enemies/slime.glb',
+    scale: 0.9,
+    modelRangeY: { min: -0.0173, max: 2.0607 },
+    armorType: 'unarmored',
+    // What is left of the ooze keeps flowing back together, unless it burns
+    regenPerSecond: 0.02,
+    // Twenty of them hold three tenths of the ooze's HP; the split scales them
+    // by its HP multiplier. No split of its own. Zog mit dem Ooze von 3.000 auf
+    // 60.000 mit (2026-09-22); seit 2026-10-02 drei Zehntel statt einem.
+    baseHp: 900,
+    baseSpeed: 4.5,
+    hasAnimations: true,
+    walkAnimation: 'Wobble',
+    // 0.45 s, it lies flat until the removal after 2 s
+    deathAnimation: 'Splat',
+    // One hop per 0.8 s Wobble cycle: 3.6 m a hop at 4.5 m/s
+    animationSpeed: 1.0,
+    heightOffset: 0,
+    healthBarOffset: 2.2,
+    canBleed: true,
+    bloodColor: '#6fe021',
+    headingOffset: 0,
+    emissiveIntensity: 0.3,
+    emissiveColor: '#66ff22',
+    randomAnimationStart: true,
+    lateralSpread: 1.0,
+    previewScale: 1.2,
+    previewCameraDistance: 5,
+    previewCameraAngle: 0.3,
+    previewOffsetY: 0.7,
+  },
+
+  // The boss of the golem wave: a golem 1.6 times as big, leading its kin.
+  // Its own type so boss bar, intro, music and abilities know it as a boss,
+  // the stone golem stays a regular in its squads. Drawn with the golem's
+  // pool (renderAs).
+  'golem-king': {
+    ...STONE_GOLEM,
+    id: 'golem-king',
+    name: 'Golem King',
+    epithet: 'Heart of the Mountain',
+    renderAs: 'stone-golem',
+    scale: STONE_GOLEM.scale * 1.6,
+    // Ten golems; the wave's budget sets what it brings (sources/budget)
+    baseHp: 4800,
+    baseSpeed: 2.2,
+    healthBarColor: '#ff3b30',
+    isBoss: true,
+    traits: { rage: { belowHp: 0.4, speed: 1.3, damageTaken: 0.7 } },
+    lateralSpread: 0.3,
+    spawnStartDelay: 2400,
+    // Previews and the debug lists keep the golem's sizes
+    previewScale: STONE_GOLEM.previewScale,
+  },
+
+  // The boss of the dragon flight, a dragon 1.6 times as big
+  'dragon-matriarch': {
+    ...DRAGON,
+    id: 'dragon-matriarch',
+    name: 'Dragon Matriarch',
+    epithet: 'Mother of the Flight',
+    renderAs: 'dragon',
+    scale: DRAGON.scale * 1.6,
+    // Ten dragons
+    baseHp: 4500,
+    baseSpeed: 5,
+    heightOffset: 26,
+    heightVariation: 0,
+    healthBarColor: '#ff3b30',
+    isBoss: true,
+    traits: { rage: { belowHp: 0.5, speed: 1.25, damageTaken: 0.75 } },
+    lateralSpread: 0.4,
+    spawnStartDelay: 2400,
+  },
+};
+
+export type EnemyTypeId = keyof typeof ENEMY_TYPES;
+
+/** Time from the kill to the removal of an enemy in ms, see EnemyTypeConfig.deathDuration. */
+export function enemyDeathDuration(config: Pick<EnemyTypeConfig, 'deathDuration'>): number {
+  return config.deathDuration ?? TIMING.deathAnimationDuration;
+}
+
+export function getEnemyType(id: EnemyTypeId): EnemyTypeConfig {
+  const type = ENEMY_TYPES[id];
+  if (!type) {
+    console.warn(`Unknown enemy type: ${id}, falling back to zombie`);
+    return ENEMY_TYPES['zombie'];
+  }
+  return type;
+}
+
+export function getAllEnemyTypes(): EnemyTypeConfig[] {
+  return Object.values(ENEMY_TYPES);
+}
+
+export function getEnemyTypeIds(): EnemyTypeId[] {
+  return Object.keys(ENEMY_TYPES) as EnemyTypeId[];
+}
+
+/** The types Custom Wave and Enemy Debug offer: all but the `debugUnlisted` ones. */
+export function getDebugEnemyTypes(): EnemyTypeConfig[] {
+  return getAllEnemyTypes().filter((type) => !type.debugUnlisted);
+}
+
+/** Guard against a split cycle in the config (a type splitting into itself). */
+const MAX_SPLIT_DEPTH = 4;
+
+/**
+ * Bodies one enemy of `id` can put on the route: itself plus everything a
+ * kill splits it into, recursively. 1 for a type without splitOnDeath.
+ */
+/**
+ * A body's share of its wave's kill gold, from its base HP. The square root:
+ * a Herbert (4000 HP) pays about six zombies, not forty, so a boss is worth
+ * hunting without one enemy carrying half the wave's gold.
+ */
+export function enemyRewardWeight(baseHp: number): number {
+  return Math.sqrt(Math.max(1, baseHp));
+}
+
+/**
+ * Reward weight of one enemy of `id` and everything a kill splits it into,
+ * recursively: what it adds to its wave's total (WaveManager).
+ */
+export function lineageRewardWeight(id: EnemyTypeId, depth = 0): number {
+  const type = ENEMY_TYPES[id];
+  if (!type) return 1;
+  const own = enemyRewardWeight(type.baseHp);
+  const split = type.splitOnDeath;
+  if (!split || depth >= MAX_SPLIT_DEPTH) return own;
+  return own + split.count * lineageRewardWeight(split.type, depth + 1);
+}
+
+export function splitBodyCount(id: EnemyTypeId, depth = 0): number {
+  const split = ENEMY_TYPES[id]?.splitOnDeath;
+  if (!split || depth >= MAX_SPLIT_DEPTH) return 1;
+  return 1 + split.count * splitBodyCount(split.type, depth + 1);
+}
+
+/** Regeneration heals in steps of this much game time, ms (regenPerSecond, the Regeneration mutator) */
+export const REGEN_INTERVAL_MS = 500;
+
+/** The spawn floor of a type without spawnStartDelay, ms */
+export const DEFAULT_SPAWN_FLOOR_MS = 300;
+
+/**
+ * Least time between two spawns next to an enemy of `id`, ms: its
+ * spawnStartDelay, else DEFAULT_SPAWN_FLOOR_MS (TODO E50). The spawner takes
+ * the larger floor of the two neighbours, after the wave's spread.
+ */
+export function spawnFloorMs(id: EnemyTypeId): number {
+  return ENEMY_TYPES[id]?.spawnStartDelay ?? DEFAULT_SPAWN_FLOOR_MS;
+}
+
+/** Most HP one enemy costs the HQ when it gets through, before the wave's scale */
+export const MAX_LEAK_DAMAGE = 50;
+
+/**
+ * HP an enemy of `id` costs the HQ when it gets through, before the wave's
+ * scale (enemyBaseDamageForWave): round(√HP / 5), from 1 to MAX_LEAK_DAMAGE
+ * (TODO E49, docs/archive/PRESSURE_ONE_PLACE_PLAN.md). A rat costs 1, a golem 4,
+ * Herbert 13. A body of many parts, the worm, costs it once for the whole
+ * body, from the HP of all its segments; each segment that gets through
+ * pays its share. A type's own `leakDamage` takes the place of the one its
+ * HP give. 1 for an unknown id.
+ */
+export function leakDamageOf(id: EnemyTypeId): number {
+  const type = ENEMY_TYPES[id];
+  if (!type) return 1;
+  if (type.leakDamage !== undefined) return type.leakDamage;
+  const hp = type.chain ? type.baseHp * WORM_MAX_SEGMENTS : type.baseHp;
+  return Math.max(1, Math.min(MAX_LEAK_DAMAGE, Math.round(Math.sqrt(hp) / 5)));
+}
+
+/**
+ * Most one enemy of `id` can cost the HQ, before the wave's scale: itself,
+ * or what its split tree costs if every end gets through (a skeleton killed
+ * just before the HQ sends both minions on), whichever is more.
+ */
+export function lineageLeakDamage(id: EnemyTypeId, depth = 0): number {
+  const own = leakDamageOf(id);
+  const split = ENEMY_TYPES[id]?.splitOnDeath;
+  if (!split || depth >= MAX_SPLIT_DEPTH) return own;
+  return Math.max(own, split.count * lineageLeakDamage(split.type, depth + 1));
+}
+
+/** Enemies one enemy of `id` becomes over its split tree, itself included; 1 for an unknown id. */
+export function lineageBodies(id: EnemyTypeId, depth = 0): number {
+  const type = ENEMY_TYPES[id];
+  if (!type) return 1;
+  const split = type.splitOnDeath;
+  if (!split || depth >= MAX_SPLIT_DEPTH) return 1;
+  return 1 + split.count * lineageBodies(split.type, depth + 1);
+}
+
+/**
+ * HP it takes to clear one enemy of `id` and everything a kill splits it
+ * into, at HP multiplier 1. Split children scale with their parent's
+ * multiplier, so the whole lineage scales with it. 80 for an unknown id.
+ */
+export function lineageHp(id: EnemyTypeId, depth = 0): number {
+  const type = ENEMY_TYPES[id];
+  if (!type) return 80;
+  const split = type.splitOnDeath;
+  if (!split || depth >= MAX_SPLIT_DEPTH) return type.baseHp;
+  return type.baseHp + split.count * lineageHp(split.type, depth + 1);
+}

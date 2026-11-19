@@ -1,0 +1,1139 @@
+import { GlobeBackdropComponent } from './components/globe-backdrop/globe-backdrop.component';
+import {
+  Component,
+  OnDestroy,
+  AfterViewInit,
+  ElementRef,
+  ViewChild,
+  Injector,
+  inject,
+  computed,
+  signal,
+  HostListener,
+  ChangeDetectionStrategy,
+  effect,
+  untracked,
+  DestroyRef,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { StreetNetwork } from './services/location/osm-street.service';
+import { ModelPreviewService } from './services/infrastructure/model-preview.service';
+import { getAllEnemyTypes } from './configs/enemy-types.config';
+import { GameSidebarComponent } from './components/game-sidebar/game-sidebar.component';
+import { CompassComponent } from './components/compass/compass.component';
+import { WorldMinimapComponent } from './components/world-minimap/world-minimap.component';
+import { GameHeaderComponent } from './components/game-header/game-header.component';
+// Deferred as one chunk, see debugWindowsRequested and debug-windows.ts
+import {
+  CameraDebuggerComponent,
+  WaveDebuggerComponent,
+  SoundDebuggerComponent,
+  EventDebuggerComponent,
+  DevWorldDebuggerComponent,
+  BotDebuggerComponent,
+  TowerDebuggerComponent,
+  EnemyDebuggerComponent,
+  DisplayOptionsComponent,
+  PerformanceDebuggerComponent,
+  LosDebuggerComponent,
+} from './components/debug-window/debug-windows';
+import { QuickActionsComponent } from './components/quick-actions/quick-actions.component';
+import { DEBUG_CREDITS_STEPS, DEBUG_HEALTH_STEPS, debugCheatAmount } from './components/quick-actions/debug-cheat-amount';
+import { InfoOverlayComponent } from './components/info-overlay/info-overlay.component';
+import { BenchmarkPanelComponent } from './benchmark/benchmark-panel.component';
+import { BenchmarkService } from './benchmark/benchmark.service';
+import { SaveGameService } from './services/save-game/save-game.service';
+import { SAVE_GAME } from './services/save-game/save-game.port';
+import { ContextHintComponent, HintAction, HintItem } from './components/context-hint/context-hint.component';
+import { controlsHints } from './components/context-hint/controls-hints';
+import { GameSpeedComponent } from './components/game-speed/game-speed.component';
+import { BossBarComponent } from './components/boss-bar/boss-bar.component';
+import { CoopSquadComponent } from './components/coop-squad/coop-squad.component';
+import { CoopDockComponent } from './components/coop-dock/coop-dock.component';
+import { WorldContext } from './world/world-context.service';
+import { WaveDebugService } from './services/debug/wave-debug.service';
+import { EnemyDebugService } from './services/debug/enemy-debug.service';
+import { DebugFacadeService } from './services/debug/debug-facade.service';
+import { DebugWindowService } from './services/debug/debug-window.service';
+import { FavoriteLocation } from './models/location.types';
+import type { LocationChangeInput } from './services/location/location-change-executor.service';
+// Refactoring services
+import { CameraControlService } from './services/camera-control.service';
+import { InputHandlerService } from './services/input-handler.service';
+import { HotkeyService } from './services/hotkey.service';
+import { escapeBelongsToGame } from './utils/keyboard-target';
+import { TowerUpgradeService } from './services/tower-upgrade.service';
+import { TowerPlacementService } from './services/tower-placement.service';
+import { AbilityTargetingService } from './services/ability-targeting.service';
+import { HeroControlService } from './services/hero-control.service';
+import { heroBarView } from './components/ability-bar/hero-bar';
+import { MapPlacementService } from './services/world/map-placement.service';
+import { LocationManagementService } from './services/location/location-management.service';
+import { EngineInitializationService } from './services/infrastructure/engine-initialization.service';
+import { LocationChangeCoordinatorService } from './services/location/location-change-coordinator.service';
+import { TowerDefenseFacadeService, FacadeComponentBridge } from './services/facade/tower-defense-facade.service';
+import { GameLoopFacadeService } from './services/facade/game-loop-facade.service';
+import { VisualizationFacadeService } from './services/facade/visualization-facade.service';
+import type { OsmMinimapSource } from './components/world-minimap/osm-minimap';
+import { TowerDefenseStore } from './store/tower-defense.store';
+import { UIStore, noticeLingerMs } from './store/ui.store';
+import { ConfigService } from './core/services/config.service';
+// The simulation as the main thread sees it (docs/SIM_WORKER.md)
+import { SimClient } from './sim/client/sim-client.service';
+import { PresentationService } from './presentation/presentation.service';
+import { RouteGridVizService } from './services/world/route-grid-viz.service';
+// Three.js Engine (new 3DTilesRendererJS-based)
+import { ThreeTilesEngine } from './three-engine';
+import { Vector3 } from 'three';
+// Theme
+// Tower config
+import { TOWER_TYPES, getAllTowerTypes, TowerTypeId, UpgradeId, TargetingStrategy, AirSubStrategy } from './configs/tower-types.config';
+import { Tower } from './entities/tower.entity';
+// AI Wave Director (optional)
+import { WaveDirector } from './director/wave-director';
+import { StateSnapshotService } from './director/state-snapshot.service';
+import { BotClientService } from './bots/bot-client.service';
+// AI Bot Training
+import type { BotSkillLevel } from './bots/bots/tower-bot.interface';
+import { TdIconComponent } from './components/icon/icon.component';
+import { LosLegendComponent } from './components/los-legend/los-legend.component';
+import { IntroSkipComponent } from './components/intro-skip/intro-skip.component';
+// Deferred in the template, loaded the first time the screen shows
+import { TokenSetupComponent } from './components/token-setup/token-setup.component';
+import { LeakVignetteComponent } from './components/leak-vignette/leak-vignette.component';
+import { OffscreenIndicatorsComponent } from './components/offscreen-indicators/offscreen-indicators.component';
+import { CoopPingArrowsComponent } from './components/coop-ping-arrows/coop-ping-arrows.component';
+import { BloodMoonBannerComponent } from './components/blood-moon-banner/blood-moon-banner.component';
+import { RelocationStatusComponent } from './components/relocation-status/relocation-status.component';
+import { UpdateHintComponent } from './components/update-hint/update-hint.component';
+import { LaneLengthPanelComponent } from './components/lane-length-panel/lane-length-panel.component';
+import { AssetManagerService } from './services/infrastructure/asset-manager.service';
+import { modelsMissingText } from './services/infrastructure/model-label';
+import { CellReportPanelComponent } from './components/cell-report-panel/cell-report-panel.component';
+import { AbilityBarComponent } from './components/ability-bar/ability-bar.component';
+import { RunSummaryComponent } from './components/run-summary/run-summary.component';
+import { RunChartsComponent, type RunChartPlayer } from './components/run-charts/run-charts.component';
+import { WorldRecordComponent } from './components/world-globe/world-record.component';
+import { BossIntroComponent } from './components/boss-intro/boss-intro.component';
+import { BestWaveService } from './services/location/best-wave.service';
+import { PhotoModeService } from './services/photo-mode.service';
+import { BossIntroService } from './services/boss-intro.service';
+import { CamoHintService } from './services/camo-hint.service';
+import { ReplayService } from './services/replay.service';
+import { TowerControlService } from './services/tower-control.service';
+import { ReplayBarComponent } from './components/replay-bar/replay-bar.component';
+import { TowerControlHudComponent } from './components/tower-control-hud/tower-control-hud.component';
+import { OnboardingService } from './services/onboarding/onboarding.service';
+import { WhatsNewService } from './services/onboarding/whats-new.service';
+import { IntroCameraFlightService } from './services/world/intro-camera-flight.service';
+import { canTargetAirEffective } from './entities/tower-targeting.util';
+import { ResearchStore } from './store/research.store';
+import { ABILITIES } from './configs/abilities.config';
+import { RefusalHintService } from './services/refusal-hint.service';
+import { FocusOnShowDirective } from './components/focus-on-show.directive';
+import { RunLogFacade } from './run-log/run-log.facade';
+import { uiSound } from './services/ui-sound';
+import { CoopService } from './services/coop.service';
+import { MAX_PLAYERS } from './coop/protocol';
+import { COOP } from './services/coop.token';
+import { MainMenuComponent } from './components/main-menu/main-menu.component';
+import { MainMenuService } from './components/main-menu/main-menu.service';
+
+@Component({
+  selector: 'app-tower-defense',
+  standalone: true,
+  imports: [
+    CommonModule,
+    GlobeBackdropComponent,
+    FocusOnShowDirective,
+    MatDialogModule,
+    CdkTrapFocus,
+    MatTooltipModule,
+    GameSidebarComponent,
+    CompassComponent,
+    WorldMinimapComponent,
+    GameHeaderComponent,
+    CameraDebuggerComponent,
+    WaveDebuggerComponent,
+    SoundDebuggerComponent,
+    EventDebuggerComponent,
+    DevWorldDebuggerComponent,
+    BotDebuggerComponent,
+    TowerDebuggerComponent,
+    EnemyDebuggerComponent,
+    DisplayOptionsComponent,
+    PerformanceDebuggerComponent,
+    LosDebuggerComponent,
+    QuickActionsComponent,
+    InfoOverlayComponent,
+    ContextHintComponent,
+    GameSpeedComponent,
+    BossBarComponent,
+    CoopSquadComponent,
+    CoopDockComponent,
+    TdIconComponent,
+    LosLegendComponent,
+    IntroSkipComponent,
+    TokenSetupComponent,
+    LeakVignetteComponent,
+    OffscreenIndicatorsComponent,
+    CoopPingArrowsComponent,
+    BloodMoonBannerComponent,
+    RelocationStatusComponent,
+    UpdateHintComponent,
+    LaneLengthPanelComponent,
+    CellReportPanelComponent,
+    AbilityBarComponent,
+    RunSummaryComponent,
+    RunChartsComponent,
+    BossIntroComponent,
+    ReplayBarComponent,
+    TowerControlHudComponent,
+    // Used only inside @defer on the game-over screen, so it loads with the globe as a lazy chunk
+    WorldRecordComponent,
+    BenchmarkPanelComponent,
+    MainMenuComponent,
+  ],
+  providers: [
+    ModelPreviewService,
+    // AI services (optional - game works without them)
+    StateSnapshotService,
+    WaveDirector,
+    BotClientService,
+    // Facade services (depend on component-scoped providers above)
+    TowerDefenseFacadeService,
+    GameLoopFacadeService,
+    VisualizationFacadeService,
+    // Game hotkeys and the upgrade purchases drive the facade, so they live in the same scope
+    HotkeyService,
+    TowerUpgradeService,
+    // Scoped with the services it switches off
+    PhotoModeService,
+    // Listens on SimClient.bus, ticked by the game loop
+    BossIntroService,
+    // Plays the simulation's recording; the game loop and the hotkeys drive it
+    ReplayService,
+    // Manning a tower: commands to the simulation, ticked by the game loop, keyed by the hotkeys
+    TowerControlService,
+    // The first camouflaged enemy of a run: a message and a look (TODO E145)
+    CamoHintService,
+    // Coop: the relay session and what the game does with it (docs/COOP_PLAN.md, C4)
+    CoopService,
+    { provide: COOP, useExisting: CoopService },
+    // The in-game benchmark drives the game loop's load handle (TODO E74)
+    BenchmarkService,
+    // Saving and loading the run, between the waves (TODO E110); the menu binds to SAVE_GAME
+    SaveGameService,
+    { provide: SAVE_GAME, useExisting: SaveGameService },
+    // The main menu: its pages reach the services above (docs/MAIN_MENU_UI_PLAN.md)
+    MainMenuService,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './tower-defense.component.html',
+  styleUrls: ['./tower-defense.component.scss'],
+  styles: [`
+    :host {
+      display: contents;
+    }
+  `],
+})
+export class TowerDefenseComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('gameCanvas') gameCanvas!: ElementRef<HTMLCanvasElement>;
+
+  private readonly dialogRef = inject(MatDialogRef<TowerDefenseComponent>, { optional: true });
+  private readonly dialog = inject(MatDialog);
+  readonly sim = inject(SimClient);
+  private readonly presentation = inject(PresentationService);
+  private readonly routeGridViz = inject(RouteGridVizService);
+  private readonly runLog = inject(RunLogFacade);
+  /** Made with the game: it saves after every wave from the start */
+  private readonly saveGame = inject(SaveGameService);
+  protected readonly uiStore = inject(UIStore);
+  readonly configService = inject(ConfigService);
+
+  /** True while the token screen is up instead of the game. */
+  readonly awaitingCredentials = signal(false);
+  private gameStarted = false;
+
+  readonly injector = inject(Injector);
+
+  // Refactoring services
+  private readonly cameraControl = inject(CameraControlService);
+  private readonly inputHandler = inject(InputHandlerService);
+  private readonly hotkeys = inject(HotkeyService);
+  private readonly towerUpgrade = inject(TowerUpgradeService);
+  private readonly towerPlacement = inject(TowerPlacementService);
+  private readonly mapPlacement = inject(MapPlacementService);
+  private readonly abilityTargeting = inject(AbilityTargetingService);
+  private readonly locationMgmt = inject(LocationManagementService);
+  private readonly engineInit = inject(EngineInitializationService);
+  private readonly locationCoordinator = inject(LocationChangeCoordinatorService);
+  /** The world the game plays: its credentials, its logos */
+  readonly worldContext = inject(WorldContext);
+  readonly facade = inject(TowerDefenseFacadeService);
+  private readonly vizFacade = inject(VisualizationFacadeService);
+  /** A real place's streets and buildings for the minimap (TODO E142) */
+  readonly minimapOsm: OsmMinimapSource = {
+    streets: () => this.streetNetwork,
+    buildings: () => this.vizFacade.buildingFootprints(),
+  };
+  readonly store = inject(TowerDefenseStore);
+  /** Best wave per place; a new record shows on the game-over screen */
+  readonly bestWaves = inject(BestWaveService);
+  /** HUD hidden, screenshot bar on top */
+  readonly photoMode = inject(PhotoModeService);
+  /** Camera cut to a wave's boss with its title card */
+  readonly bossIntro = inject(BossIntroService);
+  /** Replay of the last wave: HUD hidden, replay bar at the bottom */
+  readonly replay = inject(ReplayService);
+  /** Coop: the game-over screen restarts only at the host */
+  readonly coop = inject(CoopService);
+  readonly towerControl = inject(TowerControlService);
+
+  /** The main menu: start layer in front of the loading place, pause layer on Esc */
+  readonly mainMenu = inject(MainMenuService);
+
+  // Debug services
+  readonly waveDebug = inject(WaveDebugService);
+  readonly enemyDebug = inject(EnemyDebugService);
+  readonly debugFacade = inject(DebugFacadeService);
+  private readonly debugWindows = inject(DebugWindowService);
+
+  /**
+   * The debug windows load as one lazy chunk once the dev menu opens or a
+   * window is open, which includes one restored from storage after a reload.
+   * A `when` trigger fires once, the windows stay loaded after that. Only the
+   * window components are deferred; their services, and the debug hooks on
+   * window, are part of the game chunk as before.
+   */
+  readonly debugWindowsRequested = computed(
+    () => this.uiStore.devMenuExpanded() || this.debugWindows.hasOpenWindows()
+  );
+
+  // AI Bot Training (delegated to BotClientService)
+  private readonly botClient = inject(BotClientService);
+  // Expose bot signals from service for template bindings
+  readonly botEnabled = this.botClient.botEnabled;
+  readonly botSkillLevel = this.botClient.botSkillLevel;
+  readonly botStats = this.botClient.botStats;
+
+  // Expose Math and tower config for template
+  readonly Math = Math;
+  readonly towerTypes = getAllTowerTypes();
+
+  private engine: ThreeTilesEngine | null = null;
+  private streetNetwork: StreetNetwork | null = null;
+  private filteredStreetNetwork: StreetNetwork | null = null; // Filtered to route corridor for rendering
+  private streetNetworkLocation: { lat: number; lon: number } | null = null; // Tracks loaded location to avoid double-loading
+
+  // ═══════════════════════════════════════════════════════════
+  // Signal proxies, mostly from Store (single source of truth)
+  // A few remain from services not yet consolidated into Store
+  // ═══════════════════════════════════════════════════════════
+
+  // Loading / Engine, from Store
+  readonly loading = this.store.loading;
+  readonly error = this.store.error;
+  /**
+   * The HUD over the map: not while the place loads or failed, and not
+   * under the start menu, which stands in front of the scene alone. Under
+   * the pause layer it stays, darkened.
+   */
+  readonly hudShown = computed(() => !this.loading() && !this.error() && !this.startMenu());
+  /**
+   * The start menu stands in front: the scene alone behind it, full width,
+   * no header and no sidebar (Main.dc.html); the canvas follows its box
+   * (CanvasSizeFollower), and back when the menu closes
+   */
+  readonly startMenu = computed(() => this.uiStore.mainMenuOpen() && this.mainMenu.layer() === 'start');
+  /** The tile key screen stands instead of the game, the menu waits behind it */
+  readonly tokenScreen = computed(() =>
+    this.awaitingCredentials() || this.configService.credentialsRejected() || this.configService.setupRequested());
+
+  // UI State, from Store
+  readonly buildMode = this.store.buildMode;
+
+  // Location, from Store/Services (used in TS methods + template)
+  readonly editableHqLocation = this.locationMgmt.editableHqLocation;
+  readonly editableSpawnLocations = this.locationMgmt.editableSpawnLocations;
+  readonly favorites = this.locationMgmt.favorites;
+  readonly favoriteNamesMap = this.locationCoordinator.favoriteNamesMap;
+  readonly baseCoords = this.store.baseCoords;
+  readonly streetCount = this.store.streetCount;
+
+  // Engine stats, from Store
+  readonly fps = this.store.fps;
+  readonly tileStats = this.store.tileStats;
+  readonly mapAttribution = this.store.mapAttribution;
+  /** The map's credit, with the OSM credit where the routes run on OSM streets */
+  readonly creditLine = computed(() => this.mapAttribution().join(', '));
+
+  // Camera, from Store
+  readonly compassRotation = this.store.compassRotation;
+  readonly cameraFramingDebug = this.store.cameraFramingDebug;
+
+  readonly enemyTypes = getAllEnemyTypes();
+
+  /** The world rolling itself anew, from the store */
+  readonly worldRegenerating = this.store.worldRegenerating;
+
+  // Game state signals, sourced from Store (single source of truth via GSM→Store sync)
+  readonly waveActive = this.store.waveActive;
+  readonly isGameOver = this.store.isGameOver;
+
+  // LOS-Legend: sichtbar während Build-Mode ODER bei selektiertem Tower.
+  // Capabilities aus dem jeweils relevanten Tower(-Type) gelesen, mit
+  // AA-Retrofit-Research im Air-Bit (mixed Tower wie dual-gatling
+  // werden erst nach Research zu canTargetAir=true).
+  private readonly researchStore = inject(ResearchStore);
+  /** Intro camera flight: takes Esc (skip) and holds the other game keys back, see onKeyDown */
+  private readonly introFlight = inject(IntroCameraFlightService);
+  /** Intro camera flight is playing, gates the Skip control. */
+  readonly introFlightActive = this.introFlight.active;
+
+  readonly losLegendVisible = computed(() => {
+    if (this.buildMode() && this.store.selectedTowerType()) return true;
+    if (this.store.selectedTower()) return true;
+    return false;
+  });
+  readonly losLegendCanGround = computed(() => {
+    const typeId = this.activeLosTowerTypeId();
+    if (!typeId) return false;
+    // canTargetGround ist optional und defaultet auf true (siehe Tower-Config).
+    return TOWER_TYPES[typeId]?.canTargetGround ?? true;
+  });
+  readonly losLegendCanAir = computed(() => {
+    const typeId = this.activeLosTowerTypeId();
+    if (!typeId) return false;
+    return canTargetAirEffective(typeId, this.researchStore.airTargetingUnlocked());
+  });
+
+  /** Tower-Type-Id für die LOS-Legende: Build-Mode-Type oder selektierter Tower-Type. */
+  private activeLosTowerTypeId = computed<TowerTypeId | null>(() => {
+    if (this.buildMode()) return this.store.selectedTowerType();
+    const tower = this.store.selectedTower();
+    return tower ? (tower.typeConfig.id as TowerTypeId) : null;
+  });
+
+  // Build mode hints for context hint box
+  readonly buildModeHints: HintItem[] = [
+    { key: 'R', description: 'Rotate' },
+    { key: 'Click', description: 'Build' },
+    { key: 'ESC', description: 'Cancel' },
+    { key: 'Hover', description: 'Line of Sight' },
+  ];
+  readonly buildModeWarning = computed(() => this.towerPlacement.validationReason());
+
+  // Map placement hints for context hint box: R turns a spawn portal
+  readonly placementModeHints = computed((): HintItem[] => [
+    ...(this.mapPlacementMode() === 'spawn' ? [{ key: 'R', description: 'Rotate' }] : []),
+    { key: 'Click', description: 'Place' },
+    { key: 'ESC', description: 'Cancel' },
+  ]);
+  readonly placementModeWarning = computed(() => this.mapPlacement.validationReason());
+
+  /** Why the last press on an ability or the hero did nothing; its box comes before every other */
+  readonly refusal = inject(RefusalHintService).refusal;
+
+  // Ability targeting hints for context hint box: what a click does comes from the ability
+  readonly abilityTargetingActive = computed(() => this.abilityTargeting.targeting() !== null);
+  readonly abilityTargetingHints = computed((): HintItem[] => {
+    const id = this.abilityTargeting.targeting();
+    return [
+      { key: 'Click', description: id ? ABILITIES[id].aimHint : '' },
+      { key: 'ESC', description: 'Cancel' },
+    ];
+  });
+  readonly abilityTargetingWarning = this.abilityTargeting.warning;
+
+  // Hero selected: the next click on the route sends him
+  private readonly heroControl = inject(HeroControlService);
+  readonly heroSelected = this.heroControl.selected;
+  readonly heroHints: HintItem[] = [
+    { key: 'Click', description: 'Send' },
+    { key: 'V', description: 'Ammo' },
+    { key: 'G', description: 'Camera' },
+    { key: 'ESC', description: 'Let go' },
+  ];
+  readonly heroWarning = this.heroControl.warning;
+  /** His button at the top of the ability bar: the hire offer, then him */
+  readonly heroBar = computed(() => heroBarView(this.store.hero(), this.heroSelected(), this.store.credits()));
+
+  onHeroBarPressed(): void {
+    const bar = this.heroBar();
+    if (bar?.action === 'hire') this.heroControl.hire();
+    else if (bar?.action === 'summon') this.heroControl.summon();
+  }
+
+  // First-run tips share the context hint box; build, placement and targeting hints come first
+  private readonly onboarding = inject(OnboardingService);
+  readonly onboardingActions: HintAction[] = [
+    { id: 'skip', label: 'Skip' },
+    { id: 'hide', label: 'Hide tips' },
+  ];
+  /** Tip on screen: only over the running game, not over the intro flight, game over, photo mode or the replay */
+  readonly onboardingTip = computed(() => {
+    if (this.loading() || this.error() || this.awaitingCredentials() || this.uiStore.mainMenuOpen()) return null;
+    if (this.introFlightActive() || this.isGameOver() || this.uiStore.viewOnly()) return null;
+    return this.onboarding.tip();
+  });
+
+  onOnboardingAction(id: string): void {
+    if (id === 'skip') this.onboarding.skip();
+    else if (id === 'hide') this.onboarding.hide();
+  }
+
+  // Map placement mode (HQ/Spawn)
+  readonly mapPlacementMode = computed(() => this.uiStore.mapPlacementMode());
+  // HQ and spawns only before the first wave: a change builds the run anew,
+  // and the lanes with their start credits are set by then (docs/WAVE_SYSTEM.md (Spuren))
+  readonly canPlaceOnMap = computed(() =>
+    this.store.phase() === 'setup' && this.store.waveNumber() === 0
+      && !this.engineInit.loading() && !this.uiStore.coopMapLocked(),
+  );
+
+  // Controls hint auto-hide
+  readonly controlsHintVisible = signal(true);
+  /** With "M: Sound is off" while M from the last session holds (review 2026-10-01) */
+  readonly controlsHints = computed(() => controlsHints(this.uiStore.masterMuted()));
+  readonly controlsHintActions: HintAction[] = [{ id: 'hide', label: 'Got it' }];
+  private controlsHintTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Set once the game started; the hint's 15 s count only after the intro flight. */
+  private readonly controlsHintArmed = signal(false);
+
+  // Location name for header display - delegates to service for consistent formatting
+  readonly currentLocationName = computed(() => this.locationMgmt.getLocationDisplayName());
+
+  // Tile stats polling is managed by EngineInitializationService
+
+  constructor() {
+    this.facade.initEffects(this);
+    // Listens on its own; made here so it stands from the start
+    inject(CamoHintService);
+    window.addEventListener('keydown', this.escapePastTooltip, { capture: true });
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('keydown', this.escapePastTooltip, { capture: true }));
+    // A tower or enemy model did not load after every try: its enemies walk unseen
+    const assets = inject(AssetManagerService);
+    effect(() => {
+      const failed = assets.failedModels();
+      if (failed.length > 0) untracked(() => this.uiStore.notice.set({ text: modelsMissingText(failed), reload: true }));
+    });
+    // A notice closes by itself after a few seconds, unless it waits for a reload (TODO E137)
+    effect((onCleanup) => {
+      const notice = this.uiStore.notice();
+      const linger = notice ? noticeLingerMs(notice) : null;
+      if (linger === null) return;
+      const timer = setTimeout(() => {
+        if (this.uiStore.notice() === notice) this.uiStore.notice.set(null);
+      }, linger);
+      onCleanup(() => clearTimeout(timer));
+    });
+    // Every dialog sounds as it opens and closes
+    inject(MatDialog).afterOpened.pipe(takeUntilDestroyed()).subscribe((ref) => {
+      uiSound.play('dialogOpen');
+      ref.afterClosed().subscribe(() => uiSound.play('dialogClose'));
+    });
+
+    // Volumes from the audio menu and M as they change, silent while a bot
+    // plays; applyAudioVolumes() once more when the engine is up
+    effect(() => {
+      this.uiStore.effectiveMusicVolume();
+      this.uiStore.effectiveSfxVolume();
+      this.uiStore.effectiveUiVolume();
+      this.botEnabled();
+      untracked(() => this.applyAudioVolumes());
+    });
+
+    // The controls hint waits for the intro flight: it shares the bottom
+    // centre with "Skip intro", and 15 s under a flight would be 15 s unseen.
+    effect(() => {
+      if (!this.controlsHintArmed() || this.uiStore.mainMenuOpen() || this.introFlightActive() || this.controlsHintTimer) return;
+      this.controlsHintTimer = setTimeout(() => this.controlsHintVisible.set(false), 15000);
+    });
+
+    // "What's new" once after an update, when the game is up: not over the
+    // loading place, an error, the token dialog or the main menu. A page
+    // loaded for the benchmark runs it instead, the notes wait for the next load.
+    const whatsNew = inject(WhatsNewService);
+    const benchmark = inject(BenchmarkService);
+    let whatsNewChecked = false;
+    effect(() => {
+      if (whatsNewChecked || this.loading() || this.error() || this.awaitingCredentials() || this.uiStore.mainMenuOpen()) return;
+      whatsNewChecked = true;
+      untracked(() => (benchmark.requested ? benchmark.runIfRequested() : whatsNew.showAfterUpdate()));
+    });
+  }
+
+  async ngAfterViewInit(): Promise<void> {
+    // `?tokensetup` forces the screen even when credentials are already there.
+    // It is how you swap a key without clearing site data, and the only way to
+    // reach the first-run flow on a dev machine that has a token in environment.ts.
+    const forceTokenSetup = new URLSearchParams(window.location.search).has('tokensetup');
+
+    // No tile credentials yet: ask for them before the engine starts, otherwise
+    // the player lands on an error overlay telling them to edit a source file
+    // they do not have. A world without credentials (DevWorld, a map) skips the whole question.
+    if ((forceTokenSetup || this.configService.needsCredentials()) && this.worldContext.capabilities().credentials) {
+      this.awaitingCredentials.set(true);
+      return;
+    }
+
+    await this.startGameSequence();
+  }
+
+  /**
+   * Credentials arrived from the token screen. Before the engine ever started we
+   * can just start it; if it is already up (a token was rejected mid-flight) a
+   * reload is the honest way to rebuild the whole tile pipeline.
+   */
+  async onCredentialsSaved(): Promise<void> {
+    this.awaitingCredentials.set(false);
+
+    if (this.gameStarted) {
+      window.location.reload();
+      return;
+    }
+
+    await this.startGameSequence();
+  }
+
+  /** The token screen's chunk did not load (@error of its @defer): a reload fetches it again. */
+  reloadPage(): void {
+    window.location.reload();
+  }
+
+  private async startGameSequence(): Promise<void> {
+    this.gameStarted = true;
+    // The start menu stands in front while the place loads behind it; an
+    // invite link opens it on the coop page, where the join shows
+    this.mainMenu.openStart();
+    if (this.uiStore.mainMenuOpen() && new URLSearchParams(window.location.search).has('room')) this.mainMenu.open('coop');
+    await this.facade.startGame(this.gameCanvas.nativeElement);
+    this.applyAudioVolumes();
+    this.controlsHintArmed.set(true);
+  }
+
+  /**
+   * Hand the store's effective volumes to the music and the spatial audio,
+   * where they exist yet. A bot plays silent: at up to 75x its sound is noise,
+   * and a muted voice is not even created.
+   */
+  private applyAudioVolumes(): void {
+    const bot = this.botEnabled();
+    this.presentation.setMusicVolume(bot ? 0 : this.uiStore.effectiveMusicVolume());
+    this.engine?.spatialAudio.setMasterVolume(bot ? 0 : this.uiStore.effectiveSfxVolume());
+    this.engine?.spatialAudio.setUiVolume(bot ? 0 : this.uiStore.effectiveUiVolume());
+  }
+
+  /**
+   * Keyboard event handlers - delegates to InputHandlerService.
+   * @HostListener decorators must stay on the component (Angular requirement).
+   */
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    // Taken already on its way down, past a tooltip (escapePastTooltip)
+    if (event === this.escapeTakenEarly) return;
+    // The main menu owns the keyboard (its Esc steps back, MainMenuComponent):
+    // no boss-intro skip, no Tab trapped in the photo or replay bar behind it
+    if (this.uiStore.mainMenuOpen()) return;
+    // A running boss intro takes Esc (skip) and holds the other game keys back
+    if (this.bossIntro.handleKeyDown(event)) return;
+    // So does the intro flight
+    if (this.introFlight.handleKeyDown(event)) return;
+    // Photo mode and the replay keep Tab in their bar
+    this.photoMode.trapTab(event);
+    this.replay.trapTab(event);
+    this.inputHandler.handleKeyDown(event);
+    // Game hotkeys take what the input handler left alone (not defaultPrevented)
+    this.hotkeys.handleKeyDown(event);
+  }
+
+  /** The Escape escapePastTooltip handed to the game, so the window listener does not take it twice */
+  private escapeTakenEarly: KeyboardEvent | null = null;
+
+  /**
+   * A matTooltip under the pointer spends Escape on body, before the window
+   * listener: the game takes it on the way down instead (escapeBelongsToGame),
+   * the tooltip still closes.
+   */
+  private readonly escapePastTooltip = (event: KeyboardEvent): void => {
+    if (!escapeBelongsToGame(event)) return;
+    this.onKeyDown(event);
+    this.escapeTakenEarly = event;
+  };
+
+  @HostListener('window:keyup', ['$event'])
+  onKeyUp(event: KeyboardEvent): void {
+    this.inputHandler.handleKeyUp(event);
+    this.hotkeys.handleKeyUp(event);
+  }
+
+  @HostListener('window:blur')
+  onWindowBlur(): void {
+    this.inputHandler.handleWindowBlur();
+    this.hotkeys.handleWindowBlur();
+  }
+
+  /**
+   * Exit build mode cleanly - calls service method that handles all cleanup
+   */
+  private exitBuildMode(): void {
+    this.towerPlacement.exitBuildMode();
+  }
+
+  ngOnDestroy(): void {
+    if (this.controlsHintTimer) clearTimeout(this.controlsHintTimer);
+    this.facade.dispose();
+  }
+
+  /**
+   * Handle terrain click in build mode - directly places tower
+   */
+  private onTerrainClick(_lat: number, _lon: number, _height: number): void {
+    // Position is already tracked internally by towerPlacement
+    this.towerPlacement.handleBuildClick();
+  }
+
+  /**
+   * Handle mouse move in build mode (for build preview)
+   */
+  private onMouseMove(lat: number, lon: number, hitPoint: Vector3): void {
+    // The cursor ray already hit the exact surface the player is pointing at:
+    // a rooftop, a bridge deck, the street. Use it.
+    //
+    // This used to re-derive the height with `getTerrainHeightAtGeo`, which
+    // throws that away and answers for the column instead. That was tolerable
+    // while the column returned its topmost hit, but it now returns the
+    // walkable ground of the finest LOD, which is the right answer for where
+    // enemies walk and the wrong one here: over a tall building the column's
+    // ground is the street far below, so the preview sank to street level and
+    // placing on rooftops stopped working. Low buildings still mostly worked
+    // because the error was only a few metres.
+    this.towerPlacement.updatePreviewPosition(lat, lon, hitPoint.y);
+  }
+
+  /**
+   * Handle enemy placement from debug panel, delegated to EnemyDebugService
+   */
+  private handleEnemyPlacement(lat: number, lon: number, height: number): void {
+    this.enemyDebug.handleEnemyPlacement(lat, lon, height);
+  }
+
+  /**
+   * Toggle height debug visualization (just visibility, no re-render)
+   */
+  toggleHeightDebug(): void {
+    this.debugFacade.toggleHeightDebug();
+  }
+
+  /**
+   * Manually refresh terrain heights (re-raycast all overlays)
+   * Useful when 3D tiles have loaded more detail since initial setup
+   *
+   * In DevWorld mode: Regenerates entire world with current config
+   */
+  refreshTerrainHeights(): void {
+    this.facade.refreshTerrainHeights();
+  }
+
+  /**
+   * Add a spawn point, delegates to facade
+   */
+  addSpawnPoint(id: string, name: string, lat: number, lon: number, color: number): void {
+    this.facade.addSpawnPoint(id, name, lat, lon, color);
+  }
+
+  /**
+   * Toggle build mode - delegates to TowerPlacementService
+   */
+  toggleBuildMode(): void {
+    this.towerPlacement.toggleBuildMode();
+  }
+
+  /**
+   * Select a tower type and activate build mode - delegates to TowerPlacementService
+   */
+  selectTowerType(typeId: TowerTypeId): void {
+    this.towerPlacement.selectTowerType(typeId);
+  }
+
+  /**
+   * Sell the currently selected tower, delegates to facade
+   */
+  sellSelectedTower(): void {
+    this.facade.sellSelectedTower();
+  }
+
+  /**
+   * A click on an upgrade tile: buys it or says why not, answered like U
+   * (TowerUpgradeService)
+   */
+  upgradeTower(tower: Tower, upgradeId: UpgradeId, times = 1): boolean {
+    return this.towerUpgrade.buy(tower, upgradeId, times);
+  }
+
+  /**
+   * Change tower targeting strategy, through the command bus like every
+   * other player action (the replay records it)
+   */
+  changeTargeting(tower: Tower, strategy: TargetingStrategy): void {
+    this.facade.emitCommand({ type: 'command:set-targeting', towerId: tower.id, strategy });
+  }
+
+  /**
+   * Change air-priority sub-strategy, through the command bus
+   */
+  changeAirSubStrategy(tower: Tower, strategy: AirSubStrategy): void {
+    this.facade.emitCommand({ type: 'command:set-targeting', towerId: tower.id, airSubStrategy: strategy });
+  }
+
+  /** Hold fire of a tower on or off, through the command bus */
+  setHoldFire(tower: Tower, holdFire: boolean): void {
+    this.facade.emitCommand({ type: 'command:set-hold-fire', towerId: tower.id, holdFire });
+  }
+
+  onCancelResearch(researchId: string): void {
+    this.facade.emitCommand({ type: 'command:cancel-research', researchId });
+  }
+
+  /**
+   * Start a new wave, delegates to facade
+   */
+  startWave(): void {
+    this.facade.startWave();
+  }
+
+  /**
+   * Start custom wave, delegates to facade
+   */
+  startCustomWave(): void {
+    this.facade.startCustomWave();
+  }
+
+  /**
+   * Enable StrategyBot for automated bot runs, delegates to BotClientService
+   */
+  enableBot(skillLevel: BotSkillLevel): void {
+    this.botClient.enableBot(skillLevel);
+  }
+
+  /**
+   * Disable StrategyBot, delegates to BotClientService
+   */
+  disableBot(): void {
+    this.botClient.disableBot();
+  }
+
+  /**
+   * Reset camera - delegates to CameraControlService
+   */
+  resetCamera(): void {
+    this.cameraControl.resetCamera();
+  }
+
+  /**
+   * Handle buildings toggle side effect (visibility already toggled by QuickActionsComponent)
+   */
+  onBuildingsToggled(): void {
+    this.facade.onBuildingsToggled();
+  }
+
+  /**
+   * Handle streets toggle side effect (visibility already toggled by QuickActionsComponent)
+   */
+  onStreetsToggled(): void {
+    this.facade.onStreetsToggled();
+  }
+
+  /**
+   * Handle routes toggle side effect (visibility already toggled by QuickActionsComponent)
+   */
+  onRoutesToggled(): void {
+    this.facade.onRoutesToggled();
+  }
+
+  /**
+   * Toggle special points debug (fire position markers, etc.)
+   */
+  onSpecialPointsDebugToggled(): void {
+    this.facade.onSpecialPointsDebugToggled();
+  }
+
+  /**
+   * Toggle global route grid debug visualization
+   * Shows cells along routes with color-coded LOS and enemy presence
+   */
+  onSpatialGridDebugToggled(): void {
+    this.facade.toggleSpatialGridDebug();
+  }
+
+  /**
+   * Toggle the air-route tube, magenta dashed tube at air flight
+   * altitude along every enemy route. Persistent in UIStore.
+   */
+  onAirRouteToggled(): void {
+    this.routeGridViz.toggleAirRouteLayer();
+  }
+
+  /**
+   * Toggle the global air-cell debug overlay, same cell set as the
+   * spatial grid debug, but elevated to terrainY + airSampleYOffset
+   * and drawn in the air-layer colour. Persistent in UIStore.
+   */
+  onAirSpatialGridDebugToggled(): void {
+    this.routeGridViz.toggleAirSpatialGridDebug();
+  }
+
+  /**
+   * Cycle the per-tower LOS filter (Both → Ground only → Air only).
+   * Pure UIStore mutation, TowerPlacementService and TowerManager
+   * react via their own effects.
+   */
+  onPerTowerLosFilterCycled(): void {
+    this.uiStore.cyclePerTowerLosFilter();
+  }
+
+  /**
+   * Manually trigger route animation playback
+   */
+  onDpsBinsToggled(visible: boolean): void {
+    this.facade.onDpsBinsToggled(visible);
+  }
+
+  onPlayRouteAnimation(): void {
+    this.facade.onPlayRouteAnimation();
+  }
+
+  /**
+   * Toggle camera framing debug, delegates to facade
+   */
+  toggleCameraFramingDebug(): void {
+    this.facade.toggleCameraFramingDebug();
+  }
+
+  /**
+   * Toggle camera debug, delegates to facade
+   */
+  toggleCameraDebug(): void {
+    this.facade.toggleCameraDebug();
+  }
+  logCameraPosition(): void {
+    if (!this.engine) return;
+    this.debugFacade.logCameraPosition(this.engine, this.baseCoords());
+  }
+  killAllEnemies(): void {
+    this.debugFacade.killAllEnemies();
+  }
+  addDebugCredits(event: MouseEvent): void {
+    this.debugFacade.addDebugCredits(debugCheatAmount(event, DEBUG_CREDITS_STEPS));
+  }
+  addDebugHealth(event: MouseEvent): void {
+    this.debugFacade.addDebugHealth(debugCheatAmount(event, DEBUG_HEALTH_STEPS));
+  }
+  completeAllResearch(): void {
+    this.debugFacade.completeAllResearch();
+  }
+  maxUpgradeAllTowers(): void {
+    this.debugFacade.maxUpgradeAllTowers();
+  }
+  readyAbilities(): void {
+    this.debugFacade.readyAbilities();
+  }
+  readyHero(): void {
+    this.debugFacade.readyHero();
+  }
+  clearDebugLog(): void {
+    this.debugFacade.clearDebugLog();
+  }
+
+  close(): void {
+    this.dialogRef?.close();
+  }
+
+  get isDialog(): boolean {
+    return !!this.dialogRef;
+  }
+
+  /** The run log of the run that just ended was handed to the player. */
+  readonly runLogExported = signal(false);
+
+  /**
+   * Save the run as a JSONL file (docs/RUN_LOG.md). The game-over screen
+   * offers it; the file is what an analysis or another player reads.
+   */
+  exportRunLog(): void {
+    if (this.runLog.export()) this.runLogExported.set(true);
+  }
+
+  /**
+   * Coop: the host saves the run's replayable waves as a file at game over.
+   * Watching a replay stays off in a coop game (the lockstep runs on, see
+   * ReplayService.available); the file loads again alone on the same map.
+   */
+  readonly coopReplaySave = computed(() =>
+    this.coop.inGame() && this.coop.isHost() && this.replay.recordedWave() !== null);
+
+  /** The coop replay file of the run that just ended was saved */
+  readonly coopReplaySaved = signal(false);
+
+  async saveCoopReplay(): Promise<void> {
+    if (await this.replay.saveFile()) this.coopReplaySaved.set(true);
+  }
+
+  /**
+   * Restart game, delegates to facade
+   */
+  restartGame(): void {
+    this.facade.restartGame();
+  }
+
+  /** "Main menu" on the game-over screen: the menu over the game */
+  openMainMenu(): void {
+    this.mainMenu.open();
+  }
+
+  // ==================== Location Settings Methods (delegates to LocationChangeCoordinatorService) ====================
+
+  /** Apply new location - delegates to coordinator */
+  async onApplyNewLocation(data: LocationChangeInput): Promise<void> {
+    this.locationCoordinator.applyNewLocation(data);
+  }
+
+  /** The header's place button: the menu's New game page, where a place is chosen */
+  openPlaceChoice(): void {
+    if (this.uiStore.coopMapLocked()) return;
+    this.mainMenu.open('new-game');
+  }
+
+  /** Copy shareable URL to clipboard */
+  onShareLocation(): void {
+    this.locationCoordinator.onShareLocation();
+  }
+
+  /** Roll for a random city */
+  async onWorldDice(): Promise<void> {
+    this.locationCoordinator.onWorldDice();
+  }
+
+  /** Save current location as favorite, under the name from the header's field */
+  onAddFavorite(name: string): void {
+    this.locationCoordinator.onAddFavorite(name);
+  }
+
+  /** Rename a favorite; an empty name goes back to the geocoded one */
+  onRenameFavorite(id: string, name: string): void {
+    this.locationCoordinator.onRenameFavorite(id, name);
+  }
+
+  /** Move a favorite up (-1) or down (1) in the list */
+  onMoveFavorite(id: string, offset: number): void {
+    this.locationCoordinator.onMoveFavorite(id, offset);
+  }
+
+  /** Apply a favorite location */
+  async onSelectFavorite(fav: FavoriteLocation): Promise<void> {
+    this.locationCoordinator.onSelectFavorite(fav);
+  }
+
+  /** Delete a favorite */
+  onDeleteFavorite(id: string): void {
+    this.locationCoordinator.onDeleteFavorite(id);
+  }
+
+  /** Enter HQ placement mode */
+  onPlaceHq(): void {
+    this.facade.startMapPlacement('hq');
+  }
+
+  /** Enter spawn placement mode: move spawn `move`, or with null one spawn in place of all */
+  onPlaceSpawn(move: number | null = null): void {
+    this.facade.startMapPlacement('spawn', false, move);
+  }
+
+  /** Enter spawn placement mode for one more spawn */
+  onAddSpawn(): void {
+    this.facade.startMapPlacement('spawn', true);
+  }
+
+  /**
+   * The header's Coop button: in a room, or while joining one, the dock
+   * opens and closes (docs/COOP_PLAN.md, D41); otherwise the menu's Coop
+   * page, where hosting and joining start. A guest taken out of a room keeps
+   * the join intent, so the intent alone does not count: the dock with the
+   * reason gives way to the page.
+   */
+  openCoop(): void {
+    const status = this.coop.status();
+    const joining = this.coop.intent() === 'join' && (status === 'connecting' || status === 'loading-world');
+    if (this.coop.room() || joining) {
+      this.uiStore.coopDockOpen.update((open) => !open);
+      return;
+    }
+    this.uiStore.coopDockOpen.set(false);
+    this.mainMenu.open('coop');
+  }
+
+  /** The quick bar's Settings button: the menu's Settings page */
+  openSettings(): void {
+    this.mainMenu.open('settings');
+  }
+
+  /** The header's room chip: code, a square per player in their lane colour, how many of how many */
+  /** Every player's run wave by wave, for the game-over charts (TODO E46) */
+  readonly waveSeries = computed(() => this.runLog.waveSeries());
+
+  /** Who the charts show: the coop players in their lane colours, alone the one player */
+  readonly chartPlayers = computed<RunChartPlayer[]>(() => {
+    const rows = this.coop.summary();
+    if (rows) return rows.map((row) => ({ id: row.id, name: row.me ? `${row.name} (you)` : row.name, color: row.color }));
+    const last = this.waveSeries().at(-1);
+    return last ? Object.keys(last.players).map((id) => ({ id, name: 'You', color: 'var(--td-brass)' })) : [];
+  });
+
+  /** Gold a player earned in the run (kills and wave bonuses), for the coop table */
+  goldEarnedOf(playerId: string): number {
+    return this.waveSeries().at(-1)?.players[playerId]?.goldEarned ?? 0;
+  }
+
+  readonly coopChip = computed(() => {
+    const room = this.coop.room();
+    if (!room) return null;
+    return {
+      code: room.code,
+      colors: room.players.map((p) => (p.spawnIds.length === 0 ? null : this.coop.laneColorOf(p.id))),
+      max: MAX_PLAYERS,
+    };
+  });
+
+  /**
+   * Build the FacadeComponentBridge for the TowerDefenseFacadeService.
+   */
+  getFacadeBridge(): FacadeComponentBridge {
+    return {
+      getEngine: () => this.engine,
+      setEngine: (e) => { this.engine = e; },
+      getStreetNetwork: () => this.streetNetwork,
+      setStreetNetwork: (n) => { this.streetNetwork = n; },
+      getFilteredStreetNetwork: () => this.filteredStreetNetwork,
+      setFilteredStreetNetwork: (n) => { this.filteredStreetNetwork = n; },
+      getStreetNetworkLocation: () => this.streetNetworkLocation,
+      setStreetNetworkLocation: (l) => { this.streetNetworkLocation = l; },
+      getCanvasElement: () => this.gameCanvas.nativeElement,
+      onTerrainClick: (lat, lon, height) => this.onTerrainClick(lat, lon, height),
+      onMouseMove: (lat, lon, hitPoint) => this.onMouseMove(lat, lon, hitPoint),
+      exitBuildMode: () => this.exitBuildMode(),
+      handleEnemyPlacement: (lat, lon, height) => this.handleEnemyPlacement(lat, lon, height),
+      onMapPlacementClick: (lat, lon, height) => this.facade.handleMapPlacementClick(lat, lon, height),
+      onMapPlacementMove: (lat, lon, hitPoint) => {
+        const h = this.engine?.getTerrainHeightAtGeo(lat, lon) ?? hitPoint.y;
+        this.mapPlacement.updatePreviewPosition(lat, lon, h);
+      },
+      exitMapPlacement: () => this.mapPlacement.exitPlacementMode(),
+    };
+  }
+
+}

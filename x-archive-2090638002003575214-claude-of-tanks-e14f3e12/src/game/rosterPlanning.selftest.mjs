@@ -1,0 +1,183 @@
+import assert from 'node:assert/strict';
+import { createGameState } from './stateCore.ts';
+import {
+  pickBattleParticipants, pickNationalBattle, planBattleCamoOverrides, planBattleParticipantIds, soloBotCamo, soloMatchSeed, SOLO_MATCH_SEED, spawnTanks,
+} from './rosterState.ts';
+import { botCamoRoll } from '../sim/camoPaint.ts';
+import { getSpec, PRODUCTION_TANK_IDS } from '../vehicles/specs.ts';
+import { ENEMY_NATION_OPTIONS } from './teamArrangement.ts';
+
+const game = createGameState();
+spawnTanks(game, {});
+assert.deepEqual(game.allTanks.map((tank) => tank.specId), PRODUCTION_TANK_IDS,
+  'solo battles lazily instantiate every production-visible vehicle');
+assert.equal(game.tankById.size, PRODUCTION_TANK_IDS.length,
+  'only production vehicles are instantiated (no hidden records remain, 2026-09-23)');
+const beforeCount = game.battleCount;
+const first = planBattleParticipantIds(game, 'm1a1_abrams_hc', true);
+const again = planBattleParticipantIds(game, 'm1a1_abrams_hc', true);
+
+assert.equal(game.battleCount, beforeCount, 'planning does not consume a battle ordinal');
+assert.deepEqual(again, first, 'planning is deterministic until a battle starts');
+assert.equal(first[0], 'm1a1_abrams_hc', 'player remains the first participant');
+assert.equal(first.length, 14, 'random battle plan covers the full 7v7 roster');
+assert.equal(new Set(first).size, first.length, 'planned participant ids are unique');
+// sides (owner 2026-09-18): a 14 v 14 plan asks for 27 non-player seats and takes every one the catalog can fill
+{
+  const wide = planBattleParticipantIds(game, 'm1a1_abrams_hc', true, [], 27, null);
+  assert.equal(wide.length, Math.min(28, game.allTanks.length), 'a wider field takes every seat the catalog can fill');
+  assert.equal(new Set(wide).size, wide.length, 'a wider field never repeats a vehicle');
+  assert.equal(wide[0], 'm1a1_abrams_hc');
+}
+// batch 19 (2026-09-14): a campaign operation's formation fills the enemy seats first — same-era vehicles of
+// the named nations lead the plan (at most ten, leaving seats for the allies); no formation keeps the standard plan
+{
+  const russian = ['Russia', 'USSR', 'USSR/Russia', 'RU'];
+  const playerEra = getSpec('m1a1_abrams_hc').era;
+  const contemporaries = { ww2: ['ww2'], 'cold-war': ['cold-war', 'modern'], modern: ['modern', 'cold-war', 'next-generation'], 'next-generation': ['next-generation', 'modern'] }[playerEra];
+  const inFormation = (id) => russian.includes(getSpec(id).nation) && contemporaries.includes(getSpec(id).era);
+  const formation = planBattleParticipantIds(game, 'm1a1_abrams_hc', true, russian);
+  assert.equal(formation.length, 14); assert.equal(formation[0], 'm1a1_abrams_hc');
+  assert.equal(new Set(formation).size, formation.length);
+  const available = game.allTanks.filter((tank) => tank.specId !== 'm1a1_abrams_hc' && inFormation(tank.specId)).length;
+  assert.ok(available >= 3, `the production catalog fields same-era Russian vehicles (${available})`);
+  const lead = formation.slice(1, 11).filter(inFormation).length;
+  assert.equal(lead, Math.min(10, available), 'up to ten contemporary formation vehicles lead the roster');
+  const sameEraLead = formation.slice(1, 11).filter((id) => inFormation(id) && getSpec(id).era === playerEra).length;
+  const sameEraAvailable = game.allTanks.filter((tank) => tank.specId !== 'm1a1_abrams_hc' && inFormation(tank.specId) && getSpec(tank.specId).era === playerEra).length;
+  assert.equal(sameEraLead, Math.min(10, sameEraAvailable), 'the player\'s own era fills the formation before its contemporaries');
+  assert.deepEqual(planBattleParticipantIds(game, 'm1a1_abrams_hc', true, []), first, 'no formation keeps the standard plan');
+  assert.deepEqual(planBattleParticipantIds(game, 'm1a1_abrams_hc', true, russian), formation, 'the formation plan is deterministic');
+}
+const firstCamo = planBattleCamoOverrides(game, 'm1a1_abrams_hc', 'verdant', true);
+assert.deepEqual(planBattleCamoOverrides(game, 'm1a1_abrams_hc', 'verdant', true), firstCamo,
+  'planned bot camouflage is deterministic until a battle starts');
+assert.ok(firstCamo.every((id) => first.includes(id) && id !== 'm1a1_abrams_hc'),
+  'planned AUTO overrides are restricted to non-player participants');
+assert.deepEqual(
+  planBattleCamoOverrides(game, 'm1a1_abrams_hc', 'winter', true), first.slice(1),
+  'high-contrast battlefields plan AUTO camouflage for every bot');
+assert.deepEqual(planBattleCamoOverrides(game, 'm1a1_abrams_hc', 'verdant', false), [],
+  'non-random staged rosters do not invent bot camouflage overrides');
+// (268, item 6) one bot paint rule: the planned AUTO bots are the slots the authority's roll paints (sim/camoPaint.ts
+// botCamoRoll from the solo match seed at each roster index), and soloBotCamo is what setupBattle stamps on each hull
+// (268, item 7) the battle's own seed: the base plus the battles before it on a random roster, the fixed base on a staged one
+assert.deepEqual([soloMatchSeed(0, true), soloMatchSeed(4, true), soloMatchSeed(4, false)], [SOLO_MATCH_SEED, SOLO_MATCH_SEED + 4, SOLO_MATCH_SEED],
+  'one seed per battle');
+const nextSeed = soloMatchSeed(game.battleCount, true);
+assert.deepEqual(firstCamo, first.filter((_, index) => index > 0 && botCamoRoll(nextSeed, index, 'verdant') === 'auto'),
+  'the planned AUTO bots are the slots the next battle\'s seed rolls');
+assert.ok(firstCamo.length > 0 && firstCamo.length < first.length - 1, `a verdant roster wears both paints (${firstCamo.length} of ${first.length - 1} AUTO)`);
+assert.deepEqual(first.map((id, index) => soloBotCamo(index, id, 'm1a1_abrams_hc', 'verdant', true, nextSeed)),
+  [null, ...first.slice(1).map((id) => (firstCamo.includes(id) ? 'auto' : 'factory'))], 'the player none, every bot its roll');
+assert.deepEqual(first.map((id, index) => soloBotCamo(index, id, 'm1a1_abrams_hc', 'verdant', false, SOLO_MATCH_SEED)),
+  [null, ...first.slice(1).map(() => 'factory')], 'a staged roster\'s bots wear their stock scheme');
+assert.equal(soloBotCamo(3, 'm1a1_abrams_hc', 'm1a1_abrams_hc', 'winter', true, SOLO_MATCH_SEED), null, 'a bot on the player\'s spec wears the player\'s paint');
+const staged = planBattleParticipantIds(game, 'm1a1_abrams_hc', false);
+assert.equal(staged.length, 8,
+  'deterministic capture staging keeps a complete eight-vehicle roster');
+assert.equal(new Set(staged).size, staged.length,
+  'deterministic capture staging uses unique production vehicles');
+
+game.battleCount++;
+const second = planBattleParticipantIds(game, 'm1a1_abrams_hc', true);
+assert.notDeepEqual(second, first, 'the next battle ordinal produces a new seeded roster');
+
+const catalogByEra = Map.groupBy(PRODUCTION_TANK_IDS, (id) => getSpec(id).era);
+for (const [era, ids] of catalogByEra) {
+  const playerId = ids.find((id) => getSpec(id).roster?.productionVisible) || ids[0];
+  const sameEraCatalog = ids.filter((id) => id !== playerId);
+  const seenSameEraBots = new Set();
+  for (let ordinal = 0; ordinal < 1024; ordinal++) {
+    game.battleCount = ordinal;
+    for (const id of planBattleParticipantIds(game, playerId, true).slice(1)) {
+      if (getSpec(id).era === era) seenSameEraBots.add(id);
+    }
+  }
+  assert.deepEqual(seenSameEraBots, new Set(sameEraCatalog),
+    `${era}: ordinary solo random battles rotate through the production era catalog`);
+}
+
+// matchmaking diversity (owner 2026-09-17): the previous battle's bots rotate to the back of their era band
+{
+  game.battleCount = 0;
+  const plan = planBattleParticipantIds(game, 'm1a1_abrams_hc', true);
+  game.recentBotSpecIds = new Set(plan.slice(1));
+  const rotated = planBattleParticipantIds(game, 'm1a1_abrams_hc', true);
+  assert.equal(rotated[0], 'm1a1_abrams_hc');
+  assert.equal(rotated.length, 14);
+  const modernPool = PRODUCTION_TANK_IDS.filter((id) => getSpec(id).era === getSpec('m1a1_abrams_hc').era && id !== 'm1a1_abrams_hc').length;
+  const repeats = rotated.slice(1).filter((id) => game.recentBotSpecIds.has(id)).length;
+  assert.equal(repeats, Math.max(0, 13 - (modernPool - 13)),
+    `consecutive rosters repeat only what the era catalog forces (${repeats} of 13, pool ${modernPool})`);
+  assert.deepEqual(planBattleParticipantIds(game, 'm1a1_abrams_hc', true), rotated, 'the rotated plan is deterministic');
+  game.recentBotSpecIds = null;
+}
+// same-nation waves by default (owner 2026-09-17): a wave mode with no arranged nation still fields ONE nation
+// in its lead seats — every era of that nation before any other nation — rotating per battle ordinal
+{
+  const leads = [];
+  for (let ordinal = 0; ordinal < 6; ordinal++) {
+    game.battleCount = ordinal;
+    const plan = planBattleParticipantIds(game, 'm1a1_abrams_hc', true, [], 10, 8);
+    assert.equal(plan.length, 11, 'two allies and eight enemies join the player');
+    const lead = plan.slice(1, 9).map((id) => getSpec(id).nation);
+    const option = ENEMY_NATION_OPTIONS.find((entry) => entry.specNations.includes(lead[0]));
+    assert.ok(option, `lead nation ${lead[0]} is a fieldable nation`);
+    assert.ok(lead.every((nation) => option.specNations.includes(nation)),
+      `wave ${ordinal}: the eight lead seats share one nation (${lead.join(', ')})`);
+    leads.push(option.id);
+  }
+  assert.ok(new Set(leads).size >= 2, `consecutive battles rotate the default wave nation (${leads.join(', ')})`);
+  assert.deepEqual(planBattleParticipantIds(game, 'm1a1_abrams_hc', true, [], 10, 8), planBattleParticipantIds(game, 'm1a1_abrams_hc', true, [], 10, 8),
+    'the default wave nation is deterministic per ordinal');
+  game.battleCount = 0;
+}
+
+
+// Reloading before finishing a match keeps the same profile ordinal. Fresh
+// session entropy must change both vehicle membership and order at that ordinal,
+// while preloading and actual battle entry consume the exact same draw.
+{
+  const rosters = new Set();
+  const waveNations = new Set();
+  for (let seed = 0; seed < 64; seed++) {
+    game.rosterSeed = seed;
+    game.battleCount = 37;
+    const planned = planBattleParticipantIds(game, 'm1a3');
+    assert.deepEqual(planBattleParticipantIds(game, 'm1a3'), planned, 'hover/preload must not reroll');
+    const entered = pickBattleParticipants(game, 'm1a3', true, 38).map(entity => entity.specId);
+    assert.deepEqual(entered, planned, 'entry matches preloaded vehicles for every session seed');
+    rosters.add(planned.slice(1).sort().join(','));
+    const wave = planBattleParticipantIds(game, 'm1a3', true, [], 16, 14);
+    waveNations.add(getSpec(wave[1]).nation);
+    assert.deepEqual(planBattleParticipantIds(game, 'm1a1_abrams_hc', false), staged, 'staged captures ignore session entropy');
+  }
+  // 2026-10-25: next generation holds only the clean-sheet hulls now (taxonomy.ts), so the M1A3's own-era pool is
+  // smaller and two of 64 seeded draws can share a set by chance; membership still changes, not just the order.
+  assert.ok(rosters.size >= 60, `64 independent sessions yield ${rosters.size} different sets, not just permutations of the same team`);
+  assert.ok(waveNations.size >= 3, 'fresh sessions do not always open against the same wave nation');
+  game.rosterSeed = 0;
+}
+
+console.log('rosterPlanning.selftest: session diversity, deterministic preload/entry, recent-roster rotation and same-nation waves passed');
+
+// TEAM NATIONS (gameplay-modes-228): a country with only the player's type still gets a complete allied side — from its
+// closest allied countries first, its own type again only once those run dry — with independent identities, while
+// planning remains free of pool mutation.
+{
+ const player=game.tankById.get('m1a1_abrams_hc');
+ const sparse={...game,allTanks:game.allTanks.filter(entity=>entity===player||entity.spec.nation!==player.spec.nation)};
+ const before=sparse.tankById.size;
+ const plan={alliedSeats:6,enemySeats:7,campaignEnemy:null,arrangedEnemy:null};
+ const participants=pickBattleParticipants(sparse,'m1a1_abrams_hc',true,5,[],13,null,plan);
+ assert.equal(participants.length,14);
+ const national=pickNationalBattle(sparse,'m1a1_abrams_hc',5,plan);
+ assert.deepEqual(national.participants.map(entity=>entity.id),participants.map(entity=>entity.id),'the plan and the pick agree');
+ assert.equal(national.allies.length,6);
+ assert.ok(national.allies.every(entity=>entity.spec.nation!=='USA'),'no other US vehicle: the allies come from the closest allied countries');
+ assert.ok(national.record.notes.some(note=>note.side==='alpha'&&note.reason==='ally'),'and the fill is noted');
+ assert.equal(national.record.allied,'usa','the allied side is still the player\'s country');
+ assert.equal(new Set(participants.map(entity=>entity.id)).size,14);
+ assert.equal(sparse.tankById.size,before,'preloading must not register battle entities');
+}

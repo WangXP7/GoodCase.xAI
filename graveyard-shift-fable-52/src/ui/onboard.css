@@ -1,0 +1,119 @@
+/* Onboarding: the objective line, the hint, the compass tick, pickup toasts, the round banner, the search
+   ring, the extra HUD panels and the end screen. Same ink, accent red and label/condensed pairing as the rest of the UI;
+   sizes in --u with pixel floors so a phone stays legible. Everything sits in #gs-ui, so the reduced-motion rule
+   in ui.css (no animation, no transition) covers it. */
+
+/* ---------- top-centre: the objective, then at most one hint ---------- */
+.gs-corner.c-tc { gap: calc(10 * var(--u)); max-width: min(calc(1200 * var(--u)), 92vw); }
+.gs-obj { display: flex; align-items: center; gap: .6em; max-width: 100%; font: 600 calc(var(--t-md) * 1.18)/1.1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); text-shadow: var(--shadow); text-align: center; }
+.gs-obj .mark { flex: none; width: .5em; height: .5em; background: var(--accent); transform: rotate(45deg); box-shadow: 0 0 .8em rgba(var(--accent-rgb), .6); }
+.gs-obj .t { min-width: 0; overflow-wrap: anywhere; }
+.gs-obj .t:empty, .gs-obj:has(.t:empty) { display: none; }
+
+.gs-hint { display: none; align-items: center; gap: .9em; max-width: 100%; padding: .55em .5em .55em 1em; font: 500 calc(var(--t-md) * 1.2)/1.35 var(--label); letter-spacing: .03em; color: var(--ink); text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+  background: linear-gradient(90deg, rgba(5, 7, 10, .78), rgba(5, 7, 10, .62)); border-left: max(3px, calc(4 * var(--u))) solid var(--accent); box-shadow: 0 0 calc(24 * var(--u)) rgba(0, 0, 0, .6); pointer-events: none; }
+.gs-hint.on { display: flex; animation: gs-hint-in .32s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes gs-hint-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.gs-hint .t { min-width: 0; }
+.gs-hint .hide { flex: none; font-size: .62em; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.gs-hint .key.ico { padding: 0; width: 2em; height: 2em; min-width: 2em; border-radius: 50%; color: var(--ink); background: rgba(5, 7, 10, .55); }
+.gs-hint .key.ico svg { display: block; width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-width: 1.9; overflow: visible; }
+.gs-touch .gs-hint .key.ico { color: var(--ink); border-color: var(--accent); }
+/* a phone's top-centre holds the prompt, the objective and the hint: while a hint is up the objective steps aside */
+.gs-touch .gs-corner.c-tc:has(.gs-hint.on) .gs-obj { display: none; }
+.gs-touch .gs-hint .hide { display: none; }
+.gs-hint .key { display: inline-grid; place-items: center; min-width: 1.7em; height: 1.7em; margin: 0 .12em; padding: 0 .35em; padding-top: .1em; font: 700 .84em/1 var(--label); color: var(--night); border: max(1.5px, calc(2 * var(--u))) solid var(--ink); border-radius: .28em; background: var(--ink); text-shadow: none; box-shadow: 0 .12em 0 rgba(0, 0, 0, .7); }
+.gs-hint .x { all: unset; box-sizing: border-box; flex: none; display: grid; place-items: center; width: 1.9em; height: 1.9em; cursor: pointer; pointer-events: auto; font: 500 .85em/1 var(--label); color: var(--dim); }
+.gs-hint .x:hover, .gs-hint .x:focus-visible { color: var(--accent); }
+.gs-touch .gs-hint { font-size: var(--t-md); max-width: max(240px, min(440px, calc(100vw - var(--sl) - var(--sr) - 390px))); padding: .4em .2em .4em .8em; }
+.gs-touch .gs-hint .key { border-radius: 999px; padding: .1em .65em 0; color: var(--accent); border-color: var(--accent); background: rgba(5, 7, 10, .6); box-shadow: none; }
+.gs-touch .gs-hint .x { width: 44px; height: 44px; margin: -.8em 0; font-size: 1.15em; }
+.gs-touch .gs-corner.c-tc { max-width: max(240px, min(440px, calc(100vw - var(--sl) - var(--sr) - 390px))); }
+
+/* ---------- the compass tick on the top edge ---------- */
+.gs-compass { position: absolute; left: 0; top: calc(var(--st) + 6px); width: 0; display: flex; flex-direction: column; align-items: center; opacity: 0; pointer-events: none; transition: opacity .2s; will-change: transform; }
+.gs-compass.on { opacity: .92; }
+.gs-compass .a { display: block; width: 0; height: 0; border-left: .5em solid transparent; border-right: .5em solid transparent; border-top: .8em solid var(--accent); font-size: max(12px, calc(15 * var(--u))); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .9)); }
+.gs-compass[data-side='1'] .a { transform: rotate(-90deg); }
+.gs-compass[data-side='-1'] .a { transform: rotate(90deg); }
+.gs-compass .d { margin-top: 3px; font: 500 var(--t-sm)/1 var(--label); letter-spacing: .05em; color: var(--accent); text-shadow: var(--shadow); white-space: nowrap; }
+.gs-touch .gs-compass .d { display: none; }
+
+/* ---------- overlay layer: toasts, banner, ring ---------- */
+.gs-ob { position: absolute; inset: 0; pointer-events: none; }
+.gs-toasts { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sb) + 15vh); display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--u)); }
+.gs-toast { display: flex; align-items: center; gap: .7em; padding: .35em .9em .35em .4em; font: 600 calc(var(--t-md) * 1.2)/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: rgba(5, 7, 10, .7); border-left: max(3px, calc(3 * var(--u))) solid var(--accent); text-shadow: var(--shadow); animation: gs-toast-in .25s cubic-bezier(.2, .7, .2, 1) both; }
+.gs-toast .ic { display: grid; place-items: center; width: 1.5em; height: 1.5em; font: 500 .9em/1 var(--label); font-style: normal; color: var(--accent); }
+@keyframes gs-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.gs-touch .gs-toasts { bottom: calc(var(--sb) + 12px); }
+
+.gs-banner { position: absolute; left: 0; right: 0; top: 17%; text-align: center; opacity: 0; display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--u)); text-shadow: var(--shadow); }
+.gs-banner .small { font: 500 calc(var(--t-md) * 1.1)/1 var(--label); letter-spacing: .12em; margin-right: -.12em; text-transform: uppercase; color: var(--accent); }
+.gs-banner .big { font: 700 max(64px, calc(240 * var(--u)))/.8 var(--display); color: var(--ink); text-shadow: 0 0 calc(40 * var(--u)) rgba(var(--accent-rgb), .4), var(--shadow); }
+.gs-touch .gs-banner { top: 22%; }
+.gs-touch .gs-banner .big { font-size: 72px; }
+.gs-banner.on { animation: gs-banner 2s ease both; }
+.gs-banner.on.still { animation: none; opacity: 1; }
+@keyframes gs-banner { 0% { opacity: 0; transform: translateY(14px) scale(.96); } 14% { opacity: 1; transform: none; } 72% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .gs-banner.on { opacity: 1; } }
+
+.gs-ring { position: absolute; left: 50%; top: 50%; width: max(44px, calc(64 * var(--u))); height: max(44px, calc(64 * var(--u))); transform: translate(-50%, -50%); opacity: 0; transition: opacity .12s; overflow: visible; }
+.gs-ring.on { opacity: 1; }
+.gs-ring circle { fill: none; }
+.gs-ring .track { stroke: rgba(236, 230, 214, .22); stroke-width: 3; }
+.gs-ring .fill { stroke: var(--accent); stroke-width: 4; stroke-dasharray: 0 200; filter: drop-shadow(0 0 3px rgba(var(--accent-rgb), .7)); }
+
+/* ---------- weapon slots, plates, throwables, timers ---------- */
+.gs-slots { display: flex; flex-direction: column; gap: calc(6 * var(--u)); align-items: flex-end; }
+.gs-slot { display: flex; align-items: baseline; gap: .8em; font: 600 var(--t-md)/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); text-shadow: var(--shadow); padding: .3em .7em .3em 1.6em; border-right: max(2px, calc(3 * var(--u))) solid transparent; background: linear-gradient(270deg, rgba(5, 7, 10, .62), rgba(5, 7, 10, 0)); }
+.gs-slot[hidden] { display: none; }
+.gs-slot.held { color: var(--ink); border-right-color: var(--accent); }
+.gs-slot .a { font: 400 var(--t-sm)/1 var(--label); letter-spacing: .04em; color: var(--dim); }
+.gs-slot .p { display: inline-flex; gap: 3px; align-self: center; }
+.gs-slot .p i { width: .5em; height: .5em; background: var(--accent); }
+.gs-slot .p i.at { border-radius: 50%; background: var(--ink); opacity: .75; }
+.gs-slot .p:empty { display: none; }
+.gs-touch .gs-slot .a { display: none; }
+
+.gs-plates { display: none; gap: calc(6 * var(--u)); }
+.gs-plates.on { display: flex; }
+.gs-plates i { width: max(12px, calc(22 * var(--u))); height: max(15px, calc(28 * var(--u))); background: rgba(236, 230, 214, .18); clip-path: polygon(0 0, 100% 0, 100% 68%, 50% 100%, 0 68%); }
+.gs-plates i.f { background: var(--ink); }
+.gs-throws { display: flex; gap: calc(14 * var(--u)); }
+.gs-throws:empty { display: none; }
+.gs-th { display: flex; align-items: baseline; gap: .4em; font: 500 var(--t-sm)/1 var(--label); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); text-shadow: var(--shadow); }
+.gs-th b { font: 700 calc(var(--t-md) * 1.3)/1 var(--display); color: var(--ink); letter-spacing: .02em; }
+.gs-th.sel { color: var(--accent); }
+.gs-th.sel b { color: var(--accent); }
+.gs-timers { display: flex; flex-direction: column; gap: calc(6 * var(--u)); }
+.gs-timers:empty { display: none; }
+.gs-timer { display: flex; align-items: center; gap: .8em; font: 500 var(--t-sm)/1 var(--label); letter-spacing: .05em; text-transform: uppercase; color: var(--ink); text-shadow: var(--shadow); }
+.gs-timer i { display: block; width: max(80px, calc(140 * var(--u))); height: max(4px, calc(6 * var(--u))); background: rgba(236, 230, 214, .16); }
+.gs-timer b { display: block; height: 100%; background: var(--accent); transform-origin: 0 50%; }
+
+/* ---------- end screen ---------- */
+.gs-dead .gs-col.gs-endcol { width: min(calc(1500 * var(--u)), calc(100vw - 2 * max(28px, calc(120 * var(--u))))); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: calc(110 * var(--u)); align-content: center; justify-content: stretch; }
+.gs-endcol .gs-head { grid-area: 1 / 1; margin-bottom: calc(24 * var(--u)); }
+.gs-endcol .gs-bigwrap { grid-area: 2 / 1; margin: 0; align-self: start; }
+.gs-endcol .gs-endright { grid-area: 1 / 2 / span 2; align-self: center; padding-top: calc(60 * var(--u)); display: flex; flex-direction: column; }
+.gs-endnum { display: flex; align-items: flex-end; gap: calc(24 * var(--u)); }
+.gs-endnum .gs-newbest { margin-bottom: calc(24 * var(--u)); }
+.gs-endrows { display: flex; flex-direction: column; gap: calc(14 * var(--u)); margin-bottom: calc(26 * var(--u)); pointer-events: none; }
+.gs-endslot { pointer-events: auto; margin-bottom: calc(20 * var(--u)); }
+.gs-endslot:empty { display: none; }
+.gs-endcol .gs-list { margin-top: calc(8 * var(--u)); }
+
+.gs-touch .gs-dead .gs-col.gs-endcol { left: calc(var(--sl) + 16px); right: calc(var(--sr) + 16px); width: auto; column-gap: 24px; padding: calc(var(--st) + 8px) 0 calc(var(--sb) + 8px); }
+.gs-touch .gs-endcol .gs-endrows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin-bottom: 10px; }
+.gs-touch .gs-endcol .gs-stat .l { font-size: 16px; }
+.gs-touch .gs-endcol .gs-stat .v { font-size: 20px; }
+.gs-touch .gs-endcol .gs-endnum { gap: 12px; }
+.gs-touch .gs-endcol .gs-bignum { font-size: 96px; }
+.gs-touch .gs-endcol .gs-head { margin-bottom: 6px; }
+
+/* ---------- settings rows we add ---------- */
+.gs-hintrow .opt { text-transform: uppercase; }
+
+/* phone: the round block is two lines tall, so the left stack starts under it */
+.gs-touch .gs-corner.c-tl { top: calc(var(--st) + 96px * var(--s)); }
+.gs-touch.gs-lefty .gs-corner.c-tl { top: calc(var(--st) + 96px * var(--s)); }

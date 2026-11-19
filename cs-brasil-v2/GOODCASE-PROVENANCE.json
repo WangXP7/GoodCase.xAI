@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/corosolto/client",
+  "commit": "b814e8b7b4c6b35bbdd41237a6998d53675984d3",
+  "license": "AGPL-3.0",
+  "scope": "code-only",
+  "files": 2357,
+  "bytes": 32888856
+}

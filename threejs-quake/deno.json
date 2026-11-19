@@ -1,0 +1,8 @@
+{
+	"imports": {
+		"three": "./server/browser_shim.js"
+	},
+	"tasks": {
+		"server": "deno run --allow-net --allow-read --unstable-net game_server.js"
+	}
+}

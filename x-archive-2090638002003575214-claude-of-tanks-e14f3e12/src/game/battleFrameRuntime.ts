@@ -1,0 +1,379 @@
+import type { PlayerFrameInput, PlayerFrameSample } from './playerFrameInput.ts';
+import type { GameState } from './stateCore.ts';
+import { FRAME_STAGE, couchSeatsActive, frameStages } from './stateCore.ts';
+import { battleCountdownState, transitionBattleCountdown, warmHoldActive, warmHoldElapsed } from './preBattleCountdown.ts';
+
+interface BattlePauseInfo {
+  paused: boolean;
+  resumes: number;
+  lastDtR: number;
+  lastResumeDtR: number;
+}
+
+export interface BattleFrameReceipt {
+  dtSeconds: number;
+  inBattle: boolean;
+  paused: boolean;
+  killcamActive: boolean;
+  livePaused: boolean;
+  presentationAlpha: number;
+}
+
+interface BattleFrameSettingsPort {
+  isOpen(): boolean;
+}
+
+interface BattleFrameKillcamPort {
+  isActive(): boolean;
+}
+
+interface BattleFrameNetworkPort {
+  isActive(): boolean;
+  pump(dtSeconds: number, nowMs: number): void;
+}
+
+interface BattleFrameCountdownPort {
+  isWarmPending(): boolean;
+  advance(seconds: number, wallDtSeconds: number, warmPending: boolean): number;
+  show(seconds: number, warmPending?: boolean): void;
+  /**
+   * The battle rolls out: once a battle. `late` when this client never saw the count run (a network battle joined
+   * after its countdown: a late join, a rejoin, a host migration), so the rollout's cues stay silent.
+   */
+  rollout(late?: boolean): void;
+  /** A whole second of the running count begins (presentation only; never while PREPARING holds the count). */
+  second?(seconds: number): void;
+  /** (2026-11-02 audit F1) The warm hold outlasted its limit and the count runs on (once a battle; a beacon port). */
+  holdExpired?(heldSeconds: number): void;
+}
+
+interface BattleFramePresentationPort {
+  captureSoloPose(): void;
+  update(dtSeconds: number, alpha: number): void;
+  updateResult(): void;
+}
+
+interface BattleFrameRuntimeOptions {
+  game: GameState;
+  settings: BattleFrameSettingsPort;
+  killcam: BattleFrameKillcamPort;
+  input: PlayerFrameInput;
+  network: BattleFrameNetworkPort;
+  countdown: BattleFrameCountdownPort;
+  presentation: BattleFramePresentationPort;
+  getRigMode(): string;
+  stepSimulation(): void;
+  emitPause(paused: boolean): void;
+  simulationDt?: number;
+  maxSimulationSteps?: number;
+}
+
+export interface BattleFrameRuntime {
+  readonly pauseInfo: BattlePauseInfo;
+  readonly receipt: BattleFrameReceipt;
+  advance(
+    dtSeconds: number,
+    wallDtSeconds: number,
+    nowMs: number,
+    cameraLocked: boolean,
+  ): BattleFrameReceipt;
+  resetSimulationAccumulator(): void;
+  /**
+   * (2026-11-02 audit F1) The battle's one rollout edge: every emitter (the countdown's fall to 0 here, the rollout
+   * runtime's open at 0) goes through this latch, so a battle rolls out once. True when this call rolled it out.
+   */
+  rollout(late?: boolean): boolean;
+}
+
+/**
+ * Owns rendered-frame advancement of gameplay truth. It retains its input
+ * sample and return receipt, keeping the hot path allocation-neutral while
+ * concentrating pause edges, fixed-step debt, countdown release, network
+ * cadence, result progression, and presentation interpolation in one module.
+ */
+export function createBattleFrameRuntime({
+  game,
+  settings,
+  killcam,
+  input,
+  network,
+  countdown,
+  presentation,
+  getRigMode,
+  stepSimulation,
+  emitPause,
+  simulationDt = 1 / 60,
+  maxSimulationSteps = 4,
+}: BattleFrameRuntimeOptions): BattleFrameRuntime {
+  const required = [settings?.isOpen, killcam?.isActive, input?.poll,
+    network?.isActive, network?.pump, countdown?.isWarmPending,
+    countdown?.advance, countdown?.show, countdown?.rollout,
+    presentation?.captureSoloPose, presentation?.update,
+    presentation?.updateResult, getRigMode, stepSimulation, emitPause];
+  if (required.some((entry) => typeof entry !== 'function')) {
+    throw new TypeError('battle frame runtime requires every frame port');
+  }
+  if (!Number.isFinite(simulationDt) || simulationDt <= 0) {
+    throw new TypeError('simulationDt must be a positive finite number');
+  }
+  if (!Number.isInteger(maxSimulationSteps) || maxSimulationSteps <= 0) {
+    throw new TypeError('maxSimulationSteps must be a positive integer');
+  }
+
+  let simulationAccumulator = 0;
+  let networkBattleOwned = false;
+  // The countdown's presentation edges, once a battle: the rollout, whether a running count was seen, the last whole
+  // second reported (the count only falls, so 3, 2, 1 are each reported once even across a PREPARING hold).
+  let rolledOut = false;
+  let countSeen = false;
+  let lastWholeSecond = Infinity;
+  // wall seconds the count has waited at its warm hold this battle, and whether the limit has been reported
+  let warmHeldS = 0;
+  let holdExpiryReported = false;
+  const pauseInfo: BattlePauseInfo = {
+    paused: false,
+    resumes: 0,
+    lastDtR: 0,
+    lastResumeDtR: -1,
+  };
+  const receipt: BattleFrameReceipt = {
+    dtSeconds: 0,
+    inBattle: false,
+    paused: false,
+    killcamActive: false,
+    livePaused: false,
+    presentationAlpha: 0,
+  };
+  const inputSample: PlayerFrameSample = {
+    dtSeconds: 0,
+    inBattle: false,
+    paused: false,
+    killcamActive: false,
+    cameraLocked: false,
+    rigMode: 'ARCADE',
+    player: null,
+  };
+
+  const resetCountdownEdges = (): void => {
+    rolledOut = false;
+    countSeen = false;
+    lastWholeSecond = Infinity;
+    warmHeldS = 0;
+    holdExpiryReported = false;
+  };
+
+  const resetSimulationAccumulator = (): void => {
+    simulationAccumulator = 0;
+    networkBattleOwned = false;
+    resetCountdownEdges();
+  };
+
+  const rollout = (late = false): boolean => {
+    if (rolledOut) return false;
+    rolledOut = true;
+    countdown.rollout(late);
+    return true;
+  };
+
+  const reportSecond = (seconds: number, warmPending: boolean): void => {
+    if (warmPending || !(seconds > 0) || !Number.isFinite(seconds)) return;
+    countSeen = true;
+    const whole = Math.ceil(seconds);
+    if (whole >= lastWholeSecond) return;
+    lastWholeSecond = whole;
+    countdown.second?.(whole);
+  };
+
+  // hot-path: every battle frame
+  const applyPauseEdge = (livePaused: boolean, dtSeconds: number): number => {
+    let appliedDtSeconds = dtSeconds;
+    if (livePaused === pauseInfo.paused) return appliedDtSeconds;
+    pauseInfo.paused = livePaused;
+    if (!livePaused) {
+      appliedDtSeconds = Math.min(appliedDtSeconds, simulationDt);
+      pauseInfo.resumes += 1;
+      pauseInfo.lastResumeDtR = appliedDtSeconds;
+    }
+    emitPause(livePaused);
+    return appliedDtSeconds;
+  };
+
+  // hot-path: every battle frame; a couch battle's tanks are its phones' (docs/COUCH-MODE.md): the keyboard drives none,
+  // and the camera aims none, while that battle runs (stateCore.ts couchSeatsActive; never another battle after it)
+  const pollFrameInput = (
+    appliedDtSeconds: number,
+    inBattle: boolean,
+    paused: boolean,
+    killcamActive: boolean,
+    cameraLocked: boolean,
+  ): void => {
+    inputSample.dtSeconds = appliedDtSeconds;
+    inputSample.inBattle = inBattle;
+    inputSample.paused = paused;
+    inputSample.killcamActive = killcamActive;
+    inputSample.cameraLocked = cameraLocked;
+    inputSample.rigMode = getRigMode();
+    inputSample.player = (couchSeatsActive(game) ? null : game.player) as PlayerFrameSample['player'];
+    input.poll(inputSample);
+  };
+
+  // hot-path: every countdown frame
+  const advanceCountdown = (wallDtSeconds: number): void => {
+    // armed, not yet opened: a new battle's count (the countdown owner's state, preBattleCountdown.ts)
+    if (battleCountdownState(game.preBattleS) === 'armed') { resetCountdownEdges(); return; }
+    const heldSeconds = game.preBattleS;
+    const warmRequested = countdown.isWarmPending();
+    warmHeldS = warmHoldElapsed(warmHeldS, heldSeconds, wallDtSeconds, warmRequested);
+    // (audit F1) the hold has a limit: past it the count runs on and the warm finishes behind live play
+    const warmPending = warmHoldActive(warmHeldS, warmRequested);
+    if (warmRequested && !warmPending && !holdExpiryReported) {
+      holdExpiryReported = true;
+      countdown.holdExpired?.(warmHeldS);
+    }
+    // (audit F1) the countdown's one writer: an advance never reopens or raises the count
+    transitionBattleCountdown(game, 'advance', countdown.advance(
+      game.preBattleS,
+      wallDtSeconds,
+      warmPending,
+    ));
+    // Countdown 2026-09-14 (owner: "seems to stall at 3"): the presentation is told when the
+    // count is held for warm work, so it shows PREPARING instead of a frozen numeral.
+    countdown.show(game.preBattleS, warmPending);
+    reportSecond(game.preBattleS, warmPending);
+    if (battleCountdownState(heldSeconds) === 'counting' && battleCountdownState(game.preBattleS) === 'open') rollout(false);
+  };
+
+  /**
+   * A network battle's count arrives in snapshots (the authority's countdown phase; 0 once it plays). Its fall to 0
+   * rolls the battle out; a battle first seen already at 0 was joined after its count and rolls out late. Infinity is a
+   * round armed before its first snapshot.
+   */
+  // hot-path: every networked countdown frame
+  const followNetworkCountdown = (): void => {
+    const seconds = game.preBattleS;
+    const state = battleCountdownState(seconds);
+    if (state === 'armed') { resetCountdownEdges(); return; }
+    if (!Number.isFinite(seconds)) return;
+    if (state === 'counting') { reportSecond(seconds, false); return; }
+    if (!rolledOut) rollout(!countSeen);
+  };
+
+  // hot-path: every local battle frame (the local driver: the core steps here, in the frame that renders it)
+  const advanceLocalSimulation = (appliedDtSeconds: number): void => {
+    simulationAccumulator = Math.min(
+      simulationAccumulator + appliedDtSeconds,
+      simulationDt * maxSimulationSteps,
+    );
+    while (simulationAccumulator >= simulationDt) {
+      stepSimulation();
+      frameStages?.stage(FRAME_STAGE.pose);
+      presentation.captureSoloPose();
+      simulationAccumulator -= simulationDt;
+    }
+  };
+
+  // hot-path: every battle frame
+  const advanceLiveBattle = (
+    appliedDtSeconds: number,
+    wallDtSeconds: number,
+    networkActive: boolean,
+  ): void => {
+    if (networkActive) {
+      countdown.show(game.preBattleS);
+      followNetworkCountdown();
+      simulationAccumulator = 0;
+    } else if (battleCountdownState(game.preBattleS) !== 'open') {
+      // armed (the count resets its edges) or counting: no simulation step until the count opens
+      frameStages?.stage(FRAME_STAGE.countdown);
+      advanceCountdown(wallDtSeconds);
+      simulationAccumulator = 0;
+    } else {
+      advanceLocalSimulation(appliedDtSeconds);
+    }
+    frameStages?.stage(FRAME_STAGE.pose);
+    presentation.updateResult();
+  };
+
+  // hot-path: every battle frame
+  const updatePresentation = (
+    appliedDtSeconds: number,
+    networkActive: boolean,
+    killcamActive: boolean,
+    livePaused: boolean,
+  ): number => {
+    const alpha = networkActive ? 1 : simulationAccumulator / simulationDt;
+    frameStages?.stage(FRAME_STAGE.presentation);
+    if (!killcamActive && !livePaused) presentation.update(appliedDtSeconds, alpha);
+    return alpha;
+  };
+
+  // hot-path: every frame
+  const writeReceipt = (
+    appliedDtSeconds: number,
+    inBattle: boolean,
+    paused: boolean,
+    killcamActive: boolean,
+    livePaused: boolean,
+    presentationAlpha: number,
+  ): BattleFrameReceipt => {
+    receipt.dtSeconds = appliedDtSeconds;
+    receipt.inBattle = inBattle;
+    receipt.paused = paused;
+    receipt.killcamActive = killcamActive;
+    receipt.livePaused = livePaused;
+    receipt.presentationAlpha = presentationAlpha;
+    return receipt;
+  };
+
+  // hot-path: every frame (the battle frame owner)
+  const advance = (
+    dtSeconds: number,
+    wallDtSeconds: number,
+    nowMs: number,
+    cameraLocked: boolean,
+  ): BattleFrameReceipt => {
+    const inBattle = game.phase === 'battle';
+    if (!inBattle) { networkBattleOwned = false; resetCountdownEdges(); }
+    // Transport teardown is synchronous; restoring the Garage is not. A
+    // retired network battlefield never becomes a solo simulation in between.
+    if (inBattle && network.isActive()) networkBattleOwned = true;
+    const paused = settings.isOpen();
+    const killcamActive = killcam.isActive();
+    const livePaused = paused && inBattle && !killcamActive && !game.result;
+    const appliedDtSeconds = applyPauseEdge(livePaused, dtSeconds);
+    pauseInfo.lastDtR = appliedDtSeconds;
+    frameStages?.stage(FRAME_STAGE.input);
+    pollFrameInput(appliedDtSeconds, inBattle, paused, killcamActive, cameraLocked);
+
+    // A persistent Garage room is pumped before the event-paced early return
+    // in main. Every other phase reaches this owner and pumps exactly once.
+    frameStages?.stage(FRAME_STAGE.network);
+    if (game.phase !== 'garage') network.pump(appliedDtSeconds, nowMs);
+    const networkActive = network.isActive();
+    if (inBattle && networkActive) networkBattleOwned = true;
+    const retiringNetworkBattle = networkBattleOwned && !networkActive;
+
+    if (inBattle && !paused && !killcamActive && !retiringNetworkBattle) {
+      advanceLiveBattle(appliedDtSeconds, wallDtSeconds, networkActive);
+    }
+    const presentationAlpha = retiringNetworkBattle ? 1 : updatePresentation(
+      appliedDtSeconds, networkActive, killcamActive, livePaused,
+    );
+    return writeReceipt(
+      appliedDtSeconds,
+      inBattle,
+      paused,
+      killcamActive,
+      livePaused,
+      presentationAlpha,
+    );
+  };
+
+  return {
+    pauseInfo,
+    receipt,
+    advance,
+    resetSimulationAccumulator,
+    rollout,
+  };
+}

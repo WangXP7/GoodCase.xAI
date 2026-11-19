@@ -1,0 +1,881 @@
+/**
+ * Garage-safe roster, battle-visual construction, and deterministic battle
+ * planning. Combat initialization and fixed-step simulation remain in
+ * state.ts so this module can be loaded without ballistics, damage, AI, or
+ * spotting.
+ */
+import { createGunshipBattleVisual } from './gunshipVisual.ts';
+import { Vector3, type Object3D, type Scene } from 'three';
+import { getSpec, PRODUCTION_TANK_IDS, TANK_IDS } from '../vehicles/specs.ts';
+import {
+  battleGeometryQuality, battleStaticDrawMerge, createTank, createTankSteps, offThreadDecorPlanner, type CreateTankOptions,
+} from '../vehicles/fleetFactory.ts';
+import type { TankBuildStep } from '../vehicles/tankFactoryCore.ts';
+import { rosterVisualAttempts } from './rosterVisualFallback.ts';
+import { ERA_NEIGHBOURS, isBotTankId, rankMatchCandidates } from './matchmaking.ts';
+import { ENEMY_NATION_OPTIONS, readTeamArrangement } from './teamArrangement.ts';
+import { TEAM_NATIONS_RULES, matchRulesetFor, rulesetAllyCap, type MatchRuleset, type TeamArrangement } from '../sim/matchRuleset.ts';
+import { normalizeGameMode } from '../sim/gameModeCatalog.ts';
+import { campaignRulesetInput } from './campaignOperations.ts';
+import { battleEnemyNations, battleRosterPlan } from './soloRosterPlan.ts';
+import { countryOfVehicle, type CountryId } from '../sim/countries.ts';
+import { pickNationalSides, teamNationsSeed, type NationNote, type NationRow } from '../sim/teamNations.ts';
+import { tankTier } from '../vehicles/tier.ts';
+import type { SoloNationalMode, SoloNationalPlan } from './soloRosterPlan.ts';
+import { getDeviceTier } from '../engine/quality.ts';
+import { mulberry32 } from './stateCore.ts';
+import { botCamoRoll } from '../sim/camoPaint.ts';
+import type { BotCamo } from '../sim/camoPaint.ts';
+import type { CombatState } from '../sim/damage.ts';
+import type { MovementContactGeometry, TankState } from '../sim/movement.ts';
+import type { SpecialActionState } from '../sim/specialActionPolicy.ts';
+
+type GroundSampler = (x: number, z: number) => number;
+
+export interface BattleVisual {
+  specId: string;
+  root: Object3D;
+  boundingRadiusM?: number;
+  turretTopWorld(out: Vector3): Vector3 | void;
+  gunPivotWorld(out: Vector3): Vector3 | void;
+  gunMuzzleWorld(out: Vector3, muzzleIndex?: number): Vector3 | void;
+  gunDirWorld(out: Vector3, muzzleIndex?: number, launcher?: boolean): Vector3 | void;
+  setGroundSampler?(sampler: GroundSampler): void;
+  syncFromState?(state: object): void;
+  setVisible(visible: boolean): void;
+  prepareForSimulation?(): void;
+  resetForGaragePresentation?(): void;
+  resetDestroyed?(): void;
+  hitFlinch?(normalX: number, normalZ: number, strength: number, yaw?: number): void;
+  setTrackState?(module: string, destroyed: boolean): void;
+  setWeaponModuleState?(module: string, state: 'ok' | 'yellow' | 'red'): void;
+  stripEra?(plateName: string): void;
+  dispose(): void;
+}
+
+interface EngineContext {
+  scene: Scene;
+}
+
+export interface RosterEntity {
+  /** Extra solo seat; never a catalog/Garage entry. */
+  matchReinforcement?: boolean;
+  id: string;
+  specId: string;
+  spec: ReturnType<typeof getSpec>;
+  team: string;
+  isPlayer: boolean;
+  state: TankState | null;
+  combat: CombatState | null;
+  specialAction: SpecialActionState | null;
+  input: {
+    throttle: number;
+    steer: number;
+    brake: boolean;
+    fire: boolean;
+    aimLocked: boolean;
+    aimPoint: Vector3;
+    shellSlot: number;
+    /** This tick's presses (sim/playerActions.ts PLAYER_ACTION_BITS), consumed for every hull by sim/hullActions.ts. */
+    actionBits: number;
+  };
+  visual: BattleVisual | null;
+  rigidGear: boolean;
+  contactGeom: MovementContactGeometry | null;
+  _camoSeed: number;
+  ai: object | null;
+  aiCtl: object | null;
+  _destroyedAnnounced: boolean;
+}
+
+export interface RosterGameState<Entity extends RosterEntity = RosterEntity> {
+  allTanks: Entity[];
+  tankById: Map<string, Entity>;
+  tanks: Entity[];
+  battleCount: number;
+  ruleset?: { aerial?: string | null };
+  rosterSeed?: number;
+  /** Spec ids of the bots that fought the previous battle (matchmaking diversity, 2026-09-17). */
+  recentBotSpecIds?: ReadonlySet<string> | null;
+  /** The battle before that (matchmaking diversity 2026-09-17: two battles of memory rotate the era band). */
+  previousBotSpecIds?: ReadonlySet<string> | null;
+  _engineCtx?: EngineContext;
+  _groundSampler?: GroundSampler | null;
+  _battleVisualPool?: {
+    take(specId: string): BattleVisual | null;
+  };
+}
+
+type RosterPredicate<Entity extends RosterEntity = RosterEntity> = (entity: Entity) => boolean;
+
+interface DebugFlags {
+  forceRoster?: string[];
+  rosterExact?: boolean;
+}
+
+function debugFlags(): DebugFlags | null {
+  const root = globalThis as typeof globalThis & {
+    __DEBUG?: { flags?: DebugFlags };
+  };
+  return root.__DEBUG?.flags || null;
+}
+
+function createRosterEntity(specId: string, id: string, seed: number, matchReinforcement = false): RosterEntity {
+  const spec = getSpec(specId);
+  return {
+    id,
+    matchReinforcement,
+    specId,
+    spec,
+    team: 'enemy',
+    isPlayer: false,
+    state: null,
+    combat: null,
+    specialAction: null,
+    input: {
+      throttle: 0, steer: 0, brake: false, fire: false,
+      aimLocked: false,
+      aimPoint: new Vector3(), shellSlot: 0, actionBits: 0,
+    },
+    visual: null,
+    // True when the rendered running gear lacks a complete wheel + belt
+    // terrain-conformance layer. Some swapped visuals remain rigid; newer
+    // ones publish __glbConformingGear after both layers are discovered.
+    rigidGear: false,
+    // gameplay_feel r7: measured contact footprint (null = procedural
+    // spec fractions). Stamped with rigidGear — see measureContactGeom.
+    contactGeom: null,
+    _camoSeed: seed,
+    ai: null,
+    aiCtl: null,
+    _destroyedAnnounced: false,
+  };
+}
+
+/**
+ * Build every TankEntity record without constructing its visual. Called once
+ * at startup; battles reuse the entities via setupBattle().
+ * @param {object} game createGameState() result
+ * @param {object} engineCtx EngineCtx (§2.8)
+ * @returns {void}
+ */
+
+export function spawnTanks(game: RosterGameState, engineCtx: EngineContext) {
+  // FULL POOL: build entities for every pool entry (core roster + the rest
+  // of the fleet). A battle fields 8 of them (setupBattle picks the
+  // participants); the rest sit hidden with null state/combat.
+  //
+  // PERF (performance_budget r4): visuals are built LAZILY. Baking a vehicle's
+  // texture set is ~250-350 ms of 2048²-canvas painting per spec, and building
+  // all 17 pool vehicles at boot (a) doubled load-to-ready (4.2 s -> 8.4 s)
+  // and (b) parked ~580 MB of generated maps on the GPU for vehicles that are
+  // not even in the battle (scene texture estimate 716.8 MB vs the 512 MB
+  // ratchet target). Only the staged default battle (screenshot contract) is
+  // built at boot; setupBattle builds the picked participants on entry and
+  // EVICTS the visuals of everyone parked (the per-spec texture cache in
+  // materials.js is refcounted, so eviction frees the canvases/GPU maps).
+  game._engineCtx = engineCtx;   // for lazy visual builds (ensureTankVisual)
+  game._groundSampler = null;    // set by main.ts; applied to lazy visuals too
+  PRODUCTION_TANK_IDS.forEach((specId: string, i: number) => {
+    const ent = createRosterEntity(specId, specId, 4000 + i);
+    game.allTanks.push(ent);
+    game.tankById.set(ent.id, ent);
+  });
+  // PRODUCTION_TANK_IDS is family ordered; the staged screenshot battle is
+  // the explicitly locked core roster and must not depend on carousel order.
+  game.tanks = TANK_IDS.map((id) => game.tankById.get(id))
+    .filter((entity): entity is RosterEntity => !!entity);
+  // PERF (performance_budget r3): the staged battle's 7 ENEMY bakes are the
+  // single biggest load-to-ready block (~2.2 s of 2048² canvas painting +
+  // SimplexNoise + first-use GPU uploads on the boot path; bootprobe:
+  // heightToNormal 1050 ms + noise 2.2 s). Nobody can see the staged battle
+  // behind the garage screen, so boot builds NONE of it — ensureStagedVisuals()
+  // (idempotent, chunked by the caller) builds the roster post-ready, and
+  // main.ts runs it synchronously from warmCombatPipeline(), which
+  // __SHOTS.set() and startBattle() already invoke before anything can look
+  // at the battlefield.
+  //
+  // LOADING PERF (boot r9): the PLAYER's visual used to be built right here,
+  // on the boot-critical path — a full hero-tier build (~300-400 ms: 2048²
+  // texture bake + geometry + mesh swap kick) for a tank the garage never
+  // renders (the pedestal hero is a separate visual; battle visuals are
+  // guaranteed by warmCombatPipeline before any battlefield frame). It now
+  // streams in with the rest of the staged roster via the post-ready idle
+  // pump — the tick loop already guards `!ent.visual` for exactly this
+  // deferred window.
+}
+
+/**
+ * PERF (performance_budget r3): build any still-missing staged-battle
+ * visuals. Synchronous and idempotent — a no-op once all 8 exist. `limit`
+ * lets the post-ready idle pump build one vehicle per slice so the garage
+ * dwell absorbs ~300 ms chunks instead of one 2 s freeze.
+ * @param {object} game game state
+ * @param {number} [limit] max visuals to build this call (default: all)
+ * @param {?function(object):boolean} [predicate] optional roster subset
+ * @returns {boolean} true when every staged participant has a visual
+ */
+export function ensureStagedVisuals<Entity extends RosterEntity>(
+  game: RosterGameState<Entity>,
+  limit = Infinity,
+  predicate: RosterPredicate<Entity> | null = null,
+): boolean {
+  let built = 0;
+  for (const ent of game.tanks) {
+    if (ent.visual || (predicate && !predicate(ent))) continue;
+    if (built >= limit) return false;
+    ensureTankVisual(game, ent);
+    built++;
+  }
+  return true;
+}
+
+/** Same roster order and construction policy, with private build checkpoints. */
+export function* ensureStagedVisualsSteps<Entity extends RosterEntity>(
+  game: RosterGameState<Entity>,
+  limit = Infinity,
+  predicate: RosterPredicate<Entity> | null = null,
+): Generator<TankBuildStep, boolean, void> {
+  let built = 0;
+  for (const ent of game.tanks) {
+    if (ent.visual || (predicate && !predicate(ent))) continue;
+    if (built >= limit) return false;
+    yield* ensureTankVisualSteps(game, ent);
+    built++;
+  }
+  return true;
+}
+
+/** perf-r4b: the next entity ensureStagedVisuals(game, 1) would build, plus
+ * the texture tier ensureTankVisual will bake it at — the pre-battle loading
+ * loop prebakes that exact entry chunked before the build acquires it.
+ * @param {?function(object):boolean} [predicate] optional roster subset
+ * @returns {?{ent: object, quality: string}} */
+export function nextStagedBake<Entity extends RosterEntity>(
+  game: RosterGameState<Entity>,
+  predicate: RosterPredicate<Entity> | null = null,
+) {
+  const ent = game.tanks.find((e) => !e.visual && (!predicate || predicate(e)));
+  if (!ent) return null;
+  return { ent, quality: textureQualityFor(game, ent) };
+}
+
+/**
+ * PERF (performance_budget r4): build a pool entity's visual on demand (battle
+ * roster selection). Shares the per-spec texture cache with any live instance
+ * of the same spec (garage pedestal, thumbs booth) via materials.js refcounts.
+ * @param {object} game game state
+ * @param {object} ent TankEntity from game.allTanks
+ * @returns {object} the entity's TankVisual
+ */
+export function ensureTankVisual(game: RosterGameState, ent: RosterEntity): BattleVisual {
+  const steps = buildRosterVisual(game, ent, false);
+  let result = steps.next();
+  while (!result.done) result = steps.next();
+  return result.value;
+}
+
+/**
+ * A suspended build owns a private graph. A new round, renderer, roster or
+ * competing visual invalidates it; iterator cancellation releases it before
+ * anything is assigned to the entity or attached to the live scene.
+ */
+export function* ensureTankVisualSteps(
+  game: RosterGameState,
+  ent: RosterEntity,
+): Generator<TankBuildStep, BattleVisual, void> {
+  return yield* buildRosterVisual(game, ent, true);
+}
+
+function* buildRosterVisual(
+  game: RosterGameState,
+  ent: RosterEntity,
+  cooperative: boolean,
+): Generator<TankBuildStep, BattleVisual, void> {
+  if (game.ruleset?.aerial === 'gunship' && ent === game.tanks[0]) {
+    if (ent.visual?.root.userData.aircraftOnly) return ent.visual;
+    ent.visual?.dispose();
+    const visual = createGunshipBattleVisual(ent.specId);
+    ent.visual = visual;
+    game._engineCtx?.scene.add(visual.root);
+    return visual;
+  }
+  if (ent.visual) return ent.visual;
+  const engineCtx = game._engineCtx;
+  if (!engineCtx) throw new Error('battle roster engine context is unavailable');
+  const roster = game.tanks;
+  const battleCount = game.battleCount;
+  const specId = ent.specId;
+  const camoSeed = ent._camoSeed;
+  const state = ent.state;
+  const groundSampler = game._groundSampler;
+  const isPlayer = ent.isPlayer;
+  const firstParticipant = roster[0];
+  const assertCurrent = () => {
+    if (game._engineCtx !== engineCtx || game.tanks !== roster ||
+        game.battleCount !== battleCount || !roster.includes(ent) ||
+        ent.specId !== specId || ent._camoSeed !== camoSeed ||
+        ent.state !== state || ent.isPlayer !== isPlayer ||
+        roster[0] !== firstParticipant || game._groundSampler !== groundSampler || ent.visual) {
+      throw new Error('battle visual construction was superseded');
+    }
+  };
+  assertCurrent();
+  const playerActor = ent.isPlayer || ent === roster[0];
+  const deviceTier = getDeviceTier();
+  const mobileBot = !playerActor && deviceTier === 'mobile';
+  const battleBot = !playerActor;
+  let visual: BattleVisual | null = battleBot
+    ? game._battleVisualPool?.take(specId) || null : null;
+  let published = false;
+  // for-of supplies IteratorClose on cancellation, including when a caller's
+  // awaited frame gate rejects. The factory still owns its unfinished graph;
+  // only its completed return transfers that ownership to this transaction.
+  const construct = function* (): Generator<TankBuildStep, void, void> {
+    // Exact existing battle policy: preview player paint, authored bot detail,
+    // articulation-local static batches. No quality tier is reduced here.
+    const options: CreateTankOptions = {
+      camoSeed,
+      quality: textureQualityFor(game, ent),
+      geometryQuality: battleGeometryQuality(playerActor, deviceTier),
+      batchStatic: true,
+      battleDetailLod: battleBot && !mobileBot,
+      // Battles use the checked anatomy and live ERA clusters, not a fresh
+      // geometric audit. Keep the detailed fitted-surface report in authoring.
+      eraVisualBindingReceipt: false,
+      // stage 2b: a stepped build plans its decoration in the decor worker (the streamer awaits the wait)
+      ...(cooperative ? { decorPlanner: offThreadDecorPlanner() ?? undefined } : {}),
+    };
+    // One bad build never aborts the battle: the other geometry tier, the variant's donor, then the first participant's
+    // own tank (rosterVisualFallback.ts). A superseded build is closed through return(), never caught here.
+    let failure: unknown = null;
+    const variantOf = typeof ent.spec?.variantOf === 'string' ? ent.spec.variantOf : undefined;
+    for (const attempt of rosterVisualAttempts(specId, options, variantOf, firstParticipant?.specId)) {
+      // the static merge is the vehicle's own (a fallback build takes its donor's)
+      const attemptOptions = { ...attempt.options, staticDrawMerge: battleStaticDrawMerge(attempt.specId) };
+      try {
+        visual = cooperative
+          ? yield* createTankSteps(attempt.specId, engineCtx, attemptOptions)
+          : createTank(attempt.specId, engineCtx, attemptOptions);
+        if (failure) console.error(`[battle roster] ${specId} visual built as ${attempt.reason} ${attempt.specId}`);
+        return;
+      } catch (error) {
+        failure = error;
+        console.error(`[battle roster] ${specId} visual (${attempt.reason} ${attempt.specId}) failed`, error);
+      }
+    }
+    throw failure;
+  };
+  try {
+    if (!visual) {
+      for (const step of construct()) {
+        assertCurrent();
+        yield step;
+        assertCurrent();
+      }
+    }
+    if (!visual) throw new Error('battle visual construction returned no visual');
+    assertCurrent();
+    // Preserve the established synchronous binding order after completion.
+    ent.visual = visual;
+    engineCtx.scene.add(visual.root);
+    if (game._groundSampler && visual.setGroundSampler) {
+      visual.setGroundSampler(game._groundSampler);
+    }
+    if (ent.state && visual.syncFromState) {
+      visual.syncFromState(ent.state);
+      visual.setVisible(true);
+    }
+    published = true;
+    return visual;
+  } finally {
+    if (visual && !published) {
+      if (ent.visual === visual) ent.visual = null;
+      visual.root.removeFromParent();
+      visual.dispose();
+    }
+  }
+}
+
+// PERF r3: specs whose closeup contract shots (tank_closeup_*) frame the
+// vehicle at 3-6 m — always hero texture tier regardless of roster role.
+const HERO_TEX_SPECS = new Set(['m1a1_abrams_hc', 't90am']);
+
+function textureQualityFor(game: RosterGameState, ent: RosterEntity): NonNullable<CreateTankOptions['quality']> {
+  // The first participant is the player before setupBattle stamps isPlayer.
+  // Mobile keeps that close camera subject at hero resolution, but distant
+  // bots use the AI tier. Garage selection still upgrades its shared entry.
+  // 1024/512 is still finer than the chase-camera projection, while the old
+  // 2048/1024 player bake created the single largest cold-entry task. The
+  // garage uses this same dedicated close-up preview tier.
+  if (ent.isPlayer || ent === game.tanks[0]) return 'preview';
+  return getDeviceTier() !== 'mobile' && HERO_TEX_SPECS.has(ent.specId)
+    ? 'preview' : 'ai';
+}
+
+// Matchmaking and every tier badge consume the same canonical table in
+// vehicles/tier.ts. This prevents a newly added tank from showing one tier in
+// the garage while being matched as another.
+
+/** Matchmaking diversity (owner 2026-09-17): the bots of the last TWO battles yield their era-band place, so a
+ * roster only repeats a vehicle when the same-era catalog is exhausted. Pure. */
+export function rememberBattleBots(
+  previous: ReadonlySet<string> | null | undefined,
+  current: readonly string[],
+): { recent: ReadonlySet<string>; previous: ReadonlySet<string> } {
+  const now = new Set(current);
+  return { recent: new Set([...now, ...(previous ?? [])]), previous: now };
+}
+
+const BATTLE_ROSTER_SEED = 0x51e57;
+
+function shuffleBattleCandidates(
+  candidates: RosterEntity[],
+  battleOrdinal: number,
+  sessionSeed: number,
+): RosterEntity[] {
+  const rng = mulberry32(BATTLE_ROSTER_SEED ^ sessionSeed ^ Math.imul(battleOrdinal, 2654435761));
+  for (let index = candidates.length - 1; index > 0; index--) {
+    const swapIndex = (rng() * (index + 1)) | 0;
+    [candidates[index], candidates[swapIndex]] =
+      [candidates[swapIndex], candidates[index]];
+  }
+  return candidates;
+}
+
+function shuffledBotPool(
+  game: RosterGameState,
+  player: RosterEntity,
+  battleOrdinal: number,
+  excluded: readonly RosterEntity[] = [],
+): RosterEntity[] {
+  const candidates = game.allTanks.filter((entity) => !entity.matchReinforcement &&
+    entity !== player && !excluded.includes(entity) && isBotTankId(entity.specId));
+  return shuffleBattleCandidates(candidates, battleOrdinal, game.rosterSeed ?? 0);
+}
+
+function topUpForcedRoster(
+  game: RosterGameState,
+  player: RosterEntity,
+  list: RosterEntity[],
+  enemySlots: number,
+  battleOrdinal: number,
+): void {
+  const pool = shuffledBotPool(game, player, battleOrdinal, list);
+  for (const entity of pool) {
+    if (list.length >= enemySlots) return;
+    list.push(entity);
+  }
+}
+
+function forcedBattleCandidates(
+  game: RosterGameState,
+  player: RosterEntity,
+  randomize: boolean,
+  enemySlots: number,
+  battleOrdinal: number,
+): RosterEntity[] | null {
+  const flags = debugFlags();
+  const forced = flags?.forceRoster;
+  if (!Array.isArray(forced) || forced.length === 0) return null;
+  const list = forced
+    .map((id) => game.tankById.get(id))
+    .filter((entity): entity is RosterEntity => !!entity && entity !== player);
+  if (randomize && !flags?.rosterExact && list.length < enemySlots) {
+    topUpForcedRoster(game, player, list, enemySlots, battleOrdinal);
+  }
+  return list;
+}
+
+function stagedBattleCandidates(
+  game: RosterGameState,
+  playerSpecId: string,
+): RosterEntity[] {
+  // The foundational TANK_IDS array can contract when retired historical
+  // vehicles are removed from production. Screenshot/boot staging still
+  // needs a complete eight-vehicle battle, so draw from the authoritative
+  // production roster just like real matchmaking does.
+  return PRODUCTION_TANK_IDS
+    .filter((id) => id !== playerSpecId)
+    .map((id) => game.tankById.get(id))
+    .filter((entity): entity is RosterEntity => !!entity);
+}
+
+function randomBattleCandidates(
+  game: RosterGameState,
+  player: RosterEntity,
+  battleOrdinal: number,
+): RosterEntity[] {
+  return rankMatchCandidates(
+    shuffledBotPool(game, player, battleOrdinal),
+    player,
+    game.recentBotSpecIds ?? null,
+  );
+}
+
+/**
+ * FULL POOL: pick this battle's participants — the player plus the
+ * non-player slots. BATTLE-AI r7 (7v7): every RANDOM battle (all garage
+ * entries go through startBattle's random:true) fields 13 non-players so the
+ * teams split player+6 vs 7. The deterministic staged battle (boot /
+ * screenshot contract) keeps the core 8 — killcam_xray and the establishing
+ * shots are framed against that roster and no player ever sees it as a
+ * battle. `randomize` shuffles the whole pool (seeded per battle) so random
+ * rosters reach the whole pool.
+ * @returns {object[]} TankEntity[] (player's entity included)
+ */
+/** Eras a campaign formation may draw from around the player's: contemporaries only, never WW2 against modern
+ * (the matchmaking module owns the table since diversity r2, 2026-09-18). */
+const FORMATION_ERA_NEIGHBOURS = ERA_NEIGHBOURS;
+
+/**
+ * CAMPAIGN (batch 19, 2026-09-14): an operation's formation fills the enemy seats first — vehicles of
+ * the named nations move to the front of the curated pool, the player's own era first and then its
+ * contemporaries (the next-generation fleet has two Russian vehicles; the modern one has twenty-two),
+ * at most `cap` so seats remain for the allies. The seeded order is kept inside every band so
+ * rosters stay reproducible per battle ordinal.
+ */
+function preferNations(
+  candidates: RosterEntity[],
+  player: RosterEntity,
+  nations: readonly string[],
+  cap: number,
+  anyEra = false,
+): RosterEntity[] {
+  if (!nations.length || cap <= 0) return candidates;
+  const era = player.spec?.era ?? null;
+  const neighbours = era ? (FORMATION_ERA_NEIGHBOURS[era] ?? [era]) : null;
+  const eraOf = (entity: RosterEntity): string => String((entity.spec as { era?: string } | null | undefined)?.era || '');
+  const inFormation = (entity: RosterEntity): boolean =>
+    nations.includes(String((entity.spec as { nation?: string } | null | undefined)?.nation || ''));
+  const sameEra = candidates.filter((entity) => inFormation(entity) && (!era || eraOf(entity) === era));
+  const contemporaries = candidates.filter((entity) => inFormation(entity) && era && eraOf(entity) !== era
+    && neighbours!.includes(eraOf(entity)));
+  // same-nation waves (owner 2026-09-17): the wave modes keep the nation pure across every era
+  // before any other nation fills a seat — a WW2 hull in a modern wave beats a mixed formation there
+  const otherEras = anyEra ? candidates.filter((entity) => inFormation(entity) && era && eraOf(entity) !== era
+    && !neighbours!.includes(eraOf(entity))) : [];
+  const preferred = [...sameEra, ...contemporaries, ...otherEras].slice(0, cap);
+  const chosen = new Set(preferred);
+  return [...preferred, ...candidates.filter((entity) => !chosen.has(entity))];
+}
+
+/**
+ * Same-nation waves by default (owner 2026-09-17: "same-nation waves in Frontline / Endless Horde"): when a
+ * wave mode arrives with no arranged or campaign nation, its lead seats still come from ONE nation — the
+ * production catalog's nations that can field the whole lead, rotated per battle ordinal so consecutive
+ * sorties meet different armies. Deterministic for the loading plan and the battle pick alike.
+ */
+function defaultWaveNations(
+  game: RosterGameState,
+  battleOrdinal: number,
+  formationLead: number,
+): readonly string[] {
+  const countOf = (specNations: readonly string[]): number => game.allTanks.filter((entity) =>
+    !entity.matchReinforcement && isBotTankId(entity.specId) && specNations.includes(String((entity.spec as { nation?: string } | null | undefined)?.nation || ''))).length;
+  const counts = ENEMY_NATION_OPTIONS.map((option) => ({ option, count: countOf(option.specNations) }));
+  const best = counts.reduce((max, row) => Math.max(max, row.count), 0);
+  if (best <= 0) return [];
+  const needed = Math.min(Math.max(1, Math.floor(formationLead)), best);
+  const eligible = counts.filter((row) => row.count >= needed);
+  const offset = (game.rosterSeed ?? 0) >>> 0;
+  return eligible[(offset + Math.abs(Math.floor(battleOrdinal) * 7)) % eligible.length].option.specNations;
+}
+
+/** A battle's TEAM NATIONS record (the deploy chip, the HUD team panel and the receipts read it). */
+export interface BattleTeamNations {
+  readonly teamNations: 'mono' | 'random';
+  readonly allied: CountryId | null;
+  readonly enemy: CountryId | null;
+  readonly notes: readonly NationNote[];
+}
+
+/** A pool entity as the planner's row: its vehicle, country, era and tier. */
+function nationRowOf(entity: RosterEntity): NationRow {
+  const spec = entity.spec as { nation?: string; era?: string } | null | undefined;
+  return { id: entity.specId, country: countryOfVehicle(entity.specId, spec?.nation), era: spec?.era ?? null, tier: tankTier(entity.specId) };
+}
+
+/**
+ * MONO-NATION's battle (sim/teamNations.ts pickNationalSides): the player's pick seat 0 of the allies, the allied bots
+ * from the player's country and its closest allies, the enemy seats from one opposing country, in the curated pool's
+ * seeded, recency-rotated order; a vehicle fielded twice is a clone entity. The allied entities come back explicitly.
+ */
+export function pickNationalBattle(
+  game: RosterGameState,
+  playerSpecId: string,
+  battleOrdinal: number,
+  plan: SoloNationalPlan,
+): { participants: RosterEntity[]; allies: RosterEntity[]; record: BattleTeamNations } {
+  const player = game.tankById.get(playerSpecId);
+  if (!player) throw new Error(`unknown battle vehicle: ${playerSpecId}`);
+  const ranked = randomBattleCandidates(game, player, battleOrdinal);
+  const byId = new Map(ranked.map((entity) => [entity.specId, entity]));
+  const sides = pickNationalSides({
+    rows: ranked.map(nationRowOf), alliedHumans: [nationRowOf(player)],
+    alliedSeats: plan.alliedSeats, enemySeats: plan.enemySeats,
+    campaignEnemy: plan.campaignEnemy, arrangedEnemy: plan.arrangedEnemy,
+    seed: teamNationsSeed(battleOrdinal, game.rosterSeed ?? 0, playerSpecId),
+    rivalBlocWeight: TEAM_NATIONS_RULES.rivalBlocWeight,
+    autoNeedsContemporaries: TEAM_NATIONS_RULES.autoEnemyNeedsContemporaries,
+  });
+  const seat = (side: 'allied' | 'enemy', k: number, id: string, repeat: boolean): RosterEntity => {
+    const source = id === player.specId ? player : byId.get(id) ?? game.tankById.get(id)!;
+    return repeat || source === player
+      ? createRosterEntity(source.specId, `${side}:${k}:${source.specId}`, (side === 'allied' ? 8000 : 8500) + k, true)
+      : source;
+  };
+  const allies = sides.allies.map((s, k) => seat('allied', k, s.id, s.repeat));
+  const enemies = sides.enemies.map((s, k) => seat('enemy', k, s.id, s.repeat));
+  return {
+    participants: [player, ...enemies, ...allies],
+    allies,
+    record: Object.freeze({ teamNations: 'mono', allied: sides.allied, enemy: sides.enemy, notes: sides.notes }),
+  };
+}
+
+export function pickBattleParticipants(
+  game: RosterGameState,
+  playerSpecId: string,
+  randomize: boolean,
+  battleOrdinal = game.battleCount,
+  preferredNations: readonly string[] = [],
+  // team arrangement (2026-09-15): the co-op modes size the non-player field themselves
+  // (allies + enemy pool) and keep exactly `formationLead` seats for the named nation
+  slots: number | null = null,
+  formationLead: number | null = null,
+  // TEAM NATIONS (gameplay-modes-228): MONO's plan (pickNationalBattle), RANDOM ('random': no country preference at all,
+  // the wave modes' default formation included), or null (the legacy pool: direct callers and the receipts)
+  national: SoloNationalMode = null,
+): RosterEntity[] {
+  const player = game.tankById.get(playerSpecId);
+  if (!player) throw new Error(`unknown battle vehicle: ${playerSpecId}`);
+  const enemySlots = slots != null && Number.isFinite(slots) ? Math.max(1, Math.floor(slots)) : randomize ? 13 : 7;
+  // PERF (performance_budget r3, certification determinism): an explicit
+  // debug roster bypasses the seeded shuffle/era matchmaking so the perf
+  // gate measures a PINNED worst-case lineup (all multi-mesh heavies)
+  // instead of whatever the pool happens to draw — the round-2 critic
+  // measured 1095 worst-frame draw calls on one random roster and 470 on
+  // another, on the identical build. Debug/tooling only (perfprobe).
+  const forced = forcedBattleCandidates(
+    game, player, randomize, enemySlots, battleOrdinal,
+  );
+  if (forced) return [player, ...forced.slice(0, enemySlots)];
+  if (randomize && national && national !== 'random') {
+    return pickNationalBattle(game, playerSpecId, battleOrdinal, national).participants;
+  }
+
+  let others: RosterEntity[];
+  if (randomize) {
+    // Curated matchmaking: same-era tanks always fill first, while their
+    // seeded order lets the production catalog rotate through bot seats. A
+    // cross-era tank is an emergency fallback only when
+    // the production catalog cannot fill all 13 non-player slots;
+    // picking the Random battlefield no longer turns WWII vs modern back on.
+    const waveMode = formationLead != null;
+    const nations = preferredNations.length || !waveMode || national === 'random'
+      ? preferredNations
+      : defaultWaveNations(game, battleOrdinal, Math.min(enemySlots, Math.floor(formationLead)));
+    others = preferNations(randomBattleCandidates(game, player, battleOrdinal), player, nations,
+      Math.max(0, waveMode ? Math.min(enemySlots, Math.floor(formationLead)) : enemySlots - 3), waveMode);
+  } else {
+    // deterministic staged battle (boot, screenshot contract): core roster
+    others = stagedBattleCandidates(game, playerSpecId);
+  }
+  return [player, ...others.slice(0, enemySlots)];
+}
+
+/**
+ * Resolve the next battle's deterministic participant ids without mutating
+ * game state. Battle entry uses this while the battlefield chunk/build is in
+ * flight so every required procedural profile can transfer and parse in
+ * parallel instead of waiting behind world construction.
+ */
+export function planBattleParticipantIds(
+  game: RosterGameState,
+  playerSpecId: string,
+  randomize = true,
+  preferredNations: readonly string[] = [],
+  slots: number | null = null,
+  formationLead: number | null = null,
+  national: SoloNationalMode = null,
+) {
+  return pickBattleParticipants(game, playerSpecId, randomize, game.battleCount + 1, preferredNations, slots, formationLead, national)
+    .map((entity) => entity.specId);
+}
+
+/** The solo battle's base seed (game/state.ts resetBattleSession): a staged roster's match seed, a random one's base. */
+export const SOLO_MATCH_SEED = 6000;
+
+/**
+ * A solo battle's match seed (268, Main item 7: one seed rule): every stream of the battle reads it, as the authority's
+ * read its match seed (the bots, combat, spotting, the paint roll, the mode, the wreck turrets). A random battle's is the
+ * base plus the battles before it (a fresh session's first keeps 6000), a staged roster's (boot, the screenshot contract)
+ * the fixed base.
+ */
+export function soloMatchSeed(battlesBefore: number, random: boolean): number {
+  return random ? SOLO_MATCH_SEED + battlesBefore : SOLO_MATCH_SEED;
+}
+
+/**
+ * A solo hull's paint at its roster index (268, Main item 6: one bot paint rule for both drivers): a random roster's bots
+ * wear what the authority would roll for them (sim/camoPaint.ts botCamoRoll, from the match seed and the index), a staged
+ * roster's (boot, the screenshot contract) their stock scheme; the player, and a bot on the player's own spec (it wears the
+ * player's paint), none.
+ */
+export function soloBotCamo(
+  index: number,
+  specId: string,
+  playerSpecId: string,
+  mapId: string,
+  randomize: boolean,
+  seed: number,
+): BotCamo | null {
+  if (index === 0 || specId === playerSpecId) return null;
+  return randomize ? botCamoRoll(seed, index, mapId) : 'factory';
+}
+
+/**
+ * The next battle's bots that wear AUTO (soloBotCamo; every other bot wears its stock scheme), without mutating game or
+ * material state. The loading coordinator paints the exact roster with it while the independent world is still building;
+ * setupBattle rolls each bot the same at its roster index.
+ */
+export function planBattleCamoOverrides(
+  game: RosterGameState,
+  playerSpecId: string,
+  mapId: string,
+  randomize = true,
+  preferredNations: readonly string[] = [],
+  slots: number | null = null,
+  formationLead: number | null = null,
+  national: SoloNationalMode = null,
+) {
+  const battleOrdinal = game.battleCount + 1;
+  const participants = pickBattleParticipants(game, playerSpecId, randomize, battleOrdinal, preferredNations, slots, formationLead, national);
+  return participants
+    .filter((entity, index) => soloBotCamo(index, entity.specId, playerSpecId, mapId, randomize, soloMatchSeed(game.battleCount, randomize)) === 'auto')
+    .map((entity) => entity.specId);
+}
+
+/**
+ * The allied seats among a battle's non-player participants (`candidates`: the field after the player, in its order);
+ * the rest fight as the enemy. The mode sets the split (Horde two allies, Frontline Assault three, Standard the 6 / 7
+ * balance, never more than the pool less one enemy); MONO-NATION takes the planner's allied seats verbatim; a wave
+ * mode's or an arranged formation fills the enemy side first; the rest go tier-balanced. A staged battle takes the
+ * first three. No randomness: state.ts seats the battle with it and planBattleSeats draws the load card with it.
+ */
+export function splitBattleAllies<T extends Pick<RosterEntity, 'id' | 'specId' | 'spec'>>(
+  candidates: readonly T[],
+  { playerSpecId, randomBattle, ruleset, campaignOperationId, nationalAllyIds }: {
+    playerSpecId: string; randomBattle: boolean; ruleset: MatchRuleset; campaignOperationId: string | null;
+    nationalAllyIds: ReadonlySet<string> | null;
+  },
+): T[] {
+  if (!randomBattle) {
+    // The staged screenshot battle takes the first three roster entities as
+    // allies; the archived WWII preference list retired with those hulls
+    // (2026-09-23) and never matched a production roster.
+    return candidates.slice(0, 3);
+  }
+  if (nationalAllyIds) return candidates.filter((entity) => nationalAllyIds.has(entity.id));
+  const exactCap = debugFlags()?.rosterExact && candidates.length < 13 ? 3 : 6;
+  const allyCap = Math.min(rulesetAllyCap(ruleset, exactCap), Math.max(0, candidates.length - 1));
+  const enemyCap = candidates.length - allyCap;
+  const byTier = candidates.slice()
+    .sort((a, b) => tankTier(b.specId) - tankTier(a.specId));
+  const allies: T[] = [];
+  let allyTierSum = tankTier(playerSpecId);
+  let enemyTierSum = 0;
+  // wave modes (same-nation waves, owner 2026-09-17/18): the roster picker already leads the field with
+  // the enemy pool — `formationLead` seats of ONE nation (the operation's, the arranged one, or the
+  // battle's default wave nation) — so those seats ARE the enemy side and the allied bots come from the
+  // seats behind them. The tier-balanced pass below used to split the whole field and leaked formation
+  // vehicles to the allies while the fillers fought as hostiles (production: 13 UK + 1 Russian defender).
+  // campaign / arranged standard battles: the formation fills the enemy side first by spec nation.
+  const enemyNations = battleEnemyNations(ruleset, campaignOperationId);
+  const formationLead = battleRosterPlan(ruleset, campaignOperationId, randomBattle).formationLead;
+  const formation = new Set<T>();
+  if (formationLead != null) {
+    for (const entity of candidates.slice(0, Math.min(enemyCap, Math.max(0, Math.floor(formationLead))))) {
+      formation.add(entity);
+      enemyTierSum += tankTier(entity.specId);
+    }
+  } else if (enemyNations.length) {
+    for (const entity of byTier) {
+      if (formation.size >= enemyCap) break;
+      if (!enemyNations.includes(String(entity.spec.nation || ''))) continue;
+      formation.add(entity);
+      enemyTierSum += tankTier(entity.specId);
+    }
+  }
+  let enemyCount = formation.size;
+  for (const entity of byTier) {
+    if (formation.has(entity)) continue;
+    const tier = tankTier(entity.specId);
+    const allyRoom = allies.length < allyCap;
+    const enemyRoom = enemyCount < enemyCap;
+    if (allyRoom && (!enemyRoom || allyTierSum < enemyTierSum)) {
+      allies.push(entity);
+      allyTierSum += tier;
+    } else {
+      enemyCount++;
+      enemyTierSum += tier;
+    }
+  }
+  return allies;
+}
+
+/** One seat of the next solo battle as the load card draws it (rosterPresentation.battleRows reads these fields). */
+export interface PlannedBattleSeat {
+  id: string;
+  specId: string;
+  spec: ReturnType<typeof getSpec>;
+  team: 'player' | 'enemy';
+  isPlayer: boolean;
+  displayName: string | null;
+  /** The AC-130's pilot flies the gunship (its row names the aircraft). */
+  aerial?: { kind: 'gunship' };
+}
+
+/**
+ * The next solo battle's every seat, before its world loads: the participants setupBattle will field (the next battle
+ * ordinal, TEAM NATIONS, formations, a pinned debug roster), in its order, each on the side splitBattleAllies gives it,
+ * and the TEAM NATIONS record setupBattle keeps (the card's flags). Read-only: the battle seats the same plan once its
+ * ordinal commits. The load card lists both teams from its first frame with it (the bots' callsigns follow this order,
+ * as the HUD's do). Null for a watched battle (its own ruleset).
+ */
+export function planBattleSeats(
+  game: RosterGameState,
+  playerSpecId: string,
+  { randomRoster = true, gameMode = 'standard', campaignOperationId = null, arrangement, watch = false }: {
+    randomRoster?: boolean; gameMode?: string | null; campaignOperationId?: string | null;
+    arrangement?: TeamArrangement | null; watch?: boolean;
+  } = {},
+): { seats: PlannedBattleSeat[]; teamNations: BattleTeamNations | null } | null {
+  if (watch || !game.tankById.has(playerSpecId)) return null;
+  const mode = normalizeGameMode(gameMode);
+  const campaign = mode === 'frontline_assault' ? campaignOperationId ?? null : null;
+  const ruleset = matchRulesetFor(mode, campaignRulesetInput(campaign), arrangement === undefined ? readTeamArrangement(mode) : arrangement);
+  const plan = battleRosterPlan(ruleset, campaign, randomRoster);
+  const ordinal = game.battleCount + 1;
+  const national = plan.national && plan.national !== 'random' && !debugFlags()?.forceRoster?.length
+    ? pickNationalBattle(game, playerSpecId, ordinal, plan.national) : null;
+  const participants = national ? national.participants
+    : pickBattleParticipants(game, playerSpecId, randomRoster, ordinal, plan.nations, plan.slots, plan.formationLead, plan.national);
+  const allies = new Set(splitBattleAllies(participants.slice(1), {
+    playerSpecId, randomBattle: randomRoster, ruleset, campaignOperationId: campaign,
+    nationalAllyIds: national ? new Set(national.allies.map((entity) => entity.id)) : null,
+  }));
+  const seats = participants.map((entity, index): PlannedBattleSeat => ({
+    id: entity.id,
+    specId: entity.specId,
+    spec: getSpec(entity.specId),
+    team: index === 0 || allies.has(entity) ? 'player' : 'enemy',
+    isPlayer: index === 0,
+    displayName: (entity as { displayName?: string | null }).displayName ?? null,
+    ...(mode === 'ac130' && index === 0 ? { aerial: { kind: 'gunship' as const } } : {}),
+  }));
+  const teamNations: BattleTeamNations | null = national ? national.record
+    : plan.national === 'random' ? { teamNations: 'random', allied: null, enemy: null, notes: [] } : null;
+  return { seats, teamNations };
+}

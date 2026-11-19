@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tria Prima audio board</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./fonts.css" />
+    <style>
+      :root {
+        --bg: #121317;
+        --panel: #191b21;
+        --line: #2b2e37;
+        --ink: #d4cdbd;
+        --dim: #8b8678;
+        --gold: #c9a45c;
+        --on: #7a5a23;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.45 var(--font-ui, system-ui, sans-serif);
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 20px 24px 80px;
+      }
+      h1 {
+        font: 500 30px/1.1 var(--font-display, Georgia, serif);
+        letter-spacing: 0.02em;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font: 500 20px/1.2 var(--font-display, Georgia, serif);
+        margin: 0 0 10px;
+        color: var(--gold);
+      }
+      h3 {
+        font: 600 11px/1 var(--font-ui, system-ui, sans-serif);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--dim);
+        margin: 14px 0 6px;
+      }
+      p {
+        margin: 0 0 8px;
+        color: var(--dim);
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 14px 16px 16px;
+        margin-top: 14px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+        gap: 14px;
+      }
+      .cols > section {
+        margin-top: 0;
+      }
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: #20232b;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 5px 9px;
+        margin: 0 4px 4px 0;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--gold);
+      }
+      button:active {
+        background: #2a2e38;
+      }
+      button.on {
+        background: var(--on);
+        border-color: var(--gold);
+      }
+      button.big {
+        padding: 8px 16px;
+        font-size: 14px;
+      }
+      label.row {
+        display: grid;
+        grid-template-columns: 96px 1fr 46px;
+        align-items: center;
+        gap: 8px;
+        margin: 3px 0;
+        color: var(--dim);
+      }
+      label.row output {
+        color: var(--ink);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      input[type='range'] {
+        width: 100%;
+        accent-color: var(--gold);
+      }
+      select {
+        font: inherit;
+        color: var(--ink);
+        background: #20232b;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 4px 6px;
+      }
+      .loop {
+        display: grid;
+        grid-template-columns: 92px 1fr 1fr 1fr;
+        gap: 10px;
+        align-items: center;
+        margin: 2px 0;
+      }
+      .loop button {
+        margin: 0;
+      }
+      .loop label {
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        gap: 6px;
+        align-items: center;
+        color: var(--dim);
+      }
+      #status {
+        font-variant-numeric: tabular-nums;
+        color: var(--dim);
+        margin: 6px 0 0;
+      }
+      #meter {
+        height: 6px;
+        background: #0b0c0f;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        margin-top: 8px;
+        overflow: hidden;
+      }
+      #meter i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #5d6b4a, #c9a45c 75%, #b3432f);
+      }
+      canvas#spec {
+        width: 100%;
+        height: auto;
+        display: block;
+        margin-top: 10px;
+        border: 1px solid var(--line);
+        background: #0c0d10;
+      }
+      pre {
+        margin: 8px 0 0;
+        color: var(--dim);
+        white-space: pre-wrap;
+      }
+      .inline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: center;
+        color: var(--dim);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Tria Prima: the sound</h1>
+      <p>Every sound of the game, synthesised. Nothing plays until the first click.</p>
+      <section>
+        <div class="inline">
+          <button id="start" class="big">Start audio</button>
+          <button id="pause" title="setPaused: the world and the score step back behind a low-pass; interface sounds stay as they are">Paused</button>
+          <button id="burst">Burst of 40</button>
+          <span id="status">not started</span>
+        </div>
+        <div id="meter"><i></i></div>
+        <div id="volumes" style="max-width: 520px; margin-top: 10px"></div>
+      </section>
+
+      <section>
+        <h2>One-shots</h2>
+        <div class="inline">
+          <label><input type="checkbox" id="spatial" /> in the world</label>
+          <label>distance <input type="range" id="dist" min="1" max="200" value="8" style="width: 160px" /> <output id="distOut">8 m</output></label>
+          <label>bearing <input type="range" id="bearing" min="-180" max="180" value="40" style="width: 160px" /> <output id="bearingOut">40°</output></label>
+          <label>gain <input type="range" id="gain" min="0" max="2" step="0.05" value="1" style="width: 110px" /></label>
+          <label>pitch <input type="range" id="pitch" min="0.5" max="2" step="0.01" value="1" style="width: 110px" /></label>
+          <button id="turn" title="setListener: the listener turns clockwise on the spot, once in ten seconds; loops and long one-shots in the world move around the head">Turn around</button>
+        </div>
+        <div id="sfx"></div>
+        <h3>Footsteps</h3>
+        <div class="inline">
+          <span id="steps"></span>
+          <label>speed <input type="range" id="speed" min="0" max="1" step="0.05" value="0.5" style="width: 110px" /></label>
+          <button id="walk">Walk</button>
+        </div>
+      </section>
+
+      <div class="cols" style="margin-top: 14px">
+        <section>
+          <h2>Loops</h2>
+          <p>Each row: on or off, its parameter (heat, speed, closeness), level, distance.</p>
+          <div id="loops"></div>
+        </section>
+        <section>
+          <h2>Ambience</h2>
+          <div class="inline" style="margin-bottom: 6px">
+            <label>region <select id="region"></select></label>
+          </div>
+          <div id="ambience"></div>
+        </section>
+      </div>
+
+      <section>
+        <h2>Music</h2>
+        <div id="moods"></div>
+        <div style="max-width: 520px"><label class="row">intensity <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.6" /><output id="intensityOut">0.60</output></label></div>
+      </section>
+
+      <section>
+        <h2>Bench</h2>
+        <p>Renders the chosen sound offline, through the whole mix, and draws what it is made of.</p>
+        <div class="inline">
+          <select id="benchPick"></select>
+          <button id="benchRender">Render</button>
+          <button id="benchWav">Save as WAV</button>
+        </div>
+        <canvas id="spec" width="1200" height="600"></canvas>
+        <pre id="benchOut"></pre>
+      </section>
+    </main>
+    <script type="module" src="./audio.js"></script>
+  </body>
+</html>

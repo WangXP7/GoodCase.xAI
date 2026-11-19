@@ -1,0 +1,105 @@
+// Layout of the replay bar: bottom centre over the map, above the logos and
+// the attribution line; two rows, the title line and the controls. The look
+// is a td-overlay strip with td-* buttons, slider and segments.
+
+:host {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 15;
+  width: min(760px, calc(100% - 32px));
+}
+
+.td-replay-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.td-replay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.td-replay-title {
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.rb-step {
+  width: 22px;
+  height: 22px;
+}
+
+.td-replay-stats {
+  gap: 12px;
+  margin-left: auto;
+}
+
+.rb-stat {
+  gap: 4px;
+  cursor: default;
+}
+
+.td-replay-play {
+  flex-shrink: 0;
+}
+
+/* The scrubber; the ticks over it mark the player's commands */
+.td-replay-track {
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.td-replay-mark {
+  position: absolute;
+  top: 2px;
+  width: 1px;
+  height: 16px;
+  margin-left: -0.5px;
+  background: var(--td-teal-light);
+  pointer-events: none;
+}
+
+.td-replay-scrub {
+  position: relative;
+  z-index: 1;
+}
+
+.td-replay-time {
+  flex-shrink: 0;
+  min-width: 86px;
+  text-align: right;
+
+  &.is-seeking {
+    color: var(--td-brass-light);
+  }
+}
+
+.td-replay-speeds {
+  flex-shrink: 0;
+
+  > button {
+    min-width: 44px;
+  }
+}
+
+/* Narrow canvas: the speeds take a line of their own */
+@media (max-width: 640px) {
+  .td-replay-controls {
+    flex-wrap: wrap;
+  }
+
+  .td-replay-speeds {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

@@ -1,0 +1,35 @@
+// Layout of the Research Center section: what is done, the running
+// researches with their bars, the way into the tree, the upgrades.
+
+
+.rp-summary {
+  gap: 6px;
+}
+
+.rp-slots {
+  margin-left: auto;
+}
+
+.rp-active {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 4px 8px 8px;
+}
+
+.rp-cancel {
+  width: 24px;
+  height: 24px;
+}
+
+.rp-bar {
+  grid-column: 1 / -1;
+  margin-right: 4px;
+}
+
+.rp-open {
+  justify-content: space-between;
+  width: 100%;
+}
+

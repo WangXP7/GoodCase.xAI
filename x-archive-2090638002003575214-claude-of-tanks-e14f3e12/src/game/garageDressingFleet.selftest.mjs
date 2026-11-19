@@ -1,0 +1,455 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import {
+  ABRAMS_FLAMMABLE_BAY_OFFSET,
+  ABRAMS_WELDING_BAY_PLACEMENT,
+  getAbramsWeldingBayPlacement,
+  getGarageWorkshopBayPoses,
+} from './garageWorkshopLayout.ts';
+import { GARAGE_VARIANTS } from './garageVariants.ts';
+
+const dressing = await readFile(new URL('./garageDressing.ts', import.meta.url), 'utf8');
+const access = await readFile(new URL('./garageDressingAccess.ts', import.meta.url), 'utf8');
+const worker = await readFile(new URL('./garageWorkshopGeometryWorker.ts', import.meta.url), 'utf8');
+const transfer = await readFile(new URL('./garageWorkshopTransfer.ts', import.meta.url), 'utf8');
+const workshopLayout = await readFile(new URL('./garageWorkshopLayout.ts', import.meta.url), 'utf8');
+const stage = await readFile(new URL('../ui/garageStage.ts', import.meta.url), 'utf8');
+
+assert.doesNotMatch(dressing,
+  /Promise\.all\([\s\S]{0,300}import\('\.\.\/vehicles\/fleetFactory\.ts'\)/,
+  'the ordinary workshop path must not duplicate worker-owned fleet families on the render thread');
+assert.match(dressing,
+  /catch \(error\)[\s\S]*import\('\.\.\/vehicles\/fleetFactory\.ts'\)[\s\S]*ensureTankBuilder\(specId\)/,
+  'the playable fleet facade remains an exceptional worker-recovery path');
+assert.match(dressing, /WORKSHOP_CHUNK_VEHICLE_IDS\[next\]/,
+  'one exact fleet builder must be resolved per streamed workshop slice');
+assert.match(dressing,
+  /WORKSHOP_PRESENTATION_OPTIONS[\s\S]*quality: 'ai'[\s\S]*camoPattern: 'factory'[\s\S]*geometryQuality: 'high'[\s\S]*staticPreview: true[\s\S]*decor: true[\s\S]*deferStaticBatch: true/,
+  'workshop tanks retain full authored geometry and fittings with a fixed recovery finish');
+assert.doesNotMatch(dressing, /renderer\.compile\(/,
+  'workshop streaming must not synchronously compile a decorative subtree');
+assert.match(dressing, /await transfer\.createVisual\(specId, camoSeed\)/,
+  'full-detail exhibit geometry must be acquired away from the render thread');
+assert.match(transfer, /new Worker\(new URL\('\.\/garageWorkshopGeometryWorker\.ts'/,
+  'the workshop transfer must lazily own its dedicated module worker');
+assert.doesNotMatch(transfer, /prebakeSharedTextures|createTankMaterials/,
+  'static exhibits must not wake procedural camouflage or scrolling-track texture allocation');
+assert.match(transfer, /createGarageWorkshopMaterialPalette/,
+  'static exhibits must use the map-free factory delivery palette');
+assert.match(transfer, /sharedPalettes = new Map/,
+  'matching national service finishes must share immutable Garage materials');
+assert.match(transfer, /textureQuality = 'factory-solid'/,
+  'diagnostics must identify the map-free background finish');
+assert.match(dressing, /camoPattern: 'factory',[\s\S]*\}\);/,
+  'the exceptional main-thread recovery path must not accept signature paint overrides');
+assert.match(dressing, /workshopTransferPayload/,
+  'the Garage must retain worker payload savings for production diagnostics');
+assert.match(worker, /geometryQuality: 'high'[\s\S]*decor: true/,
+  'worker exhibits retain full procedural detail and fittings');
+assert.match(worker,
+  /name !== 'position' && name !== 'normal'/,
+  'solid workshop geometry must omit unused colour, UV and tangent transfer channels');
+assert.match(worker, /lod\.levels\[index\]\?\.hysteresis \?\? 0/,
+  'worker exhibits must serialize the authored LOD transition hysteresis');
+assert.match(transfer, /source\.lodHysteresis \?\? 0/,
+  'main-thread exhibits must restore LOD hysteresis instead of reintroducing transition chatter');
+assert.match(transfer, /spec: TANK_SPECS\[specId\]/,
+  'the transfer must send the requested spec without loading unrelated supplemental donors');
+assert.match(worker, /TANK_SPECS\[specId\] \|\|= spec/,
+  'the worker must register the requested spec before resolving its builder');
+assert.doesNotMatch(worker, /fleetFactory|ensureFullFleet|ensureTankBuilder/,
+  'the worker must not package the full playable fleet facade');
+for (const owner of ['T90_PROFILES', 'ABRAMS_PROFILES', 'LEOPARD_PROFILES', 'MODERN3_BUILDERS']) {
+  assert.match(worker, new RegExp(owner), `worker must register its bounded ${owner} family`);
+}
+for (const id of ['t90a_burlak_proto', 'm1a1_abrams_hc', 'leo2a4m', 't90am', 'xk2_black_panther']) {
+  assert.match(dressing, new RegExp(`createLegacyVisual\\('${id}'`));
+}
+assert.doesNotMatch(dressing, /visual\.root\.clone\(true\)/,
+  'the Leopard teardown must be its real fleet graph rather than a cloned Abrams');
+assert.match(dressing,
+  /createLegacyVisual\('leo2a4m'[\s\S]*vehicleIdentity = 'Leopard 2A5\/A5NL'/,
+  'the fifth exhibit must retain the exact A5NL fleet identity throughout its service bay');
+assert.doesNotMatch(dressing, /addFleetExhibit\(/,
+  'alternate duplicate fleet displays must not be built');
+assert.doesNotMatch(dressing, /leclerc/,
+  'the retired alternate Leclerc display must not wake its builder');
+assert.match(dressing, /layoutReceipt = 'pre-6c7b07533-original'/,
+  'Verdant must carry an explicit receipt for the pre-overhaul arrangement');
+for (const signature of [
+  'verdant_original_turret_gantry',
+  'verdant_original_jack_stands',
+  'verdant_original_removed_side_skirts',
+  'verdant_original_welding_cable',
+  'relikt_service_rack',
+  'verdant_original_removed_k2_running_gear',
+  'track_shoe_pallet',
+  'dressing_modern_machine_gun_service_rack',
+  'verdant_gantry_connected_crosshead',
+  'verdant_gantry_connected_side_rail',
+  'verdant_gantry_ground_foot',
+  'k2_rotisserie_ring',
+  'k2_rotisserie_clamp_arm',
+  'k2_rotisserie_clamp_pad',
+  'k2_rotisserie_roller_stand',
+  'road_wheel_service_dolly',
+]) {
+  assert.match(dressing, new RegExp(signature));
+}
+assert.match(dressing, /tank\.position\.set\(17\.8, 0\.42, -15\.5\)/,
+  'Burlak geometry retains its authored local transform inside the bay owner');
+assert.match(dressing, /garage_burlak_gantry_forward/,
+  'the complete Burlak service story must have one movable bay owner');
+assert.match(dressing,
+  /burlakBayRoot\.position\.set\([\s\S]*BURLAK_SCAFFOLD_CLEARANCE_OFFSET\.x,[\s\S]*BURLAK_SCAFFOLD_CLEARANCE_OFFSET\.z/,
+  'the Burlak tank, stands, gantry, tools and floor dressing must advance together');
+assert.match(dressing, /foregroundOfVerdantScaffold = true/,
+  'the Burlak assembly must remain in front of Verdant scaffold uprights');
+assert.match(dressing,
+  /addServiceRoadWheelDolly\([\s\S]*'t90a_burlak_proto',[\s\S]*12\.4, -15\.0, -0\.55 \+ Math\.PI \/ 2/,
+  'Burlak must carry four exact fleet road wheels on a connected service dolly');
+assert.match(workshopLayout,
+  /id: 'burlak_gantry', role: 'heavy-lift', x: 18\.8, z: -10\.3, yaw: -0\.55/,
+  'outdoor service structures must follow the Burlak assembly final pose');
+assert.match(workshopLayout, /cameraAdvanceM: 4\.38/,
+  'the Burlak foreground correction must remain large enough to clear the scaffold silhouette');
+assert.match(dressing, /tank\.position\.set\(16\.9, 0, 17\.7\)/,
+  'Abrams welding bay retains its original transform');
+// 2026-10-09, the owner's order ("put the m1 abrams area back to where it was in verdant motor pool. fn it got flipped
+// for no reason"): Verdant's Abrams welding bay is back beside the east FLAMMABLE canisters, half-turned, offset
+// (-0.8, 7.7), pose (-17.7, -10.0, -2.03 + PI), the placement every production build carried from 2026-09-04 to deploy
+// 206. a08175e95 (2026-10-05, gauntlet wave 89, "a sand-coloured turret rises right behind the T-90's turret or gun")
+// had moved it un-turned beside the Garage camera (offset (-0.4, -14.5), pose (16.5, 3.2, -2.03)) in all ten Garages;
+// the nine outdoor packs keep that station and the terrain pads fitted to it, because each outdoor pack seats its
+// signature facility at the canister spot. The owner's order outranks the critic ruling: do not move or turn the
+// Verdant bay again without the owner.
+assert.match(workshopLayout,
+  /ABRAMS_FLAMMABLE_BAY_OFFSET = Object\.freeze\(\{[\s\S]*x: -0\.8,[\s\S]*z: 7\.7,[\s\S]*rotationRad: Math\.PI,[\s\S]*canisterCenterSeparationM: 3\.83/,
+  'Verdant\'s complete Abrams bay stands half-turned beside the east FLAMMABLE canisters (the owner\'s placement)');
+assert.match(workshopLayout,
+  /id: 'abrams_welding', role: 'welding', x: -17\.7, z: -10\.0,\s*yaw: -2\.03 \+ Math\.PI/,
+  'Verdant\'s published Abrams pose is the canister station');
+assert.match(workshopLayout,
+  /ABRAMS_WELDING_BAY_PLACEMENT = Object\.freeze\(\{[\s\S]*x: -0\.4,[\s\S]*z: -14\.5,[\s\S]*rotationRad: 0,[\s\S]*heroSilhouettePx: 0/,
+  'the outdoor packs\' Abrams bay stands out of the hero\'s sight line (gauntlet wave 89)');
+assert.match(workshopLayout,
+  /id: 'abrams_welding', role: 'welding', x: 16\.5, z: 3\.2, yaw: -2\.03/,
+  'outdoor structures must follow the Abrams service owner beside the Garage camera');
+for (const variant of GARAGE_VARIANTS) {
+  // the published pose is the authored tank transform (16.9, 17.7, yaw -2.03) carried by the destination's placement
+  // and the destination's whole-workshop layout pose
+  const verdant = variant.id === 'verdant_motor_pool';
+  const placement = getAbramsWeldingBayPlacement(variant);
+  assert.equal(placement, verdant ? ABRAMS_FLAMMABLE_BAY_OFFSET : ABRAMS_WELDING_BAY_PLACEMENT,
+    `${variant.id}: the Abrams bay takes its destination's placement`);
+  const { x, z, rotationRad } = placement;
+  const cos = Math.cos(rotationRad), sin = Math.sin(rotationRad);
+  const bayX = x + 16.9 * cos + 17.7 * sin, bayZ = z - 16.9 * sin + 17.7 * cos;
+  const layoutOnly = getGarageWorkshopBayPoses({ id: variant.id, layout: 0 }).find((bay) => bay.id === 'abrams_welding');
+  assert.ok(Math.abs(layoutOnly.x - bayX) < 1e-9 && Math.abs(layoutOnly.z - bayZ) < 1e-9
+    && Math.abs(layoutOnly.yaw - (-2.03 + rotationRad)) < 1e-9,
+  `${variant.id}: the Abrams bay pose and the placement that carries the authored tank agree`);
+  const abrams = getGarageWorkshopBayPoses(variant).find((bay) => bay.id === 'abrams_welding');
+  assert.ok(Math.hypot(abrams.x, abrams.z) > 14,
+    `${variant.id}: the Abrams exhibit stands in the dressing band, well outside the painted KEEP-CLEAR ring`);
+}
+assert.match(dressing, /tank\.position\.set\(-6\.6, 0, 20\.5\)/,
+  'T-90M component bay retains its original transform');
+assert.match(dressing, /tank\.position\.set\(-16\.25, 0, -16\.85\)/,
+  'K2 teardown retains its authored transform inside the swapped bay owner');
+assert.match(dressing,
+  /placeAuthoredServiceBay\(firstBayChildIndex, 'abrams_welding', 'm1a1_abrams_hc'\)/,
+  'the complete Abrams service section must move as one owner');
+assert.match(dressing,
+  /placeAuthoredServiceBay\(firstBayChildIndex, 'rolled_k2', 'xk2_black_panther'\)/,
+  'the complete K2 teardown section must move into the Abrams\'s authored quadrant');
+assert.match(dressing,
+  /const placement = getAbramsWeldingBayPlacement\(variant\);[\s\S]*abramsBayRoot\.position\.set\(placement\.x, 0, placement\.z\);[\s\S]*abramsBayRoot\.rotation\.y = placement\.rotationRad;[\s\S]*abramsBayRoot\.updateMatrix\(\)/,
+  'the complete Abrams owner must take its destination placement as one transform');
+assert.match(dressing,
+  /bayRoot\.rotation\.y = Math\.PI;\s*const offset = \{ x: -0\.35, z: -0\.35 \};/,
+  'the K2 owner keeps its half-turn and explicit perimeter-crane placement');
+assert.match(dressing, /function setVariant[\s\S]*placeAbramsBay\(currentVariant\);[\s\S]*function prepareK2TeardownHull/,
+  'every Garage switch must carry the Abrams owner to the new destination placement');
+assert.match(dressing,
+  /serviceLandmark = verdant \? 'east-flammable-canisters' : 'west-center-hoist'/,
+  'the Abrams owner must receipt its destination landmark');
+assert.match(dressing,
+  /garage_abrams_welding_service_floor[\s\S]*floorAssetsMoveWithBay = true/,
+  'the Abrams painted square and floor assets must have one explicit movable owner');
+assert.doesNotMatch(dressing, /group\.add\(abramsServiceFloorRoot\)/,
+  'the Abrams floor must remain off-scene until its final bay transform is ready');
+assert.match(dressing,
+  /legacyVerdantRoot\.add\(abramsServiceFloorRoot\);[\s\S]*placeAuthoredServiceBay\(firstBayChildIndex, 'abrams_welding', 'm1a1_abrams_hc'\)/,
+  'the complete Abrams floor station must enter the same owner as the vehicle');
+assert.match(dressing,
+  /15\.9 - ABRAMS_FLAMMABLE_BAY_OFFSET\.x,[\s\S]*16\.6 - ABRAMS_FLAMMABLE_BAY_OFFSET\.z,[\s\S]*verdantInteriorRoot/,
+  'the indoor Abrams work lamp must follow Verdant\'s canister floor station');
+assert.match(dressing,
+  /addServiceRoadWheelDolly\([\s\S]*'m1a1_abrams_hc',[\s\S]*14\.5, 19\.0, -2\.03 \+ Math\.PI \/ 2/,
+  'Abrams must carry four exact fleet road wheels on a connected service dolly');
+assert.match(dressing, /perimeterCraneClearance = true/,
+  'the complete bay owner must receipt its corrected crane clearance');
+assert.match(dressing, /supportMode = 'two-ring-hull-rotisserie'/,
+  'the rolled K2 hull must identify its one load-bearing support');
+// 2026-10-11, wave 398: "the K2 sits in rotisserie rings and on a scissor lift at once; the rings never clamp"
+assert.doesNotMatch(dressing, /k2_cradle_|connected-steel-rollover-cradle/, 'no second support under the rotisserie hull');
+assert.match(dressing, /const reach = Math\.min\(halfW \/ Math\.abs\(dx\), halfH \/ Math\.abs\(dy\)\)/,
+  'each clamp arm reaches the stripped hull\'s section');
+// 2026-10-09: Verdant's Abrams and K2 exchange quadrants again as two half-turned owners; outdoors only the K2 does.
+assert.match(dressing,
+  /swappedServiceBayIds = isVerdant \? \['abrams_welding', 'rolled_k2'\] : \['rolled_k2'\]/,
+  'Garage diagnostics must receipt each destination\'s bay swap');
+assert.match(dressing, /legacyVerdantRoot\.visible = true/,
+  'the complete four-bay composition must surround every Garage environment');
+for (const signature of [
+  "mountMode = freestanding",
+  "'grounded-freestanding-frame'",
+  'garage_service_sign_ground_post',
+  'garage_service_sign_ground_foot',
+  'garage_service_sign_connected_brace',
+  'garage_service_sign_lower_tie',
+  'supportConnections = 9',
+]) {
+  assert.ok(dressing.includes(signature),
+    `freestanding service labels must retain their grounded support: ${signature}`);
+}
+// round 6 (waves 408, 419 and 424: "neon teardown signs repeat in every garage regardless of region"): the bay labels
+// stand only in Verdant, on its own kit owners
+for (const [text, owner] of [['T-90M / RELIKT', 't90m_service_sign'], ['K2 TEARDOWN', 'k2_service_sign'],
+  ['WEAPON SERVICE', 'weapon_service_sign']]) {
+  assert.ok(dressing.includes(`wallSign('${text}'`), `${text} label exists`);
+  assert.match(dressing, new RegExp(`verdantKit\\('${owner}'\\), true\\)`), `${text} stands only in Verdant`);
+}
+assert.match(dressing, /verdantInteriorRoot\.visible = isVerdant/,
+  'indoor wall clutter must remain exclusive to Verdant');
+assert.match(dressing, /verdantInteriorRoot\.rotation\.y = Math\.PI/,
+  'Verdant wall-supported clutter must follow the indoor room half-turn');
+assert.doesNotMatch(dressing, /legacyVerdantRoot\.rotation\.y = Math\.PI/,
+  'the shared bays and archive display must not rotate with the Verdant room');
+assert.match(dressing, /legacyVerdantRoot\.add\(battleScreenOwner\);\s*battleScreenOwner\.add\(screenRoot\)/,
+  'the slideshow panel lives on its own owner inside the unrotated workshop root');
+assert.match(dressing, /screenRoot\.rotation\.y = Math\.PI \/ 2/,
+  'the west panel must face inward so its live image is visible instead of its cabinet');
+assert.match(dressing, /battleScreenFacing = 'inward-to-hero'/,
+  'Garage diagnostics must receipt the panel orientation');
+assert.match(dressing, /screenRoot\.position\.set\(-18\.35, 4\.15, 2\.4\)/,
+  'the kept slideshow stands free on the west wall');
+// garage r9 (the owner, 2026-10-17: "remove that screen glitching through the floor ... we already have one"): the old
+// primary stood inside the back-wall mezzanine at (0, 4.15, -18.25); it is not built at all, so the static merge cannot
+// bake a copy of its frame into the deck either
+assert.doesNotMatch(dressing, /position\.set\(0, 4\.15, -18\.25\)/,
+  'no display stands inside the mezzanine deck');
+assert.doesNotMatch(dressing, /garage_battle_archive_monitor|garage_battle_archive_screen/,
+  'the two-display archive names are gone');
+assert.equal((dressing.match(/new THREE\.ShaderMaterial\(/g) || []).length, 1,
+  'one slideshow material, never a clone for a second screen');
+assert.doesNotMatch(dressing, /battleScreenMaterial\.clone\(\)/);
+// 2026-10-11, the redesign (waves 393 and 398: "a battle-footage monitor on stands in every yard"): the slideshow stands
+// in Verdant's hall only, on its own static owner, and sleeps elsewhere
+assert.match(dressing, /battleScreenOwner\.visible = isVerdant;[\s\S]{0,160}battleScreenShown = placeSlideshowScreen\(isVerdant\);\s*group\.userData\.battleScreenVisible = battleScreenShown;/,
+  'Verdant\'s panel shows in Verdant only; the screen shows where the Garage places a slideshow');
+assert.match(dressing, /if \(battleScreenShown && battleScreenCurrentTexture\) openSlideshowOnGarage\(\);/,
+  'the slideshow never runs where its screen is hidden');
+assert.match(dressing, /const pose = isVerdant \? null : garageSlideshowPose\(currentVariant\.architecture\);/,
+  'outdoor Garages hang the one screen on the pose their pack builds the frame at');
+assert.match(dressing, /battleScreenYardRoot\.updateMatrix\(\);\s*battleScreenMesh\.updateMatrix\(\);/,
+  'the optimizer freezes static matrices: a moved screen and its mount must write theirs (a boot outdoors then Verdant hid it)');
+assert.doesNotMatch(dressing, /new THREE\.PlaneGeometry\(BATTLE_SCREEN_PANEL_W[^\n]*\n[\s\S]*new THREE\.PlaneGeometry\(BATTLE_SCREEN_PANEL_W/,
+  'one screen mesh, moved between mounts, never a second slideshow');
+// 2026-10-11, waves 398 and 402 ("the same red box and drawer cabinet in every yard"): Verdant's chests are its own
+assert.match(dressing, /for \(const owner of verdantKitOwners\) owner\.visible = isVerdant;/, 'Verdant\'s workshop chests show in Verdant only');
+assert.match(dressing, /battleScreenDisplayCount = 1/,
+  'exactly one slideshow display');
+assert.match(dressing, /battleScreenResidentImageLimit = 2/,
+  'one current image at rest and the incoming one only for the crossfade');
+assert.match(dressing, /resizeWidth: BATTLE_SCREEN_DECODE_W,[\s\S]{0,60}resizeHeight: BATTLE_SCREEN_DECODE_H/,
+  'stills decode at the panel size, never at their 1920 x 1080 source');
+assert.match(dressing, /const BATTLE_SCREEN_DECODE_W = 1024;\nconst BATTLE_SCREEN_DECODE_H = 576;/);
+// garage 231 (the owner, 2026-10-21: "make it a crt screen like the one we removed"): the one material is a CRT's, its
+// picture barrel-warped into rounded corners of dark glass, raster lines and phosphor stripes that fade before they can
+// alias, a slow hum bar on a wrapped clock and darker corners; the glass is bulged geometry, 48 triangles; the housing
+// is the kit's (Verdant's kit builds it at the shared pose), so the dressing builds no bezel, cabinet or legs of its own
+assert.match(dressing, /c \*= 1\.0 \+ dot\(c, c\) \* 0\.04;/, 'the picture bows with the glass (a barrel warp)');
+assert.match(dressing, /float d = length\(max\(abs\(c\) \* vec2\(1\.778, 1\.0\) - vec2\(1\.658, 0\.88\), 0\.0\)\) - 0\.12;/,
+  'the picture rounds off at its corners into the dark glass');
+assert.match(dressing, /1\.0 - smoothstep\(0\.3, 0\.7, fwidth\(y\)\)\) \* cos\(6\.2832 \* y\)/,
+  'raster lines fade to their mean before they alias');
+assert.match(dressing, /fract\(uv\.y - uTime \* 0\.05\)/, 'a slow hum bar rolls up the picture');
+assert.match(dressing, /uTime\.value = \(performance\.now\(\) % 1e6\) \* 1e-3;/,
+  'the hum bar\'s clock wraps on a whole number of passes and allocates nothing');
+assert.match(dressing, /smoothstep\(0\.3, 2\.2, dot\(c, c\)\)/, 'the tube\'s corners are darker');
+assert.match(dressing, /new THREE\.PlaneGeometry\(BATTLE_SCREEN_PANEL_W, BATTLE_SCREEN_PANEL_W \* 9 \/ 16, 6, 4\)/,
+  'the glass is 48 triangles');
+assert.match(dressing, /\(1 - u \* u\) \* \(1 - v \* v\) \* GARAGE_SLIDESHOW_GLASS_BULGE \* BATTLE_SCREEN_PANEL_W/,
+  'the glass bulges at its centre and sits flush with the housing\'s face plane at its edges');
+assert.doesNotMatch(dressing, /statusLedMaterial|displayPostGeometry|gl_FragCoord/,
+  'the housing is the kit\'s CRT, and no raster line is a screen-space pattern');
+assert.match(dressing, /color = mix\(vec3\(luma\), color, 0\.55\) \* 0\.62;/,
+  'the slideshow stays dimmed and drained toward grey (the re-judge, 2026-10-15)');
+assert.doesNotMatch(dressing, /currentVariant\.id !== 'verdant_motor_pool'/,
+  'the shared display must not stop rotating outside Verdant');
+assert.match(dressing,
+  /staticDisplayOwners:\s*\[legacyVerdantRoot, verdantInteriorRoot, \.\.\.\(abramsBayRoot \? \[abramsBayRoot\] : \[\]\),\s*battleScreenOwner, \.\.\.verdantKitOwners\]/,
+  'the shared bays, the movable Abrams bay, the Verdant-only interior and the Verdant-only monitors collapse static leaf draws independently');
+assert.match(dressing, /sharedMaintenanceBayCount = 4/);
+assert.match(dressing, /workshopOrbitCoverageDegrees = 360/);
+assert.match(dressing, /const craneRunwayX = 21\.0/,
+  'the travelling-crane columns must clear the authored fleet service bays');
+assert.match(dressing, /const craneColumnZ = 20\.4/,
+  'the travelling-crane feet must stay on the workshop perimeter');
+const assertWorkshopSignature = (signature) => assert.ok(dressing.includes(signature),
+  `the connected overhead and utility pass must retain ${signature}`);
+assertWorkshopSignature('verdant_${stationId}_hoist_chain_left');
+assertWorkshopSignature('verdant_${stationId}_hoist_chain_right');
+assertWorkshopSignature('verdant_${stationId}_spreader_sling_');
+assertWorkshopSignature('verdant_${stationId}_reinforced_spreader');
+assertWorkshopSignature('suspended_powerpack');
+assertWorkshopSignature('suspended_final_drive');
+assertWorkshopSignature('suspended_turret_basket');
+assertWorkshopSignature('connected_lift_eye');
+assertWorkshopSignature('lifting_lug');
+assertWorkshopSignature('verdant_routed_workshop_utilities');
+assertWorkshopSignature('verdant_power_run_south');
+assertWorkshopSignature('verdant_air_run_north');
+assertWorkshopSignature('verdant_welder_power_drop');
+assertWorkshopSignature('verdant_teardown_air_drop');
+assertWorkshopSignature('verdant_center_lamp_feed');
+assertWorkshopSignature('verdant_lamp_feed_east');
+assertWorkshopSignature('verdant_lamp_feed_north');
+assertWorkshopSignature('verdant_lamp_feed_south');
+assertWorkshopSignature('verdant_lamp_feed_welding_bay');
+assertWorkshopSignature('verdant_rear_chain_fall_');
+assert.match(dressing, /verdantHeroHoistOffsetM = 12\.0/,
+  'every lift must park well clear of the hero tank');
+assertWorkshopSignature("['east_front', 12.0, -9.2, 'final-drive']");
+assertWorkshopSignature("['east_center', 14.4, 0, 'powerpack']");
+// 2026-10-10 (wave 377: the turret-basket rings read as empty hooks): those two stations carry a pack and a final drive
+assertWorkshopSignature("['east_rear', 13.2, 9.2, 'powerpack']");
+assertWorkshopSignature("['west_front', -17.0, -9.2, 'final-drive']");
+assertWorkshopSignature("['west_center', -14.4, 0, 'final-drive']");
+assertWorkshopSignature("['west_rear', -13.2, 9.2, 'powerpack']");
+assert.match(dressing, /verdantFlammableWallHoistGapM = 5\.91/,
+  'the east wall hoist bank must retain a usable inspection aisle');
+assert.match(dressing, /verdantOppositeWallHoistGapM = 5\.91/,
+  'the west wall hoist bank must retain a matching inspection aisle');
+assert.match(dressing, /verdantEastHoistsParkedAtFlammableWall = true/,
+  'the east bank must stay parked toward the FLAMMABLE wall');
+assert.match(dressing, /verdantHoistBanksParkedAtSideWalls = true/,
+  'both trolley banks must remain parked at opposite side walls');
+assert.match(dressing, /verdantHoistBankCount = 2/,
+  'the workshop must retain one complete crane bank at each side');
+assert.match(dressing, /verdantCraneBridgeCount = 3/,
+  'the paired trolley banks must share three physical bridge beams');
+assert.match(dressing, /verdantHoistStationCount = 6/,
+  'the workshop must retain three lift stations in each side-wall bank');
+assert.match(dressing, /verdantHoistChainRuns = 38/,
+  'the six lifting stations and parked falls must retain their chain choreography');
+assert.match(dressing, /verdantSuspendedLoadCount = 6/,
+  'every active lifting station must carry a purposeful mechanical load');
+assert.match(dressing, /verdantConnectedLiftPointCount = 24/,
+  'every spreader sling must terminate on one of four visible lifting eyes per load');
+assert.match(dressing, /stationX \+ Math\.sign\(x\) \* suspendedLoadAttachX/,
+  'sling endpoints must share the lifting-frame x coordinates');
+assert.match(dressing, /Math\.sign\(zOffset\) \* suspendedLoadAttachZ/,
+  'sling endpoints must share the lifting-frame z coordinates');
+assert.match(dressing, /verdantRoutedUtilityCircuits = 12/,
+  'organized wall and floor utilities must remain part of Verdant');
+assert.match(dressing, /workshopModelMode = 'actual-fleet'/,
+  'every Garage must identify its shared service exhibits as real fleet geometry');
+for (const component of [
+  'mobility_teardown_vehicle',
+  'mobility_teardown_service_bay',
+  'mobility_teardown_service_bay_owner',
+  'connected_hull_lift',
+  'removed_road_wheel_rack',
+  'removed_road_wheel_tires',
+  'removed_road_wheel_discs',
+  'turret_cradle',
+  'relikt_service_rack',
+  'rolled_k2_hull',
+  'road_wheel_stacks',
+  'track_shoe_pallet',
+  'weapon_service_rack',
+  'connected_road_wheel_dolly',
+  'service_road_wheel_tires',
+  'service_road_wheel_discs',
+]) {
+  assert.match(dressing, new RegExp(component),
+    `the full-detail shared workshop must retain ${component}`);
+}
+for (const signature of [
+  'garage_leopard_a5nl_mobility_teardown',
+  'leopard_a5nl_mobility_lift_base_rail',
+  'leopard_a5nl_mobility_lift_ground_foot',
+  'leopard_a5nl_mobility_lift_post',
+  'leopard_a5nl_mobility_lift_contact_pad',
+  'leopard_a5nl_mobility_lift_crossmember',
+  'leopard_a5nl_wheel_rack_ground_base',
+  'leopard_a5nl_wheel_rack_connected_upright',
+  'leopard_a5nl_wheel_rack_connected_rail',
+]) {
+  assert.match(dressing, new RegExp(signature));
+}
+assert.match(dressing, /paintSquareOccupied = true/,
+  'the formerly empty painted service square must carry a real teardown story');
+assert.match(dressing, /supportedWheelCount = 8/,
+  'removed Leopard road wheels must remain visibly accounted for');
+assert.match(dressing,
+  /garage_leopard_a5nl_independent_service_bay[\s\S]*LEOPARD_MOBILITY_BAY_OFFSET\.x[\s\S]*LEOPARD_MOBILITY_BAY_OFFSET\.z/,
+  'the Leopard mobility square must no longer inherit Abrams placement changes');
+assert.match(dressing, /seatVisibleRoot\(mobilityTeardownTank, 1\.04\)/,
+  'the Leopard hull must sit directly on the 1.04 m lift-pad contact plane');
+assert.match(dressing, /workshopExhibitCount = 5/,
+  'all Garage variants must expose the added teardown vehicle');
+assert.match(dressing, /verdantOriginalExhibitCount = 5/,
+  'Verdant diagnostics must include the added teardown vehicle');
+// 2026-10-09: the Abrams bay's quadrant label follows its destination placement (the bays' own compass: +x north):
+// Verdant's canister station in the south-east, the outdoor station on the north floor.
+assert.match(dressing,
+  /verdant: Object\.freeze\(\['north-east', 'south-east', 'south-west', 'north-west'\] as const\)/,
+  'Verdant\'s four bays fill all four quadrants');
+assert.match(dressing,
+  /outdoor: Object\.freeze\(\['north-east', 'north', 'south-west', 'north-west'\] as const\)/,
+  'the outdoor Abrams bay stands on the north floor');
+assert.match(dressing, /getGarageWorkshopLayoutPose\(currentVariant\)/,
+  'each environment must recompose the shared 360-degree service set');
+for (const bay of ['burlak_gantry', 'abrams_welding', 't90m_relikt', 'rolled_k2']) {
+  assert.match(dressing, new RegExp(bay));
+}
+assert.doesNotMatch(dressing, /\/maps\/thumbs\//,
+  'workshop walls must not reuse battlefield map thumbnails');
+assert.doesNotMatch(dressing, /garage_map_location_preview/,
+  'the old location-preview wall mesh must be removed');
+assert.match(dressing, /import \{ FEATURED_SHOTS \} from '\.\.\/ui\/featuredShots\.ts'/,
+  'the wall monitor reuses the canonical checked-in battle archive');
+assert.match(dressing, /FEATURED_SHOTS\.filter\(\(shot\) => shot\.maps\?\.length\),/,
+  'the slideshow rotation must include current battlefield captures while excluding editor/studio frames');
+assert.match(dressing, /garage_slideshow_screen/);
+assert.match(dressing, /battleScreenMode = 'crt-crossfade-slideshow'/);
+assert.match(dressing, /mix\(exposed\(uImageA, uv\), exposed\(uImageB, uv\), uTransition\)/,
+  'the slideshow crossfades between its two resident images');
+// garage r9 (the blind critic: "a dark urban-street frame, much less legible than the bright tank still"): each still is
+// exposed by its own mean, read from its one-texel mip, lifting dark stills and leaving bright ones alone
+assert.match(dressing, /vec3 mean = texture2D\(image, vec2\(0\.5\), 16\.0\)\.rgb;[\s\S]{0,200}clamp\(log\(0\.2\) \/ log\([\s\S]{0,80}\), 0\.6, 1\.0\)/,
+  'a dark still is lifted (never past a 0.6 power), a bright one left as it is');
+assert.match(dressing, /shot\.maps\?\.includes\(mapId\)/,
+  'the slideshow opens on its Garage\'s own map still');
+assert.match(dressing, /if \(!group\.parent \|\| !group\.visible \|\| !battleScreenShown \|\| document\.hidden\) return/,
+  'the screen timer must stop instead of polling during battle or background tabs');
+assert.match(access, /prepareGarageDressing\?\./,
+  'the access boundary prepares fleet builders before the quiet chunk pump');
+assert.doesNotMatch(stage, /openRoof = new Set\(\['field_shed'/,
+  'Verdant must retain the original enclosed ceiling and roof trusses');
+assert.match(stage, /NO SMOKING\|FLAMMABLE\|FIRE/,
+  'hazard signs must use the red safety category');
+assert.match(stage, /\^BAY\\b/,
+  'bay identification signs must use the blue safety category');
+assert.match(stage,
+  /verdantIndoorSetRoot\.rotation\.y = Math\.PI[\s\S]*verdantIndoorSetRotationRad = Math\.PI/,
+  'the complete Verdant indoor shell and fixture set must rotate once at construction');
+assert.match(stage,
+  /object !== podium[\s\S]*object !== rimRing[\s\S]*object !== architecture\.group/,
+  'the Verdant half-turn must exclude the hero podium and outdoor scene packs');
+
+console.log('garageDressingFleet.selftest: shared five-exhibit fleet set and Verdant interior pass');

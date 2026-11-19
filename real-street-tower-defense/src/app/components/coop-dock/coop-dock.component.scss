@@ -1,0 +1,157 @@
+/* Layout of the coop dock: right of the ability bar (left from the host
+ * binding), from below the info overlay down to the logo row, full height
+ * (D41). Not in a room it only takes the height it needs. Above the squad box
+ * and the arrows. The look is a td-panel with a dialog head and foot. */
+:host {
+  position: absolute;
+  bottom: calc(var(--td-logo-bottom, 0px) + var(--td-logo-height, 0px) + 8px);
+  z-index: var(--td-z-dock);
+  display: flex;
+  flex-direction: column;
+  width: 440px;
+  max-width: calc(100% - 100px);
+  container-type: inline-size;
+}
+
+/* In a room two columns: the room left, the chat right */
+:host(:not(.is-short)) {
+  width: 860px;
+}
+
+:host(.is-short) {
+  bottom: auto;
+  max-height: calc(100% - var(--td-dock-top, 150px) - 24px);
+}
+
+.title {
+  gap: 2px;
+  min-width: 0;
+}
+
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+:host(:not(.is-short)) .body {
+  overflow: hidden;
+}
+
+.blk {
+  flex-shrink: 0;
+  padding: 12px var(--td-dock-gutter);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.dock-banner,
+.status {
+  margin: 8px var(--td-dock-gutter) 0;
+}
+
+.listing-row {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.title-in {
+  flex: 1;
+}
+
+/* === Room === */
+.code-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.code {
+  gap: 2px;
+
+  .td-code {
+    font-size: var(--td-fs-hud);
+    user-select: all;
+  }
+}
+
+.acts {
+  margin-left: auto;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  b {
+    font-weight: 500;
+    color: var(--td-text-secondary);
+  }
+}
+
+.meta-end,
+.toggle {
+  margin-left: auto;
+}
+
+.segs {
+  flex: 0 0 auto;
+  width: 96px;
+}
+
+/* === Two columns (room left, chat right) === */
+.cols {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+}
+
+.main {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.chat-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Too narrow for two: one column, the chat below with a height of its own */
+@container (max-width: 700px) {
+  .cols {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .main {
+    overflow: visible;
+  }
+
+  .chat-col {
+    flex: 0 0 320px;
+    border-left: 0;
+    box-shadow: none;
+  }
+}
+
+/* === Footer menu === */
+.more {
+  position: relative;
+}
+
+.more-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 1;
+  min-width: 240px;
+  padding: 4px;
+}

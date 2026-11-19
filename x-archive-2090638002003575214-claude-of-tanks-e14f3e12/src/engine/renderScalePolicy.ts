@@ -1,0 +1,173 @@
+/**
+ * Pure render-scale policy shared by the post stack and its Node self-test.
+ * Ratios are expressed relative to CSS pixels; the renderer ratio is the
+ * native canvas density and the preset cap is the maximum 3D/post density.
+ */
+
+const DEFAULT_DYNAMIC_MIN = 0.75;
+
+interface RenderScalePreset {
+  maxPixelRatio?: number;
+  adaptiveBasePixelRatio?: number;
+  dynMin?: number;
+  /** The floor below the retina threshold (native-density displays); absent keeps the native fence. */
+  nativeDynMin?: number;
+  /** The rung a retina raster holds at under load before it goes toward dynMin (dynamicScaleHold). */
+  dynHold?: number;
+}
+
+/**
+ * 2026-10-02 (the frame-budget lane): the density from which a display counts as retina for the dynamic floor. Below
+ * it a preset's `nativeDynMin` (when it declares one) bounds the governor: High may trade raster for cadence there —
+ * down to the FSR "quality" ratio — where a 1080p laptop at 100-150 % scaling has no denser raster to give up.
+ */
+export const RETINA_PIXEL_RATIO = 1.75;
+
+type OverloadReliefLever = 'trim' | 'resolution' | 'tier';
+export type ReconstructionMode = 'linear' | 'easu' | 'easu+rcas' | 'native-rcas';
+
+export function cappedPixelRatio(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+): number {
+  const rendererRatio = Number.isFinite(rendererPixelRatio) && rendererPixelRatio > 0
+    ? rendererPixelRatio : 1;
+  const configuredCap = preset?.maxPixelRatio ?? Number.NaN;
+  const presetCap = Number.isFinite(configuredCap) && configuredCap > 0
+    ? configuredCap
+    : rendererRatio;
+  return Math.min(rendererRatio, presetCap);
+}
+
+/** Initial dynamic scale. A preset may start below its ceiling and earn it. */
+export function baseDynamicScale(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+): number {
+  const capped = cappedPixelRatio(rendererPixelRatio, preset);
+  const configuredBase = preset?.adaptiveBasePixelRatio ?? Number.NaN;
+  const requested = Number.isFinite(configuredBase) && configuredBase > 0
+    ? configuredBase
+    : capped;
+  const base = Math.min(capped, Math.max(0.01, requested));
+  return base / capped;
+}
+
+/** Lowest legal dynamic scale for the active preset/device class. */
+export function dynamicScaleFloor(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+): number {
+  const native = preset?.nativeDynMin;
+  if (rendererPixelRatio < RETINA_PIXEL_RATIO && typeof native === 'number' && Number.isFinite(native)) {
+    return Math.min(1, Math.max(0.5, native));
+  }
+  const configured = typeof preset?.dynMin === 'number' && Number.isFinite(preset.dynMin)
+    ? preset.dynMin : DEFAULT_DYNAMIC_MIN;
+  // A native-density desktop canvas is not blurred below 1 CSS pixel per axis
+  // unless its preset declares a nativeDynMin (above); retina/mobile presets
+  // carry their own explicit floor.
+  return Math.min(1, Math.max(
+    rendererPixelRatio < 1.25 ? 1 : 0,
+    configured,
+  ));
+}
+
+/**
+ * 2026-10-13 (the perf stream; the coordinator's DPR ruling): the rung the governor holds a retina raster at under
+ * load. Auto High declares 0.8334 of its 1.5 cap (a 1.25 raster): a cut from the full raster lands there in one step
+ * and stays while it can; the raster goes on toward the floor (1.0 on Auto) only under a sustained overload
+ * (adaptiveQualityPolicy HOLD_DOWN_STRIKES), and climbs back to the hold before the full raster. Without a declared
+ * hold, or on a display below the retina threshold, the hold is the floor itself (the policy's plain ladder).
+ */
+export function dynamicScaleHold(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+): number {
+  const floor = dynamicScaleFloor(rendererPixelRatio, preset);
+  const hold = preset?.dynHold;
+  if (rendererPixelRatio < RETINA_PIXEL_RATIO || typeof hold !== 'number' || !Number.isFinite(hold)) return floor;
+  return Math.min(1, Math.max(floor, hold));
+}
+
+/**
+ * The dynamic scale the governor's own tier change hands the next preset (local-fps-265, 2026-10-29): the raster it stood
+ * at, carried across the switch inside the next preset's floor and base. A tier cut is relief, so it never raises the
+ * raster: on a native-density display High's governor sits at its 0.67 floor, and the cut to Medium put the raster back at
+ * Medium's full 1.0 (2.2x the pixels), loaded the GPU it was meant to relieve and failed its trial. A failed trial's
+ * restore comes back at the raster it left instead of starting at the full raster and stepping down again (each step
+ * reallocates the composer chain).
+ */
+export function carriedDynamicScale(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+  previousInternalRatio: number,
+): number {
+  const base = baseDynamicScale(rendererPixelRatio, preset);
+  if (!Number.isFinite(previousInternalRatio) || previousInternalRatio <= 0) return base;
+  const carried = previousInternalRatio / cappedPixelRatio(rendererPixelRatio, preset);
+  return Math.min(base, Math.max(dynamicScaleFloor(rendererPixelRatio, preset), carried));
+}
+
+export function internalPixelRatio(
+  rendererPixelRatio: number,
+  preset: RenderScalePreset | null | undefined,
+  dynamicScale: number,
+): number {
+  return cappedPixelRatio(rendererPixelRatio, preset)
+    * Math.min(1, Math.max(dynamicScaleFloor(rendererPixelRatio, preset), dynamicScale));
+}
+
+/** Expensive shading is sacrificed before structural screen resolution. */
+export function overloadReliefLever(
+  performanceTrim: number,
+  maxTrim: number,
+  dynamicScale: number,
+  floor: number,
+): OverloadReliefLever {
+  if (performanceTrim < maxTrim) return 'trim';
+  if (dynamicScale > floor) return 'resolution';
+  return 'tier';
+}
+
+/**
+ * RCAS floor under temporal accumulation (2026-09-13). A converged TAA frame
+ * is the scene box-filtered over the pixel footprint: the sub-pixel sparkle
+ * that sharpening would amplify is already settled, and the fine ground and
+ * foliage contrast the 1049e4e reference kept is what went missing (measured
+ * at identical still poses: the local luminance gradient of the ground bands
+ * halved with TAA at RCAS 0.12; 0.35–0.60 recovered it without halos, 0.60
+ * began to grain snow, so the floor sits at 0.50). Enlargement still owns the
+ * range above the floor.
+ */
+export const TEMPORAL_RECONSTRUCTION_SHARPNESS = 0.5;
+
+/** RCAS recovery grows with enlargement, capped before halos become dominant. */
+export function reconstructionSharpness(
+  inputToOutputScale: number,
+  temporalAccumulation = false,
+): number {
+  const scale = Math.min(1, Math.max(0, Number(inputToOutputScale) || 0));
+  const spatial = Math.min(0.4, Math.max(0.12, 0.12 + (1 - scale) * 0.64));
+  return temporalAccumulation ? Math.max(TEMPORAL_RECONSTRUCTION_SHARPNESS, spatial) : spatial;
+}
+
+/** The input scale from which RCAS follows EASU unless a preset declares its own (`rcasMinScale`). */
+export const RCAS_MIN_SCALE = 0.6;
+
+/**
+ * Reconstruction ladder: large reductions use one hardware-linear sample to
+ * preserve native output cheaply and without ringing; EASU owns moderate
+ * enlargement; RCAS is worthwhile only when enough source detail survives.
+ * 2026-10-13 (the perf stream): the RCAS threshold is a preset's call. The 0.6
+ * default keeps phones (a 1.25-1.4 raster on a DPR-3 panel, 0.42-0.47) on EASU
+ * alone; High declares 0.5, so Auto's retina 1.0 raster on a DPR-2 panel keeps
+ * its contrast recovery (EASU alone read visibly soft on grass and foliage).
+ */
+export function reconstructionMode(inputToOutputScale: number, rcasMinScale = RCAS_MIN_SCALE): ReconstructionMode {
+  const scale = Math.min(1, Math.max(0, Number(inputToOutputScale) || 0));
+  const rcasFrom = Math.min(1, Math.max(0.4, Number.isFinite(rcasMinScale) ? rcasMinScale : RCAS_MIN_SCALE));
+  if (scale < 0.4) return 'linear';
+  if (scale < rcasFrom) return 'easu';
+  return scale < 1 ? 'easu+rcas' : 'native-rcas';
+}

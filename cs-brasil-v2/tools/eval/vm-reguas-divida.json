@@ -1,0 +1,36 @@
+{
+ "o_que_e": "Vermelhos CONHECIDOS das réguas de imagem do viewmodel (eval:vm-reguas), com dono. Com VM_LAUNCH=false, cada entrada vira DÍVIDA (aviso). Com VM_LAUNCH=true, só passa o resultado idêntico ao aceite explícito do dono em vm-launch-aceite-visual.json. Não entre aqui para passar o portão: só com dono e o número medido. Régua que ficar verde avisa para remover a entrada.",
+ "gerado": "2026-09-23",
+ "placar": "0525a3c8517685fc",
+ "dividas": {
+  "mira": {
+   "lmg": {
+    "valor": "31 px",
+    "dono": "vm-fix-grips (ads.linhaDeMira/resíduo de ADS) ou socket SOCKET_MINT_SIGHT (vm-fix-mesh)",
+    "medido": "mira fora da cruz a 31 px — massa a 31 px da cruz (+31, -3); teto 30 px; eixo no ADS +7° da vertical (teto ±12°) · socket sight (o que o AD1 lê) 0.000 NDC. Conserto: ads.off/rotDeg da arma (vmconfig) ou o socket SOCKET_MINT_SIGHT ",
+    "aspectos": [
+     "16x9",
+     "3x2"
+    ],
+    "fila": "config (ads.linhaDeMira/off por arma)"
+   }
+  }
+ },
+ "integracao_k": {
+  "pagas": [
+   "cobertura/akm",
+   "mira/ak",
+   "mira/shotgun",
+   "mira/m92",
+   "mira/akm",
+   "pistola-ref/deagle",
+   "pistola-ref/pistol",
+   "maos/akm",
+   "maos/ak"
+  ],
+  "novas": [
+   "carregador/shotgun"
+  ],
+  "nota": "Reconstruída na integração K (vm/integracao-k) a partir dos placares 3:2 e 16:9; `fila` = classe do conserto na FILA-CORRECAO consolidada."
+ }
+}

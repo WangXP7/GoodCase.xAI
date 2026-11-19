@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="See what we have shipped, what is in progress, and what is coming next for Tiny World Builder." />
+<title>Roadmap - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  // Resolve once the Netlify Identity auth module has loaded (or time out), so the
+  // admin-by-account check can read window.TinyWorldAuth before booting.
+  (function roadmapAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<script src="engine/world/00-custom-confirm.js"></script>
+<style>
+/* ---- kanban board ---- */
+.kanban-wrapper {
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 0 0 80px;
+}
+
+.kanban-admin-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-bottom: 24px;
+  background: rgba(23, 107, 235, 0.08);
+  border: 1px solid rgba(23, 107, 235, 0.22);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #164a9d;
+}
+.kanban-admin-bar svg { flex: 0 0 auto; }
+.admin-exit-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(23, 107, 235, 0.3);
+  background: transparent;
+  font: 600 12px/1 'Space Grotesk', system-ui, sans-serif;
+  color: #164a9d;
+  cursor: pointer;
+}
+.admin-exit-btn:hover { background: rgba(23, 107, 235, 0.1); }
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.kanban-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kanban-col-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 2px 10px;
+}
+
+.kanban-col-header h2 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(22px, 2.6vw, 30px);
+  color: #111b45;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.kanban-col-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.kanban-col-count {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.kanban-scroll-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 60px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 4px 4px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100,120,160,.2) transparent;
+  /* Fade at top and bottom */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+
+.kanban-cards.drag-over {
+  background: rgba(23, 107, 235, 0.07);
+  outline: 2px dashed rgba(23, 107, 235, 0.35);
+  outline-offset: -2px;
+}
+
+.kanban-card {
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 2px 8px -4px rgba(40, 50, 80, 0.16);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  cursor: pointer;
+  transition: background 0.1s, box-shadow 0.1s, transform 0.08s;
+  user-select: none;
+}
+
+.kanban-card:hover {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 20px -6px rgba(40, 50, 80, 0.22);
+  transform: translateY(-1px);
+}
+
+.kanban-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.kanban-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.97);
+}
+
+.kanban-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  flex: 0 0 auto;
+  color: rgba(80, 100, 140, 0.4);
+  cursor: grab;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.kanban-drag-handle:hover {
+  color: rgba(80, 100, 140, 0.8);
+  background: rgba(0, 0, 0, 0.05);
+}
+.kanban-drag-handle:active { cursor: grabbing; }
+.kanban-drag-handle svg { display: block; pointer-events: none; }
+
+.kanban-card.admin-card {
+  display: flex;
+  flex-direction: column;
+}
+.kanban-card.admin-card .kanban-card-top {
+  display: flex;
+  align-items: center;
+}
+.kanban-card.admin-card .kanban-card-body { flex: 1; min-width: 0; }
+
+.kanban-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111b45;
+  line-height: 1.3;
+}
+
+.kanban-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kanban-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(120, 130, 160, 0.32);
+  background: transparent;
+  color: var(--muted);
+  font: 600 13px/1 'Space Grotesk', system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  width: 100%;
+}
+.kanban-add-btn svg { flex: 0 0 auto; }
+.kanban-add-btn:hover {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- detail modal ---- */
+.detail-back {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(10, 14, 28, 0.52);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.detail-back.open { display: flex; }
+
+.detail-modal {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 20px;
+  padding: 28px;
+  width: min(520px, 100%);
+  box-shadow: 0 40px 80px -20px rgba(20, 30, 50, 0.42);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-head-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-close-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  border: 1px solid rgba(120, 130, 150, 0.24);
+  background: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: background 0.1s, color 0.1s;
+}
+.detail-close-btn:hover { background: rgba(255, 255, 255, 0.9); color: var(--ink); }
+.detail-close-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+
+.detail-modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111b45;
+  line-height: 1.25;
+}
+
+.detail-modal-desc {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+/* admin edit fields */
+.detail-edit-title {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgba(120, 130, 150, 0.26);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  font: 700 18px/1.2 'Space Grotesk', system-ui, sans-serif;
+  color: #111b45;
+  outline: none;
+}
+.detail-edit-title:focus { border-color: #3a72c8; box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14); }
+
+.detail-edit-desc {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgba(120, 130, 150, 0.26);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  font: 14px/1.6 'Space Grotesk', system-ui, sans-serif;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+}
+.detail-edit-desc:focus { border-color: #3a72c8; box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14); }
+
+.detail-status-select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 130, 150, 0.26);
+  background: rgba(255, 255, 255, 0.72);
+  font: 13px/1 'Space Grotesk', system-ui, sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-delete-btn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(200, 60, 60, 0.28);
+  background: transparent;
+  font: 600 13px/1 'Space Grotesk', system-ui, sans-serif;
+  color: #9a3020;
+  cursor: pointer;
+}
+.detail-delete-btn:hover { background: rgba(200, 60, 60, 0.07); }
+
+.detail-save-btn {
+  margin-left: auto;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(180deg, #2d7ef5 0%, #3a72c8 100%);
+  color: #fff;
+  font: 600 14px/1 'Space Grotesk', system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 12px -6px rgba(22, 76, 170, 0.45);
+  transition: filter 0.12s;
+}
+.detail-save-btn:hover { filter: brightness(1.1); }
+.detail-save-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+/* roadmap status badges (reused inside modal) */
+
+/* WAVE launch badge — small amber pill shown on cards + in the detail modal.
+   Hardcoded amber (matches the admin wave select) so it stays distinct from the
+   blue --accent status chips; do not switch back to var(--accent). */
+.wave-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #6a4a00;
+  border: 1px solid #e6c98a;
+  vertical-align: middle;
+}
+.kanban-card .wave-badge { margin-top: 8px; }
+
+/* Admin inline wave control - a <select> styled as the wave badge so an admin can
+   reassign (or clear) a card's launch wave in one click, no edit/save modal. The
+   public path keeps the plain read-only .wave-badge span. */
+.wave-select {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  cursor: pointer;
+}
+.wave-select:focus-visible { outline: 2px solid var(--accent, #ffb020); outline-offset: 2px; }
+/* No-wave state reads as "unset, click to assign" rather than a real wave pill. */
+.wave-select--empty {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted, #9aa3ad);
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+}
+
+/* responsive */
+@media (max-width: 780px) {
+  .kanban-board {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Roadmap</h1>
+        <p>What we have shipped, what we are building, and what is coming next.</p>
+      </div>
+    </section>
+
+    <div class="kanban-wrapper">
+      <div id="kanban-board" class="kanban-board" aria-label="Roadmap kanban">
+        <div class="kanban-loading" aria-live="polite" style="grid-column:1/-1;text-align:center;padding:64px;color:var(--muted)">
+          Loading roadmap&hellip;
+        </div>
+      </div>
+    </div>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>        
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+        <a class="secondary-action" href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">
+          <span>View source</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Detail modal -->
+  <div class="detail-back" id="detail-back" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+    <div class="detail-modal" id="detail-modal"></div>
+  </div>
+
+  <script>
+  (function () {
+    const COLS = [
+      { status: 'done',    label: 'Shipped',      sub: 'Features live in the builder today.' },
+      { status: 'active',  label: 'In progress',  sub: 'Work that is actively underway.' },
+      { status: 'planned', label: 'Planned',       sub: 'Features on the backlog.' },
+    ];
+
+    const STATUS_LABEL = { done: 'Done', active: 'In progress', planned: 'Planned' };
+    const STATUS_CLASS = { done: 'done', active: 'active', planned: 'planned' };
+
+    // ---- State ----
+    // Admin mode is decided by the SERVER (see boot: adminMode = serverSaysAdmin):
+    // a verified world-admin email grants it on production, and the localhost-only
+    // dev secret grants it locally. IS_LOCAL only gates the Ctrl+Shift+A secret
+    // prompt below - it is NOT what enables/disables editing.
+    const IS_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    let milestones = [];
+    let adminSecret = IS_LOCAL ? (sessionStorage.getItem('twAdminSecret') || '') : '';
+    let adminMode = !!adminSecret;
+    if (!IS_LOCAL) {
+      // Purge any stored secret so the banner can never resurface on prod.
+      try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+      try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+    }
+    let dragId = null;
+
+    // ---- Admin toggle — Ctrl+Shift+A (local dev only) ----
+    document.addEventListener('keydown', async e => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        if (!IS_LOCAL) return; // no admin on production
+        if (adminMode) { exitAdmin(); return; }
+        const s = prompt('Admin secret:');
+        if (!s) return;
+        const ok = await validateSecret(s);
+        if (!ok) { alert('Admin secret rejected — editing stays locked.'); return; }
+        adminSecret = s;
+        sessionStorage.setItem('twAdminSecret', s);
+        adminMode = true;
+        render();
+      }
+    });
+
+    // Returns true only if the server accepts this secret as admin.
+    async function validateSecret(secret) {
+      try {
+        const r = await fetch('/api/roadmap', { headers: { 'x-admin-secret': secret } });
+        const d = await r.json();
+        return !!d.admin;
+      } catch (_) { return false; }
+    }
+
+    document.getElementById('admin-exit-btn')?.addEventListener('click', exitAdmin);
+
+    function exitAdmin() {
+      adminMode = false;
+      adminSecret = '';
+      try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+      try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+      render();
+    }
+
+    // ---- Helpers ----
+    const WAVES = ['WAVE1', 'WAVE2', 'WAVE3'];
+    const WAVE1_SHIPPED_AT = Date.parse('2026-06-21T23:59:00Z');
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function wave1HasShipped() {
+      return Number.isFinite(WAVE1_SHIPPED_AT) && Date.now() >= WAVE1_SHIPPED_AT;
+    }
+    function effectiveMilestoneStatus(m) {
+      if (m && m.wave === 'WAVE1' && wave1HasShipped()) return 'done';
+      return m && m.status ? m.status : 'planned';
+    }
+    // WAVE launch label pill, or '' when the milestone has no wave.
+    function waveBadge(w) {
+      return WAVES.includes(w) ? `<span class="wave-badge">${esc(w)}</span>` : '';
+    }
+    // Admin-only inline wave control. A <select> (same No-wave/WAVE1-3 options as the
+    // detail modal) styled as the wave badge: changing it PATCHes the wave directly.
+    // Rendered only on admin cards; the public card path uses waveBadge() instead.
+    function waveControl(m) {
+      const isSet = WAVES.includes(m.wave);
+      const opts = `<option value="none"${!isSet ? ' selected' : ''}>No wave</option>`
+        + WAVES.map(w => `<option value="${w}"${w === m.wave ? ' selected' : ''}>${w}</option>`).join('');
+      return `<select class="wave-badge wave-select${isSet ? '' : ' wave-select--empty'}" data-wave-for="${m.id}" aria-label="Change launch wave">${opts}</select>`;
+    }
+
+    // Bearer token for the signed-in account, if any. Mirrors scripts/admin-users.js:
+    // Identity JWT first, then wallet-session / nf_jwt cookie fallbacks. The server
+    // decides admin authority from the verified email this token resolves to.
+    function walletToken() {
+      try { return localStorage.getItem('tinyworld:auth:wallet-session.v1') || ''; } catch (_) { return ''; }
+    }
+    function cookieToken() {
+      try { const m = document.cookie.match(/(?:^|; )nf_jwt=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; } catch (_) { return ''; }
+    }
+    async function accessToken() {
+      try {
+        const A = window.TinyWorldAuth;
+        if (A && typeof A.getUser === 'function') {
+          const u = await A.getUser();
+          if (u && typeof u.jwt === 'function') {
+            const jwt = await Promise.resolve(u.jwt()).catch(() => '');
+            return jwt || (u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+          }
+          return (u && u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+        }
+      } catch (_) {}
+      return walletToken() || cookieToken() || '';
+    }
+
+    // Headers for authenticated reads/writes: the account bearer token (prod path)
+    // plus the localhost-only dev secret when present. Same-origin fetch sets Origin
+    // automatically, satisfying the server's CSRF guard.
+    async function authHeaders(withJson) {
+      const headers = withJson ? { 'Content-Type': 'application/json' } : {};
+      const token = await accessToken();
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (adminSecret) headers['x-admin-secret'] = adminSecret;
+      return headers;
+    }
+
+    // ---- API ----
+    async function loadMilestones() {
+      const r = await fetch('/api/roadmap', { headers: await authHeaders(false), credentials: 'same-origin' });
+      const d = await r.json();
+      milestones = d.milestones || [];
+      return !!d.admin; // server's verdict: verified admin email OR local dev secret
+    }
+
+    async function patchMilestone(id, updates) {
+      const r = await fetch('/api/roadmap?id=' + id, {
+        method: 'PATCH', headers: await authHeaders(true), credentials: 'same-origin', body: JSON.stringify(updates),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Update failed');
+      const idx = milestones.findIndex(m => m.id === id);
+      if (idx >= 0) milestones[idx] = d.milestone;
+    }
+
+    async function createMilestone(data) {
+      const r = await fetch('/api/roadmap', {
+        method: 'POST', headers: await authHeaders(true), credentials: 'same-origin', body: JSON.stringify(data),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Create failed');
+      milestones.push(d.milestone);
+    }
+
+    async function deleteMilestone(id) {
+      const r = await fetch('/api/roadmap?id=' + id, {
+        method: 'DELETE', headers: await authHeaders(false), credentials: 'same-origin',
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Delete failed'); }
+      milestones = milestones.filter(m => m.id !== id);
+    }
+
+    // ---- Render ----
+    function render() {
+      renderAdminBar();
+      renderBoard();
+    }
+
+    function renderAdminBar() {
+      const _ab = document.getElementById('kanban-admin-bar'); if (_ab) _ab.hidden = !adminMode;
+    }
+
+    function renderBoard() {
+      const board = document.getElementById('kanban-board');
+      const grouped = { done: [], active: [], planned: [] };
+      for (const m of milestones) {
+        const status = effectiveMilestoneStatus(m);
+        if (grouped[status]) grouped[status].push(m);
+      }
+
+      const gripIcon = `<svg viewBox="0 0 10 16" width="14" height="18" fill="currentColor" aria-hidden="true">
+        <circle cx="3" cy="2.5" r="1.8"/><circle cx="7" cy="2.5" r="1.8"/>
+        <circle cx="3" cy="8" r="1.8"/><circle cx="7" cy="8" r="1.8"/>
+        <circle cx="3" cy="13.5" r="1.8"/><circle cx="7" cy="13.5" r="1.8"/>
+      </svg>`;
+
+      board.innerHTML = COLS.map(col => {
+        const items = grouped[col.status] || [];
+        const cards = items.map(m => {
+          if (adminMode) {
+            return `<div class="kanban-card admin-card" data-id="${m.id}" tabindex="0" role="button" aria-label="${esc(m.title)}" draggable="true">
+              <div class="kanban-card-top">
+                <div class="kanban-drag-handle" title="Drag to move">${gripIcon}</div>
+                <div class="kanban-card-body">
+                  <h3>${esc(m.title)}</h3>
+                  ${m.description ? `<p>${esc(m.description)}</p>` : ''}
+                  ${waveControl(m)}
+                </div>
+              </div>
+            </div>`;
+          }
+          return `<div class="kanban-card" data-id="${m.id}" tabindex="0" role="button" aria-label="${esc(m.title)}">
+            <h3>${esc(m.title)}</h3>
+            ${m.description ? `<p>${esc(m.description)}</p>` : ''}
+            ${waveBadge(m.wave)}
+          </div>`;
+        }).join('');
+
+        const addBtn = adminMode
+          ? `<button class="kanban-add-btn" data-add="${col.status}">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              Add card
+            </button>`
+          : '';
+
+        return `<div class="kanban-col" data-col="${col.status}">
+          <div class="kanban-col-header">
+            <h2>${esc(col.label)}</h2>
+            <span class="kanban-col-count">${items.length}</span>
+          </div>
+          <div class="kanban-scroll-wrap">
+            <div class="kanban-cards" data-drop="${col.status}">${cards}</div>
+          </div>
+          ${addBtn}
+        </div>`;
+      }).join('');
+
+      // Card clicks
+      board.querySelectorAll('.kanban-card').forEach(el => {
+        el.addEventListener('click', () => openDetail(Number(el.dataset.id)));
+        el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(Number(el.dataset.id)); } });
+      });
+
+      // Add buttons
+      board.querySelectorAll('.kanban-add-btn').forEach(btn => {
+        btn.addEventListener('click', () => openNewCard(btn.dataset.add));
+      });
+
+      // Inline wave control (admin). stopPropagation keeps interacting with the
+      // select from also opening the card's detail modal. Change is optimistic:
+      // the UI updates immediately, then reverts if the PATCH fails.
+      board.querySelectorAll('select[data-wave-for]').forEach(sel => {
+        sel.addEventListener('click', e => e.stopPropagation());
+        sel.addEventListener('keydown', e => e.stopPropagation());
+        sel.addEventListener('change', async () => {
+          const id = Number(sel.dataset.waveFor);
+          const m = milestones.find(x => x.id === id);
+          if (!m) return;
+          const prevWave = WAVES.includes(m.wave) ? m.wave : null;
+          const prevValue = prevWave || 'none';
+          const chosen = sel.value; // 'none' | 'WAVE1' | ...
+          const nextWave = WAVES.includes(chosen) ? chosen : null;
+          if (nextWave === prevWave) return;
+          // Optimistic: reflect the choice now.
+          m.wave = nextWave;
+          sel.classList.toggle('wave-select--empty', !nextWave);
+          sel.disabled = true;
+          try {
+            await patchMilestone(id, { wave: chosen });
+            // Reconcile with the server's normalized value (source of truth).
+            const cur = WAVES.includes((milestones.find(x => x.id === id) || {}).wave)
+              ? milestones.find(x => x.id === id).wave : null;
+            sel.value = cur || 'none';
+            sel.classList.toggle('wave-select--empty', !cur);
+          } catch (err) {
+            m.wave = prevWave;
+            sel.value = prevValue;
+            sel.classList.toggle('wave-select--empty', !prevWave);
+            alert(err.message);
+          } finally {
+            sel.disabled = false;
+          }
+        });
+      });
+
+      // Drag and drop (admin only)
+      if (adminMode) bindDragDrop();
+    }
+
+    function bindDragDrop() {
+      const board = document.getElementById('kanban-board');
+      // dragstart fires on the card element, not the sub-element under the cursor,
+      // so e.target.closest() can't detect handle origin. Track it via mousedown instead.
+      let fromHandle = false;
+
+      board.querySelectorAll('.kanban-card').forEach(el => {
+        const handle = el.querySelector('.kanban-drag-handle');
+
+        if (handle) {
+          handle.addEventListener('click', e => e.stopPropagation());
+          handle.addEventListener('mousedown', () => {
+            fromHandle = true;
+            // Reset once the mouse releases, whether a drag started or not.
+            window.addEventListener('mouseup', () => { fromHandle = false; }, { once: true });
+          });
+        }
+
+        el.addEventListener('dragstart', e => {
+          if (!fromHandle) { e.preventDefault(); return; }
+          dragId = Number(el.dataset.id);
+          el.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(dragId));
+        });
+        el.addEventListener('dragend', () => {
+          fromHandle = false;
+          el.classList.remove('dragging');
+          dragId = null;
+        });
+      });
+
+      board.querySelectorAll('.kanban-cards').forEach(zone => {
+        zone.addEventListener('dragover', e => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          zone.classList.add('drag-over');
+        });
+        zone.addEventListener('dragleave', e => {
+          if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+        });
+        zone.addEventListener('drop', async e => {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+          const newStatus = zone.dataset.drop;
+          if (!dragId || !newStatus) return;
+          const m = milestones.find(m => m.id === dragId);
+          if (!m || m.status === newStatus) return;
+          try {
+            await patchMilestone(dragId, { status: newStatus });
+            render();
+          } catch (err) { alert(err.message); }
+        });
+      });
+    }
+
+    // ---- Detail modal ----
+    let modalState = null; // { id, isNew, status }
+
+    function openDetail(id) {
+      const m = milestones.find(m => m.id === id);
+      if (!m) return;
+      modalState = { id, isNew: false, status: m.status };
+      renderModal(m.title, m.description, adminMode ? m.status : effectiveMilestoneStatus(m), m.wave);
+    }
+
+    function openNewCard(status) {
+      modalState = { id: null, isNew: true, status };
+      renderModal('', '', status, null);
+    }
+
+    function renderModal(title, description, status, wave) {
+      const modal = document.getElementById('detail-modal');
+      const sc = STATUS_CLASS[status] || 'planned';
+      const sl = STATUS_LABEL[status] || 'Planned';
+
+      if (adminMode) {
+        const opts = Object.entries(STATUS_LABEL).map(([v, l]) =>
+          `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`
+        ).join('');
+        // Wave control: 'none' clears the label; WAVE1/2/3 sets it. PATCHed on save.
+        const waveOpts = `<option value="none"${!WAVES.includes(wave) ? ' selected' : ''}>No wave</option>`
+          + WAVES.map(w => `<option value="${w}"${w === wave ? ' selected' : ''}>${w}</option>`).join('');
+
+        modal.innerHTML = `
+          <div class="detail-head">
+            <div class="detail-head-copy">
+              <input class="detail-edit-title" id="d-title" type="text" value="${esc(title)}" placeholder="Card title" maxlength="200" />
+              <select class="detail-status-select" id="d-status">${opts}</select>
+              <select class="detail-status-select" id="d-wave" aria-label="Launch wave">${waveOpts}</select>
+            </div>
+            <button class="detail-close-btn" id="d-close">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <textarea class="detail-edit-desc" id="d-desc" rows="5" placeholder="Description (optional)" maxlength="1000">${esc(description)}</textarea>
+          <div class="detail-actions">
+            ${!modalState.isNew ? `<button class="detail-delete-btn" id="d-delete">Delete</button>` : ''}
+            <button class="detail-save-btn" id="d-save">${modalState.isNew ? 'Add card' : 'Save'}</button>
+          </div>
+        `;
+
+        modal.querySelector('#d-save').addEventListener('click', async () => {
+          const newTitle = modal.querySelector('#d-title').value.trim();
+          const newDesc = modal.querySelector('#d-desc').value.trim();
+          const newStatus = modal.querySelector('#d-status').value;
+          const newWave = modal.querySelector('#d-wave').value;
+          if (!newTitle) { modal.querySelector('#d-title').focus(); return; }
+          const btn = modal.querySelector('#d-save');
+          btn.disabled = true;
+          btn.textContent = modalState.isNew ? 'Adding…' : 'Saving…';
+          try {
+            if (modalState.isNew) {
+              await createMilestone({ title: newTitle, description: newDesc, status: newStatus, wave: newWave, sort_order: (milestones.length + 1) * 10 });
+            } else {
+              await patchMilestone(modalState.id, { title: newTitle, description: newDesc, status: newStatus, wave: newWave });
+            }
+            closeModal();
+            render();
+          } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = modalState.isNew ? 'Add card' : 'Save'; }
+        });
+
+        const delBtn = modal.querySelector('#d-delete');
+        if (delBtn) {
+          delBtn.addEventListener('click', async () => {
+            const confirmed = await window.twConfirm({
+              title: 'Delete roadmap card?',
+              message: 'Delete this card?',
+              details: 'This removes it from the published roadmap.',
+              confirmLabel: 'Delete',
+              intent: 'danger',
+            });
+            if (!confirmed) return;
+            try { await deleteMilestone(modalState.id); closeModal(); render(); }
+            catch (err) { alert(err.message); }
+          });
+        }
+      } else {
+        modal.innerHTML = `
+          <div class="detail-head">
+            <div class="detail-head-copy">
+              <span class="roadmap-status roadmap-status--${sc}">${sl}</span>${waveBadge(wave)}
+              <h2 class="detail-modal-title" id="detail-modal-title">${esc(title)}</h2>
+            </div>
+            <button class="detail-close-btn" id="d-close">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          ${description ? `<p class="detail-modal-desc">${esc(description)}</p>` : ''}
+        `;
+      }
+
+      modal.querySelector('#d-close').addEventListener('click', closeModal);
+      openDetailBack();
+    }
+
+    function openDetailBack() {
+      const back = document.getElementById('detail-back');
+      back.classList.add('open');
+      const onBack = e => { if (e.target === back) { closeModal(); back.removeEventListener('click', onBack); } };
+      back.addEventListener('click', onBack);
+    }
+
+    function closeModal() {
+      document.getElementById('detail-back').classList.remove('open');
+    }
+
+    // Close on Escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // ---- Boot ----
+    (async () => {
+      // Wait for the Identity auth module so accessToken() can read a live session
+      // on the first load (prod account-based admin), then ask the server.
+      try { await window.__tinyworldAuthReady; } catch (_) {}
+      let serverSaysAdmin = false;
+      try {
+        serverSaysAdmin = await loadMilestones();
+      } catch (_) {
+        document.getElementById('kanban-board').innerHTML =
+          '<p style="grid-column:1/-1;text-align:center;padding:64px;color:var(--muted)">Could not load roadmap.</p>';
+        return;
+      }
+      // A stored local dev secret only grants admin if the server accepts it; clear
+      // a stale/wrong secret so the banner never shows without real access.
+      if (adminSecret && !serverSaysAdmin) {
+        adminSecret = '';
+        try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+        try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+      }
+      // Authority is the server's verdict — verified admin email (works on prod) OR
+      // the localhost-only dev secret. No client-side host gate.
+      adminMode = serverSaysAdmin;
+      render();
+    })();
+  })();
+  </script>
+</body>
+</html>

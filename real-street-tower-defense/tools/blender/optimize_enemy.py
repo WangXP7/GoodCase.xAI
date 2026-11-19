@@ -1,0 +1,1428 @@
+"""Optimise enemy models for the VAT renderer (docs/ENEMY_MODEL_BUDGET.md).
+
+Each recipe below reads the original model from git (SOURCE_REV), so a rerun
+gives the same file instead of optimising an already optimised one, and writes
+the result into public/assets/models/enemies/.
+
+Headless:
+    blender --background --python tools/blender/optimize_enemy.py -- rat spider
+From a running Blender (Text editor or the Blender MCP):
+    REPO = r'D:/Source/3dtd'
+    exec(open(REPO + '/tools/blender/optimize_enemy.py').read()); run('rat')
+
+After a run: `npm run model-budget` measures the new file and fails if a clip
+the config expects is missing.
+"""
+import fnmatch
+import math
+import os
+import subprocess
+import sys
+import tempfile
+
+import bmesh
+import bpy
+import numpy as np
+from mathutils import Matrix, Vector
+from mathutils.bvhtree import BVHTree
+from mathutils.kdtree import KDTree
+
+# Commit that holds the original models.
+SOURCE_REV = '39fbb18'
+ENEMIES = 'public/assets/models/enemies'
+
+# Recipe keys (all optional except `src`):
+#   src         model path in the repo at SOURCE_REV
+#   rev         commit to read `src` from (default SOURCE_REV); None reads the
+#               working tree, for sources that came after SOURCE_REV
+#   extra       further files the importer needs next to it (external textures)
+#   out         output path in the repo (default: src with .glb)
+#   actions     {source action: exported clip name}; every other action is dropped
+#   trim        {exported clip name: (start frame, end frame, blend frames)}, see trim_action
+#   decimate    triangle ratio kept by the collapse decimator, for every mesh or
+#               {mesh name pattern: ratio}, first matching fnmatch pattern wins
+#   seams       {mesh name pattern: weight}: vertices on UV seams get this weight in
+#               an inverted decimate vertex group, so the decimator collapses them
+#               later and fewer triangles span two UV islands (see decimate)
+#   weld        merge vertices closer than this (model units) before decimating;
+#               for meshes the importer leaves as a triangle soup because the
+#               normals differ slightly across UV seams
+#   normals     'keep' (default), 'smooth' or a smoothing angle in degrees
+#   rebake      {'size', 'supersample', 'uv_angle'}: after decimating, new UVs and the
+#               base colour taken from the undecimated mesh (see rebake_base_color); for
+#               atlases whose seams the decimator cannot keep
+#   rigid_to_skin    join the rigid meshes that hang on bones into one skinned mesh
+#               before anything else (see rigid_to_skin)
+#   join_skin   bone name: join every mesh into one skinned mesh, the rigid ones
+#               weighted fully to that bone (see join_skin)
+#   vertex_colors    False drops the colour attributes and puts the base colour
+#               factor back on the material (see drop_vertex_colors)
+#   cull_hidden      delete the faces no view from the camera's side reaches
+#               (see cull_hidden)
+#   single_layer     material name patterns whose faces come twice, the second
+#               time with reversed winding: one layer goes, the material's
+#               opacity makes up for it (see single_layer)
+#   paint       {'camo', 'camo_colours', 'camo_cover', ...}: new UVs and one generated
+#               base colour image in place of flat material colours (see weathered_paint)
+#   root        {'turn': degrees about the vertical, 'size': scale}: the model
+#               turned and scaled on its root, standing centred on the origin
+#   merge       merge co-located vertices with equal normals on import (glTF
+#               importer option), also without decimating
+#   texture     longest side of every image left in the model
+#   base_color_only  drop every other texture (the VAT shader only samples base colour)
+#   image_format     'AUTO' (default) or 'JPEG'
+#   sample      resample every frame on export (default False: write the source
+#               keys, so clip lengths like 58.75 frames stay exact)
+#   slide       shift every clip to start at 0 (default False: keep the key times)
+#   guess_bind_pose  glTF importer option (default True); False for rigs whose
+#               bind pose the importer guesses wrong (the rat's Sketchfab rig)
+#   rest_from_file   write the file's node transforms as the rest pose, not the
+#               bind pose the importer guessed (see keep_file_rest_pose)
+RECIPES = {
+    # FBXLoader builds three vertices per triangle (17,010); as indexed GLB the
+    # same mesh is 3,444. Only the clips the config uses stay.
+    'wallsmasher': {
+        'src': f'{ENEMIES}/wallsmasher.fbx',
+        'extra': [f'{ENEMIES}/Zombie_Atlas.png'],
+        'out': f'{ENEMIES}/wallsmasher.glb',
+        'actions': {
+            'CharacterArmature|CharacterArmature|Walk': 'CharacterArmature|Walk',
+            'CharacterArmature|CharacterArmature|Run': 'CharacterArmature|Run',
+            'CharacterArmature|CharacterArmature|Death': 'CharacterArmature|Death',
+        },
+        # The FBX clips start at frame 1.
+        'sample': True,
+        'slide': True,
+    },
+    # 16 rigid meshes under animated empties (object-animation VAT path). Every
+    # empty carries one mesh (the head two, with different materials), so there
+    # is nothing to merge. The four wings are flat 266-vertex cards and stay.
+    # Without seam weights the head texture tore into black stripes across the
+    # mandibles.
+    'hornet': {
+        'src': f'{ENEMIES}/hornet.glb',
+        'decimate': {'wing01_wings_0*': 1.0, '*': 0.036},
+        'seams': {'*Hornet1*': 0.5},
+        'normals': 'smooth',
+    },
+    # Swarm enemy, up to 5,000 per wave. The shader samples the base colour
+    # only; the metal-roughness and normal maps (1024² each) go. Not exact:
+    # with the bind pose guess this rig exports broken, without it Blender's
+    # Run differs from the file between the keys (up to 9.4 % of the height
+    # at frames 3 and 7 of 11, upper hind body), whatever the export options.
+    'rat': {
+        'src': f'{ENEMIES}/rat.glb',
+        'guess_bind_pose': False,
+        'decimate': 0.42,
+        'normals': 'smooth',
+        'base_color_only': True,
+        'texture': 512,
+        'image_format': 'JPEG',
+    },
+    # Swarm enemy, up to 800 per wave. Body 12,833 and eyes 340 vertices; the
+    # config plays only the basic walk, the other five cycles go. At 8 % the
+    # legs turn into triangular prisms and the eyes vanish, so the body keeps
+    # 11 % (above the 1,500 swarm guideline) and the eyes (Object_10) 30 %.
+    'spider': {
+        'src': f'{ENEMIES}/spider.glb',
+        'actions': {'Armature|Walk-Cycle-Basic': 'Armature|Walk-Cycle-Basic'},
+        'decimate': {'Object_10': 0.3, '*': 0.11},
+        'normals': 'smooth',
+    },
+    # Three 2048² JPEGs (base colour, metal-roughness, normal) for a bat the
+    # size of a pigeon; the shader samples the base colour only. `fly` is a
+    # single-frame clip nothing plays. Geometry stays as it is.
+    'bat': {
+        'src': f'{ENEMIES}/bat.glb',
+        'actions': {'fly.001': 'fly.001'},
+        'base_color_only': True,
+        'texture': 512,
+        'image_format': 'JPEG',
+    },
+    # `flying` (13.13 s) is two copies of a 99-frame flight cycle (3.3 s);
+    # shorter windows do not repeat (7 % of the height off at 1 s). Frames
+    # 158-257 differ by 0.21 %, eased over the last 4 frames. The config
+    # plays only `flying`.
+    'dragon': {
+        'src': f'{ENEMIES}/dragon.glb',
+        'actions': {'flying': 'flying'},
+        'trim': {'flying': (158, 257, 4)},
+    },
+    # 31,342 VAT vertices for 30,887 triangles: UV seams split almost every
+    # edge, and the importer keeps the mesh as a triangle soup (normals differ
+    # slightly across the seams). Welded first, the decimator works on the
+    # connected surface (15,418 positions). 62 % of those sit on UV seams, so
+    # seam weights cannot help; decimated on the old atlas the texture smeared
+    # along the seams. Rebaked onto new UVs instead, 12 % stays under 5,000
+    # VAT vertices (the new UVs split less). Electrocuted_Fall (6.33 s)
+    # stands twitching until 3.0 s and hits the ground at about 5 s; the enemy
+    # is removed 2 s after the kill, so only the fall, 3.0-5.0 s, is kept.
+    'zombie-v2': {
+        'src': f'{ENEMIES}/zombie_v2.glb',
+        'actions': {'Unsteady_Walk': 'Unsteady_Walk', 'Dead': 'Dead', 'dying_backwards': 'dying_backwards',
+                    'Electrocuted_Fall': 'Electrocuted_Fall'},
+        'trim': {'Electrocuted_Fall': (90, 150, 0)},
+        'weld': 1e-6,
+        'decimate': 0.12,
+        'normals': 'smooth',
+        'rebake': {'size': 1024, 'supersample': 2},
+    },
+    # Look change: the zombie is faceted, every vertex split at the normals
+    # (4,525 VAT vertices for 2,157 triangles). Welded and smooth-shaded it
+    # keeps only the UV splits. Geometry, texture and clips stay.
+    'zombie': {
+        'src': f'{ENEMIES}/zombie.glb',
+        'weld': 1e-6,
+        'normals': 'smooth',
+        # Walk leaves 20 bones unkeyed; with the guessed bind pose as rest they moved.
+        'rest_from_file': True,
+    },
+    # Split at UV seams like zombie_v2 (19,863 positions, 30,228 vertices). The
+    # seams keep about 2.5 vertices per position after decimating, so 17 % ends
+    # at 8,126 VAT vertices; 10.5 % (5,799) smeared the ribcage in a close-up.
+    # Neither fix used for zombie_v2 and the hornet helps here: 41 % of the
+    # vertices sit on seams, so seam weights change nothing, and a Cycles bake onto
+    # the thin double-layered robe came out dark with more VAT vertices.
+    'wraith': {
+        'src': f'{ENEMIES}/wraith.glb',
+        'weld': 1e-6,
+        'decimate': 0.17,
+        'normals': 'smooth',
+    },
+    # Swarm enemy. Three 1024² PNGs, the shader samples the base colour only;
+    # it keeps its alpha (the material blends), so it stays PNG. Of five clips
+    # the config plays Walk and Fall. Exact only with the file's node pose.
+    'penguin': {
+        'src': f'{ENEMIES}/penguin.glb',
+        'actions': {'Walk': 'Walk', 'Fall': 'Fall'},
+        'base_color_only': True,
+        'texture': 512,
+        'rest_from_file': True,
+    },
+    # Twelve clips, the config plays Walk and Die. Geometry and textures stay.
+    # The default import moves the rig; with the file's node pose it is exact.
+    'mammoth': {
+        'src': f'{ENEMIES}/mammoth.glb',
+        'actions': {'Walk': 'Walk', 'Die': 'Die'},
+        'rest_from_file': True,
+    },
+    # Casual_Walk (4.17 s) jumps by 3.2 % of the height where it loops. The
+    # window 50-90 (1.33 s, a whole number of 30 fps frames on the 24 fps key
+    # raster) jumps by 1.2 %; the last 7.5 frames ease into the first pose.
+    # Base colour and emission (the same image twice) 2048² -> 1024²; of six
+    # clips the config plays two.
+    'stone-golem': {
+        'src': f'{ENEMIES}/stone_golem.glb',
+        'actions': {'Casual_Walk': 'Casual_Walk', 'dying_backwards': 'dying_backwards'},
+        'trim': {'Casual_Walk': (50, 90, 7.5)},
+        'texture': 1024,
+    },
+    # `Take 001` (6.67 s) runs a 3.5 s float cycle about twice: frames 13-118
+    # differ by 0.49 % of the height, eased over the last 4 frames. 1,301 of
+    # the 2,640 veil triangles (Material_26, opacity 0.403, texture alpha 1)
+    # repeat another one with reversed winding under a double-sided, blended
+    # material: one layer goes, 978 vertices with it (5,248 -> 4,270), and the
+    # veils blend 0.644, what both layers gave together (see single_layer). Body,
+    # normals and textures stay; welding by position had turned the normals
+    # of 777 vertices by more than 5 degrees. Exact only with the file's node
+    # pose.
+    'ghost': {
+        'src': f'{ENEMIES}/ghost.glb',
+        'rest_from_file': True,
+        'trim': {'Take 001': (13, 118, 4)},
+        'single_layer': ['Material_26'],
+    },
+    # Quaternius "Tank" (CC0, candidates/LICENSES.md), replaces the Zsky tank.
+    # Hull and both tracks are skinned to 45 bones, Tank_Forward rolls the 44
+    # track links; turret and gun hang on the root node, so bakeVAT would
+    # leave them out: everything goes into one skin, the rigid parts on
+    # `Root`. The base colours multiply a COLOR_0 that is white everywhere.
+    # 12,093 VAT vertices, 5,234 of them road wheels that the tracks mostly
+    # cover. The faces no camera view reaches go (2,265 of 6,544, see
+    # cull_hidden): 7,334. The near-black road wheels keep 20 % of their
+    # triangles, the track links 50 % (at 40 % the links read as thin dashes
+    # from the side); hull, turret and gun stay as they are. In the file the
+    # gun points along -x and the model is 14.8 units long; turned to +z and
+    # scaled to metres (6.6 m long, 3.0 m high, as tall as the old tank). The
+    # flat material colours become one generated texture (weathered_paint:
+    # camo on hull and turret, worn edges, dust, occlusion, each material as
+    # bright as before); its UV seams add 28 VAT vertices, 4,932. The config
+    # plays Tank_Forward only.
+    'tank': {
+        'src': f'{ENEMIES}/candidates/quaternius-tank/tank.glb',
+        'rev': None,
+        'out': f'{ENEMIES}/tank.glb',
+        'merge': True,
+        'actions': {'TankArmature|Tank_Forward': 'TankArmature|Tank_Forward'},
+        'join_skin': 'Root',
+        'vertex_colors': False,
+        'cull_hidden': True,
+        'decimate_materials': {'Wheels': 0.2, 'Main_Details.001': 0.5},
+        'paint': {
+            'camo': ['Main', 'Main_Dark'],
+            'camo_colours': [(0.15, 0.11, 0.045), (0.035, 0.04, 0.022)],
+            'camo_cover': [0.3, 0.18],
+            'wear_on': ['Main', 'Main_Dark', 'Main_Details', 'Main_Light'],
+        },
+        'image_format': 'JPEG',
+        'root': {'turn': 90, 'size': 0.45},
+    },
+    # 34 rigid parts, each under an empty on a bone (object animation VAT
+    # path). Joined into one skinned mesh (rigid_to_skin), the decimator and
+    # the rebake work on one surface and one UV layout, and the parts move as
+    # before. Decimating the parts in place to 12 % (Night 1: 6,739 VAT
+    # vertices) left texture seams on the old atlas; rebaked onto new UVs the
+    # seams go. Normals split over 60 degrees. 10 % keeps 4,771 VAT vertices
+    # (12 %: 5,416, 11 %: 5,082, 10.5 %: 5,003). The round trip is exact only
+    # without the bind pose guess. The config plays Walk only.
+    'mech': {
+        'src': f'{ENEMIES}/mech.glb',
+        'guess_bind_pose': False,
+        'actions': {'Armature|Walk': 'Armature|Walk'},
+        'rigid_to_skin': True,
+        'decimate': 0.10,
+        'normals': 60,
+        'rebake': {'size': 1024, 'supersample': 2, 'uv_angle': 89},
+        'base_color_only': True,
+        'image_format': 'JPEG',
+    },
+}
+
+
+def repo_root():
+    if 'REPO' in globals():
+        return globals()['REPO']
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def git_export(repo, path, dest_dir, rev=SOURCE_REV):
+    """Write `path` as it is at `rev` (None: the working tree) into dest_dir, return the file path."""
+    if rev is None:
+        with open(os.path.join(repo, path), 'rb') as f:
+            data = f.read()
+    else:
+        data = subprocess.run(['git', '-C', repo, 'show', f'{rev}:{path}'],
+                              check=True, capture_output=True).stdout
+    dest = os.path.join(dest_dir, os.path.basename(path))
+    with open(dest, 'wb') as f:
+        f.write(data)
+    return dest
+
+
+def clear_scene():
+    for coll in (bpy.data.objects, bpy.data.meshes, bpy.data.armatures, bpy.data.actions,
+                 bpy.data.materials, bpy.data.images, bpy.data.textures, bpy.data.node_groups,
+                 bpy.data.cameras, bpy.data.lights):
+        for block in list(coll):
+            coll.remove(block)
+    for c in list(bpy.data.collections):
+        bpy.data.collections.remove(c)
+
+
+def import_model(path, merge_vertices, guess_bind_pose=True):
+    if path.lower().endswith('.fbx'):
+        bpy.ops.import_scene.fbx(filepath=path)
+    else:
+        # No bone shapes: the importer would add an Icosphere mesh that ends up in the export.
+        bpy.ops.import_scene.gltf(filepath=path, merge_vertices=merge_vertices, disable_bone_shape=True,
+                                  guess_original_bind_pose=guess_bind_pose)
+
+
+def keep_actions(mapping):
+    for act in list(bpy.data.actions):
+        if act.name not in mapping:
+            bpy.data.actions.remove(act)
+    for act in list(bpy.data.actions):
+        act.name = mapping[act.name]
+        act.use_fake_user = True
+    missing = set(mapping.values()) - {a.name for a in bpy.data.actions}
+    if missing:
+        raise RuntimeError(f'actions not found: {sorted(missing)}')
+
+
+def rigid_to_skin(weld_distance=1e-6):
+    """The meshes that hang on bones (through empties parented to a bone, the
+    mech's 34 parts) as one skinned mesh, every part weighted fully to its
+    bone, so the Skinning VAT path moves the parts as the node animation did.
+    Each part is welded on its own first, so no vertex joins two bones. Only
+    the active UV layer stays. The empties that held the parts go."""
+    scene = bpy.context.scene
+    arm = next(o for o in scene.objects if o.type == 'ARMATURE')
+    if arm.animation_data:
+        arm.animation_data.action = None
+    for pb in arm.pose.bones:
+        pb.matrix_basis.identity()
+    bpy.context.view_layer.update()
+    to_arm = arm.matrix_world.inverted()
+    parts, holders = [], set()
+    for obj in [o for o in scene.objects if o.type == 'MESH']:
+        holder = obj
+        while holder is not None and not (holder.parent == arm and holder.parent_type == 'BONE'):
+            holder = holder.parent
+        if holder is None:
+            raise RuntimeError(f'{obj.name} hangs on no bone')
+        me = obj.data.copy()
+        me.transform(to_arm @ obj.matrix_world)
+        for layer in [l for l in me.uv_layers if l != me.uv_layers.active]:
+            me.uv_layers.remove(layer)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=weld_distance)
+        bm.to_mesh(me)
+        bm.free()
+        part = bpy.data.objects.new(obj.name, me)
+        scene.collection.objects.link(part)
+        part.parent = arm
+        part.vertex_groups.new(name=holder.parent_bone).add(list(range(len(me.vertices))), 1.0, 'REPLACE')
+        parts.append(part)
+        if holder != obj:
+            holders.add(holder)
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for holder in holders:
+        bpy.data.objects.remove(holder, do_unlink=True)
+    with bpy.context.temp_override(active_object=parts[0], object=parts[0], selected_objects=parts,
+                                   selected_editable_objects=parts):
+        bpy.ops.object.join()
+    skin = parts[0]
+    skin.name = 'Skin'
+    skin.modifiers.new('Armature', 'ARMATURE').object = arm
+    return skin
+
+
+def join_skin(bone):
+    """Every mesh as one skinned mesh on the armature, so bakeVAT, which bakes
+    skinned meshes only, keeps them all. Skinned meshes keep their weights,
+    the rigid ones (the tank's turret and gun hang on the root node, not on a
+    bone) are weighted fully to `bone`; that bone must not move in the clips
+    the config plays."""
+    scene = bpy.context.scene
+    meshes = [o for o in scene.objects if o.type == 'MESH']
+    skinned = [o for o in meshes if any(m.type == 'ARMATURE' for m in o.modifiers)]
+    if not skinned:
+        raise RuntimeError('join_skin: no skinned mesh')
+    for obj in meshes:
+        if obj not in skinned:
+            obj.vertex_groups.new(name=bone).add(list(range(len(obj.data.vertices))), 1.0, 'REPLACE')
+    skin = max(skinned, key=lambda o: len(o.data.vertices))
+    with bpy.context.temp_override(active_object=skin, object=skin, selected_objects=meshes,
+                                   selected_editable_objects=meshes):
+        bpy.ops.object.join()
+    return skin
+
+
+def drop_vertex_colors():
+    """The glTF importer multiplies the base colour factor with COLOR_0 in a Mix
+    node. The VAT shader reads the material colour and ignores COLOR_0, so a
+    model whose COLOR_0 is white (the tank) loses nothing: the factor goes
+    back on the BSDF and the colour attributes go, the export writes neither."""
+    for mat in bpy.data.materials:
+        if not (mat and mat.use_nodes):
+            continue
+        nt = mat.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if bsdf is None or not bsdf.inputs['Base Color'].is_linked:
+            continue
+        mix = bsdf.inputs['Base Color'].links[0].from_node
+        if mix.type != 'MIX':
+            continue
+        colours = [i for i in mix.inputs if i.identifier in ('A_Color', 'B_Color')]
+        linked = [i for i in colours if i.is_linked]
+        if len(linked) != 1 or linked[0].links[0].from_node.type != 'VERTEX_COLOR':
+            continue
+        factor = next(i for i in colours if not i.is_linked)
+        bsdf.inputs['Base Color'].default_value = factor.default_value[:]
+        nt.nodes.remove(linked[0].links[0].from_node)
+        nt.nodes.remove(mix)
+    for me in bpy.data.meshes:
+        for attr in list(me.color_attributes):
+            me.color_attributes.remove(attr)
+
+
+def view_directions(count=512, min_elevation=-10):
+    """Directions towards the camera, evenly spread (Fibonacci sphere) and at
+    most `min_elevation` degrees below the horizon: the camera stays above
+    the road, a little below the model at most on a slope."""
+    i = np.arange(count) + 0.5
+    z = 1 - 2 * i / count
+    r = np.sqrt(1 - z * z)
+    phi = i * math.pi * (3 - math.sqrt(5))
+    d = np.stack([r * np.cos(phi), r * np.sin(phi), z], -1)
+    return [Vector(v) for v in d[z >= math.sin(math.radians(min_elevation))]]
+
+
+def drop_faces(obj, drop):
+    """Delete the faces for which `drop(face)` is true and the vertices left without a face."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if drop(f)], context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def decimate_materials(obj, ratios):
+    """Collapse-decimate only the faces of the materials matching `ratios`
+    ({material name pattern: ratio}), each split off on its own, decimated and
+    joined back, so the other materials keep their shape (the tank's track
+    links and road wheels, not its hull). Vertex groups and the armature
+    modifier travel with the copy."""
+    parts = []
+    for index, mat in enumerate(obj.data.materials):
+        ratio = next((r for pat, r in ratios.items() if mat and fnmatch.fnmatchcase(mat.name, pat)), None)
+        if ratio is None or ratio >= 1.0:
+            continue
+        part = obj.copy()
+        part.data = obj.data.copy()
+        part.name = f'{obj.name}_{mat.name}'
+        for coll in obj.users_collection:
+            coll.objects.link(part)
+        drop_faces(part, lambda f, i=index: f.material_index != i)
+        drop_faces(obj, lambda f, i=index: f.material_index == i)
+        decimate(part, ratio)
+        parts.append(part)
+    if parts:
+        objs = [obj] + parts
+        with bpy.context.temp_override(active_object=obj, object=obj, selected_objects=objs,
+                                       selected_editable_objects=objs):
+            bpy.ops.object.join()
+
+
+def cull_hidden(obj, frames=6, min_elevation=-10):
+    """Delete the faces of `obj` that no camera view reaches: the hull bottom,
+    the road wheels behind the tracks, the inner sides of the track links.
+
+    A face stays if, in one of `frames` poses spread over the kept clip (the
+    tracks move), a ray from one of its sample points (the centre and each
+    corner pulled a fifth towards it) leaves the model towards one of the
+    view_directions with the face turned towards it; the materials draw
+    front faces only. Seen through a gap between two track links counts.
+    """
+    scene = bpy.context.scene
+    arm = obj.find_armature()
+    act = next(iter(bpy.data.actions), None)
+    if arm is not None and act is not None:
+        if arm.animation_data is None:
+            arm.animation_data_create()
+        arm.animation_data.action = act
+        start, end = act.frame_range
+        poses = [start + (end - start) * k / frames for k in range(frames)]
+    else:
+        poses = [scene.frame_current]
+    dirs = view_directions(min_elevation=min_elevation)
+    size = max(obj.dimensions)
+    eps = size * 1e-4
+    visible = np.zeros(len(obj.data.polygons), dtype=bool)
+    for frame in poses:
+        scene.frame_set(int(frame), subframe=frame - int(frame))
+        dg = bpy.context.evaluated_depsgraph_get()
+        ev = obj.evaluated_get(dg)
+        me = ev.to_mesh()
+        co = [obj.matrix_world @ v.co for v in me.vertices]
+        polys = [list(p.vertices) for p in me.polygons]
+        tree = BVHTree.FromPolygons(co, polys)
+        for idx, verts in enumerate(polys):
+            if visible[idx]:
+                continue
+            pts = [co[v] for v in verts]
+            centre = sum(pts, Vector()) / len(pts)
+            normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+            if len(pts) > 3:
+                normal = sum(((pts[k] - centre).cross(pts[(k + 1) % len(pts)] - centre)
+                              for k in range(len(pts))), Vector())
+            if normal.length < 1e-12:
+                continue
+            normal.normalize()
+            samples = [centre] + [p.lerp(centre, 0.2) for p in pts]
+            facing = [d for d in dirs if d.dot(normal) > 1e-3]
+            if any(tree.ray_cast(s + normal * eps + d * eps, d)[0] is None for s in samples for d in facing):
+                visible[idx] = True
+        ev.to_mesh_clear()
+    if arm is not None and arm.animation_data is not None:
+        arm.animation_data.action = None
+    scene.frame_set(0)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    hidden = [bm.faces[i] for i in np.flatnonzero(~visible)]
+    bmesh.ops.delete(bm, geom=hidden, context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    print(f'[optimize_enemy] {obj.name}: culled {len(hidden)} of {len(visible)} faces')
+
+
+def single_layer(obj, patterns):
+    """One of two mirrored layers of the materials matching `patterns` goes.
+    The ghost's veils are 77 connected pieces under a double-sided, blended
+    material, each repeated face for face by another piece at the same
+    positions with reversed winding. A piece goes whole, and only if every
+    face of it has such a twin in a piece that stays; dropping single faces
+    kept vertices of both pieces (292 fewer instead of 978). The material
+    then blends 1 - (1 - a)^2 instead of a, which is what the two layers gave
+    together, exact for copies with the same colour while the texture alpha
+    is 1 (the ghost's is). The opacity factor sits on the BSDF or on the Math
+    node that multiplies it with the texture alpha."""
+    mats = {i for i, m in enumerate(obj.data.materials)
+            if m and any(fnmatch.fnmatchcase(m.name, p) for p in patterns)}
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    faces = [f for f in bm.faces if f.material_index in mats]
+    # Connected pieces over shared vertices
+    piece = {}
+    for start in faces:
+        if start in piece:
+            continue
+        piece[start] = start.index
+        stack = [start]
+        while stack:
+            f = stack.pop()
+            for v in f.verts:
+                for g in v.link_faces:
+                    if g.material_index in mats and g not in piece:
+                        piece[g] = start.index
+                        stack.append(g)
+    twins = {}
+    by_key = {}
+    for f in faces:
+        key = (f.material_index, tuple(sorted(tuple(round(c, 5) for c in v.co) for v in f.verts)))
+        by_key.setdefault(key, []).append(f)
+    for group in by_key.values():
+        for f in group:
+            twins[f] = [g for g in group if g is not f and piece[g] != piece[f] and f.normal.dot(g.normal) < -0.99]
+    members = {}
+    for f in faces:
+        members.setdefault(piece[f], []).append(f)
+    dropped = set()
+    # The later piece of each mirrored pair goes
+    for pid in sorted(members, reverse=True):
+        if all(any(piece[g] not in dropped for g in twins[f]) for f in members[pid]):
+            dropped.add(pid)
+    drop = [f for f in faces if piece[f] in dropped]
+    bmesh.ops.delete(bm, geom=drop, context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    for i in mats:
+        bsdf = next(n for n in obj.data.materials[i].node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+        sock = bsdf.inputs['Alpha']
+        if sock.is_linked:
+            node = sock.links[0].from_node
+            if node.type != 'MATH' or node.operation != 'MULTIPLY':
+                raise RuntimeError(f'single_layer: alpha of {obj.data.materials[i].name} is not a factor')
+            sock = next(s for s in node.inputs[:2] if not s.is_linked)
+        sock.default_value = 1 - (1 - sock.default_value) ** 2
+    print(f'[optimize_enemy] {obj.name}: dropped {len(drop)} mirrored faces')
+
+
+def place_root(turn, size):
+    """Turn the model `turn` degrees about the vertical and scale it by `size`
+    on its root node, standing on the origin with its footprint centred
+    (bounding box of the rest pose)."""
+    scene = bpy.context.scene
+    roots = [o for o in scene.objects if o.parent is None]
+    if len(roots) != 1:
+        raise RuntimeError(f'place_root expects one root, found {[o.name for o in roots]}')
+    root = roots[0]
+    turn_scale = Matrix.Rotation(math.radians(turn), 4, 'Z') @ Matrix.Scale(size, 4)
+    bpy.context.view_layer.update()
+    co = np.array([tuple(turn_scale @ o.matrix_world @ Vector(c))
+                   for o in scene.objects if o.type == 'MESH' for c in o.bound_box])
+    lo, hi = co.min(0), co.max(0)
+    offset = Matrix.Translation((-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]))
+    root.matrix_world = offset @ turn_scale @ root.matrix_world
+    bpy.context.view_layer.update()
+
+
+def trim_action(act, start, end, blend=0):
+    """Keep the keys in [start, end] (frames) and move them to start at 0.
+
+    With `blend` > 0 the last `blend` frames are eased (smoothstep) towards the
+    pose at `start`, so the clip ends where it begins and loops without a jump.
+    Expects keys on every frame of the window, as glTF imports of baked clips
+    have them.
+    """
+    for layer in act.layers:
+        for strip in layer.strips:
+            for cb in strip.channelbags:
+                groups = {}
+                for fc in cb.fcurves:
+                    groups.setdefault(fc.data_path, []).append(fc)
+                for path, fcs in groups.items():
+                    fcs.sort(key=lambda f: f.array_index)
+                    first = [fc.evaluate(start) for fc in fcs]
+                    last = [fc.evaluate(end) for fc in fcs]
+                    quat = path.endswith('rotation_quaternion') and len(fcs) == 4
+                    if quat and sum(a * b for a, b in zip(first, last)) < 0:
+                        first = [-x for x in first]
+                    delta = [a - b for a, b in zip(first, last)]
+                    by_frame = {}
+                    for i, fc in enumerate(fcs):
+                        pts = fc.keyframe_points
+                        for p in reversed(list(pts)):
+                            if p.co.x < start - 1e-3 or p.co.x > end + 1e-3:
+                                pts.remove(p, fast=True)
+                        for p in pts:
+                            by_frame.setdefault(round(p.co.x, 3), [None] * len(fcs))[i] = p
+                    for frame, pts in by_frame.items():
+                        w = 0.0
+                        if blend and frame > end - blend:
+                            t = (frame - (end - blend)) / blend
+                            w = t * t * (3 - 2 * t)
+                        if w and all(pts):
+                            vals = [p.co.y + d * w for p, d in zip(pts, delta)]
+                            if quat:
+                                n = sum(v * v for v in vals) ** 0.5
+                                vals = [v / n for v in vals]
+                            for p, v in zip(pts, vals):
+                                p.co.y = v
+                        for p in pts:
+                            if p is None:
+                                continue
+                            p.co.x -= start
+                            p.handle_left.x -= start
+                            p.handle_right.x -= start
+                    for fc in fcs:
+                        fc.keyframe_points.handles_recalc()
+                        fc.update()
+    act.use_frame_range = False
+
+
+def with_object(obj, fn):
+    with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+        return fn()
+
+
+def weld(obj, distance):
+    """Merge co-located vertices; UVs stay per corner, so seams survive."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=distance)
+    bm.to_mesh(obj.data)
+    bm.free()
+    # Faces that end up on the same three vertices would make the mesh invalid.
+    obj.data.validate()
+    obj.data.update()
+
+
+def uv_seam_vertices(obj):
+    """Indices of vertices on an open edge or on an edge whose two faces disagree in UV."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    uv = bm.loops.layers.uv.active
+    found = set()
+    if uv is not None:
+        def uv_at(loop, v):
+            return loop[uv].uv if loop.vert == v else loop.link_loop_next[uv].uv
+        for e in bm.edges:
+            loops = list(e.link_loops)
+            if len(loops) != 2 or any((uv_at(loops[0], v) - uv_at(loops[1], v)).length > 1e-5 for v in e.verts):
+                found.update(v.index for v in e.verts)
+    bm.free()
+    return sorted(found)
+
+
+def decimate(obj, ratio, seam_weight=None):
+    """Collapse decimate as the first modifier, so the armature pose is not applied.
+
+    With `seam_weight` the UV seam vertices go into an inverted vertex group with
+    that weight, so collapsing them costs more and happens later. At weight 1
+    they stay entirely (the hornet head kept 5,424 VAT vertices instead of about
+    1,000); at 0.5 the ratio is still reached. It only helps where seams are a
+    minority: at zombie_v2 (62 % seam vertices) and the wraith (41 %) it
+    changed nothing.
+    """
+    if ratio >= 1.0:
+        return
+    mod = obj.modifiers.new('Decimate', 'DECIMATE')
+    mod.decimate_type = 'COLLAPSE'
+    mod.ratio = ratio
+    mod.use_collapse_triangulate = True
+    if seam_weight is not None:
+        group = obj.vertex_groups.new(name='uv_seams')
+        group.add(uv_seam_vertices(obj), seam_weight, 'REPLACE')
+        mod.vertex_group = group.name
+        mod.invert_vertex_group = True
+        mod.vertex_group_factor = 1.0
+    with_object(obj, lambda: bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=0))
+    with_object(obj, lambda: bpy.ops.object.modifier_apply(modifier=mod.name))
+    if seam_weight is not None:
+        obj.vertex_groups.remove(obj.vertex_groups['uv_seams'])
+
+
+def set_normals(obj, normals):
+    if normals == 'keep':
+        return
+    me = obj.data
+    if me.has_custom_normals:
+        with_object(obj, lambda: bpy.ops.mesh.customdata_custom_splitnormals_clear())
+    if normals == 'smooth':
+        me.shade_smooth()
+        if 'sharp_edge' in me.attributes:
+            me.attributes.remove(me.attributes['sharp_edge'])
+    else:
+        me.shade_smooth()
+        me.set_sharp_from_angle(angle=math.radians(normals))
+
+
+def base_color_images(mat):
+    """Image nodes feeding the Principled BSDF base colour (directly or through mix nodes)."""
+    if not (mat and mat.use_nodes):
+        return []
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    if bsdf is None:
+        return []
+    found, stack = [], [bsdf.inputs['Base Color']]
+    while stack:
+        sock = stack.pop()
+        for link in sock.links:
+            node = link.from_node
+            if node.type == 'TEX_IMAGE':
+                found.append(node)
+            else:
+                stack.extend(i for i in node.inputs if i.is_linked)
+    return found
+
+
+def channel_mean(sock):
+    """Mean of what drives a Metallic/Roughness socket: factor x one channel of
+    the metal-roughness image (glTF: roughness green, metallic blue)."""
+    node, factor = sock.links[0].from_node, 1.0
+    if node.type == 'MATH' and node.operation == 'MULTIPLY':
+        factor = next((i.default_value for i in node.inputs[:2] if not i.is_linked), 1.0)
+        node = next(i.links[0].from_node for i in node.inputs[:2] if i.is_linked)
+    if node.type != 'SEPARATE_COLOR':
+        return factor
+    channel = {'Red': 0, 'Green': 1, 'Blue': 2}[next(
+        l.from_socket.name for l in node.outputs[0].links + node.outputs[1].links + node.outputs[2].links
+        if l.to_socket == sock or l.to_node.type == 'MATH')]
+    src = node.inputs[0].links[0].from_node if node.inputs[0].is_linked else None
+    if src is None or src.type != 'TEX_IMAGE' or src.image is None:
+        return factor
+    img = src.image
+    px = np.empty(len(img.pixels), dtype=np.float32)
+    img.pixels.foreach_get(px)
+    return factor * float(px[channel::4].mean())
+
+
+def strip_to_base_color(mat):
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    if bsdf is None:
+        return
+    keep = set(base_color_images(mat))
+    for sock in bsdf.inputs:
+        if sock.name in ('Base Color', 'Alpha') or not sock.is_linked:
+            continue
+        # The importer writes a glTF factor as Math(multiply) with the texture, or
+        # leaves it out at 1.0. Unlinked, the socket gets factor x texture mean.
+        value = channel_mean(sock) if sock.name in ('Metallic', 'Roughness') else None
+        # Unlinked, the emission colour would stand at the importer's white
+        # (the mech glowed white in the sidebar preview); the VAT shader takes
+        # the glow from the config.
+        if sock.name == 'Emission Color':
+            value = (0.0, 0.0, 0.0, 1.0)
+        for link in list(sock.links):
+            nt.links.remove(link)
+        if value is not None:
+            sock.default_value = value
+    # Remove the chains left dangling (image -> Separate Color / Normal Map -> nothing).
+    removed = True
+    while removed:
+        removed = False
+        for node in list(nt.nodes):
+            if node.type in ('OUTPUT_MATERIAL', 'BSDF_PRINCIPLED') or node in keep:
+                continue
+            if not any(o.is_linked for o in node.outputs):
+                nt.nodes.remove(node)
+                removed = True
+
+
+def drop_opaque_image_alpha(mat):
+    """The glTF importer multiplies the factor alpha with the texture alpha in a
+    Math node, also for a JPEG, which has none. The exporter then packs colour and
+    alpha into a new PNG. A plain factor alpha keeps the JPEG as it was."""
+    if not (mat and mat.use_nodes):
+        return
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    if bsdf is None or not bsdf.inputs['Alpha'].is_linked:
+        return
+    math = bsdf.inputs['Alpha'].links[0].from_node
+    if math.type != 'MATH' or math.operation != 'MULTIPLY':
+        return
+    linked = [i for i in math.inputs[:2] if i.is_linked]
+    if len(linked) != 1 or linked[0].links[0].from_node.type != 'TEX_IMAGE':
+        return
+    img = linked[0].links[0].from_node.image
+    if img is None or img.file_format != 'JPEG':
+        return
+    factor = next(i.default_value for i in math.inputs[:2] if not i.is_linked)
+    nt.nodes.remove(math)
+    bsdf.inputs['Alpha'].default_value = factor
+
+
+def resize_image(img, longest):
+    w, h = img.size
+    if max(w, h) <= longest:
+        return
+    f = longest / max(w, h)
+    img.scale(max(1, round(w * f)), max(1, round(h * f)))
+
+
+def keep_file_rest_pose():
+    """Bones without keys in a clip stand at their node transform in three.js.
+    The importer makes the guessed bind pose Blender's rest pose and poses the
+    bones at the file's node transforms; with no action applied, exporting that
+    pose as the rest keeps those bones where the file had them."""
+    for arm in (o for o in bpy.context.scene.objects if o.type == 'ARMATURE'):
+        ad = arm.animation_data
+        if ad is None:
+            continue
+        ad.action = None
+        for track in list(ad.nla_tracks):
+            ad.nla_tracks.remove(track)
+    for act in bpy.data.actions:
+        act.use_fake_user = True
+    bpy.context.view_layer.update()
+
+
+def view3d_override(**extra):
+    """Context for edit-mode operators: the first 3D viewport if Blender has one."""
+    for win in bpy.context.window_manager.windows:
+        for area in win.screen.areas:
+            if area.type == 'VIEW_3D':
+                region = next(r for r in area.regions if r.type == 'WINDOW')
+                return bpy.context.temp_override(window=win, area=area, region=region, **extra)
+    return bpy.context.temp_override(**extra)
+
+
+def copy_for_bake(obj):
+    """Undecimated copy of `obj`: the surface and UVs the rebake samples."""
+    high = obj.copy()
+    high.data = obj.data.copy()
+    high.name = obj.name + '_bake_source'
+    for coll in obj.users_collection:
+        coll.objects.link(high)
+    return high
+
+
+def mesh_triangles(me):
+    """Vertex positions, triangle vertex indices and triangle corner UVs of `me`."""
+    me.calc_loop_triangles()
+    n = len(me.loop_triangles)
+    verts = np.empty(n * 3, dtype=np.int32)
+    loops = np.empty(n * 3, dtype=np.int32)
+    me.loop_triangles.foreach_get('vertices', verts)
+    me.loop_triangles.foreach_get('loops', loops)
+    co = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get('co', co)
+    uv = np.empty(len(me.loops) * 2, dtype=np.float64)
+    me.uv_layers.active.data.foreach_get('uv', uv)
+    return co.reshape(-1, 3), verts.reshape(-1, 3), uv.reshape(-1, 2)[loops.reshape(-1, 3)]
+
+
+def barycentric(p, a, b, c):
+    """Barycentric weights of the points `p` in the triangles (a, b, c), row by row."""
+    v0, v1, v2 = b - a, c - a, p - a
+    d00 = (v0 * v0).sum(-1)
+    d01 = (v0 * v1).sum(-1)
+    d11 = (v1 * v1).sum(-1)
+    d20 = (v2 * v0).sum(-1)
+    d21 = (v2 * v1).sum(-1)
+    den = d00 * d11 - d01 * d01
+    den = np.where(np.abs(den) < 1e-30, 1e-30, den)
+    v = (d11 * d20 - d01 * d21) / den
+    w = (d00 * d21 - d01 * d20) / den
+    return np.stack([1 - v - w, v, w], -1)
+
+
+def sample_image(img, uv):
+    """Bilinear samples of `img` at `uv` (repeat wrap), one row per point."""
+    w, h = img.size
+    px = np.empty(w * h * img.channels, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, img.channels)
+    x = (uv[:, 0] % 1.0) * w - 0.5
+    y = (uv[:, 1] % 1.0) * h - 0.5
+    x0 = np.floor(x).astype(np.int64)
+    y0 = np.floor(y).astype(np.int64)
+    fx = (x - x0)[:, None]
+    fy = (y - y0)[:, None]
+    x0 %= w
+    y0 %= h
+    x1 = (x0 + 1) % w
+    y1 = (y0 + 1) % h
+    return ((px[y0, x0] * (1 - fx) + px[y0, x1] * fx) * (1 - fy)
+            + (px[y1, x0] * (1 - fx) + px[y1, x1] * fx) * fy)
+
+
+def raster_uv_triangles(uv_tris, res):
+    """Pixel centres of a res x res image covered by each UV triangle:
+    (pixel index, triangle index, barycentric weights), each pixel once."""
+    pix, tri, bary = [], [], []
+    for t, (a, b, c) in enumerate(uv_tris * res):
+        lo = np.clip(np.floor(np.minimum(np.minimum(a, b), c)).astype(int), 0, res - 1)
+        hi = np.clip(np.ceil(np.maximum(np.maximum(a, b), c)).astype(int), 0, res - 1)
+        d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if abs(d) < 1e-12:
+            continue
+        xs, ys = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+        p = np.stack([xs.ravel() + 0.5, ys.ravel() + 0.5], -1)
+        l0 = ((b[1] - c[1]) * (p[:, 0] - c[0]) + (c[0] - b[0]) * (p[:, 1] - c[1])) / d
+        l1 = ((c[1] - a[1]) * (p[:, 0] - c[0]) + (a[0] - c[0]) * (p[:, 1] - c[1])) / d
+        l2 = 1 - l0 - l1
+        # About half a pixel of slack, so texels on an island edge are covered.
+        eps = 0.5 / max(1e-9, math.sqrt(abs(d)))
+        inside = (l0 >= -eps) & (l1 >= -eps) & (l2 >= -eps)
+        if not inside.any():
+            continue
+        q = p[inside]
+        pix.append(q[:, 1].astype(np.int64) * res + q[:, 0].astype(np.int64))
+        tri.append(np.full(len(q), t, dtype=np.int64))
+        bary.append(np.clip(np.stack([l0[inside], l1[inside], l2[inside]], -1), 0, 1))
+    pix, tri, bary = np.concatenate(pix), np.concatenate(tri), np.concatenate(bary)
+    bary /= bary.sum(-1, keepdims=True)
+    _, first = np.unique(pix, return_index=True)
+    return pix[first], tri[first], bary[first]
+
+
+def dilate(img, filled, steps):
+    """Grow the filled pixels of `img` by `steps` pixels (mean of filled neighbours),
+    so mipmaps do not pull the empty background into the islands."""
+    img = img.copy()
+    filled = filled.copy()
+    for _ in range(steps):
+        acc = np.zeros_like(img)
+        count = np.zeros(filled.shape, dtype=np.float32)
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            m = np.roll(np.roll(filled, dy, 0), dx, 1)
+            acc += np.roll(np.roll(img, dy, 0), dx, 1) * m[..., None]
+            count += m
+        grow = ~filled & (count > 0)
+        img[grow] = acc[grow] / count[grow][:, None]
+        filled |= grow
+    return img
+
+
+def rebake_base_color(low, high, size=1024, supersample=2, margin=16, uv_angle=66):
+    """New UVs for `low` and its base colour taken from `high`, so the decimated
+    mesh no longer samples the old atlas across its seams. With several
+    materials (the mech's two) each triangle of `high` gives the colour of
+    its own material's atlas, and `low` keeps the first material only.
+
+    Each texel of the new layout (supersample x supersample samples) is placed
+    on `low` in rest pose, moved to the closest point of `high` and takes the
+    atlas colour at that point's UV. A Cycles selected-to-active bake casts rays
+    along the low normals instead: at zombie_v2 (170 units tall, decimated up
+    to 0.4 units off the original) with an extrusion of 0.1, the ray of 12 % of
+    the head and 16 % of the body vertices hit another surface than the closest
+    one, which speckled the skull and the shirt. Every link from the old atlas
+    to the BSDF (the wraith's emission, too) moves to the new image; `high` is
+    removed.
+    """
+    low.data.materials[0] = low.data.materials[0].copy()
+    unwrap(low, uv_angle)
+
+    mat = low.data.materials[0]
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    # The atlas of each material slot of `high`
+    slot_atlases = []
+    for slot in high.data.materials:
+        images = {n.image for n in base_color_images(slot)}
+        if len(images) != 1:
+            raise RuntimeError(f'rebake expects one base colour image in {slot.name}, found {len(images)}')
+        slot_atlases.append(images.pop())
+    # Every image node that shows the old atlas (the wraith has a second one for emission).
+    old = {n for n in nt.nodes if n.type == 'TEX_IMAGE' and n.image == slot_atlases[0]}
+    targets = [link.to_socket for link in nt.links
+               if link.from_node in old and link.to_node == bsdf and link.to_socket.name != 'Alpha']
+
+    res = size * supersample
+    hco, htri, huv = mesh_triangles(high.data)
+    hslot = np.empty(len(htri), dtype=np.int32)
+    high.data.loop_triangles.foreach_get('material_index', hslot)
+    tree = BVHTree.FromPolygons([Vector(v) for v in hco], htri.tolist(), all_triangles=True)
+    lco, ltri, luv = mesh_triangles(low.data)
+    pix, tri, bary = raster_uv_triangles(luv, res)
+    points = (lco[ltri[tri]] * bary[..., None]).sum(1)
+    nearest = np.empty_like(points)
+    nearest_tri = np.empty(len(points), dtype=np.int64)
+    for i, p in enumerate(points):
+        loc, _, k, _ = tree.find_nearest(Vector(p))
+        nearest[i] = loc
+        nearest_tri[i] = k
+    w = np.clip(barycentric(nearest, *(hco[htri[nearest_tri][:, j]] for j in range(3))), 0, None)
+    w /= w.sum(-1, keepdims=True)
+    uv_at = (huv[nearest_tri] * w[..., None]).sum(1)
+    colour = np.zeros((len(uv_at), 3), dtype=np.float32)
+    for s, atlas in enumerate(slot_atlases):
+        hit = hslot[nearest_tri] == s
+        if hit.any():
+            colour[hit] = sample_image(atlas, uv_at[hit])[:, :3]
+    if len(low.data.materials) > 1:
+        low.data.polygons.foreach_set('material_index', np.zeros(len(low.data.polygons), dtype=np.int32))
+        while len(low.data.materials) > 1:
+            low.data.materials.pop(index=len(low.data.materials) - 1)
+
+    out = np.zeros((res * res, 4), dtype=np.float32)
+    out[pix, :3] = colour[:, :3]
+    filled = np.zeros(res * res, dtype=bool)
+    filled[pix] = True
+    out = dilate(out.reshape(res, res, 4), filled.reshape(res, res), margin * supersample)
+    out[..., 3] = 1.0
+    out = out.reshape(size, supersample, size, supersample, 4).mean((1, 3))
+    image = bpy.data.images.new(mat.name + '_baked', size, size, alpha=False)
+    image.pixels.foreach_set(out.ravel())
+    image.pack()
+
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = image
+    for node in old:
+        nt.nodes.remove(node)
+    for sock in targets:
+        nt.links.new(tex.outputs['Color'], sock)
+    bpy.data.objects.remove(high, do_unlink=True)
+
+
+def unwrap(obj, uv_angle):
+    """New UVs for all of `obj`: Smart UV Project, the islands packed by shape."""
+    if not obj.data.uv_layers:
+        obj.data.uv_layers.new(name='UVMap')
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    with view3d_override(object=obj, active_object=obj):
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.uv.smart_project(angle_limit=math.radians(uv_angle), island_margin=0.003)
+        # Packed by shape, the islands cover 51 % of the image instead of 37 %.
+        bpy.ops.uv.select_all(action='SELECT')
+        bpy.ops.uv.pack_islands(rotate=True, margin=0.002, shape_method='CONCAVE', margin_method='FRACTION')
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def lattice_hash(ix, iy, iz, seed):
+    """A value in [0, 1] per integer lattice point, the same for the same point and seed."""
+    h = ((ix.astype(np.uint64) * np.uint64(73856093)) ^ (iy.astype(np.uint64) * np.uint64(19349663))
+         ^ (iz.astype(np.uint64) * np.uint64(83492791)) ^ np.uint64(seed * 2654435761 % 2 ** 32))
+    h ^= h >> np.uint64(13)
+    h *= np.uint64(1274126177)
+    h ^= h >> np.uint64(16)
+    return (h & np.uint64(0xFFFF)).astype(np.float64) / 65535.0
+
+
+def value_noise(p, seed):
+    """Smooth 3D value noise in [0, 1], one value per row of `p` (lattice spacing 1)."""
+    i = np.floor(p)
+    f = p - i
+    f = f * f * (3 - 2 * f)
+    i = i.astype(np.int64)
+    out = np.zeros(len(p))
+    for dx in (0, 1):
+        wx = f[:, 0] if dx else 1 - f[:, 0]
+        for dy in (0, 1):
+            wy = f[:, 1] if dy else 1 - f[:, 1]
+            for dz in (0, 1):
+                wz = f[:, 2] if dz else 1 - f[:, 2]
+                out += wx * wy * wz * lattice_hash(i[:, 0] + dx, i[:, 1] + dy, i[:, 2] + dz, seed)
+    return out
+
+
+def fbm(p, octaves, seed):
+    """Value noise summed over `octaves`, each twice as fine and half as strong, in [0, 1]."""
+    total, amp, norm = np.zeros(len(p)), 1.0, 0.0
+    for k in range(octaves):
+        total += amp * value_noise(p * 2 ** k, seed + k)
+        norm += amp
+        amp *= 0.5
+    return total / norm
+
+
+def smoothstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def linear_to_srgb(c):
+    return np.where(c <= 0.0031308, 12.92 * c, 1.055 * np.power(c, 1 / 2.4) - 0.055)
+
+
+def corner_ao(co, tri, normals, rays=32, reach=0.4):
+    """Ambient occlusion at every triangle corner over the hemisphere of the
+    triangle's own normal: the share of `rays` cosine-weighted rays that leave
+    within `reach` without a hit (1 open, 0 covered). Corners with the same
+    vertex and normal are cast once."""
+    tree = BVHTree.FromPolygons([Vector(v) for v in co], tri.tolist(), all_triangles=True)
+    rng = np.random.default_rng(3)
+    u, w = rng.random(rays), rng.random(rays)
+    local = np.stack([np.sqrt(u) * np.cos(2 * math.pi * w), np.sqrt(u) * np.sin(2 * math.pi * w),
+                      np.sqrt(1 - u)], -1)
+    out = np.ones((len(tri), 3))
+    cache = {}
+    for t, nrm in enumerate(normals):
+        if np.linalg.norm(nrm) < 0.5:
+            continue
+        helper = np.array([1.0, 0.0, 0.0]) if abs(nrm[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        tx = np.cross(nrm, helper)
+        tx /= np.linalg.norm(tx)
+        dirs = [Vector(d) for d in local @ np.stack([tx, np.cross(nrm, tx), nrm])]
+        for k in range(3):
+            key = (int(tri[t, k]), *np.round(nrm, 3))
+            if key not in cache:
+                origin = Vector(co[tri[t, k]] + nrm * 1e-3)
+                cache[key] = sum(tree.ray_cast(origin, d, reach)[0] is None for d in dirs) / rays
+            out[t, k] = cache[key]
+    return out
+
+
+def convex_edge_points(obj, metres, min_angle=35, step=0.005):
+    """Points every `step` metres along the convex edges of `obj` sharper than
+    `min_angle` degrees, in metres like weathered_paint, found on a welded copy
+    so that parts of different materials share their edges."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.transform(Matrix.Scale(metres, 4) @ obj.matrix_world)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    limit = math.radians(min_angle)
+    points = []
+    for e in bm.edges:
+        if len(e.link_faces) != 2 or e.calc_face_angle_signed(0.0) < limit:
+            continue
+        a, b = e.verts[0].co, e.verts[1].co
+        n = max(1, math.ceil((b - a).length / step))
+        points.extend(tuple(a.lerp(b, (i + 0.5) / n)) for i in range(n))
+    bm.free()
+    return points
+
+
+def weathered_paint(obj, metres, camo=(), camo_colours=(), camo_cover=(), camo_scale=1.0,
+                    wear_on=('*',), wear_colour=(0.32, 0.31, 0.27), wear_width=0.02,
+                    dust_colour=(0.17, 0.14, 0.095), dust_height=1.2, keep_brightness=True, size=1024,
+                    supersample=2, uv_angle=66, seed=11):
+    """One painted base colour image in place of the flat material colours of
+    `obj` (the tank): new UVs (unwrap) and a texture generated here from the
+    geometry, no image sources. Positions are in metres (`metres` per model
+    unit, z up), so the sizes below are real ones:
+
+    - the material colour; on the materials matching `camo`, patches of
+      `camo_colours` covering `camo_cover` of that surface (3D noise with
+      features about `camo_scale` metres across, soft edges);
+    - broad and fine brightness variation, faint vertical streaks on steep faces;
+    - worn paint (`wear_colour`) along convex edges sharper than 35 degrees,
+      up to `wear_width` wide and chipped by noise, on the materials matching
+      `wear_on` (the tank's track links are so small that it covered them whole);
+    - dust (`dust_colour`) from the ground up to `dust_height`, a little on
+      faces that look up;
+    - ambient occlusion from the triangle corners (corner_ao);
+    - with `keep_brightness`, each material scaled back to the mean luminance
+      of its flat colour: the paint moves light and dark around, it does not
+      darken the model (camo, occlusion and streaks took the tank's hull from
+      sRGB 0.55 to 0.41 on average).
+
+    Every face then uses one material, a copy of the first with the image as
+    base colour; the others go. Seams of the new UVs split vertices.
+    """
+    unwrap(obj, uv_angle)
+    me = obj.data
+    co, tri, luv = mesh_triangles(me)
+    mw = np.array(obj.matrix_world)
+    co = (co @ mw[:3, :3].T + mw[:3, 3]) * metres
+    slot = np.empty(len(tri), dtype=np.int32)
+    me.loop_triangles.foreach_get('material_index', slot)
+    normals = np.cross(co[tri[:, 1]] - co[tri[:, 0]], co[tri[:, 2]] - co[tri[:, 0]])
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    ao = corner_ao(co, tri, normals)
+    edge_points = convex_edge_points(obj, metres)
+    kd = KDTree(len(edge_points))
+    for i, q in enumerate(edge_points):
+        kd.insert(q, i)
+    kd.balance()
+
+    res = size * supersample
+    pix, t, bary = raster_uv_triangles(luv, res)
+    p = (co[tri[t]] * bary[..., None]).sum(1)
+    n = normals[t]
+    bsdfs = [next(nd for nd in m.node_tree.nodes if nd.type == 'BSDF_PRINCIPLED') for m in me.materials]
+    colour = np.array([b.inputs['Base Color'].default_value[:3] for b in bsdfs])[slot[t]]
+    painted = [i for i, m in enumerate(me.materials) if any(fnmatch.fnmatchcase(m.name, pat) for pat in camo)]
+    in_camo = np.isin(slot[t], painted)
+    for k, (patch, cover) in enumerate(zip(camo_colours, camo_cover)):
+        noise = fbm(p / camo_scale + 17.3 * (k + 1), 3, seed + 7 * k)
+        cut = np.quantile(noise[in_camo], 1 - cover) if in_camo.any() else 1.0
+        mask = smoothstep(cut - 0.006, cut + 0.006, noise) * in_camo
+        colour += (np.array(patch) - colour) * mask[:, None]
+    colour *= (0.9 + 0.2 * fbm(p / 1.5, 3, seed + 1))[:, None]
+    colour *= (0.95 + 0.1 * value_noise(p / 0.012, seed + 2))[:, None]
+    steep = 1 - smoothstep(0.3, 0.6, np.abs(n[:, 2]))
+    streaks = fbm(p / np.array([0.06, 0.06, 0.7]), 2, seed + 3)
+    colour *= (1 - 0.18 * steep * smoothstep(0.5, 0.75, streaks))[:, None]
+
+    dist = np.array([kd.find(q)[2] for q in p.tolist()])
+    edge = 1 - smoothstep(0.0, wear_width, dist)
+    wear = smoothstep(0.45, 0.65, edge * (0.4 + 1.2 * fbm(p / 0.03, 3, seed + 4)))
+    worn = [i for i, m in enumerate(me.materials) if any(fnmatch.fnmatchcase(m.name, pat) for pat in wear_on)]
+    wear *= np.isin(slot[t], worn)
+    colour += (np.array(wear_colour) - colour) * (0.7 * wear)[:, None]
+
+    height = p[:, 2] - co[:, 2].min()
+    dirt = (1 - smoothstep(0.0, dust_height, height)) * 0.5 + smoothstep(0.6, 0.95, n[:, 2]) * 0.15
+    dirt = np.clip(dirt * (0.5 + 0.8 * fbm(p / 0.25, 3, seed + 5)), 0.0, 0.6)
+    colour += (np.array(dust_colour) - colour) * dirt[:, None]
+    colour *= (1 - 0.55 * (1 - (ao[t] * bary).sum(1)))[:, None]
+    if keep_brightness:
+        luma = np.array([0.2126, 0.7152, 0.0722])
+        for i, b in enumerate(bsdfs):
+            sel = slot[t] == i
+            mean = (colour[sel] @ luma).mean() if sel.any() else 0.0
+            if mean > 1e-6:
+                colour[sel] *= (np.array(b.inputs['Base Color'].default_value[:3]) @ luma) / mean
+
+    srgb = linear_to_srgb(np.clip(colour, 0.0, 1.0))
+    for i, m in enumerate(me.materials):
+        mean = srgb[slot[t] == i].mean(0) if (slot[t] == i).any() else np.zeros(3)
+        print(f'[optimize_enemy]   {m.name}: mean sRGB {np.round(mean, 2)}')
+    out = np.zeros((res * res, 4), dtype=np.float32)
+    out[pix, :3] = srgb
+    filled = np.zeros(res * res, dtype=bool)
+    filled[pix] = True
+    out = dilate(out.reshape(res, res, 4), filled.reshape(res, res), 16 * supersample)
+    out[..., 3] = 1.0
+    out = out.reshape(size, supersample, size, supersample, 4).mean((1, 3))
+    image = bpy.data.images.new(obj.name + '_paint', size, size, alpha=False)
+    image.pixels.foreach_set(out.ravel())
+    image.pack()
+
+    mat = me.materials[0].copy()
+    mat.name = obj.name + '_paint'
+    nt = mat.node_tree
+    bsdf = next(nd for nd in nt.nodes if nd.type == 'BSDF_PRINCIPLED')
+    for link in list(bsdf.inputs['Base Color'].links):
+        nt.links.remove(link)
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = image
+    nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+    me.polygons.foreach_set('material_index', np.zeros(len(me.polygons), dtype=np.int32))
+    me.materials.clear()
+    me.materials.append(mat)
+    print(f'[optimize_enemy] {obj.name}: painted, {len(edge_points)} edge points, {len(pix)} texels')
+
+
+def purge_orphans():
+    # Materials first: an image loses its last user only once they are gone.
+    for coll in (bpy.data.materials, bpy.data.meshes, bpy.data.textures, bpy.data.images):
+        for block in list(coll):
+            if block.users == 0:
+                coll.remove(block)
+
+
+def export_glb(path, image_format, sample, slide, rest_position=True):
+    bpy.ops.export_scene.gltf(
+        filepath=path,
+        export_format='GLB',
+        export_animations=True,
+        export_animation_mode='ACTIONS',
+        export_anim_slide_to_zero=slide,
+        export_force_sampling=sample,
+        export_optimize_animation_size=True,
+        export_skins=True,
+        export_influence_nb=4,
+        export_morph=True,
+        export_materials='EXPORT',
+        export_image_format=image_format,
+        export_jpeg_quality=90,
+        export_image_quality=90,
+        export_apply=False,
+        export_yup=True,
+        export_cameras=False,
+        export_lights=False,
+        export_rest_position_armature=rest_position,
+    )
+
+
+def run(name):
+    recipe = RECIPES[name]
+    repo = repo_root()
+    out = os.path.join(repo, recipe.get('out') or os.path.splitext(recipe['src'])[0] + '.glb')
+    decim = recipe.get('decimate')
+    with tempfile.TemporaryDirectory() as tmp:
+        rev = recipe.get('rev', SOURCE_REV)
+        src = git_export(repo, recipe['src'], tmp, rev)
+        for extra in recipe.get('extra', []):
+            git_export(repo, extra, tmp, rev)
+        clear_scene()
+        # The importer places keys by the scene rate, and recipe frames (`trim`) count
+        # at the baker's 30 fps; a fresh Blender runs at 24.
+        bpy.context.scene.render.fps = 30
+        bpy.context.scene.render.fps_base = 1.0
+        # Merged vertices let the decimator collapse across UV seams without tearing them open.
+        import_model(src, merge_vertices=decim is not None or recipe.get('merge', False),
+                     guess_bind_pose=recipe.get('guess_bind_pose', True))
+
+        if 'actions' in recipe:
+            keep_actions(recipe['actions'])
+        for action_name, window in recipe.get('trim', {}).items():
+            trim_action(bpy.data.actions[action_name], *window)
+        if recipe.get('rigid_to_skin'):
+            rigid_to_skin()
+        if 'join_skin' in recipe:
+            join_skin(recipe['join_skin'])
+        if recipe.get('vertex_colors') is False:
+            drop_vertex_colors()
+
+        meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+        for obj in meshes:
+            cull = recipe.get('cull_hidden')
+            if cull:
+                cull_hidden(obj, **(cull if isinstance(cull, dict) else {}))
+            if 'single_layer' in recipe:
+                single_layer(obj, recipe['single_layer'])
+            if 'decimate_materials' in recipe:
+                decimate_materials(obj, recipe['decimate_materials'])
+            ratio = decim
+            if isinstance(decim, dict):
+                ratio = next((r for pat, r in decim.items() if fnmatch.fnmatchcase(obj.name, pat)), 1.0)
+            bake_source = copy_for_bake(obj) if 'rebake' in recipe else None
+            if 'weld' in recipe:
+                weld(obj, recipe['weld'])
+            seam_weight = next((w for pat, w in recipe.get('seams', {}).items()
+                                if fnmatch.fnmatchcase(obj.name, pat)), None)
+            if ratio is not None:
+                decimate(obj, ratio, seam_weight)
+            set_normals(obj, recipe.get('normals', 'keep'))
+            if obj.data.validate():
+                print(f'[optimize_enemy] {obj.name}: repaired invalid geometry')
+            if bake_source is not None:
+                rebake_base_color(obj, bake_source, **recipe['rebake'])
+            if 'paint' in recipe:
+                weathered_paint(obj, recipe.get('root', {}).get('size', 1.0), **recipe['paint'])
+
+        for mat in bpy.data.materials:
+            if recipe.get('base_color_only'):
+                strip_to_base_color(mat)
+            drop_opaque_image_alpha(mat)
+        purge_orphans()
+        if 'texture' in recipe:
+            for img in bpy.data.images:
+                resize_image(img, recipe['texture'])
+
+        if 'root' in recipe:
+            place_root(**recipe['root'])
+        rest_from_file = recipe.get('rest_from_file', False)
+        if rest_from_file:
+            keep_file_rest_pose()
+        export_glb(out, recipe.get('image_format', 'AUTO'), recipe.get('sample', False),
+                   recipe.get('slide', False), rest_position=not rest_from_file)
+    print(f'[optimize_enemy] {name}: {out} ({os.path.getsize(out) / 1048576:.2f} MB)')
+    return out
+
+
+if __name__ == '__main__' and '--' in sys.argv:
+    for recipe_name in sys.argv[sys.argv.index('--') + 1:]:
+        run(recipe_name)

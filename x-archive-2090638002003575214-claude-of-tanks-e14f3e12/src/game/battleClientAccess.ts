@@ -1,0 +1,138 @@
+import type {
+  AimController,
+  AimControllerDependencies,
+} from './aimController.ts';
+import {
+  hasAmmunition,
+  shellAmmunitionCapacity,
+} from '../sim/ammunition.ts';
+import { rulesetUnlimitedFor } from '../sim/matchRuleset.ts';
+import { createLazyChunk } from '../app/lazyChunk.ts';
+
+type RuntimeModule = typeof import('./battleClientRuntime.ts');
+type RuntimeLoader = () => Promise<RuntimeModule>;
+
+export interface BattleClientAccess {
+  preload(): Promise<RuntimeModule>;
+  isReady(): boolean;
+  readonly aimController: AimController;
+  readonly computeDispersionRadM: RuntimeModule['computeDispersionRadM'];
+  readonly shotRecoilScale: RuntimeModule['shotRecoilScale'];
+  readonly tankPoseFromState: RuntimeModule['tankPoseFromState'];
+  readonly traceTank: RuntimeModule['traceTank'];
+  readonly selectShell: RuntimeModule['selectShell'];
+  readonly resolveShellHit: RuntimeModule['resolveShellHit'];
+  readonly createCombatState: RuntimeModule['createCombatState'];
+  readonly repairAllModules: RuntimeModule['repairAllModules'];
+  readonly magazineReloadDenialReason: RuntimeModule['magazineReloadDenialReason'];
+  readonly startMagazineReload: RuntimeModule['startMagazineReload'];
+  readonly createShell: RuntimeModule['createShell'];
+  readonly activateSpecialAction: RuntimeModule['activateSpecialAction'];
+  readonly guidedMissileSlot: RuntimeModule['guidedMissileSlot'];
+  readonly specialActionKind: RuntimeModule['specialActionKind'];
+  readonly hasAmmunition: RuntimeModule['hasAmmunition'];
+  readonly shellAmmunitionCapacity: RuntimeModule['shellAmmunitionCapacity'];
+  /** Whether one entity's rounds are unlimited under the ruleset (sim/matchRuleset; the AC-130 refills its gunship only). */
+  readonly rulesetUnlimitedFor: typeof rulesetUnlimitedFor;
+  readonly isPostwarVehicleEra: RuntimeModule['isPostwarVehicleEra'];
+  readonly hasConsumableRule: (slot: number) => boolean;
+  /** A slot's item on the page battle's tank (game/soloConsumables.ts). */
+  readonly useSoloConsumable: RuntimeModule['useSoloConsumable'];
+  readonly advancePreBattleCountdown: RuntimeModule['advancePreBattleCountdown'];
+  readonly resolveVisiblePreBattleSeconds: RuntimeModule['resolveVisiblePreBattleSeconds'];
+  readonly advanceTankPresentationPose: RuntimeModule['advanceTankPresentationPose'];
+  readonly createTankPresentationPose: RuntimeModule['createTankPresentationPose'];
+  readonly resetTankPresentationPose: RuntimeModule['resetTankPresentationPose'];
+  readonly sampleTankPresentationPose: RuntimeModule['sampleTankPresentationPose'];
+  readonly mobileAutoAimCenter: RuntimeModule['mobileAutoAimCenter'];
+  readonly pickMobileAutoAimTarget: RuntimeModule['pickMobileAutoAimTarget'];
+  readonly requestTankSelfRight: RuntimeModule['requestTankSelfRight'];
+  readonly requestTankJump: RuntimeModule['requestTankJump'];
+}
+
+/**
+ * Keep client combat math and the armor-query controller outside garage boot.
+ *
+ * The stable aim proxy lets the camera own one raycast callback before the
+ * dynamic module arrives. Garage rays fall back to terrain; every operation
+ * that requires a combat entity fails closed until Battle intent has awaited
+ * the retryable runtime transfer.
+ */
+export function createBattleClientAccess(
+  getAimDependencies: () => AimControllerDependencies,
+  load: RuntimeLoader = () => import('./battleClientRuntime.ts'),
+): BattleClientAccess {
+  if (typeof getAimDependencies !== 'function' || typeof load !== 'function') {
+    throw new TypeError('battle client access requires dependency and loader ports');
+  }
+
+  let runtime: RuntimeModule | null = null;
+  let aim: AimController | null = null;
+  // (2026-11-02 audit R6, round 2 U35) one app/lazyChunk.ts chunk: a failed transfer is asked again under the one policy
+  // (at once after one failure, then past its backoff; a removed chunk shows the reload action), not at once by every call
+  const chunk = createLazyChunk(() => load().then((loaded) => {
+    aim = loaded.createAimController(getAimDependencies());
+    runtime = loaded;
+    return loaded;
+  }));
+  const preload = (): Promise<RuntimeModule> => chunk.load();
+
+  const requireRuntime = (): RuntimeModule => {
+    if (!runtime) throw new Error('Battle client runtime is not ready.');
+    return runtime;
+  };
+  const requireAim = (): AimController => {
+    if (!aim) throw new Error('Battle aim controller is not ready.');
+    return aim;
+  };
+
+  const aimController: AimController = {
+    raycast(origin, direction, maxDistance) {
+      if (aim) return aim.raycast(origin, direction, maxDistance);
+      return getAimDependencies().worldRaycast(origin, direction, maxDistance);
+    },
+    gunCenterRay: (...args) => requireAim().gunCenterRay(...args),
+    muzzlePathBlockDist: (...args) => requireAim().muzzlePathBlockDist(...args),
+    update(frame) { if (aim) aim.update(frame); },
+    observe(frame, tankId, view) { if (aim) aim.observe(frame, tankId, view); },
+  };
+
+  return {
+    preload,
+    isReady: () => runtime !== null,
+    aimController,
+    computeDispersionRadM: (...args) => requireRuntime().computeDispersionRadM(...args),
+    shotRecoilScale: (...args) => requireRuntime().shotRecoilScale(...args),
+    tankPoseFromState: (...args) => requireRuntime().tankPoseFromState(...args),
+    traceTank: (...args) => requireRuntime().traceTank(...args),
+    selectShell: (...args) => requireRuntime().selectShell(...args),
+    resolveShellHit: (...args) => requireRuntime().resolveShellHit(...args),
+    createCombatState: (...args) => requireRuntime().createCombatState(...args),
+    repairAllModules: (...args) => requireRuntime().repairAllModules(...args),
+    magazineReloadDenialReason: (...args) => requireRuntime().magazineReloadDenialReason(...args),
+    startMagazineReload: (...args) => requireRuntime().startMagazineReload(...args),
+    createShell: (...args) => requireRuntime().createShell(...args),
+    activateSpecialAction: (...args) => requireRuntime().activateSpecialAction(...args),
+    guidedMissileSlot: (...args) => requireRuntime().guidedMissileSlot(...args),
+    specialActionKind: (...args) => requireRuntime().specialActionKind(...args),
+    // These two helpers are deliberately tiny and pure. Action-card setup runs
+    // in the Garage before the full Battle runtime has been demand-loaded.
+    hasAmmunition,
+    shellAmmunitionCapacity,
+    // ... as is the per-entity unlimited-rounds read the shell cards carry (the composition root imports its module)
+    rulesetUnlimitedFor,
+    isPostwarVehicleEra: (...args) => requireRuntime().isPostwarVehicleEra(...args),
+    hasConsumableRule: (slot) => Number.isInteger(slot) && slot >= 0 && slot < requireRuntime().CONSUMABLE_SLOTS,
+    useSoloConsumable: (...args) => requireRuntime().useSoloConsumable(...args),
+    advancePreBattleCountdown: (...args) => requireRuntime().advancePreBattleCountdown(...args),
+    resolveVisiblePreBattleSeconds: (...args) => requireRuntime().resolveVisiblePreBattleSeconds(...args),
+    advanceTankPresentationPose: (...args) => requireRuntime().advanceTankPresentationPose(...args),
+    createTankPresentationPose: (...args) => requireRuntime().createTankPresentationPose(...args),
+    resetTankPresentationPose: (...args) => requireRuntime().resetTankPresentationPose(...args),
+    sampleTankPresentationPose: (...args) => requireRuntime().sampleTankPresentationPose(...args),
+    mobileAutoAimCenter: (...args) => requireRuntime().mobileAutoAimCenter(...args),
+    pickMobileAutoAimTarget: (...args) => requireRuntime().pickMobileAutoAimTarget(...args),
+    requestTankSelfRight: (...args) => requireRuntime().requestTankSelfRight(...args),
+    requestTankJump: (...args) => requireRuntime().requestTankJump(...args),
+  };
+}

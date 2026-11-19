@@ -1,0 +1,30 @@
+# The relay next to an existing cloudflared container (docs/COOP_PLAN.md, D56).
+# The tunnel's public hostname 3dtd-lobby.sgeht.net points at http://relay:3003.
+services:
+  relay:
+    image: ghcr.io/ingel81/3dtd-relay:latest
+    container_name: 3dtd-relay
+    restart: unless-stopped
+    # Docker's own log of the container (stdout) stays small; the relay's day files live in ./logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Actions on the status page (close a room, drop a player) for whoever enters this token; leave out for read only
+    # Keep the run logs players agree to send after a coop game (logs/runs, 2 GB, 90 days); download on the status page
+    # environment:
+    #   RELAY_ADMIN_TOKEN: "a long random string"
+    #   RELAY_COLLECT_RUNS: "1"
+    volumes:
+      - ./logs:/app/logs
+    # No published port needed: cloudflared reaches it on the shared network.
+    # Uncomment to read the status page from the LAN: http://<server>:3003/
+    # ports:
+    #   - "3003:3003"
+    networks:
+      - tunnel
+
+networks:
+  tunnel:
+    external: true   # the network your cloudflared container is on

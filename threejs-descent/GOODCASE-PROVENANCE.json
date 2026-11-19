@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/mrdoob/three-descent",
+  "commit": "e8570178df232cdc8e96d923c2fc2c760e67964a",
+  "license": "MIT",
+  "scope": "code-only",
+  "files": 63,
+  "bytes": 1543485
+}

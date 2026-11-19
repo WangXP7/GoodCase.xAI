@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+// r10e (the coordinator, from the notices session's blind critic on integ/229 ce8b634668): on a touch layout the centre
+// notices kept no distance from the reticle. The detection and the alert sat on the aim point, the ring, the struck round
+// and rack, the scope's circle and readouts and its vision plate, the alert on the pre-battle countdown's digit, the
+// countdown on the ring and the medal card on the scope's readout row. This rendered regression stages the critic's
+// scenes (out-of-ammo states, the battle sight and the scope, at full bloom and at rest, with the detection, the alert,
+// the countdown and a medal) at every touch size, records the reticle's real ink (recordReticle) and measures each notice
+// against it, the seated warning chip, the vision plate and the other notices, and (r10g: the alert sat on
+// the AUTO AIM and SCOPE labels at 375x667) the controls, their labels and the panels: each keeps 3 px. Where the
+// layout found no place that keeps clear (body[data-touch-notices~='uncleared'], touchNoticePlan.ts) the gaps are notes,
+// not failures, and the report lists them, except through a portrait phone's scope: there a notice keeps 3 px from the
+// sight's text (the readouts, the zoom, the range tag, a countdown) wherever it sits, the alert lying over the map
+// instead (r10g, the coordinator's ruling: at 320x568 the alert sat on "0 APFSDS" and the zoom plate). The short
+// landscapes' scope, whose map sits beside the score, over the notices' first row, keeps its notes. A wrapped alert
+// takes the width the plan gives it (r10g: an auto width shrank to the room right of its centre, and at 320x568 a 150 px
+// alert set five lines 96 px wide onto the ammo slot), and a notice over the map is stacked over it (at the controls'
+// layer the map, later in the page, painted over the alert the ruling sets there). No screenshot.
+// node tools/hud-touch-notices.browser.mjs --url=http://127.0.0.1:5189 [--out=outputs/hud-touch-notices] [--case=360x640,...]
+import { launchGuardedBrowser } from './browser-launch.mjs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { recordReticle } from './hud-ammo-capture.mjs';
+
+const arg = (name, fallback) => process.argv.find((v) => v.startsWith(`--${name}=`))?.split('=').slice(1).join('=') || fallback;
+const url = arg('url', 'http://127.0.0.1:5189');
+const out = resolve(arg('out', 'outputs/hud-touch-notices'));
+const { chromium } = await import(arg('playwright-module', 'playwright'));
+const TOUCH_NOTICE_SIZES = ['320x568', '360x640', '375x667', '390x844', '768x1024', '1024x768', '568x256', '568x290', '568x320',
+  '640x360', '667x375', '740x360', '844x300', '844x390', '932x430'];
+// [name, the fixture's out-of-ammo stage, sight, bloom, gun travel warning, what shows] (the critic's scenes, and two at rest)
+const TOUCH_NOTICE_SCENES = [
+  ['a-dry-gun-battle', 'ammo-dry-cannon', 'battle', 'full', true, 'det+alert'],
+  ['b-rack-reloading-scope', 'ammo-reload-autoloader-sniper', 'scope', 'full', true, 'det+medal'],
+  ['c-dry-rack-countdown', 'ammo-dry-autoloader', 'battle', 'rest', false, 'countdown+alert'],
+  ['d-dry-gun-scope', 'ammo-dry-cannon', 'scope', 'full', false, 'det+alert'],
+  ['e-dry-rack-battle-medal', 'ammo-dry-autoloader', 'battle', 'full', true, 'medal+alert'],
+  ['f-reload-scope-rest', 'ammo-reload-sniper-warn', 'scope', 'rest', true, 'det+alert'],
+  ['g-reload-battle-rest', 'ammo-reload', 'battle', 'rest', true, 'det+alert'],
+];
+const NOTICES = ['detection', 'alert', 'countdown', 'medal'];
+// the controls, their labels and the panels a notice keeps clear of (battleHudLayout TOUCH_NOTICE_OBSTACLES and _SOFT)
+const FURNITURE = ['.cot-vehicle-controls>button', '.cot-shell', '.cot-con', '.cot-touch.on .round', '.cot-touch.on .round>.lb',
+  '.cot-touch.on .joy', '.cot-touch.on .quick', '.cot-dp', '.cot-drive', '.cot-minimap', '.cot-top', '.cot-mode-status.show',
+  '.cot-ear', '.flight-identity'];
+
+/** In the page: stages a scene and returns the notices' boxes, the reticle's ink, the chip and the plate. */
+async function stageScene([stage, sight, bloom, warn, set, furniture]) {
+  const { MEDALS } = await import('/src/game/serviceRecord.ts');
+  const f = window.__HUD_LAYOUT;
+  document.querySelector('.cot-hud').classList.remove('rosters-expanded');
+  f.bus.emit('battle:presented');
+  f.state(stage);
+  f.frame.mode = sight === 'scope' ? 'sniper' : 'battle';
+  f.hud.setMode(f.frame.mode);
+  Object.assign(f.frame.aim, { zoom: sight === 'scope' ? 25 : 1, distM: 1500, dispersionRadM: bloom === 'full' ? 1e4 : 1e-4, gunLimitSpec: warn });
+  for (const part of set.split('+')) {
+    if (part === 'det') f.bus.emit('player:spotted', { timeS: f.frame.timeS - 4 });
+    else if (part === 'alert') f.bus.emit('ammo:empty', { id: f.frame.player.id });
+    else if (part === 'countdown') f.hud.preBattleCountdown(5);
+    else if (part === 'medal') f.bus.emit('service:medal', { id: MEDALS[0].id });
+  }
+  for (let i = 0; i < 150; i++) { f.frame.timeS += 1 / 60; f.hud.update(f.frame); }
+  await new Promise((done) => setTimeout(done, 250));
+  window.dispatchEvent(new Event('cot-hud-relayout'));
+  for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+  const running = document.getAnimations().filter((a) => a.playState === 'running' && Number.isFinite(a.effect?.getComputedTiming().endTime));
+  await Promise.race([Promise.all(running.map((a) => a.finished.catch(() => {}))), new Promise((done) => setTimeout(done, 1500))]);
+  f.frame.timeS += 1 / 60;
+  f.hud.update(f.frame);
+  for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+  const box = (selector) => {
+    const node = document.querySelector(selector);
+    if (!node || !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return null;
+    const r = node.getBoundingClientRect();
+    return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
+  };
+  return {
+    detection: box('.cot-sixth.on'), alert: box('.cot-alert.show'), countdown: box('.cot-prebattle.on'),
+    medal: document.querySelector('.cot-medal-toasts')?.dataset.placement === 'ready' ? box('.cot-medal-toasts .cot-medal-toast') : null,
+    chip: box('.cot-aim-warning:not([hidden]),.cot-battle-notices .cot-aim-notice'), vision: box('.cot-scope-vision'),
+    ink: window.__RETICLE_LOG.paint.filter((op) => op.box).map((op) => ({ ...op.box, what: op.text ?? (op.ring ? 'ring' : op.op) })),
+    furniture: furniture.flatMap((selector) => [...document.querySelectorAll(selector)]
+      .filter((node) => node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))
+      .map((node) => { const r = node.getBoundingClientRect(); return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom, what: selector }; })
+      .filter((box) => box.x1 - box.x0 >= 1 && box.y1 - box.y0 >= 1)),
+    uncleared: (document.body.dataset.touchNotices ?? '').split(' ').includes('uncleared'),
+    // (each notice's stacking over the map's: the same stacking context, the HUD's)
+    stacked: Object.fromEntries(['.cot-sixth.on', '.cot-alert.show'].map((selector) => {
+      const node = document.querySelector(selector);
+      const map = document.querySelector('.cot-minimap');
+      return [selector, node && map ? Number(getComputedStyle(node).zIndex) - Number(getComputedStyle(map).zIndex) : null];
+    })),
+    // (the alert's place width, and its lines)
+    alertW: parseFloat(document.body.style.getPropertyValue('--hud-touch-alert-w')) || null,
+    alertLines: (() => {
+      const copy = document.querySelector('.cot-alert.show .cot-alert-copy');
+      if (!copy) return 0;
+      const range = document.createRange();
+      range.selectNodeContents(copy);
+      return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+    })(),
+  };
+}
+
+/** Every notice's least gap to the ink, the chip, the plate and the other notices, and to what. */
+function noticeGaps(scene) {
+  const apart = (a, b) => Math.max(a.x0 - b.x1, b.x0 - a.x1, a.y0 - b.y1, b.y0 - a.y1);
+  const gaps = {};
+  for (const name of NOTICES) {
+    const notice = scene[name];
+    if (!notice) continue;
+    let least = [Infinity, ''];
+    for (const ink of scene.ink) { const gap = apart(notice, ink); if (gap < least[0]) least = [gap, `ink ${ink.what}`]; }
+    for (const box of scene.furniture) { const gap = apart(notice, box); if (gap < least[0]) least = [gap, box.what]; }
+    for (const other of ['chip', 'vision', ...NOTICES]) {
+      if (other === name || !scene[other]) continue;
+      const gap = apart(notice, scene[other]);
+      if (gap < least[0]) least = [gap, other];
+    }
+    gaps[name] = least;
+  }
+  return gaps;
+}
+
+await mkdir(out, { recursive: true });
+const sizes = TOUCH_NOTICE_SIZES.filter((size) => !arg('case', '') || arg('case', '').split(',').includes(size));
+const browser = await launchGuardedBrowser(chromium, { headless: true, channel: 'chrome', args: ['--disable-gpu'] });
+const reports = [];
+const failures = [];
+try {
+  for (const size of sizes) {
+    const [width, height] = size.split('x').map(Number);
+    const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 1,
+      reducedMotion: 'reduce' });
+    await context.addInitScript(recordReticle);
+    for (const [scene, ...staging] of TOUCH_NOTICE_SCENES) {
+      const page = await context.newPage();
+      page.on('pageerror', (error) => failures.push(`${size} ${scene}: ${error.message}`));
+      await page.goto(`${url}/tools/fixtures/battle-hud-layout.html?locale=en-US`, { waitUntil: 'networkidle', timeout: 300_000 });
+      await page.waitForFunction(() => !!window.__HUD_LAYOUT, null, { timeout: 300_000 });
+      await page.evaluate(() => document.fonts?.ready);
+      const staged = await page.evaluate(stageScene, [...staging, FURNITURE]);
+      const gaps = noticeGaps(staged);
+      const short = Object.entries(gaps).filter(([, [gap]]) => gap < 3 - 1e-6);
+      for (const [name, [gap, what]] of short) {
+        const line = `${size} ${scene}: the ${name} keeps ${gap.toFixed(2)} px from ${what}`;
+        if (!staged.uncleared) failures.push(line);
+      }
+      // (a notice over the map stacked over it, cleared or not)
+      const mapBox = staged.furniture.find((box) => box.what === '.cot-minimap');
+      for (const [name, selector] of [['detection', '.cot-sixth.on'], ['alert', '.cot-alert.show']]) {
+        const notice = staged[name];
+        if (!notice || !mapBox) continue;
+        const over = Math.min(notice.x1, mapBox.x1) - Math.max(notice.x0, mapBox.x0) > 0.5 && Math.min(notice.y1, mapBox.y1) - Math.max(notice.y0, mapBox.y0) > 0.5;
+        if (over && !(staged.stacked[selector] > 0)) failures.push(`${size} ${scene}: the ${name} lies over the map but under it (z ${staged.stacked[selector]})`);
+      }
+      // (a wrapped alert as wide as its place, cleared or not)
+      if (staged.alert && staged.alertW && staged.alertLines > 1 && staged.alert.x1 - staged.alert.x0 < staged.alertW - 1) {
+        failures.push(`${size} ${scene}: the alert set ${staged.alertLines} lines ${(staged.alert.x1 - staged.alert.x0).toFixed(1)} px wide, narrower than its ${staged.alertW} px place`);
+      }
+      // (through a portrait phone's scope the sight's text binds an uncleared place too)
+      if (staging[1] === 'scope' && staged.uncleared && height > width) {
+        const apart = (a, b) => Math.max(a.x0 - b.x1, b.x0 - a.x1, a.y0 - b.y1, b.y0 - a.y1);
+        for (const name of NOTICES) {
+          const notice = staged[name];
+          if (!notice) continue;
+          for (const ink of staged.ink) {
+            if (ink.what === 'ring' || ink.what === 'stroke' || !String(ink.what).trim()) continue;
+            const gap = apart(notice, ink);
+            if (gap < 3 - 1e-6) { failures.push(`${size} ${scene}: through the scope the ${name} keeps ${gap.toFixed(2)} px from "${ink.what}"`); break; }
+          }
+        }
+      }
+      reports.push({ size, scene, staging, gaps, uncleared: staged.uncleared, short: short.map(([name, [gap, what]]) => ({ name, gap, what })) });
+      await page.close();
+    }
+    await context.close();
+  }
+} finally {
+  await browser.close();
+  await writeFile(resolve(out, 'report.json'), JSON.stringify({ reports, failures }, null, 1));
+}
+const notes = reports.filter((r) => r.uncleared && r.short.length);
+console.log(`${reports.length} touch notice scenes; ${failures.length} failures; ${notes.length} scenes with no clear place. ${out}`);
+for (const r of notes) console.log(`  note ${r.size} ${r.scene}: ${r.short.map((s) => `${s.name} ${s.gap.toFixed(2)} from ${s.what}`).join(', ')}`);
+if (failures.length) { console.log(failures.join('\n')); process.exitCode = 1; }

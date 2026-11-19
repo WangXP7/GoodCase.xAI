@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Progress and news from Tiny World Builder - a build-in-public timeline of what we have shipped, from the first tiny worlds to voxel avatars, multiplayer, and WAVE launches." />
+<title>News - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<style>
+  /* Width matches the site's other page sections (hero, cta, roadmap) so
+     the left/right edges line up down the page. */
+  .news-section {
+    width: min(1200px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 8px 0 72px;
+  }
+  .news-intro {
+    margin: 0 auto 44px;
+    max-width: 68ch;
+    text-align: center;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  /* ---- Category palette (named tokens, not scattered literals) ----
+     Each entry carries one cat-* class. The chip reads --cat-bg/ink/border;
+     the timeline dot reads --cat-dot, so the rail and chips read as one
+     coherent colour system. All chip ink/bg pairs clear WCAG AA (>=4.5:1).
+     Brand anchors: wave1 dot = #f0a531, tinyverse dot = var(--accent). */
+  .cat-wave1     { --cat-bg:#fdecca; --cat-ink:#8a5300; --cat-border:#f3d59a; --cat-dot:#f0a531; }
+  .cat-space     { --cat-bg:#ece9fe; --cat-ink:#5b21b6; --cat-border:#ddd6fe; --cat-dot:#7c3aed; }
+  .cat-express   { --cat-bg:#fce7f3; --cat-ink:#9d174d; --cat-border:#fbcfe8; --cat-dot:#db2777; }
+  .cat-someone   { --cat-bg:#cdf7ef; --cat-ink:#0b6b5f; --cat-border:#a7ebdf; --cat-dot:#0d9488; }
+  .cat-travel    { --cat-bg:#ffe8d4; --cat-ink:#9a3412; --cat-border:#fdd0ab; --cat-dot:#ea580c; }
+  .cat-tinyverse { --cat-bg:#e2ecfb; --cat-ink:#1c4f9e; --cat-border:#c2d6f3; --cat-dot:var(--accent); }
+  .cat-smarter   { --cat-bg:#d3f3fb; --cat-ink:#0b5e7a; --cat-border:#b3e6f2; --cat-dot:#0891b2; }
+  .cat-together  { --cat-bg:#dcf6e4; --cat-ink:#166534; --cat-border:#b8eccb; --cat-dot:#16a34a; }
+  .cat-air       { --cat-bg:#dcefff; --cat-ink:#075985; --cat-border:#b9defb; --cat-dot:#0284c7; }
+  .cat-bolder    { --cat-bg:#ffe1e5; --cat-ink:#9f1239; --cat-border:#fbc4cc; --cat-dot:#e11d48; }
+  .cat-dayone    { --cat-bg:#e3e6ff; --cat-ink:#3730a3; --cat-border:#c7caf7; --cat-dot:#4f46e5; }
+  .cat-signin    { --cat-bg:#e7f0fe; --cat-ink:#1a56b0; --cat-border:#cadcfb; --cat-dot:#4285f4; }
+
+  .news-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 48px;
+    position: relative;
+  }
+  /* Reporter Binky perched on the top-left, sitting flush on the first card. */
+  .news-binky {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: clamp(220px, 24vw, 340px);
+    height: auto;
+    pointer-events: none;
+    z-index: 2;
+    filter: drop-shadow(0 14px 28px rgba(17, 27, 69, 0.22));
+  }
+  @media (max-width: 860px) {
+    .news-binky { display: none; }
+  }
+  /* The connecting spine: a neutral soft line so the coloured dots read
+     against it without clashing. */
+  .news-timeline::before {
+    content: "";
+    position: absolute;
+    left: 16px;
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(17,27,69,0.18), rgba(17,27,69,0.10));
+  }
+
+  /* Each entry is a glass card (same idiom as the roadmap list) so the
+     body copy sits on a controlled, high-contrast surface instead of the
+     busy page gradient. Two-column grid (meta | content) fills the wider
+     frame; prose is capped to a readable measure inside it. */
+  .news-entry {
+    position: relative;
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    column-gap: 28px;
+    margin-bottom: 16px;
+    padding: 22px 28px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 16px 40px -22px rgba(40, 50, 80, 0.30);
+    backdrop-filter: blur(18px) saturate(170%);
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+  }
+  .news-entry:last-child { margin-bottom: 0; }
+  /* Force everything except the meta block into the content column. */
+  .news-entry > :not(.news-meta) { grid-column: 2; }
+  /* Featured entries get a touch more presence. */
+  .news-entry.is-featured {
+    background: rgba(255, 255, 255, 0.74);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06),
+      0 22px 52px -20px rgba(40, 50, 80, 0.36);
+  }
+  .news-entry::before {
+    content: "";
+    position: absolute;
+    left: -40px;
+    top: 26px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--cat-dot, var(--accent));
+    border: 3px solid #fff;
+    box-shadow: 0 1px 3px rgba(20, 30, 50, 0.25);
+  }
+  .news-meta {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 2px 0 0;
+  }
+  .news-date {
+    font-family: var(--display-font);
+    font-size: 15px;
+    color: var(--cat-ink, var(--accent));
+    letter-spacing: 0.02em;
+  }
+  .news-tag {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: var(--cat-bg, rgba(58,114,200,0.12));
+    color: var(--cat-ink, var(--accent));
+    border: 1px solid var(--cat-border, transparent);
+  }
+  .news-entry h2 {
+    margin: 0 0 10px;
+    font-family: var(--display-font);
+    font-size: clamp(22px, 3.4vw, 30px);
+    line-height: 1.15;
+    color: #111b45;
+  }
+  .news-entry h3 {
+    margin: 22px 0 8px;
+    font-family: var(--display-font);
+    font-size: clamp(17px, 2.2vw, 20px);
+    line-height: 1.2;
+    color: #1a2655;
+  }
+  .news-entry p {
+    margin: 0 0 12px;
+    max-width: 74ch;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .news-entry p:last-child { margin-bottom: 0; }
+  .news-list {
+    margin: 0 0 12px;
+    padding-left: 22px;
+    max-width: 74ch;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .news-list li { margin: 0 0 7px; }
+  .news-list li:last-child { margin-bottom: 0; }
+  .news-quote {
+    margin: 14px 0 0;
+    max-width: 74ch;
+    padding: 16px 20px;
+    border-left: 4px solid var(--cat-dot, var(--accent));
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.6;
+    font-style: italic;
+  }
+  .news-quote cite {
+    display: block;
+    margin-top: 10px;
+    font-style: normal;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  @media (max-width: 760px) {
+    .news-entry {
+      grid-template-columns: 1fr;
+      column-gap: 0;
+      padding: 18px 20px;
+    }
+    .news-entry > :not(.news-meta) { grid-column: 1; }
+    .news-meta {
+      grid-column: 1;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+  }
+  @media (max-width: 600px) {
+    .news-timeline { padding-left: 30px; }
+    .news-timeline::before { left: 9px; }
+    .news-entry::before { left: -28px; top: 22px; width: 16px; height: 16px; }
+    .news-intro { font-size: 16px; }
+  }
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news" aria-current="page">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">News</h1>
+        <p>Building in public. Here is the journey so far.</p>
+      </div>
+    </section>
+
+    <section class="news-section" aria-label="Progress timeline">
+      <p class="news-intro">
+        Tiny World Builder started as a tiny voxel editor in May 2026. Since then it has grown
+        into a whole tinyverse you can build, fly through, and explore with other people. This is
+        the story of how we got here, newest first, with WAVE 2 here and WAVE 3 on the way.
+      </p>
+
+      <ol class="news-timeline">
+        <img class="news-binky" src="assets/binky_news.png" alt="" aria-hidden="true" loading="lazy" width="1536" height="1024" />
+
+        <li class="news-entry is-featured cat-tinyverse" id="wave2-shipped">
+          <div class="news-meta">
+            <span class="news-date">June 29, 2026</span>
+            <span class="news-tag">Wave 2</span>
+          </div>
+          <h2>Wave 2 is here — the Tinyverse takes shape</h2>
+          <p>
+            Wave 2 is live, and it delivers on the promise we made: turning
+            <strong>Tinyverse</strong> into the home for your island collection. The loop is
+            now real — discover a tiny world, read its traits, sense its potential, and make it
+            yours. This is the foundation every future wave builds on.
+          </p>
+
+          <h3>What shipped in Wave 2</h3>
+          <ul class="news-list">
+            <li><strong>Tinyverse as home base</strong> — a single place for the islands you collect, explore, and show off.</li>
+            <li><strong>Island reveal &amp; discovery flow</strong> — a proper moment of finding a new world, not just loading one.</li>
+            <li><strong>Unique generated 8&times;8 floating islands</strong> — every island is its own, no two alike.</li>
+            <li><strong>Rarity, traits &amp; identity</strong> — islands now have character: one strong in food, one built to defend, one simply rare and beautiful.</li>
+            <li><strong>Economic potential previews</strong> — readable value on every island, so you can sense what it could become before the deeper economy arrives.</li>
+            <li><strong>Stable vs experimental, clearly split</strong> — the polished core stays understandable while new ideas get room to be tested.</li>
+          </ul>
+
+          <h3>Under the hood</h3>
+          <p>
+            The island generator got a cleaner technical foundation too: stronger day-night sun
+            lighting, flatter and more buildable generated terrain, merged terrain surfaces for
+            far lower draw calls, fewer no-effect props cluttering generated islands, a simpler
+            non-build generation flow, and a progress bar so even large islands render without
+            freezing the screen.
+          </p>
+
+          <h3>Next: Wave 3</h3>
+          <p>
+            With the collection foundation in place, Wave 3 begins building on top of it — deeper
+            island identity and the first steps toward a living economy. The countdown is on:
+            <strong>Wave 3 lands in 7 days.</strong>
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-tinyverse" id="wave2-message">
+          <div class="news-meta">
+            <span class="news-date">June 26, 2026</span>
+            <span class="news-tag">Wave 2</span>
+          </div>
+          <h2>A message from the team — Wave 2 and beyond</h2>
+          <p>
+            Hello TinyWorld community, I'm Simon. I recently reached out to
+            <a href="https://x.com/jasonkneen" target="_blank" rel="noopener">Jason</a>
+            after seeing TinyWorld, and after several long conversations we've found a
+            direction for Wave 2 that we both think is sustainable, achievable, and fun.
+          </p>
+          <p>
+            First, a quick transparency note: I don't currently have any blockchain holdings,
+            and I don't currently have a blockchain wallet, though that may change in the future.
+            I'm not here because of any existing holdings. I'm here because I saw the project,
+            liked the direction, and thought I might be able to help.
+          </p>
+          <p>
+            A little about me: I've been into games since the Commodore 64 era, and I've been a
+            developer for well over twenty years. Some of my biggest influences are StarCraft,
+            Ark: Survival Evolved, Dota 2, The Guild series, RimWorld, Dwarf Fortress, Rust, and
+            7 Days to Die. Most of my career has been inside Fortune 50 companies, focused on
+            databases, systems, and internal tools, so I can't show much of that work publicly.
+            But earlier this year I released my first public product:
+            <a href="https://midiviz.com" target="_blank" rel="noopener">MidiViz.com</a>,
+            which combines music and visuals to help people create music videos or stream music
+            with WinAmp-style visual effects. I also have a few other projects cooking, including
+            digital human simulators and always-on generative content systems.
+          </p>
+
+          <h3>Why we're tightening the focus</h3>
+          <p>
+            Jason has been moving quickly and testing a lot of ideas: build tools, multiplayer
+            concepts, Battleworlds, island mechanics, and new ways for TINY to interact with the
+            world. That experimentation is valuable. But the heart of TinyWorld is already right
+            in front of us: <strong>tiny floating islands.</strong> Discovering them, collecting
+            them, showing them off, comparing them, and eventually using them in a larger world.
+          </p>
+          <p>
+            The recommendation is not to make TinyWorld smaller. It's to make the next steps clearer.
+          </p>
+
+          <h3>Wave 2: Tinyverse becomes the foundation</h3>
+          <p>
+            We are <strong>not resetting the roadmap</strong> or pretending this is Wave 1 again.
+            Wave 2 is still Wave 2. But it should become the start of a more focused process:
+            turning <strong>Tinyverse</strong> into the home for your island collection, built
+            around a simple loop — discover a tiny world, inspect its traits, understand its
+            potential, collect it, share it, and eventually use it in future systems.
+          </p>
+          <p>
+            In Wave 2, the focus is: Tinyverse as the home for collected islands; the island
+            reveal and discovery flow; unique generated 8x8 floating islands; rarity, traits, and
+            island identity; economic potential previews; and a clearer separation between stable
+            features and experiments.
+          </p>
+          <p>
+            The island generator is also getting a cleaner technical foundation: stronger
+            day-night sun lighting, flatter generated island terrain, merged terrain surfaces for
+            lower draw calls, fewer no-effect props in generated islands, a simpler non-build
+            generation flow, and a progress bar so large islands can render without freezing the
+            main UI.
+          </p>
+          <p>
+            The important phrase is <strong>economic potential</strong>. That doesn't mean a full
+            live economy has to be active immediately. It means islands can start to have readable
+            value and personality — one strong in food production, another with better defensive
+            potential, another simply beautiful or rare. The first step is making islands feel
+            worth discovering and collecting. The deeper economy can grow from there.
+          </p>
+
+          <h3>What happens to Build, Battleworlds, and multiplayer?</h3>
+          <p>
+            They aren't gone — they need clearer lanes. <strong>Tinyverse</strong> becomes the
+            collection layer: your owned worlds, generated islands, traits, rarity, showcase, and
+            eventually trading or utility. <strong>Build</strong> becomes the creative layer: a
+            place to decorate and experiment without every change needing to be part of the
+            balanced economy right away. <strong>Experiments</strong> becomes the test area, where
+            new ideas can be tried early without the community assuming every experiment is final.
+          </p>
+          <p>
+            <strong>Battleworlds</strong> should still be part of the larger vision, but it should
+            grow out of the Tinyverse foundation. The islands should matter first; then Battleworlds
+            becomes the place where those islands gain deeper utility — not a separate game bolted
+            onto TinyWorld, but the future layer where your Tinyverse islands start to matter.
+          </p>
+
+          <h3>The bigger vision</h3>
+          <p>
+            The bigger direction is to <strong>discover, collect, trade, grow, and eventually
+            defend tiny worlds.</strong> That gives every future wave a clearer purpose. Wave 2
+            starts with the collection foundation. Later waves can build toward passive economy,
+            upgrades, seasons, council decisions, pirates, and Battleworlds — all stronger if
+            built on islands that already have identity, rarity, traits, and meaning.
+          </p>
+          <p>
+            Some features that were previously visible may move into an experimental lane while
+            they are tested and tuned. That doesn't mean they're canceled. It means we want the
+            main experience to stay understandable, polished, and fun. The goal is simple: every
+            wave should make your tiny worlds more meaningful.
+          </p>
+          <p>
+            I'll share a second post soon with a more specific timeline and how we're thinking
+            about the waves after Wave 2. In the meantime, I'm happy to answer questions and meet
+            more of the community. You can find me on X at
+            <a href="https://x.com/SimonGFarmer" target="_blank" rel="noopener">@SimonGFarmer</a>.
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-tinyverse">
+          <div class="news-meta">
+            <span class="news-date">June 25, 2026</span>
+            <span class="news-tag">Early Preview</span>
+          </div>
+          <h2>Mine, hunt and fish for coins — and keep what you earn</h2>
+          <p>
+            The Tinyverse early-preview islands are open and free to explore. Drop into
+            any island, then mine ore, fish the waters, hunt, and harvest crops to earn
+            GOLD. Every coin you earn is yours to keep.
+          </p>
+          <p>
+            This is an early test of the mechanics, but your progress is not throwaway:
+            <strong>what you earn during the preview is carried over and translated into
+            the final economy.</strong> Coins you bank now travel with you when the full
+            economy goes live — so the sooner you start gathering, the bigger a head start
+            you build. GOLD is in-game spending power for use inside TinyWorld; it is not
+            money and cannot be cashed out.
+          </p>
+          <p>
+            <a href="/worlds">Start mining in the Tinyverse</a>
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-discover">
+          <div class="news-meta">
+            <span class="news-date">June 25, 2026</span>
+            <span class="news-tag">Wave 2</span>
+          </div>
+          <h2>Your worlds, on the home page</h2>
+          <p>
+            Wave 2 is taking shape. Build a world, share it, and it now appears in the
+            new community-worlds carousel right under the hero on the home page, as a
+            crisp isometric preview anyone can open. It is the easiest way yet to show off
+            what you have made and to discover what everyone else is building.
+          </p>
+          <p>
+            Alongside it: a top-builders leaderboard, a set of pixel achievement badges,
+            and builder profile pages. More is coming this week, piece by piece. A bigger
+            creator economy, where you can list worlds as paid templates and earn for what
+            you make, is in private testing now and rolling out soon.
+          </p>
+          <p>
+            <a href="/">See the home page</a> &middot; <a href="/leaderboard">Leaderboard</a> &middot; <a href="/badges">Badges</a>
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-together">
+          <div class="news-meta">
+            <span class="news-date">June 24, 2026</span>
+            <span class="news-tag">Discover</span>
+          </div>
+          <h2>Browse the Featured Worlds gallery</h2>
+          <p>
+            There is now a full gallery of community worlds to explore. Head to the
+            Featured Worlds page to scroll through published TinyWorlds as crisp
+            isometric snapshots, then jump straight into any one that catches your eye.
+            It is the easiest way yet to see what people are building and get ideas for
+            your own island.
+          </p>
+          <p>
+            You can reach it from the "Browse all" link on the home-page carousel, or go
+            straight there any time. We are exploring more ways to share and discover
+            worlds from here.
+          </p>
+          <p>
+            <a href="/featured">Open the Featured Worlds gallery</a>
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-tinyverse">
+          <div class="news-meta">
+            <span class="news-date">June 24, 2026</span>
+            <span class="news-tag">The home page</span>
+          </div>
+          <h2>Featured worlds, right on the home page</h2>
+          <p>
+            The home page now has a Featured Worlds carousel in the hero. It cycles
+            through real, published TinyWorlds as little isometric snapshots, so the
+            first thing you see is what people are actually building. Give it a moment
+            and it rolls to the next one; use the arrows or dots to browse at your own
+            pace, and click through to drop straight into a world.
+          </p>
+          <p>
+            We also taught the home page to keep up with itself: the "Latest" strip
+            under the hero now reads the newest story from this very news page
+            automatically. So from now on, whenever something ships, it shows up on the
+            home screen without anyone lifting a finger. More world-sharing — including
+            browsing a full gallery and remixing worlds you like — is on the way.
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-smarter">
+          <div class="news-meta">
+            <span class="news-date">June 24, 2026</span>
+            <span class="news-tag">The workshop</span>
+          </div>
+          <h2>We switched on the production line</h2>
+          <p>
+            Starting today we have an autonomous production line running on TinyWorld. It is a
+            self-directing crew of AI agents that dreams up, specs, builds, reviews, and ships
+            improvements to the game and the site in small pieces, around the clock, all week,
+            building up to WAVE 2. Watch this space: new features land, a fresh story goes up
+            here on the news page and on the home screen, and the world quietly gets bigger
+            while you sleep.
+          </p>
+          <p>
+            This is one of the rare times a fully autonomous build-and-deploy loop has been put
+            in charge of growing a real web app and game in public, for an audience of humans
+            and agents alike. Ideas in one end, reviewed and tested features out the other,
+            with people steering and machines doing the heavy lifting. We are genuinely excited
+            about what is coming, and we are building it where you can see it happen.
+          </p>
+          <blockquote class="news-quote">
+            "Dream big, build small, ship often. Now with a night shift that never clocks off."
+            <cite>The TinyWorld workshop</cite>
+          </blockquote>
+        </li>
+
+        <li class="news-entry is-featured cat-signin">
+          <div class="news-meta">
+            <span class="news-date">June 23, 2026</span>
+            <span class="news-tag">Accounts</span>
+          </div>
+          <h2>Sign in with Google</h2>
+          <p>
+            You can now sign in to Tiny World Builder with your Google account. It is the quickest
+            way in: one tap, no password to remember, and you land straight in your profile.
+          </p>
+          <p>
+            We have also turned off the old email verification step. It was causing sign-in trouble
+            for some people, so removing it makes getting into your account faster and more
+            reliable. Existing accounts keep working exactly as before.
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-tinyverse">
+          <div class="news-meta">
+            <span class="news-date">June 23, 2026</span>
+            <span class="news-tag">The economy</span>
+          </div>
+          <h2>The TinyWorld economy, explained</h2>
+          <p>
+            We have published a plain-English guide to how the TinyWorld economy is designed to
+            work. It covers the two kinds of value in the game: $TINYWORLD, the public Solana token
+            you hold in your own wallet, and GOLD, the non-withdrawable in-game spending power you
+            earn from your wallet status.
+          </p>
+          <p>
+            It also explains islands as scarce, ownable, on-chain land, how the marketplace and
+            island taxes are meant to work, the safety rules that keep GOLD game-first rather than a
+            cash balance, and the open decisions we are still working through in the open.
+          </p>
+          <p>
+            <a href="doc.html?file=docs/economy.md">Read the Economy Guide</a>
+            &nbsp;&middot;&nbsp;
+            <a href="assets/tinyworld-economy-guide.pdf">Download the full PDF</a>
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-wave1">
+          <div class="news-meta">
+            <span class="news-date">June 22, 2026</span>
+            <span class="news-tag">WAVE 1 readiness</span>
+          </div>
+          <h2>WAVE 2 is on the way</h2>
+          <p>
+            WAVE 1 is the point where Tiny World Builder stops being just a place to make a
+            tiny world on your own and becomes a place to build, visit, share, and test worlds
+            with other people. The build flow is being primed for sharing by default, with a
+            clearer Invite button and a purpose-built share dialog so you can send someone a
+            world link without digging through settings.
+          </p>
+          <p>
+            The in-game experience is coming together around persistent islands. The world
+            picker has moved toward a proper carousel, each island has a single central
+            stargate for arriving or heading back to selection, browser refreshes keep you
+            where you were, and the minimap, chat, name tags, avatars, and world HUD are all
+            being tightened so multiplayer feels like one coherent space instead of a builder
+            with multiplayer bolted on.
+          </p>
+          <p>
+            We are also getting the worlds ready to matter. Tinyverse islands now carry owners,
+            resource stats, mineable minerals, harvestable produce, fish and animals, and tax
+            information for the cards. That lets worlds be claimed and priced by what is actually
+            on them. Alongside that, the builder is gaining cleaner dark-mode controls, owner-only
+            import/export, editable asset visibility, safer build permissions, and the first mesh
+            landscaping work so raised voxel terrain can become part of the playable surface.
+          </p>
+        </li>
+
+        <li class="news-entry cat-together">
+          <div class="news-meta">
+            <span class="news-date">June 18, 2026</span>
+            <span class="news-tag">Smoother and fairer</span>
+          </div>
+          <h2>A livelier lobby and a fairer say in what comes next</h2>
+          <p>
+            Step into the lobby and it feels alive: join and activity notifications are on by
+            default now, so you can tell at a glance when people arrive and what is happening around
+            you. And if your account is verified, the wider tinyverse unlocks for you automatically,
+            with no extra steps to take.
+          </p>
+          <p>
+            Deciding what comes next got fairer too. Community voting is now one vote per person, so
+            the features that climb to the top really are the ones the most people want. Roadmap wave
+            labels picked up quick inline controls, and the WAVE countdown grew into a bigger pill
+            you will now spot right across the site, not just the home page.
+          </p>
+          <p>
+            Plenty of polish landed alongside it. This very news page got a wider, glassier refresh
+            with clearer colours for each kind of update, preset profile avatars now save correctly
+            so your chosen look always sticks, and the builder gained a clearer shrink control,
+            friendlier material icons, and a renamed World Items panel. You can also see the
+            project's GitHub stars right on the home page.
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-wave1">
+          <div class="news-meta">
+            <span class="news-date">June 2026</span>
+            <span class="news-tag">The road to WAVE1</span>
+          </div>
+          <h2>WAVE1 is coming, and you can help shape it</h2>
+          <p>
+            We are counting down to WAVE1, the first big moment for Tiny World Builder, and there
+            is now a live countdown right on the home page so you can see exactly how close we are.
+          </p>
+          <p>
+            The roadmap is out in the open too. Everything we are building is tagged by wave, you
+            can browse what is shipped, in progress, and planned, and you can suggest features and
+            vote on what matters most to you. The features people rally behind are the ones we build
+            next. I am sharing progress here on the site as it happens, so you are never guessing
+            what is going on.
+          </p>
+        </li>
+
+        <li class="news-entry is-featured cat-space">
+          <div class="news-meta">
+            <span class="news-date">June 14, 2026</span>
+            <span class="news-tag">Meet in the space</span>
+          </div>
+          <h2>Avatars, live chat, and AI companions</h2>
+          <p>
+            The biggest leap yet: you now show up in a world as a real voxel character, see other
+            players around you with their names floating above them, and talk to each other in live
+            chat. There are even AI-powered characters in the space you can meet and chat with.
+            Lobbies have big screens for broadcasts, and the community pages can show live views
+            from inside the worlds.
+          </p>
+          <blockquote class="news-quote">
+            "Currently doing the testing on multiplayer simulations to bring in avatars with chat
+            capability including AI powered ones too. My plan will be to open up some test access
+            times for holders to come in and 'meet' within the space. I appreciate people are eager
+            to 'play' and play..."
+            <cite>Jason Kneen, shared on X, June 14 2026</cite>
+          </blockquote>
+        </li>
+
+        <li class="news-entry cat-express">
+          <div class="news-meta">
+            <span class="news-date">June 2026</span>
+            <span class="news-tag">Express yourself</span>
+          </div>
+          <h2>Say it with a move: chat emotes</h2>
+          <p>
+            Words are not the only way to talk now. Type a quick command and your character waves,
+            dances, jumps, sits, or crouches, and everyone else in the world sees it happen in real
+            time. Little moments like a synchronised wave make the space feel alive.
+          </p>
+        </li>
+
+        <li class="news-entry cat-someone">
+          <div class="news-meta">
+            <span class="news-date">June 2026</span>
+            <span class="news-tag">Be someone</span>
+          </div>
+          <h2>Voxel avatars arrive</h2>
+          <p>
+            Pick a character and make it yours with a 3D avatar picker and live customizer, then
+            drop into a world and fly down to the surface to explore on foot. We added a skyfall
+            mini-game on the way in for good measure, and your avatar travels with you because it is
+            saved to your profile.
+          </p>
+        </li>
+
+        <li class="news-entry cat-travel">
+          <div class="news-meta">
+            <span class="news-date">June 2026</span>
+            <span class="news-tag">Travel</span>
+          </div>
+          <h2>Step through the stargate</h2>
+          <p>
+            Sky islands now hold portals you can walk straight through. Step into a gate and your
+            character descends to the land below, then walk back through to rise again. It turns a
+            single world into layered places to discover.
+          </p>
+        </li>
+
+        <li class="news-entry cat-tinyverse">
+          <div class="news-meta">
+            <span class="news-date">June 7, 2026</span>
+            <span class="news-tag">The tinyverse</span>
+          </div>
+          <h2>Explore, claim, and gather across many worlds</h2>
+          <p>
+            Tiny World Builder became a tinyverse. There is a universe map of distinct worlds to
+            explore, each one persistent, with a heads-up display for gathering resources as you go.
+            Claim your own patch of land, harvest what is there, and watch worlds keep their state
+            between visits.
+          </p>
+        </li>
+
+        <li class="news-entry cat-smarter">
+          <div class="news-meta">
+            <span class="news-date">June 2026</span>
+            <span class="news-tag">Smarter tools</span>
+          </div>
+          <h2>An AI helper by your side</h2>
+          <p>
+            Building got friendlier with an AI chat panel right alongside your world and welcoming
+            on-ramps for new builders. Sign in and you unlock the AI tools that help you generate
+            and shape worlds faster, so you can spend more time making and less time fiddling.
+          </p>
+        </li>
+
+        <li class="news-entry cat-together">
+          <div class="news-meta">
+            <span class="news-date">June 1, 2026</span>
+            <span class="news-tag">Together</span>
+          </div>
+          <h2>Build together in the same world</h2>
+          <p>
+            Worlds opened up to more than one person. Shared building lets people work in the same
+            space at once, with a lobby to gather in and quick language flags so builders around the
+            world feel at home. Multiplayer stopped being a promise and started being real.
+          </p>
+        </li>
+
+        <li class="news-entry cat-air">
+          <div class="news-meta">
+            <span class="news-date">Late May 2026</span>
+            <span class="news-tag">Up in the air</span>
+          </div>
+          <h2>Worlds take to the sky</h2>
+          <p>
+            Flat ground gave way to floating islands drifting in the sky, complete with atmosphere,
+            fog, tumbling waterfalls, and detailed undersides. A layers panel gave you more control
+            of the scene, and you could share any world with a single link.
+          </p>
+        </li>
+
+        <li class="news-entry cat-bolder">
+          <div class="news-meta">
+            <span class="news-date">Mid May 2026</span>
+            <span class="news-tag">Bigger and bolder</span>
+          </div>
+          <h2>Bigger, more beautiful worlds with AI generation</h2>
+          <p>
+            Worlds grew larger and more natural with an improved procedural generator, and a new AI
+            generate panel let you spin up a landscape from a seed, dial in the biome and elevation,
+            and watch it come to life. Weather, day and night, and new view modes gave every world
+            its own mood.
+          </p>
+        </li>
+
+        <li class="news-entry cat-dayone">
+          <div class="news-meta">
+            <span class="news-date">May 10, 2026</span>
+            <span class="news-tag">Day one</span>
+          </div>
+          <h2>It begins: the first tiny worlds</h2>
+          <p>
+            This is where it all started. A playful voxel editor in your browser: paint terrain,
+            place trees, rocks, fences, and crops, and watch the ground ripple when something heavy
+            lands. Voxel clouds drifted overhead, an AI auto-tool helped place things, and you could
+            sign in to save your profile. Small worlds, big plans.
+          </p>
+        </li>
+
+      </ol>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+        <a class="secondary-action" href="/roadmap">
+          <span>See the roadmap</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

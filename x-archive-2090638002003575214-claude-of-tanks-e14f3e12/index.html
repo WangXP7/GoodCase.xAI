@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- MOBILE-UX r1: pinch must never zoom the PAGE (pinch-out is the scope
+       gesture in battle — touchControls.ts). maximum-scale/user-scalable stop
+       spec-compliant mobile browsers; iOS Safari and every desktop browser
+       ignore them for a pinch, so the inline guard below (handed over to
+       ui/pinchZoomGuard.ts at boot) cancels ctrl+wheel and Safari's gesture*
+       pinch events from first paint.
+       viewport-fit=cover exposes env(safe-area-inset-*) on notched phones —
+       the touch HUD keeps its controls off the notch/home bar with them. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="cot-i18n-catalog" content="game" />
+  <title>Claude of Tanks · Free Browser Tank Game · {{COT_PRODUCTION_VEHICLES}} Tanks, {{COT_BATTLEFIELDS}} Battlefields</title>
+  <meta name="author" content="Kevin B. Liu" />
+  <meta name="copyright" content="Copyright © 2026 Kevin B. Liu" />
+  <!-- SEO/AEO: factual public-build metadata. Keep counts aligned with the
+       production roster and map registry; never add ratings or claims that
+       the visible product cannot substantiate. -->
+  <meta name="description" content="Free browser armored combat: {{COT_PRODUCTION_VEHICLES}} vehicles, {{COT_BATTLEFIELDS}} destructible battlefields, and {{COT_BATTLE_MODES}} modes. Plate-level armor, ballistics, modules, spotting, solo and multiplayer battles. Built with Three.js for desktop and mobile." />
+  <meta name="application-name" content="Claude of Tanks" />
+  <meta name="application-version" content="{{COT_APP_VERSION}}" />
+  <!-- entry telemetry (docs/ENTRY-RESILIENCE.md): the inline watchdog beacons only when this is on; self-hosted builds set off -->
+  <meta name="cot-telemetry" content="{{COT_TELEMETRY}}" data-url="{{COT_TELEMETRY_URL}}" />
+  <link rel="canonical" href="https://cot.kevinliu.studio/" />
+  <link rel="describedby" href="/llms.txt" type="text/plain" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <meta name="theme-color" content="#05080b" />
+  <meta property="og:site_name" content="Claude of Tanks" />
+  <meta property="og:title" content="Claude of Tanks · Free Browser Tank Game" />
+  <meta property="og:description" content="Free-roam armored warfare in the browser, with {{COT_PRODUCTION_VEHICLES}} production vehicles, {{COT_BATTLEFIELDS}} battlefields, bot and multiplayer battles, killcam X-rays. Pure Three.js, no install." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://cot.kevinliu.studio/" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:image" content="https://cot.kevinliu.studio/brand/og-r2/game.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:alt" content="Claude of Tanks in-engine armored battle with the commander mark" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Claude of Tanks · Free Browser Tank Game" />
+  <meta name="twitter:description" content="{{COT_PRODUCTION_VEHICLES}} production vehicles, {{COT_BATTLEFIELDS}} battlefields, bot and multiplayer battles. Armored warfare rendered live in your browser. No install, no account." />
+  <meta name="twitter:image" content="https://cot.kevinliu.studio/brand/og-r2/game.jpg" />
+  <meta name="twitter:image:alt" content="Claude of Tanks in-engine armored battle with the commander mark" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://cot.kevinliu.studio/#creator",
+        "name": "Kevin B. Liu",
+        "url": "https://github.com/Kevin-Liu-01"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://cot.kevinliu.studio/#website",
+        "name": "Claude of Tanks",
+        "url": "https://cot.kevinliu.studio/",
+        "description": "Official website, playable browser game, Tank Gallery, Scene Studio, and technical documentation for Claude of Tanks.",
+        "inLanguage": "en-US",
+        "publisher": { "@id": "https://cot.kevinliu.studio/#creator" }
+      },
+      {
+        "@type": "VideoGame",
+        "@id": "https://cot.kevinliu.studio/#game",
+        "name": "Claude of Tanks",
+        "url": "https://cot.kevinliu.studio/",
+        "mainEntityOfPage": { "@id": "https://cot.kevinliu.studio/#website" },
+        "creator": { "@id": "https://cot.kevinliu.studio/#creator" },
+        "copyrightHolder": { "@id": "https://cot.kevinliu.studio/#creator" },
+        "image": "https://cot.kevinliu.studio/brand/og-r2/game.jpg",
+        "description": "{{COT_PRODUCT_DESCRIPTION}}",
+        "genre": ["Vehicular combat", "Simulation", "Action"],
+        "playMode": ["SinglePlayer", "MultiPlayer"],
+        "gamePlatform": "Web Browser",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any modern operating system with a WebGL2-capable browser",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
+        "screenshot": [
+          "https://cot.kevinliu.studio/media/versus-r1/s49-orchard-sunset-modern-r14.webp",
+          "https://cot.kevinliu.studio/media/versus-r1/f6-leo2a6-steinburg-r7.webp",
+          "https://cot.kevinliu.studio/media/site50-r14/stills/s07-lake-shellfire.webp",
+          "https://cot.kevinliu.studio/media/site50-r14/stills/s19-roof-tiles-close.webp"
+        ]
+      }
+    ]
+  }
+  </script>
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/brand/favicon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="msapplication-config" content="/browserconfig.xml" />
+  <meta name="msapplication-TileColor" content="#11151a" />
+  <!-- BOOT SCREEN: first-paint faces, preloaded (src/ui/typeFaces.ts) -->
+  <!--cot:type ui mono body display-700 body-500-->
+  <script>
+    // iOS third-party browsers can expose a layout viewport that is taller or
+    // shorter than the actually visible page. Seed the real visual dimensions
+    // before first paint; responsiveLayout.ts keeps these values live once the
+    // application module has loaded. A pinch only magnifies: the visible area
+    // is measured unmagnified, by the pinch factor (the root's clientWidth over
+    // the visual viewport's width, 1 within a pixel), the rule of
+    // responsiveLayout.ts pinchFactor()/layoutViewportSize(). Not by
+    // visualViewport.scale: iOS page zoom and iPad narrow windows rest at a
+    // scale other than 1 with no pinch. A page loaded or restored zoomed still
+    // lays out at its real size.
+    (() => {
+      const viewport = window.visualViewport;
+      const root = document.documentElement;
+      const visualWidth = viewport?.width || 0;
+      const layoutWidth = root.clientWidth || 0;
+      const factor = visualWidth > 0 && layoutWidth > 0 && Math.abs(layoutWidth - visualWidth) > 1
+        ? layoutWidth / visualWidth : 1;
+      const width = Math.max(1, Math.round(visualWidth ? visualWidth * factor : window.innerWidth || 1));
+      const height = Math.max(1, Math.round(viewport?.height ? viewport.height * factor : window.innerHeight || 1));
+      root.style.setProperty('--cot-viewport-width', `${width}px`);
+      root.style.setProperty('--cot-viewport-height', `${height}px`);
+    })();
+    // The game's pinch guard from first paint (ui/pinchZoomGuard.ts, the same
+    // rule: a ctrl+wheel or Safari gesture* pinch never zooms the page in; a
+    // page already pinch-zoomed in, by the same pinch factor, may zoom back
+    // out). main.ts only evaluates after its whole import graph has loaded;
+    // installPinchZoomGuard() then takes over and calls the remover left under
+    // the boot-guard symbol. A plain wheel returns before anything is measured.
+    (() => {
+      const zoomedIn = () => {
+        const visualWidth = window.visualViewport?.width || 0;
+        const layoutWidth = document.documentElement.clientWidth || 0;
+        return visualWidth > 0 && layoutWidth - visualWidth > 1;
+      };
+      const guard = (event) => {
+        if (event.type === 'wheel' && event.ctrlKey !== true) return;
+        const cancel = event.type === 'wheel'
+          ? !(event.deltaY > 0 && zoomedIn())
+          : !zoomedIn() || (event.type === 'gesturechange' && !(event.scale < 1));
+        if (cancel) event.preventDefault();
+      };
+      const options = { passive: false, capture: true };
+      const gestures = ['gesturestart', 'gesturechange', 'gestureend'];
+      for (const type of gestures) document.addEventListener(type, guard, options);
+      window.addEventListener('wheel', guard, options);
+      window[Symbol.for('claude-of-tanks.pinch-zoom-boot-guard')] = () => {
+        for (const type of gestures) document.removeEventListener(type, guard, { capture: true });
+        window.removeEventListener('wheel', guard, { capture: true });
+      };
+    })();
+  </script>
+  <script type="module" src="/src/ui/localeBootstrap.ts"></script>
+  <script>
+    // The player's accessibility choices before first paint: colour preset, contrast, motion, drone static, hold or
+    // toggle, text and HUD size, camera shake and flash intensity, written on :root, where the game reads them
+    // (src/ui/accessibilityPreferences.ts) and where a change is written the same way (accessibilitySettings.ts
+    // applyAccessibility, which accessibilityPreferences.selftest.mjs pins to this seed). A Custom pair is re-checked.
+    (() => {
+      try {
+        const p = JSON.parse(localStorage.getItem('cot.accessibility.v1') || 'null');
+        if (!p || typeof p !== 'object') return;
+        const root = document.documentElement, data = root.dataset, hex = /^#[0-9a-f]{6}$/i;
+        const set = (name, value) => value !== 1 && root.style.setProperty(name, String(value));
+        const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : 1;
+        if (['deutan', 'protan', 'tritan', 'classic', 'custom'].includes(p.colorPreset)) data.cvd = p.colorPreset;
+        if (p.colorPreset === 'custom') {
+          set('--team-own', hex.test(p.customOwn) ? p.customOwn.toLowerCase() : '#57b8ff');
+          set('--team-enemy', hex.test(p.customEnemy) ? p.customEnemy.toLowerCase() : '#ff5a4e');
+        }
+        if (p.highContrast === true) data.contrast = 'high';
+        if (p.motion === 'reduce' || p.motion === 'full') data.motion = p.motion;
+        if (p.droneStatic === false) data.droneStatic = 'off';
+        const toggles = Array.isArray(p.toggles)
+          ? ['fire', 'handbrake', 'freeLook', 'freeCamera', 'rosters'].filter((action) => p.toggles.includes(action)) : [];
+        if (toggles.length) data.toggles = toggles.join(' ');
+        set('--cot-user-text', num(p.textScale, .8, 2));
+        set('--cot-user-hud', num(p.hudScale, .75, 1.5));
+        set('--cot-shake-scale', num(p.shake, 0, 1));
+        set('--cot-flash-scale', num(p.flash, 0, 1));
+      } catch (_) { /* no storage: the defaults */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="/src/ui/tokens/tokens.css" />
+  <style>
+    @layer reset,tokens,base,components,surfaces,utilities,overrides;
+    @layer surfaces {
+    :root {
+      /* One raster-quality contract for every DOM HUD mounted by the game.
+         Most panels are composited translucent layers, where browser defaults
+         can fall back to visibly coarse grayscale glyph edges. */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+      font-synthesis: none;
+      font-optical-sizing: auto;
+    }
+    html, body { margin: 0; padding: 0; width: var(--cot-viewport-width, 100dvw);
+      height: var(--cot-viewport-height, 100dvh); overflow: hidden; background: var(--surface-scene);
+      /* MOBILE-UX r1: no double-tap zoom anywhere (taps stay instant); menus
+         keep one-finger scrolling — their own overflow containers pan as
+         normal under touch-action: manipulation. */
+      touch-action: manipulation; }
+    body, button, input, select, textarea {
+      -webkit-font-smoothing: inherit;
+      text-rendering: optimizeLegibility;
+      font-kerning: inherit;
+      font-synthesis: none;
+      font-optical-sizing: auto;
+      /* type mandate: UI weight floor is 500 — nothing renders at book/regular */
+      font-weight: 500;
+      font-family: var(--font-ui);
+    }
+    #app { width: var(--cot-viewport-width, 100dvw); height: var(--cot-viewport-height, 100dvh); }
+    canvas, img { image-rendering: auto; }
+    canvas { display: block; }
+    /* MOBILE-UX r1: the 3D surface is a gameplay surface on every screen
+       (battle swipe-aim, garage orbit drag) — never a browser pan/pinch
+       target. Menus/garage DOM keeps its own scrolling; this is canvas-only. */
+    #app canvas { touch-action: none; }
+    svg { shape-rendering: geometricPrecision; text-rendering: geometricPrecision; }
+
+    /* ---------------------------------------------------------------------
+       ENTRY / LOADING SCREEN (src/ui/bootScreen.ts drives the live parts).
+       Everything needed for the FIRST PAINT is inline here: the game used to
+       show a black screen for ~7.5 s while the vehicle textures and the 1 km
+       world baked. Now the branded splash paints from the HTML itself, before
+       a single module is fetched, and the bar below is driven by real load
+       stages (see bootScreen.ts / main.ts BOOT STAGES).
+       --------------------------------------------------------------------- */
+    }
+  </style>
+  <style>
+    @layer reset,tokens,base,components,surfaces,utilities,overrides;
+    @layer surfaces {
+    /* The game document declares the weight-voiced 'Cot UI' family alone (src/ui/fonts.ts, its cot:type marker): the
+       display voice is that family at 600/700 (Chakra Petch), so no surface's --font-display falls to a fallback face. */
+    :root { --font-display: var(--font-ui); }
+    #cot-boot {
+      position: fixed; inset: 0; width: var(--cot-viewport-width, 100dvw);
+      height: var(--cot-viewport-height, 100dvh); z-index: 200; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-family: var(--font-ui);
+      color: var(--ink-1); -webkit-user-select: none; user-select: none; cursor: default;
+      background: var(--surface-scene);
+      opacity: 1; transition: opacity var(--dur-screen) ease;
+    }
+    #cot-boot.cot-boot-out { opacity: 0; pointer-events: none; }
+    /* The static gradient above is the stable first paint. Marketing stills
+       are decoded off-screen, installed at opacity 0, then promoted only
+       after two animation frames so their arrival is a real fade rather than
+       the old blue -> image flash. The splash chrome itself never replays. */
+    /* the picture fills the whole screen at every aspect (cover: the height filled, the sides cropped as needed) */
+    #cot-boot-hero { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+    #cot-boot-hero .hly {
+      position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px);
+      object-fit: cover; object-position: 50% 48%; opacity: 0;
+      transition: opacity calc(var(--dur-stage)*2) cubic-bezier(.22,1,.36,1);
+      will-change: opacity;
+    }
+    #cot-boot-hero .hly.on { opacity: 1; }
+    #cot-boot-hero::after {
+      content: ''; position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg, oklch(from var(--surface-scene) l c h / .78) 0%, oklch(from var(--surface-scene) l c h / .44) 28%, oklch(from var(--surface-scene) l c h / .42) 58%, oklch(from var(--surface-scene) l c h / .86) 100%),
+        radial-gradient(120% 95% at 50% 34%, oklch(from var(--surface-scene) l c h / .08) 0%, oklch(from var(--surface-scene) l c h / .60) 88%);
+    }
+    /* the load column is the lockup's ink (boot r23's design round, r24's hull edge): the stage line, both bars and the tip
+       start on the hull's rear and end on the stack's right edge, and the invitation, the gate prompt and Retry stand on
+       its centre. --boot-mark is the tank's width; --boot-lockup-k (generated below) is the ink's width in tank widths */
+    .cot-boot-inner {
+      --boot-mark: clamp(216px, 15vw, 224px);
+      position: relative; z-index: 2; width: min(calc(var(--boot-mark) * var(--boot-lockup-k)), calc(100vw - 32px)); text-align: center;
+      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "mark" "invite" "load" "slot";
+    }
+
+    /* --- emblem + wordmark ------------------------------------------------ */
+    /* the lockup (owner, 2026-10-26): the living tank on the left, CLAUDE / OF / TANKS stacked to its right, left-aligned and
+       level with the tank's drawing; the one place the words stack. --boot-mark is the tank's width, and the generated
+       rules below size the gap and the stack from it. The tank rolls along on the compositor, so a busy main thread never
+       stops it (src/ui/brandMarkMotion.ts; reduced motion shows the still) */
+    /* the mark box's margin before the hull (--boot-ink-in) hangs outside the column, so the lockup's ink centres in it */
+    .cot-boot-mark {
+      grid-area: mark; display: flex; align-items: flex-start; justify-content: center;
+      margin: 0 0 0 calc(var(--boot-mark) * var(--boot-ink-in) * -1); color: var(--ink-1);
+    }
+    .cot-boot-mark .mkl { flex: none; width: var(--boot-mark); }
+    /* cot:brand-motion */
+    .mkl{--mk-loop:1.2s;position:relative;aspect-ratio:184/106}
+    .mkl-l{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+    .mkl-wheel{position:absolute;width:5.870%;aspect-ratio:1;animation:mkl-turn var(--mk-loop) linear infinite}
+    .mkl-links{position:absolute;left:10.870%;width:68.478%;height:1.415%;overflow:hidden}
+    .mkl-links i{position:absolute;inset:0 auto 0 0;width:104.488%;
+      background:linear-gradient(90deg,var(--mk-ground,var(--surface-scene)) 42%,transparent 42%) 0 0/4.295% 100% repeat-x}
+    .mkl-links--top i{animation:mkl-top var(--mk-loop) linear infinite}
+    .mkl-links--low i{animation:mkl-low var(--mk-loop) linear infinite}
+    .mkl-hull{animation:mkl-bob calc(var(--mk-loop) / 2) ease-in-out infinite}
+    .mkl-turret{transform-origin:40.761% 55.660%;animation:mkl-rock calc(var(--mk-loop) / 2) ease-in-out calc(var(--mk-loop) * -0.38) infinite}
+    .mkl-crew{animation:mkl-bounce calc(var(--mk-loop) / 2) ease-in-out calc(var(--mk-loop) * -0.3) infinite}
+    .mkl-antenna{transform-origin:18.478% 39.623%;animation:mkl-sway calc(var(--mk-loop) / 2) ease-in-out calc(var(--mk-loop) * -0.26) infinite}
+    .mkl-puff{position:absolute;left:2.935%;top:61.698%;width:1.739%;aspect-ratio:1;border-radius:50%;
+      background:currentColor;opacity:0;animation:mkl-puff var(--mk-loop) ease-out infinite}
+    .mkl :is(.mkl-wheel,.mkl-links i,.mkl-hull,.mkl-turret,.mkl-crew,.mkl-antenna,.mkl-puff){will-change:transform}
+    @keyframes mkl-turn{to{transform:rotate(240deg)}}
+    @keyframes mkl-top{from{transform:translateX(-4.295%)}to{transform:none}}
+    @keyframes mkl-low{to{transform:translateX(-4.295%)}}
+    @keyframes mkl-bob{0%,100%{transform:none}50%{transform:translateY(-0.849%)}}
+    @keyframes mkl-rock{0%,100%{transform:rotate(-0.55deg)}50%{transform:rotate(0.55deg)}}
+    @keyframes mkl-bounce{0%,100%{transform:none}45%{transform:translateY(-1.038%)}}
+    @keyframes mkl-sway{0%,100%{transform:none}50%{transform:rotate(-5deg)}}
+    @keyframes mkl-puff{0%{opacity:.5;transform:none}100%{opacity:0;transform:translate(-343.8%,-156.3%) scale(3.2)}}
+    @media (prefers-reduced-motion:reduce){.mkl *{animation:none}.mkl-puff{display:none}}
+    .cot-boot-inner{--boot-lockup-k:2.01174;--boot-ink-in:0.02174}
+    .cot-boot-mark{gap:calc(var(--boot-mark) * 0.07609)}
+    .cot-boot-mark .wm-stack{display:block;flex:none;width:auto;height:calc(var(--boot-mark) * 0.52989);margin-top:calc(var(--boot-mark) * 0.03533)}
+    /* /cot:brand-motion */
+    .cot-boot-invite {
+      grid-area: invite; display: none; width: fit-content; max-width: min(560px, 84vw); margin: 12px auto 0;
+      color: var(--ink-1); font-size: 15px; font-weight: 700; line-height: 1.3; letter-spacing: .06em; text-transform: uppercase;
+      text-wrap: balance; overflow-wrap: break-word;
+    }
+    .cot-boot-invite.on { display: block; }
+    /* the caption sits 12 px under the mark and 24 px above the label's line (the stage reserves 20 px over a one-line label) */
+    #cot-boot.has-invite .cot-boot-load { margin-top: calc(var(--s5) - 20px); }
+    /* Entrance motion is scoped to the class present in the inline first
+       paint. bootScreen.ts permanently retires that class after this stagger,
+       so image decode or later layout work cannot restart the animation. */
+    #cot-boot.cot-boot-enter .cot-boot-mark {
+      animation: cot-boot-pop var(--dur-screen) var(--ease-camera) backwards;
+    }
+    #cot-boot.cot-boot-enter .cot-boot-invite {
+      animation: cot-boot-rise var(--dur-base) var(--ease-camera) .12s backwards;
+    }
+    @keyframes cot-boot-pop { from { opacity: 0; transform: scale(.94) translateY(6px); } }
+    @keyframes cot-boot-rise { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes cot-boot-fade { from { opacity: 0; } }
+    /* --- progress ---------------------------------------------------------- */
+    .cot-boot-load { grid-area: load; margin-top: 45px; }
+    #cot-boot.cot-boot-enter .cot-boot-load {
+      animation: cot-boot-rise var(--dur-screen) var(--ease-camera) .14s backwards;
+    }
+    .cot-boot-meta {
+      display: flex; align-items: last baseline; justify-content: space-between; gap: 18px;
+      margin-bottom: 9px;
+      font-family: var(--font-ui);
+    }
+    .cot-boot-stage {
+      display: flex; flex-direction: column; justify-content: flex-end; min-height: 40px;
+      font-size: 14px; font-weight: 500; line-height: 20px; text-align: left; color: var(--ink-2); text-wrap: wrap;
+    }
+    .cot-boot-stage .num { font-size: 13px; font-weight: 500; color: var(--ink-3); line-height: 0; }
+    /* one continuous tungsten fill: bootScreen.ts animates its scaleX on the compositor toward the real load */
+    /* one track under both bars: 3:1 on the scene, and the tungsten fill 3:1 on it (boot r23) */
+    .cot-boot-load { --boot-track: oklch(from var(--ink-1) l c h / .37); }
+    .cot-boot-bar { position: relative; height: 4px; overflow: hidden; background: var(--boot-track); }
+    .cot-boot-fill { position: absolute; inset: 0; transform: scaleX(0); transform-origin: 0 50%; background: var(--accent); will-change: transform; }
+    /* the stages under it, one segment each (owner, 2026-10-26: "a segmented loading along with the main loading line,
+       like it was before"): a done stage solid, the current one filled by its real steps, the rest dim. The inline painter
+       fills the download's segment with the files; bootScreen.ts steps the others' scaleX on the compositor */
+    .cot-boot-segs { display: flex; gap: 4px; height: 3px; margin-top: 8px; }
+    .cot-boot-segs i { position: relative; flex: 1 1 0; overflow: hidden; background: var(--boot-track); }
+    .cot-boot-segs b { position: absolute; inset: 0; transform: scaleX(0); transform-origin: 0 50%; background: var(--accent); will-change: transform; }
+    /* at rest a full fill paints on its track's own pixels: a held compositor layer snaps a whole pixel short of the track's
+       painted end (boot r24), so a done segment and the finished main line drop theirs */
+    .cot-boot-segs i.done b { transform: scaleX(1); will-change: auto; }
+    .cot-boot-fill.full { will-change: auto; }
+
+    /* --- tips + gate ------------------------------------------------------- */
+    /* the tip stands on the load column's left edge, under the stage line and the bars: one column, one edge */
+    .cot-boot-tip {
+      grid-area: slot; justify-self: start; box-sizing: border-box; height: 84px; max-width: 560px; margin: 24px 0 0; overflow: hidden;
+      text-align: left;
+      font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--ink-3);
+      opacity: 1; transition: opacity var(--dur-base) var(--ease-camera);
+    }
+    #cot-boot.cot-boot-enter .cot-boot-tip {
+      animation: cot-boot-rise var(--dur-screen) var(--ease-camera) .18s backwards;
+    }
+    /* the card's copy (the stage line and its stop notice, the tip, the credits) wraps greedily, its lines running to the
+       column's edge (boot r25); set here, it outranks the game's :where(p) pretty once that loads */
+    .cot-boot-tip span { display: inline-block; text-wrap: wrap; }
+    .cot-boot-tip.fade { opacity: 0; }
+    /* Credits and GitHub: the kit's quiet buttons in the foot row, the version at its other end; the Credits glyph's ink
+       starts 1 px into its box, so the row stands 1 px out and that ink takes the version's 16 px gutter (boot r25) */
+    /* the site's pages (src/presentation/publicShell.ts bootNavHtml; owner 2026-10-27): the foot's quiet buttons at the
+       head, their glyphs the sprite's with the kit's caps and joins (publicNav.css .cot-si): 1.8 of a 24 grid at 15 px draws the site bar's weight */
+    :is(.cot-boot-links, .cot-boot-nav) { position: absolute; left: 3px; z-index: 2; display: flex; gap: 4px; }
+    .cot-boot-links { bottom: 12px; }
+    .cot-boot-nav { top: 12px; }
+    .cot-boot-link-icon.cot-boot-glyph { stroke-linecap: square; stroke-linejoin: miter; }
+    .cot-boot-link-icon.cot-boot-glyph--s { stroke-width: 1.25; }
+    /* the home glyph's wall stands 3.5 of its 24 in: half a pixel back, its ink takes the 16 px gutter as Credits' does */
+    .cot-boot-nav > .cot-boot-link:first-child > .cot-boot-glyph { margin-inline-start: -.5px; }
+    .cot-boot-link {
+      box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-width: 118px; padding: 0 18px; border: 0; border-radius: 2px;
+      background: var(--btn-secondary-fill); box-shadow: var(--btn-secondary-ring); color: var(--ink-1); cursor: pointer;
+      font: 700 13px/1 var(--font-ui);
+      letter-spacing: var(--track-label-s); text-transform: uppercase; text-decoration: none;
+      transition: transform var(--dur-fast) var(--ease-camera), background-color var(--dur-fast) ease;
+    }
+    :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link { width: auto; min-width: 0; height: 36px; padding: 0 12px; }
+    /* the kit's quiet button (components.css .cot-c-btn--quiet), one look for the foot's buttons and the credits' last action */
+    :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link, .cot-credits-actions .cot-boot-link:last-child {
+      background: transparent; box-shadow: none; color: var(--ink-3);
+      font: 500 13px/1 var(--font-ui); letter-spacing: normal; text-transform: none;
+    }
+    #cot-boot.cot-boot-enter :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link {
+      animation: cot-boot-rise var(--dur-base) var(--ease-camera) backwards;
+    }
+    #cot-boot.cot-boot-enter :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link { animation-delay: .18s; }
+    .cot-boot-link-icon {
+      width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+      transition: transform var(--dur-fast) var(--ease-camera);
+    }
+    .cot-boot-link-icon.github { fill: currentColor; stroke: none; }
+    /* the star and its count take their button's ink, in the foot and in the credits (boot r19, r30) */
+    .cot-github-stars {
+      display: inline-flex; align-items: center; gap: 3px; padding-left: 7px;
+      border-left: 1px solid var(--line-3); color: inherit;
+      letter-spacing: .04em;
+    }
+    .cot-github-stars svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+    .cot-github-stars [data-github-stars] {
+      display: inline-grid; min-width: 4ch; min-height: 1em; place-items: center; line-height: 1;
+    }
+    .cot-github-stars [data-github-stars][data-github-stars-state='loading']::before {
+      width: 100%; height: 6px; border-radius: 3px; background: var(--line-2); content: '';
+    }
+    .cot-github-stars:has([data-github-stars-state='unavailable']) { visibility: hidden; }
+    .cot-boot-link:hover { color: var(--ink-1); background: var(--surface-hover); }
+    .cot-boot-link:active { transform: translateY(var(--btn-press-drop)); transition-duration: var(--dur-instant); }
+    .cot-boot-link:focus-visible { outline: 2px solid var(--focus-ink); outline-offset: 3px; }
+    /* the head and foot rows stand on the window's edge: their ring sits inside the button, never cut by the edge */
+    :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link:focus-visible { outline-offset: -2px; }
+    /* The splash paints before any module writes body[data-cot-*]: its phone sizes read the same bands
+       (src/ui/responsiveLayout.ts) as media queries, so the first frame already has them (brand-ui SPEC 5.5). */
+    @media (pointer: coarse) { :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link { height: 44px; } }
+    @media (width <= 380px) { :root body :is(.cot-boot-links, .cot-boot-nav) { left: 7px; } :root body :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link { padding-inline: 8px; } }
+    @media (prefers-reduced-motion: reduce) {
+      #cot-boot-hero .hly { transition-duration: .01ms; }
+      .cot-boot-gate.on { animation: none; }
+      #cot-boot.cot-boot-enter .cot-boot-mark,
+      #cot-boot.cot-boot-enter .cot-boot-invite,
+      #cot-boot.cot-boot-enter .cot-boot-load,
+      #cot-boot.cot-boot-enter .cot-boot-tip,
+      #cot-boot.cot-boot-enter :is(.cot-boot-links, .cot-boot-nav) > .cot-boot-link,
+      #cot-boot.cot-boot-enter .cot-boot-foot { animation: none; }
+      .cot-boot-link, .cot-boot-link-icon { transition: none; }
+      .cot-boot-link:active { transform: none; }
+    }
+    /* the credits: the one modal's plate (src/ui/modal.ts), no glass (brand-ui 247, the consistency pass) */
+    .cot-credits {
+      box-sizing:border-box;width:min(900px,calc(100vw - 34px));max-width:none;
+      max-height:calc(var(--cot-viewport-height,100dvh) - 32px);padding:0;overflow:hidden;
+      border:0;border-radius:var(--plate-radius);color:var(--ink-1);background:var(--surface-raised);box-shadow:var(--e4);
+      font-family:var(--font-ui);
+    }
+    .cot-credits::backdrop{background:oklch(from var(--scrim) l c h / .8)}
+    #cot-boot.credits-open :is(.cot-boot-inner, .cot-boot-foot, .cot-boot-links, .cot-boot-nav) { visibility: hidden; }
+    .cot-credits-scroll{box-sizing:border-box;max-height:calc(var(--cot-viewport-height,100dvh) - 34px);
+      overflow:auto;overscroll-behavior:contain}
+    .cot-credits-grid{display:grid;grid-template-columns:250px minmax(0,1fr);min-width:0}
+    .cot-credits-profile{margin:0;padding:32px;background:var(--surface-page);
+      border-right:1px solid var(--line-1);display:flex;flex-direction:column;gap:var(--s5)}
+    .cot-credits-portrait{box-sizing:border-box;display:block;width:100%;height:auto;aspect-ratio:1;
+      object-fit:cover;object-position:center;border-radius:var(--control-radius);background:var(--surface-raised)}
+    .cot-credits-copy{min-width:0;padding:32px;text-align:left}
+    /* the close button's corner: the title and any copy line beside it wrap short of it; lines below run to the edge */
+    .cot-credits-copy::before{content:"";float:right;width:44px;height:44px;margin-left:var(--s3)}
+    .cot-credits h2{margin:0 0 var(--s5);font:700 38px/1.06 var(--font-ui);letter-spacing:var(--track-title);text-box:trim-both cap alphabetic}
+    .cot-credits p{margin:0 0 var(--s4);color:var(--ink-2);font:400 max(14px,var(--fs-14))/1.75 var(--font-body);text-wrap:wrap}
+    /* zh: a line breaks between any two characters, never before closing or after opening punctuation */
+    .cot-credits p:lang(zh-CN){line-break:strict;text-spacing-trim:trim-both}
+    .cot-credits-actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);margin-top:var(--s5);padding-top:var(--s5);border-top:1px solid var(--line-1)}
+    .cot-credits-actions .cot-boot-link{box-sizing:border-box;min-width:0;min-height:44px;border:0;padding:0 18px;
+      font-size:13px;letter-spacing:var(--track-label-s);background:var(--btn-secondary-fill);border-color:transparent;
+      box-shadow:var(--btn-secondary-ring)}
+    .cot-credits-actions .cot-boot-link:first-child{background:var(--btn-primary-fill);color:var(--btn-primary-ink);box-shadow:var(--btn-primary-shadow)}
+    .cot-credits-actions .cot-boot-link:last-child{margin-left:auto;padding-inline:0}
+    .cot-credits-close{position:absolute;z-index:2;top:32px;right:32px;display:grid;place-items:center;
+      width:44px;height:44px;padding:0;border:0;border-radius:var(--control-radius);background:transparent;box-shadow:var(--btn-secondary-ring);color:var(--ink-2);cursor:pointer}
+    .cot-credits-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
+    .cot-credits-close:hover{color:var(--ink-1);background:var(--surface-hover)}
+    .cot-credits-close:focus-visible,.cot-credits-actions a:focus-visible{outline:2px solid var(--focus-ink);outline-offset:3px}
+    /* a phone (the responsiveLayout.ts phone and compact bands, < 768 px): the splash's own media query, since the
+       credits can open before any module writes body[data-cot-width] */
+    @media (width < 768px) {
+      .cot-credits{width:calc(100vw - 34px);max-height:calc(var(--cot-viewport-height,100dvh) - 32px)}
+      .cot-credits-scroll{max-height:calc(var(--cot-viewport-height,100dvh) - 34px)}
+      .cot-credits-grid{grid-template-columns:1fr}
+      .cot-credits-profile{flex-direction:row;align-items:center;padding:24px;gap:18px;border-right:0;border-bottom:1px solid var(--line-1)}
+      .cot-credits-portrait{width:100px;flex:none}
+      .cot-credits-copy{padding:24px}
+      .cot-credits h2{font-size:32px;margin-bottom:20px}
+      .cot-credits-actions{flex-direction:column;align-items:stretch}
+      .cot-credits-actions .cot-boot-link:last-child{margin-left:0}
+      .cot-credits-close{top:24px;right:24px}
+      .cot-credits-copy::before{content:none}
+    }
+    /* a short landscape screen: a small portrait beside the copy, so the whole dialog fits */
+    @media (height < 520px) {
+      .cot-credits-grid{grid-template-columns:132px minmax(0,1fr)}
+      .cot-credits-profile{flex-direction:column;padding:24px;border-right:1px solid var(--line-1);border-bottom:0}
+      .cot-credits-portrait{width:100%}
+      .cot-credits-copy{padding:24px}
+      .cot-credits h2{font-size:28px;margin-bottom:12px}
+      .cot-credits p{margin-bottom:var(--s2);line-height:1.6}
+      .cot-credits-actions{margin-top:var(--s3);padding-top:var(--s3)}
+      .cot-credits-close{top:24px;right:24px}
+      .cot-credits-copy::before{content:""}
+    }
+    .cot-boot-gate {
+      grid-area: slot; align-self: start; margin-top: 24px; height: 22px;
+      font-family: var(--font-ui);
+      font-size: 14px; font-weight: 500;
+      color: var(--ink-2); opacity: 0;
+      transition: opacity var(--dur-base) var(--ease-enter);
+    }
+    .cot-boot-gate.on { opacity: 1; animation: cot-gate calc(var(--dur-stage)*2) ease-in-out infinite; }
+    /* the prompt's key is the kit's key cap (components.css .cot-c-kbd), drawn here so the boot loads no kit; set in the
+       sentence, the cap's text stands on the sentence's baseline (an inline flex box's own), not its box's middle (boot r28),
+       in a line as tall as the cap: a 1-line box left half-pixel leading, and the label painted a pixel off (boot r29) */
+    .cot-boot-key {
+      display: inline-flex; align-items: center; height: 22px; margin-inline: 4px; padding: 0 6px;
+      border-radius: var(--control-radius); box-shadow: var(--ring-3);
+      font: 500 max(var(--fs-floor-11), var(--fs-11))/22px var(--font-data); color: var(--ink-1);
+    }
+    /* Retry takes the tip's slot: a failure shows it without re-centring the card, 44 px under its notice (the stage row's
+       11 px stay in place above it) */
+    .cot-boot-retry {
+      grid-area: slot; align-self: start; justify-self: center; display: none;
+      height: 44px; margin: 21px 0 0; padding: 0 18px; white-space: nowrap;
+      border: 0; border-radius: 2px;
+      background: var(--btn-primary-fill); color: var(--btn-primary-ink); box-shadow: var(--btn-primary-shadow); cursor: pointer;
+      font: 700 13px/1 var(--font-ui);
+      letter-spacing: var(--track-label-s); text-transform: uppercase;
+    }
+    .cot-boot-retry.on { display: block; }
+    .cot-boot-retry:focus-visible { outline: 2px solid var(--focus-ink); outline-offset: 3px; }
+    /* a browser the game cannot run in (src/engine/capabilityGate.ts shows Retry): the load's bar, its count and the
+       tip step aside, the reason stands centred under the mark, and the tank holds still */
+    #cot-boot:is(:has(.cot-boot-retry.on), :has(.cot-boot-gate.on)) .cot-boot-tip { visibility: hidden; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-bar { visibility: hidden; }
+    /* both bars step aside in place, so the card and its lockup stay still when loading stops */
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-segs { visibility: hidden; }
+    .cot-boot-load { position: relative; }
+    .cot-boot-alert { display: none; flex: none; font-size: 14px; line-height: 20px; color: var(--text-danger); }
+    .cot-boot-alert svg { display: inline-block; vertical-align: -4px; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-alert { display: block; align-self: center; }
+    #cot-boot[data-stop='offline'] .cot-boot-alert { color: var(--text-warn); }
+    #cot-boot[data-stop='slow'] .cot-boot-alert { color: var(--ink-2); }
+    .cot-boot-meta { position: relative; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-meta { align-items: first baseline; justify-content: flex-start; gap: 12px; padding-inline: 14px; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-meta::before {
+      content: ''; position: absolute; inset: -9px 0; z-index: -1; border-radius: var(--plate-radius);
+      background: color-mix(in srgb, var(--text-danger) 9%, var(--surface-plate)); box-shadow: var(--ring-2);
+    }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-meta { margin-bottom: 4px; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-notice { margin-top: 0; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-load { padding-bottom: 13px; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-stage { justify-content: center; }
+    #cot-boot[data-stop='offline']:has(.cot-boot-retry.on) .cot-boot-meta::before {
+      background: color-mix(in srgb, var(--text-warn) 7%, var(--surface-plate));
+    }
+    #cot-boot[data-stop='slow']:has(.cot-boot-retry.on) .cot-boot-meta::before { background: var(--surface-plate); }
+    /* the kit's glyph per severity: an error and an offline warning the alert, a slow load (progress) the clock */
+    .cot-boot-alert svg + svg { display: none; }
+    #cot-boot[data-stop='slow'] .cot-boot-alert svg:first-child { display: none; }
+    #cot-boot[data-stop='slow'] .cot-boot-alert svg + svg { display: inline-block; }
+    #cot-boot:has(.cot-boot-retry.on) .cot-boot-stage { color: var(--ink-1); }
+    #cot-boot:not([data-stop='slow']):has(.cot-boot-retry.on) .mkl * { animation-play-state: paused; }
+    /* capability gate (2026-09-24): one-line notice under the bar — software rendering, blocked storage */
+    .cot-boot-notice {
+      margin: 8px auto 0; max-width: 420px; min-height: 0;
+      font-family: var(--font-ui);
+      font-size: 13px; font-weight: 500; line-height: 1.45;
+      color: var(--ink-3); text-align: center; opacity: 0; transition: opacity var(--dur-base) var(--ease-enter);
+    }
+    .cot-boot-notice.on { opacity: 1; }
+    @keyframes cot-gate { 0%,100% { opacity: .72; } 50% { opacity: 1; } }
+    /* the version stands on the foot labels' baseline: theirs, 13 px centred in a 36 px button (44 on touch), falls on a half
+       pixel, so the version's bottom carries the same half (boot r21: 1 px high at every 1x size) */
+    .cot-boot-foot {
+      position: absolute; right: 16px; bottom: 21.5px; z-index: 2;
+      font-family: var(--font-ui);
+      font-size: 12px; font-weight: 500; line-height: 16px; color: var(--ink-3); text-align: right;
+    }
+    #cot-boot.cot-boot-enter .cot-boot-foot {
+      animation: cot-boot-fade var(--dur-screen) var(--ease-camera) .18s backwards;
+    }
+    @media (width < 768px) {
+      .cot-boot-inner { --boot-mark: calc((100vw - 32px) / var(--boot-lockup-k)); }
+      .cot-boot-load { margin-top: 45px; }
+      .cot-boot-tip { height: 144px; }
+      .cot-boot-retry { justify-self: stretch; align-self: start; margin-top: 21px; }
+    }
+    @media (pointer: coarse) { .cot-boot-foot { bottom: 25.5px; } }
+    /* a narrow phone: the version stands over the foot row's right end */
+    @media (width < 480px) { .cot-boot-foot { bottom: 64px; } }
+    @media (width >= 2200px) and (height >= 1200px) {
+      .cot-boot-inner, .cot-credits, .cot-boot-foot, .cot-boot-links, .cot-boot-nav { zoom: 1.3; }
+      /* zoomed, the labels' baseline lands 0.24 px under the whole pixel: the version keeps its whole bottom */
+      .cot-boot-foot { bottom: 22px; }
+      /* zoomed, the row's 4 px gaps are 5.2 and snap to 5 and 6: a whole 5 px keeps one rhythm (boot r27) */
+      .cot-boot-segs { gap: calc(5px / 1.3); }
+    }
+    /* a short landscape screen: no tips; the slot keeps Retry's room so a failure still moves nothing */
+    @media (height < 520px) {
+      .cot-boot-inner { --boot-mark: min(36vh, 150px); width: min(900px, calc(100vw - 32px)); }
+      .cot-boot-invite { margin-top: 12px; }
+      #cot-boot.has-invite .cot-boot-inner { --boot-mark: min(28vh, 116px); }
+      #cot-boot.has-invite .cot-boot-load { margin-top: 0; }
+      .cot-boot-load { margin-top: 33px; }
+      .cot-boot-tip { height: 48px; margin-top: 12px; visibility: hidden; }
+      .cot-boot-gate { margin-top: 12px; }
+      /* Retry sits under the notice, centred between it and the row's 44 px touch buttons: 27 px under it, 28 over them */
+      .cot-boot-retry { align-self: start; margin-top: 4px; }
+    }
+    }
+    /* Baseline for visible game scrollbars (the line ramp on the scene), in base: a component that hides its rail (a chip
+       strip's scrollbar-width:none) outranks it. In surfaces it drew a scrollbar under every picker's chips (the s16 and
+       r21q critics). */
+    @layer base {
+    :where(html,body,body *){scrollbar-width:thin;scrollbar-color:var(--line-3) transparent}
+    :where(html,body,body *)::-webkit-scrollbar{width:6px;height:6px}
+    :where(html,body,body *)::-webkit-scrollbar-track{background:transparent}
+    :where(html,body,body *)::-webkit-scrollbar-thumb{background:var(--line-3);border-radius:6px}
+    :where(html,body,body *)::-webkit-scrollbar-thumb:hover{background:var(--ink-3)}
+    :where(html,body,body *)::-webkit-scrollbar-corner{background:transparent}
+    }
+  </style>
+  <script>
+    // CHUNK RECOVERY r4: production sessions are deployment-pinned by routing
+    // middleware, but a missing/obsolete pin can leave an old document asking
+    // the current deployment for a removed lazy hash. Weak/mobile browsers can
+    // also abort a large module fetch. Keep the rejected import rejected so its
+    // real cause is observable, recover the document at most twice, then expose
+    // an honest retry instead of entering a refresh loop.
+    // r4 (2026-09-25, docs/ENTRY-RESILIENCE.md): the document watchdogs measure
+    // downloads. They used to fire 30/60 s after load while a slow connection
+    // was still delivering the entry graph; now every Resource Timing arrival
+    // (and every module stage) re-arms them, so they fire only after a full
+    // window with nothing arriving, a silent minute is confirmed against a
+    // connectivity probe before the document is replaced, and the terminal
+    // message says which it was: a file that failed to download (named), a
+    // graphics driver that refused, or a connection that is merely slow. The
+    // terminal outcomes are beaconed to the telemetry sink (telemetryErrorEndpoint
+    // below) with the same anonymous session id the module client reuses.
+    // (2026-11-02 audit S3) the boot's ready flag here is window.__COT_BOOT_READY, the product latch's page mirror
+    // (src/app/bootReadiness.ts); window.__GAME_READY is the harnesses' and nothing in the page reads it.
+    (() => {
+      const KEY = 'cot.bootRecovery.v1';
+      const MAX_AUTO_RELOADS = 2;
+      // A first visit may spend tens of seconds downloading/evaluating the
+      // initial graph or compiling shaders on an old mobile GPU. A short
+      // watchdog used to reload healthy work at 20/45 s, making the second
+      // visit look "fixed" only because browser/driver caches were warm.
+      // Notices stay early and non-blocking; automatic recovery is reserved
+      // for a genuinely inactive, foreground, online document.
+      const WATCHDOG_NOTICE_MS = 30000;
+      const WATCHDOG_RECOVER_MS = 60000;
+      // Every chunked GPU warm now pulses this watchdog between real batches,
+      // so a stage that is merely slow keeps its document while a promise,
+      // driver submission, or missing resource that makes no forward progress
+      // recovers substantially sooner.
+      // 2026-09-14 (outside QA at phone size): a RETRY LOADING button appeared at ~50 % while the
+      // eased bar was still moving — an 8 s silent stage on a slow renderer is not a stall. The
+      // stage notice now only changes the status line; the button waits for the recovery point.
+      const STAGE_NOTICE_MS = 16000;
+      const STAGE_RECOVER_MS = 30000;
+      const STABLE_READY_MS = 30000;
+      // Bytes seen within this window mean the connection is delivering, however slowly.
+      const NETWORK_FRESH_MS = 15000;
+      const loadedAt = Date.now();
+      let navigating = false;
+      let recoveryScheduled = false;
+      let stageTimer = 0;
+      let stageRecoveryTimer = 0;
+      let noticeTimer = 0;
+      let recoverTimer = 0;
+      let lastArmedAt = 0;
+      let deferredRecoveryReason = '';
+      // Capability gate (2026-09-24): a deliberate stop on the boot screen
+      // (no WebGL2, refused context) must never be "recovered" by a reload.
+      let halted = false;
+      let moduleOwnsStage = false;
+      let lastStage = 'download';
+      let lastFailedFile = '';
+      let lastErrorText = '';
+      let terminalBeaconSent = false;
+      let surfaceOwned = false;
+      let failedByStatus = '';
+      // a hashed file this deployment no longer serves (404): a newer deploy replaced the files under this document
+      let goneFile = '';
+      // A link out of the splash (its site pages, owner 2026-10-27) leaves the document: the requests its navigation
+      // cancels are no failure, so nothing reloads over it, reports or counts against the next boot. A navigation that
+      // never commits hands recovery back after LEAVE_MS; a page restored from the back-forward cache takes it back.
+      const LEAVE_MS = 10000;
+      let leaving = 0;
+      const network = { entries: 0, scripts: 0, bytes: 0, expected: 0, lastProgressAt: loadedAt };
+
+      // One anonymous session id per page load, shared with src/entry/telemetry.ts.
+      try {
+        if (!window.__COT_TELEMETRY_SID) {
+          let id = 's';
+          for (let i = 0; i < 16; i++) id += Math.floor(Math.random() * 36).toString(36);
+          window.__COT_TELEMETRY_SID = id;
+        }
+      } catch (_) { /* a frozen window still boots */ }
+
+      function retryCountFromUrl() {
+        try {
+          const receipt = new URL(location.href).searchParams.get('_bootretry');
+          if (!receipt) return 0;
+          const count = Number.parseInt(receipt.split('-', 1)[0], 10);
+          return Number.isFinite(count) ? Math.max(1, Math.min(MAX_AUTO_RELOADS, count)) : 1;
+        }
+        catch (_) { return 0; }
+      }
+
+      function state() {
+        try {
+          const value = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+          if (value && Date.now() - value.at < 15 * 60 * 1000) {
+            value.count = Math.max(Number(value.count) || 0, retryCountFromUrl());
+            return value;
+          }
+        } catch (_) { /* storage may be blocked */ }
+        return { count: retryCountFromUrl(), at: 0, reason: '' };
+      }
+
+      function remember(value) {
+        try { sessionStorage.setItem(KEY, JSON.stringify(value)); } catch (_) { /* ok */ }
+      }
+
+      // Same opt-outs as the module client: ?telemetry=off, the Diagnostics
+      // setting, Do Not Track / GPC, automation, and self-hosted builds (meta).
+      function telemetryAllowed() {
+        try {
+          const meta = document.querySelector && document.querySelector('meta[name="cot-telemetry"]');
+          if (meta && meta.getAttribute('content') === 'off') return false;
+          const query = String(location.search || '');
+          if (/[?&]telemetry=off(?:[&#]|$)/.test(query)) return false;
+          if (/[?&]telemetry=on(?:[&#]|$)/.test(query)) return true;
+          const nav = globalThis.navigator || {};
+          if (nav.doNotTrack === '1' || window.doNotTrack === '1' || nav.globalPrivacyControl === true || nav.webdriver === true) return false;
+          try { if (localStorage.getItem('cot.telemetry') === 'off') return false; } catch (_) { /* blocked storage is not an opt-out */ }
+          return true;
+        } catch (_) { return false; }
+      }
+      function bounded(value) {
+        return String(value || '').replace(/[^A-Za-z0-9_.:-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48) || 'unknown';
+      }
+      // Where a terminal verdict goes: the build's sink (the meta's data-url, VITE_TELEMETRY_URL), else the
+      // official site's telemetry Worker on the official host — the deploy strips the sensitive
+      // VITE_TELEMETRY_URL, so the live data-url is empty — else the Vercel fallback. The same rule as
+      // telemetryEndpoints() in src/entry/telemetry.ts (INFRA-P3; src/entry/inlineWatchdogSink.selftest.mjs).
+      const OFFICIAL_SITE_HOST = 'cot.kevinliu.studio';
+      const OFFICIAL_TELEMETRY_URL = 'https://cot-telemetry.kk23907751.workers.dev';
+      function telemetryErrorEndpoint(dataUrl, hostname) {
+        let base = String(dataUrl || '').trim().replace(/\/+$/, '');
+        if (!/^https?:\/\//.test(base)) base = String(hostname || '').trim().toLowerCase() === OFFICIAL_SITE_HOST ? OFFICIAL_TELEMETRY_URL : '';
+        return base ? base + '/v1/error' : '/api/telemetry';
+      }
+      // One v2 `error` record (server/telemetryRecord.ts) per terminal verdict.
+      function beacon(event) {
+        if (!telemetryAllowed()) return;
+        try {
+          const meta = document.querySelector && document.querySelector('meta[name="application-version"]');
+          const build = String(meta && meta.getAttribute('content') || 'unknown').replace(/[^A-Za-z0-9+._-]+/g, '_').slice(0, 64) || 'unknown';
+          const sink = document.querySelector && document.querySelector('meta[name="cot-telemetry"]');
+          const endpoint = telemetryErrorEndpoint(sink && sink.getAttribute('data-url'), location.hostname);
+          const body = JSON.stringify({ v: 2, sid: window.__COT_TELEMETRY_SID, build, kind: 'error', stage: event.stage,
+            code: event.code, outcome: event.outcome, ready: !!window.__COT_BOOT_READY, ms: Date.now() - loadedAt,
+            error: { message: event.message, frames: event.frames, code: event.reason } });
+          const nav = globalThis.navigator;
+          if (nav && typeof nav.sendBeacon === 'function' && nav.sendBeacon(endpoint, body)) return;
+          if (typeof fetch === 'function') {
+            fetch(endpoint, { method: 'POST', body, keepalive: true, credentials: 'omit', mode: 'no-cors',
+              headers: { 'content-type': 'text/plain;charset=UTF-8' } }).catch(() => {});
+          }
+        } catch (_) { /* the beacon never breaks recovery */ }
+      }
+
+      // Which failure is this? The words on the retry surface follow the class.
+      function classify(reason) {
+        const text = String(reason || '');
+        if (/^manual:/.test(text)) return classify(text.slice(7));
+        if (text === 'offline') return 'offline';
+        if (/^(?:preload|module|module-promise)$/.test(text)) return 'chunk';
+        if (/^(?:boot-runtime|boot-promise)$/.test(text)) {
+          if (/webgl|context|shader|program|framebuffer|gl_|renderer/i.test(lastErrorText)) return 'driver';
+          return lastFailedFile ? 'chunk' : 'script';
+        }
+        if (Date.now() - network.lastProgressAt < NETWORK_FRESH_MS) return 'slow';
+        const nav = globalThis.navigator;
+        if (nav && nav.onLine === false) return 'offline';
+        return 'stalled';
+      }
+      const MESSAGES = /^\/cn(?:\/|$)/.test(location.pathname) ? {
+        chunk: '游戏文件下载失败',
+        driver: '显卡驱动无法启动。关闭其他 3D 标签页可能有帮助。',
+        script: '游戏启动时出错。',
+        slow: '当前网络下加载时间比预期更长。',
+        offline: '已有一段时间没有下载任何内容，请检查网络连接。',
+        stalled: '加载已停滞，一分钟内没有收到任何内容。',
+        offlineRetry: '你似乎已离线，网络恢复后游戏会自动重试。',
+        end: '。',
+        reload: '重试加载',
+        downloading: '正在下载游戏文件',
+      } : {
+        chunk: 'A game file failed to download',
+        driver: 'The graphics driver refused to start. Closing other 3D tabs can help.',
+        script: 'The game hit an error while starting.',
+        slow: 'Loading is taking longer than expected on this connection.',
+        offline: 'Nothing has downloaded for a while, so check your connection.',
+        stalled: 'Loading stalled. Nothing has arrived for a minute.',
+        offlineRetry: ' You appear to be offline. The game retries when the connection returns.',
+        end: '.',
+        reload: 'Retry loading',
+        downloading: 'Downloading game files',
+      };
+      function describe(reason) {
+        const kind = classify(reason);
+        const file = failedByStatus || lastFailedFile;
+        const nav = globalThis.navigator;
+        let text = MESSAGES[kind];
+        if (kind === 'chunk' && file) text += ' (' + file + ')';
+        if (kind === 'chunk') text += MESSAGES.end;
+        if (kind === 'chunk' && nav && nav.onLine === false) text += MESSAGES.offlineRetry;
+        return { kind, text };
+      }
+      // A failed import names the entry script, not the dependency that 404ed;
+      // Resource Timing's responseStatus (noteNetworkProgress) names that file.
+      function noteFailure(text) {
+        // URLs keep their path: a query or fragment (a Studio #scene= link carries a whole scene) is never reported.
+        const joined = String(text || '')
+          .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s?#()'"]*)[?#][^\s()'"]*?(?=(?::\d+){1,2}(?=[\s)'"]|$)|[\s)'"]|$)/gi, '$1')
+          .replace(/\s+/g, ' ').trim();
+        if (joined) lastErrorText = joined.slice(0, 300);
+        const asset = /\/assets\/([^\s'")?#]+)/.exec(joined);
+        if (asset) lastFailedFile = asset[1];
+      }
+
+      function reload(reason) {
+        if (navigating) return;
+        navigating = true;
+        const prev = state();
+        const nextCount = Math.min(MAX_AUTO_RELOADS, prev.count + 1);
+        remember({ count: nextCount, at: Date.now(), reason });
+        const url = new URL(location.href);
+        // The count in the URL is the fail-safe when private browsing blocks
+        // sessionStorage. It must survive a second transient failure without
+        // ever permitting an infinite navigation loop.
+        url.searchParams.set('_bootretry', `${nextCount}-${Date.now().toString(36)}`);
+        // The one-shot middleware handshake expires a stale HttpOnly __vdpl
+        // cookie, redirects without this parameter, and lets Vercel select the
+        // newest document. A normal reload cannot repair that cookie itself.
+        url.searchParams.set('_dplreset', '1');
+        location.replace(url.href);
+      }
+
+      function showNotice(reason) {
+        if (halted || navigating || leaving || window.__COT_BOOT_READY) return;
+        surfaceOwned = true;
+        const stage = document.getElementById('cot-boot-stage');
+        if (stage) stage.textContent = describe(reason).text;
+      }
+      function showRetry(reason) {
+        if (halted || navigating || leaving) return;
+        surfaceOwned = true;
+        const verdict = describe(reason);
+        const stage = document.getElementById('cot-boot-stage');
+        // after the reveal, the one reload action already raised (2026-11-02 audit R6, round 2 U35: every chunk lazyChunk.ts
+        // found removed, and every gone preload, appended another fixed button over the last)
+        let retry = document.getElementById('cot-boot-retry') || document.getElementById('cot-runtime-retry');
+        if (stage) stage.textContent = verdict.text;
+        const boot = document.getElementById('cot-boot');
+        if (boot) boot.dataset.stop = verdict.kind;
+        // bootScreen removes its DOM after entry. A post-boot network failure
+        // still needs a visible recovery action if the one automatic reload
+        // has already been spent.
+        if (!retry && window.__COT_BOOT_READY) {
+          retry = document.createElement('button');
+          retry.id = 'cot-runtime-retry';
+          retry.textContent = MESSAGES.reload;
+          retry.title = verdict.text;
+          // the kit's primary button (components.css is the running game's), held at the foot of the screen
+          retry.className = 'cot-c-btn cot-c-btn--primary cot-c-btn--48';
+          retry.style.cssText = 'position:fixed;z-index:var(--z-toast);left:50%;bottom:24px;transform:translateX(-50%)';
+          document.body.appendChild(retry);
+        }
+        if (retry) {
+          retry.classList.add('on');
+          retry.onclick = () => reload(`manual:${reason}`);
+          // the one way forward takes the focus, unless the player is already somewhere; never in the running game, where
+          // a key meant for the Garage or a battle would press it
+          if (!window.__COT_BOOT_READY && (!document.activeElement || document.activeElement === document.body)) retry.focus({ preventScroll: true });
+        }
+        if (!terminalBeaconSent) {
+          terminalBeaconSent = true;
+          const exhausted = state().count >= MAX_AUTO_RELOADS || !canAutoRecover() || verdict.kind === 'offline';
+          beacon({ stage: bounded(lastStage), reason: bounded(reason), code: verdict.kind,
+            outcome: exhausted ? 'halted' : 'notice',
+            message: lastErrorText || verdict.text, frames: [failedByStatus, lastFailedFile].filter(Boolean).slice(0, 2) });
+        }
+      }
+
+      function canAutoRecover() {
+        if (document.hidden) return false;
+        return !globalThis.navigator || globalThis.navigator.onLine !== false;
+      }
+
+      // A silent minute with a working connection means the requests are stuck
+      // and a fresh document restarts them; without a connection a reload only
+      // produces an error page, so the document waits for `online` instead.
+      function probeConnectivity(done) {
+        if (typeof fetch !== 'function') { done(true); return; }
+        let settled = false;
+        const finish = (ok) => { if (settled) return; settled = true; done(ok); };
+        setTimeout(() => finish(false), 5000);
+        try {
+          fetch('/humans.txt?_cotprobe=' + Date.now().toString(36), { cache: 'no-store', credentials: 'omit' })
+            .then((response) => finish(!!response && response.ok), () => finish(false));
+        } catch (_) { finish(false); }
+      }
+
+      // After the reveal a failed chunk is its opener's to report, never to retry: a browser may keep the failure (Chrome
+      // 151 does) and a chunk's failed stylesheet never applies again (src/ui/components/loadFailure.ts), so the opener's
+      // trigger keeps the kit's error state and its next press reloads the page once online (the Tech Tree, the Record, Settings and a battle's entry among them). This page never
+      // reloads by itself: that would throw away the Garage, a room or a battle. Only a chunk this deployment no longer
+      // serves (a newer deploy replaced the files; src/app/lazyImportRetry.ts 'missing') needs a fresh document, and the
+      // player takes it from the reload action.
+      function recoverAfterReady(reason) {
+        if (goneFile) { showRetry(reason); return; }
+        if (!lastFailedFile || typeof fetch !== 'function') return;
+        try {
+          fetch('/assets/' + lastFailedFile, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' })
+            .then((response) => { if (response && response.status === 404) { goneFile = lastFailedFile; showRetry(reason); } }, () => {});
+        } catch (_) { /* no probe, no reload */ }
+      }
+
+      function recover(reason) {
+        if (halted || navigating || leaving || recoveryScheduled) return;
+        if (window.__COT_BOOT_READY) { recoverAfterReady(reason); return; }
+        if (!canAutoRecover()) {
+          deferredRecoveryReason = reason;
+          showRetry(reason);
+          return;
+        }
+        deferredRecoveryReason = '';
+        if (state().count >= MAX_AUTO_RELOADS) {
+          showRetry(reason);
+          return;
+        }
+        const commit = () => {
+          if (halted || navigating || leaving || recoveryScheduled) return;
+          recoveryScheduled = true;
+          window.__CHUNK_RECOVERY_PENDING = true;
+          beacon({ stage: bounded(lastStage), reason: bounded(reason), code: 'reload:' + classify(reason),
+            outcome: 'failed', message: lastErrorText || String(reason), frames: [failedByStatus, lastFailedFile].filter(Boolean).slice(0, 2) });
+          // Let the failed request unwind before replacing the document.
+          setTimeout(() => reload(reason), 150);
+        };
+        if (reason === 'timeout' || /^stall:/.test(String(reason))) {
+          probeConnectivity((ok) => {
+            if (ok) commit();
+            else { deferredRecoveryReason = reason; showRetry('offline'); }
+          });
+          return;
+        }
+        commit();
+      }
+
+      function clearDocumentWatchdogs() {
+        if (noticeTimer) clearTimeout(noticeTimer);
+        if (recoverTimer) clearTimeout(recoverTimer);
+        noticeTimer = 0;
+        recoverTimer = 0;
+      }
+      // Both document watchdogs measure silence: every arrival re-arms them.
+      function armDocumentWatchdogs() {
+        if (window.__COT_BOOT_READY || navigating || halted) return;
+        clearDocumentWatchdogs();
+        lastArmedAt = Date.now();
+        noticeTimer = setTimeout(() => {
+          if (window.__COT_BOOT_READY || halted) return;
+          showRetry('timeout');
+        }, WATCHDOG_NOTICE_MS);
+        recoverTimer = setTimeout(() => {
+          if (window.__COT_BOOT_READY || halted) return;
+          if (state().count < MAX_AUTO_RELOADS) recover('timeout');
+          else showRetry('timeout');
+        }, WATCHDOG_RECOVER_MS);
+      }
+
+      function progress(stage = 'unknown', fromModule = true) {
+        if (window.__COT_BOOT_READY || navigating || halted) return;
+        if (fromModule) {
+          moduleOwnsStage = true;
+          lastStage = String(stage);
+        }
+        window.__COT_BOOT_HEARTBEAT_AT = Date.now();
+        if (stageTimer) clearTimeout(stageTimer);
+        if (stageRecoveryTimer) clearTimeout(stageRecoveryTimer);
+        stageTimer = setTimeout(() => {
+          if (!window.__COT_BOOT_READY) showNotice(`stall:${stage}`);
+        }, STAGE_NOTICE_MS);
+        stageRecoveryTimer = setTimeout(() => {
+          if (!window.__COT_BOOT_READY) recover(`stall:${stage}`);
+        }, STAGE_RECOVER_MS);
+        armDocumentWatchdogs();
+      }
+
+      // Resource Timing is the download meter: entries and bytes arriving keep
+      // the document alive, and until the module claims the stage line the
+      // splash counts the entry graph's files as they land.
+      function paintDownloadProgress() {
+        if (moduleOwnsStage || surfaceOwned || halted || navigating || !network.expected) return;
+        if (document.querySelector('.cot-boot-gate.on')) return;
+        const stage = document.getElementById('cot-boot-stage');
+        if (!stage) return;
+        const counted = `${Math.min(network.scripts, network.expected)}/${network.expected}`;
+        // the bar's first share (its data-download-share; bootScreen.ts fills the rest) follows the files as they land
+        const fill = document.getElementById('cot-boot-fill');
+        const share = Number(fill && fill.parentElement && fill.parentElement.getAttribute('data-download-share')) || 0;
+        if (fill && share) fill.style.transform = `scaleX(${(share * Math.min(network.scripts, network.expected) / network.expected).toFixed(4)})`;
+        // the download's own segment shows the same files across its whole width
+        const seg = document.querySelector('#cot-boot-segs [data-seg="download"] b');
+        if (seg) seg.style.transform = `scaleX(${(Math.min(network.scripts, network.expected) / network.expected).toFixed(4)})`;
+        // the count ticks in place, so it wears the data face (.num); an engine without replaceChildren keeps plain text
+        if (typeof stage.replaceChildren !== 'function' || typeof document.createElement !== 'function') {
+          stage.textContent = `${MESSAGES.downloading} · ${counted}`;
+          return;
+        }
+        const line = document.createElement('span');
+        const count = document.createElement('span');
+        count.className = 'num';
+        count.textContent = counted;
+        line.append(`${MESSAGES.downloading} · `, count);
+        stage.replaceChildren(line);
+      }
+      function noteNetworkProgress(entries) {
+        let bytes = 0;
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i] || {};
+          const name = String(entry.name || '');
+          network.entries += 1;
+          bytes += Number(entry.transferSize || entry.encodedBodySize || 0) || 0;
+          if (/\/assets\/[^/?#]+\.js(?:[?#]|$)/.test(name)) network.scripts += 1;
+          if (Number(entry.responseStatus) >= 400 && /\/assets\//.test(name)) failedByStatus = name.split('/').pop().split('?')[0];
+          if (Number(entry.responseStatus) === 404 && /\/assets\//.test(name)) goneFile = failedByStatus;
+        }
+        network.bytes += bytes;
+        network.lastProgressAt = Date.now();
+        // Vite writes the modulepreload links after this inline script and the
+        // parser is still adding them while the first files land: recount until
+        // the module owns the stage line (browser proof 2026-09-25 read 17 of 104).
+        if (!moduleOwnsStage) {
+          try { network.expected = Math.max(network.expected, document.querySelectorAll('link[rel="modulepreload"]').length + 1); } catch (_) { /* keep the count */ }
+        }
+        paintDownloadProgress();
+        if (Date.now() - lastArmedAt >= 1000) armDocumentWatchdogs();
+      }
+      function watchNetwork() {
+        try {
+          if (typeof document.querySelectorAll === 'function') {
+            network.expected = document.querySelectorAll('link[rel="modulepreload"]').length + 1;
+          }
+        } catch (_) { /* no preload list, no counter */ }
+        try {
+          if (typeof PerformanceObserver === 'function') {
+            const observer = new PerformanceObserver((list) => noteNetworkProgress(list.getEntries()));
+            observer.observe({ type: 'resource', buffered: true });
+            return;
+          }
+        } catch (_) { /* fall back to polling */ }
+        try {
+          if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
+            let seen = 0;
+            const poll = setInterval(() => {
+              if (window.__COT_BOOT_READY || navigating) { clearInterval(poll); return; }
+              const entries = performance.getEntriesByType('resource');
+              if (entries.length > seen) { noteNetworkProgress(entries.slice(seen)); seen = entries.length; }
+            }, 2000);
+          }
+        } catch (_) { /* no timing API: the watchdogs keep their load-time arming */ }
+      }
+
+      function isSameOriginGameCode(value) {
+        const text = String(value || '');
+        if (!text || /(?:^|\/)analytics(?:-[^/]*)?\.js(?:[?#:]|$)/i.test(text)) return false;
+        let origin = '';
+        try { origin = new URL(location.href).origin; } catch (_) { return false; }
+        const escaped = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`${escaped}/(?:assets|src)/[^\\s)]+\\.(?:m?js|ts)(?:[?#:]|$)`, 'i').test(text);
+      }
+
+      function isBootDocumentException(event) {
+        if (window.__COT_BOOT_READY || event.target !== window || !event.error) return false;
+        const filename = String(event.filename || '');
+        // Browsers may omit filename/stack details for a module that throws
+        // while its entry graph is evaluating. A real Error on the window
+        // before the boot is ready belongs to this document; cross-origin resource
+        // failures expose no Error object and extension URLs are rejected.
+        if (!filename) return true;
+        try {
+          return new URL(filename, location.href).origin === new URL(location.href).origin;
+        } catch (_) { return false; }
+      }
+
+      addEventListener('vite:preloadError', (event) => {
+        // Preventing this event tells Vite that the failed import was handled,
+        // so it resolves the import as `undefined`. That manufactured the
+        // later Object.entries/createKillCam errors seen on battle re-entry.
+        const payload = event && event.payload;
+        noteFailure(payload && (payload.message || String(payload)));
+        recover('preload');
+      });
+      addEventListener('error', (event) => {
+        if (halted) return;
+        const node = event.target;
+        const moduleScript = node && node.tagName === 'SCRIPT' && node.type === 'module';
+        const message = String(event.message || '');
+        const bootRuntime = !window.__COT_BOOT_READY
+          && (isSameOriginGameCode(`${event.filename || ''} ${event.error?.stack || ''}`)
+            || isBootDocumentException(event));
+        if (moduleScript || bootRuntime || /module script|dynamically imported module|module preload/i.test(message)) {
+          noteFailure(`${moduleScript && node.src ? node.src : ''} ${event.filename || ''} ${message} ${event.error?.message || ''} ${event.error?.stack || ''}`);
+          recover(bootRuntime ? 'boot-runtime' : 'module');
+        }
+      }, true);
+      addEventListener('unhandledrejection', (event) => {
+        if (halted) return;
+        const message = String(event.reason && (event.reason.message || event.reason) || '');
+        const bootRuntime = !window.__COT_BOOT_READY
+          && isSameOriginGameCode(`${message} ${event.reason?.stack || ''}`);
+        if (bootRuntime || /module script|dynamically imported module|module preload|failed to fetch/i.test(message)) {
+          noteFailure(`${message} ${event.reason?.stack || ''}`);
+          recover(bootRuntime ? 'boot-promise' : 'module-promise');
+        }
+      });
+      const resumeDeferredRecovery = () => {
+        if (window.__COT_BOOT_READY || navigating || halted) return;
+        if (deferredRecoveryReason && canAutoRecover()) {
+          const reason = deferredRecoveryReason;
+          deferredRecoveryReason = '';
+          recover(reason);
+        } else if (canAutoRecover()) {
+          progress(document.hidden ? 'background' : 'resumed', false);
+        }
+      };
+      addEventListener('visibilitychange', resumeDeferredRecovery);
+      addEventListener('online', resumeDeferredRecovery);
+      addEventListener('click', (event) => {
+        const link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+        if (!link || window.__COT_BOOT_READY || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey
+          || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+        clearTimeout(leaving);
+        leaving = setTimeout(() => { leaving = 0; }, LEAVE_MS);
+      });
+      addEventListener('pageshow', (event) => {
+        if (!event.persisted || !leaving) return;
+        clearTimeout(leaving);
+        leaving = 0;
+        if (!window.__COT_BOOT_READY && !halted && !navigating) progress(lastStage, false);
+      });
+
+      const health = setInterval(() => {
+        if (!window.__COT_BOOT_READY) return;
+        clearInterval(health);
+        if (stageTimer) clearTimeout(stageTimer);
+        if (stageRecoveryTimer) clearTimeout(stageRecoveryTimer);
+        clearDocumentWatchdogs();
+        // Keep the short-lived receipt. Clearing it immediately at ready made
+        // a persistently missing post-boot chunk eligible for another reload
+        // before the user could request it again.
+        try {
+          const url = new URL(location.href);
+          if (url.searchParams.has('_bootretry')) {
+            url.searchParams.delete('_bootretry');
+            history.replaceState(null, '', url.href);
+          }
+        } catch (_) { /* cosmetic */ }
+        setTimeout(() => {
+          if (!window.__COT_BOOT_READY || window.__CHUNK_RECOVERY_PENDING) return;
+          try { sessionStorage.removeItem(KEY); } catch (_) { /* storage may be blocked */ }
+        }, STABLE_READY_MS);
+      }, 500);
+
+      // The capability gate stops the boot on purpose: keep its sentence on the
+      // stage line, disarm every watchdog and ignore later document errors.
+      function halt(code, message) {
+        halted = true;
+        window.__COT_BOOT_HALTED = String(code || 'halted');
+        if (stageTimer) clearTimeout(stageTimer);
+        if (stageRecoveryTimer) clearTimeout(stageRecoveryTimer);
+        clearDocumentWatchdogs();
+        const stage = document.getElementById('cot-boot-stage');
+        if (stage && message) stage.textContent = String(message);
+      }
+
+      watchNetwork();
+      armDocumentWatchdogs();
+
+      window.__COT_BOOT_RECOVERY = {
+        recover, showRetry, progress, state, halt,
+        network: () => ({ entries: network.entries, scripts: network.scripts, bytes: network.bytes,
+          expected: network.expected, sinceProgressMs: Date.now() - network.lastProgressAt, kind: classify('timeout') }),
+      };
+    })();
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="cot-boot" class="cot-boot-enter" data-entrance-state="playing">
+    <!-- Curated in-engine stills decode while hidden, then crossfade behind
+         this already-painted surface. Empty src attributes are intentional:
+         the boot controller owns fetch timing and never exposes a partial. -->
+    <div id="cot-boot-hero" data-hero-state="idle" aria-hidden="true">
+      <img class="hly" alt="" decoding="async" fetchpriority="low">
+      <img class="hly" alt="" decoding="async" fetchpriority="low">
+    </div>
+    <!-- The site's pages (owner 2026-10-27): a long first load can step out to a page that loads at once. Plain anchors,
+         written by node tools/public-shell.mjs --write from src/presentation/publicShell.ts bootNavHtml. -->
+    <!--cot:bootnav--><nav class="cot-boot-nav" data-cot-boot-control aria-label="Site pages" data-i18n-aria-label="publicNav.menuAria"><a class="cot-boot-link" href="/home"><svg class="cot-boot-link-icon cot-boot-glyph" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M3.5 10.5 12 3.5l8.5 7v10h-6v-6h-5v6h-6Z"/></svg><span data-i18n="publicNav.home">Home</span></a><a class="cot-boot-link" href="/gallery"><svg class="cot-boot-link-icon cot-boot-glyph cot-boot-glyph--s" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3M4.5 9.5h7l1 1.25-1 1.25h-7l-1-1.25ZM5.75 9.5V8l1-1H9l1 1v1.5ZM10 8h2.5"/></svg><span data-i18n="publicNav.tankGallery">Tank Gallery</span></a><a class="cot-boot-link" href="/docs"><svg class="cot-boot-link-icon cot-boot-glyph cot-boot-glyph--s" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><path d="M1.5 3H6l1.25 1.25v9.25L6 12.25H1.5ZM14.5 3H10L8.75 4.25v9.25L10 12.25h4.5Z"/></svg><span data-i18n="publicNav.fieldManual">Field Manual</span></a></nav><!--/cot:bootnav-->
+    <div class="cot-boot-inner">
+      <!-- The lockup (owner, 2026-10-26): the living commander mark over the one-line wordmark; generated by
+           tools/sync-brand-marks.mjs from src/ui/brandMarkMotion.ts and src/ui/brandMark.ts. -->
+      <div class="cot-boot-mark" role="img" aria-label="Claude of Tanks" data-i18n-aria-label="aria.claudeoftanks"><!-- cot:boot-lockup -->
+        <div class="mkl" aria-hidden="true"><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M50 119h126a9.5 9.5 0 0 1 0 19H50a9.5 9.5 0 0 1 0-19ZM61.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0ZM84.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0ZM107.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0ZM130.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0ZM153.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0ZM176.4 128.5a5.4 5.4 0 1 0 -10.8 0a5.4 5.4 0 1 0 10.8 0Z"/></svg><span class="mkl-links mkl-links--top" style="top:80.802%"><i></i></span><span class="mkl-links mkl-links--low" style="top:96.085%"><i></i></span><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:11.196%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:23.696%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:36.196%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:48.696%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:61.196%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><svg class="mkl-wheel" viewBox="-5.4 -5.4 10.8 10.8" style="left:73.696%;top:84.057%" focusable="false"><g fill="currentColor"><circle r="1.7"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(0)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(120)"/><rect x="-0.55" y="-5.4" width="1.1" height="5.4" transform="rotate(240)"/></g></svg><div class="mkl-l mkl-hull"><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><path fill="currentColor" d="M34 116.6 40 94h108l52 18-2.4 4.6Z"/></svg><i class="mkl-puff" style="animation-delay:0.00s"></i><i class="mkl-puff" style="animation-delay:-0.40s"></i><i class="mkl-puff" style="animation-delay:-0.80s"></i><div class="mkl-l mkl-turret"><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><g fill="currentColor"><g transform="rotate(-10 140 82)"><rect x="136" y="76" width="18" height="12" rx="1.5"/><rect x="154" y="78.3" width="52" height="7.4"/><rect x="168" y="76.4" width="16" height="11.2" rx="4.4"/><rect x="203" y="77.3" width="7" height="9.4" rx="1"/></g><path d="M77.6 68.9 71.4 53.4a1.6 1.6 0 0 1 .9-2.1l2.6-1a1.6 1.6 0 0 1 2.1.9l6.3 15.6Z"/><rect x="74.6" y="65.6" width="8.4" height="4" rx="1.2"/></g></svg><div class="mkl-l mkl-antenna"><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><path d="M64 76 56 41" fill="none" stroke="currentColor" stroke-width="1.6"/><path style="fill:var(--accent)" d="M56 38.5 41 43l15 4.5Z"/></svg></div><div class="mkl-l mkl-crew"><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><path style="fill:var(--accent)" fill-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z" transform="translate(82.65 42.75) scale(1.95)"/><g fill="currentColor"><path fill-rule="evenodd" d="M87.5 52.5a18.5 12 0 0 1 37 0ZM94 45.2h24.5v5.2H94Z"/><rect x="85.5" y="52.3" width="41" height="4.2" rx="2.1"/></g><g fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="102.5" cy="47.8" r="2.9"/><circle cx="111" cy="47.8" r="2.9"/></g></svg></div><svg class="mkl-l" viewBox="30 34 184 106" focusable="false"><g fill="currentColor"><path d="M151.4 92.6 140 77.5 82 74 61.5 72.8 58 76.5V88l4.5 3.5H73l1.5 1.1Z"/><path d="M77.5 75.5 80 68.2h53l3.1 10Z"/></g></svg></div></div></div>
+        <svg class="wm-stack" viewBox="0 0 3946 2184" aria-hidden="true" focusable="false"><path transform="translate(-55.0 -142.0)" style="fill:currentColor" d="M55 727V257L170 142H512L625 255V362H489V305L442 258H242L191 309V675L242 726H442L489 679V622H625V729L512 842H170ZM760 142H896V727H1246V842H760ZM1557 142H1681L1937 842H1799L1742 687H1496L1439 842H1301ZM1712 575 1619 309H1617L1527 575ZM2027 722V142H2163V675L2214 726H2410L2461 675V142H2597V722L2477 842H2147ZM2767 142H3215L3335 262V722L3215 842H2767ZM3148 726 3199 675V309L3148 258H2903V726ZM3495 142H4001V257H3631V434H3972V547H3631V727H4001V842H3495Z"/><path transform="translate(-5085.0 596.0)" style="fill:var(--accent)" d="M5085 619.8V372.2L5143.2 314H5314.8L5373.1 372.2V619.8L5314.8 678H5143.2ZM5290.9 634.3 5323.1 602.1V389.9L5290.9 357.7H5167.1L5134.9 389.9V602.1L5167.1 634.3ZM5529.1 314H5768.3V357.7H5579V478.3H5743.3V522H5579V678H5529.1Z"/><rect style="fill:var(--accent)" x="831.0" y="1051.0" width="3115.0" height="90.0"/><path transform="translate(-6811.5 1342.0)" style="fill:currentColor" d="M7020.5 257H6811.5V142H7365.5V257H7156.5V842H7020.5ZM7591.5 142H7715.5L7971.5 842H7833.5L7776.5 687H7530.5L7473.5 842H7335.5ZM7746.5 575 7653.5 309H7651.5L7561.5 575ZM8081.5 142H8203.5L8515.5 617H8517.5V142H8648.5V842H8526.5L8214.5 368H8212.5V842H8081.5ZM8818.5 142H8954.5V435H9060.5L9229.5 142H9382.5L9177.5 491L9399.5 842H9243.5L9059.5 551H8954.5V842H8818.5ZM9469.5 734V634H9603.5V693L9636.5 726H9843.5L9877.5 692V576L9844.5 543H9579.5L9471.5 435V250L9579.5 142H9895.5L10003.5 250V351H9869.5V291L9836.5 258H9638.5L9605.5 291V394L9638.5 427H9903.5L10011.5 535V732L9901.5 842H9577.5Z"/></svg>
+        <!-- /cot:boot-lockup --></div>
+      <div class="cot-boot-invite" id="cot-boot-invite" aria-live="polite" data-datum="room-code"></div>
+      <div class="cot-boot-load">
+        <div class="cot-boot-meta">
+          <span class="cot-boot-alert" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0ZM12 6.5v6.5M12 16.5v.5"/></svg><svg viewBox="0 0 24 24" focusable="false"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 1 1 18 0ZM12 6.5V12l3.5 2.5"/></svg></span>
+          <div class="cot-boot-stage" id="cot-boot-stage" data-datum="load-stage" role="status" aria-live="polite" aria-atomic="true">Starting engine</div>
+        </div>
+        <div class="cot-boot-bar" data-download-share=".2" data-datum="load-progress"><div class="cot-boot-fill" id="cot-boot-fill"></div></div>
+        <div class="cot-boot-segs" id="cot-boot-segs" data-datum="load-stage-progress" aria-hidden="true"><i data-seg="download" class="now"><b></b></i><i data-seg="renderer"><b></b></i><i data-seg="sky"><b></b></i><i data-seg="lighting"><b></b></i><i data-seg="garage"><b></b></i><i data-seg="vehicle"><b></b></i><i data-seg="hud"><b></b></i><i data-seg="ui"><b></b></i><i data-seg="audio"><b></b></i><i data-seg="post"><b></b></i><i data-seg="ready"><b></b></i></div>
+        <div class="cot-boot-notice" id="cot-boot-notice" aria-live="polite" data-datum="notices"></div>
+      </div>
+
+      <div class="cot-boot-tip" id="cot-boot-tip" data-datum="hints"></div>
+      <div class="cot-boot-gate" id="cot-boot-gate"></div>
+      <button class="cot-boot-retry" id="cot-boot-retry" type="button" data-i18n="boot.retry">Retry loading</button>
+    </div>
+    <div class="cot-boot-links" data-cot-boot-control>
+      <button class="cot-boot-link" id="cot-credits-open" type="button">
+        <svg class="cot-boot-link-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <circle cx="9" cy="11" r="2.2" />
+          <path d="M5.8 16c.7-1.7 1.8-2.6 3.2-2.6s2.5.9 3.2 2.6M14.8 10h3.4M14.8 14h3.4" />
+        </svg>
+        <span data-i18n="boot.credits">Credits</span>
+      </button>
+      <a class="cot-boot-link" href="https://github.com/Kevin-Liu-01/Claude-of-Tanks" target="_blank" rel="noopener noreferrer" aria-label="Claude of Tanks on GitHub" data-i18n-aria-label="publicNav.githubAria">
+        <svg class="cot-boot-link-icon github" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.1 1.2A10.8 10.8 0 0 1 12 5.8c1 0 1.9.1 2.8.4C17 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.4 5.7.4.4.8 1.1.8 2.1v3.3c0 .3.2.7.8.6A11.4 11.4 0 0 0 12 .8Z" />
+        </svg>
+        <span lang="en">GitHub</span>
+        <span class="cot-github-stars"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.7 1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.5l-3.8 2 .7-4.3-3.1-3 4.3-.6Z"/></svg><span data-github-stars data-github-stars-state="loading" aria-busy="true" aria-label="Loading GitHub star count" data-datum="github-stars"></span></span>
+      </a>
+    </div>
+    <div class="cot-boot-foot num" data-datum="version">{{COT_APP_VERSION}}</div>
+  </div>
+
+  <dialog class="cot-credits" id="cot-credits" data-cot-boot-control aria-labelledby="cot-credits-title">
+    <button class="cot-credits-close" id="cot-credits-close" type="button" aria-label="Close credits" data-i18n-aria-label="aria.closecredits" data-i18n-aria="credits.closeAria" autofocus><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.5 5.5l13 13M18.5 5.5l-13 13"/></svg></button>
+    <div class="cot-credits-scroll">
+    <div class="cot-credits-grid">
+      <figure class="cot-credits-profile">
+        <img class="cot-credits-portrait" src="/brand/kevin-liu.jpg" width="460" height="460" alt="Kevin B. Liu" data-i18n-alt="credits.portraitAlt" loading="lazy" decoding="async" />
+      </figure>
+      <div class="cot-credits-copy">
+        <h2 id="cot-credits-title">Kevin B. Liu</h2>
+        <p data-i18n="credits.body1">I designed and built Claude of Tanks as an experiment in how far one person can take an original browser game with persistent agent collaboration. Claude and Codex were development tools, not co-authors.</p>
+        <p data-i18n="credits.body2">The vehicles, simulation, combat systems, interface, performance work, testing, documentation, and production pipeline were built end to end in a sustained workflow of many Claude and Codex agents. Every selectable tank is original procedural model work by Kevin B. Liu.</p>
+        <div class="cot-credits-actions">
+          <a class="cot-boot-link" href="https://github.com/Kevin-Liu-01" target="_blank" rel="noopener noreferrer"><svg class="cot-boot-link-icon github" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.1 1.2A10.8 10.8 0 0 1 12 5.8c1 0 1.9.1 2.8.4C17 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.4 5.7.4.4.8 1.1.8 2.1v3.3c0 .3.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg><span data-i18n="credits.links.github">Kevin on GitHub</span></a>
+          <a class="cot-boot-link" href="https://github.com/Kevin-Liu-01/Claude-of-Tanks" target="_blank" rel="noopener noreferrer" aria-label="Claude of Tanks source code on GitHub"><svg class="cot-boot-link-icon github" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.1 1.2A10.8 10.8 0 0 1 12 5.8c1 0 1.9.1 2.8.4C17 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.4 5.7.4.4.8 1.1.8 2.1v3.3c0 .3.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg><span data-i18n="credits.links.source">Source code</span><span class="cot-github-stars"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.2 2.1 4.2 4.7.7-3.4 3.3.8 4.7L8 11.9l-4.2 2.2.8-4.7-3.4-3.3 4.7-.7L8 1.2Z"/></svg><span data-github-stars data-github-stars-state="loading" aria-busy="true" aria-label="Loading GitHub star count"></span></span></a>
+          <a class="cot-boot-link" href="https://github.com/Kevin-Liu-01/Claude-of-Tanks/blob/main/NOTICE.md" target="_blank" rel="noopener noreferrer" data-i18n="credits.links.notice">Authorship notice</a>
+        </div>
+      </div>
+    </div>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      document.documentElement.dataset.baseTitle = document.title;
+      const params = new URLSearchParams(location.search);
+      const roomCode = String(params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+        .replace(/[01IO]/g, (char) => ({ 0: 'Q', 1: 'L', I: 'L', O: 'Q' })[char] || char)
+        .slice(0, 6);
+      const hostName = String(params.get('host') || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+      const chineseRoute = /^\/cn(?:\/|$)/.test(location.pathname);
+      const invite = document.getElementById('cot-boot-invite');
+      const boot = document.getElementById('cot-boot');
+      if (roomCode.length === 6 && invite && boot) {
+        const battleLabel = String(params.get('mode') || '').toLowerCase() === 'lan'
+          ? (chineseRoute ? 'LAN 对战' : 'LAN Battle')
+          : (chineseRoute ? '私人对战' : 'Private Battle');
+        const invitationTitle = hostName
+          ? (chineseRoute ? '加入' + (/^[\x21-\x7e]/.test(hostName) ? ' ' : '') + hostName + (/[\x21-\x7e]$/.test(hostName) ? ' ' : '') + '的' + (/^[A-Z]/.test(battleLabel) ? ' ' : '') + battleLabel : 'Join ' + hostName + '’s ' + battleLabel)
+          : (chineseRoute ? '加入私人对战 ' + roomCode : 'Join Private Battle ' + roomCode);
+        // the host's callsign is one word, so the balanced wrap never splits a name (boot r26)
+        invite.textContent = hostName ? invitationTitle.replace(hostName, hostName.replace(/ /g, '\u00a0')) : invitationTitle;
+        invite.classList.add('on');
+        boot.classList.add('has-invite');
+        document.title = invitationTitle + ' · Claude of Tanks';
+      }
+
+      const dialog = document.getElementById('cot-credits');
+      const open = document.getElementById('cot-credits-open');
+      const close = document.getElementById('cot-credits-close');
+      if (!dialog || !open || !close) return;
+      // Preserve native dialog keys without sending them to game shortcuts.
+      for (const type of ['keydown', 'keyup']) {
+        dialog.addEventListener(type, (event) => event.stopPropagation());
+      }
+      // The browser centres the dialog on a fraction of a pixel, and past half a pixel the title's caps painted a row
+      // off the portrait (boot r31). Its top margin takes the centred place rounded to a whole pixel, so everything in it
+      // lays out on whole rows and its size, so its padding, stays its content's (boot r32). It settles again whenever
+      // its content or the screen changes size.
+      const settle = () => {
+        dialog.style.marginTop = '';
+        dialog.style.marginTop = `${Math.round(dialog.getBoundingClientRect().top)}px`;
+      };
+      new ResizeObserver(() => { if (dialog.open) settle(); }).observe(dialog);
+      open.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!dialog.open) { boot?.classList.add('credits-open'); dialog.showModal(); settle(); }
+      });
+      addEventListener('resize', () => { if (dialog.open) settle(); });
+      close.addEventListener('click', (event) => { event.stopPropagation(); dialog.close(); });
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      dialog.addEventListener('close', () => { boot?.classList.remove('credits-open'); open.focus(); });
+    })();
+  </script>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

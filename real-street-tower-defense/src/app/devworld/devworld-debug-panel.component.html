@@ -1,0 +1,74 @@
+<div class="td-stack devworld-panel">
+  <div class="td-tag is-caps is-brass badge">
+    <td-icon name="gamepad" [size]="14"></td-icon>
+    DevWorld
+  </div>
+
+  <div class="td-group">
+    <div class="td-section td-inline">Terrain</div>
+    <select class="td-select terrain-select" (change)="onTerrainChange($event)">
+      @for (category of categories; track category.name) {
+        <optgroup [label]="category.name">
+          @for (preset of category.presets; track preset) {
+            <option [value]="preset" [selected]="preset === devWorld.config.terrain">{{ preset }}</option>
+          }
+        </optgroup>
+      }
+    </select>
+  </div>
+
+  <div class="td-group">
+    <div class="td-section td-inline">Seed</div>
+    <div class="seed-row">
+      <input
+        type="number"
+        class="td-input seed-input"
+        [value]="devWorld.config.seed"
+        (change)="onSeedChange($event)"
+        min="0"
+        max="99999"
+      />
+      <button class="td-icon-btn" (click)="randomSeed()" title="Random Seed" aria-label="Random seed">
+        <td-icon name="shuffle" [size]="14"></td-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="td-group">
+    <div class="td-section td-inline">Buildings</div>
+    <div class="td-seg is-compact" role="group" aria-label="Buildings">
+      @for (preset of buildingPresets; track preset) {
+        <button
+          type="button"
+          [attr.aria-pressed]="devWorld.config.buildings === preset"
+          (click)="selectBuildings(preset)"
+        >
+          {{ preset }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="td-group">
+    <div class="td-section td-inline">Actions</div>
+    <button class="td-btn-primary td-btn-sm" [disabled]="isRegenerating()" (click)="regenerate()" title="Regenerate world with current settings">
+      <td-icon name="refresh" [size]="14" [class.td-spin]="isRegenerating()"></td-icon>
+      {{ isRegenerating() ? 'Regenerating' : 'Regenerate world' }}
+    </button>
+    <button class="td-btn-secondary td-btn-sm" (click)="copyUrl()" title="Copy shareable URL">
+      <td-icon name="share" [size]="14"></td-icon>
+      Copy URL
+    </button>
+  </div>
+
+  <div class="td-group">
+    <div class="td-kv">
+      <span>Size</span>
+      <b>1000 m x 1000 m</b>
+    </div>
+    <div class="td-kv">
+      <span>Max height</span>
+      <b>150 m</b>
+    </div>
+  </div>
+</div>

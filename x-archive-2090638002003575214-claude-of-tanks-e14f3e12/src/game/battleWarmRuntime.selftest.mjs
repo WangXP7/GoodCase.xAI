@@ -1,0 +1,1499 @@
+import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
+import {
+  BoxGeometry,
+  DirectionalLight,
+  Frustum,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  Matrix4,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  Texture,
+  Vector3,
+} from 'three';
+import {
+  createCombatRareWarmSteps,
+  createCombatOpeningWarmSteps,
+  invalidateBattleWarmRuntime,
+  stageCombatFxProgramSubmission,
+  primeOpeningTerrainPresentation,
+  warmBattleTerrainTiles,
+  warmNetworkOpeningEffects,
+  warmNetworkWrecks,
+  warmStudioEffects,
+} from './battleWarmRuntime.ts';
+import { createFx } from '../fx/effects.ts';
+import { missileTailM } from '../fx/missileBodies.ts';
+import { registerWorldDestructibles } from '../world/destructibles.ts';
+import { createCameraRig } from '../engine/cameraRig.ts';
+import { createCombatWarmCoordinator } from './combatWarmCoordinator.ts';
+import { graphLabels } from '../../tools/receipt-kit.test-support.mjs';
+
+let warmedTerrainPoints = null;
+let terrainYieldCount = 0;
+let presentationPrimeCount = 0;
+await warmBattleTerrainTiles({
+  game: {
+    tanks: [
+      {
+        isPlayer: true,
+        state: { pos: { x: 10, y: 2, z: 20 }, yaw: Math.PI / 2 },
+      },
+      {
+        isPlayer: false,
+        state: { pos: { x: 0, y: 0, z: 0 }, yaw: 0 },
+        _openingRoute: [[25, 0], [50, 0], [75, 0], [100, 0], [125, 0]],
+      },
+    ],
+    player: {
+      state: { pos: { x: 10, y: 2, z: 20 }, yaw: Math.PI / 2 },
+    },
+  },
+  world: {
+    heightField: {
+      * warmFastTilesAround(points) {
+        warmedTerrainPoints = points;
+        yield 'terrain-batch';
+      },
+    },
+    update() { presentationPrimeCount += 1; },
+  },
+  yieldForBudget: async () => { terrainYieldCount += 1; },
+});
+assert.deepEqual(
+  warmedTerrainPoints.slice(0, 4).map(({ x, z, radiusM }) => [Math.round(x), Math.round(z), radiusM]),
+  [[10, 20, 64], [90, 20, 10], [122, 20, 10], [154, 20, 10]],
+  'opening warm includes the player steering disc and narrow spawn-heading corridor',
+);
+assert.ok(warmedTerrainPoints.some(({ x, radiusM }) => x >= 100 && radiusM === 10),
+  'bot terrain warming reaches the first 120 m of its opening route');
+assert.equal(terrainYieldCount, 1, 'terrain-only work yields without warming an invented camera');
+assert.equal(presentationPrimeCount, 0, 'presentation waits for the solved reveal camera');
+
+function carpetWarmFixture({ finishAt = 4, disposed = false, cancelAt = 0, primePresentation = true } = {}) {
+  const calls = [];
+  let updates = 0, yields = 0;
+  const world = {
+    heightField: { *warmFastTilesAround() {} },
+    update(dt, camera, forward, focus) {
+      updates++;
+      calls.push(['update', dt, ...camera.toArray(), ...forward.toArray(), ...focus.toArray()]);
+    },
+    getGrassWorkState() {
+      return { disposed, carpet: { cold: updates < finishAt, pending: updates < finishAt } };
+    },
+  };
+  return {
+    calls, get updates() { return updates; }, get yields() { return yields; },
+    run: () => primePresentation ? primeOpeningTerrainPresentation({
+      game: { tanks: [], player: { state: { pos: { x: 10, y: 2, z: 20 }, yaw: 0 } } },
+      world, camera: new PerspectiveCamera(),
+      yieldForBudget: async force => {
+        yields++;
+        calls.push(['yield', force]);
+        if (cancelAt && yields === cancelAt) throw new Error('stale deployment');
+      },
+    }) : warmBattleTerrainTiles({ game: { tanks: [] }, world, primePresentation: false }),
+  };
+}
+const coldCarpet = carpetWarmFixture();
+await coldCarpet.run();
+assert.equal(coldCarpet.updates, 4, 'cold carpet completes before returning the covered prime');
+assert.equal(coldCarpet.yields, 4, 'each bounded batch forces a visible loading-frame yield');
+assert.ok(coldCarpet.calls.filter(([name]) => name === 'update')
+  .every(call => JSON.stringify(call) === JSON.stringify(coldCarpet.calls[0])),
+'readiness uses one stable opening camera and never advances simulation time');
+assert.deepEqual(coldCarpet.calls.map(([name]) => name),
+  ['update', 'yield', 'update', 'yield', 'update', 'yield', 'update', 'yield']);
+const readyCarpet = carpetWarmFixture({ finishAt: 0 });
+await readyCarpet.run();
+assert.equal(readyCarpet.updates, 1, 'resident warm carpet adds no extra update loop');
+const noPrimeCarpet = carpetWarmFixture({ primePresentation: false });
+await noPrimeCarpet.run();
+assert.equal(noPrimeCarpet.updates, 0, 'deferred terrain-only warm cannot rebuild the camera carpet');
+const cancelledCarpet = carpetWarmFixture({ cancelAt: 2 });
+await assert.rejects(cancelledCarpet.run(), /stale deployment/);
+assert.equal(cancelledCarpet.updates, 2, 'generation cancellation stops before another world update');
+const disposedCarpet = carpetWarmFixture({ disposed: true });
+await assert.rejects(disposedCarpet.run(), /world was disposed/);
+const stuckCarpet = carpetWarmFixture({ finishAt: Infinity });
+await assert.rejects(stuckCarpet.run(), /900 bounded batches/);
+assert.equal(stuckCarpet.updates, 900, 'broken readiness cannot hang loading forever');
+
+// Cancellation may run after a yielder's own check, but before its consumer's
+// await resumes. The actual producer must stop before even reading old-world
+// readiness, rather than waiting for a second world update to notice it.
+for (const mode of ['generation', 'signal']) {
+  const expected = new Error(`late ${mode} cancellation`);
+  const controller = new AbortController();
+  let current = true, updates = 0, stateReads = 0, innerChecks = 0;
+  const requireCurrent = () => { if (!current) throw expected; };
+  await assert.rejects(primeOpeningTerrainPresentation({
+    game: { tanks: [], player: { state: { pos: new Vector3() } } },
+    camera: new PerspectiveCamera(),
+    world: {
+      update() { updates++; },
+      getGrassWorkState() {
+        stateReads++;
+        return { disposed: false, carpet: { cold: true, pending: true } };
+      },
+    },
+    ...(mode === 'signal' ? { signal: controller.signal } : { assertCurrent: requireCurrent }),
+    yieldForBudget: async () => {
+      await (async () => {
+        queueMicrotask(() => queueMicrotask(() => {
+          current = false;
+          controller.abort(expected);
+        }));
+      })();
+      requireCurrent();
+      innerChecks++;
+    },
+  }), error => error === expected);
+  assert.equal(innerChecks, 1, `${mode}: inner yielder check passed before cancellation`);
+  assert.equal(updates, 1, `${mode}: no second old-world update`);
+  assert.equal(stateReads, 0, `${mode}: no old-world readiness access after the await`);
+}
+const beforePrimeFailure = new Error('expired before terrain prime');
+await assert.rejects(primeOpeningTerrainPresentation({
+  game: { tanks: [], get player() { assert.fail('expired producer must not inspect the roster'); } },
+  world: null, camera: new PerspectiveCamera(),
+  assertCurrent() { throw beforePrimeFailure; },
+}), error => error === beforePrimeFailure);
+
+// Use the actual rig, including its pitched 13 m orbit and collision pull-in:
+// a 12 m spawn heuristic chooses the wrong 16 m carpet cell at this boundary.
+for (const [collision, observer] of [[false, false], [true, false], [false, true]]) {
+  const camera = new PerspectiveCamera();
+  const root = new Object3D();
+  root.position.set(20, 0, 12.5);
+  const player = {
+    state: { pos: root.position.clone(), yaw: 0, turretYaw: 0 },
+    input: { aimPoint: new Vector3() }, spec: { dims: { heightM: 2 } },
+    visual: { root,
+      turretTopWorld: out => out.set(0, 2, 0).applyMatrix4(root.matrixWorld),
+      gunPivotWorld: out => out.set(0, 1.7, 0.2).applyMatrix4(root.matrixWorld),
+    },
+  };
+  const rig = createCameraRig(camera, {
+    heightField: { getHeightAt: () => 0 }, getPlayer: () => player,
+    raycast: (_origin, _direction, distance) => collision && distance < 20
+      ? { point: new Vector3(20, 6, 2), normal: new Vector3(0, 0, 1), dist: 10 } : null,
+  });
+  if (observer) {
+    camera.position.set(-1500, 10, -1500);
+    rig.startSpectate(player);
+    assert.equal(rig.snapSpectateForReveal(), true);
+  } else rig.snapArcade(2, 0, -Math.PI / 18);
+  const expected = camera.position.clone();
+  const forward = camera.getWorldDirection(new Vector3());
+  if (!collision) assert.notEqual(Math.floor(expected.z / 16), Math.floor((12.5 - 12) / 16));
+  let updates = 0;
+  await primeOpeningTerrainPresentation({
+    game: {
+      tanks: observer ? [{ state: { pos: new Vector3(800, 0, 800) } }, player] : [player],
+      player: observer ? null : player,
+    }, camera, focusEntity: observer ? player : undefined,
+    world: {
+      update(dt, position, direction, focus) {
+        assert.equal(dt, 0);
+        assert.deepEqual(position.toArray(), expected.toArray());
+        assert.deepEqual(direction.toArray(), forward.toArray());
+        assert.deepEqual(focus.toArray(), [20, 1.5, 12.5], 'observer follows its selected live entity, not first roster state');
+        updates++;
+      },
+      getGrassWorkState: () => ({ disposed: false, carpet: { cold: updates < 3, pending: updates < 3 } }),
+    },
+    yieldForBudget: async () => {},
+  });
+  assert.equal(updates, 3);
+  assert.deepEqual(camera.position.toArray(), expected.toArray(), 'warming never moves the rig camera');
+}
+// (battle-spikes-253) the prime also waits for the tall grass's near ring, whose cold fill is capped per update
+{
+  let updates = 0;
+  await primeOpeningTerrainPresentation({
+    game: { tanks: [{ state: { pos: new Vector3(0, 0, 0) } }], player: { state: { pos: new Vector3(0, 0, 0) } } },
+    camera: new PerspectiveCamera(),
+    world: {
+      update() { updates++; },
+      getGrassWorkState: () => ({ disposed: false, carpet: { cold: updates < 2, pending: updates < 2 }, swardNearPending: Math.max(0, 5 - updates) }),
+    },
+    yieldForBudget: async () => {},
+  });
+  assert.equal(updates, 5, 'the carpet done at 2, the near sward at 5: the prime waits for both');
+}
+const coverAbort = new AbortController();
+let abortedUpdates = 0;
+await assert.rejects(primeOpeningTerrainPresentation({
+  game: { tanks: [], player: { state: { pos: new Vector3() } } },
+  camera: new PerspectiveCamera(), signal: coverAbort.signal,
+  world: { update: () => abortedUpdates++, getGrassWorkState: () => ({ disposed: false, carpet: { cold: true, pending: true } }) },
+  yieldForBudget: async () => coverAbort.abort(new Error('entry cancelled')),
+}), /entry cancelled/);
+assert.equal(abortedUpdates, 1, 'abort during a forced yield cannot advance or uncover another batch');
+
+function createFxProbe() {
+  const group = new Group();
+  group.visible = false;
+  group.userData.softParticles = { layer: 27 };
+  const textured = new Object3D();
+  textured.material = { map: new Texture() };
+  group.add(textured);
+  const calls = [];
+  return {
+    calls,
+    group,
+    warmTexturesChunked: async (yieldForBudget) => {
+      calls.push('textures');
+      await yieldForBudget();
+    },
+    warmOpeningEffects: () => calls.push('opening'),
+    composeFiringMoment: () => calls.push('firing-moment'),
+    warmProjectilePresentation: () => calls.push('projectile-presentation'),
+    impact: (kind) => calls.push(`impact:${kind}`),
+    dust: () => calls.push('dust'),
+    exhaust: () => calls.push('exhaust'),
+    destruction: (_position, _source, kind) => calls.push(`destruction:${kind}`),
+    armorScar: () => calls.push('armor-scar'),
+    clearVehicleDecals: () => calls.push('clear-scars'),
+    propBreak: (kind) => calls.push(`prop:${kind}`),
+    propCrush: () => calls.push('crush'),
+    warmStructures: () => { calls.push('structures'); return 1; },
+    update: (_dt, shells) => calls.push(`update:${shells.length}`),
+    resetAll: () => calls.push('reset'),
+  };
+}
+
+invalidateBattleWarmRuntime();
+const studioFx = createFxProbe();
+const studioCamera = new PerspectiveCamera();
+const studioMask = studioCamera.layers.mask;
+let prepared = 0;
+let initializedPrograms = 0;
+let initializedTextures = 0;
+let clock = 0;
+const progress = [];
+const traces = [];
+const studioOptions = {
+  fx: studioFx,
+  post: { prepareSoftParticles: () => { prepared += 1; } },
+  renderer: { initTexture: () => { initializedTextures += 1; } },
+  camera: studioCamera,
+  * initializeForwardPrograms() {
+    initializedPrograms += 1;
+    yield;
+  },
+  isCombatPipelineWarmed: () => false,
+  onProgress: (fraction, label) => progress.push([fraction, label]),
+  onTrace: (trace) => traces.push(trace),
+  now: () => clock += 10,
+};
+
+await Promise.all([
+  warmStudioEffects(studioOptions),
+  warmStudioEffects(studioOptions),
+]);
+assert.equal(studioFx.calls.filter((call) => call === 'textures').length, 1,
+  'concurrent Studio callers share one exact warm');
+assert.equal(initializedPrograms, 1);
+assert.equal(initializedTextures, 1);
+assert.equal(prepared, 1);
+assert.equal(studioCamera.layers.mask, studioMask, 'Studio warm restores camera layers');
+assert.equal(traces.length, 1);
+assert.ok(progress.some(([fraction]) => fraction === 1));
+
+await warmStudioEffects(studioOptions);
+assert.equal(initializedPrograms, 1, 'a valid renderer receipt remains memoized');
+invalidateBattleWarmRuntime();
+await warmStudioEffects(studioOptions);
+assert.equal(initializedPrograms, 2,
+  'context invalidation forces Studio programs and textures through the owner again');
+
+const combatFx = createFxProbe();
+const combatCamera = new PerspectiveCamera();
+combatCamera.layers.mask = 5;
+const combatMask = combatCamera.layers.mask;
+const game = {
+  tanks: [],
+  player: {
+    state: { pos: { x: 12, y: 3, z: -8 } },
+    spec: { gun: { shells: [{ caliberMm: 125 }] } },
+    combat: { shellSlot: 0 },
+  },
+};
+let shellOrigin = null;
+const submission = stageCombatFxProgramSubmission({
+  game,
+  fx: combatFx,
+  post: { prepareSoftParticles: () => combatFx.calls.push('soft') },
+  camera: combatCamera,
+  createShell: (_spec, _shooter, _isPlayer, position) => {
+    shellOrigin = position.clone();
+    return { pos: new Vector3(), prevPos: new Vector3() };
+  },
+});
+assert.equal(submission.staged, true);
+assert.deepEqual(shellOrigin?.toArray(), [12, 4.4, -4],
+  'deployment FX stages around the exact player field');
+assert.equal(combatFx.group.visible, true);
+assert.ok(combatFx.calls.includes('update:1'), 'the live projectile tracers are allocated');
+assert.ok(combatFx.calls.includes('prop:drumblast'), 'rare prop pools are included');
+// (EF.04) a solo battle's first missile launch compiled the missile body and smoke trail programs mid-battle
+assert.ok(combatFx.calls.indexOf('projectile-presentation') > combatFx.calls.indexOf('update:1'),
+  'the missile body and smoke trail join the covered render, after the update');
+submission.restore();
+assert.equal(combatFx.group.visible, false, 'FX root visibility is restored exactly');
+assert.equal(combatCamera.layers.mask, combatMask, 'combat staging restores camera layers');
+assert.equal(combatFx.calls.at(-1), 'reset');
+
+invalidateBattleWarmRuntime();
+const networkFx = createFxProbe();
+let networkTexturePolicy;
+networkFx.warmTexturesChunked = async (yieldForBudget, options) => {
+  networkTexturePolicy = options;
+  networkFx.calls.push('textures');
+  await yieldForBudget(true);
+};
+networkFx.warmTextures = () => { throw new Error('network must not synchronously bake atlases'); };
+const decalRoot = new Group();
+decalRoot.visible = false;
+let networkCompiles = 0;
+await warmNetworkOpeningEffects({
+  fx: networkFx,
+  post: { prepareSoftParticles: () => networkFx.calls.push('soft') },
+  camera: new PerspectiveCamera(),
+  shells: [],
+  decalVisual: { root: decalRoot },
+  compilePrograms: () => { networkCompiles += 1; },
+  warmRender: () => networkFx.calls.push('render'),
+});
+assert.ok(networkFx.calls.includes('armor-scar'),
+  'network loading primes the pooled vehicle-owned impact decal');
+assert.ok(networkFx.calls.includes('clear-scars'),
+  'the warm scar is removed before battle reveal');
+assert.equal(decalRoot.visible, false, 'decal warm restores vehicle visibility');
+assert.equal(networkCompiles, 1, 'the lazy vehicle-owned decal still compiles under cover');
+assert.deepEqual(networkTexturePolicy, { assets: 'ready-only' },
+  'network entry cannot wait indefinitely for optional atlas image requests');
+assert.equal(networkFx.calls[0], 'textures', 'textures finish before atomic scar/FX staging');
+
+const noScarFx = createFxProbe();
+const noScarCamera = new PerspectiveCamera();
+const noScarMask = noScarCamera.layers.mask;
+const noScarCompiles = [];
+await warmNetworkOpeningEffects({
+  fx: noScarFx,
+  post: { prepareSoftParticles: () => noScarFx.calls.push('soft') },
+  camera: noScarCamera,
+  shells: [],
+  compilePrograms: (root) => noScarCompiles.push(root),
+  warmRender: () => noScarFx.calls.push('render'),
+});
+assert.deepEqual(noScarCompiles, [], 'entry without a scar needs no redundant FX subtree compile');
+// (fx-first-use-261) a room's guest linked a broken building's pieces, fracture face and room programs at its first break
+assert.ok(noScarFx.calls.includes('structures') && noScarFx.calls.indexOf('structures') < noScarFx.calls.indexOf('render'),
+  'the network warm stages a building\'s stage and fracture programs for its covered render');
+assert.equal(noScarFx.calls.filter((call) => call === 'render').length, 1,
+  'the exact compositor warm draw is still required without a scar');
+assert.equal(noScarFx.calls.at(-1), 'reset');
+assert.equal(noScarFx.group.visible, false);
+assert.equal(noScarCamera.layers.mask, noScarMask);
+
+let releaseNetworkTextures;
+const deferredNetworkFx = createFxProbe();
+deferredNetworkFx.warmTexturesChunked = () => new Promise((resolve) => { releaseNetworkTextures = resolve; });
+const deferredNetworkWarm = warmNetworkOpeningEffects({
+  fx: deferredNetworkFx, post: { prepareSoftParticles() {} },
+  camera: new PerspectiveCamera(), shells: [], decalVisual: { root: decalRoot },
+  compilePrograms: () => deferredNetworkFx.calls.push('compile'),
+  warmRender: () => deferredNetworkFx.calls.push('render'),
+});
+for (let attempt = 0; attempt < 200 && !releaseNetworkTextures; attempt++) {
+  await new Promise((resolve) => setTimeout(resolve, 1));
+}
+assert.equal(typeof releaseNetworkTextures, 'function', 'texture preparation starts within the bounded frame fallback');
+assert.deepEqual(deferredNetworkFx.calls, [], 'pending atlases do not stage scars, pools, or draws');
+assert.equal(decalRoot.visible, false, 'pending texture preparation does not expose a hidden tank');
+releaseNetworkTextures();
+await deferredNetworkWarm;
+assert.ok(deferredNetworkFx.calls.includes('render'), 'completed textures allow the same real FX draw');
+
+// Exercise the real FX graph and its actual muzzle angle gate, frustum and
+// tracer instance count. Canvas painting is immaterial to this Node contract;
+// native GPU upload/compile coverage is verified by the covered browser draw.
+function createCanvasProbe() {
+  const canvas = { width: 0, height: 0 };
+  const noop = () => {};
+  const gradient = () => ({ addColorStop: noop });
+  const context = new Proxy({
+    canvas,
+    createRadialGradient: gradient,
+    createLinearGradient: gradient,
+    getImageData: (_x, _y, width, height) => ({
+      data: new Uint8ClampedArray(width * height * 4),
+    }),
+  }, { get: (target, key) => target[key] ?? noop });
+  return Object.assign(canvas, { getContext: () => context });
+}
+
+const priorDocument = globalThis.document;
+const priorWindow = globalThis.window;
+// Canvas-only documents omit the browser event contract used by the real
+// covered paint scheduler. Keep its listeners real so cleanup is observable.
+const paintDocument = Object.assign(new EventTarget(), {
+  hidden: false,
+  createElement: createCanvasProbe,
+});
+try {
+  globalThis.document = paintDocument;
+  globalThis.window = {};
+  const camera = new PerspectiveCamera(55, 1.6, 0.5, 2000);
+  camera.position.set(125, 32, -205);
+  camera.lookAt(150, 32, -190);
+  camera.updateMatrixWorld(true);
+  const initialMask = camera.layers.mask;
+  const fxScene = new Scene();
+  const scarRoot = new Group();
+  scarRoot.position.set(12, 3, -24);
+  scarRoot.rotation.set(0.1, 0.6, -0.05);
+  scarRoot.scale.set(1.1, 0.9, 1.2);
+  scarRoot.add(new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial()));
+  scarRoot.visible = false;
+  fxScene.add(scarRoot);
+  const scarVisual = { root: scarRoot };
+  const scarTransform = [scarRoot.position.toArray(), scarRoot.quaternion.toArray(), scarRoot.scale.toArray()];
+  const fx = createFx({ camera, scene: fxScene }, { getHeightAt: () => 0 });
+  fx.warmTextures = () => {};
+  fx.warmTexturesChunked = async () => {};
+  fx.group.visible = false;
+  fxScene.add(fx.group);
+  let gameplaySweeps = 0;
+  let gameplayImpacts = 0;
+  registerWorldDestructibles({
+    key: 'covered-network-fx-warm-regression',
+    isActive: () => true,
+    sweep: () => { gameplaySweeps += 1; },
+    impact: () => { gameplayImpacts += 1; },
+  });
+  const liveShell = {
+    id: 'not-a-warm-shell', pos: new Vector3(5, 1, 5),
+    prevPos: new Vector3(0, 1, 0), vel: new Vector3(0, 0, 100),
+    spec: { tracer: 'APFSDS' },
+  };
+  const shells = Object.freeze([liveShell]);
+  const liveShellBefore = JSON.stringify(liveShell);
+  let nativeSubmissionCalls = 0;
+  let submissionValidated = false;
+  let stagedTracer = null;
+  let compiledScarMesh = null;
+  let submittedScarMesh = null;
+  const compiledWarmRoots = [];
+  const compiledWarmLights = [];
+  assert.equal(fx.group.children.filter((object) => object.isPointLight).length, 2,
+    'the real scene-attached FX graph owns its two default-layer lights');
+  // (FX lane 10-15) a missile's body is its family's airframe (fx/missileBodies.ts: one instanced pool per airframe,
+  // under one group) beside the one flare pool
+  const guidedPools = [];
+  fx.group.traverse((mesh) => {
+    if (mesh.isInstancedMesh && (mesh.renderOrder === 25 || mesh.renderOrder === 26)) guidedPools.push(mesh);
+  });
+  const flarePool = guidedPools.find((mesh) => mesh.renderOrder === 26);
+  const bodyPools = guidedPools.filter((mesh) => mesh.renderOrder === 25);
+  assert.ok(flarePool && bodyPools.length >= 10 && bodyPools.every((mesh) => /^fx-missile-body-/.test(mesh.name)),
+    'the real missile airframe and flare pools are present');
+  const konkursPool = bodyPools.find((mesh) => mesh.name === 'fx-missile-body-konkurs');
+  const options = {
+    fx,
+    post: { prepareSoftParticles() {} },
+    camera,
+    shells,
+    decalVisual: scarVisual,
+    compilePrograms(root) {
+      compiledWarmRoots.push(root);
+      const lights = [];
+      const collectLight = (object) => {
+        if (object.isLight && object.layers.test(camera.layers)) lights.push(object);
+      };
+      // Pinned Three compile gathers target-scene lights, then subtree lights
+      // when root !== targetScene. An attached FX root duplicates its lights.
+      fxScene.traverseVisible(collectLight);
+      if (root !== fxScene) root.traverseVisible(collectLight);
+      compiledWarmLights.push(lights);
+      if (root === scarRoot) compiledScarMesh = root.getObjectByName('fx_impactDecals');
+    },
+    warmRender() {
+      nativeSubmissionCalls += 1;
+      assert.equal(fx.group.visible, true, 'the actual FX root is drawable during warm');
+      assert.equal(fx.group.userData.softParticles.isActive(), true,
+        'the real late-composite activity gate is open during submission');
+      const drawnScars = [];
+      fxScene.traverseVisible((object) => {
+        if (object.name === 'fx_impactDecals') drawnScars.push(object);
+      });
+      assert.equal(drawnScars.length, 1,
+        'the actual scene draw sees the compiled scar still attached under a visible vehicle');
+      assert.equal(drawnScars[0] === compiledScarMesh, true,
+        'the drawn scar is the same mesh prepared by the scoped compile');
+      submittedScarMesh = drawnScars[0];
+      assert.equal(submittedScarMesh.frustumCulled, false);
+      fx.group.updateMatrixWorld(true);
+      const frustum = new Frustum().setFromProjectionMatrix(
+        new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+      );
+      // (round 2 U31) the runtime's visuals are made under its replay veil; the lights stay on the root
+      const visuals = fx.group.getObjectByName('fx-replay-veil').children;
+      const rings = visuals.filter((mesh) =>
+        mesh.geometry?.type === 'PlaneGeometry' && mesh.renderOrder === 23);
+      assert.ok(rings.some((mesh) => mesh.visible && frustum.intersectsObject(mesh)),
+        'a real muzzle ring passes BOTH the angle gate and production camera frustum');
+      // (ac130-fx-228) the composer's frozen round is the projectile tracers' static (the pre-October ribbon is retired)
+      stagedTracer = visuals.find((mesh) => mesh.name === 'Projectile tracers');
+      assert.ok(stagedTracer.geometry.instanceCount > 0,
+        'the real tracer issues a nonzero instanced draw, not compile-only zero instances');
+      assert.equal(flarePool.count, bodyPools.length, 'the warm stages one flare per airframe');
+      for (const mesh of guidedPools) {
+        assert.ok(mesh.count >= 1, 'every airframe AND the flare issue a nonzero native draw');
+        assert.equal(mesh.visible, true);
+        assert.equal(mesh.frustumCulled, false);
+        const matrix = new Matrix4();
+        mesh.getMatrixAt(0, matrix);
+        const position = new Vector3().setFromMatrixPosition(matrix);
+        assert.ok(frustum.containsPoint(position), 'guided warm instance lies in the current view');
+      }
+      assert.equal(fx.getGuidedMissileDebug().trailSegments, 0,
+        'guided pool staging creates no synthetic persistent trail');
+      submissionValidated = true;
+    },
+  };
+  invalidateBattleWarmRuntime();
+  await warmNetworkOpeningEffects(options);
+  assert.ok(compiledWarmLights.every((lights) => new Set(lights).size === lights.length),
+    'covered FX warming must not compile a duplicated-light variant from the scene-attached FX root');
+  assert.deepEqual(graphLabels(compiledWarmRoots), graphLabels([scarRoot]),
+    'retain only the lazy vehicle scar compile; the exact compositor draw warms existing FX pools');
+  assert.equal(nativeSubmissionCalls, 1);
+  assert.equal(submissionValidated, true, 'real staged resources satisfy submission assertions');
+  assert.equal(getEventListeners(paintDocument, 'visibilitychange').length, 0,
+    'completed covered FX warm releases its real document listeners');
+  assert.equal(fx.group.visible, false);
+  assert.equal(camera.layers.mask, initialMask);
+  assert.equal(fx.group.userData.softParticles.isActive(), false);
+  assert.equal(stagedTracer.geometry.instanceCount, 0, 'no warm tracer leaks into live battle');
+  assert.ok(guidedPools.every((mesh) => mesh.count === 0), 'no warm missile survives reset');
+  assert.equal(scarRoot.visible, false);
+  assert.ok(scarRoot.getObjectByName('fx_impactDecals') === undefined);
+  assert.deepEqual([scarRoot.position.toArray(), scarRoot.quaternion.toArray(), scarRoot.scale.toArray()],
+    scarTransform, 'scar staging preserves the exact authored vehicle transform');
+  assert.equal(fx.impactDecalStats().pooled, 1, 'one submitted scar returns to the shared pool');
+  fx.armorScar(scarVisual, new Vector3(12, 4, -24), new Vector3(0, 1, 0), 120);
+  assert.ok(scarRoot.getObjectByName('fx_impactDecals') === submittedScarMesh,
+    'the first real impact reuses the exact submitted mesh, geometry and shared atlas');
+  {
+    // Live scars cull with their own quads (P21): only the covered warm draw above lifts
+    // culling, so this off-camera hull stops submitting its decal draw.
+    assert.equal(submittedScarMesh.frustumCulled, true, 'a live scar culls with its hull');
+    scarRoot.updateMatrixWorld(true);
+    const sees = (eye, target) => {
+      const view = new PerspectiveCamera(55, 1.6, 0.5, 2000);
+      view.position.copy(eye);
+      view.lookAt(target);
+      view.updateMatrixWorld(true);
+      return new Frustum().setFromProjectionMatrix(
+        new Matrix4().multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse),
+      ).intersectsObject(submittedScarMesh);
+    };
+    assert.equal(sees(camera.position, new Vector3(150, 32, -190)), false,
+      'the warm camera does not see the hull, so its live scar is culled');
+    assert.equal(sees(new Vector3(12, 8, -6), scarRoot.position), true, 'a camera on the hull keeps the scar');
+    const positions = submittedScarMesh.geometry.getAttribute('position');
+    const sphere = submittedScarMesh.geometry.boundingSphere;
+    const corner = new Vector3();
+    let written = 0;
+    for (let i = 0; i < positions.count; i += 1) {
+      if (corner.fromBufferAttribute(positions, i).lengthSq() === 0) continue;
+      written += 1;
+      assert.ok(sphere.distanceToPoint(corner) <= 1e-6, 'the scar bounds cover every written corner');
+    }
+    assert.ok(written >= 4, 'the live scar wrote at least one quad');
+  }
+  fx.clearVehicleDecals(scarVisual);
+  submissionValidated = false;
+  await warmNetworkOpeningEffects(options);
+  assert.equal(nativeSubmissionCalls, 2,
+    'returning from Garage restores resources again after phase GPU release');
+  assert.equal(submissionValidated, true);
+  assert.equal(gameplaySweeps, 0, 'warm never sweeps supplied live shells through world props');
+  assert.equal(gameplayImpacts, 0, 'presentation-only staging never submits a gameplay impact');
+  assert.equal(JSON.stringify(liveShell), liveShellBefore, 'live shell state remains untouched');
+
+  const priorWarn = console.warn;
+  try {
+    console.warn = () => {};
+    const realArmorScar = fx.armorScar;
+    for (const initialVisibility of [false, true]) {
+      scarRoot.visible = initialVisibility;
+      for (const failureAt of ['stamp', 'compile', 'draw']) {
+        let injected = false;
+        fx.armorScar = (...args) => {
+          realArmorScar(...args);
+          if (failureAt === 'stamp') { injected = true; throw new Error('stamp failed after attachment'); }
+        };
+        await warmNetworkOpeningEffects({
+          ...options,
+          compilePrograms(root) {
+            options.compilePrograms(root);
+            if (failureAt === 'compile') { injected = true; throw new Error('compile failed'); }
+          },
+          warmRender() { injected = true; throw new Error('driver submission failed'); },
+        });
+        assert.equal(injected, true, `${failureAt} failure fixture reached its intended boundary`);
+        assert.equal(scarRoot.visible, initialVisibility, `${failureAt} failure restores exact visibility`);
+        assert.equal(scarRoot.parent === fxScene, true, `${failureAt} failure preserves scene ownership`);
+        assert.ok(scarRoot.getObjectByName('fx_impactDecals') === undefined,
+          `${failureAt} failure detaches the temporary scar`);
+        assert.deepEqual([scarRoot.position.toArray(), scarRoot.quaternion.toArray(), scarRoot.scale.toArray()],
+          scarTransform, `${failureAt} failure preserves the exact vehicle transform`);
+        assert.equal(fx.impactDecalStats().pooled, 1, `${failureAt} failure retains one reusable mesh`);
+        assert.equal(camera.layers.mask, initialMask);
+        assert.equal(fx.group.visible, false);
+        assert.equal(fx.group.userData.softParticles.isActive(), false);
+        assert.equal(getEventListeners(paintDocument, 'visibilitychange').length, 0,
+          `${failureAt} failure releases covered paint listeners`);
+      }
+    }
+    scarRoot.visible = false;
+    fx.armorScar = realArmorScar;
+  } finally {
+    console.warn = priorWarn;
+  }
+  assert.equal(fx.group.visible, false, 'failed submission restores exact FX visibility');
+  assert.equal(camera.layers.mask, initialMask, 'failed submission restores camera layers');
+  assert.equal(fx.group.userData.softParticles.isActive(), false, 'failed warm clears staged FX');
+  assert.ok(guidedPools.every((mesh) => mesh.count === 0), 'failed warm clears guided pools too');
+  await warmNetworkOpeningEffects(options);
+  assert.equal(nativeSubmissionCalls, 3, 'failed warm remains retryable on the next entry');
+
+  const realClearDecals = fx.clearVehicleDecals;
+  const realResetFx = fx.resetAll;
+  let failedCleanupResets = 0;
+  scarRoot.visible = true;
+  try {
+    fx.clearVehicleDecals = () => { throw new Error('decal cleanup failed'); };
+    fx.resetAll = () => { failedCleanupResets += 1; realResetFx(); };
+    await assert.rejects(warmNetworkOpeningEffects(options), /decal cleanup failed/);
+    assert.equal(failedCleanupResets, 1, 'a throwing scar cleanup cannot skip final FX reset');
+    assert.equal(scarRoot.visible, true, 'throwing cleanup restores an originally visible root');
+    assert.ok(scarRoot.getObjectByName('fx_impactDecals') === undefined, 'FX reset removes the scar anyway');
+    assert.equal(camera.layers.mask, initialMask);
+    assert.equal(fx.group.visible, false);
+  } finally {
+    fx.clearVehicleDecals = realClearDecals;
+    fx.resetAll = realResetFx;
+    scarRoot.visible = false;
+  }
+
+  // The same matrix writer must still position a real moving missile, retain
+  // real trails, honor the existing capacity and clear it all on round reset.
+  const missile = {
+    id: 'real-guided-regression', pos: new Vector3(20, 4, 8),
+    prevPos: new Vector3(20, 4, 7), vel: new Vector3(30, 40, 50),
+    spec: { guided: true, tracer: 'ATGM' },
+  };
+  const missileDirection = missile.vel.clone().normalize();
+  for (let frame = 0; frame < 2; frame += 1) {
+    fx.update(0.016, [missile], camera);
+    // a round naming nothing flies the default airframe (a Konkurs at its 135 mm): the nose at the round, the flare at
+    // its tail
+    const tailM = missileTailM('konkurs', 0);
+    for (const [mesh, back] of [[konkursPool, 0], [flarePool, tailM + 0.04]]) {
+      assert.equal(mesh.count, 1, 'live guided projection keeps one body/flare');
+      const matrix = new Matrix4();
+      mesh.getMatrixAt(0, matrix);
+      const actualPosition = new Vector3().setFromMatrixPosition(matrix);
+      const expectedPosition = missile.pos.clone().addScaledVector(missileDirection, -back);
+      assert.ok(actualPosition.distanceTo(expectedPosition) < 2e-6,
+        'live body and flare retain the exact authored direction offsets');
+    }
+    assert.ok(bodyPools.every((mesh) => mesh === konkursPool || mesh.count === 0), 'no other airframe draws');
+    assert.ok(fx.getGuidedMissileDebug().trailSegments > 0, 'real missiles still retain trails');
+    missile.prevPos.copy(missile.pos);
+    missile.pos.addScaledVector(missileDirection, 2);
+  }
+  const capacity = flarePool.instanceMatrix.count;
+  const missiles = Array.from({ length: capacity + 2 }, (_, index) => ({
+    ...missile, id: `capacity-${index}`, prevPos: missile.pos,
+  }));
+  fx.update(0.016, missiles, camera);
+  assert.ok([konkursPool, flarePool].every((mesh) => mesh.count === capacity), 'live guided pool cap is unchanged');
+  fx.resetAll();
+  assert.ok(guidedPools.every((mesh) => mesh.count === 0));
+  assert.deepEqual(fx.getGuidedMissileDebug(), { bodies: 0, trailSegments: 0 });
+} finally {
+  if (priorDocument === undefined) delete globalThis.document;
+  else globalThis.document = priorDocument;
+  if (priorWindow === undefined) delete globalThis.window;
+  else globalThis.window = priorWindow;
+  assert.equal(getEventListeners(paintDocument, 'visibilitychange').length, 0,
+    'the real FX fixture retains no document listeners after cleanup and retry cases');
+}
+
+// Warm-only armour scars (2026-10-02): the rare warm stamps one real scar per fielded hull so the hidden-variant
+// compile prepares the impact-decal program inside every hull, then removes exactly those scars when it is done or
+// closed. Their only cleanup used to be the destruction warm's resetAll, which a cached destruction warm skips, and
+// the covered deployment always warms destruction first: every solo battle carried them onto hulls never hit.
+function rareWarmScarProbe({ close = false } = {}) {
+  const priorWarmDocument = globalThis.document, priorWarmWindow = globalThis.window;
+  globalThis.document = paintDocument;
+  globalThis.window = {};
+  const camera = new PerspectiveCamera(55, 1.6, 0.5, 2000), scene = new Scene();
+  const fx = createFx({ camera, scene }, { getHeightAt: () => 0 });
+  const geometry = new BoxGeometry(3.6, 2.2, 7), material = new MeshBasicMaterial();
+  const tanks = [-12, 0, 12].map((x) => {
+    const root = new Group(), hull = new Mesh(geometry, material);
+    hull.position.y = 1.1;
+    root.position.set(x, 0, 30);
+    root.add(hull);
+    scene.add(root);
+    return { visual: { root }, state: { pos: root.position.clone() }, spec: { dims: { heightM: 2.2 } } };
+  });
+  scene.updateMatrixWorld(true);
+  const compiledScars = [];
+  const context = {
+    game: { tanks }, fx, camera, scene, world: () => null, anisotropy: 1,
+    renderer: { info: { programs: [] }, getContext: () => ({ isContextLost: () => false }), initTexture() {} },
+    scratch1: new Vector3(), scratch2: new Vector3(), scratch3: new Vector3(),
+    isOpeningReady: () => true, isRareReady: () => false, markRareReady() {},
+    // The production order: the covered deployment already warmed destruction, so its resetAll never runs here.
+    isDestructionWarmed: () => true, setDestructionWarmed() {},
+    warmWreckTextures() {}, deploymentShadowWarm: { *warmDepthProgramSteps() {} },
+    forwardProgramWarm: {
+      compile(object) { if (object.name === 'fx_impactDecals') compiledScars.push(object); },
+      *linkerBreathingSlices() {},
+    },
+    lighting: { updateFrustums() {} }, warmRender() {},
+  };
+  const scarred = () => tanks.filter(({ visual }) => visual.root.getObjectByName('fx_impactDecals')).length;
+  const steps = createCombatRareWarmSteps(context);
+  try {
+    let stamped = 0;
+    for (let result = steps.next(); !result.done; result = steps.next()) {
+      stamped = Math.max(stamped, scarred());
+      if (close && stamped === tanks.length) break;
+    }
+    steps.return();
+    const { vehicles, decals, meshes } = fx.impactDecalStats();
+    return { stamped, compiled: compiledScars.length, after: scarred(), live: { vehicles, decals, meshes } };
+  } finally {
+    steps.return();
+    geometry.dispose();
+    material.dispose();
+    if (priorWarmDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorWarmDocument;
+    if (priorWarmWindow === undefined) delete globalThis.window;
+    else globalThis.window = priorWarmWindow;
+  }
+}
+{
+  const drained = rareWarmScarProbe();
+  assert.equal(drained.stamped, 3, 'the rare warm stamps a real scar on every fielded hull');
+  assert.equal(drained.compiled, 3, 'the hidden-variant compile still prepares the decal program inside every hull');
+  assert.equal(drained.after, 0, 'no hull carries a warm scar out of a finished rare warm');
+  assert.deepEqual(drained.live, { vehicles: 0, decals: 0, meshes: 0 }, 'the decal runtime holds no warm record');
+  const closed = rareWarmScarProbe({ close: true });
+  assert.equal(closed.stamped, 3);
+  assert.equal(closed.after, 0, 'a rare warm closed after stamping removes its scars');
+  assert.deepEqual(closed.live, { vehicles: 0, decals: 0, meshes: 0 });
+}
+
+const scene = new Scene();
+const bridgeRoot = new Group();
+const siblingBefore = new Object3D();
+const wreckRoot = new Group();
+const siblingAfter = new Object3D();
+const intactMaterial = new MeshBasicMaterial({ name: 'intact' });
+const fallbackMaterial = new MeshBasicMaterial({ name: 'cot:burnt', map: new Texture() });
+const wreckMesh = new Mesh(new BoxGeometry(), intactMaterial);
+wreckMesh.castShadow = true;
+wreckMesh.frustumCulled = true;
+wreckRoot.visible = false;
+wreckRoot.add(wreckMesh);
+bridgeRoot.add(siblingBefore, wreckRoot, siblingAfter);
+let restoredDetails = 0;
+let realWarmFrames = 0;
+let compiledRoots = 0;
+let wreckTexturesInitialized = 0;
+const unrelatedSceneRoot = new Group();
+const shadowLight = new DirectionalLight();
+shadowLight.castShadow = true;
+shadowLight.shadow.autoUpdate = false;
+shadowLight.shadow.needsUpdate = false;
+scene.add(unrelatedSceneRoot, shadowLight);
+const wreckGl = { isContextLost: () => false };
+await warmNetworkWrecks({
+  entities: [{
+    specId: 'test-tank',
+    camo: 'factory',
+    visual: {
+      root: wreckRoot,
+      prewarmBurn() { return [wreckMesh]; },
+      getWreckFallbackMaterial: () => fallbackMaterial,
+      stageBattleDetailsForWarm() {
+        return () => { restoredDetails += 1; };
+      },
+    },
+  }],
+  prebakeBurntSteps: function* () { yield; },
+  anisotropy: 4,
+  renderer: {
+    info: { programs: [] },
+    getContext: () => wreckGl,
+    compile() { compiledRoots += 1; },
+    initTexture() { wreckTexturesInitialized += 1; },
+  },
+  compilePrograms() { compiledRoots += 1; },
+  scene,
+  camera: new PerspectiveCamera(),
+  warmRender() {
+    realWarmFrames += 1;
+    const probe = scene.getObjectByName('WreckFallbackWarmProbe:0');
+    assert.ok(probe, 'one isolated fallback probe is mounted for the real draw');
+    assert.equal(probe.frustumCulled, false);
+    assert.ok(probe.material === fallbackMaterial);
+    assert.equal(probe.castShadow, true);
+    assert.equal(unrelatedSceneRoot.visible, false,
+      'the fallback draw does not resubmit the complete battlefield');
+    assert.equal(shadowLight.shadow.needsUpdate, true,
+      'one production shadow light submits the generic wreck depth variant');
+  },
+});
+assert.equal(realWarmFrames, 1);
+assert.ok(wreckRoot.parent === bridgeRoot, 'bridge ownership is restored after warming');
+assert.deepEqual(graphLabels(bridgeRoot.children), graphLabels([siblingBefore, wreckRoot, siblingAfter]),
+  'temporary scene staging preserves exact sibling order');
+assert.equal(wreckRoot.visible, false);
+assert.equal(wreckMesh.frustumCulled, true);
+assert.ok(wreckMesh.material === intactMaterial);
+assert.equal(unrelatedSceneRoot.visible, true);
+assert.equal(shadowLight.shadow.autoUpdate, false);
+assert.equal(shadowLight.shadow.needsUpdate, false,
+  'the production shadow scheduler state is restored exactly');
+assert.equal(restoredDetails, 1, 'compile staging restores detail state once');
+assert.equal(compiledRoots, 2, 'fielded burn hooks and the isolated fallback both compile');
+assert.equal(wreckTexturesInitialized, 1, 'destroyed-only maps upload before first blood');
+
+{
+  const root = new Group();
+  root.visible = false;
+  let staged = false;
+  let frames = 0;
+  let reflected = 0;
+  let queried = 0;
+  const priorRaf = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    assert.equal(staged, false, 'wreck detail staging is restored before every scheduler checkpoint');
+    assert.equal(root.visible, false);
+    frames += 1;
+    queueMicrotask(() => callback(performance.now()));
+    return frames;
+  };
+  const gl = {
+    isContextLost: () => false,
+    getExtension: () => ({ COMPLETION_STATUS_KHR: 0x91B1 }),
+    getProgramParameter() { queried += 1; return true; },
+  };
+  const renderer = { info: { programs: [] }, getContext: () => gl };
+  try {
+    await warmNetworkWrecks({
+      entities: [{ visual: {
+        root,
+        stageBattleDetailsForWarm() {
+          staged = true;
+          return () => { staged = false; };
+        },
+      } }],
+      prebakeBurntSteps: function* () {},
+      anisotropy: 1, renderer, scene: new Scene(), camera: new PerspectiveCamera(),
+      compilePrograms() {
+        assert.equal(staged, true);
+        renderer.info.programs.push({ program: {}, getUniforms() {
+          assert.equal(staged, false, 'native reflection runs only after exact visual restoration');
+          assert.equal(root.visible, false);
+          assert.ok(frames > 0, 'submission releases a checkpoint before its first native query');
+          reflected += 1;
+        } });
+      },
+      warmRender() { assert.fail('no fallback probes were requested'); },
+    });
+    assert.equal(reflected, 1, 'detached wreck programs still receive explicit first use');
+    assert.equal(queried, 1, 'reflection requires observed readiness when KHR is available');
+  } finally {
+    if (priorRaf === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = priorRaf;
+  }
+}
+
+async function wreckLifetimeProbe(change, checkpoint = 1) {
+  const controller = new AbortController();
+  const root = new Group();
+  const material = new MeshBasicMaterial();
+  const mesh = new Mesh(new BoxGeometry(), material);
+  root.add(mesh);
+  root.visible = false;
+  let staged = false;
+  let frames = 0;
+  let renders = 0;
+  let queries = 0;
+  let uniforms = 0;
+  let lost = false;
+  const gl = {
+    isContextLost: () => lost,
+    getExtension: () => ({ COMPLETION_STATUS_KHR: 0x91B1 }),
+    getProgramParameter() {
+      queries += 1;
+      if (change === 'query-failure') throw new Error('driver');
+      return true;
+    },
+  };
+  const renderer = { info: { programs: [] }, getContext: () => gl, initTexture() {} };
+  const priorRaf = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    assert.equal(staged, false);
+    assert.equal(root.visible, false);
+    frames += 1;
+    if (frames === checkpoint) {
+      if (change === 'abort') controller.abort();
+      if (change === 'epoch') invalidateBattleWarmRuntime();
+      if (change === 'info') renderer.info = { programs: [...renderer.info.programs] };
+      if (change === 'context') renderer.getContext = () => ({ ...gl });
+      if (change === 'loss') lost = true;
+    }
+    queueMicrotask(() => callback(performance.now()));
+    return frames;
+  };
+  try {
+    const promise = warmNetworkWrecks({
+      signal: controller.signal,
+      entities: [{ visual: {
+        root, prewarmBurn: () => [mesh], getWreckFallbackMaterial: () => material,
+        stageBattleDetailsForWarm() { staged = true; return () => { staged = false; }; },
+      } }],
+      prebakeBurntSteps: function* () {}, anisotropy: 1,
+      renderer, scene: new Scene(), camera: new PerspectiveCamera(),
+      compilePrograms(candidate) {
+        if (candidate !== root) return;
+        renderer.info.programs.push({ program: {}, getUniforms() { uniforms += 1; } });
+      },
+      warmRender() { renders += 1; },
+    });
+    if (change === 'abort') await assert.rejects(promise, { name: 'AbortError' });
+    else await promise;
+    assert.equal(root.visible, false);
+    assert.equal(staged, false);
+    return { renders, queries, uniforms };
+  } finally {
+    if (priorRaf === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = priorRaf;
+    mesh.geometry.dispose();
+    material.dispose();
+  }
+}
+
+for (const change of ['abort', 'epoch', 'info', 'context', 'loss']) {
+  assert.deepEqual(await wreckLifetimeProbe(change), { renders: 0, queries: 0, uniforms: 0 },
+    `${change}: abandoned wreck warm cannot query or draw after its restored submission checkpoint`);
+}
+assert.deepEqual(await wreckLifetimeProbe('abort', 2), { renders: 0, queries: 1, uniforms: 1 },
+  'abort after the final reflection checkpoint still prevents the fallback draw');
+assert.deepEqual(await wreckLifetimeProbe('abort', 3), { renders: 1, queries: 1, uniforms: 1 },
+  'the final post-render wait must not swallow cancellation');
+assert.deepEqual(await wreckLifetimeProbe('query-failure'), { renders: 1, queries: 1, uniforms: 0 },
+  'failed readiness never permits speculative reflection, and the real fallback draw remains');
+
+function hiddenProgramFixture({ pendingQueries = 1, extension = true, wreck = false } = {}) {
+  const priorWindow = globalThis.window;
+  globalThis.window = {};
+  const root = new Group(), world = new Group();
+  const geometry = new BoxGeometry(), material = new MeshBasicMaterial();
+  const actor = new Mesh(geometry, material), terrain = new Mesh(geometry, material);
+  root.add(actor); world.add(terrain);
+  root.visible = actor.visible = terrain.visible = false;
+  const events = [], state = { queries: 0, reflections: 0, cold: 0, forced: 0, renders: 0, lost: false };
+  const gl = {
+    isContextLost: () => state.lost,
+    getExtension: () => extension ? { COMPLETION_STATUS_KHR: 0x91B1 } : null,
+    getProgramParameter() {
+      state.queries++;
+      events.push('query');
+      state.onQuery?.();
+      return state.queries > pendingQueries;
+    },
+  };
+  const retained = { program: {}, getUniforms() { assert.fail('retained unrelated program must not be reflected'); } };
+  const program = { program: {}, getUniforms() {
+    state.reflections++;
+    if (extension && state.queries <= pendingQueries) state.cold++;
+    events.push('uniform');
+    return {};
+  }, getAttributes: () => ({}) };
+  const renderer = { info: { programs: [retained] }, getContext: () => gl, initTexture() {} };
+  // wreck: a fielded hull with a destroyed state (the rare warm's wreck stage compiles it first)
+  const visual = wreck ? { root, setDestroyed() { events.push('destroyed'); }, resetDestroyed() { events.push('reset'); } } : { root };
+  const context = {
+    game: { tanks: [{ specId: wreck ? 'wreck-fixture' : undefined, visual }] }, renderer, camera: new PerspectiveCamera(),
+    *prebakeBurntSteps() {}, anisotropy: 1,
+    world: () => ({ group: world }), fx: { group: new Group() },
+    isOpeningReady: () => true, isRareReady: () => owner.isRareReady(),
+    markRareReady: () => owner.markRareReady(), isDestructionWarmed: () => true,
+    warmWreckTextures() {}, deploymentShadowWarm: { *warmDepthProgramSteps() {} },
+    forwardProgramWarm: {
+      compile(object) {
+        assert.equal(object.visible, true);
+        events.push(object === actor ? 'actor' : object === root ? 'wreck' : 'terrain');
+        if (!renderer.info.programs.includes(program)) renderer.info.programs.push(program);
+      },
+      *linkerBreathingSlices() {},
+    },
+    lighting: { updateFrustums() {} }, warmRender() { state.renders++; },
+  };
+  const owner = createCombatWarmCoordinator({
+    createOpening: function* () {},
+    createRare: execution => createCombatRareWarmSteps(context, execution),
+  });
+  owner.markOpeningReady();
+  return { root, actor, terrain, renderer, gl, program, events, state, context, owner,
+    assertRestored() { assert.equal(root.visible, false); assert.equal(actor.visible, false); assert.equal(terrain.visible, false); },
+    dispose() {
+      geometry.dispose(); material.dispose();
+      if (priorWindow === undefined) delete globalThis.window;
+      else globalThis.window = priorWindow;
+    },
+  };
+}
+
+{
+  const fixture = hiddenProgramFixture();
+  try {
+    await fixture.owner.warmRareChunked(6, async force => {
+      fixture.assertRestored();
+      if (force) fixture.state.forced++;
+    });
+    assert.equal(fixture.state.cold, 0, 'cooperative hidden programs must witness readiness before reflection');
+    assert.ok(fixture.state.forced >= 2, 'submission and pending-link checkpoints must force real scheduler waits');
+    assert.equal(fixture.state.reflections, 1, 'the second object reuses the already prepared program');
+    assert.equal(fixture.state.renders, 3, 'base and both scope variants still render');
+    assert.equal(fixture.owner.isRareReady(), true);
+    assert.deepEqual(fixture.events.filter(event => event !== 'uniform' && event !== 'query'), ['actor', 'terrain']);
+    const detail = globalThis.window.__COMBAT_RARE_WARM.hiddenDetail;
+    assert.ok(Number.isFinite(detail.startedAt) && detail.finishedAt >= detail.startedAt,
+      'exact stage timestamps support direct overlap with callback-gap receipts');
+    assert.equal(detail.compileCount, 2);
+    assert.ok(detail.compileMs >= detail.maxCompileMs);
+    assert.equal(detail.programs.queryCount, 2);
+    assert.equal(detail.programs.uniformCount, 1);
+    assert.equal(detail.programs.uniformFailures, 0);
+    assert.ok(detail.programs.maxQueryMs >= 0 && detail.programs.maxUniformMs >= 0,
+      'bounded diagnostics distinguish submission, native queries, and reflection');
+  } finally { fixture.dispose(); }
+}
+
+for (const change of ['cancel', 'epoch', 'info', 'context', 'lost', 'query-info', 'query-context', 'query-lost']) {
+  const fixture = hiddenProgramFixture({ pendingQueries: 0 });
+  const invalidate = () => {
+    if (change.endsWith('info')) fixture.renderer.info = { programs: [...fixture.renderer.info.programs] };
+    if (change.endsWith('context')) fixture.renderer.getContext = () => ({ ...fixture.gl });
+    if (change.endsWith('lost')) fixture.state.lost = true;
+    if (change === 'epoch') invalidateBattleWarmRuntime();
+  };
+  if (change.startsWith('query-')) fixture.state.onQuery = invalidate;
+  try {
+    const pending = fixture.owner.warmRareChunked(6, async force => {
+      fixture.assertRestored();
+      if (!force || ++fixture.state.forced !== 1) return;
+      if (change === 'cancel') fixture.owner.cancelRare();
+      else if (!change.startsWith('query-')) invalidate();
+    });
+    if (change === 'cancel') await pending;
+    else await assert.rejects(pending, error => error.preparation?.reason === 'invalidated'
+      && error.preparation.pending === null);
+    fixture.assertRestored();
+    assert.equal(fixture.state.reflections, 0, `${change}: stale programs cannot be reflected`);
+    assert.equal(fixture.state.renders, 0, `${change}: stale jobs cannot render fallback variants`);
+    assert.equal(fixture.owner.isRareReady(), false, `${change}: stale work cannot publish rare readiness`);
+  } finally { fixture.dispose(); }
+}
+
+for (const change of ['later-program', 'removed', 'replaced', 'query-failure', 'unsupported-extension']) {
+  const fixture = hiddenProgramFixture({ pendingQueries: 0, extension: change !== 'unsupported-extension' });
+  if (change === 'query-failure') fixture.state.onQuery = () => { throw new Error('native query failed'); };
+  try {
+    await fixture.owner.warmRareChunked(6, async force => {
+      fixture.assertRestored();
+      if (!force || ++fixture.state.forced !== 1) return;
+      if (change === 'later-program') fixture.renderer.info.programs.push({ program: {},
+        getUniforms() { assert.fail('a later unrelated program cannot enter the captured cohort'); } });
+      if (change === 'removed') fixture.renderer.info.programs = fixture.renderer.info.programs.filter(p => p !== fixture.program);
+      if (change === 'replaced') fixture.program.program = {};
+    });
+    assert.equal(fixture.state.cold, 0);
+    assert.equal(fixture.state.reflections, ['replaced', 'query-failure'].includes(change) ? 0 : 1,
+      `${change}: reflect only current submitted pairs, preserving the unsupported-extension fallback`);
+    assert.equal(fixture.state.renders, 3);
+    fixture.assertRestored();
+  } finally { fixture.dispose(); }
+}
+
+// 2026-10-19 (the 229 perf pass): the wreck stage polls readiness in the deferred warm, as the hidden variants do (the
+// burnt fallback's synchronous LINK_STATUS wait held the main thread 0.5-0.6 s into every battle); its drain reflects at once
+{
+  const fixture = hiddenProgramFixture({ wreck: true });
+  try {
+    await fixture.owner.warmRareChunked(6, async () => { fixture.assertRestored(); });
+    assert.equal(fixture.state.cold, 0, 'the deferred wreck stage reflects only linked programs');
+    assert.equal(fixture.state.reflections, 1, 'the hidden variants reuse the wreck stage\'s prepared program');
+    const order = fixture.events.filter((event) => event !== 'uniform');
+    assert.deepEqual(order.slice(0, 3), ['destroyed', 'wreck', 'reset'], 'compiled in its wreck state, reset before any wait');
+    assert.ok(order.indexOf('query') > order.indexOf('reset'), 'the readiness polls follow the reset');
+    assert.equal(fixture.owner.isRareReady(), true);
+  } finally { fixture.dispose(); }
+}
+{
+  const fixture = hiddenProgramFixture({ wreck: true });
+  try {
+    fixture.owner.drain();
+    assert.equal(fixture.state.queries, 0, 'a drained wreck stage reflects directly');
+    assert.equal(fixture.state.reflections, 1);
+    assert.equal(fixture.owner.isRareReady(), true);
+  } finally { fixture.dispose(); }
+}
+
+{
+  const fixture = hiddenProgramFixture();
+  try {
+    fixture.owner.drain();
+    assert.equal(fixture.state.queries, 0, 'fresh synchronous drain retains direct reflection, not a polling loop');
+    assert.equal(fixture.state.reflections, 1);
+    assert.equal(fixture.state.renders, 3);
+    assert.equal(fixture.owner.isRareReady(), true);
+    fixture.assertRestored();
+  } finally { fixture.dispose(); }
+}
+
+for (const checkpoint of [1, 2]) {
+  const fixture = hiddenProgramFixture({ pendingQueries: Infinity });
+  let resume;
+  try {
+    const pending = fixture.owner.warmRareChunked(6, force => {
+      fixture.assertRestored();
+      if (force && ++fixture.state.forced === checkpoint) return new Promise(resolve => { resume = resolve; });
+      return Promise.resolve();
+    });
+    for (let index = 0; index < 40 && !resume; index++) await Promise.resolve();
+    assert.equal(typeof resume, 'function');
+    fixture.renderer.info.programs.push({ program: {}, getUniforms() {
+      assert.fail('synchronous takeover must not reflect later renderer additions');
+    } });
+    const beforeQueries = fixture.state.queries;
+    fixture.owner.drain();
+    assert.equal(fixture.state.queries, beforeQueries, 'in-flight drain closes the poller before another native query');
+    assert.equal(fixture.state.reflections, 1, 'in-flight drain eagerly reflects its finite captured pair');
+    assert.equal(fixture.state.renders, 3);
+    assert.equal(fixture.owner.isRareReady(), true);
+    fixture.assertRestored();
+    resume();
+    await pending;
+    assert.equal(fixture.state.reflections, 1, 'old asynchronous settlement cannot restart the drained generator');
+  } finally { fixture.dispose(); }
+}
+
+{
+  const fixture = hiddenProgramFixture({ pendingQueries: 0 });
+  const fov = fixture.context.camera.fov;
+  const projection = fixture.context.camera.projectionMatrix.clone();
+  fixture.context.warmRender = () => { throw new Error('warm render failed'); };
+  try {
+    await fixture.owner.warmRareChunked(6, async () => {});
+    assert.equal(fixture.context.camera.fov, fov, 'failed scope warm restores the original field of view');
+    assert.deepEqual(fixture.context.camera.projectionMatrix.elements, projection.elements);
+    fixture.assertRestored();
+  } finally { fixture.dispose(); }
+}
+
+{
+  const events = [];
+  const root = new Group();
+  root.visible = false;
+  let destroyed = false;
+  const renderer = { info: { programs: [{ getUniforms() { events.push('unexpected-old-uniform'); } }] } };
+  const visual = {
+    root,
+    setDestroyed() { destroyed = true; events.push('destroyed'); },
+    resetDestroyed() { destroyed = false; events.push('reset'); },
+  };
+  const steps = createCombatRareWarmSteps({
+    isRareReady: () => false,
+    isOpeningReady: () => true,
+    game: { tanks: [{ specId: 'solo-capture-regression', visual }] },
+    renderer,
+    anisotropy: 1,
+    prebakeBurntSteps: function* () {},
+    forwardProgramWarm: { compile(candidate) {
+      assert.ok(candidate === root);
+      assert.equal(destroyed, true);
+      assert.equal(root.visible, true);
+      events.push('compile');
+      renderer.info.programs.push(
+        { getUniforms() { events.push('failed-uniform'); throw new Error('driver'); } },
+        { getUniforms() {
+          assert.equal(destroyed, true, 'legacy solo/capture reflection remains synchronous with staging');
+          assert.equal(root.visible, true);
+          events.push('ready-uniform');
+        } },
+      );
+    } },
+  });
+  try {
+    assert.equal(steps.next().done, false, 'the public rare-warm owner yields after the destroyed roster variant');
+    assert.deepEqual(events, ['destroyed', 'compile', 'failed-uniform', 'ready-uniform', 'reset'],
+      'solo/capture consumes every new uniform table synchronously, including after a failed call');
+    assert.equal(destroyed, false);
+    assert.equal(root.visible, false, 'the original visibility is restored before the roster yield');
+  } finally { steps.return(); }
+}
+
+async function scarFirstUseProbe({ initialVisible = false, change = '', readyAfter = 1, checkpoint = 1 } = {}) {
+  const controller = new AbortController();
+  const fx = createFxProbe();
+  const root = new Group();
+  root.visible = initialVisible;
+  const camera = new PerspectiveCamera();
+  const mask = camera.layers.mask;
+  let expectedRootVisible = initialVisible;
+  let expectedMask = mask;
+  let expectedFxVisible = false;
+  const scar = new Object3D();
+  const nextRoot = new Group();
+  const timing = {};
+  let queries = 0;
+  let uniforms = 0;
+  let draws = 0;
+  let warmCheckpoints = 0;
+  let lost = false;
+  const gl = {
+    isContextLost: () => lost,
+    getExtension: () => ({ COMPLETION_STATUS_KHR: 0x91B1 }),
+    getProgramParameter() {
+      queries += 1;
+      if (change === 'query-failure') throw new Error('driver query');
+      if (change === 'query-loss') lost = true;
+      return queries > readyAfter;
+    },
+  };
+  const renderer = { info: { programs: [] }, getContext: () => gl };
+  fx.armorScar = () => { root.add(scar); fx.calls.push('scar'); };
+  fx.clearVehicleDecals = () => { scar.removeFromParent(); fx.calls.push('clear'); };
+  const priorRaf = globalThis.requestAnimationFrame;
+  const priorWarn = console.warn;
+  console.warn = () => {};
+  globalThis.requestAnimationFrame = (callback) => {
+    if (scar.parent) {
+      warmCheckpoints += 1;
+      assert.equal(root.visible, expectedRootVisible, 'scar waits cannot overwrite the latest root visibility');
+      assert.equal(scar.visible, false, 'even an originally visible vehicle cannot expose the warm scar at a yield');
+      assert.equal(camera.layers.mask, expectedMask);
+      assert.ok(!fx.calls.includes('opening'), 'the live muzzle/FX staging cannot age during shader waits');
+      if (warmCheckpoints === checkpoint) {
+        if (change.startsWith('visibility-')) {
+          root.visible = expectedRootVisible = !initialVisible;
+          camera.layers.mask = expectedMask = 7;
+          fx.group.visible = expectedFxVisible = true;
+        }
+        if (change === 'abort' || change === 'visibility-abort') controller.abort();
+        if (change === 'epoch' || change === 'visibility-epoch') invalidateBattleWarmRuntime();
+        if (change === 'info') renderer.info = { programs: [...renderer.info.programs] };
+        if (change === 'context') renderer.getContext = () => ({ ...gl });
+        if (change === 'loss') lost = true;
+        if (change === 'reuse-other' || change === 'reuse-same') {
+          scar.removeFromParent();
+          assert.equal(scar.visible, true, 'a scar is drawable before another owner borrows it from the pool');
+          (change === 'reuse-other' ? nextRoot : root).add(scar);
+          scar.visible = false; // The new owner now controls this flag, even on the same root.
+          scar.removeFromParent();
+          assert.equal(scar.visible, false, 'the old removal listener relinquishes ownership exactly once');
+          (change === 'reuse-other' ? nextRoot : root).add(scar);
+          root.visible = true;
+        }
+      }
+    }
+    queueMicrotask(() => callback(performance.now()));
+    return warmCheckpoints;
+  };
+  try {
+    const promise = warmNetworkOpeningEffects({
+      fx, post: { prepareSoftParticles() {} }, camera, shells: [],
+      decalVisual: { root }, renderer, signal: controller.signal, timing,
+      compilePrograms(candidate) {
+        assert.ok(candidate === root);
+        assert.ok(scar.parent === root);
+        if (change === 'no-new-program') return;
+        renderer.info.programs.push({ program: {}, getUniforms() {
+          assert.equal(root.visible, expectedRootVisible);
+          assert.equal(scar.visible, false);
+          uniforms += 1;
+          if (change === 'uniform-failure') throw new Error('driver reflection');
+        } });
+      },
+      warmRender() {
+        assert.ok(scar.parent === root, 'the final compositor consumes the exact compiled pooled mesh');
+        assert.equal(scar.visible, true);
+        assert.equal(root.visible, true);
+        if (!change) assert.equal(uniforms, 1, 'new scar uniforms must be ready before the first draw');
+        draws += 1;
+      },
+    });
+    if (change === 'abort' || change === 'visibility-abort') await assert.rejects(promise, { name: 'AbortError' });
+    else await promise;
+    if (change === 'reuse-other' || change === 'reuse-same') {
+      assert.ok(scar.parent === (change === 'reuse-other' ? nextRoot : root));
+      assert.equal(scar.visible, false, 'stale cleanup cannot overwrite a newer scar owner');
+      assert.equal(root.visible, true);
+      assert.ok(!fx.calls.includes('clear') && !fx.calls.includes('reset'));
+      scar.removeFromParent();
+      assert.equal(scar.visible, false, 'terminal cleanup removes the temporary removal listener');
+    } else {
+      assert.ok(scar.parent === null);
+      assert.equal(scar.visible, true, 'returned pooled scars retain their own original drawable visibility');
+      assert.equal(root.visible, expectedRootVisible);
+    }
+    assert.equal(camera.layers.mask, expectedMask);
+    assert.equal(fx.group.visible, expectedFxVisible);
+    if (draws) assert.equal(fx.calls.at(-1), 'reset');
+    else assert.ok(!fx.calls.includes('opening'), 'stale scar waits never stage live FX');
+    return { queries, uniforms, draws, warmCheckpoints, timing };
+  } finally {
+    if (priorRaf === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = priorRaf;
+    console.warn = priorWarn;
+  }
+}
+
+for (const initialVisible of [false, true]) {
+  const result = await scarFirstUseProbe({ initialVisible });
+  assert.equal(result.uniforms, 1, 'the post-scene scar cohort receives explicit native first use');
+  assert.equal(result.queries, 2);
+  assert.equal(result.draws, 1);
+  assert.ok(result.warmCheckpoints >= 2);
+  assert.equal(result.timing.uniformCount, 1);
+  assert.equal(result.timing.uniformPending, 0);
+}
+
+for (const checkpoint of [1, 2]) {
+  for (const change of ['abort', 'epoch', 'info', 'context', 'loss']) {
+    const result = await scarFirstUseProbe({ initialVisible: true, change, checkpoint });
+    assert.equal(result.uniforms, 0, `${change}: no native reflection after a stale wait`);
+    assert.equal(result.draws, 0);
+    assert.equal(result.queries, checkpoint - 1);
+  }
+}
+for (const change of ['query-failure', 'uniform-failure']) {
+  const result = await scarFirstUseProbe({ change, readyAfter: 0 });
+  assert.equal(result.draws, 1, `${change}: valid-lifetime native failure retains the same real draw`);
+  assert.equal(result.timing.uniformPending, 1);
+}
+for (const change of ['reuse-other', 'reuse-same']) {
+  const result = await scarFirstUseProbe({ change });
+  assert.equal(result.uniforms, 0);
+  assert.equal(result.draws, 0, `${change}: a reused pooled mesh invalidates the old scar job`);
+}
+for (const change of ['visibility-healthy', 'visibility-abort', 'visibility-epoch']) {
+  const result = await scarFirstUseProbe({ initialVisible: false, change });
+  assert.equal(result.draws, change === 'visibility-healthy' ? 1 : 0,
+    `${change}: asynchronous presentation changes are not restored to stale pre-wait values`);
+}
+{
+  const result = await scarFirstUseProbe({ change: 'query-loss', readyAfter: 0 });
+  assert.equal(result.uniforms, 0, 'context loss inside a native query cannot authorize reflection');
+  assert.equal(result.draws, 0);
+}
+{
+  const result = await scarFirstUseProbe({ change: 'no-new-program' });
+  assert.equal(result.queries, 0);
+  assert.equal(result.uniforms, 0);
+  assert.equal(result.warmCheckpoints, 0, 'reused programs do not create metadata waits');
+  assert.equal(result.draws, 1);
+}
+
+for (const change of ['abort', 'epoch', 'info', 'context']) {
+  const fx = createFxProbe();
+  const camera = new PerspectiveCamera();
+  const controller = new AbortController();
+  const gl = { isContextLost: () => false };
+  const renderer = { info: { programs: [] }, getContext: () => gl };
+  let releaseTextures;
+  fx.warmTexturesChunked = () => new Promise((resolve) => { releaseTextures = resolve; });
+  const promise = warmNetworkOpeningEffects({
+    fx, post: { prepareSoftParticles() {} }, camera, shells: [], renderer, signal: controller.signal,
+    compilePrograms() { assert.fail('abandoned atlas work cannot compile'); },
+    warmRender() { assert.fail('abandoned atlas work cannot render'); },
+  });
+  for (let attempt = 0; attempt < 200 && !releaseTextures; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  assert.equal(typeof releaseTextures, 'function');
+  if (change === 'abort') controller.abort();
+  if (change === 'epoch') invalidateBattleWarmRuntime();
+  if (change === 'info') renderer.info = { programs: [] };
+  if (change === 'context') renderer.getContext = () => ({ ...gl });
+  fx.group.visible = true;
+  camera.layers.mask = 7;
+  fx.calls.push('newer-live-FX');
+  releaseTextures();
+  if (change === 'abort') await assert.rejects(promise, { name: 'AbortError' });
+  else await promise;
+  assert.deepEqual(fx.calls, ['newer-live-FX'], `${change}: pending atlas cancellation cannot reset newer FX`);
+  assert.equal(camera.layers.mask, 7);
+  assert.equal(fx.group.visible, true);
+}
+
+{
+  const fx = createFxProbe();
+  let textureSteps = 0;
+  fx.warmTexturesChunked = async (yieldForBudget) => {
+    textureSteps += 1;
+    invalidateBattleWarmRuntime();
+    await yieldForBudget(true);
+    textureSteps += 1;
+  };
+  const priorWarn = console.warn;
+  try {
+    console.warn = () => {};
+    await warmNetworkOpeningEffects({
+      fx, post: { prepareSoftParticles() {} }, camera: new PerspectiveCamera(), shells: [],
+      compilePrograms() { assert.fail('invalidated texture producer cannot compile'); },
+      warmRender() { assert.fail('invalidated texture producer cannot draw'); },
+    });
+  } finally { console.warn = priorWarn; }
+  assert.equal(textureSteps, 1, 'an internal stale texture checkpoint must stop the producer itself');
+  assert.ok(!fx.calls.includes('reset'));
+}
+
+console.log('battleWarmRuntime.selftest: Studio invalidation and covered FX staging passed');
+
+{
+ const order=[];let staged=false;
+ const steps=createCombatOpeningWarmSteps({
+  isOpeningReady:()=>false,
+  game:{tanks:[{visual:{prewarmBurn(){order.push('burn');}}}]},
+  fx:{group:new Group(),warmTextures(){},muzzleFlash(){order.push('effects');}},
+  ensureStagedVisuals(){order.push('roster');const ready=staged;staged=true;return ready;},
+  prepareModeVisuals(){order.push('mode');},
+ });
+ steps.next();assert.deepEqual(order,['roster']);
+ steps.next();assert.deepEqual(order,['roster','roster']);
+ steps.next();assert.deepEqual(order,['roster','roster','mode','burn','effects'],
+  'mode materials and attachments exist before covered opening shader work');
+ steps.return();
+}

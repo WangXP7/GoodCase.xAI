@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/mrdoob/toys",
+  "commit": "829e15e9821958a30a337b08def148b3590b3e08",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 5,
+  "bytes": 83190
+}

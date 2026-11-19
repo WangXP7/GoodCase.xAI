@@ -1,0 +1,227 @@
+/**
+ * Watch mode's seats (watch-mode-243): who drives each hull of a watched battle (sim/matchRuleset.ts WATCH_RULES).
+ *
+ * A watched battle is set up as any solo battle — the human seat on its side, spawn, role and vehicle, so the loading
+ * and reveal pipeline runs unchanged — with one difference: that seat's bot brain is built beside it (state.ts
+ * spawnBattleEntities) and parked here. When the battle opens, openWatchSeats hands the seat to its brain and leaves the
+ * session with no player: every hull is driven by its controller and the watcher only looks.
+ *
+ * Taking control is the player's own path, nothing new: the fixed step drives a hull from its controller exactly when
+ * `aiCtl` is set (state.ts stepBotControllers), and the frame input writes `game.player.input` before each step
+ * (playerFrameInput.ts). takeWatchSeat parks the hull's controller here (its park() takes the battle's clock) and makes
+ * the hull the session's player, so the watcher's input enters the step as any player's does and the controller never
+ * also writes it; leaveWatchSeat gives the controller back, which resumes from the hull's live state (pose, hull,
+ * rounds, reload, modules; its resume() restarts what it measures between ticks and moves its own record's clocks on by
+ * the park, so the stretch it was parked is no tick of its own, looks at its target afresh after any park that could
+ * have hidden a move or a round, and the watcher's rounds still in flight are not its own). A seat's
+ * `bot` flag never changes: the mode controller keeps reading the human seat as the human's (its one life in
+ * Frontline, the Horde's survivors) and every other seat as a bot's, so taking control bends no mode rule.
+ *
+ * Node-runnable: no DOM, no clock, no randomness.
+ */
+
+interface WatchSeatInput {
+  throttle: number;
+  steer: number;
+  brake: boolean;
+  fire: boolean;
+  actionBits?: number;
+  aimLocked?: boolean;
+}
+
+/** The slice of a solo entity the seats read and write. */
+export interface WatchSeatEntity<TController = unknown> {
+  id: string;
+  team: string;
+  isPlayer: boolean;
+  aiCtl: TController | null;
+  input: WatchSeatInput;
+  combat: { destroyed?: boolean } | null;
+  modeActive?: boolean;
+  aerial?: { kind?: string } | null;
+}
+
+/** A watched battle's seat ledger (on the session as `game.watch`). */
+export interface WatchSession<TController = unknown> {
+  /** The human seat (the reference side's verdict and the drone's opening frame read it). */
+  readonly seatId: string;
+  /**
+   * The human seat's side as the battle opened ('player' or 'enemy'): the battle's frame for its verdict, the mode's
+   * perspective and the spectator's HUD. The seat itself can change sides (an Infected survivor rises infected); the
+   * watched battle's frame never does.
+   */
+  readonly team: string;
+  /** The seat the watcher drives, or null while watching. */
+  takenId: string | null;
+  /** True once the battle opened: the human seat's brain drives it. */
+  opened: boolean;
+  /** Parked controllers by hull id: the human seat's until the battle opens, a taken seat's while it is driven. */
+  readonly parked: Map<string, TController>;
+}
+
+interface WatchSeatGame<TEntity extends WatchSeatEntity<TController>, TController> {
+  player: TEntity | null;
+  tanks: TEntity[];
+  ruleset: { readonly watch?: { readonly takeControl: boolean } | null };
+  watch?: WatchSession<TController> | null;
+  /** The battle's clock (the solo session's game.timeS): a brain parks and is handed back on it. */
+  timeS?: number;
+  /** The battle's next shell id (the solo session's game.nextShellId): the rounds fired before a hand-back have lower ids. */
+  nextShellId?: number;
+}
+
+interface WatchSeatBrain {
+  park?(timeS?: number): void;
+  resume?(timeS?: number, firstShellId?: number): void;
+}
+
+/** A controller the watcher takes the hull from stops being stepped at the battle's clock (ai.ts park, round 2 U18). */
+function parkBrain(brain: unknown, timeS: number | undefined): void {
+  (brain as WatchSeatBrain | null)?.park?.(timeS);
+}
+
+/**
+ * A controller handed a hull back restarts what it measures between its own ticks from the hull as it stands (ai.ts
+ * resume, 2026-11-02 audit M7): parked, it was not stepped, and the gap would read as one tick of its own (the hull
+ * the watcher lost as one burst of damage, the ground covered as one tick's progress, the watcher's shot as its own,
+ * the park as a silence of its gun, the target it could not watch as still and silent). `timeS` is the battle's clock
+ * at the hand-back; `firstShellId` the battle's next shell id, so a round the watcher fired before Leave that lands
+ * after it is not reported to the bot as its own.
+ */
+function resumeBrain(brain: unknown, timeS: number | undefined, firstShellId: number | undefined): void {
+  (brain as WatchSeatBrain | null)?.resume?.(timeS, firstShellId);
+}
+
+function zeroInput(input: WatchSeatInput): void {
+  input.throttle = 0;
+  input.steer = 0;
+  input.brake = false;
+  input.fire = false;
+  input.actionBits = 0;
+  input.aimLocked = false;
+}
+
+function seatById<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>, id: string | null,
+): TEntity | null {
+  if (!id) return null;
+  for (const entity of game.tanks) if (entity.id === id) return entity;
+  return null;
+}
+
+/**
+ * Setup (state.ts): the human seat's brain has just been built on `seat`; park it so the seat stays the player's
+ * through loading and the reveal, and open the session's ledger.
+ */
+export function prepareWatchSeat<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>, seat: TEntity,
+): void {
+  const parked = new Map<string, TController>();
+  if (seat.aiCtl) parked.set(seat.id, seat.aiCtl);
+  seat.aiCtl = null;
+  game.watch = { seatId: seat.id, team: seat.team, takenId: null, opened: false, parked };
+}
+
+/** The battle opens: the human seat's brain drives it and the session has no player. Idempotent. */
+export function openWatchSeats<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>,
+): boolean {
+  const watch = game.watch;
+  if (!watch || watch.opened) return false;
+  const seat = seatById(game, watch.seatId);
+  const brain = watch.parked.get(watch.seatId);
+  watch.parked.delete(watch.seatId);
+  watch.opened = true;
+  if (seat) {
+    if (brain) {
+      seat.aiCtl = brain;
+      resumeBrain(brain, game.timeS, game.nextShellId);
+    }
+    seat.isPlayer = false;
+    zeroInput(seat.input);
+  }
+  game.player = null;
+  return true;
+}
+
+/** Why a hull cannot be taken (null: it can). */
+export function watchSeatRefusal<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>, entity: TEntity | null,
+): 'no-watch' | 'not-open' | 'no-take-control' | 'already-driving' | 'no-hull' | 'destroyed' | 'inactive' | 'no-brain' | 'aircraft' | null {
+  const watch = game.watch;
+  if (!watch) return 'no-watch';
+  if (!watch.opened) return 'not-open';
+  if (!game.ruleset.watch?.takeControl) return 'no-take-control';
+  if (watch.takenId) return 'already-driving';
+  if (!entity) return 'no-hull';
+  if (!entity.combat || entity.combat.destroyed) return 'destroyed';
+  if (entity.modeActive === false) return 'inactive';
+  if (!entity.aiCtl) return 'no-brain';
+  if (entity.aerial?.kind === 'gunship') return 'aircraft';
+  return null;
+}
+
+/**
+ * Take control of `entity`: its controller parks, the hull becomes the session's player and the watcher's input drives
+ * it from the next step. Nothing about the hull itself changes. Returns false (and changes nothing) when refused.
+ */
+export function takeWatchSeat<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>, entity: TEntity | null,
+): boolean {
+  if (watchSeatRefusal(game, entity) !== null || !entity || !game.watch) return false;
+  parkBrain(entity.aiCtl, game.timeS);
+  game.watch.parked.set(entity.id, entity.aiCtl as TController);
+  entity.aiCtl = null;
+  entity.isPlayer = true;
+  zeroInput(entity.input);
+  game.player = entity;
+  game.watch.takenId = entity.id;
+  return true;
+}
+
+/**
+ * Leave the taken seat: its controller drives it again from the hull's live state (a wreck's controller waits for the
+ * mode's revive, as any bot's does) and the session has no player. Returns the hull handed back, or null.
+ */
+export function leaveWatchSeat<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>,
+): TEntity | null {
+  const watch = game.watch;
+  if (!watch?.takenId) return null;
+  const entity = seatById(game, watch.takenId);
+  const brain = watch.parked.get(watch.takenId);
+  watch.parked.delete(watch.takenId);
+  watch.takenId = null;
+  if (entity) {
+    if (brain) {
+      entity.aiCtl = brain;
+      resumeBrain(brain, game.timeS, game.nextShellId);
+    }
+    entity.isPlayer = false;
+    zeroInput(entity.input);
+  }
+  if (game.player === entity) game.player = null;
+  return entity;
+}
+
+/**
+ * Whose view the mode serializes while nobody drives (state.ts stepMatchMode): the human seat while it fights on the
+ * battle's side, else the first hull still on that side (a converted seat must not turn the spectator's frame).
+ */
+export function watchViewer<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>,
+): TEntity | null {
+  const watch = game.watch;
+  if (!watch) return null;
+  const seat = seatById(game, watch.seatId);
+  if (seat?.team === watch.team) return seat;
+  for (const entity of game.tanks) if (entity.team === watch.team) return entity;
+  return seat;
+}
+
+/** The verdict's reference seat in a watched battle (the human seat, whoever drives it); else the player. */
+export function verdictSeat<TEntity extends WatchSeatEntity<TController>, TController>(
+  game: WatchSeatGame<TEntity, TController>,
+): TEntity | null {
+  return game.watch ? seatById(game, game.watch.seatId) : game.player;
+}

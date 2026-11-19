@@ -1,0 +1,841 @@
+/**
+ * LittleJS Debug System
+ * - Press Esc to toggle debug overlay with object picking
+ * - Number keys toggle debug visualizations (physics, particles, etc.) while the overlay is open
+ * - +/- keys control time scale for slow motion/fast forward while the overlay is open
+ * - setDebugKeysAlways lets those keys work with the overlay closed too
+ * - ASSERT and LOG macros for development (removed in release builds)
+ * - Debug primitive rendering (rectangles, circles, lines, points, text)
+ * - Screenshot support
+ * - FPS counter and performance watermark
+ * - Debug overlay shows mouse position and picked objects
+ * @namespace Debug
+ */
+
+'use strict';
+
+/** True if debug is enabled
+ *  @type {boolean}
+ *  @default
+ *  @memberof Debug */
+const debug = true;
+
+/** Size to render debug points by default
+ *  @type {number}
+ *  @default
+ *  @memberof Debug */
+const debugPointSize = .5;
+
+/** Width in pixels of the outlines debug shapes are drawn with, the physics boxes and the tile collision view
+ *  among them; larger makes them easier to see
+ *  @type {number}
+ *  @default
+ *  @memberof Debug */
+let debugLineWidth = 2;
+
+/** True if watermark with FPS should be shown, false in release builds
+ *  @type {boolean}
+ *  @default
+ *  @memberof Debug */
+let debugWatermark = true;
+
+/** Key code used to toggle debug mode, Esc by default
+ *  @type {string}
+ *  @default
+ *  @memberof Debug */
+let debugKey = 'Escape';
+
+/** Let the debug keys work while the overlay is closed, the number keys and the +/- time keys, for a game that does
+ *  not use them; off by default, so they only work while the overlay is open
+ *  @type {boolean}
+ *  @default
+ *  @memberof Debug */
+let debugKeysAlways = false;
+
+/** True if the debug overlay is active, always false in release builds
+ *  @type {boolean}
+ *  @default
+ *  @memberof Debug */
+let debugOverlay = false;
+
+/** Open or close the debug overlay from code, as the debug key does; does nothing in release builds
+ *  @param {boolean} [show]
+ *  @memberof Debug */
+function setDebugOverlay(show=true) { debug && (debugOverlay = !!show); }
+
+/** True if the tweakables panel is shown, 9 toggles it while the overlay is open; set it to show the panel
+ *  from the start, the panel is never shown in release builds
+ *  @type {boolean}
+ *  @default
+ *  @memberof Debug */
+let debugTweakables = false;
+
+// the shadow behind debug text, so it reads over anything: the overlay menu and the mouse text both use it;
+// a smaller blur is tighter and darker, a larger one softer and fainter
+const debugTextShadowColor = '#000', debugTextShadowBlur = 9;
+function debugTextShadow(context) { context.shadowColor = debugTextShadowColor; context.shadowBlur = debugTextShadowBlur; }
+
+// Engine internal variables not exposed to documentation
+let debugPrimitives = [], debugClearCount = 0, debugPhysics = false, debugRaycast = false, debugParticles = false, debugGamepads = false, debugSound = false, debugTiles = 0, debugTakeScreenshot;
+// debugTiles is 0 for off, 1 for every layer, and 2 on for one layer at a time, see debugTileLayersSelected
+
+///////////////////////////////////////////////////////////////////////////////
+// Debug helper functions
+
+// if an ASSERT is calling console.assert, which debugShowErrors makes throw for the game's own asserts
+let debugAsserting = false;
+
+/** Asserts if the expression is false, does nothing in release builds
+ *  Halts execution if the assert fails and throws an error
+ *  @param {*} assert - any value, the assert fails when it is falsy
+ *  @param {...Object} output - error message output
+ *  @memberof Debug */
+function ASSERT(assert, ...output)
+{
+    if (assert) return;
+    debugAsserting = true; // the console says it, and the error below is what is thrown, debugShowErrors or not
+    try { console.assert(assert, ...output); }
+    finally { debugAsserting = false; }
+    // the error says what went wrong, so an error box or overlay that shows only the error shows the message too: a
+    // value with a toString of its own as that, a vec2 or a color, a plain object as JSON, an object of a class with
+    // none by its class's name, each cut at 200 characters, so a whole level is not the message
+    const text = output.map((value)=>
+    {
+        let text;
+        try
+        {
+            const prototype = value && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+            text = prototype === Object.prototype || prototype === null ? JSON.stringify(value) :
+                prototype && value.toString === Object.prototype.toString ?
+                '[' + (value.constructor?.name || 'object') + ']' : String(value);
+        }
+        catch { text = Object.prototype.toString.call(value); }
+        text = String(text); // JSON of nothing, as from a toJSON that returns nothing, is undefined
+        return text.length > 200 ? text.slice(0, 199) + '…' : text;
+    }).join(' ');
+    throw new Error(text ? 'Assert failed: ' + text : 'Assert failed!'); // halt execution
+}
+
+/** Log to console if debug is enabled, does nothing in release builds
+ *  @param {...Object} output - message output
+ *  @memberof Debug */
+function LOG(...output) { console.log(...output); }
+
+/** Draw a debug rectangle in world space, or on the screen with screenSpace
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2()]
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {number} [angle]
+ *  @param {boolean} [fill]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugRect(pos, size=vec2(), color=WHITE, time=0, angle=0, fill=false, screenSpace=drawScreenSpace)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isStringLike(color) || isColor(color), 'color is invalid');
+    ASSERT(isNumber(time), 'time must be a number');
+    ASSERT(isNumber(angle), 'angle must be a number');
+
+    if (headlessMode) return; // nothing draws them, they would pile up
+    if (isColor(color))
+        color = color.toString();
+    const timer = new Timer(time, true); // real time, so they still expire while the game is paused
+    debugPrimitives.push({pos:pos.copy(), size:size.copy(), color, timer, angle, fill, screenSpace});
+}
+
+/** Draw a debug poly in world space, or on the screen with screenSpace
+ *  @param {Vector2} pos
+ *  @param {Array<Vector2>} points
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {number} [angle]
+ *  @param {boolean} [fill]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugPoly(pos, points, color=WHITE, time=0, angle=0, fill=false, screenSpace=drawScreenSpace)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isArray(points), 'points must be an array');
+    ASSERT(isStringLike(color) || isColor(color), 'color is invalid');
+    ASSERT(isNumber(time), 'time must be a number');
+    ASSERT(isNumber(angle), 'angle must be a number');
+
+    if (headlessMode) return;
+    if (isColor(color))
+        color = color.toString();
+    pos = pos.copy();
+    points = points.map(p=>p.copy());
+    const timer = new Timer(time, true); // real time, so they still expire while the game is paused
+    debugPrimitives.push({pos, points, color, timer, angle, fill, screenSpace});
+}
+
+/** Draw a debug circle in world space, or on the screen with screenSpace
+ *  @param {Vector2} pos
+ *  @param {number} [size] - diameter
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {boolean} [fill]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugCircle(pos, size=0, color=WHITE, time=0, fill=false, screenSpace=drawScreenSpace)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isNumber(size), 'size must be a number');
+    ASSERT(isStringLike(color) || isColor(color), 'color is invalid');
+    ASSERT(isNumber(time), 'time must be a number');
+
+    if (headlessMode) return;
+    if (isColor(color))
+        color = color.toString();
+    pos = pos.copy();
+    const timer = new Timer(time, true); // real time, so they still expire while the game is paused
+    debugPrimitives.push({pos, size, color, timer, angle:0, fill, screenSpace});
+}
+
+/** Draw a debug point in world space, or on the screen with screenSpace
+ *  @param {Vector2} pos
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {number} [angle]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugPoint(pos, color, time, angle, screenSpace=drawScreenSpace)
+{ debugRect(pos, undefined, color, time, angle, false, screenSpace); }
+
+/** Draw a debug line in world space, or on the screen with screenSpace
+ *  @param {Vector2} posA
+ *  @param {Vector2} posB
+ *  @param {Color|string} [color]
+ *  @param {number} [width]
+ *  @param {number} [time]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugLine(posA, posB, color, width=.1, time=0, screenSpace=drawScreenSpace)
+{
+    ASSERT(isVector2(posA), 'posA must be a vec2');
+    ASSERT(isVector2(posB), 'posB must be a vec2');
+    ASSERT(isNumber(width), 'width must be a number');
+
+    const halfDelta = vec2((posB.x - posA.x)/2, (posB.y - posA.y)/2);
+    const size = vec2(width, halfDelta.length()*2);
+    // screen space y points down, so its angle is measured the other way, as drawLine does
+    const angle = vec2(halfDelta.x, screenSpace ? -halfDelta.y : halfDelta.y).angle();
+    debugRect(posA.add(halfDelta), size, color, time, angle, true, screenSpace);
+}
+
+/** Draw a debug combined axis aligned bounding box in world space, or on the screen with screenSpace
+ *  @param {Vector2} posA
+ *  @param {Vector2} sizeA
+ *  @param {Vector2} posB
+ *  @param {Vector2} sizeB
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugOverlap(posA, sizeA, posB, sizeB, color, time, screenSpace=drawScreenSpace)
+{
+    ASSERT(isVector2(posA), 'posA must be a vec2');
+    ASSERT(isVector2(posB), 'posB must be a vec2');
+    ASSERT(isVector2(sizeA), 'sizeA must be a vec2');
+    ASSERT(isVector2(sizeB), 'sizeB must be a vec2');
+
+    const minPos = vec2(
+        min(posA.x - sizeA.x/2, posB.x - sizeB.x/2),
+        min(posA.y - sizeA.y/2, posB.y - sizeB.y/2)
+    );
+    const maxPos = vec2(
+        max(posA.x + sizeA.x/2, posB.x + sizeB.x/2),
+        max(posA.y + sizeA.y/2, posB.y + sizeB.y/2)
+    );
+    debugRect(minPos.lerp(maxPos,.5), maxPos.subtract(minPos), color, time, 0, false, screenSpace);
+}
+
+/** Draw debug text in world space, or on the screen with screenSpace
+ *  @param {string|number} text
+ *  @param {Vector2} pos
+ *  @param {number} [size]
+ *  @param {Color|string} [color]
+ *  @param {number} [time]
+ *  @param {number} [angle]
+ *  @param {string} [font]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @memberof Debug */
+function debugText(text, pos, size=1, color=WHITE, time=0, angle=0, font='monospace', screenSpace=drawScreenSpace)
+{
+    ASSERT(isStringLike(text), 'text must be a string');
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isNumber(size), 'size must be a number');
+    ASSERT(isStringLike(color) || isColor(color), 'color is invalid');
+    ASSERT(isNumber(time), 'time must be a number');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(isStringLike(font), 'font must be a string');
+
+    if (headlessMode) return;
+    if (isColor(color))
+        color = color.toString();
+    pos = pos.copy();
+    const timer = new Timer(time, true); // real time, so they still expire while the game is paused
+    debugPrimitives.push({text, pos, size, color, timer, angle, font, screenSpace});
+}
+
+/** Clear all debug primitives in the list
+ *  @memberof Debug */
+function debugClear() { debugPrimitives = []; ++debugClearCount; } // the count lets plugins clear their own
+
+/** Trigger debug system to take a screenshot
+ *  @memberof Debug */
+function debugScreenshot() { debugTakeScreenshot = 1; }
+
+/** Breaks on all asserts/errors, hides the canvas, and shows message in plain text
+ *  This is a good function to call at the start of your game to catch all errors
+ *  In release builds this function has no effect
+ *  @memberof Debug */
+function debugShowErrors()
+{
+    const showError = (message)=>
+    {
+        // replace entire page with error message
+        document.body.style.cssText = 'background-color:#111;margin:8px';
+        const pre = document.createElement('pre'); // the message as text, a file name in it never markup
+        pre.style.cssText = 'color:#f00;font-size:28px;white-space:pre-wrap';
+        pre.textContent = String(message);
+        document.body.replaceChildren(pre);
+    }
+    
+    // set on globalThis, the window in a browser, so in Node, which has neither, it does not throw half way
+    globalThis.onunhandledrejection = (event)=>
+        showError(event.reason?.stack || event.reason);
+    globalThis.onerror = (message, source, lineno, colno)=>
+        showError(`${message}\n${source}\nLn ${lineno}, Col ${colno}`);
+    const originalAssert = console.assert;
+    console.assert = (assertion, ...output)=>
+    {
+        originalAssert(assertion, ...output);
+        if (!assertion && !debugAsserting) // an ASSERT throws its own error, which says what its values are
+            throw new Error('Assertion failed!\n' + output.join(' '));
+    };
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Engine debug functions (called automatically)
+
+function debugInit()
+{
+    if (showEngineVersion)
+        console.warn("LittleJS DEBUG build loaded. Use the release build for production.");
+}
+
+function debugUpdate()
+{
+    if (!debug) return;
+
+    if (keyWasPressed(debugKey)) // Esc
+        debugOverlay = !debugOverlay;
+    const debugKeys = debugOverlay || debugKeysAlways; // the keys work while the overlay is open, or always if set
+    if (debugKeys)
+    {
+        if (keyWasPressed('Digit1'))
+            debugPhysics = !debugPhysics, debugParticles = false;
+        if (keyWasPressed('Digit2'))
+            debugTiles = (debugTiles + 1) % (debugTileLayersShown().length + 2); // off, all, then each layer
+        if (keyWasPressed('Digit3'))
+            debugParticles = !debugParticles, debugPhysics = false;
+        if (keyWasPressed('Digit4'))
+            debugRaycast = !debugRaycast;
+        if (keyWasPressed('Digit5'))
+            debugGamepads = !debugGamepads;
+        if (keyWasPressed('Digit6'))
+            debugSound = !debugSound;
+        if (keyWasPressed('Digit7'))
+            debugScreenshot();
+        if (keyWasPressed('Digit9'))
+            debugTweakables = !debugTweakables;
+        if (keyWasPressed('Digit0'))
+            levelEditor.isOpen ? levelEditor.close() : levelEditor.open();
+    }
+}
+
+// the text beside the mouse, with the same shadow as the overlay
+function debugMouseText(text)
+{
+    mainContext.save();
+    debugTextShadow(mainContext);
+    drawTextScreen(text, mousePosScreen, 24, WHITE, 0, BLACK, 'center', 'monospace', undefined, undefined, 0, mainContext);
+    mainContext.restore();
+}
+
+// the center of the tile under a world position, on the grid of the collision layer that has a tile there
+function debugTileCellCenter(pos)
+{
+    for (const layer of tileCollisionLayers)
+    {
+        const local = pos.subtract(layer.pos);
+        if (local.arrayCheck(layer.size) && layer.getCollisionData(local))
+            return local.floor().add(layer.pos).add(vec2(.5));
+    }
+    return pos.floor().add(vec2(.5));
+}
+
+// the tile layers Debug Tiles can show, the ones not switched off with debugShow, in render order
+function debugTileLayersShown()
+{
+    return engineObjects.filter(o=> o instanceof TileLayer && !o.destroyed && o.debugShow)
+        .sort((a, b)=> a.renderOrder - b.renderOrder); // a stable sort, so equal orders keep the order they were made in
+}
+
+// the layers Debug Tiles shows right now, from the ones shown: every one, or the one the 2 key has stepped to,
+// every one again if layers went away since
+function debugTileLayersSelected(layers)
+{
+    const layer = layers[debugTiles - 2];
+    return layer ? [layer] : layers;
+}
+
+// what the overlay menu says Debug Tiles is showing
+function debugTilesLabel(layers)
+{
+    if (!debugTiles) return '';
+    const layer = layers[debugTiles - 2];
+    return layer ? ` (layer ${debugTiles - 1} of ${layers.length}, renderOrder ${layer.renderOrder}${layer instanceof TileCollisionLayer && layer.isSolid ? ', collision' : ''})` : ' (all)';
+}
+
+// Debug Tiles: each layer's bounds, then the collision value of every cell on screen, tinted by value, with the
+// number when a tile is big enough on screen to read it
+function debugTileLayers(layers)
+{
+    // everything the camera can see, turned or not
+    const reach = getCameraSize().length() / 2;
+    const showValues = cameraScale >= 24;
+    for (const layer of debugTileLayersSelected(layers))
+    {
+        // a layer the solid tests skip, a map's art, is not collision whatever values it has
+        const isCollision = layer instanceof TileCollisionLayer && layer.isSolid, size = layer.size, pos = layer.pos;
+        const color = isCollision ? '#f80' : '#0cf';
+        debugRect(pos.add(size.scale(.5)), size, color, 0, 0, false, false);
+        const label = 'layer ' + (layers.indexOf(layer) + 1) + ', ' + size.x + 'x' + size.y + ', renderOrder ' + layer.renderOrder + (isCollision ? ', collision' : '');
+        debugText(label, pos.add(vec2(size.x / 2, size.y + .4)), .6, color, 0, 0, 'monospace', false);
+        if (!isCollision) continue;
+
+        const x0 = max(0, floor(cameraPos.x - reach - pos.x)), x1 = min(size.x, ceil(cameraPos.x + reach - pos.x));
+        const y0 = max(0, floor(cameraPos.y - reach - pos.y)), y1 = min(size.y, ceil(cameraPos.y + reach - pos.y));
+        for (let y = y0; y < y1; ++y)
+        for (let x = x0; x < x1; ++x)
+        {
+            const data = layer.collisionData[y * size.x + x];
+            if (!data) continue;
+            const center = vec2(pos.x + x + .5, pos.y + y + .5), tint = hsl(data * .17 % 1, 1, .6, .8);
+            debugRect(center, vec2(.9), tint, 0, 0, false, false);
+            showValues && debugText(data, center, .5, tint, 0, 0, 'monospace', false);
+        }
+    }
+}
+
+// the tile and collision value under the mouse of each layer shown by Debug Tiles, as lines of the mouse text
+function debugTileText(layers)
+{
+    if (!debugTiles) return '';
+    // each layer by its number in the 2 key's cycle, the one the menu shows
+    let text = '';
+    for (const layer of debugTileLayersSelected(layers))
+    {
+        const local = mousePos.subtract(layer.pos);
+        if (!local.arrayCheck(layer.size)) continue;
+        // only a collision layer has collision data, the others are just drawn
+        const data = layer.getData(local);
+        const collision = layer instanceof TileCollisionLayer && layer.getCollisionData(local);
+        text += '\nlayer ' + (layers.indexOf(layer) + 1) + ': tile ' + (data?.tile ?? 'empty') + (collision ? ', collision ' + collision : '');
+    }
+    return text;
+}
+
+function debugRender()
+{
+    if (debugTakeScreenshot)
+    {
+        // combine canvases, remove alpha and save
+        glFlush();
+        combineCanvases();
+        saveCanvas(mainCanvas);
+        debugTakeScreenshot = 0;
+    }
+
+    // flush any gl sprites before drawing debug info
+    glFlush();
+
+    // the tile layers Debug Tiles can show, found once for everything below
+    const tileLayers = debugTiles ? debugTileLayersShown() : [];
+
+    const savedDrawCount = drawCount;
+    const savedPrimitiveCount = primitiveCount;
+
+    const debugContext = mainContext;
+    if (debugGamepads && gamepadsEnable)
+    {
+        // draw gamepads
+        const maxGamepads = 8;
+        let gamepadConnectedCount = 0;
+        for (let i = 0; i < maxGamepads; i++)
+            gamepadConnected(i) && gamepadConnectedCount++;
+
+        for (let i = 0; i < maxGamepads; i++)
+        {
+            if (!gamepadConnected(i))
+                continue;
+
+            const stickScale = 1;
+            const buttonScale = .2;
+            const cornerPos = cameraPos.add(vec2(-stickScale*2, ((gamepadConnectedCount-1)/2-i)*stickScale*3));
+            debugText(i, cornerPos.add(vec2(-stickScale, stickScale)), 1, WHITE, 0, 0, 'monospace', false);
+            if (i === gamepadPrimary)
+                debugText('Main', cornerPos.add(vec2(-stickScale*2, 0)),1, '#0f0', 0, 0, 'monospace', false);
+
+            // read analog sticks
+            const stickCount = gamepadStickCount(i); // none after an inputClear this frame
+            for (let j = 0; j < stickCount; j++)
+            {
+                if (!(j in gamepadStickData[i]))
+                    continue; // skip sticks that are not present (eg a disabled touch left stick)
+                const stick = gamepadStick(j, i);
+                const drawPos = cornerPos.add(vec2(j*stickScale*2, 0));
+                const stickPos = drawPos.add(stick.scale(stickScale));
+                debugCircle(drawPos, stickScale*2, '#fff7',0,true, false);
+                debugLine(drawPos, stickPos, '#f00', .1, 0, false);
+                debugText(j, drawPos, .3, WHITE, 0, 0, 'monospace', false);
+                debugPoint(stickPos, '#f00', undefined, undefined, false);
+            }
+
+            const buttonCount = inputData[i+1].length;
+            for (let j = 0; j < buttonCount; j++)
+            {
+                const drawPos = cornerPos.add(vec2(j*buttonScale*2, -stickScale-buttonScale*2));
+                const pressed = gamepadIsDown(j, i);
+                debugCircle(drawPos, buttonScale*2, pressed ? '#f00' : '#fff7', 0, true, false);
+                debugText(j, drawPos, .3, WHITE, 0, 0, 'monospace', false);
+            }
+        }
+    }
+
+    let debugObject;
+    if (debugOverlay)
+    {
+        // draw red rectangle around screen
+        const cameraSize = getCameraSize();
+        debugRect(cameraPos, cameraSize.subtract(vec2(.1)), '#f008', 0, 0, false, false);
+
+        // mouse pick
+        let bestDistance = Infinity;
+        for (const o of engineObjects)
+        {
+            if (o.destroyed)
+                continue;
+
+            if (o instanceof TileLayer)
+                continue; // prevent tile layers from being picked
+
+            o.renderDebugInfo();
+            if (!o.size.x || !o.size.y)
+                continue;
+
+            const distance = mousePos.distanceSquared(o.pos);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                debugObject = o;
+            }
+        }
+
+        if (tileCollisionTest(mousePos))
+        {
+            // show the collision tile under the mouse, on its layer's own grid
+            drawRect(debugTileCellCenter(mousePos), vec2(1), rgb(1,1,0,.5), 0, false, false);
+        }
+    }
+
+    // Debug Tiles draws with the overlay closed too, like the other modes listed in the corner
+    debugTiles && debugTileLayers(tileLayers);
+
+    {
+        // draw debug primitives, the line width put back after so the game's next frame starts as it would in release
+        debugContext.save();
+        debugContext.lineWidth = debugLineWidth;
+        debugPrimitives.forEach(p=>
+        {
+            debugContext.save();
+
+            // create canvas transform from world space to screen space
+            // without scaling because we want consistent pixel sizes
+            let pos = p.pos, scale = 1, angle = p.angle;
+            if (!p.screenSpace)
+            {
+                pos = worldToScreen(p.pos);
+                scale = cameraScale;
+                angle -= cameraAngle;
+            }
+            debugContext.translate(pos.x|0, pos.y|0);
+            debugContext.rotate(angle);
+            debugContext.scale(1, p.text !== undefined ? 1 : -1);
+            debugContext.fillStyle = p.color;
+            debugContext.strokeStyle = p.color;
+            if (p.text !== undefined)
+            {
+                debugContext.font = p.size*scale + 'px '+ p.font;
+                debugContext.textAlign = 'center';
+                debugContext.textBaseline = 'middle';
+                debugContext.fillText(p.text, 0, 0);
+            }
+            else if (p.points !== undefined)
+            {
+                // poly
+                debugContext.beginPath();
+                for (const point of p.points)
+                {
+                    const p2 = point.scale(scale).floor();
+                    debugContext.lineTo(p2.x, p2.y);
+                }
+                debugContext.closePath();
+                p.fill && debugContext.fill();
+                debugContext.stroke();
+            }
+            else if (p.size === 0 || (p.size.x === 0 && p.size.y === 0))
+            {
+                // point
+                const pointSize = debugPointSize * scale;
+                debugContext.fillRect(-pointSize/2, -1, pointSize, 3);
+                debugContext.fillRect(-1, -pointSize/2, 3, pointSize);
+            }
+            else if (p.size.x !== undefined)
+            {
+                // rect
+                const s = p.size.scale(scale).floor();
+                const w = s.x, h = s.y;
+                p.fill && debugContext.fillRect(-w/2|0, -h/2|0, w, h);
+                debugContext.strokeRect(-w/2|0, -h/2|0, w, h);
+            }
+            else
+            {
+                // circle
+                debugContext.beginPath();
+                debugContext.arc(0, 0, abs(p.size)*scale/2, 0, 9); // a negative radius would throw
+                p.fill && debugContext.fill();
+                debugContext.stroke();
+            }
+
+            debugContext.restore();
+        });
+        debugContext.restore();
+
+        // remove expired primitives
+        debugPrimitives = debugPrimitives.filter(r=>r.timer<0);
+    }
+
+    if (debugObject)
+    {
+        const raycastHitPos = tileCollisionRaycast(debugObject.pos, mousePos);
+        raycastHitPos && drawRect(debugTileCellCenter(raycastHitPos), vec2(1), rgb(0,1,1,.3), 0, false, false);
+        drawLine(mousePos, debugObject.pos, .1, raycastHitPos ? rgb(1,0,0,.5) : rgb(0,1,0,.5), undefined, undefined, false, false);
+
+        let debugText = 'mouse pos = ' + mousePos;
+        if (tileCollisionLayers.length)
+            debugText += '\nmouse collision = ' + tileCollisionGetData(mousePos);
+        debugText += debugTileText(tileLayers);
+        debugText += '\n\n--- object info ---\n';
+        debugText += debugObject.toString();
+        debugMouseText(debugText);
+    }
+    else if (debugOverlay && debugTiles)
+    {
+        // no object to pick, the tiles under the mouse on their own
+        const text = debugTileText(tileLayers);
+        text && debugMouseText('mouse pos = ' + mousePos + text);
+    }
+
+    {
+        // draw debug overlay
+        const fontSize = 20;
+        const lineHeight = fontSize * 1.2 | 0;
+        debugContext.save();
+        debugContext.fillStyle = '#fff';
+        debugContext.textAlign = 'left';
+        debugContext.textBaseline = 'top';
+        debugContext.font = fontSize + 'px monospace';
+        debugTextShadow(debugContext);
+
+        let x = 9, y = 0, h = lineHeight;
+        if (debugOverlay)
+        {
+            debugContext.fillText(`${engineName} v${engineVersion}`, x, y += h/2 );
+            debugContext.fillText('Time: ' + formatTime(time), x, y += h);
+            debugContext.fillText('FPS: ' + averageFPS.toFixed(1) + (glEnable?' WebGL':' Canvas2D'), 
+                x, y += h);
+            debugContext.fillText('Objects: ' + engineObjects.length, x, y += h);
+            debugContext.fillText('Draw Calls: ' + drawCount, x, y += h);
+            debugContext.fillText('Primitives: ' + primitiveCount, x, y += h);
+            debugContext.fillText('---------', x, y += h);
+            debugContext.fillStyle = '#f00';
+            debugContext.fillText('ESC: Debug Overlay', x, y += h);
+            debugContext.fillStyle = debugPhysics ? '#f00' : '#fff';
+            debugContext.fillText('1: Debug Physics', x, y += h);
+            debugContext.fillStyle = debugTiles ? '#f00' : '#fff';
+            debugContext.fillText('2: Debug Tiles' + debugTilesLabel(tileLayers), x, y += h);
+            debugContext.fillStyle = debugParticles ? '#f00' : '#fff';
+            debugContext.fillText('3: Debug Particles', x, y += h);
+            debugContext.fillStyle = debugRaycast ? '#f00' : '#fff';
+            debugContext.fillText('4: Debug Raycasts', x, y += h);
+            debugContext.fillStyle = debugGamepads ? '#f00' : '#fff';
+            debugContext.fillText('5: Debug Gamepads', x, y += h);
+            debugContext.fillStyle = debugSound ? '#f00' : '#fff';
+            debugContext.fillText('6: Debug Sound', x, y += h);
+            debugContext.fillStyle = '#fff';
+            debugContext.fillText('7: Save Screenshot', x, y += h);
+            debugContext.fillStyle = debugTweakables ? '#f00' : '#fff';
+            debugContext.fillText('9: Tweakables', x, y += h);
+            debugContext.fillStyle = levelEditor.isOpen ? '#f00' : '#fff';
+            debugContext.fillText('0: Edit Level', x, y += h);
+            for (const line of debugOverlayKeys)
+            {
+                // a key a debug plugin added, when it has something to say
+                const key = line();
+                if (!key) continue;
+                debugContext.fillStyle = key.on ? '#f00' : '#fff';
+                debugContext.fillText(key.text, x, y += h);
+            }
+            debugContext.fillStyle = '#fff';
+
+            let keysPressed = '';
+            let mousePressed = '';
+            for (const i in inputData[0])
+            {
+                // read the input state itself, keyIsDown asserts on the numbered keys for..in gives as strings
+                if (!(inputData[0][i] & 1))
+                    continue;
+                if (!isNaN(+i)) // mouse buttons are numbered, keys are named
+                    mousePressed += i + ' ' ;
+                else
+                    keysPressed += i + ' ' ;
+            }
+            mousePressed && debugContext.fillText('Mouse: ' + mousePressed, x, y += h);
+            keysPressed && debugContext.fillText('Keys: ' + keysPressed, x, y += h);
+
+            // show gamepad buttons
+            for (let i = 1; i < inputData.length; i++)
+            {
+                let buttonsPressed = '';
+                if (inputData[i])
+                for (const j in inputData[i])
+                {
+                    if (inputData[i][j] & 1)
+                        buttonsPressed += j + ' ' ;
+                }
+                buttonsPressed && debugContext.fillText(`Gamepad ${i-1}: ` + buttonsPressed, x, y += h);
+            }
+        }
+        else
+        {
+            debugContext.fillText(debugPhysics ? 'Debug Physics' : '', x, y += h);
+            debugContext.fillText(debugTiles ? 'Debug Tiles' + debugTilesLabel(tileLayers) : '', x, y += h);
+            debugContext.fillText(debugParticles ? 'Debug Particles' : '', x, y += h);
+            debugContext.fillText(debugRaycast ? 'Debug Raycasts' : '', x, y += h);
+            debugContext.fillText(debugGamepads ? 'Debug Gamepads' : '', x, y += h);
+            debugContext.fillText(debugSound ? 'Debug Sound' : '', x, y += h);
+        }
+
+        debugContext.restore();
+    }
+    
+    if (debugWatermark || debugOverlay)
+    {
+        // show fps stats display, the text state put back after for the game's next frame
+        mainContext.save();
+        mainContext.textAlign = 'right';
+        mainContext.textBaseline = 'top';
+        mainContext.font = '1em monospace';
+        mainContext.fillStyle = '#000';
+        const text = engineName + ' v' + engineVersion + ' / '
+            + savedDrawCount + ' / ' + savedPrimitiveCount + ' / '
+            + engineObjects.length + ' / ' + averageFPS.toFixed(1)
+            + (glEnable ? ' GL' : ' 2D') ;
+        mainContext.fillText(text, mainCanvasSize.x-3, 3);
+        mainContext.fillStyle = '#fff';
+        mainContext.fillText(text, mainCanvasSize.x-2, 2);
+        mainContext.restore();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// debug utility functions
+
+// make color constants immutable with debug assertions
+function debugProtectConstant(obj)
+{
+    if (debug)
+    {
+        // get properties and store original values
+        const props = Object.keys(obj), values = {};
+        props.forEach(prop => values[prop] = obj[prop]);
+        
+        // replace with getters/setters that assert
+        props.forEach(prop =>
+        {
+            Object.defineProperty(obj, prop, {
+                get: ()=> values[prop],
+                set: (value)=> 
+                {
+                    ASSERT(false, `engine constants like RED can not be changed, change a copy made with copy(); ` +
+                        `tried to set ${prop} of ${obj} to ${value}`);
+                },
+                enumerable: true
+            });
+        });
+    }
+    
+    // freeze the object to prevent adding new properties
+    return Object.freeze(obj);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Input capture: the free camera and the 3D level editor take the keyboard and mouse, so the game under them reads
+// every key and mouse button as up, and no mouse movement or wheel; gamepads are left to the game
+
+let inputCaptureOn = false;      // something has taken the keyboard and mouse
+let inputCaptureReading = false; // it is reading them now
+let inputCaptureDeltaScreen, inputCaptureWheel = 0; // this update's mouse movement and wheel, for it alone
+
+// the game let go of a captured mouse itself, with pointerLockExit, since the debug tools last looked: a capture
+// that is lost without it is the browser's doing, which is how Chrome takes Escape
+let inputLockLetGo = false;
+function inputLockExit() { inputLockLetGo = true; }
+
+// the keys debug plugins add to the overlay's list, each a function that gives {text, on} or nothing to show
+const debugOverlayKeys = [];
+
+// take the keyboard and mouse from the game, or hand them back
+function inputCapture(on=true)
+{
+    inputCaptureOn = !!on;
+    inputCaptureDeltaScreen = vec2();
+    inputCaptureWheel = 0;
+}
+
+// read the input as the one that took it, keyIsDown and the rest work as always inside read
+function inputCaptureRead(read)
+{
+    const was = inputCaptureReading;
+    inputCaptureReading = true;
+    try { return read(); }
+    finally { inputCaptureReading = was; }
+}
+
+// if a read of the keyboard and mouse, device 0, is the game's while they are taken
+function inputCaptureHides(device) { return inputCaptureOn && !inputCaptureReading && !device; }
+
+// called first in inputUpdate: the mouse movement and wheel go to the one that took the input
+function inputCaptureMouse()
+{
+    if (!inputCaptureOn) return;
+    inputCaptureDeltaScreen = mouseDeltaScreen;
+    inputCaptureWheel = mouseWheel;
+    mouseDeltaScreen = vec2();
+    mouseWheel = 0;
+}

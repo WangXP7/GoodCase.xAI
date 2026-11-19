@@ -1,0 +1,237 @@
+/**
+ * Per-seat input admission: a small tick-keyed buffer with v1's rejection
+ * rules (stale, far-ahead, pre-handshake handled by the actor), an adaptive
+ * 1..3 tick jitter buffer, held-input expiry and edge sequences applied once.
+ */
+import { ACTION_BIT_MASK, CONTROL_FLAGS, HELD_INPUT_LEASE_TICKS, NO_TICK } from '../../src/mp/wire/constants.ts';
+import type { ControlFrame, InputMessage } from '../../src/mp/wire/messages.ts';
+import {
+  dequantizeAimDistance, dequantizeAimPitch, dequantizeAngle, dequantizeControlAxis,
+} from '../../src/mp/wire/quantize.ts';
+import type { AuthoritativePlayerInput } from '../../src/sim/authoritativeMatch.ts';
+
+const RING = 64;
+const MAX_BUFFER_TICKS = 3; // the adaptive jitter buffer's deepest setting
+/**
+ * The admission horizon is what the ring can hold (267). A control for tick X runs at inputFor(X + bufferTicks); the
+ * control for X + RING shares its slot and, admitted at most L ticks ahead of the server's last tick, can arrive at
+ * server tick X + RING - L. Past RING - bufferTicks it takes the slot before X runs, and neither is applied while the
+ * client stays that far ahead (the old 120-tick bound: leads 62-119 every tick dry at the deepest buffer). A frame
+ * beyond the horizon is refused, never stored.
+ */
+export const MAX_LEAD_TICKS = RING - MAX_BUFFER_TICKS;
+// HELD_INPUT_LEASE_TICKS (wire constants, shared with the seat's prediction): 500 ms without a fresh frame releases the controls
+const ACTION_REPEAT_WINDOW_TICKS = 30; // bits applied at the previous actionSeq within 500 ms are not applied again
+const ADAPT_WINDOW = 60;             // frames per adaptation decision (about one second at 60 Hz)
+const LATE_RATE_GROW = 0.05;
+const MARGIN_SHRINK = 2;
+
+interface AdmitResult {
+  /** Controls stored for future ticks (duplicates excluded). */
+  accepted: number;
+  /** Controls older than the newest already applied tick. */
+  stale: number;
+  /** True when the frame's tick is further ahead than the lead bound: the whole frame is rejected. */
+  farAhead: boolean;
+}
+
+interface SeatInputBufferOptions {
+  /** The frame is rejected when its newest tick exceeds serverTick + maxLeadTicks (at most, and by default, MAX_LEAD_TICKS). */
+  maxLeadTicks?: number;
+  initialBufferTicks?: number;
+}
+
+export interface SeatInputBuffer {
+  readonly bufferTicks: number;
+  readonly lastAppliedTick: number;
+  readonly lastAppliedFireSeq: number;
+  readonly lastAppliedActionSeq: number;
+  readonly snapshotAckTick: number;
+  readonly interpDelayMs: number;
+  /** Ticks of margin the newest frame arrived with (smoothed minimum), or null. */
+  readonly marginTicks: number | null;
+  /** `longestDry`: the longest run of braking ticks (the held lease expired) that ended with an applied control. */
+  readonly stats: { frames: number; accepted: number; stale: number; farAhead: number; late: number; held: number; dry: number; longestDry: number };
+  admit(frame: InputMessage, serverTick: number): AdmitResult;
+  /** The authority input for `serverTick` (applies tick serverTick - bufferTicks), or a neutral hold. */
+  inputFor(serverTick: number): AuthoritativePlayerInput;
+  /** A neutral, braking input (no driver). */
+  neutral(): AuthoritativePlayerInput;
+  reset(): void;
+}
+
+function makeInput(): AuthoritativePlayerInput {
+  return {
+    throttle: 0, steer: 0, brake: true, fire: false, fireIntentSeq: null, aimLocked: true,
+    shellSlot: 0, actionBits: 0, aimYaw: 0, aimPitch: 0, aimDistance: 1000,
+  };
+}
+
+export function createSeatInputBuffer({ maxLeadTicks = MAX_LEAD_TICKS, initialBufferTicks = 1 }: SeatInputBufferOptions = {}): SeatInputBuffer {
+  if (!Number.isInteger(maxLeadTicks) || maxLeadTicks < 1 || maxLeadTicks > MAX_LEAD_TICKS) {
+    throw new TypeError(`maxLeadTicks must be an integer in 1..${MAX_LEAD_TICKS} (the ${RING}-tick ring holds no further)`);
+  }
+  const ticks = new Int32Array(RING).fill(-1);
+  const controls: (ControlFrame | null)[] = new Array(RING).fill(null);
+  const output = makeInput();
+  const stats = { frames: 0, accepted: 0, stale: 0, farAhead: 0, late: 0, held: 0, dry: 0, longestDry: 0 };
+  let bufferTicks = Math.min(MAX_BUFFER_TICKS, Math.max(1, initialBufferTicks | 0));
+  let dryRun = 0;
+  let lastAppliedTick = -1;
+  let lastAppliedFireSeq = -1;
+  let lastAppliedActionSeq = -1;
+  let lastActionBits = 0;
+  let lastActionTick = -Infinity;
+  let snapshotAckTick = NO_TICK;
+  let interpDelayMs = 0;
+  let newestStoredTick = -1;
+  let lastFrameServerTick = -1;
+  // adaptation window
+  let windowFrames = 0;
+  let windowLate = 0;
+  let windowMinMargin = Infinity;
+  let marginTicks: number | null = null;
+  // held controls (the last applied) keep aim and ammunition selection across gaps
+  let held: ControlFrame | null = null;
+  // ticks run since the last applied control: the lease counts what the server ran, not a stall's skipped ticks (267)
+  let heldRun = 0;
+
+  function slot(tick: number): number { return tick % RING; }
+
+  function adapt(): void {
+    if (windowFrames < ADAPT_WINDOW) return;
+    const lateRate = windowLate / windowFrames;
+    if (lateRate > LATE_RATE_GROW && bufferTicks < MAX_BUFFER_TICKS) bufferTicks++;
+    else if (windowMinMargin >= bufferTicks + MARGIN_SHRINK && bufferTicks > 1) bufferTicks--;
+    windowFrames = 0;
+    windowLate = 0;
+    windowMinMargin = Infinity;
+  }
+
+  function fillInput(control: ControlFrame, edges: boolean, applyTick: number): AuthoritativePlayerInput {
+    output.throttle = dequantizeControlAxis(control.throttle);
+    output.steer = dequantizeControlAxis(control.steer);
+    output.brake = (control.flags & CONTROL_FLAGS.BRAKE) !== 0;
+    output.aimLocked = (control.flags & CONTROL_FLAGS.AIM_LOCKED) !== 0;
+    output.aimYaw = dequantizeAngle(control.aimYaw);
+    output.aimPitch = dequantizeAimPitch(control.aimPitch);
+    output.aimDistance = Math.max(0.01, dequantizeAimDistance(control.aimDistance));
+    output.shellSlot = control.shellSlot;
+    // the first applied control seeds the edge sequences: a reconnect or seat replacement never fires a stray shot
+    const seeding = lastAppliedFireSeq < 0;
+    const firePress = edges && !seeding && control.fireSeq !== lastAppliedFireSeq;
+    output.fire = (control.flags & CONTROL_FLAGS.FIRE_HELD) !== 0 || firePress;
+    output.fireIntentSeq = output.fire ? control.fireSeq : null;
+    const actionPress = edges && !seeding && control.actionSeq !== lastAppliedActionSeq;
+    let actionBits = 0;
+    if(edges)lastActionBits &= control.actionBits;
+    if (actionPress) {
+      // a union of un-acknowledged presses: skip what the previous sequence applied within the window
+      const recent = applyTick - lastActionTick <= ACTION_REPEAT_WINDOW_TICKS ? lastActionBits : 0;
+      actionBits = control.actionBits & ACTION_BIT_MASK & ~recent;
+      lastActionBits = control.actionBits & ACTION_BIT_MASK;
+      lastActionTick = applyTick;
+    }
+    output.actionBits = actionBits;
+    if (edges) {
+      lastAppliedFireSeq = control.fireSeq;
+      lastAppliedActionSeq = control.actionSeq;
+    }
+    return output;
+  }
+
+  return {
+    get bufferTicks() { return bufferTicks; },
+    get lastAppliedTick() { return lastAppliedTick; },
+    get lastAppliedFireSeq() { return lastAppliedFireSeq; },
+    get lastAppliedActionSeq() { return lastAppliedActionSeq; },
+    get snapshotAckTick() { return snapshotAckTick; },
+    get interpDelayMs() { return interpDelayMs; },
+    get marginTicks() { return marginTicks; },
+    stats,
+    admit(frame, serverTick) {
+      stats.frames++;
+      if (frame.clientTick > serverTick + maxLeadTicks) {
+        stats.farAhead++;
+        return { accepted: 0, stale: 0, farAhead: true };
+      }
+      if (frame.snapshotAckTick !== NO_TICK && frame.snapshotAckTick <= serverTick &&
+          (snapshotAckTick === NO_TICK || frame.snapshotAckTick > snapshotAckTick)) {
+        snapshotAckTick = frame.snapshotAckTick;
+      }
+      interpDelayMs = frame.interpDelayMs;
+      let accepted = 0;
+      let stale = 0;
+      const first = frame.clientTick - frame.controls.length + 1;
+      for (let index = 0; index < frame.controls.length; index++) {
+        const tick = first + index;
+        if (tick <= lastAppliedTick) { stale++; continue; }
+        const at = slot(tick);
+        if (ticks[at] === tick) continue; // redundant copy of a control already held
+        ticks[at] = tick;
+        controls[at] = frame.controls[index]!;
+        if (tick > newestStoredTick) newestStoredTick = tick;
+        accepted++;
+      }
+      stats.accepted += accepted;
+      stats.stale += stale;
+      // arrival margin of the newest control against its apply tick (serverTick + 1 - bufferTicks is the next apply target)
+      if (serverTick !== lastFrameServerTick || windowFrames === 0) {
+        const applyTarget = serverTick + 1 - bufferTicks;
+        const margin = frame.clientTick - applyTarget;
+        windowFrames++;
+        if (margin < 0) windowLate++;
+        if (margin < windowMinMargin) windowMinMargin = margin;
+        marginTicks = marginTicks == null ? margin : Math.min(margin, Math.round(marginTicks * 0.9 + margin * 0.1));
+        adapt();
+      }
+      lastFrameServerTick = serverTick;
+      return { accepted, stale, farAhead: false };
+    },
+    inputFor(serverTick) {
+      const target = serverTick - bufferTicks;
+      let applyTick = -1;
+      if (target >= 0 && ticks[slot(target)] === target && target > lastAppliedTick) applyTick = target;
+      else {
+        // a late control (arrived after its tick passed) is still newer than what runs: apply the newest one
+        for (let tick = target - 1; tick > lastAppliedTick && tick > target - RING; tick--) {
+          if (ticks[slot(tick)] === tick) { applyTick = tick; stats.late++; break; }
+        }
+      }
+      if (applyTick >= 0) {
+        const control = controls[slot(applyTick)]!;
+        if (dryRun > stats.longestDry) stats.longestDry = dryRun;
+        dryRun = 0;
+        lastAppliedTick = applyTick;
+        held = control;
+        heldRun = 0;
+        return fillInput(control, true, serverTick);
+      }
+      if (held && ++heldRun <= HELD_INPUT_LEASE_TICKS) {
+        stats.held++;
+        return fillInput(held, false, serverTick);
+      }
+      stats.dry++;
+      if (held) {
+        dryRun++;
+        // the lease expired: keep aim and ammunition, release drive and fire (v1)
+        const neutral = fillInput(held, false, serverTick);
+        neutral.throttle = 0; neutral.steer = 0; neutral.brake = true; neutral.fire = false;
+        neutral.fireIntentSeq = null; neutral.aimLocked = true; neutral.actionBits = 0;
+        return neutral;
+      }
+      return this.neutral();
+    },
+    neutral() {
+      const neutral = makeInput();
+      return neutral;
+    },
+    reset() {
+      ticks.fill(-1);
+      controls.fill(null);
+      lastAppliedTick = -1; lastAppliedFireSeq = -1; lastAppliedActionSeq = -1; lastActionBits = 0; lastActionTick = -Infinity;
+      snapshotAckTick = NO_TICK; newestStoredTick = -1; held = null; heldRun = 0; dryRun = 0;
+      windowFrames = 0; windowLate = 0; windowMinMargin = Infinity; marginTicks = null;
+    },
+  };
+}

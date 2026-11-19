@@ -1,0 +1,195 @@
+/**
+ * Playtest 161 of night 1 (docs/archive/REVIEW_SPRINT_2026-09-13.md) replayed:
+ * "Map Key" opens the token screen, Esc closes it; with the key deleted and
+ * the page reloaded, the token screen is back and Esc does not leave it.
+ *
+ * The real ConfigService with a production build's environment (no
+ * credentials, mocked below) and jsdom's localStorage; the real
+ * TokenSetupComponent template (read from disk) with its document Esc
+ * listener. "Map key" on the menu's Settings page and in its loading plate
+ * only sets config.setupRequested; the game shows the screen while
+ * TowerDefenseComponent.tokenScreen() holds
+ * (`awaitingCredentials() || credentialsRejected() || setupRequested()`;
+ * the main menu waits behind it), and sets awaitingCredentials on start when
+ * needsCredentials() (TowerDefenseComponent.ngAfterViewInit). Both are
+ * one-liners read here, not rendered. Not covered: that the screen's chunk
+ * loads (48618172, a @defer), and how it looks.
+ */
+// The component is partially compiled and needs the JIT compiler
+import '@angular/compiler';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { getTestBed, TestBed, type ComponentFixture } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+
+// A production build: no credentials in the bundle
+vi.mock('../../../environments/environment', () => ({
+  environment: { production: true, googleMapsApiKey: '', cesiumIonToken: '', cesiumAssetId: '2275207', tileProvider: 'cesium' },
+}));
+
+import { ConfigService } from '../../core/services/config.service';
+import { TokenSetupComponent } from './token-setup.component';
+import { WORLD_NAVIGATE } from '../../world/world-choice.service';
+import { CUSTOM_MAPS_OPEN } from '../../world/custom-maps-open';
+
+const template = readFileSync(resolve('src/app/components/token-setup/token-setup.component.html'), 'utf8');
+const STORAGE_KEY = '3dtd-tile-credentials';
+
+/** What the game shows the token screen for (TowerDefenseComponent.tokenScreen) */
+const screenShown = (config: ConfigService, awaitingCredentials: boolean) =>
+  awaitingCredentials || config.credentialsRejected() || config.setupRequested();
+
+describe('Map Key and the token screen, playtest 161 (night 1) replayed', () => {
+  let config: ConfigService;
+  let fixture: ComponentFixture<TokenSetupComponent>;
+  let navigated: string[] = [];
+
+  beforeAll(() => {
+    getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+  });
+
+  beforeEach(async () => {
+    localStorage.clear();
+    // No runtime-config.json next to the page
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+    navigated = [];
+    TestBed.configureTestingModule({ providers: [{ provide: WORLD_NAVIGATE, useValue: (url: string) => navigated.push(url) }, { provide: CUSTOM_MAPS_OPEN, useValue: true }] });
+    TestBed.overrideComponent(TokenSetupComponent, {
+      set: { template, templateUrl: undefined, styleUrl: undefined, styles: [], imports: [CdkTrapFocus] },
+    });
+    config = TestBed.inject(ConfigService);
+    await config.load();
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  const render = () => {
+    fixture = TestBed.createComponent(TokenSetupComponent);
+    fixture.detectChanges();
+  };
+  const pressEsc = () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+  };
+  const backButton = () => (fixture.nativeElement as HTMLElement).querySelector('.token-back');
+
+  it('Map Key in a running game opens the screen, Esc goes back to the game', () => {
+    // A key stored earlier, the game runs
+    config.setCredentials('cesium', 'stored-token');
+    expect(config.needsCredentials()).toBe(false);
+    expect(screenShown(config, false)).toBe(false);
+
+    // "Map key" in the game menu (TODO A3; the sidebar footer before)
+    config.setupRequested.set(true);
+    expect(screenShown(config, false)).toBe(true);
+    render();
+    expect(backButton()?.textContent).toContain('Esc');
+
+    pressEsc();
+    expect(config.setupRequested()).toBe(false);
+    expect(screenShown(config, false)).toBe(false);
+    // The key is untouched
+    expect(config.cesiumIonToken()).toBe('stored-token');
+  });
+
+  it('with the key deleted and the page reloaded the screen is back, and Esc does not leave it', async () => {
+    config.setCredentials('cesium', 'stored-token');
+    config.setupRequested.set(true);
+    render();
+
+    // Delete the key: the screen's clear(), as clearing the site data would
+    fixture.componentInstance.clear();
+    fixture.detectChanges();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    // Nothing to go back to any more: no way out, Esc included
+    expect(backButton()).toBeNull();
+    pressEsc();
+    expect(config.setupRequested()).toBe(true);
+
+    // Reload: a fresh ConfigService finds no key in the build, the file or the browser
+    const reloaded = new ConfigService();
+    await reloaded.load();
+    expect(reloaded.needsCredentials()).toBe(true);
+    expect(reloaded.hasStoredToken()).toBe(false);
+    // So the game waits for credentials on start and shows the screen
+    const awaitingCredentials = reloaded.needsCredentials();
+    expect(screenShown(reloaded, awaitingCredentials)).toBe(true);
+  });
+
+  it('with ?nokey the build keys do not count, one typed in does (PLAYTEST T37)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ cesiumIonToken: 'from-the-file' }) })));
+    const before = window.location.href;
+    window.history.replaceState(null, '', '/?room=ABC123&nokey');
+    try {
+      const stranger = new ConfigService();
+      await stranger.load();
+      expect(stranger.needsCredentials()).toBe(true);
+      stranger.setCredentials('cesium', 'typed-in');
+      const again = new ConfigService();
+      await again.load();
+      expect(again.cesiumIonToken()).toBe('typed-in');
+    } finally {
+      window.history.replaceState(null, '', before);
+    }
+  });
+
+  it('an invite link in a browser on the site points to the desktop app, not to joining here (E114)', () => {
+    const before = window.location.href;
+    window.history.replaceState(null, '', '/?room=ABC123');
+    try {
+      const text = (access: 'app' | 'dev' | 'hint') => {
+        const f = TestBed.createComponent(TokenSetupComponent);
+        (f.componentInstance as { coopAccess: string }).coopAccess = access;
+        f.detectChanges();
+        const shown = (f.nativeElement as HTMLElement).textContent!.replace(/\s+/g, ' ');
+        f.destroy();
+        return shown;
+      };
+      const hint = text('hint');
+      expect(hint).toContain('You were invited to coop room ABC123. Co-op runs in the free desktop app');
+      expect(hint).not.toContain('you join by yourself');
+      for (const access of ['app', 'dev'] as const) {
+        expect(text(access)).toContain("You are joining coop room ABC123. Every player needs a map key of their own; once yours is in, the host's map loads and you join by yourself.");
+      }
+    } finally {
+      window.history.replaceState(null, '', before);
+    }
+  });
+
+  it('a first start without any key shows the screen, and Esc does not leave it', () => {
+    expect(config.needsCredentials()).toBe(true);
+    expect(screenShown(config, config.needsCredentials())).toBe(true);
+    render();
+    expect(backButton()).toBeNull();
+    pressEsc();
+    expect(config.needsCredentials()).toBe(true);
+    expect(fixture.componentInstance.dismissible()).toBe(false);
+  });
+
+  it('is a modal dialog that holds the focus, named by its heading (review E92)', () => {
+    render();
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = root.querySelector('[role="dialog"]')!;
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(root.querySelector(`#${dialog.getAttribute('aria-labelledby')}`)!.textContent).toBe('Bring your own map key');
+    // cdkTrapFocus puts its anchors around the screen; what they do needs a browser (jsdom sees nothing focusable)
+    expect(root.querySelectorAll('.cdk-focus-trap-anchor').length).toBe(2);
+    expect(root.querySelector('[cdkFocusInitial]')?.classList).toContain('token-input');
+  });
+
+  it('without a key "Play the maps" loads the page on a shipped map, no key asked', () => {
+    render();
+    const root = fixture.nativeElement as HTMLElement;
+    const play = [...root.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Play the maps')!;
+    play.click();
+    expect(navigated).toHaveLength(1);
+    expect(new URL(navigated[0]).searchParams.get('world')).toBe('map:mountain-pass');
+    expect(config.setupRequested()).toBe(false);
+  });
+});

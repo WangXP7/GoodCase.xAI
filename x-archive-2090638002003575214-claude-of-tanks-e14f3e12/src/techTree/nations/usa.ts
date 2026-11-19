@@ -1,0 +1,78 @@
+// The United States tech tree: lines as rows, tiers as columns, the special lane under them. `builds` are
+// near-identical twins drawn on one node. Generated with the other national trees; src/techTree/techTree.selftest.mjs
+// checks its shape and pins its content. Pure data, Node-runnable. First-party: Kevin B. Liu (NOTICE.md).
+
+import type { NationTree, TreeNode } from '../model.ts';
+
+const node = (row: TreeNode): TreeNode => Object.freeze({
+  ...row, parents: Object.freeze([...row.parents]), ...(row.builds ? { builds: Object.freeze([...row.builds]) } : {}),
+});
+
+export const USA_TREE: NationTree = Object.freeze({
+  id: 'usa',
+  nations: Object.freeze(['USA']),
+  flagNation: 'USA',
+  name: 'United States',
+  lines: Object.freeze([
+    { id: 'patton', name: 'Patton' },
+    { id: 'm1a1', name: 'Abrams M1A1' },
+    { id: 'm1a2', name: 'Abrams M1A2' },
+    { id: 'm41', name: 'M41 Walker Bulldog' },
+    { id: 'sheridan', name: 'Sheridan' },
+    { id: 'bradley', name: 'Bradley' },
+    { id: 'special', name: 'Special' },
+  ].map((line) => Object.freeze(line))),
+  nodes: Object.freeze([
+    // Patton
+    node({ id: 'm46_patton', tier: 1, line: 'patton', lane: 5, parents: [], slot: 'line' }),
+    node({ id: 'm47_patton', tier: 1, line: 'patton', lane: 4, parents: ['m46_patton'], slot: 'line' }),
+    // release 266: the M48A3 between the M47 and the A5 it was rebuilt into
+    node({ id: 'm48a3_patton', tier: 1, line: 'patton', lane: 3, parents: ['m47_patton'], slot: 'line' }),
+    node({ id: 'm60a1', tier: 1, line: 'patton', lane: 1, parents: ['m48a5_patton'], slot: 'line' }),
+    node({ id: 'm48a5_patton', tier: 1, line: 'patton', lane: 2, parents: ['m48a3_patton'], slot: 'line' }),
+    node({ id: 'm60a3', tier: 1, line: 'patton', lane: 0, parents: ['m60a1'], slot: 'line' }),
+    // Abrams M1A1
+    node({ id: 'm1a1', tier: 8, line: 'm1a1', lane: 5, parents: ['m60a3'], slot: 'line' }),
+    node({ id: 'm1a1_abrams_hc', tier: 8, line: 'm1a1', lane: 4, parents: ['m1a1'], slot: 'line' }),
+    node({ id: 'm1a1_abrams_sa', tier: 8, line: 'm1a1', lane: 1, parents: ['m1a1_abrams_aim'], slot: 'line' }),
+    node({ id: 'm1a1_abrams_aim', tier: 8, line: 'm1a1', lane: 2, parents: ['m1a1_abrams_hc'], slot: 'line' }),
+    node({ id: 'm1a1_abrams_fep', tier: 8, line: 'm1a1', lane: 0, parents: ['m1a1_abrams_sa'], slot: 'line' }),
+    // Abrams M1A2
+    node({ id: 'm1a1ha', tier: 8, line: 'm1a2', lane: 6, parents: ['m1a1'], slot: 'line' }),
+    node({ id: 'm1a2_abrams', tier: 9, line: 'm1a2', lane: 4, parents: ['m1a1ha'], slot: 'line' }),
+    node({ id: 'm1a2_abrams_sepv2', tier: 9, line: 'm1a2', lane: 7, parents: ['m1a2_abrams'], slot: 'line' }),
+    node({ id: 'm1a2_abrams_sepv3', tier: 10, line: 'm1a2', lane: 8, parents: ['m1a2_abrams_sepv2'], slot: 'line' }),
+    node({ id: 'abramsx', tier: 10, line: 'm1a2', lane: 7, parents: ['m1a2_abrams_sepv3'], slot: 'line' }),
+    node({ id: 'm1a3', tier: 10, line: 'm1a2', lane: 0, parents: ['abramsx', 'm1a1_abrams_fep'], slot: 'line' }),
+    // Sheridan
+    // release 265: the M41 Walker Bulldog, the M46 and M47's light-tank contemporary, a step from the root at I (266
+    // integration: lane 6, beside the M46 now on lane 5 after the M48 marks joined)
+    node({ id: 'm41a3', tier: 1, line: 'm41', lane: 6, parents: ['m46_patton'], slot: 'line' }),
+    // the T49 (the owner 2026-10-30): the M41's hull under the M551's turret, the Sheridan's gun a tier up (lane 10: the
+    // M551's connector to the M2A2 runs down tier II's lanes 1-9, the M60A3's to the M1A1 along lane 0)
+    // (268: lane 11, so the M2A2's connector to the M3A2 beside it on lane 10 runs clear)
+    node({ id: 't49', tier: 2, line: 'm41', lane: 11, parents: ['m41a3'], slot: 'line' }),
+    node({ id: 'm551_sheridan', tier: 2, line: 'sheridan', lane: 1, parents: ['m48a5_patton'], slot: 'line' }),
+    node({ id: 'm551a1_tts', tier: 4, line: 'sheridan', lane: 8, parents: ['m551_sheridan'], slot: 'line' }),
+    node({ id: 'griffin_viper', tier: 3, line: 'sheridan', lane: 8, parents: ['m551_sheridan'], slot: 'line' }),
+    // Bradley
+    node({ id: 'm2a2_bradley', tier: 2, line: 'bradley', lane: 9, parents: ['m551_sheridan'], slot: 'line' }),
+    // 268 (owner 2026-11-02): the M3A2 cavalry Bradley under the classic turret, beside the M2A2 at II
+    node({ id: 'm3a2_bradley', tier: 2, line: 'bradley', lane: 10, parents: ['m2a2_bradley'], slot: 'line' }),
+    node({ id: 'm3a3_bradley', tier: 5, line: 'bradley', lane: 9, parents: ['m2a2_bradley'], slot: 'line' }),
+    node({ id: 'm6_linebacker', tier: 5, line: 'bradley', lane: 1, parents: ['m2a2_bradley'], slot: 'line' }),
+    node({ id: 'griffin50mm', tier: 10, line: 'bradley', lane: 9, parents: ['m3a3_bradley'], slot: 'line' }),
+    // Special
+    // release 270: the T95 superheavy tank destroyer with its fictional 152 mm (owner 2026-11-05), at tier II beside the
+    // M60A2 (Main's ruling from the head-on duels: tier II mean 0.31, tier I 0.87 over the band; real armour, no nerf)
+    node({ id: 't95', tier: 2, line: 'special', lane: 2, parents: [], slot: 'special' }),
+    node({ id: 'm60a2', tier: 2, line: 'special', lane: 0, parents: [], slot: 'special' }),
+    // 269 (the owner, 2026-11-03: "make a USA m113 variant, that plays similar to the ares apc"): the M113A3 at II, the
+    // Ares APC's tier in the UK tree's special lane
+    node({ id: 'm113a3', tier: 2, line: 'special', lane: 1, parents: [], slot: 'special' }),
+    // 269 (the owner, 2026-11-04: "also add the m163 VADS"): the M163 on the M113's M741 at IV, after the M113A3 on its
+    // special lane (a special has no parents; a 20 mm gun a tier under the 35 mm Gepard at V)
+    node({ id: 'm163_vads', tier: 4, line: 'special', lane: 1, parents: [], slot: 'special' }),
+    node({ id: 'm1a2_abrams_tusk', tier: 9, line: 'special', lane: 0, parents: [], slot: 'special' }),
+  ]),
+});

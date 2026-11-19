@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-29T18:00:00.000Z",
+  "flags": {
+    "ai": { "everyone": false, "admin": false },
+    "settings": { "everyone": false, "admin": true },
+    "meshBuilding": { "everyone": false, "admin": false },
+    "stamps": { "everyone": false, "admin": false },
+    "movableMap": { "everyone": false, "admin": false },
+    "buildBrush": { "everyone": false, "admin": false },
+    "sunSlider": { "everyone": false, "admin": false },
+    "weather": { "everyone": false, "admin": false },
+    "elapsingTime": { "everyone": false, "admin": false },
+    "generatePrompt": { "everyone": false, "admin": false },
+    "spotlights": { "everyone": false, "admin": false },
+    "connections": { "everyone": false, "admin": false },
+    "lamps": { "everyone": false, "admin": false },
+    "lava": { "everyone": false, "admin": false },
+    "developerSettings": { "everyone": false, "admin": false },
+    "playersMenu": { "everyone": false, "admin": false },
+    "partyCreation": { "everyone": false, "admin": false },
+    "playerSearch": { "everyone": false, "admin": false },
+    "settingsWorkspace": { "everyone": false, "admin": false },
+    "settingsRendering": { "everyone": false, "admin": false },
+    "settingsWorld": { "everyone": false, "admin": false },
+    "settingsMaterials": { "everyone": false, "admin": false },
+    "settingsEnvironment": { "everyone": false, "admin": false },
+    "settingsCrowd": { "everyone": false, "admin": false },
+    "settingsAi": { "everyone": false, "admin": false },
+    "thirdPersonView": { "everyone": false, "admin": false }
+  }
+}

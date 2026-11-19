@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "cs-urban-catalog-fit-evidence/1",
+  "sourceHashes": {
+    "urbanCatalog": "47baca9a13940c67e51826031ff87742bd49f763aa62ee14985ff48193118743",
+    "mintBatch": "061c6af4061e62540d7ec2ab072d609dea2fe24e9f9facc5696607390750b8eb",
+    "bodyCensus": "c8751a6a138f1e864e51957de464594719daa7be9507654be3a606732493f10c",
+    "rigidFactory": "a6d654d010bae8c629180a3e0d0c9b78eba0fc4abed4435f6be9f78d339938a5",
+    "apparelFactory": "d98e66ae663cab9c8081d7fd3bf6261165b50523a3ba2c1561c54a39c2c38927",
+    "eyewearManifest": "9d28f8f7e84e0b9bacc1dffabb71b5adc213601853e7ec5167cf39a223fecc32",
+    "eyewearRuntime": "69bb2b162cea02cce46fee1ba252764dc7028667e0232a3d445bed2f39459c4d",
+    "faceLandmarks": "cf178868a1cc58449d710a4d7c2557be3eef15efd38440178ae674a08a0bee43",
+    "scene": "1c1a06efd230ffb56ce93c36d9fbf826d8d0f8f580720abe57fc3ed896b2fa0a",
+    "captureTool": "fcc36fc7bc40ffa949bce62d420b1e0c9b537b302b410e33afd8e3279f25cdac"
+  },
+  "files": {
+    "bodies-01.png": {
+      "kind": "body-contact-sheet",
+      "bytes": 3767886,
+      "sha256": "41072379f99a15dcac89d09ef7ec4b754092ecd45cb51509c5326bae9a9514b6",
+      "width": 1120,
+      "height": 5859
+    },
+    "bodies-02.png": {
+      "kind": "body-contact-sheet",
+      "bytes": 3823373,
+      "sha256": "fd89d32e65c8cfb8b860d49ebe79ce5ff4d687e795e05e6d1df56528c440fe94",
+      "width": 1120,
+      "height": 5859
+    },
+    "bodies-03.png": {
+      "kind": "body-contact-sheet",
+      "bytes": 3961788,
+      "sha256": "abc39ffee74a4860c26fbb6b1c902e03d823ee6131b00c7ea22815c75f0a66e8",
+      "width": 1120,
+      "height": 5859
+    },
+    "bodies-04.png": {
+      "kind": "body-contact-sheet",
+      "bytes": 3745373,
+      "sha256": "440d651ebd0424bf735ce724e19300532c2e287f9cb7df7791560da59035c5f6",
+      "width": 1120,
+      "height": 5414
+    },
+    "families-34.png": {
+      "kind": "family-gallery",
+      "bytes": 2288497,
+      "sha256": "ecb1aa8d16f07340ffc1d1268811ff621b80e4b37b01cdcd2433a54b5f8d4980",
+      "width": 1200,
+      "height": 4340
+    },
+    "blocked-permission-needed-13.png": {
+      "kind": "blocked-card-gallery",
+      "bytes": 130883,
+      "sha256": "5e189564cab2e69fa85a567a2b7b171526a6e8c443496658edf55fc73522e0a4",
+      "width": 1080,
+      "height": 1120
+    }
+  }
+}

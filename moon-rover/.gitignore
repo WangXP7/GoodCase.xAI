@@ -1,0 +1,15 @@
+node_modules/
+.shots/
+.DS_Store
+Thumbs.db
+*.log
+
+.claude/
+
+# Internal development docs live in the private repo (winchxyz/moon-rover-dev)
+# and must never land here. ARCHITECTURE.md and CLAUDE.md are the exceptions —
+# they describe the code and belong with it.
+docs/RULES.md
+docs/BOARD.md
+docs/DECISIONS.md
+docs/tasks/

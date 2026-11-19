@@ -1,0 +1,84 @@
+<!DOCTYPE html><meta charset=utf-8>
+<title>LittleJS smoke: shaders</title>
+<script src=../../dist/littlejs.js></script>
+<script src=smoke.js></script>
+<pre id=result>PENDING</pre>
+<script>
+'use strict';
+
+// a custom Shader on a 2D object compiles and gives its color, and a post process shader with feedback gets the frame
+// before in iChannel1: its red builds up over the frames, 64, 96, 112, while green and blue pass the scene through
+smokeRun(async ()=>
+{
+    setShowSplashScreen(false);
+    setDebugWatermark(false);
+    setEngineManualStep(true);
+    setCanvasFixedSize(vec2(64));
+    setCanvasClearColor(rgb(0, 0, 0));
+    let object, disposeInFrame = false;
+    await engineInit(()=>
+    {
+        setCameraScale(1);
+        const canvas = new OffscreenCanvas(8, 8), context = canvas.getContext('2d');
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, 8, 8);
+        const white = new TileInfo(vec2(), vec2(8), new TextureInfo(canvas));
+
+        // the right half is an object with a Shader that makes it cyan
+        object = new EngineObject(vec2(16, 0), vec2(32, 64), white);
+        // a define of a name the engine's own code uses, its vertex color d, which must not reach that code
+        object.shader = new Shader('#define d vec4(0)\nvoid mainImage(out vec4 c, vec2 uv) { c = vec4(0., 1., 1., 1.); }');
+
+        new PostProcessPlugin(`
+            void mainImage(out vec4 c, vec2 p)
+            {
+                vec2 uv = p / iResolution.xy;
+                c = texture(iChannel0, uv);
+                c.r = .25 + .5 * texture(iChannel1, uv).r;
+                c.a = 1.;
+            }`, false, true);
+    }, ()=> {}, ()=> {}, ()=> {}, ()=>
+    {
+        disposeInFrame && object.shader.dispose(); // in the frame, the object's draw still waiting in the batch
+    });
+
+    const reds = [];
+    for (let i = 0; i < 3; ++i)
+    {
+        engineStep();
+        reds.push(smokePixel(.25, .5)[0]);
+    }
+    check('post process feedback builds up over frames', reds.every((red, i)=> Math.abs(red - [64, 96, 112][i]) < 4),
+        reds);
+    const shaded = smokePixel(.75, .5), plain = smokePixel(.25, .5);
+    check('a Shader on a 2D object gives its color', shaded[1] > 230 && shaded[2] > 230, shaded);
+    check('the rest of the scene passes through', plain[1] < 25 && plain[2] < 25, plain);
+
+    // a Shader let go of frees its program and leaves the list, and drawn again it compiles again and is kept again
+    const shader = object.shader, first = shader.program;
+    shader.dispose();
+    check('a disposed Shader lets go of its program', !shader.program && !glShaderObjects.includes(shader));
+    engineStep();
+    const again = smokePixel(.75, .5);
+    check('drawn again it compiles again and gives its color', again[1] > 230 && again[2] > 230 && !!shader.program &&
+        shader.program !== first && glShaderObjects.includes(shader), again);
+
+    // let go of in the frame right after drawing with it, its batch is drawn first, and it is not compiled again
+    disposeInFrame = true;
+    engineStep();
+    disposeInFrame = false;
+    const inFrame = smokePixel(.75, .5);
+    check('disposed in the frame it drew in, that draw shows and it stays let go of',
+        inFrame[1] > 230 && inFrame[2] > 230 && !shader.program && !glShaderObjects.includes(shader), inFrame);
+
+    // let go of before its first draw is drawn: drawing that batch compiles it and lists it, and it still leaves
+    const fresh = new Shader(shader.fragmentCode);
+    setShader(fresh);
+    drawRect(vec2(), vec2(2));
+    setShader();
+    fresh.dispose();
+    check('disposed before its first batch is drawn, it leaves the list too', !fresh.program &&
+        !glShaderObjects.includes(fresh));
+    checkGLError();
+});
+</script>

@@ -1,0 +1,125 @@
+import { Box3, Matrix4, Sphere, Vector3 } from 'three';
+import { RouteCorridorRegion } from './route-corridor-region';
+
+/** A bounding volume with only a sphere, in the tiles group's frame. */
+function sphereVolume(x: number, y: number, z: number, radius: number) {
+  return { sphere: new Sphere(new Vector3(x, y, z), radius), obb: null };
+}
+
+describe('RouteCorridorRegion', () => {
+  // One straight route along local +Z at x = 10, 0 to 200 m.
+  const route = [new Vector3(10, 0, 0), new Vector3(10, 0, 200)];
+  const identity = new Matrix4();
+
+  it('accepts a tile whose footprint reaches the corridor', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    // 35 m off the route: radius 20 + half width 20 = 40 m reach.
+    expect(region.intersectsTile(sphereVolume(45, 0, 100, 20), {})).toBe(true);
+  });
+
+  it('rejects a tile beside the corridor', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    expect(region.intersectsTile(sphereVolume(60, 0, 100, 5), {})).toBe(false);
+  });
+
+  it('rejects a tile past the end of the route', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    expect(region.intersectsTile(sphereVolume(10, 0, 300, 5), {})).toBe(false);
+  });
+
+  it('ignores height, the corridor reaches from valley to rooftop', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    expect(region.intersectsTile(sphereVolume(10, 900, 100, 1), {})).toBe(true);
+    expect(region.intersectsTile(sphereVolume(10, -900, 100, 1), {})).toBe(true);
+  });
+
+  it('maps the tiles frame to local space before testing', () => {
+    // The tiles group is Z-up and rotated -90 deg about X into our Y-up
+    // scene: tileset (x, y, z) lands at local (x, z, -y).
+    const toLocal = new Matrix4().makeRotationX(-Math.PI / 2);
+    const region = new RouteCorridorRegion([route], toLocal, 20, 5);
+    expect(region.intersectsTile(sphereVolume(10, -100, 50, 1), {})).toBe(true);  // local z = 100
+    expect(region.intersectsTile(sphereVolume(10, 100, 50, 1), {})).toBe(false);  // local z = -100
+  });
+
+  it('falls back to the bounding box when the volume has no sphere', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const volume = {
+      sphere: null,
+      obb: {
+        box: new Box3(new Vector3(-5, -5, -5), new Vector3(5, 5, 5)),
+        transform: new Matrix4().makeTranslation(10, 0, 100),
+      },
+    };
+    expect(region.intersectsTile(volume, {})).toBe(true);
+  });
+
+  it('rejects a volume it cannot place', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    expect(region.intersectsTile({ sphere: null, obb: null }, {})).toBe(false);
+  });
+
+  it('counts the active tiles that reach it by how far they are refined, for the corridor trace', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const tile = (x: number, geometricError: number, children = 0) =>
+      ({ geometricError, children: new Array(children), engineData: { boundingVolume: sphereVolume(x, 0, 100, 5) } });
+    expect(region.lodState([
+      tile(10, 1), // finer than the target: the camera's tiles
+      tile(10, 4), // at the target
+      tile(10, 20, 4), // coarser, still to refine
+      tile(10, 20), // coarser, a leaf that cannot refine
+      tile(200, 20, 4), // beside the corridor
+      { geometricError: 1 }, // no bounding volume
+    ])).toEqual({ tiles: 4, fine: 3, finest: 1, coarse: 1, tileSet: expect.stringMatching(/^[0-9a-f]{8}$/) });
+  });
+
+  it('names the tiles that reach it by their content paths, whatever the session and the order', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const tile = (x: number, uri: string) =>
+      ({ geometricError: 1, content: { uri }, engineData: { boundingVolume: sphereVolume(x, 0, 100, 5) } });
+    const a = region.lodState([tile(10, 'a.glb?session=1'), tile(20, 'b.glb?session=1')]).tileSet;
+
+    expect(region.lodState([tile(20, 'b.glb?session=2'), tile(10, 'a.glb?session=2')]).tileSet).toBe(a);
+    // Beside the corridor: not one of its tiles.
+    expect(region.lodState([tile(10, 'a.glb'), tile(20, 'b.glb'), tile(200, 'c.glb')]).tileSet).toBe(a);
+    expect(region.lodState([tile(10, 'a.glb'), tile(20, 'c.glb')]).tileSet).not.toBe(a);
+  });
+
+  it('lists the paths of the tiles it names, sorted and without the session', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const tile = (x: number, uri: string, geometricError = 1, children = 0) =>
+      ({ geometricError, children: new Array(children), content: { uri }, engineData: { boundingVolume: sphereVolume(x, 0, 100, 5) } });
+    const active = [tile(20, 'b.glb?session=1'), tile(10, 'a.glb?session=1'), tile(10, 'parent.glb', 20, 4), tile(200, 'c.glb')];
+
+    expect(region.finePaths(active)).toEqual(['a.glb', 'b.glb']);
+    expect(region.lodState(active).tileSet).toBe(region.lodState([tile(10, 'a.glb'), tile(20, 'b.glb')]).tileSet);
+  });
+
+  /**
+   * Tokyo, retest of 2026-09-16: the same corridor on a fresh load and after
+   * a location change and reset(), with fine=181 both times, but coarse=20
+   * and 14, and so two tileSet hashes.
+   */
+  it('names only the fine tiles: parents still to refine do not change it, a coarse leaf does', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const tile = (uri: string, geometricError: number, children = 0) =>
+      ({ geometricError, children: new Array(children), content: { uri }, engineData: { boundingVolume: sphereVolume(10, 0, 100, 5) } });
+    const fine = [tile('a.glb', 2.5), tile('b.glb', 4)];
+    const measured = region.lodState(fine);
+
+    const withParents = region.lodState([...fine, tile('p.glb', 20, 4), tile('q.glb', 10, 8)]);
+    expect(withParents).toMatchObject({ tiles: 4, fine: 2, coarse: 2 });
+    expect(withParents.tileSet).toBe(measured.tileSet);
+
+    expect(region.lodState([...fine, tile('leaf.glb', 20)]).tileSet).not.toBe(measured.tileSet);
+    expect(region.lodState([tile('a.glb', 2.5)]).tileSet).not.toBe(measured.tileSet);
+  });
+
+  it('refines while the tile is coarser than its error target', () => {
+    const region = new RouteCorridorRegion([route], identity, 20, 5);
+    const tiles = { errorTarget: 20 };
+    // The renderer refines when the error exceeds its own errorTarget.
+    expect(region.calculateError({ geometricError: 8 }, tiles)).toBeGreaterThan(tiles.errorTarget);
+    expect(region.calculateError({ geometricError: 4 }, tiles)).toBeLessThan(tiles.errorTarget);
+  });
+});

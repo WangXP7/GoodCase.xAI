@@ -1,0 +1,436 @@
+// The top bar in basalt: the place field, values parted by engraved lines,
+// caps labels, big numbers.
+@use 'base';
+
+@mixin topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-2);
+  box-sizing: border-box;
+  height: var(--td-h-topbar);
+  padding: 0 14px;
+  background: var(--td-surface-topbar);
+  box-shadow: var(--td-topbar-edge);
+  color: var(--td-text-secondary);
+}
+
+// A value in the top bar: icon, caps label, number. A value after a value has
+// an engraved line before it.
+@mixin stat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-2);
+  height: calc(var(--td-h-topbar) - 12px);
+  padding: 0 12px;
+
+  // A deeper groove than the engraved lines elsewhere: the values read apart
+  & + &::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 4px;
+    bottom: 4px;
+    border-left: var(--td-line-width) solid var(--td-sep-dark);
+    box-shadow: var(--td-line-gap) 0 0 var(--td-sep-light);
+  }
+}
+
+// A caps label: in the top bar, over a number, over a column
+@mixin caps {
+  font-size: var(--td-fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--td-track-caps);
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--td-text-muted);
+}
+
+// A big number: top bar values, results
+@mixin value($size: var(--td-fs-hud)) {
+  font-size: $size;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--td-text-value);
+  font-variant-numeric: tabular-nums;
+}
+
+// The place field: sunken, with an engraved edge. As a <button> the place
+// name lights on hover.
+@mixin sunk-field {
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-2);
+  height: calc(var(--td-h-topbar) - 12px);
+  padding: 0 14px;
+  border-radius: var(--td-radius);
+  background: var(--td-well-soft);
+  box-shadow: var(--td-well-shadow), 0 0 0 1px var(--td-line-dark), 0 1px 0 1px var(--td-hairline);
+
+  @at-root button#{&} {
+    border: 0;
+    font-size: inherit;
+    cursor: pointer;
+
+    &:hover#{base.$enabled} .td-loc-name {
+      color: var(--td-brass-light);
+    }
+
+    // Locked (a coop room plays this map) it still names the place: no dimming
+    &:disabled,
+    &[aria-disabled='true'] {
+      cursor: not-allowed;
+    }
+  }
+}
+
+// The dim caps label before the place, an engraved line after it
+@mixin loc-label {
+  padding-right: 10px;
+  margin-right: 2px;
+  font-size: var(--td-fs-small);
+  font-weight: 600;
+  letter-spacing: var(--td-track-caps);
+  text-transform: uppercase;
+  color: var(--td-text-dim);
+  @include base.engraved-line-right;
+}
+
+@mixin loc-name {
+  font-size: var(--td-fs-small);
+  font-weight: 600;
+  color: var(--td-text-primary);
+  @include base.motion(color);
+  @include base.truncate;
+}
+
+// A thin engraved gap between groups of tools
+@mixin tool-gap {
+  align-self: stretch;
+  width: 0;
+  margin: 10px 4px;
+  @include base.engraved-separator;
+}
+
+// A segmented bar in a well (loading, HQ): the children are the segments,
+// .is-on lit in brass
+@mixin meter($height: 8px) {
+  display: flex;
+  gap: 2px;
+  box-sizing: border-box;
+  height: $height;
+  padding: 2px;
+  border-radius: var(--td-radius);
+  background: var(--td-well);
+  box-shadow: var(--td-well-shadow);
+
+  > * {
+    flex: 1;
+    background: var(--td-line-dark);
+  }
+
+  > .is-on {
+    background: var(--td-brass);
+  }
+}
+
+// A thin progress bar in a well; its one child is the fill, width in %
+@mixin progress($height: 6px) {
+  display: block;
+  box-sizing: border-box;
+  height: $height;
+  padding: 1px;
+  border-radius: var(--td-radius);
+  background: var(--td-well);
+  box-shadow: var(--td-well-shadow);
+
+  > * {
+    display: block;
+    height: 100%;
+    max-width: 100%;
+    background: var(--td-brass);
+    transition: width var(--td-dur-mid) linear;
+  }
+
+  // A 2px bar on the bottom edge of its button or strip (the wave button,
+  // moving the HQ): a dark groove instead of the well; .is-tick follows a
+  // once-a-second count, .is-teal shows a running wave
+  &.is-edge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    padding: 0;
+    border-radius: 0;
+    background: var(--td-line-dark);
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  &.is-tick > * {
+    transition-duration: var(--td-dur-tick);
+  }
+
+  &.is-teal > * {
+    background: var(--td-teal);
+  }
+}
+
+// An arrow at the view edge: a round plate over the map, its ring and icon in
+// --td-mark (the text in --td-mark-text when it differs). The button around
+// it (.td-marker-btn) moves the hover onto the plate.
+@mixin marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  outline: 2px solid var(--td-mark, var(--td-brass));
+  outline-offset: -2px;
+  color: var(--td-mark-text, var(--td-mark, var(--td-brass-light)));
+  @include base.motion(transform);
+
+  &.is-sm {
+    width: 24px;
+    height: 24px;
+    outline-width: 1px;
+    outline-offset: -1px;
+  }
+}
+
+@mixin marker-btn {
+  @include base.button-reset;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+
+  &:hover > .td-marker {
+    transform: scale(1.15);
+  }
+}
+
+// Game over over the map: a red vignette over the greyed map, GAME OVER
+// slams in from large, the view shakes once, the plate with the figures rises
+// after it. Played once as the screen opens; still under reduced motion.
+@mixin gameover-veil {
+  background: var(--td-gameover-veil);
+  backdrop-filter: var(--td-gameover-map);
+  -webkit-backdrop-filter: var(--td-gameover-map);
+  animation:
+    td-gameover-fade var(--td-dur-slow) var(--td-ease-out) both,
+    td-gameover-shake 450ms 300ms linear both;
+
+  @include base.reduced-motion {
+    animation: none;
+  }
+}
+
+@mixin gameover-word {
+  margin: 0;
+  font-size: var(--td-fs-gameover);
+  font-weight: 700;
+  line-height: .95;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--td-danger-text);
+  text-shadow: var(--td-gameover-word);
+  animation: td-gameover-slam 420ms cubic-bezier(.2, 1.4, .4, 1) both;
+
+  @include base.reduced-motion {
+    animation: none;
+  }
+}
+
+// The line under it: "HQ lost | York | wave 23", the wave in brass
+@mixin gameover-sub {
+  margin: 0;
+  font-size: var(--td-fs-lead);
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--td-text-secondary);
+  text-shadow: var(--td-over-image);
+
+  b {
+    font-weight: 700;
+    color: var(--td-brass-light);
+  }
+}
+
+// What follows the words: rises into place after the slam
+@mixin gameover-rise {
+  animation: td-gameover-rise 400ms 450ms var(--td-ease-out) both;
+
+  @include base.reduced-motion {
+    animation: none;
+  }
+}
+
+@mixin gameover-keyframes {
+  @keyframes td-gameover-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes td-gameover-slam {
+    0% { opacity: 0; transform: scale(1.9); }
+    60% { opacity: 1; }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes td-gameover-shake {
+    0%, 100% { transform: none; }
+    20% { transform: translate(-6px, 3px); }
+    40% { transform: translate(5px, -4px); }
+    60% { transform: translate(-3px, 2px); }
+    80% { transform: translate(2px, -1px); }
+  }
+
+  @keyframes td-gameover-rise {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+// A place on the menu globe (docs/GLOBE_PLAN.md): a dot and its name, placed
+// by the globe each frame. Brass for records and favourites, teal for the
+// place that loads, quiet for the recent ones.
+@mixin globe-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  font-size: var(--td-fs-small);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--td-text-engraved);
+  text-shadow: var(--td-over-image);
+  will-change: transform;
+
+  > i {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: var(--td-over-image);
+  }
+
+  &.is-record,
+  &.is-favorite {
+    color: var(--td-brass-light);
+  }
+
+  transition: opacity 200ms ease-out;
+
+  // Under the target's label: back, so its name reads clear
+  &.is-behind {
+    opacity: .2;
+  }
+
+  // The place that loads: larger, over the others, a ring that pulses
+  // while it loads and a line under the name that says how far
+  &.is-target {
+    z-index: 1;
+    gap: 10px;
+    font-size: var(--td-fs-text);
+    font-weight: 700;
+    color: var(--td-teal-light);
+
+    > i {
+      position: relative;
+      width: 10px;
+      height: 10px;
+      margin-left: -5px;
+      outline: 1px solid currentColor;
+      outline-offset: 3px;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        opacity: 0;
+      }
+    }
+
+    > span {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    small {
+      font-size: var(--td-fs-small);
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--td-text-primary);
+      font-variant-numeric: tabular-nums;
+
+      &:empty {
+        display: none;
+      }
+    }
+
+    &.is-busy > i::after {
+      animation: td-globe-ping 1.6s ease-out infinite;
+    }
+
+    @include base.reduced-motion {
+      &.is-busy > i::after {
+        animation: none;
+        opacity: .6;
+      }
+    }
+  }
+}
+
+@mixin globe-mark-keyframes {
+  @keyframes td-globe-ping {
+    0% { opacity: .9; transform: scale(.6); }
+    100% { opacity: 0; transform: scale(2.6); }
+  }
+}
+
+// The read-out beside the globe: a table of label and value (target,
+// position, altitude) and what happens, the labels quiet on the left
+@mixin globe-readout {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: var(--td-fs-small);
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--td-text-secondary);
+  text-shadow: var(--td-over-image);
+  font-variant-numeric: tabular-nums;
+
+  dt {
+    color: var(--td-text-dim);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  b {
+    font-weight: 700;
+    color: var(--td-brass-light);
+  }
+
+  em {
+    font-style: normal;
+    color: var(--td-teal-light);
+  }
+}

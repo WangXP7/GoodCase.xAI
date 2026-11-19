@@ -1,0 +1,359 @@
+import { OWNER_SIZE_TARGETS, withOwnerSizeTargets } from './owner-size-targets.ts';
+import { withAssembledSourceFrames } from './supplied-source-assemblies.mjs';
+import { GRIFFIN_PROPORTION_REFERENCE } from './griffin-proportion-registration.mjs';
+import { ADDITIONAL_SUPPLIED_SOURCE_STUDIES } from '../src/vehicles/suppliedSourceStudyIndex.ts';
+import { SUPPLIED_SOURCE_STUDY_FILES } from './supplied-source-study-files.mjs';
+import { T80U_X_RING_RAISE_M } from '../src/vehicles/t80uXArmor.ts';
+// The Strv 81 print ("Strv 81" by MMD_SonicNewYear, CC-BY-4.0, docs/ATTRIBUTION.md), raw bda892df… (the bytes kept
+// before the 08-17 whip excision; nothing trimmed), prepared by tools/source-x-oracle.mjs
+// (docs/history/research/second-wave-registrations/strv81_x.json): gun to +z, uniform 3.38 m over the side plates (the
+// User Handbook's width; the hull then reads 7.569 m against its 7.557), ground at the track belts' contact, the belts
+// centred on z 0. Turret: the ring skirt's circle (23 vertices, rms 0) on the turret's flat underside, the plane it turns
+// in (y 1.69628; the deck under it is 1.6807). Gun: the bore axis on the tube (12 rings within 0.2 mm). The print shows no
+// trunnion (its gun mesh starts at the mantlet cover, z 1.285, and its gun_0 origin stands 7 cm beside the bore at the
+// cover's face), so the station is the family casting's, z 1.10 (centurionFamily.ts TRUNNION), as the M60s take theirs.
+// turret_0 and gun_0 are the print's own meshes; its two whips are fused into turret_0 and stay in the oracle (the gate's
+// body rule names them by box: tools/fused-roof-gun-boxes.mjs FUSED_ANTENNA_BOXES).
+// The Chieftain Mk 5 X source (chieftain5, and from 271 the Mk 3 built on its castings).
+const CHIEFTAIN5_SOURCE_FRAME = Object.freeze({
+  sha256:'2a781a798e4ffe8f99ab9f6750b8db8e132b236de51a021cac28cbb82f268e79',
+  fused:true,turret:Object.freeze([.0031,1.476,.36928]),gun:Object.freeze([-.008067,1.859441,1.570]),
+});
+const CENTURION_SOURCE_FRAME = Object.freeze({
+  sha256:'66b2818a6cfe23a2f7be0ec7be68286e9969fb253d0c878a231aeec95e021aa1',
+  turret:Object.freeze([-.000085,1.69628,.468587]), gun:Object.freeze([.000004,2.079211,1.10]),
+});
+// QA-only certificates for independently normalized local comparison files.
+// Coordinates are source measurements, not candidate-fit outputs. The hashes
+// identify the canonical local oracles, not licenses or redistributable assets.
+const STUDY_SOURCE_WORLD_FRAMES = withAssembledSourceFrames({
+  puma_s1: {sha256:'340e00fa8053680d2adbeabc10293264d07f743c9e5680462da8e081635cf4c0',
+    fused:true,turret:[.434794,1.947494,-1.319322],gun:[.019503,2.513110,-.791446]},
+  type89: {sha256:'8ab1bbbcbde2e6c008a80557cb54409211301df21b86d865b27b4d1adb027566',
+    fused:true,turret:[.08,1.80,-.82],gun:[.08,2.095,.38]},
+  // Mk3D: independent 2026-09-05 source-axis measurements, already baked
+  // to metres and ground zero. Mixed bone/material owners remain fused.
+  merkava3d: {
+    sha256:'68aab556c5202455881862e5beae79fbe6b6dec4cf690ab3f1c73716e3bb3a5c',
+    fused:true,turret:[0,1.68034,-.72418],gun:[0,2.0898,1.4258],
+  },
+  // Israeli modern-family owner studies (2026-09-18): proper-rotation,
+  // uniform-only source-x-oracle bakes.  The source meshes are fused for
+  // scoring because their ownership is flattened or crosses both sides.
+  // Merkava family 262 (owner 2026-10-27, the supplied Mk 1B, 2B, 2D, 3C, 3D and 4B models): unit-scale identity bakes of
+  // the supplied OBJs (raw hashes in docs/references/tanks/<id>.md). Fused: the OBJs' flattened group names carry no
+  // turret/gun hierarchy. Turret: the measured ring centre at deck height; gun: the trunnion in the source's gun mask.
+  merkava1b: {
+    sha256:'bcf4f84b9685fe25bbacbab3cd89a6d8ed5086fc37fa24267ef9e821e9b8c3aa',
+    fused:true, turret:[0,1.7,-.872], gun:[0,2.0822,1.18],
+  },
+  merkava2b: {
+    sha256:'f15d59be87ffe27a1fa913371316d3a3ab7c0b2720ffeec8eec3a408a2979637',
+    fused:true, turret:[0,1.7,-.867], gun:[0,2.0822,1.18],
+  },
+  merkava2d: {
+    sha256:'c76f1d522eb81314004c714c6fe98bcae19a06dd83f5ebaf5f3a54d76260c725',
+    fused:true, turret:[0,1.7,-1.049], gun:[0,2.0822,1.18],
+  },
+  merkava3c: {
+    sha256:'7d55fb050e1d27b8c6a383484a443a5557052f122910a8fb650fe908b53c87aa',
+    fused:true, turret:[0,1.7,-.928], gun:[0,2.0763,1.05],
+  },
+  merkava3_baz: {
+    sha256:'3f9ea08e23342137b519c767710750dcb4cb95ce7a9cf721323be6babd900760',
+    fused:true, turret:[0,1.7,-.948], gun:[0,2.0762,1.05],
+  },
+  merkava4b: {
+    sha256:'b3d01d76b9bec5e7e5ca28effb6824e15170b6dd72bb6c8f61e0eda195f6fd3e',
+    fused:true, turret:[0,1.7,-1.254], gun:[0,2.1595,.65],
+  },
+  merkava4_trophy: {
+    sha256:'a155cb6fb3ed46ef77e01f11fbd1d6cc8f5b8e747d09494f98f93579e396f684',
+    fused:true,turret:[0,1.605,-.3906],gun:[0,1.9934619,1.93],
+  },
+  merkava4_barak: {
+    sha256:'0549b50430cd8df0ebf9d095b617e64e8c6274747bea1dd99e4dec0e987b8f4d',
+    fused:true,turret:[0,1.605,-.3906],gun:[0,1.9934619,1.93],
+  },
+  namer_ifv: {
+    sha256:'72afdec001c1013a7a847a176adf12f0d00d1863f29874797448fdb66d174870',
+    fused:true,turret:[0,2.10,-1.15],gun:[.05,2.38,-.13],
+  },
+  // T-84BM Oplot-M (release 262): the owner-supplied 42manako print baked by source-x-oracle ([-x, y, -z], uniform 4.10,
+  // tracks centred, ground y 0, hull centred); the gun is fused into TUR, so the whole source is scored at rest.
+  bm_oplot_m: {
+    sha256:'d2adad43bba88a867f743aeeacf969587e7be0c2bbcaeee0259218f3145ab22a',
+    fused:true,turret:[-.012,1.4965,.185],gun:[-.012,1.808,1.518],
+  },
+  ares_apc: {
+    sha256:'f43fce5b07bcd04f6089aa23338ed3c4114ff75866eec0ce98e1800171891ff1',
+    fused:true,turret:[-.3835,2.2502,.5027],gun:[-.4265,3.078,.397],
+  },
+  // ztz100 retired 2026-10-27 (release 262): the '[OD]ZTZ-20 Test-3' bake (7eeb9852…758f1) now measures the ZTZ-20
+  // family concept (docs/references/tanks/ztz20.md) and certifies no comparison.
+  strv122: {
+    sha256:'d1ac97d98dd477d52850aaed8ae98184f9a3fd9b7ef20c5aadcf6c34d8e6d582',
+    fused:true,turret:[0,1.705,-.12],gun:[.00787,2.02397,1.24],
+  },
+  chieftain5: CHIEFTAIN5_SOURCE_FRAME,
+  // 271 (Main): the Mk 3 rebuilt on the Mk 5 X castings measures against the same certified source
+  chieftain3: CHIEFTAIN5_SOURCE_FRAME,
+  c1_ariete: {
+    // Owner's further10% enlargement of the already1.12-scale C1; complete original source.
+    sha256:'1f33b3966189c876c8e507a57c59def5e6f3a70334d42315e0366911aedb6177',
+    fused:true,turret:[0.0, 1.6092726791680003, 0.40413158632000007],
+    gun:[0.0, 2.0346470254880002, 1.6527944048000003],
+  },
+  challenger1_mk3: {
+    sha256:'90a18f59e64509211fa15e4298fba40443766b8dbd9e6cfb1e7858ecad8f4e64',
+    fused:true,turret:[-.000896347416,1.396470802105,.616221772969],
+    gun:[-.014789345038,1.675227177967,1.697635206325],
+  },
+  // Challenger 3 TD (release 262): "Challenger 3 TD MBT" (Jeyhun1985, CC-BY-4.0; raw sha256 3a4b3fbb…) prepared by
+  // tools/source-x-oracle.mjs (.qa-dev recipe challenger3_td_x: axes x y z, the family's installed 1.10, +0.2145 z: the
+  // fender span centred). The ring and trunnion are the packet's measured datums in that frame; the turret and gun
+  // owners are routed by island in the registry (the material groups carry the basket inside the ring).
+  challenger3_td: {
+    sha256:'6e3b3983f040319d9dd5c55fdcf850d438a6c0656ae46a62908f0c4baa387386',
+    turret:[0, 1.98, 0.7106], gun:[0, 2.2341, 1.9195],
+  },
+  // The M60s (release 266, Main's ruling 2026-10-31: the owner's models are the reference): the owner's M60A1, M60A2 and
+  // M60A3 models prepared by tools/source-x-oracle.mjs (.qa-dev/m60-265/a1-, a2-, a3-recipe.json: the A1 FBX in cm at
+  // 0.01, axes -z y x; the A3 axes -z y x; the A2 axes x y z, 0.15 m forward and 0.045 m down to the A1's ring; raw
+  // hashes in ~/cot-lanes/m60-src-265/SOURCES.sha256), in the M60A1 build frame. The ring and the trunnion are the
+  // castings' measured datums in that frame (pattonCast.ts M60_RING, M60_GUN, M60A2_GUN).
+  m60a1: {
+    sha256:'c002db9dab0c31efb26bb8fb7586f0a2b347e673cab874760d4cdab866e00a8d',
+    turret:[0, 1.733, 0.55], gun:[0, 2.10, 1.62],
+  },
+  m60a2: {
+    sha256:'d2d5e89f9ff357b110e9955ea64a13cd8aaafed0b31adbf45acafdabdaf96c86',
+    turret:[0, 1.733, 0.55], gun:[0, 2.145, 1.80],
+  },
+  m60a3: {
+    sha256:'1eaf2699bfb8471b8a251b92679ba8e7149015745fadd33cf0a3b1f0a684b3fb',
+    turret:[0, 1.733, 0.55], gun:[0, 2.10, 1.62],
+  },
+  amx56: {
+    sha256:'e1a3fa18589075da9fbe0bd19fb504ca1e3d579eae52b926c1d73a43e432e4f0',
+    turret:[-.0162842395776,1.47698078437,.561125178827],
+    gun:[.00612553759845,1.95678372667,2.45012127254],
+  },
+  t90ms_tagil:{
+    sha256:'fd3d0c6e13b419ef76b431f6c96230407b9a07d43546a85d757ce82f78182ec5',
+    turret:[-.00094997882843,1.4433900117874146,.1200934632560673],
+    gun:[-.0016399808228014,1.8143100142478943,1.3700721232514588],
+  },
+  t90a_burlak:{
+    sha256:'db1ca6b229f9925474dfda35727d76895e9a3b825af2c3b3a326cf2a6e7d0b52',
+    fused:true,turret:[-.001247544176495,1.544579982757568,.114670021536425],
+    gun:[.001410018652678,1.784449994564055,1.283482024669646],
+  },
+  t90:{
+    sha256:'619f5cec83ed3ceb8ab852bd1ae95b09d097e12631d8c89f3c0f19f56c7fa592',
+    turret:[-.00094997882843,1.408079981803894,.115670447585103],
+    gun:[-.0007899813354,1.726339995861054,1.271363670175725],
+  },
+  t72bu:{
+    sha256:'d62a92b41e65c9c0085f73d6f402980f6c057bc3c6169b8dfcd7bc41ec019ec3',
+    fused:true,turret:[.00489819586996,1.33032792438745,.248076543568282],
+    gun:[.002245869663885,1.629788855115796,1.37094868816255],
+  },
+  type10: {
+    sha256:'fb6c2aa30119ac45b49fdfb7393a13760109ce4c9cc3f6244e579eb4944879fe',
+    fused:true,turret:[-.00275904,1.50831687,.20655021],gun:[0,1.851,2.0529],
+  },
+  type90: {
+    sha256:'b049dc04744e4bc918dbdd41d59f54d2d05a502084c58b913d777e5c2af92170',
+    fused:true,turret:[0,1.681682,.156993],gun:[0,1.997083,1.650032],
+  },
+  t62mv1: {
+    sha256:'65a1be96d0ab2c15023a257c17d3cd5a0ad5492b73de6333d99574756e662080',
+    fused:true,turret:[0,1.446436,.3041853764],gun:[0,1.6650417561,1.5303753764],
+  },
+  t72b_1987: {
+    sha256:'0d8a2541b648e0c6576de4b7e4b922948bf2ce97913fa363d9fc767746b7f7af',
+    fused:true,turret:[-.0000548974,1.4040902854,-.0343498434],gun:[-.0000548633,1.6208176016,1.2669569241],
+  },
+  t80u: {
+    sha256:'dcb16e5bc83c37e380a252c08462948a6ff9098738464ea4bee9e45ccb02df81',
+    fused:true,turret:[0,1.55158,.0718698169],gun:[0,1.7564274071,1.4199398169],
+  },
+  t72b3m_2016: {
+    sha256:'1df241160448443c6cde0e13be959720acdf7b5ce3e21185ed82b0b308c744e2',
+    fused:true,turret:[.0000072471,1.529483974,.1143146502],gun:[.0014311878,1.821993965,1.334185527],
+  },
+  amx40: {
+    sha256:'2b67a377fbd39d6a80e4d9511a2b890ec4abd19db37c41b1e7a6142d5c990079',
+    turret:[-.03904,1.56289,.16819],gun:[-.00005,1.94827,1.3413],
+  },
+  jpz_e100: {
+    sha256:'a7b6440b17c641b9c69947d263e8a1922ec137c269ccafc9dd63fa7c3e129571',
+    turret:[-.0007,2.33805,.20],gun:[-.0007,2.33805,.20],
+  },
+  t72b3: {
+    sha256:'53d22b5ca53a742446dd957840233863735deda09b967ea1f1a79c9b2b03d797',
+    turret:[.0000002374,1.457100315,.065591405], gun:[.006050285,1.758750301,1.096549988],
+  },
+  chieftain_mk10: {
+    sha256:'252e45ee57928c6256252fa7dcdba8c42bfc2c2c86a6d4548ea68291b45c6f85',
+    turret:[0,1.512956,.595241], gun:[.000026,1.912199,1.550505],
+  },
+  leclerc_xlr: {
+    sha256:'8d3f1061d6e9cfcf195052317859a57af9a7d7883050aed9538b77f3027e7c4e',
+    turret:[-.00215336,1.40294995,.72122934], gun:[.018886,1.8791055,1.998880],
+  },
+  leo2a6: {
+    sha256:'5ea67b3783b6e33c13dabad34048697353758f011dec8aec19080001e14ae359',
+    turret:[.000005,2.14836,1.047795], gun:[.000005,1.97054,1.419495],
+  },
+  m1a2_abrams_sepv2: {
+    sha256:'7fc3216da131d26e6389c4d40818f70ba03603c99812c5ae42c2f8b798910d16',
+    turret:[-.000286,1.513295,.392712], gun:[-.020003,1.849085,1.396],
+  },
+  k1a1: {
+    sha256:'16280a971fc1364dfda606e236d4d5cce214ab73112121c02845123c8bc03a46',
+    turret:[0,1.49566,.42564], gun:[.0352,1.81797,1.57716],
+  },
+  amx30b: {
+    sha256:'55f4ec8837caa90c4ad976fdfd974bd9761497b27d963e3af84f040b9126bae5',
+    turret:[0,1.584,.285], gun:[-.011,1.87565,1.60],
+  },
+  leo2a5: {
+    sha256:'41b3cc644e2e9610b0b47a8e6e193a90929c711e13b10716057942807493ce99',
+    turret:[0,1.662,.661], gun:[.0238,1.9979,1.659],
+  },
+  t90a: {
+    sha256:'f0ba16a464dc7e9584ea382f11e5e98481b2945db2b8a2f134dfbae4fbba793d',
+    turret:[.010,1.468,-.0039], gun:[.005,1.8174,1.30],
+  },
+  t90m: {
+    sha256:'926571090982af867c43277c0f77a73501f6559dac363d33dc42bf157ebd0e60',
+    turret:[.018092,1.336748,-.104459], gun:[.001973,1.608251,1.140604],
+  },
+  t90sm: {
+    sha256:'48f04021a53a883b5603c33c73d9652718eb14e451f039256b8e148d920452b1',
+    turret:[.008,1.532,.359], gun:[.001,1.90309,1.56],
+  },
+  kf51_panther: {
+    sha256:'82735650f85c1b8144ee9b87cb95d0ec230f0e627f34694ffa9116dd17dd2722',
+    turret:[0,1.4596,.5185], gun:[0,1.85491175,1.3478],
+  },
+  ...Object.fromEntries(ADDITIONAL_SUPPLIED_SOURCE_STUDIES.map(study => [study.id, {
+    sha256: SUPPLIED_SOURCE_STUDY_FILES[study.id].oracleSha256, fused: true, turret: [...study.turret], gun: [...study.gun],
+  }])),
+  // M48A5 (release 262): the owner-supplied ater.studio model ("use this patton for the m48"), raw sha256 a7c37097...89c7fc,
+  // baked by source-x-oracle (axes -x, y, -z; scale 1; no translation). Turret: the Turret_01_4 node's origin. Gun: the
+  // gun_01_Shape_6 node's station (z 1.7616) on the tube's measured bore axis (y 1.9215; the node origin itself sits
+  // 11 cm over the bore at the shield's face). Separate hull, turret and gun meshes (Object_14 / 12 / 16).
+  m48a5_patton: {
+    sha256:'b54aff317407b292bd4d352a3d60ea0531a36bfbc3c21c698a9ba12ebb495285',
+    turret:[-.001963,1.638327,.577502], gun:[0,1.9215,1.761582],
+  },
+  kurganets25: {
+    sha256:'a2b4074765a9f1765c35e3838bd775cfcc2657cb6bb6e7530dc71930f95630d0',
+    fused:true, turret:[0,2.21,-1.27], gun:[-.004,2.917,-.68],
+  },
+  // The Centurion family (267, Main 2026-10-31), one source frame for the three marks rebuilt to it in 262
+  // (centurionFamily.ts): the Strv 81 print in its pristine download, whips and all (CENTURION_SOURCE_FRAME).
+  centurion3: CENTURION_SOURCE_FRAME, centurion5_2: CENTURION_SOURCE_FRAME, strv81: CENTURION_SOURCE_FRAME,
+});
+/** One source's hull under another's turret and gun: the graft moves rigidly by the difference of the two certified
+ *  ring datums (the graft's onto the host's), so the composite's turret datum is the host's and its trunnion the graft's,
+ *  moved. Both sources keep their own certificates; the loader verifies both files (tools/reference-glb-loader.ts). */
+function seatedGraft(host, graft) {
+  const translation = host.turret.map((v, i) => v - graft.turret[i]);
+  return { sha256: host.sha256, turret: [...host.turret], gun: graft.gun.map((v, i) => v + translation[i]),
+    graft: { sha256: graft.sha256, turret: [...graft.turret], gun: [...graft.gun], translation } };
+}
+export const AUTHORING_SOURCE_WORLD_FRAMES = Object.freeze({...STUDY_SOURCE_WORLD_FRAMES,
+  griffin50mm: GRIFFIN_PROPORTION_REFERENCE.frame,
+  // t90a_burlak_proto (267, Main's ruling 2026-10-31): the build is the T-90A X hull (profiles/t90X.ts, the t90a twin)
+  // under the Burlak prototype turret (t90.ts buildT90BurlakTurret), so its reference is the T-90A X source's hull under
+  // the Burlak X source's turret and gun (the source the production t90a_burlak passes), the Burlak turret's lower-ring
+  // datum seated on the T-90A X ring datum: both are the turret's ring bottom in their sources (the T-90A X ring 11 mm
+  // into its 1.479 deck, the Burlak's on its hull's raised ring at 1.545 over a 1.466 deck), so the Burlak turret drops
+  // 0.0766 m with its ring onto the T-90A deck. Installed at the owner's 1.05 (tools/owner-size-targets.ts).
+  t90a_burlak_proto: seatedGraft(STUDY_SOURCE_WORLD_FRAMES.t90a, STUDY_SOURCE_WORLD_FRAMES.t90a_burlak),
+});
+export const SOURCE_WORLD_FRAMES = Object.freeze(withOwnerSizeTargets(AUTHORING_SOURCE_WORLD_FRAMES));
+// Declared departures of a build's turret and gun pivots from its certificate's source datums (the certificates stay
+// immutable). The T-80U seats its casting T80U_X_RING_RAISE_M over the source's ring on a machined race (owner
+// 2026-10-21, 31235a8c85: the gun mount stood in the deck); the build is held to the datums plus that raise only.
+// An offset is one vector for both pivots, or {turret, gun} where they depart apart (an anchor it omits departs by 0).
+// The Burlak prototype (267) sits its turret on the T-90A X ring (no departure there) but keeps the T-90A X cannon on
+// the T-90A X trunnion station (x .005, z 1.30) with its seat 15.6 mm higher (t90.ts finishT90BurlakNative2026): over
+// the ring that trunnion stands 0.1251 m higher and 0.1351 m further forward than the production Burlak X source's, the
+// prototype's own (source metres; installed at the owner's 1.05).
+const T90A_BURLAK_PROTO_SEAT_RISE_M = .0156;
+export const SOURCE_WORLD_BUILD_OFFSETS = Object.freeze({ t80u: Object.freeze([0, T80U_X_RING_RAISE_M, 0]),
+  t90a_burlak_proto: Object.freeze({ gun: Object.freeze(AUTHORING_SOURCE_WORLD_FRAMES.t90a.gun.map((v, i) =>
+    (v - AUTHORING_SOURCE_WORLD_FRAMES.t90a_burlak_proto.gun[i] + (i === 1 ? T90A_BURLAK_PROTO_SEAT_RISE_M : 0))
+      * OWNER_SIZE_TARGETS.t90a_burlak_proto)) }) });
+/** The declared departure of one pivot (`anchor`: 'turret' or 'gun') from a build offset of either form. */
+export const buildOffsetFor = (buildOffset, anchor) =>
+  Array.isArray(buildOffset) ? buildOffset : buildOffset?.[anchor] ?? [0,0,0];
+// Declared departures of a build's PARTS from its certified source, as SOURCE_WORLD_BUILD_OFFSETS declares its pivots':
+// the source node named stands in the comparison where the owner ruled the build's part, moved rigidly (its shape stays
+// the source's) so its top is the ruled height. The certificate and its file stay as they are; the loader applies each
+// row before any scale and the gate record lists it (tools/reference-glb-loader.ts, procedural-fidelity.html).
+// The T-90A X (release 240, the owner: "make sure all tank turrets are clear of hulls"): the housing behind the ring, the
+// source's 'gear222' (x -0.885..0.335, z -1.877..-1.543, its top 24 cm over the deck at 1.721), stood in the bustle's
+// sweep, so the build lays a low cover on its footprint with its top at 1.530 (profiles/t90X.ts aGlacis). The Burlak
+// prototype's composite hull is that source and its build that hull, so the row is its too.
+const T90A_X_DECK_COVER = Object.freeze({ node: 'gear222', top: 1.530,
+  ruling: 'owner, release 240 ("make sure all tank turrets are clear of hulls"): the housing behind the ring is a low cover at 1.53 (profiles/t90X.ts aGlacis)' });
+export const SOURCE_WORLD_PART_DEPARTURES = Object.freeze({
+  t90a: Object.freeze([T90A_X_DECK_COVER]), t90a_burlak_proto: Object.freeze([T90A_X_DECK_COVER]),
+});
+
+const IDENTITY = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+const finiteVector = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+const distance = (a,b) => Math.hypot(...a.map((v,i)=>v-b[i]));
+
+/** Fail closed: no declaration alone can switch off registration. */
+export function validateSourceWorldFrame(certificate, measuredHash, frames, buildOffset = [0,0,0]) {
+  const failures=[];
+  if (!certificate || measuredHash !== certificate.sha256) failures.push('canonical oracle hash mismatch');
+  for (const owner of ['reference','procedural']) {
+    const frame=frames?.[owner];
+    const matrix=frame?.rootMatrix;
+    if (!Array.isArray(matrix) || matrix.length !== 16
+      || matrix.some((v,i)=>!Number.isFinite(v) || Math.abs(v-IDENTITY[i])>.002)) {
+      failures.push(`${owner}: world root must be unit-scale, ground-zero and unrotated`);
+    }
+    for (const anchor of ['hull','turret','gun']) {
+      // A fused oracle has no independent moving owners. Its empty rig nodes
+      // stay at the origin; do not fabricate source articulation. Native
+      // inferred articulation remains independently checked below.
+      const offset=owner==='procedural' && anchor!=='hull' ? buildOffsetFor(buildOffset,anchor) : [0,0,0];
+      const expected=anchor==='hull' || (owner==='reference'&&certificate?.fused)
+        ? [0,0,0] : certificate?.[anchor]?.map((v,i)=>v+offset[i]);
+      const actual=frame?.[anchor];
+      // Source datums are measured to millimetres; procedural pivots may use
+      // rounded authoring coordinates, but never more than 12 mm departure.
+      const tolerance=owner==='reference' ? .004 : .012;
+      if (!finiteVector(expected) || !finiteVector(actual) || distance(expected,actual)>tolerance) {
+        failures.push(`${owner}: ${anchor} differs from the independent source datum`);
+      }
+    }
+  }
+  return { passed:failures.length===0, failures, mode:'canonical-source-world',
+    ...(failures.length ? {} : { fixedReg:{dAlong:0,dy:0} }) };
+}
+
+/** Verify the bytes BEFORE the loader may bypass legacy centering/scaling. */
+export async function verifySourceWorldBytes(bytes, certificate) {
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  const actual=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+  if(!certificate || actual!==certificate.sha256)throw new Error('Canonical oracle hash mismatch');
+  return actual;
+}
+
+export async function hashLocalOracle(url) {
+  if (!url?.startsWith('/models/community-candidates/')) throw new Error('Expected private local oracle path');
+  const response=await fetch(url);
+  if (!response.ok) throw new Error(`Cannot verify canonical oracle: ${response.status}`);
+  const hash=await crypto.subtle.digest('SHA-256',await response.arrayBuffer());
+  return Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');
+}

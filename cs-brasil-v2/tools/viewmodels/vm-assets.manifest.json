@@ -1,0 +1,451 @@
+{
+  "schema": 1,
+  "servedRoot": "/private-assets/viewmodels",
+  "blobPrefix": "viewmodels/sha256",
+  "blobBase": "https://c7n4tyaqblkahvgo.private.blob.vercel-storage.com",
+  "count": 63,
+  "totalBytes": 166568194,
+  "files": [
+    {
+      "path": "ak/ak-baked-runtime.glb",
+      "bytes": 1536096,
+      "sha256": "96d077bec15209f63a6cdf7367305f417c2a8bc05fb8c054456ae73a04c3dee8",
+      "v": "96d077bec1",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ak/akm-baked-runtime.glb",
+      "bytes": 1531012,
+      "sha256": "664dd1c43808d749d22709907d496ea858e0406965c40a497269949a3ba8a79a",
+      "v": "664dd1c438",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ak/m92-baked-runtime.glb",
+      "bytes": 1697728,
+      "sha256": "dd51c07b8fddad1b59001a622a3e6c3d9fc4427316dfcf4482a41036e02da1fd",
+      "v": "dd51c07b8f",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/carbine-baked-runtime.glb",
+      "bytes": 1687080,
+      "sha256": "59806688b0884480ec142d1a4c0e388b0bdeed9736638ca67eeba2fbcdb52bca",
+      "v": "59806688b0",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/famas-baked-runtime.glb",
+      "bytes": 1589920,
+      "sha256": "640f3369d7cf586ad7c7f153d556a713e6afcf349ea61d93af6dc792fb180592",
+      "v": "640f3369d7",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/m4-baked-runtime.glb",
+      "bytes": 1506656,
+      "sha256": "2d8e00559ad2e640183b45062f13e5a3b77256d5638831957e8c96af9b510233",
+      "v": "2d8e00559a",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/md97-baked-runtime.glb",
+      "bytes": 1518536,
+      "sha256": "4cd468a65fffa13414d4f47dc8fd7a1f6070d7c26ef9f9dc2784f39ea3bfe7dc",
+      "v": "4cd468a65f",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/scar-baked-runtime.glb",
+      "bytes": 1573740,
+      "sha256": "5a4f8664e3b150398700cd5b8a842cedf3e37575b439ef0e83265d484883fb6a",
+      "v": "5a4f8664e3",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "ar/tavor-baked-runtime.glb",
+      "bytes": 1603920,
+      "sha256": "e90326406e6619f8b9799516474857db88f1785f1d56c52f56420cf0cec5ed0f",
+      "v": "e90326406e",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "bolt/mosin-baked-runtime.glb",
+      "bytes": 5492332,
+      "sha256": "ea1195452048dfc352948d135f84805b8d295ca2a3a50e2e4e21cfc3cb6caca7",
+      "v": "ea11954520",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "bolt/rem700-baked-runtime.glb",
+      "bytes": 5261724,
+      "sha256": "2a5eb7c53b291381b8fb79811ab0c0920deda68fa7ca5643004613a7a1f5f2af",
+      "v": "2a5eb7c53b",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "deagle/deagle-runtime.glb",
+      "bytes": 3443296,
+      "sha256": "e480f69e76f892b5b7ad3d49d1a69f24fe0c8515735faa1c7cd86de7a2583c97",
+      "v": "e480f69e76",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/akm-fabrica.glb",
+      "bytes": 3889224,
+      "sha256": "91ee56bd36a34f8b616e6038ce04139c258dbf9dfa4a8e1dd0cec751a6252a05",
+      "v": "91ee56bd36",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/awp-fabrica.glb",
+      "bytes": 2820968,
+      "sha256": "3df6baabdb3db80a93fcece4e829fcc53cbb764a7bb4581e33fb7b4710178e31",
+      "v": "3df6baabdb",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/carbine-fabrica.glb",
+      "bytes": 2306700,
+      "sha256": "d9c3907371d7f5879a8c2156dc284520bf77a4e25d84b72e19e30f9a7c073290",
+      "v": "d9c3907371",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/deagle-fabrica.glb",
+      "bytes": 2543216,
+      "sha256": "a08149fe7315fc5703535c149ddaa6c185674df2b4291401c43f76d9cb90b12d",
+      "v": "a08149fe73",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/famas-fabrica.glb",
+      "bytes": 2267808,
+      "sha256": "47e12d76849026f5b663f0ff4454216316478504daf5cd333284d69b7ff653dd",
+      "v": "47e12d7684",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/g3-fabrica.glb",
+      "bytes": 3351684,
+      "sha256": "41e72be5d88dfde2c46d8d3f559c498c678957141f5e62778630f572ad6b9e33",
+      "v": "41e72be5d8",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/g3sg1-fabrica.glb",
+      "bytes": 3369520,
+      "sha256": "e9248df6b25a5e407bf3fa9c1275b6e18928805bdd5f1ee22967c54efa89ee75",
+      "v": "e9248df6b2",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/lmg-fabrica.glb",
+      "bytes": 4863540,
+      "sha256": "527c3d411e39f5c57cc66d2434afa22eaccd489477f933c9e725bc827b825ece",
+      "v": "527c3d411e",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/m4-fabrica.glb",
+      "bytes": 4162644,
+      "sha256": "c500cfe6320ac063d72c60750adecce0a91179b8b53881f3b48e30f6918a2a9a",
+      "v": "c500cfe632",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/m400-fabrica.glb",
+      "bytes": 4133476,
+      "sha256": "a9f4bce104f31563c59ecd0d7a369026b0bb9c9e1d0e2bdb4cfc8577fa5a4793",
+      "v": "a9f4bce104",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/m92-fabrica.glb",
+      "bytes": 3799036,
+      "sha256": "c8fcfb1276481e184033543f150c72fc474b71f59f8930a1f2bb139262a0c07a",
+      "v": "c8fcfb1276",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/md97-fabrica.glb",
+      "bytes": 4162572,
+      "sha256": "f17921e1c1db424f9bd18f651fe5fa5a25cd795732936d47b139945948914e26",
+      "v": "f17921e1c1",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/mosin-fabrica.glb",
+      "bytes": 2587280,
+      "sha256": "71b22a261d20006e95886af09bad40859d489dd0b7827e5e20c000387590d21a",
+      "v": "71b22a261d",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/mp5-fabrica.glb",
+      "bytes": 3126712,
+      "sha256": "d26da9f0abc835518f0b7bb84cbf2c84804b2929f8661c0cd36303d618c97bd7",
+      "v": "d26da9f0ab",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/p90-fabrica.glb",
+      "bytes": 5417180,
+      "sha256": "f0ab213493475f1d152871d46b76e6bd268f4b77fc2fa5abc04d0f0c56564a11",
+      "v": "f0ab213493",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/pistol-fabrica.glb",
+      "bytes": 2727384,
+      "sha256": "4c9e3a1a29908310c9e6d555c3dadf783e75d5858c646bd10060081aaabe7f6a",
+      "v": "4c9e3a1a29",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/rem700-fabrica.glb",
+      "bytes": 2716640,
+      "sha256": "4cbc945120022d89c93056e1f86573954687ebb7a94b7c44088a062388cc6b45",
+      "v": "4cbc945120",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/revolver38-fabrica.glb",
+      "bytes": 2385736,
+      "sha256": "9204c8df66922c6f02392573b4220aaf3295bac3e46fb47df7caf1f270046ea5",
+      "v": "9204c8df66",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/scar-fabrica.glb",
+      "bytes": 3819096,
+      "sha256": "e15febed0de571bb81b388fd4b64a1852785906412ddaf675ab66e1957dc7b01",
+      "v": "e15febed0d",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/shotgun-fabrica.glb",
+      "bytes": 3080316,
+      "sha256": "8b3c8639cad501ac42893e4829efbbfab901f227f7da203ad39325496f088a80",
+      "v": "8b3c8639ca",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/sks-fabrica.glb",
+      "bytes": 2733696,
+      "sha256": "39c44f6e413db048dc5d48aeb0e410bac2711b843b521156585308af0aab0947",
+      "v": "39c44f6e41",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/svd-fabrica.glb",
+      "bytes": 2523332,
+      "sha256": "8932f87984c5778d8b617f4ccac591838fbbfe6e06c4f7e98baba75d85088ccc",
+      "v": "8932f87984",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/tavor-fabrica.glb",
+      "bytes": 2260692,
+      "sha256": "88a6aeec814e23d4e8206135ba7116420d7a03d83670efdb244b6ab7c39f923f",
+      "v": "88a6aeec81",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "fabrica/uzi-fabrica.glb",
+      "bytes": 2162564,
+      "sha256": "59756a6f187a031a5b1fe822c135be20e6509ba51a1cf6e818261868381e32b8",
+      "v": "59756a6f18",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "g3/g3-baked-runtime.glb",
+      "bytes": 1636876,
+      "sha256": "a31aff0279267f1ef22a890256961c7cc3d1d86a89b104a53df149ac7d7bac02",
+      "v": "a31aff0279",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "g3/g3sg1-baked-runtime.glb",
+      "bytes": 1523360,
+      "sha256": "f6959a3ae2efbc4191ac48bc77f9e10b4ddf220d8acf979f5598cfff5047002c",
+      "v": "f6959a3ae2",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "grenade/grenade-runtime.glb",
+      "bytes": 2868028,
+      "sha256": "f6033daefb76b26e80f21ea7138e36f418cb3f3aa7e07d1cff98a6b1bd4a9826",
+      "v": "f6033daefb",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "grenade/grenades-world.glb",
+      "bytes": 1213844,
+      "sha256": "0e64280c5bace45167a325b3b43ef505d4be77e208dba2f568cc4f2d3025badf",
+      "v": "0e64280c5b",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "knife/knife-baked-runtime.glb",
+      "bytes": 1487908,
+      "sha256": "93028919ee74f46ed8ef77c8e34ceec314f4e76b2e069b4686b65d1cb84f0556",
+      "v": "93028919ee",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "lmg/lmg-baked-runtime.glb",
+      "bytes": 6467236,
+      "sha256": "025a99f2f5f969e513ebafb7678f87f8bd726149d9d924cde6d6941ae367a179",
+      "v": "025a99f2f5",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "marksman/sks-baked-runtime.glb",
+      "bytes": 5629224,
+      "sha256": "0e5d0ff138a73371e090ddb5a21fee7cd2b07b03742675543b036e1b2648fc4a",
+      "v": "0e5d0ff138",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "mp5/mp5-runtime.glb",
+      "bytes": 1540288,
+      "sha256": "b548817afd0725ef52ac8ba11834fd44acf4e48678785adb15fa425f6161fd58",
+      "v": "b548817afd",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "p90/p90-baked-runtime.glb",
+      "bytes": 1469436,
+      "sha256": "2b4ff0fdf8ad65973f5eb6d3230cfa5d0e3eca73fecb7ca4380aafa1c57c196c",
+      "v": "2b4ff0fdf8",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "pistol/pistol-runtime.glb",
+      "bytes": 3006796,
+      "sha256": "04c126d93148f9cf0ffa07927f4d09cde2067d9abbc9ddcd25d3b811923fa3b8",
+      "v": "04c126d931",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "recoil.json",
+      "bytes": 78732,
+      "sha256": "f7fd16adea20ca8f9e856eaa56ec0f94f667972a611c201a2ce227ab2fb27265",
+      "v": "f7fd16adea",
+      "contentType": "application/json"
+    },
+    {
+      "path": "revolver/revolver-runtime.glb",
+      "bytes": 4186328,
+      "sha256": "40b53e2fba7309ee210f0199f69fd7227c544b197d409904faaa4981231f796e",
+      "v": "40b53e2fba",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "shared/T_Arm01_B.webp",
+      "bytes": 27992,
+      "sha256": "ea23ecd5a6dfac1b62348bd815a2d171b2779573ec9a96a53cb579c9532eb0d0",
+      "v": "ea23ecd5a6",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Arm01_N.webp",
+      "bytes": 147602,
+      "sha256": "df2a3f6343c2e4f0bac4ff06e71399127762c2b03ffedc7200ff74ac73a60d47",
+      "v": "df2a3f6343",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Arm01_ORM.webp",
+      "bytes": 71416,
+      "sha256": "5b5e79a1a26e12b89a427c7ea470c1f1f126ba3b90f004f81d72f0eae373960b",
+      "v": "5b5e79a1a2",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Cloth01_B.webp",
+      "bytes": 68940,
+      "sha256": "7300e251e2f5550d36dfda181a9602ac42a3fb2a04c43d13320f83c6c8a059b2",
+      "v": "7300e251e2",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Cloth01_N.webp",
+      "bytes": 1346582,
+      "sha256": "9ed1a23714bb98f6367178de003839e283d74c458e58b7e3b38e836e641e2812",
+      "v": "9ed1a23714",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Cloth01_ORM.webp",
+      "bytes": 184270,
+      "sha256": "f2d1797be051960d4a6ff455e17764542976004131e31a4a415d2a1e4eb03c63",
+      "v": "f2d1797be0",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Glove01_B.webp",
+      "bytes": 183500,
+      "sha256": "7542bec0c2d5eae1600cac2c2da46fc7a449a47cc6af106c73e23e0d7c99954b",
+      "v": "7542bec0c2",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Glove01_N.webp",
+      "bytes": 1470334,
+      "sha256": "29494e350ba01ed6e6ab2ae13fac48a9f7cce1f689a39bd8c688a89b1f1c1438",
+      "v": "29494e350b",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/T_Glove01_ORM.webp",
+      "bytes": 147442,
+      "sha256": "c8034b6e1b42f831857972b857c362b1562c38ae418ac5a7dd619dd209e5aac8",
+      "v": "c8034b6e1b",
+      "contentType": "image/webp"
+    },
+    {
+      "path": "shared/general-runtime.glb",
+      "bytes": 8044284,
+      "sha256": "e90274422745fb0450fc795ab89d6a9e70e953d692bc8f564dc2bc42b1e71c8f",
+      "v": "e902744227",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "shotgun/shotgun-baked-runtime.glb",
+      "bytes": 4307324,
+      "sha256": "d08281eef972f6033766794ca8930a03138524e0a211d125caa9838c09d1724d",
+      "v": "d08281eef9",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "smg/uzi-baked-runtime.glb",
+      "bytes": 5142564,
+      "sha256": "c215b93f67f132a816140bf99ee1befc4f519a6953c2726da830a002d1e4c71b",
+      "v": "c215b93f67",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "sniper/awp-baked-runtime.glb",
+      "bytes": 1486132,
+      "sha256": "3e6b77e45760191847097dc4847c9200686367d241c7d03505b46de06ba52f0a",
+      "v": "3e6b77e457",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "sniper/m400-baked-runtime.glb",
+      "bytes": 1984364,
+      "sha256": "838066951a0a9ed1b530875932e5af127f1ad3b7448773169ce3fcda4ed07637",
+      "v": "838066951a",
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "svd/svd-baked-runtime.glb",
+      "bytes": 5194336,
+      "sha256": "9db55c0299f966ee1877beecb21c5c8a54f3f823c2ce7126439d1af383b3622d",
+      "v": "9db55c0299",
+      "contentType": "model/gltf-binary"
+    }
+  ]
+}

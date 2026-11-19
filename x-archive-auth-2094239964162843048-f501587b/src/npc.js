@@ -1,0 +1,207 @@
+import * as THREE from 'three';
+import { sampleHullSurface } from './hullsurface.js';
+import { loadDriver } from './airboat.js';
+import { person } from './folk.js';
+import { mulberry32 } from './noise.js';
+import { emitWakeStamp } from './wakestamps.js';
+import { wakeSampleAt } from './wakefield.js';
+
+function skiffHullGeometry() {
+  const stations = [
+    { z: -2.36, top: 0.05, y: 0.17, chine: 0.015, cy: -0.2 },
+    { z: -1.72, top: 0.54, y: 0.38, chine: 0.31, cy: -0.37 },
+    { z: -0.55, top: 0.77, y: 0.44, chine: 0.56, cy: -0.47 },
+    { z: 0.75, top: 0.85, y: 0.44, chine: 0.63, cy: -0.46 },
+    { z: 1.92, top: 0.86, y: 0.41, chine: 0.64, cy: -0.41 },
+  ];
+  const p = [], tri = (a, b, c) => p.push(...a, ...b, ...c), quad = (a, b, c, d) => { tri(a, b, d); tri(b, c, d); };
+  for (let i = 0; i < stations.length - 1; i++) {
+    const a = stations[i], b = stations[i + 1];
+    quad([-a.top, a.y, a.z], [-a.chine, a.cy, a.z], [-b.chine, b.cy, b.z], [-b.top, b.y, b.z]);
+    quad([a.chine, a.cy, a.z], [a.top, a.y, a.z], [b.top, b.y, b.z], [b.chine, b.cy, b.z]);
+    quad([-a.chine, a.cy, a.z], [a.chine, a.cy, a.z], [b.chine, b.cy, b.z], [-b.chine, b.cy, b.z]);
+  }
+  const stern = stations[stations.length - 1];
+  quad([-stern.top, stern.y, stern.z], [-stern.chine, stern.cy, stern.z], [stern.chine, stern.cy, stern.z], [stern.top, stern.y, stern.z]);
+  const bow = stations[0];
+  quad([-bow.top, bow.y, bow.z], [bow.top, bow.y, bow.z], [bow.chine, bow.cy, bow.z], [-bow.chine, bow.cy, bow.z]);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.computeVertexNormals(); geo.computeBoundingSphere(); return geo;
+}
+
+const SKIFF_GEO = {
+  hull: skiffHullGeometry(), floor: new THREE.BoxGeometry(1.16, 0.055, 3.28), rail: new THREE.BoxGeometry(0.075, 0.075, 3.43),
+  bowRail: new THREE.BoxGeometry(1.0, 0.07, 0.08), rib: new THREE.BoxGeometry(1.38, 0.045, 0.075), bench: new THREE.BoxGeometry(1.43, 0.09, 0.34),
+  cowl: new THREE.CapsuleGeometry(0.22, 0.28, 4, 8), stripe: new THREE.BoxGeometry(0.455, 0.055, 0.46), leg: new THREE.BoxGeometry(0.12, 0.86, 0.18),
+  tiller: new THREE.CylinderGeometry(0.02, 0.02, 0.74, 6), hub: new THREE.CylinderGeometry(0.045, 0.045, 0.24, 8), blade: new THREE.BoxGeometry(0.04, 0.34, 0.075),
+  torso: new THREE.CapsuleGeometry(0.17, 0.4, 4, 8), head: new THREE.SphereGeometry(0.11, 10, 8), nose: new THREE.SphereGeometry(0.026, 6, 5), hat: new THREE.CylinderGeometry(0.12, 0.13, 0.1, 10), brim: new THREE.BoxGeometry(0.15, 0.018, 0.12),
+  legBody: new THREE.CapsuleGeometry(0.06, 0.3, 4, 6), arm: new THREE.CapsuleGeometry(0.048, 0.32, 4, 6), net: new THREE.SphereGeometry(0.4, 10, 7),
+  netCoil: new THREE.TorusGeometry(0.25, 0.028, 5, 14), fuel: new THREE.BoxGeometry(0.35, 0.3, 0.25), cleat: new THREE.BoxGeometry(0.14, 0.055, 0.045),
+};
+const SKIFF_MAT = {
+  hull: new THREE.MeshStandardMaterial({ color: 0x6f7570, roughness: 0.48, metalness: 0.74, side: THREE.DoubleSide }),
+  aluminum: new THREE.MeshStandardMaterial({ color: 0x969c96, roughness: 0.5, metalness: 0.68 }), floor: new THREE.MeshStandardMaterial({ color: 0x252a28, roughness: 0.86, metalness: 0.22 }),
+  motor: new THREE.MeshStandardMaterial({ color: 0x161918, roughness: 0.46, metalness: 0.42 }), stripe: new THREE.MeshStandardMaterial({ color: 0xc3c8c3, roughness: 0.45, metalness: 0.52 }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xb98a66, roughness: 0.85 }), shirt: new THREE.MeshStandardMaterial({ color: 0x4d5a3c, roughness: 0.9 }), pants: new THREE.MeshStandardMaterial({ color: 0x2b2a26, roughness: 0.9 }),
+  capRed: new THREE.MeshStandardMaterial({ color: 0xc8442c, roughness: 0.9 }), capDark: new THREE.MeshStandardMaterial({ color: 0x303332, roughness: 0.9 }),
+  net: new THREE.MeshStandardMaterial({ color: 0x8a7a4a, roughness: 1, wireframe: true }), rope: new THREE.MeshStandardMaterial({ color: 0xa58e59, roughness: 1 }), fuel: new THREE.MeshStandardMaterial({ color: 0xc03a2b, roughness: 0.6 }),
+};
+const skiffPart = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; return m; };
+let skiffSerial = 0;
+function skiffCrew(x, z, cap, driver = false) {
+  const p = new THREE.Group(); p.position.set(x, 0.5, z);
+  const torso = skiffPart(SKIFF_GEO.torso, SKIFF_MAT.shirt); torso.position.y = 0.42; p.add(torso);
+  const headPivot = new THREE.Group(); headPivot.position.y = 0.82; p.add(headPivot);
+  const head = skiffPart(SKIFF_GEO.head, SKIFF_MAT.skin); headPivot.add(head);
+  const nose = skiffPart(SKIFF_GEO.nose, SKIFF_MAT.skin); nose.position.set(0, 0, -0.104); headPivot.add(nose);
+  const hat = skiffPart(SKIFF_GEO.hat, cap); hat.position.y = 0.1; headPivot.add(hat);
+  const brim = skiffPart(SKIFF_GEO.brim, cap); brim.position.set(0, 0.105, -0.085); brim.rotation.x = 0.12; headPivot.add(brim);
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const leg = skiffPart(SKIFF_GEO.legBody, SKIFF_MAT.pants); leg.position.set(sx * 0.1, 0.12, -0.15); leg.rotation.x = -1.1; p.add(leg);
+    const arm = skiffPart(SKIFF_GEO.arm, SKIFF_MAT.skin); arm.position.set(sx * 0.19, 0.48, driver ? 0.06 : -0.03); arm.rotation.x = driver ? -1.22 : -0.72; arm.rotation.z = sx * (driver ? -0.35 : -0.18); p.add(arm);
+    arms.push(arm);
+  }
+  p.userData.skiffCrew = { driver, torso, head: headPivot, arms, baseX: arms.map(a => a.rotation.x), baseZ: arms.map(a => a.rotation.z), phase: driver ? 0.4 : 2.1 };
+  return p;
+}
+
+// A shallow-draft, open aluminium johnboat shared by traffic, residents, incidents and shoreline sets.
+export function buildSkiff({ crew = true, driverModel = true } = {}) {
+  const g = new THREE.Group(); g.name = 'aluminum johnboat';
+  const hull = skiffPart(SKIFF_GEO.hull, SKIFF_MAT.hull); g.add(hull);
+  const floor = skiffPart(SKIFF_GEO.floor, SKIFF_MAT.floor); floor.position.set(0, 0.07, 0.16); g.add(floor);
+  for (const side of [-1, 1]) { const rail = skiffPart(SKIFF_GEO.rail, SKIFF_MAT.aluminum); rail.position.set(side * 0.69, 0.46, 0.2); rail.rotation.y = side * 0.082; g.add(rail); }
+  const bowRail = skiffPart(SKIFF_GEO.bowRail, SKIFF_MAT.aluminum); bowRail.position.set(0, 0.43, -1.7); g.add(bowRail);
+  const ribs = new THREE.InstancedMesh(SKIFF_GEO.rib, SKIFF_MAT.aluminum, 4); const matrix = new THREE.Matrix4();
+  for (let i = 0; i < 4; i++) { matrix.makeTranslation(0, 0.22, -1.28 + i * 0.82); ribs.setMatrixAt(i, matrix); } ribs.instanceMatrix.needsUpdate = true; ribs.castShadow = ribs.receiveShadow = true; g.add(ribs);
+  for (const z of [-0.95, 0.45]) { const bench = skiffPart(SKIFF_GEO.bench, SKIFF_MAT.aluminum); bench.position.set(0, 0.49, z); g.add(bench); }
+  const cleats = new THREE.InstancedMesh(SKIFF_GEO.cleat, SKIFF_MAT.aluminum, 4);
+  for (let i = 0; i < 4; i++) { matrix.makeTranslation(i % 2 ? 0.69 : -0.69, 0.53, i < 2 ? -1.38 : 1.34); cleats.setMatrixAt(i, matrix); } cleats.instanceMatrix.needsUpdate = true; cleats.castShadow = true; g.add(cleats);
+  const motor = new THREE.Group(); motor.position.set(0, 0.51, 1.97);
+  const cowl = skiffPart(SKIFF_GEO.cowl, SKIFF_MAT.motor); cowl.scale.set(1, 0.78, 1.12); cowl.position.y = 0.29; motor.add(cowl);
+  const stripe = skiffPart(SKIFF_GEO.stripe, SKIFF_MAT.stripe); stripe.position.set(0, 0.31, -0.02); motor.add(stripe);
+  const leg = skiffPart(SKIFF_GEO.leg, SKIFF_MAT.motor); leg.position.set(0, -0.37, 0.05); motor.add(leg);
+  const tiller = skiffPart(SKIFF_GEO.tiller, SKIFF_MAT.aluminum); tiller.rotation.x = Math.PI / 2; tiller.position.set(-0.16, 0.22, -0.49); motor.add(tiller);
+  const prop = new THREE.Group(); prop.position.set(0, -0.72, 0.26);
+  const hub = skiffPart(SKIFF_GEO.hub, SKIFF_MAT.motor); hub.rotation.x = Math.PI / 2; prop.add(hub);
+  for (const r of [0, Math.PI / 2]) { const blade = skiffPart(SKIFF_GEO.blade, SKIFF_MAT.motor); blade.position.z = 0.07; blade.rotation.z = r; prop.add(blade); }
+  motor.add(prop); motor.userData.prop = prop;
+  g.add(motor);
+  const crewList = [], people = [];
+  if (crew) {
+    const driver = skiffCrew(0.16, 1.18, SKIFF_MAT.capRed, true); g.add(driver); crewList.push(driver);
+    const rr = mulberry32(0x51cf2d + skiffSerial++ * 977); const deckhand = person(rr, { pose: 'sit', hat: true, vest: rr() < 0.55 }); deckhand.scale.setScalar(0.74); deckhand.position.set(-0.1, 0.142, -0.68); deckhand.rotation.y = Math.PI; g.add(deckhand); people.push(deckhand);
+    if (driverModel) loadDriver(g, { scale: 0.48, position: [0.16, 0.49, 1.16] }).then(model => { if (!model) return; driver.visible = false; g.userData.driverModel = model; }).catch(() => {});
+  }
+  const net = skiffPart(SKIFF_GEO.net, SKIFF_MAT.net); net.scale.set(1.32, 0.42, 0.8); net.position.set(0, 0.42, -1.52); g.add(net);
+  for (const x of [-0.24, 0.22]) { const coil = skiffPart(SKIFF_GEO.netCoil, SKIFF_MAT.rope); coil.rotation.x = Math.PI / 2; coil.position.set(x, 0.5, -1.48); g.add(coil); }
+  const fuel = skiffPart(SKIFF_GEO.fuel, SKIFF_MAT.fuel); fuel.position.set(0.5, 0.32, 1.16); g.add(fuel);
+  g.userData.motor = motor; g.userData.crew = crewList; g.userData.people = people; g.userData.fuel = fuel;
+  return g;
+}
+
+const MODEL_BOAT_FALLBACKS = Object.freeze({
+  beau_boat: Object.freeze({ beam: 0.94, depth: 0.96, length: 0.98, console: 1.05 }),
+  sandbox_boat: Object.freeze({ beam: 0.9, depth: 0.92, length: 0.9, console: 0.92 }),
+  boat_dreams: Object.freeze({ beam: 1.24, depth: 1.08, length: 1.22, console: 1.7 }),
+});
+
+// Low-tier model replacements stay recognizable while sharing four resources already owned by the procedural
+// johnboat. The wrapper is removed when a GLB arrives; on old hardware it remains as a compact four-draw hull.
+export function buildModelBoatFallback(name = 'beau_boat') {
+  const shape = MODEL_BOAT_FALLBACKS[name] || MODEL_BOAT_FALLBACKS.beau_boat;
+  const g = new THREE.Group(); g.name = `${name} procedural hull`; g.userData.fallbackModel = name;
+  const hull = skiffPart(SKIFF_GEO.hull, SKIFF_MAT.hull); hull.scale.set(shape.beam, shape.depth, shape.length); g.add(hull);
+  const floor = skiffPart(SKIFF_GEO.floor, SKIFF_MAT.floor); floor.scale.set(shape.beam * 1.08, 1, shape.length); floor.position.set(0, 0.07, 0.16 * shape.length); g.add(floor);
+  const cowl = skiffPart(SKIFF_GEO.cowl, SKIFF_MAT.motor); cowl.scale.set(shape.console, 0.86 + shape.console * 0.18, 1.08 + shape.console * 0.32); cowl.position.set(0, 0.67, 0.72 * shape.length); g.add(cowl);
+  const leg = skiffPart(SKIFF_GEO.leg, SKIFF_MAT.motor); leg.scale.y = 0.82; leg.position.set(0, 0.08, 1.92 * shape.length); g.add(leg);
+  return g;
+}
+
+// A boat that runs a list of waypoints with a pure-pursuit steer and slows for the bends.
+export class SkiffAI {
+  constructor(waveFn) {
+    this.mesh = buildSkiff();
+    this.pos = new THREE.Vector2(); this.vel = new THREE.Vector2(); this.heading = 0; this.speed = 0;
+    this.maxSpeed = 11.6; this.path = []; this.i = 0; this.active = false; this.done = false; this.waveFn = waveFn;
+    this.navigationLights = true;
+    this.roll = 0; this.pitch = 0; this.dist = 0;
+    this.waterHeight = 0; this.waterPitch = 0; this.waterRoll = 0;
+    this.shoveX = 0; this.shoveZ = 0; this.yawKick = 0; this.heelKick = 0;
+    this.lookAhead = 14; this._flow = new THREE.Vector2(); this._forward = new THREE.Vector2();
+  }
+  start(path, speed, lookAhead = 14) {
+    this.path = path; this.i = 0; this.maxSpeed = speed || 11.6; this.lookAhead = Math.max(4, Number(lookAhead) || 14);
+    this.pos.set(path[0].x, path[0].z); this.heading = Math.atan2(-(path[1].x - path[0].x), -(path[1].z - path[0].z));
+    this.vel.set(0, 0); this.speed = 0; this.active = true; this.done = false; this.dist = 0; this.roll = 0; this.pitch = 0;
+    this.shoveX = 0; this.shoveZ = 0; this.yawKick = 0; this.heelKick = 0;
+    this.waterPitch = 0; this.waterRoll = 0;
+    this.mesh.position.set(this.pos.x, this.waveFn(this.pos.x, this.pos.y, 0, this) - 0.05, this.pos.y);
+    this.mesh.rotation.set(0, this.heading, 0); this.mesh.userData.motor.rotation.y = 0; this.mesh.visible = true;
+  }
+  stop() { this.active = false; this.mesh.visible = false; this.shoveX = 0; this.shoveZ = 0; this.yawKick = 0; this.heelKick = 0; }
+  forward(out = new THREE.Vector2()) { return out.set(-Math.sin(this.heading), -Math.cos(this.heading)); }
+  // Retain a short hydrodynamic slide and attitude kick after another hull strikes this one. The normal points from
+  // the skiff toward the other boat, so the reciprocal impulse travels in the opposite direction. Contact distance
+  // along the centreline provides the torque arm: the same side hit yaws opposite ways at the bow and stern.
+  applyImpact(into, nx, nz, contactAlong = 0) {
+    const hit = Math.max(0, Math.min(12, Number(into) || 0)), normalLength = Math.hypot(nx, nz);
+    if (hit <= 0 || !Number.isFinite(normalLength) || normalLength < 1e-5) return false;
+    nx /= normalLength; nz /= normalLength;
+    const impulse = Math.min(4.8, hit * 0.48);
+    this.shoveX -= nx * impulse; this.shoveZ -= nz * impulse;
+    const shoveSpeed = Math.hypot(this.shoveX, this.shoveZ), maxShove = 5.4;
+    if (shoveSpeed > maxShove) { const scale = maxShove / shoveSpeed; this.shoveX *= scale; this.shoveZ *= scale; }
+    const along = Math.max(-2, Math.min(2, Number(contactAlong) || 0));
+    const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading), forceX = -nx * impulse, forceZ = -nz * impulse;
+    const torque = (fz * along) * forceX - (fx * along) * forceZ;
+    this.yawKick = Math.max(-1.1, Math.min(1.1, this.yawKick + Math.max(-0.85, Math.min(0.85, torque * 0.1))));
+    const rightX = -Math.cos(this.heading), rightZ = Math.sin(this.heading), contactSide = nx * rightX + nz * rightZ;
+    this.heelKick = Math.max(-0.22, Math.min(0.22, this.heelKick + contactSide * hit * 0.022));
+    return true;
+  }
+  update(dt, t, hold = 0) {
+    if (!this.active) return;
+    // advance the target index past waypoints we are within reach of, then steer at a point a little ahead
+    while (this.i < this.path.length - 1 && Math.hypot(this.path[this.i].x - this.pos.x, this.path[this.i].z - this.pos.y) < this.lookAhead) this.i++;
+    const tgt = this.path[this.i];
+    const want = Math.atan2(-(tgt.x - this.pos.x), -(tgt.z - this.pos.y));
+    let dh = want - this.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    const turnRate = 1.6;
+    const turn = Math.max(-turnRate, Math.min(turnRate, dh * 3.0));
+    this.heading += (turn + this.yawKick) * dt;
+    // slow for the bends, and if told to (a boat alongside)
+    const bend = Math.min(1, Math.abs(dh) / 0.8);
+    const tgtSpeed = this.maxSpeed * (1 - bend * 0.3) * (1 - hold * 0.8);
+    this.speed += (tgtSpeed - this.speed) * (1 - Math.exp(-dt * (tgtSpeed > this.speed ? 0.6 : 2.0)));
+    const f = this.forward(this._forward);
+    this.vel.set(f.x * this.speed + this.shoveX, f.y * this.speed + this.shoveZ);
+    if (this.currents) this.vel.add(this.currents.flowAt(this.pos.x, this.pos.y, this._flow));
+    this.pos.addScaledVector(this.vel, dt); this.dist += this.speed * dt;
+    sampleHullSurface(this, this.waveFn, this.pos.x, this.pos.y, this.heading, t);
+    this.roll += ((-turn * this.speed * 0.02 + this.heelKick + this.waterRoll) - this.roll) * (1 - Math.exp(-dt * 6));
+    this.pitch += ((this.speed * 0.006 + this.waterPitch) - this.pitch) * (1 - Math.exp(-dt * 3));
+    const shoveDecay = Math.exp(-dt * 1.9); this.shoveX *= shoveDecay; this.shoveZ *= shoveDecay;
+    this.yawKick *= Math.exp(-dt * 3.2); this.heelKick *= Math.exp(-dt * 2.8);
+    const y = this.waterHeight;
+    this.mesh.position.set(this.pos.x, y - 0.05, this.pos.y);
+    this.mesh.rotation.set(this.pitch, this.heading, this.roll, 'YXZ');
+    this.mesh.userData.motor.rotation.y = -turn * 0.4; this.mesh.userData.motor.userData.prop.rotation.z += dt * (6 + this.speed * 5);
+    if (this.i >= this.path.length - 1 && Math.hypot(tgt.x - this.pos.x, tgt.z - this.pos.y) < 6) this.done = true;
+  }
+  wakeHeightAt(x, z, t) {
+    if (!this.active || this.speed <= 2.2) return 0;
+    const dx = x - this.pos.x, dz = z - this.pos.y; if (dx * dx + dz * dz > 10609) return 0;
+    return wakeSampleAt(this.pos.x, this.pos.y, this.heading, this.speed, this.maxSpeed, 0.11, x, z, t);
+  }
+  visitActiveVessels(visitor) {
+    if (this.active) visitor(this.pos.x, this.pos.y, this.speed, 'skiff', this);
+  }
+  // wake stamps for the water sim (only worth pushing when inside the sim window)
+  stamps(out) {
+    if (!this.active || this.speed < 2) return;
+    const f = this.forward(this._forward); const sp = Math.min(1, this.speed / 11);
+    emitWakeStamp(out, this.pos.x - f.x * 1.8, this.pos.y - f.y * 1.8, 1.1, 0.5 * sp, 1.6 * sp, 1.0);
+    emitWakeStamp(out, this.pos.x + f.x * 1.8, this.pos.y + f.y * 1.8, 1.0, -0.7 * sp, 0.1 * sp, 0.7);
+  }
+}

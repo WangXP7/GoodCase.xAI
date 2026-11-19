@@ -1,0 +1,80 @@
+/**
+ * The LAN / offline multiplayer helper: `npm run server:mp`.
+ *
+ * One process, one port: the v2 room service (`/rooms/<CODE>`) and the match
+ * service (`/match`, `/healthz`, `/metrics`) from `server/rooms/serve.ts`.
+ * Browsers on the local network open the game, choose LAN in the Play menu, and
+ * the client resolves the room endpoint to this port (src/mp/session/endpoint.ts).
+ *
+ * Environment (names only):
+ *   COT_ROOMS_PORT              TCP port (default 8792)
+ *   COT_ROOMS_HOST              bind address (default 0.0.0.0)
+ *   COT_ROOMS_ALLOWED_ORIGINS   comma-separated exact origins; unset allows any (LAN)
+ *   COT_MATCH_SEAT_SECRET       HMAC secret for seat tokens (generated per run when unset: LAN only)
+ *   COT_MATCH_CONTROL_SECRET    bearer secret of the control routes (defaults to the seat secret)
+ *   COT_MATCH_WORLD             'dedicated' (collision shards, default) | 'terrain'
+ *   COT_ROOMS_MATCH_TRANSPORT   'service' (the match runs in this process, default) | 'p2p' (in the host's browser,
+ *                               as the Cloudflare rooms do — docs/MULTIPLAYER-V2.md §13)
+ *   COT_MATCH_LOG_LEVEL         debug | info | warn | error
+ *   Relay credentials for the browser-hosted match (§13.14; `server/relayCredentials.ts`, the rooms Worker's names):
+ *   COT_TURN_URLS + COT_TURN_SHARED_SECRET (+ COT_TURN_USERNAME), COT_CLOUDFLARE_TURN_KEY_ID + COT_CLOUDFLARE_TURN_API_TOKEN,
+ *   COT_TURN_ICE_SERVERS_JSON, COT_TURN_TTL_SECONDS, COT_STUN_URLS — all unset by default: a LAN needs host candidates only.
+ */
+import { randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { installProcessShutdown } from '../processShutdown.ts';
+import { createLogger, parseLogLevel } from '../match/log.ts';
+import { createRoomsServer } from './serve.ts';
+import { createRelayIssuer, pickRelayEnv } from '../relayCredentials.ts';
+import { ROOM_DEV_MAX_TEAM_SIZE } from '../../src/mp/room/protocol.ts';
+
+function integerEnv(name: string, fallback: number, low: number, high: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < low || value > high) throw new TypeError(`${name} must be an integer ${low}..${high}`);
+  return value;
+}
+
+async function startRoomsServerFromEnv(env: NodeJS.ProcessEnv = process.env) {
+  const log = createLogger({ level: parseLogLevel(env.COT_MATCH_LOG_LEVEL) });
+  let seatSecret = env.COT_MATCH_SEAT_SECRET ?? '';
+  if (seatSecret.length < 16) {
+    seatSecret = randomBytes(24).toString('hex');
+    log.info('COT_MATCH_SEAT_SECRET unset: generated a per-run secret (LAN helper only)');
+  }
+  const allowedOrigins = env.COT_ROOMS_ALLOWED_ORIGINS
+    ? env.COT_ROOMS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : null;
+  const world = env.COT_MATCH_WORLD === 'terrain' ? 'terrain' : 'dedicated';
+  const transport = env.COT_ROOMS_MATCH_TRANSPORT ?? 'service';
+  if (transport !== 'service' && transport !== 'p2p') throw new TypeError("COT_ROOMS_MATCH_TRANSPORT must be 'service' or 'p2p'");
+  const relay = createRelayIssuer({ env: pickRelayEnv(env), warn: (line) => log.warn(line) });
+  if (relay.source !== 'none') log.info(`relay credentials for browser-hosted matches: ${relay.source}`);
+  // (mp-scale-251) the dev override for bot-filled test rooms: a versus room may set teams up to this (the wire's 32 a
+  // side at most); unset, every room keeps its mode's sizes (src/sim/matchRuleset.ts roomSizeRulesFor), as the Worker does
+  const devMaxTeamSize = integerEnv('COT_ROOM_DEV_MAX_TEAM_SIZE', 0, 0, ROOM_DEV_MAX_TEAM_SIZE);
+  if (devMaxTeamSize) log.info(`dev override: versus rooms may set teams up to ${devMaxTeamSize}`);
+  return createRoomsServer({
+    host: env.COT_ROOMS_HOST || '0.0.0.0',
+    port: integerEnv('COT_ROOMS_PORT', 8792, 1, 65535),
+    seatSecret,
+    controlSecret: env.COT_MATCH_CONTROL_SECRET || seatSecret,
+    allowedOrigins,
+    world,
+    matchTransport: transport,
+    ...(devMaxTeamSize ? { guards: { maxTeamSize: devMaxTeamSize } } : {}),
+    log,
+    relayCredentials: () => relay.issue(),
+  });
+}
+
+const isCli = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isCli) {
+  startRoomsServerFromEnv().then((server) => {
+    installProcessShutdown(() => server.close());
+  }).catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

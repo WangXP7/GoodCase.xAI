@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/iamtechartist/boba-bar",
+  "commit": "a4bbb89dacb9a2ce4942df1815faadce17ca74a2",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 18,
+  "bytes": 177114
+}

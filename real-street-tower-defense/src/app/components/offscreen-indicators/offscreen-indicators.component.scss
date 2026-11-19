@@ -1,0 +1,38 @@
+// Layout of the arrows at the view edge: one per direction, centred on its
+// point, a small round plate with a chevron pointing out. Red for enemies
+// close to the HQ, brass and a little larger when a boss is among them. Only
+// the arrows take a click.
+
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Red ring for enemies close to the HQ; brass and larger with a boss */
+.osi {
+  --td-mark: var(--td-health-red);
+  --td-mark-text: var(--td-hp-text);
+}
+
+.osi-boss {
+  --td-mark: var(--td-brass);
+  --td-mark-text: var(--td-brass-light);
+}
+
+/* Count toward the view centre (offset from the component), centred on the
+   chip first */
+.osi-count {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: 20px;
+  margin: -8px 0 0 -10px;
+  padding: 0 3px;
+  text-align: center;
+  font-size: var(--td-fs-small);
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--td-text-primary);
+}

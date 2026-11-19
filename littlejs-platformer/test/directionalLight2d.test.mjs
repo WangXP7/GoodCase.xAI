@@ -1,0 +1,85 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadEngine } from './vmEngine.mjs';
+
+// The 2D directional light, a sun for the light system: one at a time, made after the plugin, its settings and
+// their defaults, and the background caster flag every object has
+
+function engine()
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true); console.assert = ()=> {}; new LightSystemPlugin;');
+    return run;
+}
+const thrown = (run, code)=> run(`(()=> { try { ${code} } catch (e) { return e.message; } })()`);
+
+test('a DirectionalLight has its sunDirection, toward the sun as 3D\'s, its color and settings, and is the light system\'s', ()=>
+{
+    const run = engine();
+    const light = JSON.parse(run(`var sun = new DirectionalLight(vec2(2, -1), hsl(.1, .5, .9));
+        JSON.stringify({x: sun.sunDirection.x, y: sun.sunDirection.y, castShadow: sun.castShadow,
+            shadowLength: sun.shadowLength, backgroundDepth: sun.backgroundDepth, current: lightSystem.directionalLight === sun,
+            size: lightSystem.directionalTextureSize})`));
+    assert.deepEqual(light, {x: 2, y: -1, castShadow: true, shadowLength: 20, backgroundDepth: 3, current: true, size: 512});
+    run('sun.destroy()');
+    assert.deepEqual(JSON.parse(run('JSON.stringify(new DirectionalLight().sunDirection)')), {x: -1, y: 1},
+        'the sun up and to the left by default, shining down and to the right');
+});
+
+test('one at a time: a second asserts while the first lives, and destroying it lets another be made', ()=>
+{
+    const run = engine();
+    run('var sun = new DirectionalLight');
+    assert.match(thrown(run, 'new DirectionalLight') ?? '', /one DirectionalLight/);
+    run('sun.destroy()');
+    assert.equal(run('lightSystem.directionalLight'), undefined, 'destroying it clears it');
+    assert.equal(thrown(run, 'new DirectionalLight'), undefined);
+});
+
+test('it asserts without the plugin, and on a direction that is no vector or zero', ()=>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true); console.assert = ()=> {};');
+    assert.match(thrown(run, 'new DirectionalLight') ?? '', /LightSystemPlugin/);
+    run('new LightSystemPlugin');
+    assert.match(thrown(run, 'new DirectionalLight(vec2())') ?? '', /sunDirection/);
+    assert.match(thrown(run, 'new DirectionalLight(5)') ?? '', /sunDirection/);
+});
+
+test('a negative shadowLength or backgroundDepth, or a zero sunDirection, asserts at its update', ()=>
+{
+    const run = engine();
+    run('var sun = new DirectionalLight');
+    assert.equal(thrown(run, 'sun.update()'), undefined);
+    assert.match(thrown(run, 'sun.shadowLength = -1; sun.update()') ?? '', /shadowLength/);
+    assert.match(thrown(run, 'sun.shadowLength = 2; sun.backgroundDepth = -1; sun.update()') ?? '', /backgroundDepth/);
+    assert.match(thrown(run, 'sun.backgroundDepth = 3; sun.sunDirection = vec2(); sun.update()') ?? '', /sunDirection/);
+});
+
+test('every object has castBackgroundShadow, off by default', ()=>
+{
+    const run = engine();
+    assert.equal(run('new EngineObject().castBackgroundShadow'), false);
+    assert.equal(run('new TileLayer(vec2(), vec2(4)).castBackgroundShadow'), false);
+});
+
+test('directionalTextureSize is a whole number of 1 or more, checked where the sizes are', ()=>
+{
+    const run = engine();
+    assert.match(thrown(run, 'lightSystem.directionalTextureSize = 0; lightSystem.clampTextureSizes()') ?? '',
+        /directionalTextureSize/);
+    assert.match(thrown(run, 'lightSystem.directionalTextureSize = NaN; lightSystem.clampTextureSizes()') ?? '',
+        /directionalTextureSize/);
+    run('lightSystem.directionalTextureSize = 300.7; lightSystem.clampTextureSizes()');
+    assert.equal(run('lightSystem.directionalTextureSize'), 300, 'a fraction is taken down to whole texels');
+});
+
+test('in a release build, where the assert is gone, a second sun takes over and the first is destroyed', ()=>
+{
+    const { run } = loadEngine({}, '', 'littlejs.release.js');
+    run('setHeadlessMode(true); new LightSystemPlugin; var first = new DirectionalLight; var second = new DirectionalLight;');
+    assert.equal(run('lightSystem.directionalLight === second'), true);
+    assert.equal(run('first.destroyed'), true, 'the first is not left alive and doing nothing');
+    run('first.destroy()');
+    assert.equal(run('lightSystem.directionalLight === second'), true, 'destroying the first again leaves the second');
+});

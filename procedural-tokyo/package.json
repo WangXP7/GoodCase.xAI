@@ -1,0 +1,35 @@
+{
+  "name": "procedural-tokyo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A real-time 3D Tokyo in the browser, compiled from public data (PLATEAU, OpenStreetMap, GSI) with procedural detail",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "fetch": "node tools/pipeline/fetch.mjs",
+    "compile": "node --max-old-space-size=4096 tools/pipeline/compile.mjs",
+    "preview": "node tools/pipeline/preview.mjs",
+    "deploy": "node tools/deploy.mjs",
+    "test": "node tools/tests/tileformat.test.mjs && node tools/tests/road-markings.test.mjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
+    "@takram/three-atmosphere": "^0.19.1",
+    "@takram/three-clouds": "^0.7.6",
+    "@takram/three-geospatial": "^0.9.1",
+    "@takram/three-geospatial-effects": "^0.6.4",
+    "earcut": "^3.2.4",
+    "lil-gui": "^0.21.0",
+    "n8ao": "^2.0.1",
+    "pngjs": "^7.0.0",
+    "polygon-clipping": "^0.15.7",
+    "postprocessing": "^6.39.5",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.5",
+    "vite": "^8.3.2"
+  }
+}

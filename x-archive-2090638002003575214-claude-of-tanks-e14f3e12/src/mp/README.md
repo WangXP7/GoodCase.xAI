@@ -1,0 +1,299 @@
+# Multiplayer v2 client (`src/mp`)
+
+The browser side of `docs/MULTIPLAYER-V2.md`: a server-authoritative match
+client for up to 14v14 that speaks the binary wire in `src/mp/wire`, predicts
+the viewer's own tank through the shared movement module, interpolates
+everyone else, and drives the existing renderer, HUD, FX and audio through one
+thin presentation adapter. Every layer below `presentation/` runs unchanged in
+Node — the receipts and the soaks drive the real client headless. This is the
+**online driver** (docs/ARCHITECTURE.md §1.6, [SKILL.md](SKILL.md)): nothing under `src/mp` is reached by a local
+battle, which steps the shared core on the page.
+
+## Module map
+
+| Directory | Owns | Node-runnable |
+|---|---|---|
+| `wire/` (server lane) | The binary schema and codecs both sides share. Import it; never edit it from the client lane. | yes |
+| `transport/` | `Transport` contract (`open/send/reconnect/close`, `onFrame/onState`, `bufferedBytes`, typed close reasons), `WebSocketTransport`, `LoopbackTransport` pair, `WebRtcTransport` (one reliable ordered data channel to the hosting browser through the room's signaling relay; ICE from `src/mp/transport/iceConfig.ts` over the room's relay credentials, `room_relay` — docs/MULTIPLAYER-V2.md §13.14), `MigratingTransport` (swaps a running client's link across a host migration); `rtcDouble.test-support.ts` is the scripted WebRTC world the receipts run on. | yes |
+| `match/` | `MatchClient` and its parts: `clock.ts`, `inputStream.ts`, `snapshotStream.ts`, `interpolation.ts`, `prediction.ts` (+ `movementCheckpoint.ts`; `authorityRow.ts`, a row onto a hull, which a migrated host's restore shares), `events.ts`, `recovery.ts`, `headlessDriver.ts`, `migrationStore.ts` (the sealed keyframes a client keeps for a host migration), `rtcClientLink.ts` (the actor's link over a data channel and the host acceptor); `scriptedServer.test-support.ts` is the fixture server the receipts use. | yes |
+| `host/` | The browser host (docs/MULTIPLAYER-V2.md §13.6): `matchHost` (main thread: the Worker port, the WebRTC acceptor, the loopback seat, the room reports), `matchHostCore` (in the Worker: the unchanged `server/match` actor, the Web Crypto HELLO gate, sealed migration keyframes), `migrationState`, `hostPlan`, `seatTokenWeb`, `worldCollision` (the map's collision manifest, fetched and verified), `browserHostPort` (the Worker chunk) / `inProcessHost` (Node). | yes (the Worker chunk is browser-only) |
+| `presentation/` | `PresentationAdapter` + `bindMatchPresentation`, `RecordingPresentation` (headless), `createBattlePresentation` (the renderer/HUD/FX/audio bridge), `createPredictionWorld` (the collision the prediction integrates against). | adapter + recorder yes; the battle presentation needs the fleet and `three` |
+| `room/` | The room protocol and policy both sides share, `RoomActor` (the room state machine the LAN helper and the Worker run), `RoomClient` (create/join/resume, commands, chat, `match_start`). | yes |
+| `session/` | `MatchSession` (one room's session owner: a `MatchClient` and a presentation per round), `createHeadlessSession` (receipts, `tools/mp-rooms-e2e.mjs`, `tools/mp-exit-e2e.mjs`), `createRoomConnectionAdapter` (the Play menu's v2 room connection), `resolveRoomsUrl` (the rooms endpoint policy), `NetworkStatusModel` (`networkStatus.ts`: the link's status snapshot, threshold table, banner facts and telemetry summary — below), `createBrowserComposition` (the browser launch, below). | yes; the browser composition's default presentation factory needs the fleet and `three` |
+
+Dependency direction: `presentation → match → transport`, all three `→ wire`
+and `→ src/sim` (movement only). The first multiplayer's `src/net` left the tree with the cutover of 2026-09-29; the
+receipts import it only to prove parity (`movementCheckpoint.selftest.mjs`).
+
+## Layer contracts
+
+**Transport.** Five calls and two subscriptions. `send` returns false and
+counts a drop when the frame would leave more than `maxBufferedBytes` (64 KB)
+unsent; refusals sustained for 5 s close the transport with `backpressure`.
+`reconnect(reason)` drops the socket and retries with backoff (250 ms doubling
+to 8 s, ±20 % jitter) inside a 60 s window, presenting the resume token on the
+URL (`?resume=<token>&attempt=<n>`) so a proxy or Durable Object can route the
+new socket to the same match; `open { resumed: true }` tells the owner to run
+its handshake again. `close('client' | 'server' | …)` never reconnects; an
+unsolicited socket close always does, because the owner ends a deliberate
+server close itself when it sees the wire `CLOSE` first. The loopback pair
+keeps socket semantics — order preserved under jitter, a graceful close
+delivered behind the frames sent before it — and adds one-way latency, jitter
+and loss per direction on the caller's clock (`pump(nowMs)`); `lossFilter`
+restricts loss to replaceable frames (SNAPSHOT, INPUT), which is what loss
+means on an ordered socket.
+
+**MatchClient.** `connect()`, `update(nowMs, elapsedS)` once per display frame,
+`leave()`, `dispose()`; `onWelcome`, `onFrame`, `onPhase`; `stats()` for F3.
+The frame (`MatchFrame`) carries the interpolated remote samples, shells, the
+sampled meta clocks, the persistent destroyed-prop list and revision, the
+viewer's predicted `TankState` + newest authority row + viewer section + this
+frame's predicted own shot, the budgeted reliable events, and the viewer's own
+accepted shots (immediate). Prediction is enabled by a `PredictionProvider`
+(`{ world: { heightField, collide? }, specFor }`) at construction or later via
+`enablePrediction` (the presentation knows the map late).
+
+**Presentation.** `applyRoster(roster, context)`, `applyFrame(frame)`,
+`applyEvent(event, { own, feedbackPredicted })`, `applyVerdict`,
+`setVisibility(entityId, visible)`, `dispose`. `bindMatchPresentation(client,
+adapter)` is the whole glue. The battle presentation writes the same surfaces
+v1's bridge fed (`game.tanks/tankById/player/shells/spotting`, `timeS`,
+`preBattleS`, `result`, `gameMode`, `matchModeState`; the bus vocabulary
+`shell:fired`, `shell:hit`, `shell:expired`, `tank:destroyed`, `prop:crushed`,
+`module:state`, `tank:fire`, `tank:ram`, `battle:ended`, `ui:*`, `ammo:*`,
+`weapon:predicted`, `mode:*`; the tank visuals' `setVisible`, `syncFromState`
+seeding, `stripEra/resetEra`, `setDestroyed/resetDestroyed`, `recoilKick`,
+`gunMuzzleWorld/gunDirWorld`; `worldCollision.crushObstacle`, with
+`{ settled: true }` for destruction older than this seat's view) and owns no
+rule: combat values are the authority's rows, the own tank renders the
+predictor's state object directly, effects are the authority's events.
+
+## The client's rules and their constants (why each number)
+
+| Rule | Constant | Why |
+|---|---|---|
+| Server clock | median of the last 16 pongs after rejecting the slower half of RTTs and 3-MAD outliers; slew ≤ 50 ms/s, ≤ 250 ms of elapsed per step; snap above 2 s | v1's slew (a late pong can never move a fast tank a visible fraction of a metre in one frame); the RTT-half filter removes asymmetric-path samples; the snap keeps a slept tab from slewing for a minute |
+| Pings | 8 at 200 ms, then 1 Hz; HELLO→WELCOME is the first sample | the offset filter fills before the countdown ends |
+| Room keepalive | every 15 s (`pingIntervalMs`), the exact text frame `ping` (`ROOM_KEEPALIVE_REQUEST`) when the transport carries it (`sendKeepalive`), else the `room_ping` envelope; the answer (`pong`, or `room_pong`) is the room RTT readout and `lastKeepaliveAt` | P1b (2026-09-28): the Room Durable Object answers the frame through its hibernation auto-response without waking — never a handled message, so never a billed request on the Free plan (the envelope wakes it and is billed; deployed clients from before the frame keep it and still work); 15 s keeps NATs and proxies from dropping the socket |
+| Input | 60 Hz ticks, every frame carries the newest 3 ticks, `fireSeq`/`actionSeq` repeat until acknowledged, per-bit release by first sequence | the wire's contract; one lost frame loses nothing |
+| Lead | starts 2 ticks over the server tick + RTT/2; +1 when `inputMarginTicks` < 1 (≤ 1 per 250 ms), −1 when > 3 (≤ 1 per s), 0..12 | controls arrive 1–3 ticks early, as the server's buffer asks |
+| Tick catch-up | ≤ 4 ticks per frame; > 8 behind skips ahead | a suspended tab must not flood the server with stale controls |
+| Snapshot ring | 96 frames (3 s); ack = newest assembled frame, `NO_TICK` = "send a keyframe" | keyframes go every 2 s; a delta against an evicted or unknown baseline requests a keyframe at once |
+| Interpolation delay | 2 intervals + 2 × arrival jitter + 1 interval while a loss is < 2 s old, clamped to 2..4 intervals (67–133 ms at 30 Hz); grows at ½ of elapsed, releases at ⅒ | v1's adaptive buffer with the charter's bounds; latency is recovered at 1.1× real time, never by seeking back |
+| Extrapolation | ≤ 1 interval, angles continue the last short-arc secant for at most one interval | the charter's cap; longer stalls hold the render clock at the horizon (the delay grows, then releases) and a stall past 400 ms or beyond the buffer resyncs once with every entity flagged `snapped` |
+| Hull blending | monotone Hermite on the ground, plain Hermite airborne, shortest-arc angles, teleport above max(8 m, 3 × speed × dt) snaps | contact-safe (a stale tangent never overshoots a stop), ballistic arcs stay velocity-correct |
+| Prediction | rewind to the row + the version-1 integrator checkpoint (viewer section), replay ≤ 24 ticks (400 ms), correction = the same-tick shift accumulated onto the decaying one | the server's lag-compensation history is 400 ms; a perfect prediction stages nothing |
+| Correction envelopes | hull 110 ms, attitude/support 160 ms, live aim 75 ms; 180/240 ms for 300 ms after a contact; release ≤ 0.2 m horizontal and 0.1 m vertical per frame; hard snap only above 7 m | v1's ratified envelopes ("Client smoothness") |
+| Resting hull | held while nothing requests motion and the re-prediction stays within 3 cm / 2.5 cm / 0.0035 rad | quantization chatter never reaches the screen; drive intent releases it at once |
+| Display tick | a fractional tick advancing at 1 tick per tick of local time, slewed ⅒ per frame toward the sampler, blending a 32-pose ring | lead and RTT changes never hitch the local hull |
+| Own shot feedback | flash on a fire edge only when authority ≤ 250 ms old says the slot is ready, once per ready epoch; the `shell_fired` carrying that `fireIntentSeq` confirms | v1's `shotFeedbackVersion 1` rule |
+| Events | released once the presented tick reaches theirs, ≤ 3 per frame, a heavy one (shot, hit, impact, destruction, prop) ends the flush — for at most 4 ticks past their tick, then everything due lands together; own shots bypass | v1's volley budget; the deadline from the world state audit (2026-10-01): one heavy beat per frame put a volley's or a tree line's tail 13–20 ticks behind the world on a 30 Hz presenter |
+| Destroyed props | the persistent destroyed list every snapshot carries is settled state: a prop it names that this seat has not seen fall is laid at its final pose, no fall, no sound; a prop whose `world_prop_destroyed` the client still owes the presentation (queued, staged, or in the frame's events — `MatchFrame.destroyedPending`) is left to that event, which fells it live with the authority's direction and speed; a prop already down falls once (a migrated host's re-send is no second crunch); the list is compared by content, not by revision alone | the world state audit (2026-10-01): the list arrives one interpolation delay ahead of the presented world and used to fell every tree first — early, toward +Z, at speed 0 — while a rejoin or a return replayed every earlier fall as an animation |
+| Which prop | the authority's index is its collision manifest's (the desktop tier's base map); a fall fells the viewer's record at that index only when it is the prop the event names (box centre within 1 cm, same kind), else the viewer's own record of that prop found by identity, else nothing; a world laid out otherwise (`layoutTier` mobile, a `terrainVariant`) reads the persistent list through the manifest's identities (`setAuthorityObstacles`) or not at all; the crunch names its `obstacleIndex` | the ghost-crunch lane (2026-10-02): the mobile tier's lighter placements and Frontline Assault's trench works put another prop at nearly every index — 237 of 274 falls felled a prop nobody touched on the mobile tier |
+| Recovery | stalled after 5 s without accepted authority (one reconnect request); before its WELCOME a held seat waits out the hold its host announced (wire HOLD) and a 3 s release margin, those two at most 33 s, before its 5 s begin, and a link to a newly elected host allows the 33 s before any word (`recovery.ts` holdAllowanceMs); live only after a snapshot on the socket, failed 60 s after the loss, explicit leave | v1's watchdog and grace; WELCOME alone never ends an outage; a host holds a seat's HELLO through its boot and a resume hold (round 3 B1/X6) |
+| Status verdict | `good` / `degraded` / `bad` / `offline` from one table (round-trip floor 160 / 300 ms, spread 40 / 100 ms, 4 s loss 6 / 15 %, snapshot age 250 / 1000 ms, cadence 80 / 50 % of 30 Hz, visible corrections 2 / 6 per s) after the transport and link states; sampled at 4 Hz | `docs/MULTIPLAYER-V2.md` §12; the round trip is the 16-sample window minimum (a busy main thread can only inflate a pong), a window with a ≥ 250 ms self-stall judges neither cadence nor freshness |
+
+## Peer-to-peer (owner decision 2026-09-28)
+
+A `match_start` whose URL is `rtc://<room>/<generation>` opens no socket (docs/MULTIPLAYER-V2.md §13). The seat the
+room names as host boots `src/mp/host` — the match actor in a Worker on the map's collision manifest fetched from
+`/mp-collision/v3` (229's v5 manifests; the production before keeps its own frozen route, docs/MULTIPLAYER-V2.md "Manifest routes"), seat tokens verified with the per-match host secret, reports to the room (one `ended` report closes the match, nothing after it), a sealed keyframe of every
+entity every 2 s — and plays through the host's loopback pair; every other seat opens a `WebRtcTransport` to the host
+through `room_signal`. Both ride a `MigratingTransport`: a `host_changed` with a newer generation makes the elected
+peer open its retained keyframe (only its `host_changed` carries the secret), boot a host at the continued tick and
+swap its link onto it; the other peers re-offer to the new host; a replaced host steps down. Seats that cannot host
+(no Worker, the mobile tier, the never-host switch) send `host_decline` on join. The status model shows the role,
+the generation, the candidate path (TURN), the host uplink and the migration banner. Receipts: `transport/webRtcTransport`,
+`match/rtcClientLink`, `host/*`, `room/roomClientSignals`, the extended session / status / surface / telemetry ones,
+the headless three-seat proof `tools/mp-p2p-headless.mjs` (core group) on `tools/mp-p2p-room-double.ts`, and the
+lifecycle proofs `tools/mp-room-lifecycle.mjs` (docs/MULTIPLAYER-V2.md §13.11: eighteen scenarios in which no room, seat or
+client may hang, against the local actor, wrangler dev or the deployed Worker; its receipt in the core group,
+`npm run test:net:v2:rooms:lifecycle` with the slow budgets);
+`npm run test:net:v2:p2p` runs the same flow in three headless Chromes with real WebRTC (`--rooms=wss://…` for the real
+room service; the two tabs still rendering draw at 320×200 while the old host re-enters, so its program compile is not
+starved by two full battle frames on the shared headless GPU). The v2 entry itself keeps a shader preparation that runs
+out of its wall-clock window going while programs keep linking (a `slow_reveal` beacon `compile_extended`, a
+`compileRetry` stage), lets the covered reveal link the rest at its last resort (`compile_deferred`) and refuses only a
+preparation that cannot succeed; after any refused entry the loader clears and the room's lobby opens again with
+Rejoin battle — docs/MULTIPLAYER-V2.md §13.6 "Entry resilience" and "A slow compile never refuses entry".
+
+The certification of the peer-to-peer match (§13.8, P3 lane 2026-09-28) drives N seats as tabs of the peer harness
+`tools/mp-p2p-peer/` (this session composition with no renderer, the browser host, real WebRTC, prediction against the
+manifest world; a serve-only vite middleware at `/mp-p2p-peer/`, never in the build) with `tools/mp-p2p-soak.mjs`
+(`npm run test:net:v2:p2p:soak --seats=28 --rooms=ws://127.0.0.1:8791 --port=5340 --play=6 --migrate-every=3`, the room
+service being `wrangler dev` of `cloudflare/rooms` with the dev origin allowed): host tick cost, uplink, snapshot rate,
+RTT, clock offset, lost frames, memory, the migration measured on every seat (the tab close, or `--migrate-mode=stepdown`
+for the `host_only` step-down), desync, the room's messages by type, each against §13.8's budgets. ICE candidates ride
+inside the offer and answer SDP since that lane (`awaitIceGathering`): a 14v14 start on production ICE costs ≈ 230 room
+messages instead of ≈ 1,350, and the host's room socket never nears the 120-per-10 s window.
+
+## Network status and the exit flow
+
+`session/networkStatus.ts` owns one in-place snapshot of the link (transport
+state with the reconnect attempt and the delay before the next try, the
+recovery phase, the round-trip floor / median / spread, cadence against the
+authority's 30 Hz, snapshot age, buffer depth, windowed loss, visible
+corrections per second, byte rates, the wire close reason and whether it ended
+the seat, the room's phase / round trip / region / seat / seated count) and
+the verdict table above; `networkBannerFor` turns a snapshot into the banner
+fact, `summary()` into what telemetry keeps. The browser composition owns the
+model (the room attaches on adoption, the match client on every `match`
+phase), mounts `src/ui/multiplayerStatus.ts` — the strip, the F3 panel, the
+banner, the Leave battle control — after activation and paints it from the
+pumps at the model's cadence.
+
+Leave battle (F4 armed then confirmed, the panel, the banner once the link is
+bad, the settings row) is the lifecycle owner's Garage return: the wire
+`LEAVE`, the socket closed, the presentation released, the session back in
+the lobby, no timer or listener left (`exitFlow.selftest.mjs` asserts the
+order); the room seat and its `match_start` stay, so the lobby offers *Rejoin
+battle* while the room's match runs and `beginRoom` re-enters through
+`MatchSession.enterMatch` (same token, same entity). A server-side seat drop
+(a wire `CLOSE` with a seat-drop reason) paints the banner with the reason and
+takes the same clean return after a 3 s notice; a lost link keeps the
+`network_disconnect` result; a room kick tears the match link down through
+the same leave. Telemetry keeps one note per played round (`mp_exit`) plus
+counted reconnects and drops. `docs/MULTIPLAYER-V2.md` §12 has the tables,
+the copy and the measured runs.
+
+## Receipts and soaks
+
+Every module has a receipt in the core group (`tools/selftest-suites.mjs`):
+`src/mp/transport/transport.selftest.mjs`, `src/mp/match/{clock,inputStream,
+snapshotStream,interpolation,events,recovery,movementCheckpoint,prediction,
+matchClient}.selftest.mjs`, `src/mp/presentation/battlePresentation.selftest.mjs`,
+`src/mp/session/{networkStatus,exitFlow,browserComposition}.selftest.mjs`,
+`tools/mp-client-soak.selftest.mjs`, `tools/mp-rooms-e2e.selftest.mjs`,
+`tools/mp-exit-e2e.selftest.mjs`. Run any of them with `node <file>`.
+
+`matchClient.selftest.mjs` is the loopback receipt against the scripted server
+fixture (100 ms RTT ± 30 ms, 3 % loss): no hard snaps, remote and own pose
+steps ≤ 0.5 m, correction release ≤ 0.25 m, input ack lag p50 ≤ RTT + 2 ticks
+(the intrinsic lag, i.e. minus the lead the client chose), keyframe recovery
+after dropped baselines, stall → reconnect → live, the 60 s grace, leave and a
+server close, a spectator.
+
+The soak (`tools/mp-client-soak.mjs`) runs N headless clients on one virtual
+clock against the real `server/match` MatchActor (its authority, bots, lag
+compensation and publisher; seats admitted through signed seat tokens) or the
+fixture, and prints every gate plus bytes per client per second:
+
+```
+node tools/mp-client-soak.mjs                        # 4 clients, 120 s, 100 ms ± 30 ms, 3 % loss, MatchActor on verdant
+node tools/mp-client-soak.mjs --server=fixture --seconds=20
+node tools/mp-client-soak.mjs --clients=8 --rtt=160 --jitter=40 --loss=0.05 --map=alpine --json
+```
+
+Measured 2026-09-25 (4 clients + 4 bots, 120 s, MatchActor, verdant, terrain
+world): 12.1–12.8 KB/s down and 3.3 KB/s up per client (the charter's 12–18
+KB/s is sized for 28 rows; 8 rows read at the floor), interpolation delay
+120–128 ms at 11–16 ms of measured jitter, 0 hard snaps, remote steps ≤ 0.47 m,
+own steps ≤ 0.43 m, release ≤ 0.21 m, misprediction ≤ 1.5 m (hull contacts
+and shell knocks the client cannot see; 0.03–0.3 m otherwise), intrinsic ack
+lag p50 6 / p95 7 ticks against 7–8 ticks of RTT, every own shot predicted and
+confirmed, 0 rejected inputs, 0 dropped snapshots, server tick p95 0.17 ms.
+
+## Browser launch
+
+Since the cutover of 2026-09-29 (docs/MULTIPLAYER-V2.md §13.10) this is the
+only multiplayer path: no switch, no v1 fallback. The Play menu
+(`src/ui/playMenu.ts`, loaded behind explicit multiplayer intent — nothing
+under `src/mp` is on the solo boot path) imports its room connection directly:
+
+- `session/playMenuAdapter.ts` — `createRoomConnectionAdapter` owns one room
+  acquisition for the menu (connect / observe / close / forget) over a
+  `RoomClient`; the menu renders the lobby shape `roomToLobby` produces and
+  sends the room's commands. The connection's `session` is recognised by
+  `isMultiplayerV2Session`; the room's `match_start` reaches the menu's
+  `onHostStart` for every seat. An unreachable room host is a
+  `RoomConnectError` (`room_unreachable`), a deployment without one
+  `room_unconfigured`: both present as "Room service unavailable" with a retry.
+- `session/endpoint.ts` — `resolveRoomsUrl` names the room host the menu
+  connects to: `VITE_ROOMS_URL` (a `wss://` origin), the official site's Worker
+  (`src/officialHost.ts`), or the LAN helper (`npm run server:mp`, port 8792)
+  on local and RFC1918 hosts. There is no connection-settings field.
+- `session/lobbyIntent.ts` — loaded with the menu by `src/main.ts`: the
+  pending lobby (the menu's seat while the player browses the Garage) and the
+  composition's owned room (its `network:roomState` event) paint the Garage's
+  room strip, warm the room's battlefield and roster builders through the
+  lobby preloader (`session/lobbyPreloader.ts`), and relay the strip's Ready, the vehicle pick and the end
+  screen's Start back into the menu, which sends the commands.
+
+The menu's `onNetworkStart` calls `beginMultiplayerV2Battle` in main, which
+mounts the synchronous intent cover and loads `session/browserComposition.ts`,
+built from the app's ports (`multiplayerAppPorts()` in main: the loader cover,
+`ensureBattleVisuals`, the battle-only modules, `ensureWorld`, the roster
+labels, the warm owners, the activation runtime, the Garage return). Per room
+it owns one `MatchSession`; per `match_start` the session asks it for a
+presentation:
+
+1. cover, reset the round state, show the concrete battlefield of `match_start`
+   with the room's roster; load the modules, the visuals and the world together;
+2. `createBattlePresentation` on the world's collision (paint from the room
+   seats' `camo`); after WELCOME wait for `rosterReady()`, seat the ground
+   sampler, enable prediction with `predictionWorld()`;
+3. on the first frame: the covered warm order v1 proved (atmosphere, night
+   lighting, terrain, wrecks, program compile, player panel (after the compile
+   since battle-spikes-253: its mask programs link behind the scene's), opening effects,
+   shot cards), `activate` (world/HUD/FX reset, phase `battle`, camera
+   ownership, Garage shutdown), the opening ground cover, final shadows, the
+   black watchdog, `primeReveal`, the loader fade;
+4. the verdict reaches the end overlay through the presentation's
+   `battle:ended`; once the result is up (or the player is back in the Garage)
+   the lobby re-attaches to the Play menu (`attachActiveRoom`, version 2) for
+   the rematch, which re-enters through the same `beginRoom`;
+5. the Garage return's network port keeps the room (`disposePresentation`
+   leaves the match with the wire `LEAVE`, the seat stays with its
+   `match_start`: the lobby's *Rejoin battle* re-enters the running match) or
+   closes it (`closeMatch`); an explicit leave from the lobby drops the seat
+   at once; Leave battle in the HUD (F4, the network panel, the banner, the
+   settings row) is the Garage return with the room kept.
+
+Failures go to the existing surfaces: a load that fails, the black watchdog
+refusing the frame, the match link exhausted while loading (`lost`) and the
+start timeout (120 s without `match_start`) restore the Garage under the cover
+and settle the entry `false`; `lost` in a live round ends it once as
+`network_disconnect`; the room vanishing (kicked, expired, resume denied,
+transport exhausted) clears input, returns to the Garage and opens the menu's
+room failure panel with the reason. The composition's frame hooks (`pump`,
+`pumpBackground`, `queueConsumable`, `queueAction`, `active`) are main's
+network predicate and pumps. Diagnostics builds publish
+it as `window.__MULTIPLAYER_V2` (`stats()`: room, session, round, events by
+kind and shots by shooter, the last failure).
+
+The receipt (`session/browserComposition.selftest.mjs`, core group) drives the
+composition through a scripted session owner and a recorded presentation:
+the start, the covered load, prediction, the warm order, activation, the
+reveal, controls (aim intent from the own actor's aim point, HUD action edges),
+the pumps, the verdict and the lobby back on the menu, the Garage return with
+the room kept, the rematch on the same owner, a lost link, a failing world
+load, the black watchdog, the room closing mid-battle and mid-load, an
+explicit leave mid-load and from the lobby, the start timeout.
+
+### Browser end-to-end
+
+`npm run test:net:v2:browser` (`tools/mp-browser-e2e.mjs`): one in-process room
+host (`server/rooms/serve.ts`, the LAN helper's composition), one Vite dev
+server of the checkout with its own `--cache-dir`, two pristine Puppeteer
+contexts on the real site. A creates a LAN room from the
+Garage's battle menu; the invite link comes from the address bar (`v=2`); B
+opens it, joins and takes A's side; both ready; A starts; both reach the
+battle (first battle frames screenshot); the network strip shows a ping on
+both and F3 expands A's panel (screenshot); 30 s of driving with one shot per
+side; A closes its tab; B plays on 15 s; the admin migrates to B; B leaves the
+battle to the Garage (room kept), reopens the room, rejoins the running match
+from the lobby (screenshot), leaves again and leaves the room. Any console
+or page error fails the run; `report.json` and the screenshots land in
+`--out` (default `.qa-dev/mp-browser-e2e`).
+
+Measured 2026-09-25 (headless Chromium, ANGLE; terrain world; 2 humans + 2
+bots): Garage ready 3.5 s (A) / 2.6 s (B, invite link); room created 5.7 s
+after the Garage; load to the revealed battle 14.6 s (A) / 14.1 s (B) with 4
+actors each; in 30 s of play each browser saw the other move 35–36 m across
+30/30 disclosed samples and saw the other's `shell_fired` once (own shot
+predicted and confirmed on both), RTT 10–11 ms, ~1 230 snapshots and ~1 900
+presented frames per browser; after A closed its tab B received 451
+snapshots in 15 s with the link `live` and the battle unresolved, and the
+admin migrated to B 30.3 s after the close (the reconnect grace); B's Garage
+return kept the room, the explicit leave left A's disconnected seat alone in
+a `playing` room; 0 browser errors; 106 s of wall time.

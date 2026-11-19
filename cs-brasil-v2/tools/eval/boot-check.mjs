@@ -1,0 +1,446 @@
+/* boot-check.mjs — O JOGO ABRE? É a régua mais barata e a mais cara de não ter.
+   ═══════════════════════════════════════════════════════════════════════════════════
+   O DEFEITO QUE COMPROU ESTA RÉGUA (07/08, achado EM PRODUÇÃO)
+
+   `public/js/main.js` chamava `_pingPresenca()` no escopo do módulo na linha 483, e a
+   função lê `testMode` na primeira linha — `const` declarado só na 498. `const` não é
+   hoisted como `var`: a chamada lança
+
+     ReferenceError: Cannot access 'testMode' before initialization
+
+   **no escopo do módulo**, o que mata a avaliação inteira de `main.js` ali. Tudo depois
+   da linha 483 nunca acontece — inclusive o `onclick` do `#btn-jogar` (linha ~779).
+   Medido no navegador contra `www.corosolto.com.br`: o botão JOGAR existia e era INERTE.
+   O site respondia 200, o build passava, o `check:fast` inteiro passava, o `npm run
+   syntax` passava (é erro de RUNTIME, não de sintaxe) — e ninguém conseguia jogar.
+
+   ── POR QUE NENHUM PORTÃO EXISTENTE PEGOU ───────────────────────────────────────
+   Todos mediam OUTRA coisa, e cada um com boa razão:
+     · `syntax`      — parseia o módulo; TDZ não é erro de parse.
+     · `eval:site`   — status HTTP e JSON-LD das 13 rotas; a `/` respondia 200 com o HTML
+                       inteiro, porque o HTML não depende do JS ter avaliado.
+     · `harness.mjs` — sobe a classe `Game` em node, importando `game.js` DIRETO. Ele
+                       nunca passa por `main.js`, que é justamente a casca que liga o menu.
+     · as capturas   — usam `/?debug=1&auto=1` ou importam módulos soltos.
+   Faltava a pergunta mais boba de todas, e é sempre a mais boba que fica sem régua:
+   **o main.js terminou de avaliar?**
+
+   O QUE ELA MEDE (na rota REAL `/`, no navegador, com o Astro no ar)
+     B1 · zero `pageerror` durante o boot.
+     B2 · o `main.js` terminou de avaliar — prova pelo EFEITO, não pela ausência de erro:
+          `#btn-jogar` tem `onclick`, que é atribuído lá embaixo no arquivo.
+     B3 · uma exceção injetada no começo da partida volta ao menu e abre uma mensagem
+          acionável, sem stack nem overlay técnico no modo normal.
+     B4 · o relatório automático chega e o botão de confirmação consegue reenviá-lo.
+     B5 · `?debug=1` continua mostrando o diagnóstico técnico para quem está depurando.
+     B8 · boot direto na rota do multiplayer (`/?partida=multiplayer`) não lança. O
+          `restoreHubRoute()` do fim do boot chamava `abrirMultiplayer()` antes do
+          `const mpEl` existir: "Cannot access 'mpEl' before initialization" (#707/#708/#723).
+     B9 · boot sem `Object.hasOwn` (Chromium 89–92: tem import map, não tem hasOwn) não lança (#718).
+
+   A MUTAÇÃO QUE A DEIXA VERMELHA (executada)
+     --mutante=tdz   injeta, no topo do main.js servido, uma leitura de `testMode` antes
+                     da declaração — reproduz exatamente o defeito de 07/08. A mutação é
+                     em MEMÓRIA (interceptação de rota), o arquivo em disco não é tocado.
+     --mutante=sem-amigavel  tira a chamada de recuperação do catch de `startGame`.
+     --mutante=vaza-detalhe  remove a guarda que restringe o overlay técnico a `?debug=1`.
+     --mutante=sem-console-watchdog  volta a esconder do console o timeout do watchdog.
+     --mutante=mp-cedo       devolve o boot para antes das declarações do multiplayer -> B8.
+     --mutante=hasown        devolve o `Object.hasOwn` ao `restoreHubRoute`            -> B9.
+
+   USO
+     node tools/eval/boot-check.mjs                 # sobe o astro dev sozinho
+     node tools/eval/boot-check.mjs --mutante=tdz   # prova que a régua morde
+     BASE=https://www.corosolto.com.br node tools/eval/boot-check.mjs   # alvo externo
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+import { spawn, spawnSync, execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+const args = process.argv.slice(2);
+const val = (k, d) => { const v = (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1]; return v === undefined ? d : v; };
+const MUTANTE = val('mutante', '');
+const PORTA = Number(val('porta', 4321));
+const FOTO = val('foto', '');
+const EXTERNO = !!process.env.BASE;
+const BASE = process.env.BASE || `http://localhost:${PORTA}`;
+const MAIN_LOCAL = readFileSync(new URL('../../public/js/main.js', import.meta.url), 'utf8');
+const MUTANTES = new Set(['', 'tdz', 'sem-amigavel', 'vaza-detalhe', 'sem-console-watchdog', 'mp-cedo', 'hasown']);
+if (!MUTANTES.has(MUTANTE)) {
+  console.error(`✗ BOOT0  mutante desconhecido: ${MUTANTE}`);
+  process.exit(1);
+}
+
+let subiuAqui = false;
+async function arvoreCorreta() {
+  try {
+    const r = await fetch(BASE + '/js/main.js');
+    return r.ok && await r.text() === MAIN_LOCAL;
+  } catch { return false; }
+}
+async function noAr() {
+  const fim = Date.now() + 90_000;
+  while (Date.now() < fim) {
+    if (await arvoreCorreta()) return true;
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  return false;
+}
+async function sobeServidor() {
+  if (EXTERNO) return true;
+  try {
+    if ((await fetch(BASE + '/robots.txt')).status) {
+      if (await arvoreCorreta()) return true;
+      throw new Error(`a porta ${PORTA} já serve outra árvore; use --porta=<livre>`);
+    }
+  } catch (e) {
+    if (/já serve outra árvore/.test(e.message)) throw e;
+  }
+  // mesmo padrão do site-smoke.mjs: o `astro dev` daemoniza, quem derruba é o `stop`.
+  spawn('npx', ['astro', 'dev', '--port', String(PORTA)], { stdio: 'ignore', detached: false }).on('error', () => {});
+  subiuAqui = true;
+  return noAr();
+}
+function derrubaServidor() { if (subiuAqui) spawnSync('npx', ['astro', 'dev', 'stop'], { stdio: 'ignore' }); }
+
+let browser;
+try {
+  if (!(await sobeServidor())) {
+    console.error(`✗ BOOT0  o site não subiu em ${BASE} (90 s de espera)`);
+    process.exit(1);
+  }
+  const gRoot = execSync('npm root -g').toString().trim();
+  const _pw = await import(pathToFileURL(`${gRoot}/playwright/index.js`).href);
+  const chromium = _pw.chromium || _pw.default?.chromium;
+  browser = await chromium.launch({
+    executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--headless=new', '--mute-audio'],
+  });
+  const context = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+  // navegador de diagnóstico grava a permissão explícita (privacy-runtime.js): a medição já
+  // é ligada por padrão, mas o portão fixa o estado para não depender do default do runtime
+  await context.addInitScript(() => {
+    // B3 asserts Portuguese copy: select the product's explicit language before boot.
+    try { localStorage.setItem('cs_lang', 'pt'); } catch {}
+    try { localStorage.setItem('cs_privacy', JSON.stringify({ version: 'corosolto-analytics-v1', analytics: true, updatedAt: new Date(0).toISOString() })); } catch {}
+  });
+  const relatorios = [];
+  let mutacaoAplicou = !MUTANTE;
+
+  /* Falha determinística no PRIMEIRO passo da partida. No modo normal ela fica dormente,
+     porque a rota inicial não usa `?auto`; a segunda navegação abre esse caminho sem
+     depender de asset, GPU ou tempo de rede. */
+  await context.route('**/js/main.js*', async (rota) => {
+    const r = await rota.fetch();
+    const corpo = await r.text();
+    let novo = corpo;
+    if (MUTANTE === 'tdz') {
+      novo = `void testMode;\n${novo}`;
+      mutacaoAplicou = true;
+    } else {
+      // ancorado no NOME: a lista de parâmetros já mudou uma vez (#489, `online = false`) e cegou a régua
+      const inicioPartida = /async function _startGame\([^)]*\) \{/;
+      novo = novo.replace(inicioPartida, (m) => `${m}\n  throw new Error('SEGREDO_BOOT_CHECK');`);
+      novo = novo.replace("if (testMode && params.get('auto'))", "if (params.get('auto'))");
+      if (!novo.includes("throw new Error('SEGREDO_BOOT_CHECK')") || novo === corpo)
+        throw new Error('fixture de falha não aplicou em main.js');
+      if (MUTANTE === 'mp-cedo') {
+        const boot = novo.match(/\nshow\('main-menu'\);[^\n]*\nif \(HUB_ENABLED\) \{[\s\S]*?restoreHubRoute\(\);\n\}\n/);
+        const ancora = '\nfunction showInspectionResult(';
+        if (!boot || !novo.includes(ancora)) throw new Error('mutante mp-cedo não casou');
+        novo = novo.replace(boot[0], '\n').replace(ancora, `${boot[0]}${ancora}`);
+        mutacaoAplicou = true;
+      }
+      if (MUTANTE === 'hasown') {
+        const guarda = 'Object.prototype.hasOwnProperty.call(panes, section)';
+        if (!novo.includes(guarda)) throw new Error('mutante hasown não casou');
+        novo = novo.replace(guarda, 'Object.hasOwn(panes, section)');
+        mutacaoAplicou = true;
+      }
+      if (MUTANTE === 'sem-amigavel') {
+        const chamada = "window.__gameLaunch?.fail(e, 'main.js:startGame');";
+        if (!novo.includes(chamada)) throw new Error('mutante sem-amigavel não casou');
+        novo = novo.replace(chamada, '/* MUTANTE: recuperação amigável removida */');
+        mutacaoAplicou = true;
+      }
+    }
+    await rota.fulfill({ status: 200, contentType: 'application/javascript', body: novo });
+  });
+
+  if (MUTANTE === 'vaza-detalhe' || MUTANTE === 'sem-console-watchdog') {
+    await context.route(/\/\?auto=E,$/, async (rota) => {
+      const r = await rota.fetch();
+      const corpo = await r.text();
+      const novo = MUTANTE === 'vaza-detalhe'
+        ? corpo.replace('if (!DEBUG) return;', 'if (false) return; /* MUTANTE */')
+        : corpo.replace("try { consoleErroNativo('Falha ao abrir ' + etapa, err); } catch(_) {}", '/* MUTANTE: log nativo removido */');
+      if (novo === corpo) throw new Error(`mutante ${MUTANTE} não casou`);
+      mutacaoAplicou = true;
+      await rota.fulfill({ status: r.status(), headers: r.headers(), body: novo });
+    });
+  }
+
+  /* B4: chegada = seq monotônica; aguarda histórico E futuro sem gap de registro
+     (varredura e cadastro síncronos no mesmo tick). Ledger R90, expectations frozen. */
+  const coletor = { seq: 0, registros: [] };
+  const aguardas = new Set();
+  function coletorRecebe(corpo) {
+    const rec = { seq: ++coletor.seq, corpo };
+    coletor.registros.push(rec);
+    for (const w of [...aguardas]) {
+      if (Date.now() >= w.prazo) {
+        clearTimeout(w.timer); aguardas.delete(w); w.resolve(null);
+      } else if (rec.seq > w.minSeq && w.casa(corpo)) {
+        clearTimeout(w.timer); aguardas.delete(w); w.resolve(rec);
+      }
+    }
+  }
+  function esperaRelatorio(casa, minSeq, prazo) {
+    if (Date.now() >= prazo) return Promise.resolve(null);
+    const noHistorico = coletor.registros.find((r) => r.seq > minSeq && casa(r.corpo));
+    if (noHistorico) return Promise.resolve(noHistorico);
+    return new Promise((resolve) => {
+      const w = { casa, minSeq, prazo, resolve, timer: null };
+      w.timer = setTimeout(() => { aguardas.delete(w); resolve(null); }, Math.max(prazo - Date.now(), 1));
+      aguardas.add(w);
+    });
+  }
+  function limpaAguardas() { for (const w of aguardas) { clearTimeout(w.timer); w.resolve(null); } aguardas.clear(); }
+
+  await context.route('**/api/jserror', async (rota) => {
+    let corpo; try { corpo = JSON.parse(rota.request().postData() || '{}'); } catch { corpo = { invalido: true }; }
+    relatorios.push(corpo);
+    coletorRecebe(corpo);
+    await rota.fulfill({ status: 204, body: '' });
+  });
+
+  const page = await context.newPage();
+
+  const erros = [];
+  const consoleErros = [];
+  page.on('pageerror', (e) => erros.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') consoleErros.push(m.text()); });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await page.waitForFunction(() => window.__CS_MAIN_READY__ === true, null, { timeout: 15000 }).catch(() => {});
+
+  console.log(`RÉGUA DE BOOT${MUTANTE ? `  [MUTAÇÃO: ${MUTANTE}]` : ''}   alvo ${BASE}\n`);
+
+  const b1 = erros.length === 0;
+  console.log('B1 · zero pageerror durante o boot');
+  if (b1) console.log('   nenhum');
+  else for (const e of erros) console.log(`   ${e}`);
+  console.log(`   ${b1 ? 'PASSA' : 'FALHA'}\n`);
+
+  /* B2 mede o EFEITO e não a ausência de erro: `pageerror` engolido por um `catch` de
+     terceiro deixaria B1 verde com o jogo morto do mesmo jeito. O `onclick` do JOGAR é
+     atribuído perto do FIM do main.js — se ele está lá, o módulo avaliou inteiro. */
+  const alvo = await page.evaluate(() => {
+    const b = document.getElementById('btn-jogar');
+    return { existe: !!b, ligado: !!(b && b.onclick) };
+  });
+  const b2 = alvo.existe && alvo.ligado;
+  console.log('B2 · o main.js terminou de avaliar (o JOGAR está ligado)');
+  console.log(`   #btn-jogar existe ${alvo.existe}   onclick ligado ${alvo.ligado}`);
+  console.log(`   ${b2 ? 'PASSA' : 'FALHA'}\n`);
+
+  let b3 = false, b4 = false, b5 = false, b6 = false, b7 = false;
+  if (b1 && b2) {
+    erros.length = 0;
+    await page.goto(`${BASE}/?auto=E,`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await page.waitForFunction(() => !document.getElementById('launch-error')?.classList.contains('hidden'), null, { timeout: 15000 }).catch(() => {});
+    const estado = await page.evaluate(() => {
+      const modal = document.getElementById('launch-error');
+      const card = modal?.querySelector('.launch-error-card');
+      const menu = document.getElementById('main-menu');
+      const loading = document.getElementById('load-overlay');
+      const rect = card?.getBoundingClientRect();
+      return {
+        modal: !!modal && !modal.classList.contains('hidden'),
+        menu: !!menu && !menu.classList.contains('hidden'),
+        loading: !!loading && !loading.classList.contains('hidden'),
+        tecnico: !!document.getElementById('crash-overlay'),
+        vazou: document.body.innerText.includes('SEGREDO_BOOT_CHECK'),
+        codigo: document.getElementById('launch-error-code')?.textContent || '',
+        retry: document.getElementById('launch-error-retry')?.textContent?.trim() || '',
+        report: document.getElementById('launch-error-report')?.textContent?.trim() || '',
+        dentro: !!rect && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+      };
+    });
+    b3 = estado.modal && estado.menu && !estado.loading && !estado.tecnico && !estado.vazou
+      && /^CÓDIGO [0-9A-F]{8}$/.test(estado.codigo) && estado.retry === 'TENTAR DE NOVO'
+      && estado.report === 'REPORTAR ERRO' && estado.dentro;
+    console.log('B3 · falha ao abrir a partida recupera para mensagem amigável em 3:2');
+    console.log(`   modal ${estado.modal}   menu ${estado.menu}   loading ${estado.loading}   técnico ${estado.tecnico}`);
+    console.log(`   detalhe vazou ${estado.vazou}   código ${JSON.stringify(estado.codigo)}   card dentro da tela ${estado.dentro}`);
+    console.log(`   ${b3 ? 'PASSA' : 'FALHA'}\n`);
+
+    if (FOTO) await page.screenshot({ path: FOTO, fullPage: false, timeout: 120000 });
+
+    /* B4 exige recibo automático exato ANTES do clique; manual só vale com seq NOVA (> base de
+       chegadas) + ack real de UI, tudo num único prazo absoluto de 15 s. Ledger R90. */
+    const b4Prazo = Date.now() + 15000;
+    const restoB4 = () => {
+      const ms = b4Prazo - Date.now();
+      if (ms <= 0) { const erro = new Error('B4_DEADLINE'); erro.code = 'B4_DEADLINE'; throw erro; }
+      return ms;
+    };
+    const fpCartao = (estado.codigo.match(/^CÓDIGO ([0-9A-F]{8})$/) || [null, null])[1];
+    const casaB4 = (r) => !!fpCartao && !!r && !r.invalido
+      && typeof r.fingerprint === 'string' && r.fingerprint.toUpperCase() === fpCartao
+      && r.kind === 'error' && r.source === 'main.js:startGame'
+      && typeof r.message === 'string' && r.message.includes('SEGREDO_BOOT_CHECK');
+    let recAuto = null, recManual = null, baseManual = -1, cliques = 0, erroB4 = '';
+    let ack = { texto: '', status: '' }, faseB4 = 'AUTO';
+    try {
+      recAuto = await esperaRelatorio(casaB4, -1, b4Prazo);
+      if (recAuto) {
+        restoB4();
+        baseManual = coletor.seq;
+        const pManual = esperaRelatorio(casaB4, baseManual, b4Prazo);
+        try {
+          faseB4 = 'MANUAL_CLICK';
+          cliques = await page.evaluate(() => {
+            const botao = document.getElementById('launch-error-report');
+            if (!botao || botao.disabled) return 0;
+            botao.click(); return 1;
+          });
+          faseB4 = 'MANUAL_REPORT';
+          recManual = await pManual;
+        } finally { limpaAguardas(); }
+        if (recManual) {
+          faseB4 = 'UI_ACK';
+          await page.waitForFunction(() => {
+            const t = document.getElementById('launch-error-report')?.textContent?.trim() || '';
+            const s = document.getElementById('launch-error-status')?.textContent?.trim() || '';
+            return t === 'RELATÓRIO ENVIADO ✓' && /ajuda a gente/i.test(s);
+          }, null, { timeout: restoB4() });
+          restoB4();
+          ack = await page.evaluate(() => ({
+            texto: document.getElementById('launch-error-report')?.textContent?.trim() || '',
+            status: document.getElementById('launch-error-status')?.textContent?.trim() || '',
+          }));
+          restoB4();
+        }
+      }
+    } catch (erro) {
+      if (erro.code !== 'B4_DEADLINE' && erro.name !== 'TimeoutError') throw erro;
+      erroB4 = erro.code || `B4_${faseB4}_TIMEOUT`;
+    } finally { limpaAguardas(); }
+    b4 = !erroB4 && Date.now() < b4Prazo && !!recAuto && !!recManual && cliques === 1
+      && ack.texto === 'RELATÓRIO ENVIADO ✓' && /ajuda a gente/i.test(ack.status);
+    console.log('B4 · relatório automático + confirmação manual chegam ao coletor');
+    console.log(`   automático seq ${recAuto ? recAuto.seq : 'nenhum'}   manual seq ${recManual ? recManual.seq : 'nenhum'} (base ${baseManual})   cliques ${cliques}`);
+    console.log(`   total no coletor ${relatorios.length}   aguardas pendentes ${aguardas.size}   botão ${JSON.stringify(ack.texto)}`);
+    if (!b4) console.log(`   motivo ${erroB4 || (!recAuto ? 'B4_AUTO_TIMEOUT' : cliques !== 1 ? 'B4_MANUAL_CLICK_MISSING'
+      : !recManual ? 'B4_MANUAL_TIMEOUT' : Date.now() >= b4Prazo ? 'B4_DEADLINE' : 'B4_UI_ACK_INVALID')}`);
+    console.log(`   ${b4 ? 'PASSA' : 'FALHA'}\n`);
+
+    if (b3 && b4) {
+      const debug = await context.newPage();
+      await debug.goto(`${BASE}/?debug=1`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+      /* Injeção em callback de TIMER, não direto no evaluate: a stack de erro criado
+         direto em page.evaluate carrega os frames do UtilityScript do Playwright, e o
+         corte de arnês de automação (BUG-151, merge #587) classifica esses frames como
+         externos DE PROPÓSITO — arnês apontado para produção não é defeito do jogo.
+         Erro de quem depura de verdade (console do navegador) nunca carrega esses
+         frames; callback de setTimeout agendado pelo evaluate também não (medido:
+         "at eval (eval at evaluate…)" sem UtilityScript), e é esse o formato de erro
+         que o painel ?debug=1 promete exibir. Sem isto o B5 falha desde o #587. */
+      await debug.evaluate(() => new Promise((resolve) => {
+        setTimeout(() => { console.error(new Error('DETALHE_DEBUG_BOOT_CHECK')); resolve(); }, 0);
+      }));
+      await debug.waitForTimeout(100);
+      const painel = await debug.locator('#crash-overlay').textContent().catch(() => '');
+      b5 = /DEBUG \(console\)/.test(painel || '') && /DETALHE_DEBUG_BOOT_CHECK/.test(painel || '');
+      console.log('B5 · ?debug=1 preserva o painel técnico');
+      console.log(`   painel técnico ${b5 ? 'visível com o detalhe' : 'ausente ou sem o detalhe'}`);
+      console.log(`   ${b5 ? 'PASSA' : 'FALHA'}\n`);
+      await debug.close();
+    } else {
+      console.log('B5 · não medido porque a recuperação amigável já falhou\n');
+    }
+
+    const antes = consoleErros.length;
+    await page.evaluate(() => {
+      window.__gameLaunch?.begin('teste do console', 60000, () => false);
+      window.__gameLaunch?.fail(new Error('tempo limite ao abrir teste do console'), 'launch-watchdog');
+    });
+    await page.waitForTimeout(100);
+    const novos = consoleErros.slice(antes);
+    b6 = novos.some((m) => /Falha ao abrir teste do console/.test(m) && /tempo limite ao abrir teste do console/.test(m));
+    console.log('B6 · timeout do watchdog permanece visível no console');
+    console.log(`   ${b6 ? 'erro e stack preservados' : 'nenhum erro correspondente no console'}`);
+    console.log(`   ${b6 ? 'PASSA' : 'FALHA'}\n`);
+
+    const watchdogsAntes = relatorios.filter((r) => r.source === 'launch-watchdog').length;
+    await page.close();
+    const jornada = await context.newPage();
+    // Exercise a first guest visit even after the earlier recovery scenarios.
+    await jornada.addInitScript(() => { localStorage.removeItem('cs_treta_intro'); localStorage.removeItem('csbr-mode-ann-seen'); });
+    await jornada.goto(`${BASE}/?nav=1&home=legacy&ui=legacy`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await jornada.locator('#splash-enter:not(.hidden)').waitFor({ timeout: 120000 });
+    await jornada.locator('#boot-splash').dispatchEvent('pointerdown');
+    await jornada.waitForFunction(() => { const s = document.getElementById('boot-splash'); return !s || s.classList.contains('gone'); }, null, { timeout: 120000 });
+    const anuncio = jornada.locator('dialog.cs-modes-dialog[open]');
+    if (await anuncio.count()) { await anuncio.locator('.cs-modes-primario').click(); await anuncio.waitFor({ state: 'detached', timeout: 120000 }); }
+    await jornada.waitForTimeout(3100);
+    const entradaOk = await jornada.locator('#launch-error').evaluate((el) => el.classList.contains('hidden'));
+    // O anúncio solicitado fecha antes do lobby; conta e loja continuam sem abrir sozinhas.
+    const modaisAbertura = await jornada.locator('dialog[open]').count();
+    // SINGLE PLAYER abre os modos contra bots; Mata-mata inicia a jornada padrão.
+    await jornada.locator('.cs-item[data-act="single-player"]').click();
+    await jornada.locator('.cs-item[data-act="sp"]:visible').click();
+    await jornada.locator('#ms-continue').click();
+    await jornada.locator('#team-select:not(.hidden)').waitFor({ timeout: 120000 });
+    await jornada.locator('#btn-team-e').click();
+    await jornada.locator('#char-select:not(.hidden)').waitFor({ timeout: 120000 });
+    await jornada.waitForTimeout(3100);
+    const menuOk = await jornada.locator('#launch-error').evaluate((el) => el.classList.contains('hidden'));
+    const watchdogsDepois = relatorios.filter((r) => r.source === 'launch-watchdog').length;
+    b7 = entradaOk && menuOk && watchdogsDepois === watchdogsAntes && modaisAbertura === 0;
+    console.log('B7 · avançar rápido pela entrada e pelo menu não dispara falso timeout nem abre modal');
+    console.log(`   entrada ${entradaOk}   menu ${menuOk}   novos watchdogs ${watchdogsDepois - watchdogsAntes}   modais inesperados na abertura ${modaisAbertura}`);
+    console.log(`   ${b7 ? 'PASSA' : 'FALHA'}\n`);
+    await jornada.close();
+  } else {
+    console.log('B3–B7 · não medidos porque o boot não concluiu\n');
+  }
+
+  const bootLimpo = async (url, antes) => {
+    const pg = await context.newPage();
+    const errosPg = [];
+    pg.on('pageerror', (e) => errosPg.push(e.message));
+    if (antes) await pg.addInitScript(antes);
+    await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await pg.waitForFunction(() => !!document.getElementById('btn-jogar')?.onclick, null, { timeout: 15000 }).catch(() => {});
+    const ligado = await pg.evaluate(() => !!document.getElementById('btn-jogar')?.onclick);
+    await pg.close();
+    return { errosPg, ligado };
+  };
+  const mp = await bootLimpo(`${BASE}/?partida=multiplayer`);
+  const b8 = mp.errosPg.length === 0 && mp.ligado;
+  console.log('B8 · boot direto na rota do multiplayer não lança');
+  for (const e of mp.errosPg) console.log(`   ${e}`);
+  console.log(`   pageerror ${mp.errosPg.length}   JOGAR ligado ${mp.ligado}`);
+  console.log(`   ${b8 ? 'PASSA' : 'FALHA'}\n`);
+
+  const velho = await bootLimpo(`${BASE}/`, () => { delete Object.hasOwn; });
+  const b9 = velho.errosPg.length === 0 && velho.ligado;
+  console.log('B9 · boot sem Object.hasOwn (Chromium 89–92) não lança');
+  for (const e of velho.errosPg) console.log(`   ${e}`);
+  console.log(`   pageerror ${velho.errosPg.length}   JOGAR ligado ${velho.ligado}`);
+  console.log(`   ${b9 ? 'PASSA' : 'FALHA'}\n`);
+
+  const passou = b1 && b2 && b3 && b4 && b5 && b6 && b7 && b8 && b9 && mutacaoAplicou;
+  console.log(passou
+    ? '✓ BOOT1  o jogo abre e falhas de entrada têm recuperação amigável, reportável e depurável'
+    : '✗ BOOT1  boot ou recuperação de falha não cumpriu o contrato');
+  await browser.close(); browser = null;
+  derrubaServidor();
+  process.exit(passou ? 0 : 1);
+} catch (e) {
+  console.error('✗ BOOT0  a régua não conseguiu medir:', e.message);
+  if (browser) await browser.close().catch(() => {});
+  derrubaServidor();
+  process.exit(1);
+}

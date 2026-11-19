@@ -1,0 +1,61 @@
+import { describe, it, expect } from 'vitest';
+import { Texture, type ShaderMaterial } from 'three';
+import { createDiamondMaterial, createGroundGlowMaterial, createLabelMaterial, createRingMaterial } from './marker-shaders';
+import { createPortalGateMaterial, setPortalGateTextures } from './spawn-portal-gate-material';
+import { createPortalGlowMaterial } from './spawn-portal-glow-material';
+import { PORTAL_SHADER_LAYOUT } from './spawn-portal-geometry';
+import { SPAWN_PORTAL_LOOK as L } from '../../../configs/visual-effects.config';
+import { DISPLAY_OUTPUT_GLSL } from '../display-output';
+
+/** Every material the marker and portal managers build, with the arguments they pass. */
+function materials(): Record<string, ShaderMaterial> {
+  return {
+    diamond: createDiamondMaterial(),
+    ring: createRingMaterial(),
+    groundGlow: createGroundGlowMaterial(),
+    label: createLabelMaterial(new Texture()),
+    portalGate: createPortalGateMaterial(
+      PORTAL_SHADER_LAYOUT, L.palette, L.frameExposure, L.frameGlints, L.glyphs, L.idleEnergy, L.rippleLife,
+    ),
+    portalGlow: createPortalGlowMaterial(PORTAL_SHADER_LAYOUT, L.palette, L.idleEnergy, L.rippleLife, L.circle, L),
+  };
+}
+
+describe('Marker- und Portal-Materialien', () => {
+  it('rechnen alle mit logarithmischer Tiefe', () => {
+    for (const material of Object.values(materials())) {
+      expect(material.vertexShader).toContain('#include <logdepthbuf_pars_vertex>');
+      expect(material.vertexShader).toContain('#include <logdepthbuf_vertex>');
+      expect(material.fragmentShader).toContain('#include <logdepthbuf_pars_fragment>');
+      expect(material.fragmentShader).toContain('#include <logdepthbuf_fragment>');
+    }
+  });
+
+  it('hält die Fresnel-Basis des HQ vor pow() in 0..1: mit MSAA wird die Normale über 1 hinaus extrapoliert, pow() einer negativen Basis ist NaN', () => {
+    const { diamond, ring } = materials();
+    expect(ring.fragmentShader).toContain('float fresnel = clamp(1.0 - abs(dot(viewDir, vWorldNormal)), 0.0, 1.0);');
+    expect(diamond.vertexShader).toContain('vFresnel = clamp(1.0 - abs(dot(viewDir, vWorldNormal)), 0.0, 1.0);');
+    expect(diamond.fragmentShader).toContain('float fresnel = clamp(vFresnel, 0.0, 1.0);');
+  });
+
+  it('schreibt die Farben des HQ für ihr Ziel: Diamant, Ringe und Label als Farbe, das Bodenglühen als Licht', () => {
+    const { diamond, ring, groundGlow, label } = materials();
+    for (const material of [diamond, ring, groundGlow, label]) {
+      expect(material.fragmentShader).toContain(DISPLAY_OUTPUT_GLSL);
+    }
+    expect(diamond.fragmentShader).toContain('gl_FragColor = displayOutput(vec4(finalColor, alpha));');
+    expect(ring.fragmentShader).toContain('gl_FragColor = displayOutput(vec4(finalColor, alpha));');
+    expect(groundGlow.fragmentShader).toContain('gl_FragColor = displayLight(vec4(finalColor, alpha));');
+    expect(label.fragmentShader).toContain('gl_FragColor = displayOutput(vec4(texColor.rgb, texColor.a * vAlpha));');
+  });
+
+  it('gibt dem Tor die gebackenen Texturen des Rahmens', () => {
+    const gate = materials()['portalGate'];
+    const [baseColor, normal, orm, emissive] = [new Texture(), new Texture(), new Texture(), new Texture()];
+    setPortalGateTextures(gate, { baseColor, normal, orm, emissive });
+    expect(gate.uniforms['uBaseMap'].value).toBe(baseColor);
+    expect(gate.uniforms['uNormalMap'].value).toBe(normal);
+    expect(gate.uniforms['uOrmMap'].value).toBe(orm);
+    expect(gate.uniforms['uEmissiveMap'].value).toBe(emissive);
+  });
+});

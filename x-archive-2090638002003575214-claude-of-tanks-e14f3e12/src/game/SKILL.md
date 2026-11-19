@@ -1,0 +1,315 @@
+---
+name: src-game-skill
+description: Work on battle integration, bots, input, garage dressing, progression, replays, and studio state.
+---
+
+# claude-of-tanks / src/game
+
+## Purpose
+<!-- agent-docs:fill:purpose -->
+Own game-level orchestration between pure simulation, presentation, input, bots,
+and persisted player choices.
+
+## Mental model & key files
+<!-- agent-docs:fill:model -->
+`stateCore.ts` owns the dependency-free typed session shell and event bus;
+`rosterState.ts` owns typed roster entities, battle-visual construction policy,
+and deterministic participant/camouflage planning; `rosterPresentation.ts`
+owns consistent lobby and pre-battle display rows without importing rendering
+or authority code; `soloBattleAccess.ts` owns
+retryable lazy acquisition while `soloBattleRuntime.ts` is the typed import
+boundary for legacy solo authority in `state.ts`, which owns battle setup and
+the fixed battle step; `battleEntryAcquisition.ts` owns covered solo/network
+dependency order and timing; `battleWarmRuntime.ts` owns battle-only terrain,
+wreck, Studio/shared FX, and covered deployment-program residency behind a
+retryable typed access facade; `ai.ts`
+owns bot decisions and is injected into the headless multiplayer authority;
+`jevCommander.ts` is the Jev commander (docs/JEV-COMMANDER.md): one text-only
+team document per team every few seconds (rotating bounded batches for large teams) through an injected transport,
+TypeSafe's answers gated by freshness and confidence into standing orders the
+classic controller takes through `setOrder()` and drops on expiry — the
+shared local controller owns mission driving, coordinated flanks, fall safety and ability reflexes even without orders (docs/BOT-TACTICS.md); `jevProtocol.ts` is the shared
+wire schema the proxy validates and builds the questions from;
+`input.ts` normalizes devices; `vehicleActions.ts` is the one table of a vehicle's actions (order, key, glyph, name)
+that the HUD's controls row, Settings › Controls, the input defaults and the Garage (`ui/vehicleActionList.ts`) read;
+`profile.ts` persists real local match history;
+`serviceRecord.ts` tracks medals through each battle from bus events (main.ts
+supplies the player/team/clock context) and keeps the medal case, achievement
+tiers and last 25 battles in `cot.service.v1`, emitting `service:medal` live
+and `service:battleAwards` at the end; medals never unlock anything;
+`playerBattleActions.ts` owns ammunition, consumable, special-action, and
+local-versus-network command policy without importing the combat runtime;
+`equipment.ts` owns the Garage's picker, persistence and stat card, and
+re-exports the rules from the DOM-free `src/sim/equipmentRules.ts` (the strict
+catalog, legal-loadout, multiplier, combat-attachment and bot-default contract
+shared by both authorities and read by the rooms Worker's rulesets);
+`playerFrameInput.ts` owns allocation-free per-frame movement, fire, mouse,
+touch, cursor fallback, zoom, free-look, and sniper-mode sampling;
+`pointerLockFeedbackRuntime.ts` owns pointer-lock denial/restoration listeners,
+the delayed cursor-aim notice, canvas recapture, and battle-start touch refresh;
+`mobileAutoAimRuntime.ts` owns touch target acquisition, loss, UI state and the
+allocation-free center-mass sample consumed by the camera input;
+`mobileBattleInputAccess.ts` keeps touch controls and that auto-aim owner out of
+desktop boot, joins concurrent touch entry, retries failed chunks, and owns the
+mobile sound toggle behind one typed access interface;
+`battlePhasePolicy.ts` is the synchronous source of truth for live-battle,
+settings, pointer-lock, disconnect-presentation, and Garage-idle predicates;
+`battleRolloutRuntime.ts` owns countdown/audio release without moving the
+covered reveal camera; `soloBattleEntryRuntime.ts` owns selected solo launch
+and the paint-before-fade Garage recovery transaction for failed cold entry;
+`sniperFillRuntime.ts` owns the retained shadow-free close-cover scope light;
+`combatFeedbackRuntime.ts` owns discrete ERA, hit-confirm, camera-recoil,
+prop-destruction, and Garage-residency reactions on the shared event bus;
+`armorAimOverlay.ts` owns the typed, bounded scoped plate-penetration overlay
+(painted on the vehicle's own paint by `vehicles/materials.ts` ARMOR_PAINT, zone by
+zone from `armorZones.ts`'s plates; `armorPaintPanels.ts` bakes each part's zone and
+leaves bare what a round's damage never reads: gear, and parts standing off the
+armour the authority traces);
+`battleFrameRuntime.ts` owns pause edges, retained input sampling, network
+cadence, pre-battle hold, the countdown's presentation edges (one rollout a
+battle, solo or network, late for a network battle joined after its count;
+each whole second of the running count), fixed-step debt, result progression,
+and rendered pose interpolation;
+`battlePresentationRuntime.ts` owns solo/network pose selection, spotting
+residency, running-gear detail cadence, vehicle FX, and light prop contact;
+`battleHudFrameRuntime.ts` owns the retained HUD frame, spectator perspective,
+spotting disclosure, aim publication, scoped armor targeting, and damage-panel
+transaction;
+`battleResultPresentationRuntime.ts` owns live player-death holds, result
+replay handoff, final verdict presentation, and round/exit reset state;
+`battleEnding.ts` is the pure battle-ending director (beat per mode × verdict
+reason, the deciding objective from observed mode events, the beat clock and
+skip), `battleEndingCamera.ts` poses its camera beats through the rig, and
+`killcamSelection.ts` is the pure final-kill replay policy the killcam reads;
+`killcamAccess.ts` owns retryable replay acquisition and its stable inactive
+facade; `killcam.ts` owns replay presentation, and its `active` flag is the one
+"a replay owns the screen" fact (`killcamScreen.ts` publishes it on the bus: the
+battle input owner, the audio overlay and the phase policy read it, never a copy
+fed by `killcam:begin`/`killcam:done`), while `studio.ts` renders the
+Scene Studio and `studioTimeline.ts` owns its strict JSON-safe storyboard and
+allocation-free camera/actor sampling contract. The Studio film renderer is
+`studioFilmPlan.ts` (pure film block, speed ramps, monotone cut-aware shutter
+schedules, adaptive counts, Halton jitter), `studioFilm.ts` (accumulation
+session: TAA bypass, per-sample cascades, cloud settle, flare film clock),
+`studioFilmExport.ts` (lazy WebCodecs encoder) and `studioFilmMux.ts` (pure
+MP4/WebM containers); while a film is open the live tick and Studio input stand
+still, the timeline advances unrounded, smoke emitters pulse on the 60 Hz grid
+and track phase follows the exact sample instant. `studioPicture.ts` owns the
+pure Studio picture schema (neutral default, clamps, named looks, minimal
+`state()` diff, thin-lens/letterbox/grain-seed physics) that
+`engine/cinemaPost.ts` renders; a neutral stage must never insert a pass.
+`studioLight.ts` owns the pure
+Studio times of day (a superset of the battle times, authored relative to each
+map's sky) and the scene `light` block; `studioLightRuntime.ts`, demand-loaded
+only by main.ts's Studio port, applies a plan over the battle owner's authored
+day (sky, key, readability, the baked horizon light, the ring's shadow re-bake,
+blue-hour/night lamps) and restores every value on a return to day, a world
+switch or Studio exit. Battles never import either file.
+The Studio opens shell-first: entering it or changing its battlefield runs under
+`studio.ts` `withStage()` — the panels show at once and wait inert while the
+viewport shows the map's card and the build's stage (`studioPanel.ts`
+`setStage`/`setStageProgress`); a loaded scene loads only its own tanks and the
+rest of the fleet warms at idle (`__STUDIO.ready()` awaits it), and
+`window.__STUDIO_LOAD` names each part of the load. The exit keeps the cover and
+a direct `/studio` boot the boot veil (docs/STUDIO.md).
+Watch mode (watch-mode-243) is a watched battle: any listed mode
+(`sim/matchRuleset.ts` `WATCH_RULES`) set up as a solo battle whose human seat a
+bot drives. `watchSeat.ts` owns the seats (`openWatchSeats` hands the player's
+seat to its parked brain; `takeWatchSeat`/`leaveWatchSeat` swap a living bot's
+hull with the watcher between fixed steps, so a replay is still the replay of its
+inputs); `watchController.ts` turns the watcher's input into the three views —
+the drone, a ride-along on any living tank, and Drive in that bot's seat through
+the player's own path — over `engine/watchCamera.ts`; `src/app/watchRuntime.ts`
+composes it into the battle, and `battleHudFrameRuntime.ts` shows the ridden
+tank's HUD read-only. The sim never reads the controller.
+`garagePedestalRuntime.ts` owns hero construction, shader submission, warm LRU
+residency, switch convergence, and battle visual handoff; it composes
+`garagePedestalPreloader.ts` for exact card-intent and quiet neighbor warming.
+`garageShowroomRuntime.ts` owns the Garage camera phase latch, pointer capture,
+drag/wheel bindings, and disposal while the engine orbit remains the only pose
+solver.
+`garageReturnRuntime.ts` owns battle/Studio return teardown, retained-room
+policy, world/hero handoff, coalesced leave transitions, and Battle Again
+sequencing.
+`garagePhasePresentationRuntime.ts` owns the authored Garage key lights,
+neutral showroom sun, mutually exclusive scene membership, renewable dressing
+GPU residency, world-root swaps, and terrain-relative stage placement. Camera
+framing and pedestal pose math remain with their existing owners.
+`garageEnvironmentPresentationRuntime.ts` owns the isolated Garage anchor,
+battlefield dormancy, lifecycle effects, and diagnostics.
+`garagePresentationPose.ts` is the only owner of hero heading, camera offset,
+look height, and FOV; stage, pedestal, activation, and return paths must consume
+it without variant-specific branches. `garageStage.ts` owns the restored exact
+Verdant indoor workshop. Its shell, fixed fixtures, lights, and wall-supported
+clutter use one construction-time half-turn around the podium; never rotate the
+hero, camera, shared maintenance graph, or rear-axis archive display to achieve
+that room composition. `garageEnvironmentKit.ts` owns the other nine bounded
+scene packs: generated real-terrain excerpts, authored world-space perimeter
+districts of seven real map structures, static tree-grove/ground-cover instances,
+Garage-sized PBR derivatives, the bounded
+three-layer terrain horizon, and the exact source-map preset on the shared
+procedural engine sky. `garageApproachDetails.ts` owns one
+terrain-following arrival route per map identity (including Cinder's three-road
+rail fan), while `exteriorDetailKit.ts` certifies every sill, pier, awning,
+ladder, pipe, balcony, and service fixture against its wall, roof, or ground
+support before those facades merge. `garageFacilityDetails.ts` builds two-sided
+service frames and static equipment across seven non-overlapping terrain
+terraces per pack; it must never add tank-shaped proxy geometry. All complete
+vehicles, turrets, guns, armor arrays, road wheels, track shoes, and service
+racks come from the shared full-detail fleet dressing. The architecture probe must
+keep their measured contact error at or below 0.1 m. It must never import a
+playable fleet builder.
+Every outdoor signature facility needs a believable purpose visible in the
+default view and a coherent silhouette through a full orbit. Ground all
+footings to a shared island datum, connect braces by endpoints, keep service
+hardware out of the camera orbit, and use actual fleet builders—not Garage-only
+silhouettes—for every readable vehicle or tank component.
+Never add a world-loading
+or per-frame update port to a Garage environment module. `garageDressingAccess.ts`
+demand-loads one shared, optimized four-bay modern maintenance layer after
+Garage readiness. Its Burlak, Abrams, Leopard 2A5/A5NL, T-90M, and K2
+exhibits surround all ten
+environments. Keep each service section under one static bay owner when moving
+it between quadrants so its tank, tools, floor dressing, signage, and support
+equipment cannot separate. Rolled hulls require grounded connected cradles with
+visible contact pads. Its connected freestanding field-record display remains on
+the tank's rear axis in every opening composition. Verdant alone may show the
+remaining wall-mounted interior clutter. Keep the
+fleet load behind the quiet-window scheduler, build the five full-detail static
+meshes in `garageWorkshopGeometryWorker.ts`, reconstruct them with the ordinary
+vehicle PBR role contract but four shared map-free solid national-service
+palettes in cooperative frame slices, reuse one graph across variants, and never
+duplicate it per scene pack. Background exhibits must not inherit player paint
+or allocate camouflage canvases. Transfer worker-computed bounds and only the
+position/normal attributes these materials consume; never rescan the full vertex
+stream on the render thread. The worker entry may import only those five exhibit
+families. A selector-menu intent may warm one non-selected outdoor scene inside
+the two-pack LRU, never all nine packs.
+`battleIntentRuntime.ts` owns the explicit Battle hover/focus lifecycle:
+concrete Random-map reservation, exact-roster texture coalescing, stale intent
+cancellation, and the camouflage-safe handoff into covered loading. Passive
+garage dwell never constructs a battlefield. `battleEntryLifecycle.ts` owns
+entry exclusivity across every mode and the covered default-frame reveal gate.
+`playSurfaceRuntime.ts` owns mode-specific menu acquisition, preload policy,
+active-room reopening, solo bypass, and battle dismissal. Later-declared lazy
+ports must stay behind closures so pristine boot never reads a temporal-dead-
+zone binding while the composition root is still evaluating.
+`soloBattleDeploymentRuntime.ts` owns the ordered solo deployment warm from
+final camouflage through exact roster, terrain, FX, shader, CSM, post, and
+reveal preparation; callers receive only generation and reveal receipts.
+`soloBattleLoadingRuntime.ts` owns the complete covered solo entry around that
+warm: exact world/roster acquisition, progress, texture upload, visual staging,
+minimum loader dwell, reveal fallback, countdown calculation, and diagnostics.
+`soloBattleStartRuntime.ts` owns the synchronous post-acquisition transaction
+that resets round-scoped presentation, activates the world and roster, and
+publishes the solo battle phase; `soloBattleStartAccess.ts` keeps it out of
+Garage/multiplayer boot until covered solo intent.
+The corresponding multiplayer lifecycle lives in
+`src/mp/session/browserComposition.ts`; `main.ts` supplies renderer and world
+adapters (`multiplayerAppPorts()`) but must not reimplement its
+preparation/readiness/reveal order. Keep it behind
+`src/mp/session/compositionAccess.ts` so Garage and solo boot do not evaluate
+or allocate multiplayer-only presentation policy.
+
+## Patterns to follow / invariants
+<!-- agent-docs:fill:patterns -->
+**One core, two drivers** (the owner, 2026-10-29; docs/ARCHITECTURE.md §1.6). In this directory `solo*` names the
+**local driver**: `state.ts` and the `soloBattle*` owners, with `battleFrameRuntime.ts`, the Proving Ground, Watch,
+killcam, replays, the campaign and Jev. They run the shared core on the page, with input, the fixed step and the render
+in one frame. They use no match client, prediction, interpolation, input-delay buffer, loopback, room or wire message,
+and nothing from `src/mp`. `ai.ts` and `botAbilities.ts` belong to the core: they import no driver.
+`tools/driver-boundaries.selftest.mjs` fails on any edge from a local owner into `src/mp` or the room host, including
+lazy imports and Worker entries. It also fails when main.ts's local entries (`beginLocalBattleEntry`, `beginLocalBattle`)
+name the online composition. An off-thread local simulation is still a local driver, and it needs the owner's OK after
+they have played it.
+
+Keep authoritative rules deterministic and Node-runnable. Inject world, bus,
+RNG, and presentation dependencies. Keep garage-safe session data in
+`stateCore.ts`, visual/roster policy in `rosterState.ts`, and combat integration
+in `state.ts`. Keep roster naming, filtering, and local-player ordering in
+`rosterPresentation.ts`. Garage boot must not statically import `state.ts`; acquire it
+through `soloBattleAccess.ts` on Battle or capture intent. Multiplayer work
+must move visual creation out of authority rather than importing more UI into
+`state.ts`.
+
+`battleVisualStreamer.ts` consumes `ensureStagedVisualsSteps` for covered
+construction and uses the caller's existing frame-budget/lifetime guard between
+private checkpoints. `ensureTankVisualSteps` rejects stale roster, round,
+renderer, actor or ground-sampler ownership before publishing. Preserve the
+original synchronous helpers, visual-pool behavior and player/bot quality policy.
+Report scheduling waits separately from non-await elapsed work, not as CPU time.
+
+## Common tasks → first action
+<!-- agent-docs:fill:tasks -->
+Trace callers in `src/main.ts`, run the nearest selftest, and preserve existing
+event payloads. Keep garage/Studio-safe state in `stateCore.ts`; do not add
+simulation or rendering imports there. Keep deterministic roster planning
+independent from combat setup so battle intent can preload exact families.
+Route Battle preload changes through `battleIntentRuntime.ts`; do not restore
+independent map plans, texture generations, or garage timers in `main.ts`.
+Route mode-picker and retained-room changes through `playSurfaceRuntime.ts`;
+keep menu construction retryable and keep solo entry independent of the menu.
+Acquire killcam implementation through `killcamAccess.ts`; do not restore its
+promise state in the composition root. Route player shell, consumable, and
+special-action policy through `playerBattleActions.ts`; inject combat and
+network ports instead of importing either implementation. Route rendered
+device polling through `playerFrameInput.ts`; keep the render loop ignorant of
+bindings and device modes. Route rendered tank updates through
+`battlePresentationRuntime.ts`; never apply the solo interpolation buffer to
+already-smoothed network poses. Bot changes require both focused AI tests and
+battle probes. A commander change runs `node src/game/jevCommander.selftest.mjs`
+and `node src/game/ai.selftest.mjs` (the classic path must stay green and
+unchanged); a real played battle uses the dev proxy (`npm run jev:dev`).
+Route mobile battle UI acquisition through `mobileBattleInputAccess.ts`; do not
+restore touch/auto-aim promise state or sound-toggle state in `main.ts`.
+Route phase-sensitive browser predicates through `battlePhasePolicy.ts`; do not
+restate live-battle semantics independently in settings, networking, or input.
+Keep solo launch selection and failed-entry recovery in
+`soloBattleEntryRuntime.ts`; never fade the loader before a restored Garage
+frame has painted.
+Route live HUD assembly through `battleHudFrameRuntime.ts`; do not rebuild
+spectator focus, spotting, aim, armor-target filtering, or damage presentation
+inside `main.ts`.
+Route rendered gameplay advancement through `battleFrameRuntime.ts`; do not
+retain pause transitions, fixed-step debt, countdown release, or parallel
+solo/network authority policy in `main.ts`.
+Route every battle/Studio return through `garageReturnRuntime.ts`; do not
+recreate replay/tank/network/world teardown order or a leave-transition latch
+in `main.ts`.
+Route Garage environment selection through
+`garageEnvironmentPresentationRuntime.ts`; do not load or activate battle
+worlds, retain environment state, or add camera offsets in `main.ts`.
+Route covered solo warm changes through `soloBattleDeploymentRuntime.ts`; do
+not put shader, effect, shadow, or reveal ordering back into `main.ts`.
+Route covered solo entry changes through `soloBattleLoadingRuntime.ts`; do not
+recreate its acquisition barrier, progress policy, or reveal handoff in the
+composition root.
+Route post-acquisition solo round reset and phase activation through
+`soloBattleStartRuntime.ts`; preload its access owner before the synchronous
+handoff and do not rebuild that transaction in `main.ts`.
+Route cold network entry changes through `src/mp/session/browserComposition.ts`
+(`beginRoom`); keep a new presentation private until the roster and the first
+authority frame succeed.
+Route result, death-beat, and replay-handoff changes through
+`battleResultPresentationRuntime.ts`; keep those latches out of `tick()`.
+Garage scene-pack changes must pass the architecture, terrain-generation,
+transition, persisted-outdoor-entry, and phase-resource gates. Preserve the
+two-pack cache, reject stale switch completions, perform shader and texture
+warming only after interactive readiness, and keep all environment identity out
+of the canonical pose. Static pack scenery receives the settled Garage shadow
+but never joins live CSM caster updates. Keep the stable shadowless hero bounce;
+do not add small-prop shadow casters or variant-specific Garage lights.
+
+## Gotchas
+<!-- agent-docs:fill:gotchas -->
+`state.ts` still mixes solo battle orchestration with some visual lifecycle
+calls; deepen that seam incrementally through `rosterState.ts` without pulling
+the solo graph back into garage boot. Entity IDs historically equal spec IDs
+and must not remain so in multiplayer.
+The mode energy skin (`juggernautVisual.ts`) is one material per drawn
+material, a program-variant twin included. In a mode that lights tanks
+(`matchRuleset.ts` `modeLightsTanks`) every tank wears it dormant from its
+staging (`prepareModeEnergy` in the streamers' `onVisualReady`, the opening
+warm's `prepareModeVisuals`) until the battle's exit clears it. Never end a
+skin on a scene removal (spotting detaches unseen enemies) and never swap
+materials on a role change: both relink programs on a live frame.

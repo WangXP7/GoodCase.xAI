@@ -1,0 +1,184 @@
+/* The shared component sheet (src/ui/components/components.ts builds the markup). It is the Premiere direction's own
+   kit, streams/brand-ui/phase2/bui01/src/components.css, under the live class names (src/ui/components/DIRECTION.md
+   maps each direction class to its cot-c- class), with every colour, font size, tracking, shadow and duration read from
+   a token (src/ui/tokens), so the presets (colour vision, contrast, motion) reach the components with no code. It
+   declares into the components layer, below every surface: a surface restyles a component without !important
+   (src/ui/styleLayers.ts). */
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+@layer components{
+/* ---- display type and copy (direction .d1-.d3, .h1-.h3, .body, .small, .data); the accent and hollow treatments are
+   the type head's .t-accent and .t-hollow ---- */
+.cot-c-d1{font:700 var(--fs-112)/.86 var(--font-display);letter-spacing:var(--track-title);text-transform:uppercase}
+.cot-c-d2{font:700 var(--fs-76)/.9 var(--font-display);letter-spacing:var(--track-title);text-transform:uppercase}
+.cot-c-d3{font:700 var(--fs-52)/.94 var(--font-display);text-transform:uppercase}
+.cot-c-h1{font:600 var(--fs-40)/1.02 var(--font-display)}
+.cot-c-h2{font:600 var(--fs-28)/1.08 var(--font-display)}
+.cot-c-h3{font:600 var(--fs-20)/1.15 var(--font-display)}
+.cot-c-body{font:400 var(--fs-16)/1.55 var(--font-body);color:var(--ink-2)}
+.cot-c-small{font:400 max(var(--fs-floor-12),var(--fs-13))/1.45 var(--font-body);color:var(--ink-3)}
+.cot-c-data{font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-data);color:var(--ink-2)}
+.cot-c-muted{color:var(--ink-3)}
+/* ---- buttons (direction .btn, -primary, -secondary, -ghost, -xl/-lg/-sm) ---- */
+.cot-c-btn{--h:var(--btn-h-m);box-sizing:border-box;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  height:var(--h);min-width:var(--h);padding:0 22px;border:0;border-radius:var(--control-radius);
+  background:var(--btn-media-fill);box-shadow:var(--ring-3);color:var(--ink-1);cursor:pointer;text-decoration:none;
+  font:600 max(var(--fs-floor-12),var(--fs-15))/1 var(--font-display);letter-spacing:var(--track-label-s);text-transform:uppercase;white-space:nowrap;
+  transition:background-color var(--dur-fast) var(--ease-enter),color var(--dur-fast) var(--ease-enter),transform var(--dur-instant) var(--ease-enter)}
+.cot-c-btn svg{width:18px;height:18px}
+.cot-c-btn--36{--h:var(--btn-h-s);padding:0 14px;font-size:max(var(--fs-floor-12),var(--fs-13))}
+.cot-c-btn--56{--h:var(--btn-h-l);padding:0 26px;font-size:var(--fs-16)}
+.cot-c-btn--64{--h:var(--btn-h-xl);padding:0 30px;font-size:var(--fs-18)}
+.cot-c-btn--icon{padding:0;width:var(--h)}
+/* a secondary on a plate sits a step above it (the default's media fill is for buttons over art and footage) */
+.cot-c-btn--secondary{background:var(--btn-secondary-fill);box-shadow:var(--btn-secondary-ring)}
+.cot-c-btn--primary{background:var(--btn-primary-fill);color:var(--btn-primary-ink);box-shadow:var(--btn-primary-shadow)}
+.cot-c-btn--ghost,.cot-c-btn--quiet{background:transparent;box-shadow:none;color:var(--ink-2)}
+.cot-c-btn--quiet{color:var(--ink-3);text-transform:none;letter-spacing:normal;font-family:var(--font-ui)}
+.cot-c-btn--danger{background:transparent;color:var(--text-danger);box-shadow:var(--ring-danger)}
+@media (hover:hover){
+  .cot-c-btn:hover{background:var(--surface-hover);color:var(--ink-1)}
+  .cot-c-btn--primary:hover{background:var(--btn-primary-hover);color:var(--btn-primary-ink)}
+}
+.cot-c-btn:active{transform:translateY(var(--btn-press-drop))}
+.cot-c-btn--primary:active{background:var(--btn-primary-press);box-shadow:none}
+.cot-c-btn:focus-visible,.cot-c-chip:focus-visible,.cot-c-seg__opt:focus-visible,.cot-c-tabs__tab:focus-visible,.cot-c-toggle:focus-visible{
+  outline:none;box-shadow:var(--focus-ring)}
+.cot-c-btn:disabled,.cot-c-btn[aria-disabled=true]{color:var(--btn-disabled-ink);background:transparent;box-shadow:var(--ring-2);
+  cursor:not-allowed;transform:none}
+.cot-c-btn .cot-i{flex:none}
+/* ---- key caps (direction .kbd) ---- */
+.cot-c-kbd{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;
+  border:0;border-radius:var(--control-radius);box-shadow:var(--ring-3);font:500 max(var(--fs-floor-11),var(--fs-11))/1 var(--font-data);letter-spacing:normal;
+  text-transform:none;color:var(--ink-2)}
+.cot-c-kbd svg{width:12px;height:12px;margin-inline:-1px}
+/* a glyph cap is as wide as a letter cap (22 px): the glyph gives back the 2 px it has over a capital */
+.cot-c-btn--primary .cot-c-kbd{color:var(--kbd-on-accent-ink);box-shadow:var(--kbd-on-accent-ring)}
+body:is(.cot-touch-layout,[data-cot-panels='overlay']) .cot-c-kbd{display:none}
+@media (hover:none),(pointer:coarse){.cot-c-kbd{display:none}}
+/* ---- chips and tags (direction .chip, .chip.on, .tag, .tag.new) ---- */
+.cot-c-chip{box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:0;
+  border-radius:var(--chip-radius);background:var(--chip-fill);box-shadow:var(--ring-2);color:var(--ink-2);
+  font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);white-space:nowrap}
+.cot-c-chip svg{width:15px;height:15px}
+button.cot-c-chip{cursor:pointer}
+.cot-c-chip--compact{width:34px;padding:0;justify-content:center}
+.cot-c-chip[aria-pressed=true]{color:var(--ink-1);background:var(--chip-fill-on);box-shadow:var(--ring-accent)}
+.cot-c-chip__count{color:var(--ink-3);font-size:max(var(--fs-floor-12),var(--fs-12))}
+.cot-c-tag{box-sizing:border-box;display:inline-flex;align-items:center;height:20px;padding:0 7px;border:0;border-radius:var(--control-radius);
+  box-shadow:var(--ring-2);font:600 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label);
+  text-transform:uppercase;color:var(--ink-2);white-space:nowrap}
+.cot-c-tag--accent{color:var(--btn-primary-ink);background:var(--accent);box-shadow:none}
+.cot-c-tag--ok{color:var(--text-ok);box-shadow:var(--ring-ok)}
+.cot-c-tag--warn{color:var(--text-warn);box-shadow:var(--ring-warn)}
+.cot-c-tag--danger{color:var(--text-danger);box-shadow:var(--ring-danger)}
+/* ---- segmented control (direction .seg, .seg span.on) ---- */
+.cot-c-seg{box-sizing:border-box;display:inline-flex;padding:3px;border:0;border-radius:var(--control-radius);
+  background:var(--fill-quiet);box-shadow:var(--ring-1)}
+.cot-c-seg__opt{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:32px;height:32px;
+  padding:0 13px;border:0;border-radius:var(--control-radius);background:transparent;color:var(--ink-3);
+  font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);cursor:pointer;white-space:nowrap}
+.cot-c-seg__opt svg{width:16px;height:16px}
+/* the kit's one selected state: the accent's wash and edge, as a chip, a picked card and a toggle wear it */
+.cot-c-seg__opt:is([aria-checked=true],[aria-selected=true]){background:var(--accent-wash);color:var(--ink-1);box-shadow:var(--ring-accent)}
+.cot-c-seg__opt:disabled{color:var(--ink-4);cursor:not-allowed}
+/* ---- tabs (direction .tabs, .tab, .tab.on, .tab .n) ---- */
+.cot-c-tabs{display:flex;gap:26px;border-bottom:1px solid var(--line-1)}
+.cot-c-tabs__tab{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:13px 0;border:0;background:none;
+  color:var(--ink-3);font:600 var(--fs-15)/1 var(--font-display);letter-spacing:normal;cursor:pointer;white-space:nowrap}
+.cot-c-tabs__tab svg{width:16px;height:16px}
+.cot-c-tabs__tab[aria-selected=true]{color:var(--ink-1)}
+.cot-c-tabs__tab[aria-selected=true]::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
+.cot-c-tabs__count{color:var(--ink-3);font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-data)}
+.cot-c-toggle{display:inline-flex;align-items:center;gap:var(--s2);min-height:36px;padding:0;border:0;background:none;color:var(--ink-2);
+  cursor:pointer;font:600 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label-s);text-transform:uppercase}
+.cot-c-toggle__track{box-sizing:border-box;position:relative;width:36px;height:20px;border:0;box-shadow:var(--ring-3);
+  border-radius:var(--control-radius);background:var(--fill-quiet)}
+.cot-c-toggle__track i{position:absolute;left:3px;top:3px;width:14px;height:14px;background:var(--ink-3);
+  transition:transform var(--dur-fast) var(--ease-enter),background-color var(--dur-fast) var(--ease-enter)}
+.cot-c-toggle[aria-checked=true] .cot-c-toggle__track{background:var(--accent-wash);box-shadow:var(--ring-accent)}
+.cot-c-toggle[aria-checked=true] .cot-c-toggle__track i{transform:translateX(16px);background:var(--accent)}
+.cot-c-toggle[aria-checked=true]{color:var(--ink-1)}
+.cot-c-toggle:disabled{color:var(--ink-4);cursor:not-allowed}
+.cot-c-toggle:disabled .cot-c-toggle__track i{background:var(--ink-4)}
+/* ---- the 20-cell stat scale (direction .scale; the A graft) ---- */
+.cot-c-scale{display:grid;grid-template-columns:repeat(20,1fr);gap:2px;height:8px}
+.cot-c-scale i{box-sizing:border-box;background:var(--fill-scale)}
+.cot-c-scale i.f{background:var(--ink-2)}
+.cot-c-scale i.r{background:transparent;box-shadow:var(--ring-accent)}
+.cot-c-scale i.f.r{background:var(--accent)}
+.cot-c-stat{display:grid;grid-template-columns:20px minmax(0,1fr) auto;grid-template-rows:auto auto;column-gap:var(--s3);row-gap:var(--s2);
+  align-items:center}
+.cot-c-stat>.cot-i,.cot-c-stat>span:first-child{grid-row:span 2;color:var(--ink-3)}
+.cot-c-stat--compact{row-gap:var(--s1)}
+.cot-c-stat__label{min-width:0;font:500 max(var(--fs-floor-11),var(--fs-13))/1.1 var(--font-ui);color:var(--ink-2)}
+.cot-c-stat__value{display:inline-flex;align-items:baseline;gap:var(--s1);white-space:nowrap}
+.cot-c-stat__value b{font:700 var(--fs-18)/1 var(--font-display);color:var(--ink-1)}
+.cot-c-stat__value small{font:500 max(var(--fs-floor-11),var(--fs-11))/1 var(--font-data);color:var(--ink-3)}
+.cot-c-stat__delta{margin-left:var(--s2);color:var(--ink-3);font:500 max(var(--fs-floor-11),var(--fs-11))/1 var(--font-data);font-style:normal}
+.cot-c-stat__delta.is-better{color:var(--text-ok)}
+.cot-c-stat__delta.is-worse{color:var(--text-danger)}
+.cot-c-stat .cot-c-scale{grid-column:2/span 2}
+/* ---- vehicle identity: flag + silhouette + name (direction .flag, .silm, .veh; owner rule 3) ---- */
+.cot-c-flag{box-sizing:border-box;display:inline-block;flex:none;object-fit:cover;object-position:50% 50%;border:0;border-radius:1px;box-shadow:var(--flag-ring)}
+.cot-c-flag--sm{width:16px;height:12px}
+.cot-c-flag--md{width:22px;height:16.5px}
+.cot-c-flag--lg{width:30px;height:22.5px}
+.cot-c-sil{display:inline-block;flex:none;width:42px;height:14px;background:currentColor;-webkit-mask:var(--sil) center/contain no-repeat;
+  mask:var(--sil) center/contain no-repeat}
+.cot-c-sil--right{transform:scaleX(-1)}
+.cot-c-veh{display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--ink-2);white-space:nowrap}
+.cot-c-veh b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 max(var(--fs-floor-12),var(--fs-14))/1 var(--font-display);color:var(--ink-1)}
+.cot-c-veh .cot-c-sil{height:13px}
+.cot-c-vs{font:700 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label-s);color:var(--accent)}
+/* ---- the data voice's inline rules: a glyph and a value per fact (direction .rules) ---- */
+.cot-c-rules{display:flex;flex-wrap:wrap;gap:12px;font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-data);color:var(--ink-2)}
+.cot-c-rules>span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.cot-c-rules svg{width:14px;height:14px;color:var(--ink-3)}
+/* ---- media caption: honest, small, never over a tank (direction .cap) ---- */
+.cot-c-cap{display:inline-flex;align-items:center;gap:8px;font:500 max(var(--fs-floor-12),var(--fs-12))/1.2 var(--font-body);color:var(--ink-2)}
+.cot-c-cap svg{width:14px;height:14px}
+/* ---- plates (direction .plate, .raised, .plate.hud) ---- */
+.cot-c-plate{background:var(--plate-fill);border-radius:var(--plate-radius);box-shadow:var(--plate-shadow)}
+.cot-c-plate--raised{background:var(--surface-raised);box-shadow:var(--e2)}
+.cot-c-plate--hud{background:var(--hud-plate)}
+/* ---- picture cards: a picture under its title, the fade only where type sits (direction .mode, .camp-card, .bfield,
+   .take) ---- */
+.cot-c-media{position:relative;overflow:hidden;border-radius:var(--control-radius);background:var(--surface-raised);box-shadow:var(--e1)}
+.cot-c-media>img,.cot-c-media>video,.cot-c-media>picture>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
+.cot-c-media::after{content:'';position:absolute;inset:0;pointer-events:none;background:var(--media-fade)}
+.cot-c-media--soft::after{background:var(--media-fade-soft)}
+.cot-c-media--full::after{background:var(--media-fade-full)}
+.cot-c-media>:not(img,video,picture){position:relative;z-index:var(--z-lift)}
+.cot-c-skel{display:block;min-height:1em;border-radius:var(--control-radius);background:var(--fill-quiet)}
+/* an opener whose surface did not load (loadFailure.ts markLoadFailed; loading states 264): a danger dot that needs no
+   chunk, its next press reloading the page */
+:where([data-load-state='error']){position:relative}
+[data-load-state='error']::after{content:'';position:absolute;top:var(--s1);right:var(--s1);width:8px;height:8px;border-radius:50%;
+  background:var(--danger);pointer-events:none}
+/* a revealed box (reveal.ts revealWhenReady; loading states, owner 2026-10-27): its image or video fades in once decoded,
+   over the box's own tone or skeleton; a file that never arrives leaves the tone, never a broken frame */
+[data-reveal]>:is(img,video,picture){opacity:0;transition:opacity var(--dur-base) var(--ease-enter)}
+[data-reveal][data-ready]>:is(img,video,picture){opacity:1}
+/* ---- the hover tip (hoverTip.ts): one per document, in the top layer, placed clear of every edge; it keeps its text's
+   own line breaks (a consumable slot's second line, the Studio clip's effects) ---- */
+.cot-c-tip{position:fixed;inset:auto;z-index:var(--z-toast);max-width:min(280px,calc(100vw - 16px));margin:0;padding:var(--s1) var(--s2);
+  overflow:visible;border:0;border-radius:var(--r1);background:var(--surface-menu);box-shadow:var(--e3);color:var(--ink-1);
+  font:500 max(var(--fs-floor-11),var(--fs-11))/1.35 var(--font-body);letter-spacing:normal;text-transform:none;
+  white-space:pre-line;pointer-events:none;opacity:0;transition:opacity var(--dur-instant) var(--ease-enter)}
+.cot-c-tip.is-on{opacity:1}
+.cot-c-tip[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.cot-c-btn,.cot-c-toggle__track i,.cot-c-tip{transition:none}}
+/* the reveal without scripting: a box served with data-reveal (a prerendered page marks its pictures in the markup) is
+   never marked ready, so its pictures show as they load. A sheet that gives revealed media a transition of its own
+   replaces the fade's (transition is one property) and the picture snaps in: it lists opacity too */
+@media (scripting:none){[data-reveal]>:is(img,video,picture){opacity:1}}
+/* a mode's own hue (tokens.json semantic.mode; UI-GAUNTLET bar line 6): mark an element data-mode-tone=<mode id> and paint
+   its mode glyph var(--mode-ink); the selection, the primary action and text stay the kit's */
+[data-mode-tone='standard']{--mode-ink:var(--mode-standard)}[data-mode-tone='drone']{--mode-ink:var(--mode-drone)}
+[data-mode-tone='zone_control']{--mode-ink:var(--mode-zone-control)}[data-mode-tone='capture_the_flag']{--mode-ink:var(--mode-capture-the-flag)}
+[data-mode-tone='frontline_assault']{--mode-ink:var(--mode-frontline-assault)}[data-mode-tone='turbo_ball']{--mode-ink:var(--mode-turbo-ball)}
+[data-mode-tone='mars']{--mode-ink:var(--mode-mars)}[data-mode-tone='endless_horde']{--mode-ink:var(--mode-endless-horde)}
+[data-mode-tone='gun_game']{--mode-ink:var(--mode-gun-game)}[data-mode-tone='juggernaut']{--mode-ink:var(--mode-juggernaut)}
+[data-mode-tone='infected']{--mode-ink:var(--mode-infected)}[data-mode-tone='realistic']{--mode-ink:var(--mode-realistic)}
+[data-mode-tone='ac130']{--mode-ink:var(--mode-ac130)}[data-mode-tone='proving_ground']{--mode-ink:var(--mode-proving-ground)}[data-mode-tone='air_support']{--mode-ink:var(--mode-air-support)}
+}

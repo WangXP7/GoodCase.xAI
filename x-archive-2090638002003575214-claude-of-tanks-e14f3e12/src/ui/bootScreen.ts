@@ -1,0 +1,560 @@
+/**
+ * bootScreen.ts — the branded entry + loading screen (WoT-style).
+ *
+ * WHY: the game used to boot into a black canvas for ~7.5 s while ~48 vehicle
+ * texture sets and a 1 km battlefield baked, then pop straight into the garage.
+ * The splash markup itself lives INLINE in index.html so first paint happens
+ * from the HTML parse (no module graph, no WebGL context, no bakes); this
+ * module only takes over the live parts:
+ *
+ *  - a progress bar driven by REAL load stages (main.ts BOOT STAGES calls
+ *    begin()/end() around each one; weights below are measured costs, so the
+ *    bar tracks wall-clock work instead of a fake timer),
+ *  - the current stage name + percentage,
+ *  - rotating gameplay tips,
+ *  - a "press any key" gate into the garage. An accepted trusted Garage entry
+ *    can silently prepare its audio device
+ *    before dismissing the opaque splash, without starting the mixer/sounds.
+ *
+ * HARNESS CONTRACT (docs/SCREENSHOT_CONTRACT.md): every headless probe drives
+ * the page through window.__SHOTS / window.__DEBUG and never presses a key, so
+ * the gate AUTO-SKIPS on the harness path (src/app/automationPath.ts: the request every tool's browser makes,
+ * __COT_AUTOMATION / ?automation=harness) and for an explicit ?nosplash / ?nogate flag; a player-path receipt
+ * (?automation=player) and any page that asks for nothing see the gate. window.__COT_FORCE_SPLASH=true (set by
+ * tools/boot-probe.mjs before navigation) re-arms it so the boot screens can
+ * still be captured.
+ */
+
+import { TRANSITION_SHOTS } from './featuredShots.ts';
+import { mountGitHubStars } from './githubStars.ts';
+import { preloadImage } from './imagePreload.ts';
+import { t } from './i18n.ts';
+import { harnessPath } from '../app/automationPath.ts';
+
+declare global {
+  interface Window {
+    __COT_NO_BOOT_HERO?: boolean;
+    __COT_FORCE_SPLASH?: boolean;
+    __COT_BOOT_RECOVERY?: {
+      progress?(stage: string): void;
+      halt?(code: string, message: string): void;
+      /** Post-boot: the inline watchdog's visible reload action for a failed game file (index.html). */
+      showRetry?(reason: string): void;
+    };
+    /** Set by the inline watchdog when the capability gate stopped the boot on purpose. */
+    __COT_BOOT_HALTED?: string;
+  }
+}
+
+type BootStage = readonly [key: string, label: string, weight: number];
+
+// Tip keys are resolved through i18n at render time so the rotating list
+// stays in sync with the player's chosen locale. Order is hand-curated.
+// The tip's body alone: its heading was a kicker over it (owner: no eyebrows). A tip marked `fine` names a mouse or
+// keyboard control, so a coarse pointer never sees it (SPEC 12.1.1).
+const TIP_KEYS: ReadonlyArray<readonly [bodyKey: string, fine?: true]> = [
+  ['boot.tip.angling.body'],
+  ['boot.tip.weakspots.body'],
+  ['boot.tip.camouflage.body'],
+  ['boot.tip.gunhandling.body'],
+  ['boot.tip.hulldown.body'],
+  ['boot.tip.tracks.body'],
+  ['boot.tip.sniper.body', true],
+  ['boot.tip.gunhold.body', true],
+  ['boot.tip.spotting.body'],
+  ['boot.tip.shelltypes.body'],
+  ['boot.tip.terrain.body'],
+  ['boot.tip.ammorack.body'],
+  ['boot.tip.flanking.body'],
+];
+
+// Stage labels are also i18n-resolved at render time.
+const STAGE_KEYS = {
+  renderer: 'boot.stage.renderer',
+  sky: 'boot.stage.sky',
+  lighting: 'boot.stage.lighting',
+  garage: 'boot.stage.garage',
+  vehicle: 'boot.stage.vehicle',
+  hud: 'boot.stage.hud',
+  ui: 'boot.stage.ui',
+  audio: 'boot.stage.audio',
+  post: 'boot.stage.post',
+  ready: 'boot.stage.ready',
+  studio: 'boot.stage.studio',
+} as const;
+
+function resolveStageLabel(key: keyof typeof STAGE_KEYS): string {
+  return t(STAGE_KEYS[key]);
+}
+
+interface BootScreenOptions {
+  readonly mode?: 'garage' | 'studio';
+}
+
+interface BootScreen {
+  begin(key: string): void;
+  end(key: string): void;
+  sub(fraction: number): void;
+  note(text: string): void;
+  ready(onEntryGesture?: () => void): Promise<void>;
+  dismiss(): void;
+  readonly gated: boolean;
+}
+
+// Weighted load stages. Weight = measured share of boot wall-clock, so the bar
+// moves at a roughly constant rate instead of parking at 40% for three seconds.
+// Keep the keys in sync with the main.ts BOOT STAGES block.
+const GARAGE_STAGES: readonly BootStage[] = [
+  ['renderer', resolveStageLabel('renderer'), 4],
+  ['sky', resolveStageLabel('sky'), 16],
+  ['lighting', resolveStageLabel('lighting'), 7],
+  ['garage', resolveStageLabel('garage'), 6],
+  ['vehicle', resolveStageLabel('vehicle'), 24],
+  ['hud', resolveStageLabel('hud'), 10],
+  ['ui', resolveStageLabel('ui'), 14],
+  ['audio', resolveStageLabel('audio'), 4],
+  ['post', resolveStageLabel('post'), 12],
+  ['ready', resolveStageLabel('ready'), 3],
+] as const;
+
+// Direct Studio navigation keeps the first, already-painted boot surface in
+// charge until the battlefield and focused FX warm are ready.  The previous
+// flow completed this list, briefly revealed the garage, then opened a second
+// loading screen whose work was invisible to this meter.
+const STUDIO_STAGES: readonly BootStage[] = [
+  ['renderer', resolveStageLabel('renderer'), 3],
+  ['sky', resolveStageLabel('sky'), 4],
+  ['lighting', resolveStageLabel('lighting'), 2],
+  ['garage', resolveStageLabel('garage'), 9],
+  ['vehicle', resolveStageLabel('vehicle'), 7],
+  ['hud', resolveStageLabel('hud'), 2],
+  ['ui', resolveStageLabel('ui'), 3],
+  ['audio', resolveStageLabel('audio'), 1],
+  ['post', resolveStageLabel('post'), 14],
+  ['studio', resolveStageLabel('studio'), 52],
+  ['ready', resolveStageLabel('ready'), 3],
+] as const;
+
+const $ = <ElementType extends HTMLElement = HTMLElement>(id: string): ElementType | null =>
+  document.getElementById(id) as ElementType | null;
+
+// Keep the entry art on the same curated source used by transitions and the
+// Garage gallery. The first shot has a small boot derivative; later shots are
+// fetched only if the player leaves the entry gate open long enough to see
+// another frame.
+const BOOT_HERO_SHOTS = TRANSITION_SHOTS;
+const HERO_ROTATE_MS = 9000;
+/** The progress fill moves only when the load does: each step runs STEP_MS (the --dur-base motion step) and the finished
+ *  load fills it in DONE_MS (--dur-screen). It never creeps on a timer (Main, 2026-10-26: a bar that moves without real
+ *  progress is lossy motion; the living mark says the page is alive). */
+const STEP_MS = 220;
+const DONE_MS = 360;
+
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+/**
+ * Decode each still before it touches a visible layer. Two stacked <img>s let
+ * the current shot remain fully painted while the next one loads. Waiting two
+ * frames after assigning the hidden layer guarantees the opacity transition
+ * has a committed start frame instead of flashing to its final state.
+ */
+function startBootHero(): () => void {
+  const wrap = $<HTMLDivElement>('cot-boot-hero');
+  if (!wrap || !BOOT_HERO_SHOTS.length || window.__COT_NO_BOOT_HERO) return () => {};
+  let q = '';
+  try { q = window.location.search || ''; } catch (_) { q = ''; }
+  if (/[?&]nohero(?:[=&]|$)/.test(q) || wrap.dataset.heroStarted === 'true') return () => {};
+
+  const layers = [...wrap.querySelectorAll<HTMLImageElement>('img.hly')];
+  if (layers.length < 2) return () => {};
+  wrap.dataset.heroStarted = 'true';
+  wrap.dataset.heroState = 'loading';
+
+  let index = -1;
+  let front = -1;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+  let generation = 0;
+  const urlFor = (shot: (typeof BOOT_HERO_SHOTS)[number]): string => shot.bootImg || shot.img;
+
+  const schedule = (): void => {
+    if (stopped || document.hidden || timer || BOOT_HERO_SHOTS.length < 2) return;
+    timer = setTimeout(() => {
+      timer = null;
+      void advance();
+    }, HERO_ROTATE_MS);
+  };
+
+  const show = async (nextIndex: number, requestGeneration: number): Promise<void> => {
+    const shot = BOOT_HERO_SHOTS[nextIndex];
+    const nextLayer = layers[(front + 1) % layers.length];
+    const url = urlFor(shot);
+    nextLayer.classList.remove('on');
+    nextLayer.src = url;
+    nextLayer.style.objectPosition = shot.focal || 'center';
+    try { await nextLayer.decode(); } catch (_) { /* preload already confirmed load */ }
+    if (stopped || requestGeneration !== generation) return;
+    await afterPaint();
+    if (stopped || requestGeneration !== generation) return;
+
+    nextLayer.classList.add('on');
+    if (front >= 0) layers[front].classList.remove('on');
+    front = (front + 1) % layers.length;
+    index = nextIndex;
+    wrap.dataset.heroState = 'visible';
+    wrap.dataset.heroIndex = String(index);
+    schedule();
+  };
+
+  async function advance(): Promise<void> {
+    if (stopped || document.hidden) return;
+    const nextIndex = (index + 1) % BOOT_HERO_SHOTS.length;
+    const requestGeneration = ++generation;
+    const url = urlFor(BOOT_HERO_SHOTS[nextIndex]);
+    const loaded = await preloadImage(url, { priority: 'low', decode: true });
+    if (!loaded || stopped || requestGeneration !== generation) return;
+    await show(nextIndex, requestGeneration);
+  }
+
+  const onVisibility = (): void => {
+    if (document.hidden) {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      generation += 1;
+      return;
+    }
+    if (index < 0) void advance();
+    else schedule();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  void advance();
+
+  return () => {
+    stopped = true;
+    generation += 1;
+    if (timer) clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onVisibility);
+    wrap.dataset.heroState = 'stopped';
+  };
+}
+
+/**
+ * Should the entry gate be dismissed without a keypress?
+ * @returns {boolean} true for headless harnesses / explicit ?nosplash
+ */
+function bootGateSkipped() {
+  if (typeof window === 'undefined') return true;
+  if (window.__COT_FORCE_SPLASH) return false;
+  let q = '';
+  try { q = window.location.search || ''; } catch (_) { q = ''; }
+  if (/[?&](nosplash|nogate)\b/.test(q)) return true;
+  // (2026-11-02 audit S3) the one automation reader, never navigator.webdriver here
+  return harnessPath();
+}
+
+/**
+ * Wire the inline splash in index.html up to the real load stages.
+ *
+ * Every method is safe to call when the markup is absent (a stripped build, a
+ * unit-test DOM) — the boot sequence must never depend on the screen existing.
+ *
+ * @returns {{begin:(k:string)=>void, end:(k:string)=>void, sub:(f:number)=>void,
+ *   note:(s:string)=>void, ready:()=>Promise<void>, dismiss:()=>void,
+ *   readonly gated:boolean}}
+ */
+export function createBootScreen({ mode = 'garage' }: BootScreenOptions = {}): BootScreen {
+  const stages = mode === 'studio' ? STUDIO_STAGES : GARAGE_STAGES;
+  const root = $('cot-boot');
+  const elStage = $('cot-boot-stage');
+  const elFill = $('cot-boot-fill');
+  const elTip = $('cot-boot-tip');
+  const elGate = $('cot-boot-gate');
+  const elRetry = $('cot-boot-retry');
+  // 2026-09-14 (outside QA): phone players read keyboard-only copy on their first screen; a
+  // coarse pointer gets the touch prompt. A keyboard's prompt names its key as a key cap, as every control label does
+  // (INTERACTION-REDESIGN line 6): the boot sheet draws the kit's cap without loading the kit.
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  if (elGate && coarsePointer) elGate.textContent = t('boot.gate.promptTouch');
+  else if (elGate) {
+    const [before, after = ''] = t('boot.gate.prompt', { key: '\u0001' }).split('\u0001');
+    const cap = document.createElement('kbd');
+    cap.className = 'cot-boot-key';
+    cap.textContent = t('boot.gate.anyKey');
+    elGate.replaceChildren(before, cap, after);
+  }
+  const tips = coarsePointer ? TIP_KEYS.filter(([, fine]) => !fine) : TIP_KEYS;
+  if (elRetry) elRetry.textContent = t('boot.retry');
+  mountGitHubStars(document);
+
+  const heartbeat = (stage: string): void => {
+    try { window.__COT_BOOT_RECOVERY?.progress?.(stage); } catch (_) { /* recovery is optional */ }
+  };
+  heartbeat('boot-screen');
+
+  const total = stages.reduce((a, s) => a + s[2], 0);
+  // cumulative [start, end] fraction per stage key, after the bar's first share, which the page's inline script fills
+  // with the files as they download (index.html: the bar's data-download-share)
+  const head = Number(elFill?.parentElement?.dataset.downloadShare) || 0;
+  const span = new Map<string, readonly [start: number, end: number]>();
+  {
+    let acc = 0;
+    for (const [key, , w] of stages) {
+      span.set(key, [head + (1 - head) * acc / total, head + (1 - head) * (acc + w) / total]);
+      acc += w;
+    }
+  }
+
+  let target = 0;      // where the real load says we are
+  let curKey: string | null = null;
+  let dismissed = false;
+  let finished = false;
+  let readyPromise: Promise<void> | null = null;
+  let stopEntryGate = (): void => {};
+  let heroStartRaf = 0;
+  let entranceTimer: ReturnType<typeof setTimeout> | null = null;
+  let finishEntrance: () => void = () => {};
+  let stopHero: () => void = () => {};
+  let tipTimer: ReturnType<typeof setInterval> | null = null;
+  let tipIdx = Math.floor(Math.random() * tips.length);
+
+  // The fill moves on the compositor (owner, 2026-10-26: the boot "looks so laggy" while it loads): each change of the load
+  // (a stage begun or ended, a step inside one) starts one short animation of its scaleX from where it stands to where the
+  // load is, so a busy main thread cannot stall a step already started; no frame loop drives it, and it never moves without
+  // the load. Under reduced motion (the player's choice on :root, else the OS: accessibilityPreferences.ts, inlined as
+  // modal.ts does on the boot path) it steps to each value.
+  const motionChoice = document.documentElement?.dataset.motion;
+  const reducedMotion = motionChoice === 'reduce' || (motionChoice !== 'full' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  let fillMotion: Animation | null = null;
+  /** Where the fill stands now (its animation's current scaleX). */
+  function fillNow(): number {
+    const transform = elFill ? getComputedStyle(elFill).transform : 'none';
+    return transform && transform !== 'none' ? new DOMMatrixReadOnly(transform).a : 0;
+  }
+  /** Send the fill on from where it stands to where the load is. */
+  function retarget(): void {
+    if (!elFill || typeof elFill.animate !== 'function') return;
+    const to = Math.min(1, target);
+    const from = fillNow();
+    if (to <= from + 0.0005) return;
+    fillMotion?.cancel();
+    const motion = fillMotion = elFill.animate([{ transform: `scaleX(${from})` }, { transform: `scaleX(${to})` }],
+      { duration: reducedMotion ? 0 : finished ? DONE_MS : STEP_MS, easing: 'ease-out', fill: 'forwards' });
+    // the full line rests as a style, its motion and layer dropped (.cot-boot-fill.full): a held compositor fill snaps a
+    // whole pixel short of the track's painted end (boot r24)
+    if (to >= 1) motion.onfinish = () => { elFill.style.transform = 'scaleX(1)'; elFill.classList.add('full'); motion.cancel(); };
+  }
+
+  // The stage row under the fill (owner, 2026-10-26: "a segmented loading along with the main loading line"): one segment
+  // per stage, the download's first (the page's inline painter fills it with the files), then this list's. The page
+  // writes the Garage's stages, so its first paint holds the row; a Studio boot, whose list is longer, writes its own.
+  const elSegs = $('cot-boot-segs');
+  if (elSegs && elSegs.children.length !== stages.length + 1) {
+    const keep = elSegs.firstElementChild;
+    elSegs.replaceChildren(...(keep ? [keep] : []), ...stages.map(([key]) => {
+      const seg = document.createElement('i');
+      seg.dataset.seg = key;
+      seg.append(document.createElement('b'));
+      return seg;
+    }));
+  }
+  const segs = new Map<string, HTMLElement>();
+  for (const seg of elSegs ? [...elSegs.children] as HTMLElement[] : []) if (seg.dataset.seg) segs.set(seg.dataset.seg, seg);
+  const segMotion = new Map<HTMLElement, Animation>();
+  /** One segment's fill to `to` (0..1) from where it stands, a compositor step on a real change only. */
+  function stepSeg(seg: HTMLElement | undefined, to: number, then?: () => void): void {
+    const fill = seg?.firstElementChild as HTMLElement | null;
+    if (!seg || !fill || seg.classList.contains('done')) return;
+    const transform = getComputedStyle(fill).transform;
+    const from = transform && transform !== 'none' ? new DOMMatrixReadOnly(transform).a : 0;
+    fill.style.transform = '';
+    segMotion.get(seg)?.cancel();
+    if (typeof fill.animate !== 'function' || reducedMotion || to <= from + 0.0005) {
+      fill.style.transform = `scaleX(${Math.max(from, to)})`;
+      then?.();
+      return;
+    }
+    const motion = fill.animate([{ transform: `scaleX(${from})` }, { transform: `scaleX(${to})` }],
+      { duration: STEP_MS, easing: 'ease-out', fill: 'forwards' });
+    segMotion.set(seg, motion);
+    if (then) motion.onfinish = then;
+  }
+  /** A stage done: its segment full and solid. */
+  function doneSeg(seg: HTMLElement | undefined): void {
+    if (!seg || seg.classList.contains('done')) return;
+    stepSeg(seg, 1, () => {
+      segMotion.get(seg)?.cancel();
+      segMotion.delete(seg);
+      (seg.firstElementChild as HTMLElement | null)?.style.removeProperty('transform');
+      seg.classList.remove('now');
+      seg.classList.add('done');
+    });
+  }
+  /** The stage under way: every segment before it done, it the current one. */
+  function nowSeg(key: string): void {
+    for (const [segKey, seg] of segs) {
+      if (segKey === key) { seg.classList.add('now'); break; }
+      doneSeg(seg);
+    }
+  }
+
+  function showTip(i: number): void {
+    if (!elTip) return;
+    // the sentence on its plate, the plate sized to it inside the tip's reserved box
+    const plate = document.createElement('span');
+    plate.textContent = t(tips[i % tips.length][0]);
+    elTip.replaceChildren(plate);
+  }
+  function rotateTip() {
+    if (!elTip || dismissed) return;
+    elTip.classList.add('fade');
+    setTimeout(() => {
+      if (dismissed) return;
+      tipIdx = (tipIdx + 1) % tips.length;
+      showTip(tipIdx);
+      elTip.classList.remove('fade');
+    }, 360);
+  }
+  showTip(tipIdx);
+  if (root) tipTimer = setInterval(rotateTip, 5200);
+  if (root?.classList.contains('cot-boot-enter')) {
+    const onEntranceEnd = (event: AnimationEvent): void => {
+      if (event.animationName === 'cot-boot-fade' &&
+          event.target instanceof Element && event.target.classList.contains('cot-boot-foot')) {
+        finishEntrance();
+      }
+    };
+    finishEntrance = (): void => {
+      if (entranceTimer) clearTimeout(entranceTimer);
+      entranceTimer = null;
+      root.removeEventListener('animationend', onEntranceEnd, true);
+      root.classList.remove('cot-boot-enter');
+      root.dataset.entranceState = 'complete';
+    };
+    root.addEventListener('animationend', onEntranceEnd, true);
+    // Reduced-motion mode emits no animationend. This also retires the class
+    // if the module graph mounts after the inline animation already finished.
+    entranceTimer = setTimeout(finishEntrance, 900);
+  }
+  // Preserve the zero-image automation/cold-load path and wait for the static
+  // inline splash to receive a paint before any decorative request begins.
+  if (root && !bootGateSkipped()) {
+    heroStartRaf = requestAnimationFrame(() => {
+      heroStartRaf = requestAnimationFrame(() => {
+        heroStartRaf = 0;
+        if (!dismissed) stopHero = startBootHero();
+      });
+    });
+  }
+
+  function stageLabel(key: string): string {
+    const s = stages.find((x) => x[0] === key);
+    return s ? s[1] : key;
+  }
+
+  const api: BootScreen = {
+    /** Enter a stage: the fill carries on from its start, the label updates. */
+    begin(key: string) {
+      heartbeat(key);
+      curKey = key;
+      const sp = span.get(key);
+      if (sp && sp[0] > target) target = sp[0];
+      if (elStage) elStage.textContent = stageLabel(key);
+      nowSeg(key);
+      retarget();
+    },
+    /** Leave a stage: the fill advances to its end. */
+    end(key: string) {
+      heartbeat(`${key || curKey}:complete`);
+      const effectiveKey = key || curKey;
+      const sp = effectiveKey ? span.get(effectiveKey) : undefined;
+      if (sp && sp[1] > target) target = sp[1];
+      if (effectiveKey) doneSeg(segs.get(effectiveKey));
+      retarget();
+    },
+    /** Sub-progress inside the current stage (0..1) — used by the world build. */
+    sub(f: number) {
+      heartbeat(curKey || 'sub-progress');
+      const sp = curKey ? span.get(curKey) : undefined;
+      if (!sp) return;
+      const v = sp[0] + (sp[1] - sp[0]) * Math.max(0, Math.min(1, f));
+      if (v > target) target = v;
+      if (curKey) stepSeg(segs.get(curKey), Math.max(0, Math.min(1, f)));
+      retarget();
+    },
+    /** Override the visible stage label without touching the bar. */
+    note(text: string) {
+      heartbeat(curKey || 'note');
+      if (elStage) elStage.textContent = text;
+    },
+
+    /**
+     * Loading complete. Snaps the bar to 100%, arms the entry gate and
+     * resolves once the player commits (immediately under automation).
+     * @returns {Promise<void>}
+     */
+    ready(onEntryGesture) {
+      if (readyPromise) return readyPromise;
+      if (dismissed) return Promise.resolve();
+      finished = true;
+      target = 1;
+      for (const seg of segs.values()) doneSeg(seg);
+      retarget();
+      if (elStage) elStage.textContent = mode === 'studio' ? t('boot.stage.studioReady') : t('boot.stage.readyBattle');
+      if (!root || bootGateSkipped()) { api.dismiss(); return Promise.resolve(); }
+      if (elGate) elGate.classList.add('on');
+      return readyPromise = new Promise<void>((resolve) => {
+        stopEntryGate = () => {
+          window.removeEventListener('keydown', go, true);
+          window.removeEventListener('pointerdown', go, true);
+          stopEntryGate = () => {};
+          resolve();
+        };
+        const go = (ev: Event) => {
+          if (dismissed) return;
+          // Credits and GitHub are deliberate splash controls, not entry
+          // gestures. Let them remain interactive without dismissing the
+          // game gate underneath the modal/link click.
+          if (ev?.target instanceof Element && ev.target.closest('[data-cot-boot-control]')) return;
+          // ignore pure modifier taps so Cmd-Tab back into the tab does not
+          // consume the gate
+          if (ev.type === 'keydown' && ev instanceof KeyboardEvent &&
+              ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(ev.key)) return;
+          if (mode === 'garage' && ev.isTrusted) {
+            try { onEntryGesture?.(); } catch { /* optional preparation cannot trap entry */ }
+          }
+          api.dismiss();
+        };
+        window.addEventListener('keydown', go, true);
+        window.addEventListener('pointerdown', go, true);
+      });
+    },
+
+    /** Tear the screen down now (gate skip, or a __SHOTS.set staging call). */
+    dismiss() {
+      if (dismissed) return;
+      dismissed = true;
+      stopEntryGate();
+      if (tipTimer) clearInterval(tipTimer);
+      if (heroStartRaf) cancelAnimationFrame(heroStartRaf);
+      finishEntrance();
+      stopHero();
+      if (!root) return;
+      // The Garage lays itself out behind this opaque surface. Reveal its
+      // already-settled chrome on the same frame the boot fade begins, so
+      // asynchronous panels can never leak their construction shifts.
+      document.dispatchEvent(new CustomEvent('cot:boot-dismiss'));
+      root.classList.add('cot-boot-out');
+      // keep it in the DOM for one transition, then drop it so the tips and
+      // the animated sheen stop costing style recalcs during play
+      setTimeout(() => { if (root.parentNode) root.parentNode.removeChild(root); }, 620);
+    },
+
+    /** True while the entry gate is still waiting on the player. */
+    get gated() { return finished && !dismissed; },
+  };
+  return api;
+}

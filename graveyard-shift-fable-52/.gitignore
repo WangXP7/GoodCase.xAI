@@ -1,0 +1,14 @@
+node_modules
+dist
+*.log
+.vercel
+
+# local deployment settings (templates: .env.example, server/wrangler.example.toml)
+.env*
+!.env.example
+server/wrangler.toml
+server/.wrangler/
+.wrangler/
+
+# generated shader dumps (scripts/dump-boot-shaders.mjs)
+scripts/shaders-*.json

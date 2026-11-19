@@ -1,0 +1,2715 @@
+# LittleJS Engine Quick Reference Sheet
+
+## This cheat sheet contains all LittleJS essentials.
+- [LittleJS on GitHub](https://github.com/KilledByAPixel/LittleJS) - Official LittleJS website with more info
+- [LittleJS Documentation](https://killedbyapixel.github.io/LittleJS/docs) - LittleJS documentation browser
+- [Particle System Designer](https://killedbyapixel.github.io/LittleJS/examples/particles) - Editor for LittleJS Particle Systems
+- [Sound Effect Designer](https://killedbyapixel.github.io/ZzFX) - Tool for creating ZzFX sound effects
+- [Starter Project](https://killedbyapixel.github.io/LittleJS/examples/starter) - Simple LittleJS demo to start with
+
+## LittleJS Setup
+
+To start LittleJS, you need to create a few functions and pass them to engineInit.
+
+```javascript
+// Start up LittleJS engine with your callback functions
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, imageSources=[], rootElement=document.body)
+// a rootElement keeps its inline styles and holds the canvas, which is still sized from the window
+// startup: the splash if it is on, then gameInit once the images are in, and the game loop once gameInit and
+// everything loaded while it ran are done; the loading screen shows if that takes more than half a second
+engineAddLoad(promise)  // wait for this too, and count it on the loading screen; images from loadTexture and sounds
+                        // from files are added on their own, a failed load counts as done; after startup does nothing
+
+// Engine globals
+engineName            // Name of the engine: 'LittleJS'
+engineVersion         // Version of the engine
+frameRate             // Fixed frame rate for updates (60)
+frame                 // Current update frame
+time                  // Game time since start in seconds (stops when paused, falls behind the clock below 20 FPS)
+timeReal              // Real time since start in seconds (keeps running when paused; the debug speed keys scale it)
+averageFPS            // Display frames per second, smoothed, whether or not each one drew
+timeDelta             // Seconds the update covers: 1/60, or the display frame's time with engineVariableStep
+timeScale = 1         // Game speed, more or fewer fixed updates per second; with engineVariableStep it scales timeDelta
+paused                // Is the game paused? (set with setPaused)
+headlessMode = false  // Run without rendering for testing/servers (set before engineInit)
+engineManualStep      // Advance only via engineStep, default false; can be turned on and off while running
+engineStep(frames=1)  // Advance the engine manually, needs engineManualStep
+engineVariableStep    // One update per display frame, default false; velocity, gravity and other per-frame values are not scaled
+```
+
+### Headless testing
+
+`headlessMode` disables rendering, audio, and input. `engineManualStep` additionally
+stops the engine driving itself with `requestAnimationFrame`, so it only advances when
+you call `engineStep`. Together they make time-driven game logic deterministic and testable —
+`Timer`, time-based spawns, cooldowns, and physics all advance exactly as many frames as you
+ask for. `engineStep` drives the real update loop, so `timeScale` scales fixed updates per
+step just as it does under `requestAnimationFrame`: at `timeScale = .5`, ten steps run five
+fixed updates. Leave `timeScale` at 1 when you want frame counts to match exactly.
+
+```javascript
+setHeadlessMode(true);        // no rendering, audio, or input
+setEngineManualStep(true);    // no requestAnimationFrame loop
+await engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+
+// In manual step mode engineInit runs gameInit but no update frame, so this
+// is where you assert on what initialization produced.
+engineStep();                 // advance exactly one fixed update
+engineStep(600);              // advance 10 seconds of game time at 60fps (timeScale 1)
+
+// engineStep respects paused, exactly as the normal update loop does
+setPaused(true);
+engineStep(5);                // gameUpdatePost runs, time and frame do not advance
+```
+
+`headlessMode` must be set before `engineInit`; `engineManualStep` can be, or it can be turned
+on and off later to stop and restart the loop. Input is not synthesized in headless mode, so
+tests drive game state directly rather than through `keyIsDown` and friends.
+
+`engineStep` is synchronous and does not yield — every frame runs back to back before
+it returns. That is what makes it deterministic, and in headless mode it is what you
+want. Outside headless mode each step also renders, so a large count blocks the tab
+and throws away every frame but the last. To advance a lot of time while staying
+responsive, chunk it yourself and let the browser paint between chunks:
+
+```javascript
+// advance 10 minutes of game time without freezing the tab
+let remaining = 36000;
+(function chunk()
+{
+    engineStep(min(remaining, 60));
+    if ((remaining -= 60) > 0)
+        requestAnimationFrame(chunk);
+})();
+```
+
+## Units and directions
+- **Space:** world units, y up. Draws and objects take full sizes (a circle's diameter); only the math helpers and
+  lights take a radius, and their parameter says so
+- **2D angles:** radians, clockwise: `EngineObject.angle`, `cameraAngle`, the `angle` of every draw and of a
+  `ParticleEmitter`; `Vector2.angle()` is 0 up
+- **3D angles:** radians, `rotation3D` is pitch, yaw and roll, turning as three.js does, counter clockwise seen
+  down an axis; `Camera3D.fov` is radians; a 3D level file and the 3D editor's `setTransform` take degrees, as
+  does `new ThreeJSPlugin(THREE, cameraFOV)`
+- **Per frame:** speeds and spins, `velocity`, `angleVelocity`, a particle's `speed` and `angleSpeed`, damping and
+  gravity, at the fixed 60 updates a second
+- **Seconds:** `Timer`, `Tween`, `time`, a particle emitter's `emitTime` and `particleTime` and its `emitRate` (per
+  second) and `lifeTime`; a particle's `fadeRate` is a part of its life, not seconds
+- **Materials:** `roughness`, `reflectivity` and `specular` run 0 to 1, `shininess` 1 up, about 10,000 a mirror (a roughness of 0 sets it far higher), and
+  `emissive` from 0 up
+- **Milliseconds:** `gamepadVibrate`'s duration, `vibrate` patterns and `saveDataURL`'s `revokeTime`
+- **Limits:** the GPU draws with 32-bit floats: keep the world within about ±10,000 units of the origin, and a
+  shader's `iTime` gets coarse in a game left running for days; the FAQ says more
+
+## What functions give back
+- **Raycasts:** where the ray hits, a Vector2: `tileCollisionRaycast`, `lineTest`; how far along the ray, a number:
+  `raycastBox`, `raycastSphere`, `raycastPlane`, `HeightMap.raycast`; a record of the hit: `VoxelMap.raycast` (a
+  `VoxelHit`), `render3D.pick` (`{object, distance}`), `box2d.raycast` (a `Box2dRaycastResult`); every object
+  hit, a list: `engineObjectsRaycast`; nothing hit is `undefined`, or an empty list
+- **Overlaps:** `isOverlapping` and `isIntersecting` say whether, a boolean, as does a layer's `collisionTest`;
+  `tileCollisionTest` gives the layer hit; the collide helpers (`collideCircleBox`, `collideSphereBox` and the rest)
+  give the push that moves the first shape out, each `undefined` for none
+- **Not found:** `undefined`, but `PathFinder.getNode` and `getNearestClearNode`, which give `null`
+- **Loading:** an image that fails, from `engineInit` or `loadTexture`, and a `Sound` made from a file that fails,
+  warn in the console and the game goes on without them; `fetchJSON`, `loadGLTF`, `loadOBJ` and `Sound.loadSound`
+  reject with an error naming the file, for the game to catch
+- **Ending things:** objects, particles, UI, Box2D objects and joints are ended with `destroy`; a `Mesh` or a
+  `GLTFModel` frees its GPU buffers with `dispose`, a `TextureInfo` its texture with `destroyWebGLTexture`; a
+  playing sound, a `Tween` and an animation `stop`
+
+## LittleJS Utilities Classes and Functions
+- General purpose math library
+- Vector2 - Fast, simple, easy 2D vector class
+- Color - Holds a rgba color with some math functions
+- Timer - Tracks time automatically
+- RandomGenerator - Seeded random number generator
+
+```javascript
+
+// Object Constructors
+vec2(x=0, y=x)                                // Create a 2D vector with Vector or floats
+rgb(r=1, g=1, b=1, a=1)                       // Create a color object with RGBA values
+hsl(h=0, s=0, l=1, a=1)                       // Create a color object with HSLA values
+tile(index=0, size=(16,16), texture=0, padding=0, bleed=0) // Create a tile info object
+tileInfo.frame(n)                             // Tile offset by n animation frames, on into the next row of the sheet
+tileInfo.setColumns(columns)                  // Frames per row, so frame() wraps to the next row
+
+// Helper functions 
+abs(value)                                    // Get absolute value
+min(...values)                                // Get lowest of values
+max(...values)                                // Get highest of values
+sign(value)                                   // Get the sign of value
+mod(dividend, divisor=1)                      // Get remainder of division
+clamp(value, min=0, max=1)                    // Clamps between values
+percent(value, valueA, valueB)                // Get percentage between values
+lerp(valueA, valueB, percent)                 // Linearly interpolates between values
+percentLerp(value, percentA, percentB, lerpA, lerpB) // Lerp that remaps the percent
+distanceWrap(valueA, valueB, wrapSize=1)      // Signed wrapped distance between values
+lerpWrap(valueA, valueB, percent, wrapSize=1) // Linearly interpolates with wrapping
+distanceAngle(angleA, angleB)                 // Signed wrapped distance between angles
+lerpAngle(angleA, angleB, percent)            // Linearly interpolates with wrapping
+smoothStep(percent)                           // Applies smoothstep function, percent clamped to 0-1
+isPowerOfTwo(value)                           // Checks if the value is a power of two
+nearestPowerOfTwo(value)                      // Smallest power of two not less than the value
+isOverlapping(posA, sizeA, posB, sizeB)       // Checks if bounding boxes overlap
+isIntersecting(start, end, pos, size)         // Checks if ray intersects box
+// the collide helpers answer how far out, where isOverlapping answers whether; boxes are axis aligned and centered
+// with a full size, and each returns undefined when the shapes are not touching
+collideCircleCircle(posA, radiusA, posB, radiusB) // vector that moves circle A clear of circle B
+collideCircleBox(pos, radius, boxPos, boxSize)    // vector that moves a circle clear of a box
+collideBoxBox(posA, sizeA, posB, sizeB)           // vector that moves box A clear of box B, the shortest way out
+oscillate(frequency=1, amplitude=1, t=time, offset=0, type=0) // Oscillating wave
+lineTest(posStart, posEnd, testFunction, normal) // Step along a line until test passes
+formatTime(t)                                 // Formats seconds for display
+
+// Math aliases (prefer over Math.X)
+PI, abs, floor, ceil, round, min, max, sign, hypot, log2, sin, cos, tan, atan2
+
+// Type checking helpers
+isNumber(n)     // Is it a number and not NaN?
+isStringLike(s) // Can it be converted to a string?
+isArray(a)      // Is it an array?
+isVector2(v)    // Is it a valid Vector2?
+isColor(c)      // Is it a valid Color?
+
+// Utility functions
+noise1D(x)                            // Smooth 1D value noise (0 to 1)
+noise2D(x, y)                         // Smooth 2D value noise (0 to 1)
+fetchJSON(url)                        // Fetch and parse a JSON file (async)
+shareURL(title, url, callback)        // Share a URL via the navigator share API
+readSaveData(saveName, defaultSaveData) // Read game save data from localStorage, default must be an object
+                                      // the result has the default's type in TypeScript
+writeSaveData(saveName, saveData)     // Write a save data object to localStorage, false if it could not; give medalsInit a different name
+
+// Random functions
+rand(valueA=1, valueB=0)             // Random float between values
+randInt(valueA, valueB=0)            // Random integer between values
+randBool(chance=.5)                  // Random boolean with given chance (0 to 1)
+randSign()                           // Randomly either -1 or 1
+randVec2(length=1)                   // Random Vector2 with the passed in length
+randInCircle(radius=1, minRadius=0)  // Random Vector2 within a circle
+randColor(colorA, colorB, linear)    // Random color between values
+randPick(items)                      // Random element of an array or a Set, undefined when empty
+randWeighted(items, weights)         // Random element picked in proportion to its weight, one weight per item
+
+// 2D vector math
+Vector2(x=0, y=0)                         // Create a 2D vector
+Vector2.copy()                            // Copy this vector    
+Vector2.set(x=0, y=0)                     // Set this vector's components
+Vector2.setFrom(v)                        // Set this vector from another vector
+Vector2.add(v)                            // Add a vector
+Vector2.subtract(v)                       // Subtract a vector
+Vector2.multiply(v)                       // Multiply by a vector 
+Vector2.divide(v)                         // Divide by a vector
+Vector2.scale(s)                          // Scale by a float
+Vector2.length()                          // Get length 
+Vector2.lengthSquared()                   // Get length squared
+Vector2.distance(v)                       // Get distance to vector
+Vector2.distanceSquared(v)                // Get distance to vector squared
+Vector2.normalize(length=1)               // Copy of this vector at a length, its direction kept
+Vector2.clampLength(length=1)             // Copy of this vector no longer than a length
+Vector2.dot(v)                            // Dot product with vector
+Vector2.cross(v)                          // Cross product with vector
+Vector2.reflect(normal, restitution=1)    // Reflect off a surface normal
+Vector2.floor()                           // Copy with each component floored
+Vector2.round()                           // Copy with each component rounded
+Vector2.abs()                             // Get copy with absolute value components
+Vector2.snap(grid)                        // Snap down to the grid, grid is steps per unit
+Vector2.mod(divisor=1)                    // Get modulo of each component
+Vector2.area()                            // Get area covered by this vector as a rectangle
+Vector2.lerp(v, percent)                  // Interpolate between vectors
+Vector2.arrayCheck(arraySize)             // Check if in bounds of array size
+Vector2.angle()                           // Angle of this vector, up is 0
+Vector2.setAngle(angle=0, length=1)       // Set angle and length
+Vector2.rotate(angle)                     // Rotate by angle
+Vector2.setDirection(direction, length=1) // Set integer direction (0-3) and length
+Vector2.direction()                       // Get integer direction (0-3)
+Vector2.toString(digits=3)                // Get string representation
+// every Vector2 and Color method gives a new one and leaves it as it is, but set, setFrom, setAngle and
+// setDirection, and Color's set, setFrom, setAlpha, setHSLA and setHex, which change it in place
+
+// RGBA color object
+Color(r=1, g=1, b=1, a=1)                 // Create an RGBA color
+Color.copy()                              // Copy this color
+Color.set(r=1, g=1, b=1, a=1)             // Set this color's values
+Color.setFrom(c)                          // Set this color from another color
+Color.add(c)                              // Add a color
+Color.subtract(c)                         // Subtract a color
+Color.multiply(c)                         // Multiply by a color
+Color.divide(c)                           // Divide by a color
+Color.scale(scale, alphaScale=scale)      // Scale by a float
+Color.clamp()                             // Copy with each component clamped to 0 to 1
+Color.lerp(c, percent)                    // Interpolate between colors
+Color.setHSLA(h=0, s=0, l=1, a=1)         // Set the color from HSLA values
+Color.HSLA()                              // Get the color in HSLA format
+Color.mutate(amount=.05, alphaAmount=0)   // Copy randomly diverged from this color
+Color.setHex(hex)                         // Set this color from a hex code
+Color.setAlpha(a=1)                       // Set the alpha of this color
+Color.withAlpha(a=1)                      // Get a copy of this color with the alpha set
+Color.rgbaInt()                           // Get this color as 32 bit RGBA value
+Color.toString(useAlpha=true)             // Get hex color code as a string
+
+// Color constants (frozen, use .copy() to modify)
+WHITE, BLACK, GRAY, CLEAR_WHITE, CLEAR_BLACK
+RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, MAGENTA
+
+// Seeded random number generator
+RandomGenerator(seed)                     // Create a random number generator, reseed by setting r.seed;
+                                          // a seed that is 0 as an integer uses the default seed
+RandomGenerator.float(valueA=1, valueB=0) // Random float between values
+RandomGenerator.int(valueA, valueB=0)     // Random integer between values
+RandomGenerator.sign()                    // Randomly either -1 or 1
+RandomGenerator.bool(chance=.5)           // Random boolean with given chance (0 to 1)
+RandomGenerator.floatSign(valueA=1, valueB=0) // Random float between values with a random sign
+RandomGenerator.angle()                   // Random angle between -PI and PI
+RandomGenerator.vec2(valueA=1, valueB=0)  // Random Vector2, each component between values
+RandomGenerator.direction(length=1)       // Random Vector2 with the passed in length, like randVec2
+RandomGenerator.randColor(colorA=WHITE, colorB=BLACK, linear=false) // Random color between values
+RandomGenerator.pick(items)          // Seeded random element of an array or a Set
+RandomGenerator.weighted(items, weights) // Seeded random element by weight
+RandomGenerator.mutateColor(color, amount=.05, alphaAmount=0) // Copy of a color randomly diverged
+
+// Time tracking system
+Timer(timeLeft, useRealTime=false)    // Create a timer object
+Timer.set(timeLeft=0)                 // Set the timer with seconds passed in
+Timer.setUseRealTime(useRealTime=true) // Keep running while the game is paused
+Timer.unset()                         // Unset the timer
+Timer.isSet()                         // Returns true if set
+Timer.active()                        // Returns true if set and has not elapsed
+Timer.elapsed()                       // Returns true if set and elapsed
+Timer.get()                           // Get how long since elapsed, 0 if not set
+Timer.getPercent()                    // Get percent elapsed, 0 if not set
+Timer.getSetTime()                    // Get the time it was set to, 0 if not set
+Timer.toString()                      // Get this timer expressed as a string
+Timer.valueOf()                       // Get how long since elapsed, 0 if not set
+```
+
+## LittleJS Drawing System
+- Hybrid system with both Canvas2D and WebGL available
+- Super fast tile sheet rendering with WebGL
+- Can apply rotation, mirror, color and additive color
+- Text and font rendering system with built in engine font
+
+```javascript
+// Drawing functions
+// Most also accept optional trailing params: useWebGL=glEnable, screenSpace=drawScreenSpace, context
+// Canvas2D draws (text, useWebGL=false) go to a canvas above every WebGL draw, whatever order they are drawn in
+drawTile(pos, size, tileInfo, color=WHITE, angle=0, mirror, additiveColor)
+drawRect(pos, size, color=WHITE, angle=0)
+drawRectGradient(pos, size, colorTop=WHITE, colorBottom=CLEAR_WHITE, angle=0)
+drawTextureWrapped(pos, size, wrapCount, texture=0, color=WHITE, angle=0, additiveColor)
+drawLine(posA, posB, width=.1, color=WHITE, pos=(0,0), angle=0)
+drawLineList(points, width=.1, color=WHITE, wrap=false, pos=(0,0), angle=0)
+drawPoly(points, color=WHITE, lineWidth=0, lineColor=BLACK, pos, angle=0)
+drawRegularPoly(pos, size=(1,1), sides=3, color=WHITE, lineWidth=0, lineColor=BLACK, angle=0)
+drawEllipse(pos, size=(1,1), color=WHITE, angle=0, lineWidth=0, lineColor=BLACK)
+drawCircle(pos, size=1, color=WHITE, lineWidth=0, lineColor=BLACK)
+drawEllipseGradient(pos, size=(1,1), colorInner=WHITE, colorOuter=CLEAR_WHITE, angle=0)
+drawCircleGradient(pos, size=1, colorInner=WHITE, colorOuter=CLEAR_WHITE)
+drawCanvas2D(pos, size, angle=0, mirror=false, drawFunction, screenSpace=drawScreenSpace, context)
+
+// Where the orders differ, worth a look when changing one draw for another:
+// - angle is after the colors in drawTile, drawRect, drawEllipse and the gradients, after size in drawCanvas2D,
+//   after lineColor in drawRegularPoly and after pos in drawLine, drawLineList and drawPoly; drawCircle has none
+// - a line's width is before its color in drawLine and drawLineList, the outline's after the fill color, with
+//   lineColor, in drawPoly, drawRegularPoly, drawEllipse, drawCircle and the text
+// - pos comes first in most draws, but is an offset near the end in drawLine, drawLineList and drawPoly
+// - drawText and drawTextScreen draw with Canvas2D and take no useWebGL or screenSpace
+
+// Text functions
+drawText(text, pos, size=1, color=WHITE, lineWidth=0, lineColor=BLACK, textAlign='center', font, fontStyle, maxWidth, angle=0)
+drawTextScreen(text, pos, size, color=WHITE, lineWidth=0, lineColor=BLACK, textAlign='center', font, fontStyle, maxWidth, angle=0)
+setTextIcon(name, tileInfo)  // a tile shown in any text where its name is written between colons, 'Gold: :coin: 25',
+                             // as tall as the text, in ImageFont text too; only registered names are replaced, no
+                             // tileInfo takes it off
+
+// Utility drawing functions
+setAdditiveBlendMode(additive)
+setShader(shader)                  // draw with a custom Shader from now on, none for the engine's own; objects set
+                                   // their own, so this is for draws in gameRender and gameRenderPost
+isFullscreen()
+toggleFullscreen()
+
+// Shader Object - a custom fragment shader for objects and draws, 2D or 3D
+new Shader(fragmentCode)          // fragmentCode defines void mainImage(out vec4 c, vec2 uv) in the post processing
+                                  // style; it gives the surface color, then the object's color and additive color
+                                  // apply in 2D, and the lighting, shadows and fog in 3D; in 3D it may also define
+                                  // void mainNormal(inout vec3 n), the world normal after the normal map, to bend
+                                  // it per pixel (waves, ripples) for the lighting, specular and reflection
+new Shader(fragmentCode, vertexCode, uniforms) // uniforms: values the snippets read by name, {glow: 1, tint: RED},
+                                  // declared for them, a number a float, a boolean a bool, a Vector2, Vector3 or
+                                  // Color a vec2 to vec4, a list of 2 to 4, 9 or 16 numbers or a Matrix4 a vector,
+                                  // mat3 or mat4, column by column; a name the engine's shader uses already, like
+                                  // tint or lightColor, fails to compile with the GLSL error naming it
+shader.setUniform(name, value)    // change one, no recompile; in 2D the draws before keep the old value, in 3D set it
+                                  // outside the 3D pass and it holds for the frame
+new Shader(fragmentCode, vertexCode) // 3D: vertexCode defines void mainVertex(inout vec3 pos, inout vec3 normal),
+                                  // world space, to move vertices (wind, waves), in the shadow map and depth too;
+                                  // names: iTime, iResolution, cameraPos, iChannel0, localUV, modelMatrix,
+                                  // instanceData (an InstancedMesh3D's setDataAt) and vertexColor, which it may
+                                  // change; new Shader('', vertexCode) keeps the 3D look
+obj.shader = shader               // any EngineObject or EngineObject3D; draws that share a Shader share a batch
+shader.noTint = false             // 2D: write mainImage's color as it is with the draw's alpha, no tint, for data
+                                  // like normals; set before it first draws
+shader.dispose()                  // frees its programs and takes it off the engine's list, which keeps every Shader
+                                  // for a lost context; for one made each time a scene starts; drawn again it
+                                  // compiles again, so let go of only one nothing draws with
+// names in the snippet: iChannel0 the texture, iTime, iResolution, localUV 0 to 1 across the sprite or the mesh uv,
+// premultipliedTexture true for a render target or a smooth image (tilesPixelated false), whose rgb and alpha
+// change together;
+// in 2D untextured draws like drawRect are not shaded; a bad snippet throws with the GLSL log in debug builds;
+// in 3D the shadow map is drawn without the Shader, so a snippet that cuts holes still casts the whole shadow
+
+// Tile Info Object
+TileInfo(pos, size, textureInfo, padding=0, bleed=0) // Create a tile info object
+TileInfo.pos            // Top left corner of tile in pixels
+TileInfo.size           // Size of tile in pixels
+TileInfo.padding        // How many pixels padding around tiles
+TileInfo.offset(offset) // Offset this tile by a certain amount in pixels
+TileInfo.frame(frame)   // Offset this tile by a number of animation frames, past the sheet's edge on the next row
+TileInfo.textureInfo    // The texture info for this tile
+
+// Sprite Animation Object - steps a tile through the frames along its row over time, paused with the game
+new SpriteAnimation(tileInfo, frameCount, frameTime=.1) // first frame, how many, seconds each; loops from the start
+animation.loop() .play() .pingPong()  // start over from the first frame: repeat, run once and hold the last
+                                      // frame, or there and back; each returns the animation
+animation.stop()        // hold the current frame, a mode call starts it again
+animation.tileInfo      // the frame to draw now, read it in update or before a drawTile
+animation.frame         // its index, 0 to frameCount-1
+animation.isDone        // true once a play has run through
+animation.speed = 1     // rate multiplier, set before starting
+animation.play(onEnd)   // onEnd is called once when the play ends, on the first read after it
+
+// Sprite Animator - a character's animations by name and the one showing now
+const hero = new SpriteAnimator({idle, walk, attack}) // clips are SpriteAnimations in their own modes, first shows
+hero.set('walk')        // show a clip, starting over only when it changes or a play of it has ended
+hero.set('attack', ()=> hero.set('idle')) // with a callback for when a play clip ends
+hero.tileInfo           // the frame to draw now; also hero.frame, hero.isDone, hero.name, hero.clip
+
+// Texture Info Object
+TextureInfo(image, useWebGL=true, wrap=false, pixelated) // Created automatically for each image; pixelated makes
+                        // this texture hard edged or smooth on its own, undefined follows tilesPixelated
+TextureInfo.setPixelated(pixelated) // Hard edged or smooth for this texture alone, a soft glow in a pixel art game
+                        // a change remakes it from its image, so updateData's pixels must go in again
+TextureInfo.updateData(pixels, x=0, y=0, width, height) // Put RGBA bytes or an image into part of the texture,
+                        // uploading only that rectangle; x and y from the top left, as a tile's pos is
+TextureInfo.image       // Image source
+TextureInfo.size        // Size of the image
+TextureInfo.glTexture   // WebGL texture
+TextureInfo.wrap        // Whether texture is set to REPEAT (true) or CLAMP_TO_EDGE
+TextureInfo.setWrap(wrap=true) // Enable or disable wrapping for this texture, or give the WebGL modes across and
+                               // down, like [gl.CLAMP_TO_EDGE, gl.MIRRORED_REPEAT]
+await loadTexture(textureIndex, src) // Load an image after engineInit into textureInfos[textureIndex], for tile(i, size, textureIndex);
+                                     // resolves to the TextureInfo, and an image that fails to load logs a warning
+
+// Image Font Object draws text using characters in an image
+ImageFont(tileInfo)     // Create a font from a tile sheet
+ImageFont.drawText(text, pos, size=1, center=true, color=WHITE, useWebGL=glEnable, context)
+                        // Draw text in world space, size is a character's size in world units, a number or vec2
+                        // stays upright when the camera turns, glyphs snap to whole pixels
+ImageFont.drawTextScreen(text, pos, size, center=true, color=WHITE, useWebGL=glEnable, context)
+                        // Draw text in screen space, size in pixels is required
+                        // for both, center also centers the lines of multi-line text on pos, like the engine's drawText
+                        // a setTextIcon name between colons draws its icon, as tall as a character, in its own colors
+
+// Camera settings
+cameraPos = (0,0)        // Position of camera in world space
+cameraAngle = 0          // Rotation angle of camera in world space
+cameraScale = 32         // Scale of camera in world space
+screenToWorld(screenPos) // Convert from screen to world space coordinates
+worldToScreen(worldPos)  // Convert from world to screen space coordinates
+screenToWorldDelta(screenDelta) // Convert a screen space delta to world space
+worldToScreenDelta(worldDelta)  // Convert a world space delta to screen space
+screenToWorldTransform(screenPos, screenSize, screenAngle=0) // Convert a whole transform
+getCameraSize()          // Get the camera's visible area in world space
+cameraFit(center, size, worldMargin, screenInset) // Fit the camera to a world space rectangle
+cameraShake(amount=.5, direction=vec2(1)) // Shake for a hit: adds to a shake that fades by itself,
+                         // only what is drawn moves, cameraPos and cameraAngle stay the game's own; in 2D and
+                         // 3D, held while paused or at time scale 0; direction weights each axis, vec2(0, 1)
+                         // shakes only up and down, and each axis fades on its own
+                         // move the camera in an update: while a frame draws, cameraPos is the shaken one
+cameraShakeDistance = .5 // How far a full shake moves the view, world units; setCameraShakeDistance(distance)
+cameraShakeAngle = .05   // How far a full shake turns the view, radians; setCameraShakeAngle(angle)
+cameraShakeDecay = 1     // How much shake fades a second, 1 is a full shake gone in a second; setCameraShakeDecay(decay)
+
+// Display settings
+canvasMaxSize = (3840, 2160)  // The max size of the canvas in css pixels
+canvasFixedSize = (0, 0)      // Fixed size of the canvas
+canvasMinAspect = 0           // Min aspect ratio, a narrower window gets a shorter canvas (0 = disabled)
+canvasMaxAspect = 0           // Max aspect ratio, a wider window gets a narrower canvas (0 = disabled)
+canvasPixelRatio = 1          // Scales render resolution only (undefined tracks devicePixelRatio)
+getCanvasPixelRatio()         // Get the pixel ratio currently applied to the backing store
+canvasClearColor = CLEAR_BLACK // Color to clear the canvas to each frame, alpha 0 does not clear
+canvasColorTiles = true       // Allow tiles to be tinted when drawn
+fontDefault = 'arial'         // Default font used for text rendering
+canvasPixelated = false       // Use nearest neighbor canvas scaling for more pixelated look
+tilesPixelated = true         // Disable filtering for crisper pixel art, when false textures get mipmaps at any size
+                              // and upload premultiplied, so smooth edges do not darken
+showSplashScreen = false      // Show the LittleJS splash screen on startup
+loadingScreen                 // Drawn after the splash while the game loads, if that takes over half a second:
+                              // setLoadingScreen((progress)=> ...) draws your own on mainContext, progress 0 to 1,
+                              // setLoadingScreen() for none; the default says Loading over a bar
+glEnable = true               // Enable fast WebGL rendering
+drawScreenSpace = false       // What screenSpace defaults to in the draw and debug functions; turn it on for a HUD or
+                              // a 3D game's 2D drawing; the engine's own drawing stays in world space, but a game's
+                              // render() overrides follow it too; sizes and widths are still world sized by default,
+                              // so pass pixels; drawText stays in world space, drawTextScreen draws on the screen
+
+// Tile sheet settings
+tileDefaultSize = (16,16) // Default size of tiles in pixels
+tileDefaultPadding = 0    // Default padding around tiles in pixels
+tileDefaultBleed = 0      // How much smaller to draw tiles to prevent bleeding
+
+// Canvas and context globals
+mainCanvas / mainContext     // The main 2D canvas and its context
+drawContext                  // Context currently being drawn to
+glCanvas / glContext         // The WebGL canvas and context
+mainCanvasSize               // Size of the main canvas in css pixels (screen space)
+backgroundCanvas             // Extra canvas composited behind the engine canvases
+setBackgroundCanvas(canvas)  // Set a plugin canvas to include when combining
+setCursor(cursorStyle)       // Set the CSS cursor style
+isOnScreen(pos, size)        // Is a world space area visible on screen?
+combineCanvases()            // Combine all canvases onto mainCanvas (for screenshots)
+
+// Very many sprites: drawTile works out the tile's uvs and packs the color on every call, so a game drawing
+// thousands a frame can work those out once and write each sprite into the WebGL batch itself (glEnable only)
+glSetTexture(textureInfo.glTexture) // Bind the sheet the sprites come from, once
+glDraw(x, y, sizeX, sizeY, angle=0, uv0X, uv0Y, uv1X, uv1Y, rgba=-1, rgbaAdditive=0) // One sprite in world space;
+    // uvs are tile pos and pos + size times textureInfo.sizeInverse, a negative sizeX mirrors it,
+    // rgba is color.rgbaInt(), kept from frame to frame while the color holds; the batch flushes itself
+```
+
+## LittleJS Audio System
+- Caches sounds and music for fast playback, every play shares one decoded buffer
+- Individual sound instance control with pause/resume capabilities
+- Can attenuate and apply stereo panning to sounds
+- Ability to play mp3, ogg, and wave files
+- Route sounds or everything through effects with the audio effects plugin
+- [ZzFX Sound Effect Generator](https://killedbyapixel.github.io/ZzFX)
+
+```javascript
+// Sound Object
+Sound(zzfxSound, randomness, range, taper, onloadCallback) // Create a zzfx sound
+zzfx(...zzfxSound)                                     // Generate and play a zzfx sound at once, no Sound kept
+Sound(filename, randomness, range, taper, onloadCallback)  // Load a wave, mp3, or ogg; onloadCallback(sound) is
+                                    // called once it loads or fails to, isLoaded says which
+Sound.play(pos, volume=1, pitch=1, randomnessScale=1, loop=false, paused=false) // Play a sound, returns SoundInstance
+Sound.playLoop(pos, volume=1, pitch=1, randomnessScale=1, paused=false) // Play on a loop, like play with loop on
+Sound.playMusic(volume=1, loop=true, paused=false)     // Play as music with looping
+                                    // (played before the first input, a sound waits and starts once audio runs;
+                                    // only the newest play of each sound waits)
+Sound.playNote(semitoneOffset, pos, volume=1)          // Play as note with a semitone offset
+Sound.getDuration()                                    // Get length of sound in seconds (0 if loading)
+Sound.isLoaded()                                       // Check if sound is fully loaded
+Sound.loadedPercent                                    // 0 until a file is decoded, then 1
+Sound.output                                           // Optional node or effect to route every play through
+
+// SoundInstance
+SoundInstance.start(offset=0)     // Start or restart from a time in seconds, to seek
+SoundInstance.setVolume(volume, fadeTime=0) // Change volume during playback, fading to it if given a time
+SoundInstance.setRate(rate)       // Change speed and pitch during playback, like an engine loop following speed
+SoundInstance.setPan(pan)         // Change stereo pan during playback (-1 left to 1 right), to follow its source
+SoundInstance.stop(fadeTime=0)    // Stop with optional fade out
+SoundInstance.pause()             // Pause the sound
+SoundInstance.resume()            // Resume paused sound
+SoundInstance.isPlaying()         // Check if currently playing
+SoundInstance.isPaused()          // Check if paused or stopped, not playing
+SoundInstance.getCurrentTime()    // Where it is in the sound, in the sound's own seconds whatever the rate
+SoundInstance.getDuration()       // Length of the sound, the same at any rate; divide by rate for time to play
+SoundInstance.getSource()         // Get AudioBufferSourceNode
+SoundInstance.onendedCallback     // Called when it plays to its end, not on stop or pause; set it any time
+
+// Audio functions
+speak(text, volume=1, rate=1, pitch=1, language='')  // Speak text line
+speakStop()                                          // Stop all queued speech
+getNoteFrequency(semitoneOffset, rootFrequency=220)  // Get frequency for musical notes
+
+// Audio settings
+soundEnable = true      // Should sound be enabled? set it before sounds are made, setSoundEnable(false)
+                        // before they are, setSoundVolume(0) to mute while the game runs
+soundIgnoreSilentSwitch = false // play with an iPhone's silent switch on, as media, pausing the player's music;
+                        // off, the switch mutes the game; setSoundIgnoreSilentSwitch(true)
+soundVolume = .3        // Volume scale to apply to all sound
+soundDefaultRange = 40  // Default range where sound no longer plays
+soundDefaultTaper = .7  // Default range percent to taper off sound (0-1)
+soundPauseWhenHidden = true // Pause all sound while the page is hidden, the way the game stops; off keeps
+                            // music playing in a background tab
+soundPauseWhenBlurred = false // Pause all sound while the window does not have focus, the game runs on
+
+// Audio globals
+audioContext            // The shared Web Audio context
+audioMasterGain         // Master gain node all sound routes through
+setAudioMasterEffect(input, output) // Route all sound through a node or effect, or a chain's first and last; no args to remove it
+audioIsRunning()        // Is the audio context running? (requires user interaction)
+playSamples(sampleChannels, volume=1, rate=1, pan=0, loop=false, sampleRate, gainNode, offset=0, onended, output, pannerNode) // Low level sample playback
+createAudioBuffer(sampleChannels, sampleRate) // Copy arrays of samples into an audio buffer
+playAudioBuffer(buffer, volume=1, rate=1, pan=0, loop=false, gainNode, offset=0, onended, output, pannerNode) // Play an audio buffer, shareable between sounds
+```
+
+## LittleJS Audio Effects
+- Optional plugin with Web Audio effects, each with a wet/dry mix
+- Route a group of sounds with `sound.output = effect`, or everything with `setAudioMasterEffect(effect)`
+- Chain effects with `effect.connect(next)`, never by assigning `effect.output`, that is the effect's own node
+
+```javascript
+AudioEffect(mix=1)                                // Base class, input and output gain nodes with a mix between
+AudioEffect.input / AudioEffect.output            // Its own nodes, output feeds the master gain until connect() moves it
+AudioEffect.setMix(mix, fadeTime=0)               // 0 is fully dry, 1 is fully wet
+AudioEffect.connect(effectOrNode)                 // Send output into the next effect instead, returns it
+AudioEffect.disconnect()                          // Stop sending output anywhere
+AudioFilter(type='lowpass', frequency=1000, q=1, mix=1) // Muffle sounds, setFrequency(hz, fadeTime) to sweep
+AudioReverb(duration=2, decay=2, mix=.5)          // Room or cave from generated noise, setRoom(duration, decay) to change it
+AudioDelay(time=.3, feedback=.4, mix=.5)          // Echoes, setTime and setFeedback while playing
+AudioDistortion(amount=.5, mix=1)                 // Overdrive, setAmount rebuilds the curve
+AudioCompressor(threshold=-24, ratio=12, mix=1)   // Stops clipping on the master bus, setThreshold, setRatio
+AudioFilter.node, AudioReverb.node, ...           // Each effect's wrapped Web Audio node, for anything the above doesn't cover
+```
+
+## LittleJS Input System
+- Tracks keyboard down, pressed, and released
+- Tracks mouse buttons, position, and wheel
+- Tracks multiple analog gamepads
+- Routes touch input to mouse
+- Virtual gamepad for touch devices
+
+```javascript
+// Keyboard, keys are KeyboardEvent.code names like 'KeyW', 'Space' or 'ArrowUp', not characters
+keyIsDown(key, device=0)              // Is key down? device 0 is the keyboard and mouse, 1 on the gamepads
+keyWasPressed(key, device=0)          // Was key pressed this frame?
+keyWasReleased(key, device=0)         // Was key released this frame?
+keyDirection(up, down, left, right)   // Get input vector from arrow keys or wasd
+inputClear()                          // Clear all input state
+inputClearKey(key, device=0, clearDown=true, clearPressed=true, clearReleased=true) // Clear input state for a key
+
+// Mouse / Touch
+mousePos                              // World space mouse position
+mousePosScreen                        // Screen space mouse position
+mouseDelta                            // World space mouse movement delta
+mouseDeltaScreen                      // Screen space mouse movement delta
+mouseWheel                            // Delta mouse wheel this frame, a touch pinch turns it too
+touchPinch                            // Pinch of two fingers this frame in wheel units: apart is negative like
+                                      // the wheel up, 1 for every 50 pixels; the mouse is between the fingers
+touchPinchWheel = true                // Add touchPinch to mouseWheel? A second finger then lets go of the button
+                                      // the first pressed; setTouchPinchWheel(false) leaves the first finger the
+                                      // mouse, for a game with its own use for two fingers
+mouseScreenTransform                  // Bends each mouse and touch position as it comes in, for a picture bent after
+                                      // it is drawn; setMouseScreenTransform(transform), undefined for none
+mouseIsDown(button)                   // Is mouse button down?
+mouseWasPressed(button)               // Was mouse button pressed this frame?
+mouseWasReleased(button)              // Was mouse button released this frame?
+mouseInWindow                         // Is the mouse inside the window?
+isTouchDevice                         // Is this a touch capable device?
+
+// Pointer Lock
+pointerLockRequest()                  // Request pointer lock on the canvas
+pointerLockExit()                     // Exit pointer lock
+pointerLockIsActive()                 // Is pointer lock currently active?
+
+// Last input device (most recently used)
+lastInputDevice                       // 'mouse' | 'keyboard' | 'gamepad' (sticky while idle)
+usingMouseInput()                     // Is the mouse the most recently used device?
+usingKeyboardInput()                  // Is the keyboard the most recently used device?
+usingGamepadInput()                   // Is a gamepad the most recently used device?
+
+// Gamepad
+isUsingGamepad                        // Is a gamepad the most recently used device? (= usingGamepadInput())
+gamepadPrimary                        // Index of the primary gamepad (first one with input, until it disconnects)
+// every gamepad function below defaults to gamepad=gamepadPrimary, not pad 0
+gamepadIsDown(button, gamepad=gamepadPrimary)      // Is gamepad button down?
+gamepadWasPressed(button, gamepad=gamepadPrimary)  // Was gamepad button pressed this frame?
+gamepadWasReleased(button, gamepad=gamepadPrimary) // Was gamepad button released this frame?
+gamepadStick(stick, gamepad=gamepadPrimary)        // Get gamepad analog stick value
+gamepadDpad(gamepad=gamepadPrimary)                // Get gamepad dpad as a direction vector
+gamepadStickCount(gamepad=gamepadPrimary)          // Get number of analog sticks
+gamepadConnected(gamepad=gamepadPrimary)           // Is the gamepad connected?
+gamepadVibrate(gamepad=gamepadPrimary, duration=200, strongMagnitude=1, weakMagnitude=1, startDelay=0) // Rumble,
+                                                   // durations in ms, browsers stop at 5 seconds with the delay
+gamepadVibrateStop(gamepad=gamepadPrimary)         // Stop gamepad vibration
+touchGamepadButtonPos(button)                      // {pos, size, alpha} of a touch gamepad button on screen, to
+                                                   // draw an icon over it; undefined when the touch gamepad
+                                                   // is off, alpha 0 while it has faded out
+
+// Touch Gamepad
+touchGamepadEnable = false            // Is on screen touch gamepad enabled? A real gamepad in use takes over
+touchGamepadAnalog = true             // Is touch gamepad analog or 8 way dpad?
+touchGamepadSize = 100                // Size of touch gamepad
+touchGamepadAlpha = .3                // Alpha of touch gamepad
+touchGamepadPassthrough = false       // Also route touches outside the gamepad to mouse?
+touchGamepadButtonCount = 4           // Number of right side buttons (0-4)
+touchGamepadCenterButtonSize = 0      // Size of center start button (0 = disabled)
+touchGamepadLeftStick = true          // Show analog stick on the left side?
+touchGamepadLeftButtonCount = 0       // Number of left side buttons (when left stick is off)
+touchGamepadRightStick = false        // Use a stick instead of buttons on the right side?
+touchGamepadFloating = false          // Directional controls float to where you press?
+touchGamepadDisplayTime = 3           // Seconds to display when unused (0 = always show)
+touchGamepadVibration = 0             // Vibrate duration in ms on button press (0 = off)
+
+// Vibration
+vibrate(pattern=100)                  // Pulse the vibration hardware if it exists
+vibrateStop()                         // Stop all vibration
+
+// Input settings
+gamepadsEnable = true                 // Should gamepads be allowed?
+gamepadDirectionEmulateStick = true   // Should dpad be routed to the left analog stick?
+gamepadAxisFilterEnable = true        // Ignore axes that don't rest near center (steering wheels)
+inputWASDEmulateDirection = true      // Should WASD keys be routed to the direction keys? Off for two players on one
+                                      // keyboard, WASD and arrows
+inputPreventDefault = true            // Should input events prevent default browser handling?
+inputMouseMoveThreshold = 6           // Screen-px mouse movement per frame that counts as mouse use
+vibrateEnable = true                  // Allow vibration hardware if it exists?
+touchInputEnable = true               // Should touch input route to mouse events?
+```
+
+## LittleJS Object System
+- Top level object class used by the engine
+- Automatically adds self to object list
+- Will be updated and rendered each frame
+- Renders as a sprite from a tile sheet by default
+- Can have color and additive color applied
+- 2D Physics and collision system
+- Sorted by renderOrder before drawing
+- Objects can have children in local space
+- Parents are updated before children
+- Call destroy() to get rid of objects
+
+```javascript
+// Engine Object
+EngineObject(pos, size=(1,1), tileInfo, angle=0, color, renderOrder=0)
+EngineObject.update()                              // Update object, called automatically
+EngineObject.render()                              // Render object, called automatically
+EngineObject.destroy(immediate=false)              // Destroy this object and children, removed at the end of the frame;
+                                                   // immediate cuts attached emitters off instead of letting them finish
+EngineObject.collideWithTile(tileData, pos, isHit) // Tile collision resolve check, isHit false for places only tried
+EngineObject.collideWithObject(object, push)       // Object collision resolve check, push is 3D only
+EngineObject.getAliveTime()                        // How long since object was created
+EngineObject.getSpeed()                            // Length of the velocity
+EngineObject.getVelocityAtPoint(pos)               // Velocity of a world point on it, its spin included
+EngineObject.applyAcceleration(acceleration)       // Apply acceleration
+EngineObject.applyForce(force)                     // Apply force
+EngineObject.getMirrorSign()                       // Get mirror direction (1 or -1)
+EngineObject.localToWorld(pos)                     // Convert a point from this object's space to world space
+EngineObject.worldToLocal(pos)                     // Convert a world space point to this object's space
+EngineObject.localToWorldVector(vec)               // Convert a direction, rotation only, and back with
+                                                   // worldToLocalVector(vec)
+EngineObject.isOverlappingObject(object)           // Do the two boxes overlap?
+EngineObject.isOverlapping(pos, size=(0,0))        // Does its box overlap a box, or a point with no size?
+EngineObject.addChild(child, localPos, localAngle) // Attach a child at an offset; localPos only exists on a child
+EngineObject.attach(child)                         // Attach a child where it is, the offset worked out for it
+EngineObject.removeChild(child)                    // Remove a child, it stays where it was in the world
+EngineObject.setCollision(solids=true, isSolid=true, level=true, raycast=true) // Set collision, level is collideLevel,
+                                                   // the tile collision layers; raycast=false
+                                                   // leaves it out of engineObjectsRaycast; an object with no width
+                                                   // or height is not a solid obstacle, so it blocks nothing and
+                                                   // nothing blocks it
+EngineObject.persistent = false                    // true skips it in engineObjectsDestroy, for things that outlive
+                                                   // a level like a camera; destroy() still destroys it
+
+// Engine Object Members
+EngineObject.pos           // World space position
+EngineObject.size          // World space width and height
+EngineObject.drawSize      // Size of object used for drawing if set
+EngineObject.tileInfo      // Tile info to render object
+EngineObject.angle         // Rotation angle for rendering
+EngineObject.color         // Color to apply when rendered
+EngineObject.additiveColor // Additive color to apply when rendered
+EngineObject.mirror        // Should it flip along y axis when rendered
+EngineObject.mass          // Weight of object, static if 0: it moves by its velocity but only others collide with it
+EngineObject.damping       // Fraction of velocity kept each frame, 1 keeps all, 0 stops at once
+EngineObject.angleDamping  // Fraction of angular velocity kept each frame, 1 keeps all, 0 stops at once
+EngineObject.restitution   // How bouncy is it when colliding (0-1)
+EngineObject.friction      // Fraction of sliding speed kept each frame on the ground, 1 is no friction; the
+                           // more slippery of the object and the ground is used
+EngineObject.gravityScale  // How much to scale gravity by
+EngineObject.renderOrder   // Objects are sorted by render order
+EngineObject.velocity      // Velocity of the object, world units per frame
+EngineObject.angleVelocity // Angular velocity of the object, radians per frame
+EngineObject.groundObject  // What it stands on this frame, a tile layer or an object, undefined in the air; a
+                           // moving platform carries its rider through velocity.x, so a controller adds to it
+EngineObject.clampSpeed    // Hold each axis of velocity to objectMaxSpeed while it collides, with solids or with tiles
+                           // while it has a mass, so it can not pass through a thin wall; true by default, false for
+                           // a fast bullet that collides; what does not collide moves as fast as it is told
+EngineObject.parent / children // Set by addChild, a child is placed by its parent and sits out solid collision;
+                                // setting a child's pos or angle moves it, and its localPos or localAngle follows;
+                                // a 3D child's pos3D is local instead, see EngineObject3D
+EngineObject.isBullet      // Moves through the tiles as a point along a ray, never passing one at any speed and not held
+                           // to objectMaxSpeed for them; collideWithTile sees it where it meets the tile; on a hit it
+                           // bounces by restitution and goes on with the rest of its move, so it rolls along a floor;
+                           // its collision with solid objects is the usual one, so one with a size is still clamped
+EngineObject.oneWay        // Up, down, left or right, like vec2(0, 1): a solid passed through that way, a platform
+                           // jumped up through; it blocks only what was wholly on its far side or stood on it
+
+// Engine Object settings
+enablePhysicsSolver = true    // Enable collisions, between objects and with tiles, and in 3D with solids and the level?
+objectDefaultMass = 1         // Default object mass for collisions
+objectDefaultDamping = 1      // Fraction of velocity kept each frame (1 keeps all)
+objectDefaultAngleDamping = 1 // Fraction of angular velocity kept each frame (1 keeps all)
+objectDefaultRestitution = 0  // How much to bounce when a collision occurs (0-1)
+objectDefaultFriction = .8    // Fraction of sliding speed kept each frame on the ground (1 is no friction)
+objectMaxSpeed = 1            // Clamp each axis of velocity, world units per frame, so fast objects don't miss
+                              // collisions; each axis on its own, so a faster diagonal bends toward 45 degrees
+gravity = (0,0)               // How much gravity to apply to objects, added to velocity each frame
+
+// Engine Object functions
+engineObjectsCollect(pos, size, objects=engineObjects, testCenters=false) // size is a circle's diameter or a box's
+                                                           // full size, objects whose box overlaps it; testCenters
+                                                           // only those whose center is inside, a little faster
+engineObjectsCallback(pos, size, callbackFunction, objects=engineObjects, testCenters=false) // destroyed objects are
+                                                           // left out
+engineObjectsRaycast(start, end, objects=engineObjects)    // only objects with collideRaycast set, which
+                                                           // setCollision turns on
+engineObjectsDestroy(immediate=true) // destroy every object except the persistent ones
+```
+
+## LittleJS Tile Layer System
+- Caches arrays of tiles to off screen canvas for fast rendering
+- Unlimited numbers of layers, allocates canvases as needed
+- Interfaces with EngineObject for collision
+- Collision layer is separate from visible layers
+- It is recommended to have a visible layer that matches the collision
+- Tile layers made without WebGL can be drawn to using their context with Canvas2D, after the layer has drawn
+  (redraw), and a cell set later clears its square unless setData is given false; when more than half the cells
+  wait to be drawn the whole layer is drawn again, which clears what was painted over the rest too
+- Drawn with WebGL by default, or straight to the main canvas when made with useWebGL=false
+
+```javascript
+
+// Canvas Layer
+CanvasLayer(pos, size, angle=0, renderOrder=0, canvasSize=(512,512), useWebGL=true) // Create a canvas layer object
+CanvasLayer.canvas          // The canvas used by this layer
+CanvasLayer.context         // The 2D context of the canvas, read it back with context.getImageData(...)
+CanvasLayer.updateWebGL()   // Creates or updates WebGL texture
+CanvasLayer.draw(pos, size, color=WHITE, angle=0, mirror=false, additiveColor, screenSpace=drawScreenSpace, context)
+                            // Draw the layer centered at pos
+CanvasLayer.drawRect(pos, size, color, angle) // Draw a rectangle into the layer in world space, where it shows in
+                            // the world whatever the layer's place, angle and mirror; on the GPU into its WebGL
+                            // texture, a cheap picture layer for decals, paint or fog of war with no tile grid
+CanvasLayer.drawTile(pos, size=(1,1), tileInfo, color, angle, mirror) // Draw a tile into the layer in world space
+                            // a world unit is as many pixels as the canvas has across the layer's size
+CanvasLayer.redrawStart(clear=false) // Start drawing in layer pixels; redrawEnd() finishes
+CanvasLayer.drawLayerTile(pos, size=(1,1), tileInfo, color=WHITE, angle=0, mirror, additiveColor) // Draw a tile in
+                            // layer pixels, up from its bottom left, inside redrawStart/End
+CanvasLayer.drawLayerRect(pos, size, color, angle=0) // Draw a rectangle in layer pixels, inside redrawStart/End
+CanvasLayer.clearLayerRect(pos, size) // Clear a rectangle in layer pixels, inside redrawStart/End
+CanvasLayer.scroll(offset)  // Move the layer through the world while what is drawn stays where it is in the world,
+                            // snapped to its whole pixels, returns the offset moved: a picture that follows
+                            // something, like decals around a car; what scrolls off is gone, the strip coming into
+                            // view is empty to draw; one GPU draw into a second texture kept from the first scroll
+                            // (as big as the layer's), the canvas drawn onto itself without WebGL; not on a TileLayer
+CanvasLayer.onContextRestored() // Called when a lost WebGL context comes back, does nothing by default: what was
+                            // drawn into the layer's texture is gone, draw it again here to keep it
+
+// LittleJS Layer System
+TileLayer(pos, size, tileInfo, renderOrder=0, useWebGL=true) // Create a tile layer object
+TileLayer.setData(layerPos, data, redraw)      // Set data at position, drawn on the next render, now inside its own redraw; redraw true draws now, false leaves it as drawn until a redraw()
+TileLayer.clearData(layerPos, redraw)          // Clear data at position, drawn as setData draws
+TileLayer.getData(layerPos)                    // Get data at position
+TileLayer.debugShow = true                     // Shown by the debug overlay's 2: Debug Tiles, off to leave a layer out
+TileLayer.redraw()                             // Draw the whole layer now, a layer never drawn draws on its first render
+TileLayer.drawTileData(layerPos, clear=true)   // Draw the tile, inside redrawStart/End
+// a TileLayer is a CanvasLayer placed by its corner, with all of its drawing: drawRect, drawTile and redrawStart draw
+// the cells waiting to be drawn first, so what is drawn goes on top of them
+// to draw on a layer made with useWebGL=false (or with WebGL off), pass its context to drawCanvas2D:
+// drawCanvas2D(pos, size, angle, mirror, drawFunction, screenSpace, layer.context)
+// a TileLayer draws over it: its first render draws it whole, a cell set with no redraw argument is drawn again
+// on a WebGL layer use drawRect/drawTile, or drawLayerTile/drawLayerRect inside redrawStart/End, its canvas is not shown
+
+// Tile Layer Data Object
+TileLayerData(tile, direction=0, mirror=false, color=WHITE) // Create tile data object, tile from 0 like tile(),
+                                                            // undefined for an empty cell
+TileLayerData.clear()                                       // Clear this tile data, it draws nothing
+
+// Tile Collision Layer
+TileCollisionLayer(pos, size, tileInfo=tile())      // Create a tile collision layer object, with no tile when no
+                                                    // image is loaded, for a collision only layer
+TileCollisionLayer.setCollisionData(layerPos, data=1) // Set tile collision data at a cell in the layer
+TileCollisionLayer.getCollisionData(layerPos)       // Get tile collision data at a cell, 0 outside the layer
+TileCollisionLayer.clearCollisionData(layerPos)     // Clear tile collision data at a cell
+TileCollisionLayer.collisionTest(pos, size=(0,0), object) // Like tileCollisionTest for this layer only
+TileCollisionLayer.collisionRaycast(posStart, posEnd, object, normal) // Like tileCollisionRaycast for this layer only
+TileCollisionLayer.isSolid = true                   // Solid layers block objects and particles, the solidOnly tests
+                                                    // skip the others
+TileCollisionLayer.setOneWay(tile, direction=vec2(0,1)) // The cells drawing that tile index are passed through
+                                                    // moving that way and block only what was wholly on the far
+                                                    // side, objects, particles and rays; turned and mirrored with
+                                                    // each cell's art; vec2(0, 1) is a platform jumped up through
+TileCollisionLayer.oneWayTiles                      // Map of the one way tiles, tile index to direction; delete one
+                                                    // to make it solid again
+tileCollisionGetData(pos, solidOnly=true)           // Get tile collision data at pos
+tileCollisionTest(pos, size=(0,0), object, solidOnly=true) // Check if collision should occur
+tileCollisionRaycast(posStart, posEnd, callbackObject, normal, solidOnly=true) // Where the ray meets the first tile hit,
+                                                    // or undefined; a normal vec2 passed in is set to the surface's
+tileCollisionLayers                                 // List of all tile collision layers
+tileLayersLoad(tileMapData, tileInfo=tile(), renderOrder=0, collisionLayer, draw=true) // collisionLayer is the index
+                                                    // or the name of the layer that gets collision, no tile when no
+                                                    // image is loaded
+                                                    // Load tile layers from exported data, Tiled flips and turns included;
+                                                    // groups are flattened and layer indices count that flat list,
+                                                    // hidden layers load with collision but are not drawn; a
+                                                    // tileset in the map with a margin or spacing is read where
+                                                    // its tiles are
+tileLayersFromLDtk(ldtk, level=0)                   // A Tiled map of an LDtk level, by index or identifier, to give
+                                                    // tileLayersLoad and objectLayersLoad: its layers bottom first, an
+                                                    // IntGrid layer a hidden layer of its values under its name, for
+                                                    // collisionLayer, its rule tiles over it as name tiles, tiles
+                                                    // stacked in a cell in layers above, named (2), (3), and a
+                                                    // see-through tile in a layer of its opacity; its entities
+                                                    // objects with their fields as properties
+objectLayersAddType(name, make, defaults={}, tileInfo) // Name a type of object in a Tiled map: a class made
+                                                    // with new make(pos), or an arrow function called make(pos),
+                                                    // defaults set on what it made; tileInfo is an editor icon
+objectLayersLoad(tileMapData)                       // Make the objects of a map's object layers, returns them
+
+```
+
+## LittleJS Particle System
+- Simple kinematic particle system with many parameters
+- [Particle Effect Designer](https://killedbyapixel.github.io/LittleJS/examples/particles) - Editor for creating LittleJS Particle Systems
+
+```javascript
+// Particle Emitter Object
+ParticleEmitter(pos, angle, emitSize, emitTime, emitRate, emitConeAngle, tileInfo, colorStartA, colorStartB,
+    colorEndA, colorEndB, particleTime, sizeStart, sizeEnd, speed, angleSpeed, damping, angleDamping,
+    gravityScale, particleConeAngle, fadeRate, randomness, collideLevel, additive, randomColorLinear,
+    renderOrder, localSpace) // Create a particle system, speeds are per frame; collideLevel is for world space only
+emitter.trailScale / velocityInheritance / restitution / friction / emitCircle // More settings, set after making it
+emitter.particleCreateCallback / particleDestroyCallback / particleCollideCallback // Called with each particle
+emitter.particleUpdateCallback // Called with each particle every update, after it moves
+emitter.finishCallback  // Called once with the emitter when its last particle is gone, not on destroy(true)
+emitter.scale = 1         // grows the whole effect: spawn area, sizes, speed and fall; each particle keeps its own
+emitter.gravity = 0       // the effect's own fall per frame, added to world gravity times gravityScale
+ParticleEmitter.emitParticle()           // Spawn one particle
+
+// Particle Settings
+particleEmitRateScale = 1 // Scales particles emit rate
+```
+
+## LittleJS Particle Effects
+- Ready made effects in one line, 2D and 3D, each tuned around a one unit emitter
+- Effects are plain data, {name, settings, behaviors}, the format the particle designer saves, so a designed library
+  plays by name
+
+```javascript
+particleEffect(name, pos, {scale, hue, saturation, angle}) // play an effect, returns its ParticleEmitter; a
+                                        // continuous one goes until destroyed, a one-shot ends itself; any setting
+                                        // in the options replaces the effect's own: {emitTime: .5} for a burst,
+                                        // {emitTime: 0, emitRate: 30} to keep a one-shot going
+particleEffect3D(name, pos3D, {scale, hue, saturation, angle, flatten, roundLighting}) // the same effect as a
+                                        // ParticleEmitter3D, angle turning it about z; a circle area becomes a sphere
+                                        // and a rectangle a box as deep as it is wide, flatten makes them a disc or a
+                                        // sheet across the way it emits; roundLighting lights each particle as a ball
+                                        // both take {tileInfo} to draw the game's own art in place of the shape
+particleEffectsBuiltIn                  // the built-in names: fire, torch, smoke, steam, explosion, sparks, hit,
+                                        // dust, debris, sparkle, magic, heal, poison, portal, rain, snow, leaves,
+                                        // bubbles, fireflies, trail, muzzle, blood, confetti and splash
+// each at scale 1 fits a one unit object, with the hue it starts from for options.hue to turn; a one-shot ends
+// itself, a continuous one goes until destroyed
+'fire'       // hue .08, continuous
+'torch'      // hue .09, continuous
+'smoke'      // no hue, gray, continuous
+'steam'      // no hue, white, continuous
+'explosion'  // hue .12, one-shot
+'sparks'     // hue .17, continuous
+'hit'        // hue 0, red, one-shot
+'dust'       // hue .1, one-shot
+'debris'     // hue .08, one-shot
+'sparkle'    // hue .14, continuous
+'magic'      // hue .55 to .79, continuous
+'heal'       // hue .33, continuous
+'poison'     // hue .3 and .8, continuous
+'portal'     // hue .75, continuous
+'rain'       // hue .63, continuous
+'snow'       // no hue, white, continuous
+'leaves'     // hue .25 to .05, continuous
+'bubbles'    // hue .55, continuous
+'fireflies'  // hue .2, continuous
+'trail'      // hue .08, continuous
+'muzzle'     // hue .14, one-shot
+'blood'      // hue 0, red, one-shot
+'confetti'   // hue 0 and .6, mixed, one-shot
+'splash'     // hue .58, one-shot
+// an effect is plain data, typed ParticleEffect: {name, settings, behaviors}, settings a ParticleEffectSettings,
+// each optional, and a play's options a ParticleEffectOptions, the settings with scale, hue and the rest;
+// particleEffectsAdd takes a ParticleEffectInput, its settings optional, and an effect's shape is any string,
+// where a play's options take only the built-in names
+particleEffectApply(emitter, effect)    // set a live 2D emitter to an effect
+particleEffectApply3D(emitter, effect)  // the same for a ParticleEmitter3D, its particles, place and scale kept
+particleEffectFromEmitter(emitter, name='Effect') // a 2D emitter's settings as an effect, to save or build in 3D
+particleEffectsAddBehavior(name, update, update3D, min=-2, max=2, value=1, description='') // add a behavior effects
+                                        // can name, with 2D and 3D pushes; min and max for the designer and to clamp
+                                        // a strength to, value to start at
+particleEffectsAdd(effects)             // add effects to play by name, one of the same name replaces it
+particleEffectsGet(name)                // an effect's data, any case, to change or build by hand
+await particleEffectsLoad(url)          // load the file the particle designer's Save Library wrote, and add its effects
+particleEffectsParse(text)              // a library file's text to effects, particleEffectsText(effects) back
+particleEffectSanitize(raw)             // any input to a whole effect, defaults filled, bad values clamped
+particleEffectRecolor(effect, hue, saturation) // a copy turned around the color wheel and its saturation scaled
+particleEffectSettings                  // every setting an effect has, with particleEffectGroups, the groups
+particleEffectBehaviors                 // the behaviors an effect can name: wobble, swirl, turbulence, attract,
+                                        // orbit, wind and stick
+particleEffectShapes                    // the shapes the plugin draws: dot, soft, glow, smoke, spark, square,
+                                        // triangle, ring, star and plus
+particleEffectShapeTile(name)           // a built-in shape's tile, on a sheet drawn once, undefined headless or
+                                        // without WebGL, where effects draw untextured
+```
+
+## LittleJS Tween System
+- Animate numbers, Vector2, Color, or any value with a `.lerp(other, percent)` method
+- Pauses with the game by default; opt-in real-time mode keeps tweens running while paused
+- Easing curves with looping, ping-pong, and chained completion callbacks
+- Auto-registers via `engineAddPlugin` — no setup needed
+- See the Tween and Tween Advanced shorts (`examples/shorts/tween.js`, `tweenAdvanced.js`) for demos
+
+```javascript
+// Tween a property by dot-path (common case)
+tweenProperty(target, propertyPath, start, end, duration=1, options)
+
+// Tween via custom callback
+new Tween(callback, start=0, end=1, duration=1, options)
+Tween.setEase(easeFn)          // Set easing curve, returns this
+Tween.then(callback)           // Set onComplete, called after the last pass or loop, returns this
+Tween.onComplete               // Completion callback, kept by restart, not called by stop
+Tween.loop(count=Infinity)     // Repeat n times, returns this
+Tween.pingPong(count=Infinity) // Bounce between endpoints, returns this
+Tween.pause()                  // Pause this tween
+Tween.resume()                 // Resume a paused tween
+Tween.restart()                // Reset to start and replay
+Tween.stop()                   // Remove from active list
+Tween.isActive()               // True if running and not paused
+Tween.getPercent()             // Progress 0..1
+Tween.getValue()               // Current interpolated value
+
+// Easing curves — pass to setEase or options.ease
+Ease.LINEAR, Ease.SINE, Ease.CIRC, Ease.EXPO
+Ease.BACK, Ease.ELASTIC, Ease.SPRING, Ease.BOUNCE
+Ease.POWER(n)                  // Returns x => x**n
+Ease.BEZIER(x1, y1, x2, y2)    // CSS cubic-bezier solver
+
+// Direction modifiers — wrap a curve to flip its direction
+Ease.OUT(curve)                // Reverse to ease-out
+Ease.IN_OUT(curve)             // Symmetric S-curve
+Ease.IN(curve)                 // No-op (curves are already ease-in)
+Ease.PIECEWISE(...curves)      // Run different curves over equal sections
+
+// Tween options
+options.ease         // Easing function (default Ease.LINEAR)
+options.useRealTime  // Advance even when game is paused (default false)
+options.paused       // Start in paused state (default false)
+
+// Global helper
+tweenStopAll()                 // Stop every active tween (e.g. on level reset)
+```
+
+## LittleJS Scene System
+- A game's states, like a title, the game and game over, as scene objects
+- `setScene` leaves the current scene, destroys every object that is not persistent, and enters the next
+- Pause is the engine's `paused`: a scene's update stops with gameUpdate, its render hooks keep drawing
+- See the Scenes short and the Box2D example
+
+```javascript
+setScene(scene)      // Leave the current scene, clear objects, enter scene; the current one restarts it
+getScene()           // The current scene, or undefined
+
+// A scene is any object, every hook is optional
+scene.enter()        // After the old scene left and the objects were cleared; not awaited, so setup done once
+                     // (await box2dInit(), new plugins) goes in gameInit before the first setScene
+scene.leave()        // Before the objects are cleared, while the scene is still current
+scene.update()       // Each update after gameUpdate, not while paused or at time scale 0
+scene.render()       // Before gameRender, under the objects
+scene.renderPost()   // After gameRenderPost, over the game, while paused too; plugins made after the first setScene draw over it
+```
+
+## LittleJS Parallax
+- A background layer that follows the camera by a part of its movement and repeats across the view
+- Draws mountains by default, or anything a game draws into its canvas
+- See the Parallax short and the platformer example
+
+```javascript
+new ParallaxLayer(pos, size=vec2(32,16), parallax=.5, renderOrder=-1e3, drawFunction, canvasSize=vec2(512,256))
+                           // a CanvasLayer; pos is where the image's middle is when the camera is there too,
+                           // size the world size of one copy; parallax is how much of the camera's movement it
+                           // follows, 0 with the world, 1 with the screen, a Vector2 for x and y apart
+drawFunction(context, canvasSize, layer) // draws the image once, parallaxMountains() when not given; an image
+                           // that meets itself at its left and right edges repeats with no seam
+parallaxMountains(topColor, bottomColor, seed) // a draw function: a range of mountains that repeats with no seam,
+                           // shaded from its peaks to its feet; the same seed gives the same range
+layer.wrapX = true         // repeat across the view; wrapY = false, up and down too
+layer.zoomFollow = 1       // how much the camera's zoom changes its size on screen, 0 keeps it the size it has at
+layer.zoomScale            // this camera scale, the cameraScale when it was made
+layer.redraw()             // draw the image again, after changing layer.drawFunction or what it draws from
+layer.getDrawPositions()   // where each copy is drawn now in the world; getDrawSize() the size of one
+
+// three ranges, the far ones lighter, higher and slower
+for (let i = 3; i--;)
+    new ParallaxLayer(vec2(0, i*2), vec2(40, 20), .3 + i*.25, -1e3 - i,
+        parallaxMountains(hsl(.6, .3, .4 + i*.15), hsl(.6, .5, .2)));
+```
+
+## LittleJS Camera
+- Camera objects drive the view, so a game need not move cameraPos itself; the newest made drives it
+- They update after the objects move, so they are never a frame behind, and hold while paused
+- Destroy the one driving and the one before takes over from where the view is
+- cameraShake (see the camera settings) works with or without one; the 3D cameras are in LittleJS 3D Rendering
+
+```javascript
+new FollowCamera(target, smoothing=.1) // the 2D camera, follows an EngineObject or a vec2 and sets cameraPos;
+                           // the view goes to the target at once; smoothing is seconds, 0 snaps
+camera.offset = vec2()     // where the target sits from the middle of the view
+camera.deadZone = vec2()   // a box in the middle of the view the target moves in without the view moving
+camera.lookAhead = vec2()  // how much more to show the way the target goes, vec2(3, 0) for a side scroller;
+camera.lookAheadTurn = 1   // it slides across over lookAheadSmoothing = .5 seconds once the target has gone
+                           // back lookAheadTurn units the other way, so a jiggle does not flip it
+camera.boundsMin, camera.boundsMax // keep the view over the level, centered where it is smaller than the view
+camera.scale               // the cameraScale it eases to over scaleSmoothing = .2 seconds, undefined leaves it
+camera.snap()              // straight to the target, for a level start or a teleport
+camera.activate()          // make it the camera that drives the view, from where the view is
+camera.pos                 // the middle of the view it sets, before shake
+                           // the debug overlay (Esc) shows its dead zone, offset, look ahead, focus and bounds
+```
+
+## LittleJS PathFinding System
+- A* pathfinding on a grid
+- Works with a TileCollisionLayer or a bare grid with custom walkability
+- Optional path smoothing (corner cleanup + string-pull line-of-sight)
+- See `examples/shorts/pathFinder.js` for a demo
+
+```javascript
+// Construct from a TileCollisionLayer or a Vector2 grid size
+const pf = new PathFinder(tileCollisionLayer);
+const pf = new PathFinder(vec2(50, 50));
+pf.isWalkable = (x, y) => myGrid[y*50 + x] === 0; // bare grid: provide your own
+
+// Tunables (set freely)
+pf.heuristicWeight = 1     // > 1 = greedier search, faster but less optimal
+pf.maxLoop = undefined     // max A* steps per search, undefined for the cell count so a search always finishes
+pf.searchGaveUp            // true when the last search stopped at maxLoop, an empty path then means it gave up
+pf.smoothPath = true       // run smoothing pass on result
+pf.debug = false           // draw search visualization
+pf.debugTime = 1           // seconds debug visuals persist
+
+// Main API
+pf.findPath(startPos, endPos, rebuild=true) // Returns array of world positions, or empty if no path;
+                                     // rebuild false reuses the grid read from the layer last time
+pf.buildNodeData()                   // Read the grid from the layer again, what findPath does when rebuild is true
+pf.getNearestClearNode(worldPos, searchRange=10, rebuild=true) // Snap an obstructed point to the nearest open tile
+pf.isWalkable(x, y)                  // Override for custom walkability
+pf.getCost(x, y)                     // Override for weighted tiles (0 = clear)
+
+// Conversion helpers
+pf.worldToTile(worldPos)             // Vector2 -> tile coords
+pf.tileToWorld(x, y)                 // tile coords -> Vector2 (tile center)
+pf.getNode(x, y)                     // Get PathFinderNode at tile coords
+```
+
+## LittleJS UI System
+- Standalone UI plugin with buttons, text, sliders, checkboxes, text input, video, and auto-layout
+- Auto-registers via `engineAddPlugin` — `new UISystemPlugin()` is all you need
+- Keyboard listener only attached while a UITextInput is being edited
+- A click on the UI, or a navigation press (Space, Enter, gamepad A) that activates it, is used up before objects update and `gameUpdatePost`, so read world clicks there; `gameUpdate` runs first and still sees it, so check `uiSystem.isMouseOverUI()` there; only the press is used up, `mouseIsDown` stays true while it is held, so a held action like auto fire checks `uiSystem.isMouseOverUI()` too
+- See `examples/uiSystem/`, `examples/shorts/uiSystem.js` and `examples/shorts/uiSlice.js` for demos
+
+```javascript
+// Setup
+const ui = new UISystemPlugin()        // Creates global uiSystem
+uiSystem.defaultColor                  // Default style values used by all widgets
+uiSystem.defaultLineColor              // (override before constructing widgets)
+uiSystem.defaultTextColor / defaultButtonColor / defaultHoverColor / defaultDisabledColor / defaultGradientColor
+uiSystem.defaultLineWidth / defaultCornerRadius / defaultTextFitScale / defaultFont
+uiSystem.defaultSoundPress / defaultSoundRelease / defaultSoundClick // Sounds every widget plays
+uiSystem.defaultShadowColor / defaultShadowBlur / defaultShadowOffset
+uiSystem.defaultSlice                  // a TileSlice drawn in place of every widget's rectangle, tinted by its state
+                                       // color, undefined for rectangles; needs the drawUtilities plugin
+uiSystem.defaultHandleSlice            // a TileSlice for slider handles, undefined for the slider's own slice
+obj.slice / slider.handleSlice         // the same for one widget, starting from the defaults
+uiSystem.drawSlice(slice, pos, size, color=WHITE) // Draw a TileSlice to the UI context
+uiSystem.nativeHeight                  // If set, UI coords are normalized to this height
+uiSystem.destroyObjects()              // Remove all UI elements
+uiSystem.isMouseOverUI()               // True if the mouse is over a visible hoverable UI object, or a confirm dialog is open
+uiSetDebug(debugMode)                  // Toggle uiDebug rendering of widget bounds
+
+// Confirm dialog
+uiSystem.showConfirmDialog(text='Are you sure?', yes, no, size, exitKey='Escape') // the exit key or gamepad B answers no, the title and buttons scale with size
+
+// Drawing helpers (use these instead of the engine's draw* during UI rendering)
+uiSystem.drawRect(pos, size, color, lineWidth, lineColor, cornerRadius, gradientColor, shadowColor, shadowBlur, shadowOffset)
+uiSystem.drawTile(pos, size, tileInfo, color, angle, mirror, shadowColor, shadowBlur, shadowOffset)
+uiSystem.drawText(text, pos, size, color, lineWidth, lineColor, align, font, fontStyle, applyMaxWidth, textShadow, shadowColor, shadowBlur, shadowOffset)
+uiSystem.drawLine(posA, posB, lineWidth, lineColor)
+
+// Base widget
+new UIObject(pos=vec2(), size=vec2())
+UIObject.anchor                        // vec2 in [-1,1]; anchors to parent (or canvas if root) + self-pivot; default vec2()=center
+UIObject.localPos                      // Position from its anchor, what the pos passed in sets; move or tween this,
+                                       // nativePos is worked out from it each frame
+UIObject.visible / disabled            // Hidden objects are skipped, disabled ones draw but do not respond
+UIObject.text / textHeight             // The text it draws, and a fixed height per line, undefined fits it to the
+                                        // size, its lines sharing the height
+UIObject.navigationIndex               // Order for keyboard and gamepad navigation, undefined leaves it out
+UIObject.addChild(child)               // Returns child, parents it
+UIObject.removeChild(child)
+UIObject.destroy()
+UIObject.isHoverObject()               // True if mouse is over this object
+UIObject.isInteractive()
+UIObject.onClick / onPress / onRelease / onChange / onEnter / onLeave / onUpdate / onRender // Hooks
+UIObject.onKeyDown(e)                  // Each key while this object is uiSystem.keyInputObject
+uiSystem.keyInputObject                // The object being typed into; end typing with field.stopEditing(),
+                                       // which also fires its onChange
+
+// Widgets
+new UIText(pos, size, text='', align='center', font)
+new UITile(pos, size, tileInfo, color, angle=0, mirror=false)
+new UIButton(pos, size, text='', color)
+new UICheckbox(pos, size, checked=false, text='', color)  // .checked toggles on click
+new UISlider(pos, size, value=.5, text='', color, handleColor)  // .value in [0, 1]
+new UITextInput(pos, size, text='')   // .text holds current value; reads a physical keyboard, no on-screen keyboard,
+                                      // IME or paste, use an HTML input for those
+new UIVideo(pos, size, src, autoplay=false, loop=false, volume=1)
+UIVideo.play() .pause() .stop() .setTime(time) .setVolume(volume) .setPlaybackRate(rate)
+UIVideo.isPlaying() .isPaused() .isLoading() .hasEnded() .getCurrentTime() .getDuration()
+
+// Auto-layout container — arranges children into a grid
+new UILayout(pos, columns=1, gap=10, padding=10, transparent=false)
+UILayout.addChild(child)               // Triggers relayout
+UILayout.relayout()                    // Call manually if you mutate a child's size
+```
+
+## LittleJS Light System
+- 2D dynamic lighting overlay
+- Lights are first-class EngineObjects (the `Light` class) that draw soft falloff blobs
+- Lights accumulate ADDITIVELY in the lightmap (red + blue = magenta)
+- The lightmap is MULTIPLIED with the scene during composite — draw your world at full brightness and the lightmap handles the darkening
+- Any EngineObject can override `renderLight()` to additively contribute to the lightmap (lava tiles, weapon flashes, glowing crystals, etc.)
+- Shadows: set `lightSystem.shadows` and every object draws black into a shadow map that blocks the lights by its alpha, so smoke or a fading sprite casts a partial shadow; a `TileCollisionLayer` casts only from its cells with collision, and a plain floor `TileLayer` needs `castShadow = false` or it blacks out the map
+- The lightmap darkens WebGL draws only, so a HUD drawn with WebGL in gameRenderPost goes dark too; draw it with `useWebGL=false` or from a plugin made after this one
+- See `examples/shorts/lightShadows.js` for shadows, glass, a coin left out with castShadow and an emissive lava brick
+- Must be constructed BEFORE `PostProcessPlugin` so post-process sees lit pixels
+- See `examples/shorts/lightSystem.js` for a demo
+
+```javascript
+// Setup (call in gameInit, after engineInit has made the WebGL context)
+new LightSystemPlugin()                       // Defaults: full-canvas lightmap, BLACK ambient
+new LightSystemPlugin(vec2(512, 512))         // Lower-res lightmap (perf knob)
+new LightSystemPlugin(undefined, rgb(.1,.1,.15)) // Faint moonlight ambient
+
+// Tunables
+lightSystem.enabled       = true              // Skip the render pass entirely when false
+lightSystem.ambientColor  = rgb(0, 0, 0)      // Color of unlit areas
+lightSystem.textureSize   = vec2(320, 180)    // the lightmap's size, the canvas's unless one was given; set it later
+lightSystem.textureSizeAuto = false           // with this, and the lightmap is made again at it
+
+// Shadows: once a frame every object draws black into a shadow map, and each light's rays stop at them
+lightSystem.shadows          = false  // on for shadows; off costs nothing
+lightSystem.shadowMapSize    = 1024   // pixels across the shadow map, a square of world around the camera; this
+                                      // and the other sizes fall back to the largest texture the device makes
+lightSystem.shadowMapScale   = 2      // how many views the map spans, so casters just off screen still cast in;
+                                      // raise it when lights reach further than a view past the screen
+lightSystem.shadowTextureSize = 256   // pixels across each light's own shadow texture, larger is sharper; a gap
+                                      // narrower than about 4*radius/shadowTextureSize between casters closes
+lightSystem.shadowPassCount  = 16     // stretch passes per light, fewer is cheaper and shorter shadows
+lightSystem.shadowSoftness   = .5     // light bled into a caster's near side, 0 hard, 1 most; it reaches further
+                                      // in under a big light, lower it if thin walls let light in
+lightSystem.shadowPass                // read only: true inside the shadow pass, so a render() can skip its text or glow
+lightSystem.emissivePass              // read only: true while emissive objects draw into the lightmap
+lightSystem.setShadowTransparent(on)  // in the shadow pass the draws that follow keep their color, tinting the light
+                                      // through them (glass, colored smoke); nothing outside it, so call it around
+                                      // the draws and set it back
+light.castShadow = true               // this light's rays stop at casters; a light inside a caster is blocked
+light.shadowCore = 0                  // radius around the light where casters are left out, so its lamp, torch
+                                      // or the player carrying it does not block it; reach past its corners
+obj.emissive = 0                      // 1 shows it at full brightness in its own colors, lit or not, between partly;
+                                      // exact for solid pixels, a half alpha one shows at a quarter
+obj.renderEmissive()                  // draws its glowing shape into the lightmap, render() by default; override to
+                                      // glow only a part, like a robot's eyes
+obj.castShadow = true                 // draws into the shadow map; false for a floor TileLayer, a background, a pickup
+layer.shadowSolidOnly = true          // a TileCollisionLayer casts only from its cells with collision, as they are
+                                      // drawn, so a floor in the same layer stays lit; false casts every tile
+layer.shadowSquares = false           // casts its cells with collision as squares, set on a hidden layer the
+                                      // loader made, which draws no tiles to cast from
+obj.renderShadow()                    // draws the shadow shape, render() by default, screen space draws skipped;
+                                      // a figure draws a blob at its feet
+                                      // to stay lit; additive draws add black so glows cast nothing; WebGL draws only
+// Normal maps: once a frame every object draws into a normal buffer, and the lights shade by it
+lightSystem.normalMaps = false        // on to shade objects by their normalMap; every object draws its normal map, or
+                                      // flat without one, so what is in front hides it; about doubles the scene's
+                                      // draws, off costs nothing; every surface is shaded, so lights fall off faster;
+                                      // an image the game lays out, not one packed by loadSprite or loadAtlas; an
+                                      // object without a normalMap draws with its own Shader, so its holes show what
+                                      // is behind; additive draws hide nothing; a
+                                      // textureSize not the canvas's shape skews a turned sprite's normals a little
+lightSystem.normalPass                // read only: true while objects draw into the normal buffer
+lightSystem.normalTexture             // read only: the normal buffer, the lightmap's size, while normalMaps is on
+light.height = 1                      // how far the light is above the scene, how steeply it falls on normal maps
+obj.normalMap = undefined             // a TextureInfo the lights shade it by with lightSystem.normalMaps on: an image
+                                      // laid out like its sheet, read where its tile is, green up, as 3D's normalMap
+obj.renderNormal()                    // draws it into the normal buffer, render() by default, its normalMap in place
+                                      // of its textures, or flat without one; screen space draws skipped
+
+// Lights are EngineObjects — auto-register, destroy() to remove
+new Light(pos, radius, color=WHITE, fadeRange=radius)
+//   pos       Vector2  World space position
+//   radius    number   Total extent in world units
+//   color     Color    Light color; alpha modulates intensity
+//   fadeRange number   Width of the soft edge (0 = hard disc, radius = fully soft blob)
+light.glow = 0          // size across of a soft hazy glow over the light, like a lamp at night, 0 for none; added
+                        // over the lit scene after the lightmap, so it shows in the dark, in front of everything
+light.glowFalloff = 1   // how fast the glow fades from its middle, .5 a wide haze, 2 a tight bright core
+light.coneAngle = 0     // a cone, like a flashlight or headlight: radians from its up to the cone's edge, the beam
+                        // twice this across; it looks along getUp(), turned by its angle; 0 shines every way
+light.coneSoftness = .2 // how much of the cone is its fading edge: 0 a hard edge, 1 fading from the middle
+light.gel = tileInfo    // or a whole TextureInfo: a picture the light shines through, across its square, its top
+                        // the way it looks, turned with it, multiplied into its color; shadows still fall
+
+// One directional light, a sun: lights the whole scene from one direction, added with the point lights
+new DirectionalLight(sunDirection=vec2(-1,1), color=WHITE) // toward the sun, as render3D.sunDirection; its color
+sun.sunDirection           // toward the sun, it shines the other way
+sun.castShadow = true      // foreground casters (castShadow) throw long shadows; no lightSystem.shadows needed
+sun.shadowLength = 20      // world units a long shadow reaches before it has faded out; a caster casts from inside
+                           // the shadow map only, (shadowMapScale - 1) / 2 of a view past the screen
+sun.backgroundDepth = 3    // world units the light gets into a background area from its edges facing it
+sun.height = 1             // with lightSystem.normalMaps, how far it rises for each unit across: 1 is 45 degrees,
+                           // 0 flat along the ground, larger nearly straight down
+lightSystem.directionalLight          // the one there is, or undefined; a second one asserts, destroy the first
+                                      // (a release build destroys the first itself)
+lightSystem.directionalTextureSize = 512 // pixels across its work textures, which cover the shadow map's area; a
+                                      // power of two, as shadowMapSize is, or the shadows shimmer as the view pans
+obj.castBackgroundShadow = false      // a background: dark to the directional light inside, lit at its edges;
+                                      // a background layer sets castShadow = false and this true
+
+// Per-object lightmap contribution hook (on every EngineObject)
+class LavaTile extends EngineObject {
+    renderLight() {
+        // Called during the lightmap pass with additive blending active.
+        // drawRect / drawTile / drawCircle all land in the lightmap.
+        drawRect(this.pos, vec2(3), rgb(1, 0.4, 0));
+    }
+}
+```
+
+## LittleJS Post Processing
+- Optional plugin that applies a full screen WebGL shader to the rendered output
+- Shadertoy style uniforms: iTime, iResolution, iChannel0 (the frame just drawn), and iChannel1 (the previous
+  frame's output) when feedbackTexture is set, for trails and echoes
+- With render3D.depthTexture on, iChannel2 is the 3D depth, and sceneDepth(uv) gives the distance from the camera
+  along its view in world units, uv 0 to 1 across the screen, for ambient occlusion, fog and outlines; only the solid
+  objects of the default 3D layer are in it
+- See `examples/shorts/postProcess.js` for your own shader code, and `examples/shorts/postEffects.js` for the built in
+  effects
+
+```javascript
+new PostProcessPlugin(shaderCode, includeMainCanvas=false, feedbackTexture=false) // call in gameInit; with no
+                               // shaderCode the image passes through unchanged, and one effect may be given alone,
+                               // new PostProcessPlugin(postProcessVignette()), which postProcessEffects joins
+postProcess                    // Global instance created by the plugin
+postProcessBloom(threshold=.6, strength=1, size=6, includeMainCanvas=false) // set up a ready made bloom effect, so
+                               // bright colors and lights glow; threshold is where the glow starts, and the 2D canvas
+                               // is left out so HUD text stays crisp; a wider glow takes more samples to stay smooth,
+                               // and past a size of 32 it would take hundreds, so that is as wide as it goes
+postProcessBloomShader(threshold, strength, size) // its shader code, to pass to PostProcessPlugin or build on
+postProcess.setShaderCode(shaderCode) // shade with new code from the next frame, to switch effects while running
+postProcess.enabled = true     // false skips the pass, the frame showing as drawn, to turn an effect off and back on
+postProcess.pixelated = false  // true reads the frame hard edged, so blurs and the CRT curve step as pixel art does
+
+// Built in effects: each is a piece of shader code with its settings written in, working on c, the pixel's color,
+// and uv, where it is on the screen from 0 to 1; postProcessEffects joins pieces in order into one shader, and your
+// own GLSL is a piece too; put the ones that bend or sample the picture (curve, chromatic, glow) first
+new PostProcessPlugin(postProcessEffects(postProcessScanlines(.5), postProcessVignette(), 'c.rgb *= vec3(1, .9, .8);'))
+postProcessEffects(...effects)      // one shader from the pieces, none passes the frame through
+postProcessTV({noise, scanlines, scanlineSpacing, glow, vignette, curve}) // an old TV in one piece, curve 0 by
+                                    // default for flat; any setting at 0 leaves that part out
+postProcessScanlines(strength=.5, spacing=6) // lines across the screen, spacing in pixels
+postProcessNoise(strength=.1, size=2)        // static that changes every frame, size of a speck in pixels
+postProcessVignette(strength=1, falloff=3)   // darker toward the corners, a higher falloff only the corners
+postProcessCurve(strength=.1)                // the bulged glass of an old TV, black past the corners
+postProcessCurveMouse(strength=.1)           // the mouse bent the same way, for setMouseScreenTransform, so clicks
+                                             // land on what is drawn under them
+postProcessChromatic(strength=.005)          // red and blue split apart toward the edges
+postProcessGlow(threshold=.6, strength=1, size=6) // the bloom as a piece
+postProcessOutline(color=BLACK, thickness=1, threshold=.02) // lines where the 3D depth jumps, needs
+                                             // render3D.depthTexture
+postProcessTiltShift(focus=.5, size=.25, blur=8) // a sharp band across the screen at focus, 0 bottom to 1 top,
+                                             // size its height, blurred above and below, 2D or 3D
+postProcessDepthOfField(focus=10, range=4, blur=8) // sharp at focus world units from the camera, range deep,
+                                             // blurred nearer and farther; needs render3D.depthTexture
+postProcess.values = {focus: .5}             // the game's own values for the shader, a uniform each, set every
+                                             // frame; any effect setting but glow's size, which sets its sample
+                                             // count, may be such a name, to change it live; set them after the
+                                             // plugin is made, as the shader is made at the first render;
+                                             // not named _x, iX, gl_x, c, uv or p, which the shader uses:
+new PostProcessPlugin(postProcessEffects(postProcessTiltShift('focus'))); postProcess.values.focus = .6; // live
+```
+
+## LittleJS 3D Math
+- Optional plugin with `Vector3` and `Matrix4` for 3D games and plugins
+- Right handed, Y up, camera looks down -Z, angles in radians
+- Used by the Render3D plugin, but has no rendering dependencies
+
+```javascript
+// Vectors
+vec3(x, y, z)                  // vec3() is zero, vec3(s) fills all, vec3(x, y) has z=0
+isVector3(v)                   // true if v is a Vector3
+randVector3(length=1, coneAngle=PI) // random direction, uniform over the sphere or a cone around +Y
+randInSphere(radius=1, minRadius=0) // random point inside a sphere, even through its volume, like randInCircle
+v.add(v2) v.subtract(v2) v.multiply(v2) v.divide(v2) v.scale(s)
+v.dot(v2) v.cross(v2) v.length() v.lengthSquared() v.distance(v2) v.distanceSquared(v2)
+v.normalize(length=1) v.clampLength(length=1) v.lerp(v2, percent) // percent is clamped like lerp
+v.rotate(axis, angle)          // turned around a unit axis, counter clockwise when the axis points at you
+v.rotateX(angle) v.rotateY(angle) v.rotateZ(angle) // turned around one axis, the way rotation3D turns things
+v.reflect(normal, restitution=1) // bounce off a surface, 0 slides along it
+v.abs() v.floor() v.round() v.snap(grid) v.copy() v.set(x, y, z) v.setFrom(v2) v.isValid() v.toString(digits=3)
+
+// Matrices - m.m is a column major Float32Array(16), the order WebGL wants, so it goes to a shader as is
+// euler is vec3(pitch, yaw, roll) in radians: applied to points as roll (Z), then pitch (X), then yaw (Y)
+// +pitch looks up, +yaw turns left for something facing -Z, +roll rolls counter clockwise around Z
+Matrix4.translation(v) Matrix4.rotation(euler, out) Matrix4.scaling(v)   // new Matrix4 or Matrix4.identity() is the identity
+Matrix4.perspective(fov, aspect, near, far)    // fov is vertical, radians
+Matrix4.orthographic(left, right, bottom, top, near, far)
+Matrix4.lookAt(eye, target, up)                // transform of an object at eye facing target, invert it for the view
+                                               // matrix of a camera there
+m.multiply(m2)                 // m = m * m2, m2 is applied to points first
+m.translate(v) m.rotate(euler) m.scale(v)      // append a transform, returns self
+m.invert() m.transpose()       // in place, return self
+m.copy() m.transformPoint(v) m.transformDirection(v) m.getTranslation() // or v.transform(m), v.transformDirection(m)
+m.getScale() m.getRotation()   // the scale and the vec3(pitch, yaw, roll) back out of a transform, a mirror is a negative x
+m.determinant()                 // of the rotation and scale part: negative when it mirrors, 0 when it flattens
+buildMatrix(pos, rotation, scale, matrix)      // translate * rotate * scale, any arg optional; matrix is written into
+                                               // instead of a new matrix, for a loop that builds many each frame
+
+// Collision - boxes are centered with full size, upright unless given a rotation, an Euler vec3 like rotation3D;
+// spheres and cylinders take a radius, cylinders stand on Y
+isPointInBox3D(point, pos, size, rotation)     // true if point is in the box, boundary inclusive
+isOverlapping3D(posA, sizeA, posB, sizeB, rotationA, rotationB) // box vs box, touching edges do not overlap; no sizeB
+                                               // tests a point
+collideSphereSphere(posA, radiusA, posB, radiusB)          // push A out of B, or undefined
+collideSphereBox(pos, radius, boxPos, boxSize, boxRotation) // push a sphere out of a box, or undefined
+collideSphereInBox(pos, radius, boxPos, boxSize)           // push a sphere back inside a box, for rooms and arenas
+collideSphereCylinder(pos, radius, cylinderPos, cylinderRadius, cylinderHeight) // push a sphere out of a cylinder,
+                                                                                // or undefined
+collideBoxBox3D(posA, sizeA, posB, sizeB, rotationA, rotationB) // push A out of B the shortest way, or undefined;
+                                               // the 3D twin of collideBoxBox, turned boxes by the separating axis test
+// raycasts return the distance t where the hit is ray.getPosition(t), so scale direction and t scales too
+new Ray3D(origin, direction)                   // a start and a direction, what screenToRay returns
+ray.getPosition(distance)                      // the point a distance along it, distance is what the raycasts return
+raycastSphere(ray, pos, radius)                // distance t to the sphere, or undefined; a ray that starts
+                                               // inside a sphere or a box is already there and gets back 0
+raycastPlane(ray, planePos, planeNormal)       // distance t to the plane, or undefined
+raycastBox(ray, pos, size, rotation)           // distance t to the box, or undefined
+```
+
+## LittleJS 3D Rendering
+- Optional plugin in the dist bundle like the others, draws meshes, billboards (flat pictures that turn to face the
+  camera), lines and particles into the engine's WebGL canvas, under the 2D layer by default
+- Requires the 3D Math plugin. One shader: directional, ambient and point lights, specular, fog, shadows, textures,
+  vertex colors; any object or draw can bring its own Shader on top of it, see render3D.shader
+- EngineObject3D extends EngineObject, so update, destroy, timers, children and renderOrder all work; the 2D pos is
+  ignored by rendering
+- The 3D pass is the part of the frame that draws 3D, and it draws in two rounds: the opaque stage for solid things
+  first, then the transparent stage for see-through things; every object and callback runs with the draw state set from
+  the object's flags
+- 3D draws only work inside the 3D pass, from an object's `render3D()` or from `onRenderOpaque` / `onRenderTransparent`;
+  drawing from `gameRender` asserts, and anything that fades (soft discs, soft shadows) must be in the transparent stage
+- Builders and draws take full sizes (diameters) like buildBox and drawCircle; collision helpers and lights take radii
+- Textures sample through mipmaps in 3D so floors do not shimmer in the distance, crisp up close when tilesPixelated
+  is on; render3D.mipmaps = false keeps each texture's own filtering, and 2D sprites always do
+- The 3D scene is on the engine's WebGL canvas, so the post processing plugin shades it too: call postProcessBloom()
+  after new Render3DPlugin to make lights glow, see the render3dGlow demo
+- Opaque draws drop texels under half alpha, so cut out art like a fence or a leafy tree works and its shadow matches;
+  see through draws blend instead, set obj.transparent for a sprite that fades
+- A texture comes before its tint like drawTile, except where per vertex colors are part of the geometry (drawStrip,
+  drawRibbon)
+- Y is up and -Z is forward, so the ground is the XZ plane: 2D input maps to it as vec3(move.x, 0, -move.y), forward for
+  a yaw is vec3(-sin(yaw), 0, -cos(yaw)) and right is vec3(cos(yaw), 0, -sin(yaw))
+- Below, `name = value` shows a value to set; when that is not the default, the comment says what the default is,
+  or `e.g.` marks it as an example
+- See the `examples/shorts/render3d*.js` demos - features: render3dBasics to start, render3dShapes,
+  render3dBillboards, render3dHeightMap terrain, render3dCollision with picking, render3dFirstPerson for a walking
+  camera, render3dLights, render3dParticles, render3dTrails, render3dDraw for immediate drawing, render3dText,
+  render3dMesh for OBJ loading, render3dLayers for 3D layers in a 2D scene, render3dInstancing, render3dTextures,
+  render3dGlow, render3dShaders; games: render3dDodgeGame, render3dRacingGame, render3dPuzzleGame; and `examples/3d`
+  is a full example with all of it in one scene
+
+```javascript
+// Setup (call in gameInit)
+new Render3DPlugin;                  // creates global render3D, renders automatically before gameRender
+
+// A first 3D scene
+function gameInit()
+{
+    new Render3DPlugin;                                  // draws itself every frame, before gameRender
+    render3D.setSky();                                   // dome colors, also sets the fog color
+    new EngineObject3D(vec3(), buildGrid(vec2(20), 20)); // the ground is the XZ plane, Y is up
+    new EngineObject3D(vec3(0, 1, 0), buildBox(), undefined, RED);
+    render3D.camera.orbit(vec3(0, 1, 0), 12, 0, .4);     // or set camera.pos and camera.lookAt(target)
+}
+
+// Camera
+render3D.camera.pos = vec3(0, 5, 10) // Camera3D: pos (0, 0, 10), rotation (pitch, yaw, roll), fov PI/3, near .1,
+                                     // far 1000, which can be Infinity for a perspective view
+render3D.camera.orthographic = 20     // visible height in world units with no perspective, so distance does not
+                                      // shrink things; 0 is the normal perspective view; near and far still clip,
+                                      // and far must be a real distance here, Infinity is perspective only
+render3D.camera.lookAt(target)        // set the rotation to face a target now, clears roll
+render3D.camera.orbit(target, distance, yaw, pitch=.5) // put the camera on an orbit looking at the target
+new CameraControl3D(target, distance, pitch=.4, idleSpin=0) // an object that orbits the camera around its pos3D:
+                               // drag to turn, wheel to zoom; fields for dragButton, dragSpeed, zoomSpeed, zoomRange,
+                               // pitchRange, yaw and idleSpin; destroy it to hand the camera back
+new ThirdPersonCamera3D(target, distance=6, pitch=.3) // a pole from a pivot over the target, pivotOffset = vec3(0,1,0),
+                               // turned by yaw and pitch, the camera at its end looking back; follows an
+                               // EngineObject3D or a vec3; the view goes to it at once
+camera.autoSwing = true        // swing behind the way the target moves across the ground, over swingSmoothing = .6
+                               // seconds, once it moves faster than swingSpeed = 1 a second; useFacing = false swings
+                               // behind the target's getForward3D instead
+camera.manualControl = true    // the mouse dragging dragButton = 2 (lockPointer to capture it) and gamepad stick 1 turn
+                               // it, holding the swing for swingDelay = 1 second; camera.turn(yaw, pitch) does the same
+camera.collideWalls = true     // the level or a solid object between pulls it in, wallMargin = .2 in front, easing back out over
+                               // wallSmoothing = .2 seconds; the target and its parts are never the wall
+camera.smoothing = .05         // seconds the pivot trails the target; pitchRange = vec2(-.4, 1.2); snap() at once
+// the 3D cameras are cameras of the camera plugin: the newest made drives render3D.camera after the objects move,
+// and destroying it hands the view to the one before
+new FirstPersonCamera3D(pos3D, yaw, pitch) // mouse look and WASD or arrows to move, the camera at its pos3D;
+                               // click captures the mouse, Esc lets it go; each defaults to where the camera is now,
+                               // so it takes over without a jump; fields for moveSpeed, lookSpeed, pitchRange,
+                               // lockPointer, and fly to move the way it looks instead of walking level; give it a
+                               // size3D and setCollision() to walk into solids, destroy it to hand the camera back
+camera.stick = 1               // the gamepad stick that looks, stickSpeed = 3 radians a second; moveStick = 0 moves;
+                               // -1 for either leaves that stick to the game
+camera.jumpSpeed = 0           // above 0, Space or gamepad button 0 jumps while it stands on something: a height map,
+                               // a voxel map or a solid, see groundObject
+camera.eyeHeight = 0           // how far above its position the eye is, toward the top of its size3D body
+render3D.camera.follow(target, offset, percent=1) // chase camera: ease toward target + offset and look at it, percent
+                                                  // is how far it moves each call, so call it every frame, from
+                                                  // gameUpdatePost once the target has moved
+render3D.camera.align2D = true        // lock to the 2D camera so the z=0 plane matches world space, false by default
+render3D.camera.align2DZ = 0          // the z of the plane align2D lines up, the camera its distance in front
+render3D.camera.getForward() .getRight() .getUp() // the camera's axes as it is right now; render3D.cameraRight
+                                                  // .cameraUp .cameraForward are this frame's, read only
+render3D.viewMatrix .projectionMatrix .viewProjection .shadowMatrix // this frame's, rebuilt by updateMatrices()
+render3D.camera.getMatrix() .getViewMatrix() .getProjectionMatrix(aspect) // built from the camera as it is now
+render3D.worldToScreen(pos, canvasSize) // Vector3 -> screen pixels, undefined when behind the camera; the opposite
+                                      // of screenToRay and it takes the same canvas, so the two agree
+render3D.worldToClip(pos)             // Vector3 -> -1 to 1 across and up the screen, z is depth; undefined when behind
+                                      // the camera
+render3D.screenToRay(screenPos, canvasSize)  // Ray3D under a screen point, always returns one; canvasSize
+                                     // defaults to the main canvas, and both of these bring the matrices up to
+                                     // date for it, so worldToScreen keeps agreeing with them
+render3D.screenToGround(screenPos, groundHeight=0, canvasSize) // where that ray meets a flat ground plane, or
+                                                   // undefined; terrain has HeightMap.raycast
+render3D.pick(screenPos or ray, objects)           // {object, distance} of the nearest object hit, on its mesh's
+                                                   // triangles, the faces that show, both sides when doubleSided,
+                                                   // or a sprite's quad; a screen position goes through screenToRay
+render3D.soundDefaultRange = 100      // how far a sound with no range of its own is heard in 3D, the 2D
+                                      // soundDefaultRange is 40; a Sound made with a range keeps it
+render3D.playSound(sound, pos3D, volume, pitch, randomnessScale, loop, paused) // like sound.play(pos): quieter with
+                                                // distance from the camera, panned by side
+render3D.playSoundLoop(sound, pos3D, volume, pitch, randomnessScale) // the same on a loop; its volume and pan
+                                                // are set when it starts
+render3D.isSphereVisible(center, radius) // the same is-it-on-screen test drawMesh uses, for skipping your own draws
+
+// Lights and fog, read at each draw
+render3D.sunDirection = vec3(-.3, 1, .5) // toward the sun, where its light comes from, like a directional Light3D;
+                                         // any length, it is normalized for you; the sun casts the shadows, or
+                                         // a spotlight set as render3D.shadowLight
+render3D.sunColor = hsl(.08, 1, .95) // e.g., WHITE by default
+render3D.ambientColor = hsl(0, 0, .3)  // from above once ambientGroundColor is set
+render3D.ambientGroundColor = undefined // set, ambient blends from it on faces pointing down to ambientColor on
+                                        // faces pointing up, the way a sky and a ground light a scene; setSky sets both
+render3D.fogColor = undefined         // uses canvasClearColor when undefined
+render3D.fogStart = 20; render3D.fogEnd = 100 // e.g., both 0 by default which is no fog; measured by camera distance,
+                                              // fogEnd 0 disables fog; additive draws fade out with distance instead
+                                              // of taking the fog color, since adding it would brighten them
+render3D.fogDepth = true              // false by default; measure fog by depth along the view instead of distance
+                                      // from the camera, even across the screen like a classic depth fog
+render3D.fogFadeStart = 400; render3D.fogFadeEnd = 533 // e.g., both 0 by default for no fade; see through draws fade
+                                      // to transparent between these, measured like the fog, so distant things melt
+                                      // into a sky or backdrop drawn behind them; opaque draws stay solid
+render3D.gravity = vec3(0, -.01, 0) // e.g., vec3() by default so nothing falls; objects with a mass fall by this each
+                                    // frame, times their gravityScale, and slow by their damping, which is 1 by
+                                    // default for no slowing
+new Light3D(pos3D, radius, color, intensity=1) // point light, an EngineObject3D; it drops off fast, so a small
+                                  // radius wants an intensity above 1; an alpha, intensity or radius of 0 is off
+light.intensity = 2               // brightness, multiplies the color, above 1 is brighter than white
+light.coneAngle = .5              // a spotlight: the angle in radians from its forward out to the edge of its
+                                  // cone, 0 by default for a light that shines every way; it shines along its
+                                  // own forward, so rotation3D or what it is attached to aims it
+light.coneSoftness = .2           // how much of the cone is its fading edge: 0 a hard edge, 1 fading from the middle
+light.gel = textureInfo           // or a TileInfo's whole texture: a picture the light shines through, cast along its cone in its colors, upright
+                                  // as the light looks out, like a slide or stained glass; only the spotlight that
+                                  // casts the shadows has one, render3D.shadows on and it as render3D.shadowLight
+light.glow = 1                    // a soft hazy glow over the light this big, like a lamp at night; 0 by default,
+                                  // added onto what is behind it, hidden by what is in front
+light.glowFalloff = 1             // how fast the glow fades from its middle, .5 a wide haze, 2 a tight bright core
+new DirectionalLight3D(pos3D, color, intensity=1) // a Light3D that shines from far away with no falloff, from its
+                                  // position toward the origin like a three.js DirectionalLight; moving it or
+                                  // its parent swings the light, so parent it to a sun mesh and it follows
+// 8 lights reach the shader each frame: every directional light first, then the point lights nearest the camera;
+// a light switched off by its alpha, intensity or radius is left out so it cannot take a slot from one that is on;
+// they cast no shadows, the sun does, or one spotlight set as render3D.shadowLight; each makes its own highlight
+// when specular is set
+
+// Shadows - one shadow map, from the sun or from render3D.shadowLight; lit opaque objects and draws on the default side of the 2D scene
+// cast and receive
+render3D.depthTexture = true // off by default and free when off; draws the solid objects' depth from the camera
+                             // for PostProcessPlugin, which reads it with sceneDepth(uv); one more draw, depth only
+render3D.shadows = true // off by default and free when off, soft shadows (drawSoftShadow) still work alongside
+render3D.shadowMapSize = 1024         // pixels across the shadow map, rebuilt when it changes; a size the device
+                                      // does not have falls back to the largest it has, glMaxTextureSize
+glClampTextureSize(size)              // that fallback, for a texture a game makes by size itself
+render3D.shadowLight = flashlight     // a spotlight, a Light3D with a coneAngle, casts the shadows in place of the
+                                      // sun, down its cone as far as its radius; the sun still lights the scene;
+                                      // undefined for the sun; one caster at a time; while it casts them its
+                                      // cone is at most 1.35, what its shadow map covers
+render3D.shadowRange = 40             // world size the map covers around shadowCenter, smaller is sharper
+                                      // it is a square facing the light, so ~1.5x an area's width covers it
+render3D.shadowCenter = undefined // Vector3 center of the shadowed area, read each frame; undefined follows the camera
+render3D.shadowBias = .003 // raise if lit surfaces get speckled with their own shadow, lower if shadows float away;
+                           // a share of the map's depth (2 * shadowRange for the sun), so the gap grows with the range
+                           // from their casters
+render3D.shadowSoftness = 1           // how far to blur the shadow edge, in shadow map pixels
+
+// Sky
+render3D.setSky(topColor, horizonColor, bottomColor, ambient=.5) // dome colors straight up, level and straight
+                                                     // down; sets render3D.sky, fogColor to the horizon, and the
+                                                     // ambient light to the top color from above and the bottom
+                                                     // color from below, both times ambient; 0 leaves ambient dark
+render3D.setFog(fogStart, fogEnd, fogColor) // the fog distances and color at once, no color keeps the current one
+render3D.sky = buildSky(topColor, horizonColor, bottomColor, sides, rings) // or set a dome yourself
+render3D.skyBox = cubeMap             // a CubeMap drawn behind everything in place of the dome, undefined by default;
+                                      // fog fades to fogColor, so set it to the sky box's horizon color
+render3D.environment = cubeMap        // what reflective surfaces reflect, undefined reflects the sky's colors; one
+                                      // made again and again disposes the one it replaces, its GPU memory
+makeCubeMap(size, colorOf)            // a CubeMap of six size by size faces, colorOf(direction) the Color each way,
+                                      // a unit Vector3; paint a sky in code, 64 or so is plenty for a blurry one
+await loadCubeMap([px, nx, py, ny, pz, nz]) // a CubeMap from six square image urls, +x, -x, +y, -y, +z and -z,
+                                      // a sky box set shown as three.js shows it, each face as its image is drawn
+cubeMap.size cubeMap.faces cubeMap.dispose() // its face size, its six faces, and freeing its GPU texture
+const mirror = new CubeMap(128)       // no faces: a cube map to draw the scene into
+mirror.capture(pos3D)                 // draw the scene around pos3D into it in the next frame's pass, six views of
+                                      // the whole scene: once for a still scene, every few frames for a moving one
+mirror.capturePos                     // where it was last captured from, captured again from there after a lost context
+
+// Draw state, read at each draw; the pass sets it from each object's flags before render3D() and resets it before each
+// callback, so set it inside those, or use the object flags below
+render3D.lighting = true              // false draws plain vertex color times texture, as lines do
+render3D.emissive = 0                 // how much a surface lights itself, set from each object's emissive
+render3D.additive = false             // additive blending in the transparent stage
+render3D.specular = 0                 // Phong highlight strength, the shiny spot where the sun and each
+                                      // Light3D reflect: 1 adds a light's full color at its peak, more burns
+                                      // out; shininess sets the size of the spot
+render3D.shininess = 16               // the highlight's exponent, 4 broad like rubber, 100 sharp like polished metal
+render3D.normalMap render3D.normalScale render3D.reflectivity render3D.emissiveMap render3D.emissiveMapColor
+render3D.environmentMap               // the cube map reflected in place of render3D.environment, from obj.environment
+                                      // the material, set from each object's fields of the same names
+render3D.receiveShadow = true         // false keeps the next draws out of the shadow map's darkening
+render3D.roundLighting = false        // billboards lit as a ball facing the camera, set from obj.roundLighting
+render3D.shader = undefined           // a Shader for the next draws, set from each object's shader; with emissive 1
+                                      // the snippet's color is final, so it can light itself from these 3D names:
+                                      // worldPos, worldNormal, cameraPos, sunDirection (toward the sun), sunColor,
+                                      // ambientColor, ambientGroundColor, lightCount, lights[i] (xyz position, or
+                                      // direction toward a directional one, w radius, negative when directional),
+                                      // lightColors[i] (rgb, a strength) and shadow(), the sun shadow 0 to 1 here;
+                                      // viewProjection, world to screen, for a snippet that sets gl_FragDepth,
+                                      // which shadows and sceneDepth do not see
+render3D.cullBackFaces render3D.mirrored // set from each mesh as it draws: its doubleSided, and whether its
+                               // transform mirrors it; strips leave both off
+render3D.depthTest = true; render3D.depthWrite = true // the transparent stage turns depth writes off, so see-through
+                                                      // draws never hide each other
+
+// The pass
+render3D.onRenderOpaque = ()=> {} // after the opaque objects: world geometry drawn outside of objects, also called for
+                                  // the shadow map
+render3D.onRenderTransparent = ()=> {} // after the transparent objects: billboards, glows and soft shadows drawn
+                                       // outside of objects
+render3D.queueTransparent(pos, draw)   // sort your own transparent draw in with the rest, draws now when sorting is off
+render3D.isRendering render3D.shadowPass // read only: inside the 3D pass, and inside the shadow map part of it
+render3D.sortTransparent = true // transparent draws sort far to near by depth along the view, right for an
+                                // orthographic camera too, so alpha and additive mix; false keeps object order
+render3D.frustumCulling = true // drawMesh skips meshes whose bounding sphere is outside the frustum, the wedge of
+                               // space the camera can see
+render3D.mipmaps = true        // textures sample through mipmaps so they do not shimmer far away, false keeps each
+                               // texture's own filtering like 2D; magnification follows tilesPixelated either way
+obj.pixelated = true           // false by default; keep one object's texture pixels hard edged, no mipmaps or blending
+                               // between them, for pixel art that should not blur or bleed into its neighbors
+render3D.anisotropy = 4        // sharper textures seen at an angle, 1 to 16, 1 is off; needs mipmaps
+render3D.instancing = true     // every use of a mesh in the opaque stage is one draw call however many there are,
+                               // mesh.instanced = false keeps one mesh drawing in object order instead
+new InstancedMesh3D(mesh, count, tileInfo, color) // many copies of a mesh as one draw with their transforms kept on the
+                                  // GPU: an instance costs nothing per frame until it changes, for big sets that
+                                  // mostly stay put; an EngineObject3D whose flags cover the whole set
+set.setTransformAt(i, pos, rotation, scale) // place an instance, in world space, the object's own transform does not
+                                  // move them; buildMatrix's arguments written straight in, the fastest way
+set.setTransforms(start, count, x, y, z, rx, ry, rz, sx, sy, sz) // place a run from arrays indexed by instance,
+                                  // plain or typed, in one loop, the fastest way to move many every frame;
+                                  // rotations and scales are optional, all three or none
+set.setMatrixAt(i, matrix)        // place one by a matrix; getMatrixAt(i) reads one back
+set.setColorAt(i, color)          // color one, they start in the object's color; only changed colors upload
+set.setDataAt(i, x, y, z, w)      // four numbers of the game's own, read by a Shader as vec4 instanceData, in
+                                  // both stages and the shadow map; set.dataValues and set.markDataDirty(start, end)
+set.matrixData / set.colorData    // 16 and 8 floats an instance, edit them and call markDirty(i) / markColorDirty(i),
+                                  // or markDirtyRange(start, end) for a run of matrices
+set.radius = 50                   // fix the culling sphere, which otherwise grows to hold every instance set
+set.count = 500                   // draw the first 500 of the count it was made with
+render3D.renderAfter2D = false // true draws the 3D scene on top of the 2D scene instead of under it; objects that do
+                               // not set their own renderAfter2D follow this
+render3D.smoothShading = true  // default for every builder's smooth argument, false (flat) by default;
+                               // meshes already built keep the normals they have
+
+// Objects - EngineObject with a 3D transform, drawn by the 3D pass
+new EngineObject3D(pos3D, mesh, tileInfo, color) // a tileInfo with no mesh draws a sprite billboard of size3D in the
+                                                 // transparent stage, already transparent without setting the flag;
+                                                 // size3D.z does not change how a sprite draws, only how it collides;
+                                                 // a whole TextureInfo is kept as the
+                                                 // tile covering it, so obj.tileInfo is always a TileInfo as it is in 2D
+obj.pos3D obj.rotation3D obj.scale3D // Vector3, rotation is (pitch, yaw, roll); change them in place or assign new ones;
+                                     // on a child of an EngineObject3D all three are relative to the parent, unlike
+                                     // a 2D child, whose pos and angle stay in world space
+obj.velocity3D obj.angleVelocity3D // added to pos3D and rotation3D by the engine before update, like the 2D physics,
+                                   // no super.update() needed; damping and angleDamping slow them as in 2D, and
+                                   // clampSpeed keeps each axis of velocity3D within objectMaxSpeed while it collides
+obj.updatePhysics()                // moves it and pushes it out of solids; bounce off anything else in update, which
+                                   // runs once every object has moved, so the fix lands before the frame draws
+obj.mass = 1 // objects start with no mass and are not pulled; with a mass render3D.gravity and gravityScale act on
+             // velocity3D; damping slows every object, damped first and gravity added after as in 2D, and damping is
+             // 1 by default for no slowing
+obj.size3D                              // full size for engineObjectsCollect3D, solid collision and
+                                        // sprites, which it also picks by, a mesh is picked by its own box;
+                                        // starts at the size of the mesh's box, 1 with no mesh; the box is
+                                        // centered on pos3D, so center() a mesh whose origin is not its middle;
+                                        // scale3D and a parent's scale grow it
+obj.setCollision(solids, isSolid, level) // the same flags as in 2D, but the collision happens in 3D against size3D;
+                                        // isSolid needs solids, an object cannot block without colliding;
+                                        // a 3D object has no 2D size, so it is never an obstacle in a 2D scene;
+                                        // both objects of a pair need solids, and a pair where neither one blocks
+                                        // passes through, so movers hit the level without shoving each other;
+                                        // heavier objects move less and each bounces by its own restitution; mass 0
+                                        // stays put and keeps its velocity, a wall the other bounces off;
+                                        // collideLevel is on by default: voxel maps and height maps, which an
+                                        // object with mass is kept out of, or the tile layers for a sync2D object;
+                                        // the raycast half is 2D only and defaults off here;
+                                        // a sync2D object collides in 2D instead, against the 2D size, so set that
+                                        // as well as size3D; a child rides with its parent so it sits solid collision
+                                        // out, the same rule as in 2D; the solid box turns with rotation3D, so a
+                                        // turned wall or a ramp collides as it looks, but against height maps and
+                                        // voxel maps an object is still its upright box
+obj.collideAsSphere3D = true              // collide as the sphere that fits size3D instead of the box, false by default
+obj.collideWithObject(object, push)     // called when it touches a solid object, both objects are asked and either
+                                        // returning false leaves the push and the bounce to you; push is the
+                                        // shortest way to move this one clear, along the surface's normal, so it
+                                        // says which way what it touched faces; when it stands there the engine
+                                        // lifts it straight up instead; push is undefined in 2D
+obj.collideWithVoxel(type, cell)        // asked by a VoxelMap whether a block stops it, true by default; return false
+                                        // to pass through, as for water
+obj.groundObject                        // what it stands on this frame, a height map, a voxel map or a solid,
+                                        // undefined in the air; sliding on it slows by friction, the less grippy of
+                                        // the two, relative to it, so a moving platform carries what rides it
+obj.groundAngle = PI/4                  // the steepest slope it stands on, in radians under PI/2: resting on a
+                                        // box's face within this of flat holds it still, steeper it slides down, and
+                                        // a sphere, an edge or a corner is nothing to stand on; a player climbs more
+obj.softShadow = 2                      // 0 by default; a soft shadow of that diameter under the object on
+                                        // render3D.softShadowHeight; scale3D and a parent's scale grow it, so set it
+                                        // for the unscaled object
+obj.upright = true                      // a sprite stands on world up instead of tilting toward the camera, false by
+                                        // default
+                                        // a sprite also turns with rotation3D.z, like a 2D object turns with angle
+obj.sync2D = true // false by default; copy the 2D pos and angle into pos3D and rotation3D each frame; the 2D physics only run for a
+                  // sync2D object, so set its mass to have them move it
+// these inherited EngineObject fields are 2D only and do nothing on a 3D object: angle, angleVelocity,
+// additiveColor, drawSize, mirror; sync2D is the one way in
+obj.mesh obj.tileInfo obj.color         // what to draw and how
+obj.setMesh(mesh)                       // draw a different mesh and free the GPU buffer of the one it replaces, for
+                                        // text and terrain built again as things change; a mesh another object is
+                                        // still drawing is left alone, so shared builders are safe
+obj.transparent = true                  // draw in the transparent stage, blended, sorted far to near, no depth writes;
+                                        // false by default, true for a sprite
+obj.additive = true                     // additive blending, implies the transparent stage, false by default
+obj.emissive = 1                        // 0 by default; how much it lights itself: 0 lit, 1 its own color for lamps and glowing
+                                        // things, between partly self lit, above 1 brighter for bloom; still casts
+obj.specular = .5                       // highlight strength, 0 is none and 1 is full, as render3D.specular; 0 by default
+obj.shininess = 100                     // 16 by default; the highlight's exponent, higher is smaller and sharper
+obj.roughness = .5                      // shininess set the way glTF measures it, 0 a mirror to 1 matte: it sets
+                                        // shininess = 2 / roughness^4 - 2, at least 1, and reads it back, as
+                                        // .9 from about .9 up, where shininess is 1
+obj.normalMap = textureInfo             // bumps and grooves that catch the light, read at the color texture's uvs;
+                                        // green points up the image (OpenGL and glTF), flip the green of a DirectX one;
+                                        // no tangents needed, any mesh with uvs works; normalMapFromHeight makes one
+obj.normalScale = 1                     // how strongly it bends the surface, 0 turns it off
+obj.reflectivity = .5                   // 0 by default, 1 a mirror; more at a glancing angle (Fresnel); shows
+                                        // render3D.environment, sharper the higher shininess, as the highlight
+                                        // is: 10000 a mirror, 1000 polished, 10 a wide blur;
+                                        // with none, the colors of render3D.sky from setSky or buildSky, or the
+                                        // ambient ones with no sky
+obj.environment = mirror                // a CubeMap it reflects in place of render3D.environment, as one captured
+                                        // from its own middle; undefined by default
+obj.emissiveMap = textureInfo           // where it glows, added on top of the lit surface so it shows in the dark
+obj.emissiveMapColor = WHITE            // multiplies the emissive map
+obj.castShadow = false                  // true by default, false keeps it out of the shadow map; sprites and cut out
+                                        // textures cast their outline, an object faded below half its alpha casts
+                                        // nothing, a see through one casts only when textured, additive never casts
+obj.receiveShadow = false               // true by default, false draws it without the shadow map's darkening
+obj.roundLighting = true                // a sprite or particle emitter lit as a ball bulging toward the camera,
+                                        // bright on the side toward each light; a normal map takes its place
+obj.renderOrder                         // sorts the opaque stage; instanced meshes draw as batches, so set
+                                        // mesh.instanced = false on a mesh whose order matters
+obj.renderAfter2D = true // this object on top of the 2D scene, or false for under it; undefined follows
+                         // render3D.renderAfter2D
+// the layer under the 2D scene and the layer over it are drawn separately with their own depth, so neither hides the
+// other; the sky, callbacks and debug primitives draw with the default side
+obj.getMatrix() // buildMatrix(pos3D, rotation3D, scale3D), or localMatrix when set, composed with an EngineObject3D
+                // parent's
+obj.localMatrix // a Matrix4 from the parent used in place of pos3D, rotation3D and scale3D, for a pose they cannot
+                // hold; glTF animations pose parts with it and it stays after they stop, set it to undefined to move a
+                // part by pos3D again; undefined by default
+obj.getWorldPos3D()                     // world position, pos3D is local when parented
+obj.setWorldPos3D(pos)                  // move a child to a world position, setting its local pos3D; exact
+obj.getWorldRotation3D()                // rotation in the world, the parent's included, the nearest under a shear
+obj.setWorldRotation3D(rotation)        // turn a child to a world rotation, setting its local rotation3D; exact
+                                        // unless a parent above it is scaled unevenly
+obj.getForward3D() .getRight3D() .getUp3D() // the object's axes in the world, forward is -Z
+engineObjectsCollect3D(pos, size, objects, testCenters) // the EngineObject3D objects whose boxes overlap a sphere,
+                                           // size a number (diameter, 0 for a point), or a box, size a vec3;
+                                           // testCenters as in 2D
+engineObjectsCallback3D(pos, size, callback, objects, testCenters)
+engineObjectsRaycast3D(ray, objects)       // every object along the ray, nearest first, like engineObjectsRaycast in
+                                           // 2D; the ray has no end, use render3D.pick for just the nearest one
+obj.lookAt(target)                      // turn -Z toward a world space point: sets pitch and yaw, clears roll;
+                                        // a child aims through its parent, since its rotation3D is local
+obj.render3D() // override for custom drawing, the draw state is already set from the flags; render() is empty
+// children attached with addChild follow an EngineObject3D parent's 3D transform, pos3D, rotation3D and scale3D are
+// then local, as in three.js, where 2D keeps a child's pos and angle in world space and its offset in localPos; addChild's 2D
+// offset arguments do nothing in 3D; attach keeps a child where it is and works its pos3D, rotation3D and scale3D out,
+// and removeChild leaves it where it was in the world, both as close as those three values can get under a shear,
+// and exactly for a child with a localMatrix
+
+// Draw right now, no object needed - only inside render3D() or a pass callback, drawing elsewhere asserts; strips batch
+// into one draw per texture and state
+render3D.drawBox(pos, size, color, rotation)              // size is a vec3 or a number, untextured
+render3D.drawSphere(pos, size, color)                     // size is the diameter, untextured
+render3D.boxMesh render3D.sphereMesh                      // the size 1 meshes those use, for any box or sphere
+                                                          // object so they all draw in one batch; set scale3D and
+                                                          // color on the object, editing the mesh changes them all
+render3D.planeMesh render3D.planeMeshDoubleSided          // a size 1 square facing +Y, seen from above only, or seen
+                                                          // and lit from both sides for signs and cards; stand it
+                                                          // up with rotation3D, size it with scale3D
+render3D.billboardMesh                                    // a size 1 square facing +Z with the tile across it, what a
+                                                          // ParticleEmitter3D draws its particles as instances of
+render3D.drawMesh(mesh, matrix, tileInfo, color) // any mesh, batched with its other uses; tileInfo can be a TextureInfo
+                                                 // for the whole texture, uvs past 1 repeat when it wraps
+render3D.drawBillboard(pos, size, tileInfo, color, angle, upright) // camera facing quad, size is a Vector2; lit
+                                                                   // with no direction, by how near each light
+                                                                   // is, the sun, ambient and shadows, so a cloud
+                                                                   // is bright by a light inside it; emissive 1
+                                                                   // or additive keeps it unlit; a normal map lights
+                                                                   // it as a card facing the camera;
+                                                                   // upright stands on world up; opaque ones,
+                                                                   // and sprite objects that are not transparent,
+                                                                   // are batched: a sheet's sprites are one
+                                                                   // instanced draw, its clear pixels cut out
+// list points counter clockwise as seen from the front, or the face points away and a culling mesh hides it
+render3D.drawQuad(a, b, c, d, tileInfo, color)            // corners in loop order, a is the texture's top left
+render3D.drawTriangle(a, b, c, color)
+render3D.drawLine(posA, posB, width, color)               // camera facing ribbon, unlit
+render3D.drawRibbon(points, width, tileInfo, color, side) // strip along a path, unlit, two sided; width and color one
+                                                          // or per point, texture runs along it, side faces the camera
+                                                          // unless given; a path ending where it starts joins as a loop
+// soft discs and shadows fade to transparent, so draw them from a transparent object or onRenderTransparent
+render3D.drawSoftDisc(pos, size, color, normal, sides) // fades to transparent at the rim, unlit, faces the camera
+                                                       // unless a normal is given
+render3D.drawSoftShadow(pos, size, floorHeight, color, lift) // soft blob shadow under pos, unlit; floorHeight can be
+                                                             // (x, z)=> y to follow terrain
+render3D.softShadowHeight = 0                             // floor for objects with a softShadow: a height, a HeightMap,
+                                                          // or (x, z)=> y
+// strip order, counter clockwise as seen from the front: the first three points make a triangle, then every extra
+// point makes another with the two before it, so the shape is walked in pairs
+render3D.drawStrip(points, normals, uvs, colors, tileInfo) // a raw triangle strip; normals, uvs and colors are one
+                                                           // value or one per point
+render3D.drawStripUnlit(points, normals, uvs, colors, tileInfo) // same with lighting off
+render3D.flush()                                          // draw what is pending, automatic when needed
+render3D.bake(()=> { ...draws... })                       // returns the strips drawn inside as a Mesh
+
+// Debug primitives - like debugRect and friends, drawn on top of the scene in debug builds; debugClear clears them too
+debugBox3D(pos, size, color, time, rotation)
+debugSphere3D(pos, size, color, time)
+debugLine3D(posA, posB, color, width, time)
+debugPoint3D(pos, color, time, size)
+
+// Meshes - triangle strips, sent to the GPU on first render, drawn by matrix; dispose a mesh you stop using to free
+// its GPU buffer, or use obj.setMesh to swap the mesh of an object and free the old one in a single call
+const mesh = new Mesh
+mesh.addStrip(points, normals, uvs, colors) // one strip in strip order, counter clockwise from the front; normals, uvs
+                                            // and colors are one value or one per point; extra strips in one mesh are
+                                            // joined by an invisible flat triangle, so they do not look connected
+mesh.addQuad(a, b, c, d, color, uvs) // corners in loop order, counter clockwise seen from the front; color and uvs one
+                                     // or per corner
+mesh.addTriangles(points, indices, normals, uvs, colors) // triangles over their own vertices, the form a model file
+                                     // comes in: each vertex once, three indices per triangle counter clockwise from
+                                     // the front; the mesh becomes indexed, a strip already in it is welded first
+mesh.setVertexData(vertexData, indices, vertexCount) // a big generated mesh, like terrain, given in the GPU layout:
+                                     // a Float32Array of RENDER3D_VERTEX_FLOATS floats per vertex, written by
+                                     // meshWriteVertex(floats, ints, j, x, y, z, nx, ny, nz, u, v, rgba) with ints a
+                                     // Uint32Array view of its buffer, and a Uint32Array or Uint16Array of triangles
+                                     // counter clockwise from the front; uploaded as it is, kept for a lost context,
+                                     // drawn and picked like any mesh, but has no points to transform or combine
+mesh.toIndexed()                     // turn a strip mesh into the indexed form in place, each distinct vertex once
+mesh.indices                         // the triangles of an indexed mesh, undefined for a strip; either form draws the same
+mesh.combine(otherMesh, matrix, color)        // append a transformed, tinted copy, to build one shape out of several;
+                                              // matrix can be a vec3 when the part only needs moving into place
+mesh.mirror(axis=vec3(1,0,0))                 // a new mesh: this one and its image across the plane through the
+                                              // origin facing axis, for modeling half a shape against that plane
+mesh.spin(count, axis=vec3(0,1,0))            // a new mesh of count copies turned evenly around the axis
+mesh.union(otherMesh, matrix)                 // CSG, each a new closed indexed mesh from two closed ones (not
+mesh.subtract(otherMesh, matrix)              // grids or ribbons), neither changed: all of both, this one with the
+mesh.intersect(otherMesh, matrix)             // other cut out, or only what is in both; matrix or a vec3 places
+                                              // the other; cut faces take its normals, uvs and colors; parts that
+                                              // overlap must be joined with union, not combine, mirror or spin;
+                                              // cuts add triangles, so build shapes this way at load time
+mesh.scaleUVs(scale)                          // repeat a wrapping texture across the mesh, a vec2 or a number
+mesh.transform(matrix)                        // move every vertex in place, a mirror turns the faces too
+mesh.flipNormals()                            // turn it inside out, for rooms and domes seen from within
+mesh.setColor(color)                          // every vertex color
+mesh.computeNormals(smooth=false)             // derive normals from the triangles
+mesh.getBounds()                              // {min, max} around the vertices
+mesh.center() mesh.fit(size) // move the bounds onto the origin, scale the largest extent to size; both edit in place
+                             // and return the mesh
+mesh.render(matrix, tileInfo, color)          // draw it now with the current draw state
+mesh.dispose()                                // free the GPU buffer now, the CPU data stays; optional, a mesh
+                                              // that is garbage collected frees its buffer anyway, some time later
+mesh.points mesh.normals mesh.uvs mesh.colors // the vertex arrays, one entry per strip vertex, or per vertex of an
+                                 // indexed mesh; building one by hand you can fill points alone, the rest fall
+                                 // back to up, zero and white
+mesh.instanced = false           // draw this mesh one call per use, in object order, instead of batching it
+mesh.doubleSided = true          // draw both sides, each lit as the side seen; off, the default, skips faces pointing
+                                 // away, faster for closed shapes; buildGrid, buildRibbon and open lathes turn it
+                                 // on, and combine keeps it on if any part had it
+mesh.dirty = true; mesh.upload() // re-upload edited arrays on the next draw, or upload now; upload also measures
+                                 // mesh.radius; every method that edits a mesh sets dirty itself
+mesh.dynamicDraw = true          // set once for a mesh whose values change every frame, a water surface or a
+                                 // cloth: it keeps its GPU layout, so a dirty upload only rewrites the vertices;
+                                 // the strip must keep the same points in the same order, a new point count asserts
+mesh.vertexCount mesh.radius mesh.bounds      // vertices, the bounding sphere for culling, and the box for picking
+mesh.computeRadius()                          // measure mesh.radius now, without uploading
+mesh.getTriangles()                           // {vertices, indices}: the strip as the indexed triangle list upload sends,
+                                              // its distinct vertices and real triangles, for an exporter or a check; an
+                                              // indexed mesh gives its own, read clockwise as the pass draws
+
+// Shape builders - return a Mesh centered on the origin, sizes are full sizes, smooth defaults to the plugin setting
+buildBox(size=1, bevel=0, bevelSegments=1)    // a vec3 or a number, six flat faces with uvs; bevel cuts the edges
+                                              // and corners, 1 segment a flat chamfer, more round them, clamped
+                                              // to half the smallest side
+buildSphere(size=1, sides=16, rings=8, smooth)
+buildCylinder(size=1, height=1, sides=16, smooth, capped=true, bevel=0, bevelSegments=1) // bevel cuts both rims
+buildCone(size=1, height=1, sides=16, smooth, capped=true, bevel=0, bevelSegments=1) // point up, bevel cuts the base rim
+buildCapsule(size=1, height=1, sides=16, rings=4, smooth) // total height including the rounded ends, at least the size
+buildTorus(size=1, tubeSize=.3, sides=16, tubeSides=8, smooth) // size is the diameter of the whole donut, outside edge
+                                                               // to outside edge; it lies flat in the XZ plane like a
+                                                               // coin on a table, so rotation3D.x = PI/2 stands it up
+buildLathe(profile, sides=16, smooth, capped=true) // spins an outline around the Y axis like a vase on a wheel; profile
+                                                   // is [[radius, y], ...] bottom to top, a closed profile is a ring;
+                                                   // an uncapped end makes it doubleSided, so its inside shows;
+                                                   // smooth, an end on the axis within 45 degrees of level is a
+                                                   // round pole like a sphere's, a steeper one a point like a cone's
+buildRibbon(points, width=1, color, closed, up) // lit quads along a path, for roads and tracks; width and color one or
+                                                // per point; doubleSided, so it shows from below too
+buildGrid(size=vec2(1), segments=1, color, heightFunction, smooth) // XZ plane; size and segments a number or vec2,
+                                                                    // height is (x, z)=> y; doubleSided, turn it
+                                                                    // off for ground only seen from above
+// color is a Color or (x, z)=> Color, where x and z are positions on the mesh itself with (0, 0) at its center; it is
+// called per vertex when smooth and once per cell center when flat, so a checker needs cell sized steps; a grid with
+// no heightFunction is flat shaded unless smooth is passed, pass it for a color gradient to blend; with
+// buildGrid(vec2(30), 15) the cells are 2 units, so (x, z)=> (floor(x/2) + floor(z/2)) & 1 ? GRAY : WHITE
+buildLoft(stations) // a hull from diamond shaped cross sections, the stations: [[z, width, top, bottom, sideHeight],
+                    // ...] nose first at the largest z, always flat; sideHeight is 0 to 1, where the side corners sit
+                    // between the bottom and the top; the other order would build the hull inside out, so it asserts
+buildSky(topColor, horizonColor, bottomColor, sides, rings) // dome colored by height, set as render3D.sky
+normalMapFromHeight(size, heightFunction, strength=1) // a wrapping normal map TextureInfo made in code, no image:
+                                     // heightFunction(x, y) is 0 to 1 at each pixel, the slope strength times steeper
+buildExtrude(pixels, size, depth) // 3D sprite: each solid pixel of a tileInfo given thickness, like a block model,
+                                  // colors kept; or rows of pixels (Color, truthy for white, falsy for empty)
+buildText3D(text, size, depth, font) // extruded glyphs from an ImageFont, the white engine font by default so the
+                                     // object color tints it; centered, faces +Z, a new mesh each call; newlines
+                                     // stack downward with a gap, since extruded lines that touch overlap at an angle
+
+// Height map terrain - from a 2D array [row][column] of 0-1 heights or an image's red channel; row 0 is the far edge at
+// -Z, column 0 the left edge at -X
+const terrain = new HeightMap(heights, mapSize=vec2(1), height=1, colors, pos3D=vec3(), smooth) // an EngineObject3D
+        // that draws itself and that objects with collideLevel stand on; heights and colors take the array, an image
+        // or a canvas; pos3D is its center, and it stays upright and unscaled
+terrain.rebuild()                             // make the mesh again after changing heights, colors or smooth
+terrain.buildMesh(smooth)                     // one vertex per sample, centered on its own origin, for other uses
+terrain.getHeight(pos3D) or (x, z)            // world height of the drawn mesh there, to stand things on it; the
+                                              // lookups are in world space, with its position taken off
+terrain.getNormal(pos3D) or (x, z)            // surface normal there, to tilt things to the slope
+terrain.raycast(ray)                          // distance along a ray to where it crosses the ground, or undefined,
+                                              // for clicking; exact, a hill the ray only grazes is still hit, and a
+                                              // ray starting underneath crosses on its way out
+terrain.getColor(pos3D) or (x, z)             // nearest sample color
+terrain.rows terrain.columns                  // samples along Z and X
+
+// Mesh collider - a mesh's triangles as level collision: floors, walls, ramps and rocks
+new MeshCollider(mesh, pos3D=vec3())          // objects with collideLevel land on it, slide along it and walk up
+        // it as on a HeightMap, as capsules as tall as their height and as wide as their narrowest side, or their
+        // sphere; draws nothing, so make an EngineObject3D with the same mesh, or any, to see it; any mesh,
+        // turned and scaled with the collider, both sides of a triangle; particles and picking hit it too
+collider.rebuild()                            // take the triangles from the mesh again after changing it
+
+// Voxel map - a 3D tile map, from the render3dVoxels plugin
+const map = new VoxelMap(pos3D=vec3(), mapSize=vec3(16), tileInfo=tile()) // a grid of blocks that draws itself and
+        // that objects with collideLevel collide with; pos3D is its corner and a cell is 1 unit, it stays upright
+map.setVoxel(cell, type) / map.getVoxel(cell) // type 1-255 shows that tile on every face, 0 is empty, a cell outside
+                                              // the map is ignored and reads 0
+map.setBlockType(type, faces, {seeThrough, transparent, doubleSided}) // faces: a tile, six (+x, -x, +y, -y, +z,
+        // -z), or {top, side, bottom}; seeThrough for holes like leaves, transparent to blend like water, drawn after
+        // the rest; doubleSided for faces seen from inside too, so the surface of water shows from under it
+map.raycast(ray, maxDistance, test)           // {distance, cell, normal, type} of the first block a ray hits, or
+                                              // undefined; test(type, cell) says which blocks count
+map.data / map.rebuild()                      // the Uint8Array of types, x + mapSize.x*(y + mapSize.y*z); rebuild
+                                              // after editing it directly
+map.ambientOcclusion = true                   // darken corners where blocks meet, rebuild after changing it
+
+// OBJ meshes - v, vt, vn and f lines, convex polygons, no materials
+parseOBJ(text, smooth)                        // Mesh from OBJ text, smooth normals when the file has none
+await loadOBJ(url, smooth) // fetch then parse, in an async gameInit; chain .center().fit(size) for models of unknown
+                           // units
+
+// glTF models - the glTF plugin, .gltf with its files beside it or .glb in one file; meshes with their node placement,
+// vertex colors, material colors and base color textures, node animations and skinned characters, four joints a
+// vertex, bent on the CPU each frame; no morph targets, and no Draco or meshopt compressed geometry, which throws
+// saying so
+const model = await loadGLTF(url)   // a GLTFModel, in an async gameInit; or await parseGLTF(data, baseUrl, files) on
+                                     // bytes or JSON you already have; files, a Map of the .bin and image files a
+                                     // .gltf names by their paths, like the files of a drop, in place of fetching,
+                                     // baseUrl then the .gltf's folder among them
+model.parts                          // one GLTFPart per primitive of every node: name, mesh in model space, color,
+                                     // textureInfo when the material has one and WebGL is on, transparent for a
+                                     // blending material or glass (KHR_materials_transmission), which comes in
+                                     // as a faint tint of its color, and unlit for KHR_materials_unlit; the uvs
+                                     // are the set the texture's texCoord names, moved by KHR_texture_transform;
+                                     // normalMap and normalScale from normalTexture, emissiveMap and
+                                     // emissiveMapColor from emissiveTexture and emissiveFactor, read at the base
+                                     // color texture's uvs, and roughness from roughnessFactor, 1 when it has none
+model.mesh, model.textureInfo        // everything as one Mesh tinted by its materials, and its texture when every
+                                     // part uses the same one; a model mixing plain and textured parts, or using
+                                     // several textures or unlit parts, draws right through createObject
+model.createObject(pos3D)            // a GLTFObject, an EngineObject3D with a child per part, each with its own
+                                     // texture and blending, so windows and other see through parts show, and
+                                     // emissive 1 for an unlit one; move and turn the root and the parts follow
+model.animations                     // one GLTFAnimation each: name, duration in seconds, and the channels that
+                                     // move, turn and scale nodes; model.getAnimation(nameOrNumber) finds one
+object.play(animation=0, loop=true, speed=1, blend=0) // play one on a GLTFObject by name or number, its parts move
+                                     // and a skinned mesh bends with it; speed below 0 plays it backward, one that
+                                     // does not loop holds its end, and blend is seconds to cross-fade from the pose
+                                     // it is in, the animation it leaves going on through the fade
+object.getJointMatrix(name)          // a node's world Matrix4 as posed now, by its name in the file, to hang a sword
+                                     // on a hand; undefined for a name the model does not have
+object.stop()                        // hold the pose where it is; object.setAnimationTime(t) poses it at a time
+object.animation .animationTime .animationSpeed .animationLoop .animationPlaying
+model.getPose(animation, time)       // one Matrix4 per part, how far it moved from its resting place
+model.dispose()                      // free the part meshes, the combined mesh and the textures of a model that
+                                     // is done with; destroy the objects createObject made first
+// colors come in converted from glTF's linear values, a NEAREST sampler makes a part pixelated, sparse accessors
+// are read, and object.parts is what an animation poses; a skinned part's object bends a mesh of its own, so
+// characters of one model hold their own poses, and part.skin is what bends it
+model.center().fit(size)             // move the model's bounds onto the origin and scale its largest extent to
+                                     // size, every part together, like Mesh.center and fit; getBounds and
+                                     // transform(matrix) as well
+
+// Particles - the 3D twin of ParticleEmitter, camera facing billboards sorted with everything transparent
+new ParticleEmitter3D(pos3D, emitSize, emitTime, emitRate, emitConeAngle, tileInfo,
+    colorStartA, colorStartB, colorEndA, colorEndB, particleTime, sizeStart, sizeEnd,
+    speed, damping, gravity, fadeRate, randomness, additive)
+emitter3D.stick = 0        // how much a particle grips where it lands, 0 to 1, on top of the friction; 1 stops it
+emitter3D.emitFlat = false // flatten the spawn area across the way it emits: a sphere a disc, a box a flat rectangle
+// particles shoot out along the emitter's own up axis, so rotation3D aims the spray; emitSize is a sphere diameter or a
+// vec3 box; speeds are per frame, sizes are world units, gravity changes velocity y per frame so it is negative to
+// fall, and it is the emitter's own number rather than render3D.gravity, so an effect falls the same wherever it is used
+emitter3D.gravityScale = 0 // a share of render3D.gravity added on top of its own gravity, 1 falls with the world
+// emitConeAngle is the half angle around that direction, PI is every direction; damping multiplies velocity each frame,
+// 1 by default for no slowing; fadeRate is the fraction of life spent fading, half in and half out; randomness is extra
+// randomness on speed, size and life
+// an emitter with an emitTime destroys itself once its last particle is gone, so a burst is fire and forget
+// untextured particles are soft round dots, textured ones are billboards of the tile
+emitter.collideLevel = false // particles hit the height maps and voxel maps, bounce by restitution, slide by friction
+                             // only: not solid objects, as 2D particles hit only tile layers
+emitter.finishCallback // as in 2D, called once with the emitter when its last particle is gone
+emitter.particleCreateCallback / particleUpdateCallback / particleCollideCallback / particleDestroyCallback
+                       // as in 2D, each given a Particle3D {pos, velocity, age, lifeTime, emitter, destroy()}, one object
+                       // the emitter reuses, so copy what you keep; the collide callback gets (particle, level, pos) and
+                       // returns true to stop the particle there
+emitter.trailTime = .2 // 0 by default; draw each particle as a ribbon along its last .2 seconds instead (trailTime * 60 updates with engineVariableStep), the texture stretches along
+                       // it
+// scale3D on the emitter, its own or a parent's, grows the whole effect: spawn area, sizes, speed and fall
+emitter.angleSpeed = .05; emitter.angleDamping = 1 // tumble each particle in the camera plane, either way from a random
+                       // start, damped each frame; 0 is no spin, which is the default, and the 2D emitter takes these
+                       // as constructor arguments instead
+emitter.emitParticle()  // fire one particle now, on top of the emit rate
+emitter.particleCount   // how many are alive; they live in emitter.particleData, 21 floats each, owned by the
+                        // emitter and drawn as one instanced batch of render3D.billboardMesh, so nothing else touches them
+
+// Lens flare - light in the lens when the sun is in view
+new LensFlare3D(size=1, count=7, intensity=1, saturation=1, color) // the sun's lens flare, the old kind: a glow at
+                                  // the sun and a row of discs and rings along the line through the middle of the
+                                  // screen; it fades as the sun leaves the screen or goes behind something
+flare.flareSize = 1.5             // scales every part; count is how many ghosts, intensity how bright, saturation
+                                  // how colorful, 0 all its own color; seed picks another arrangement
+flare.shapes = ['hex', 'streak']  // what the ghosts are picked from: glow, disc, ring, hex, streak or star; glowSize
+                                  // scales the glow at the sun, 0 for none, and ghostSize the ghosts
+flare.elements = [{at: .5, size: .1, color: hsl(.6,1,.6,.3), shape: 'disc'}] // or parts of your own, each a
+                                  // LensFlareElement: at 0 the sun, 1 the middle, 2 as far past it; size a part of
+                                  // the screen's height, or a vec2 for a wide one; shape one of the six, or
+                                  // tileInfo for a tile of your own; angle turns it
+flare.visible                     // how much of the sun shows, 0 to 1, eased over fadeTime, to read; what is not
+                                  // see through hides it, flare.occlusion = false turns that off
+light.addFlare(size, count, intensity, saturation, color) // gives a Light3D a flare of its own and returns it: at the
+                                  // light, in its color, smaller from farther than its radius, hidden by what is
+                                  // in front of it, a spotlight's only from inside its beam
+light.flare                       // the light's LensFlare3D, its child, or undefined; set one of your own, and
+                                  // destroy it to take it away; it goes with the light; a level's Light has a
+                                  // lensFlare property
+flare.light = lamp                // the same by hand, a flare made on its own and pointed at a light; it goes when
+                                  // the light does; a DirectionalLight3D's flare is far away, where it shines from
+// Trails - a ribbon through where the object has been, parent it to something that moves
+new Trail3D(pos3D, lifeTime, width, tileInfo, color, colorEnd, additive) // thins and fades from head to tail over
+                                                                         // lifeTime seconds; Infinity keeps every
+                                                                         // sample at full width, a path that only
+                                                                         // grows, and destroy() then takes it at once
+trail.side // Vector3 for which way the ribbon lies flat, recorded with each sample; undefined turns it to face the
+           // camera
+// the samples are world space, so width is a world width and scale3D does nothing to a trail; a Light3D's radius is
+// a world distance too, so scale3D does nothing there either
+trail.clear()                                 // forget the trail, for when the object teleports
+```
+
+### Coming from three.js
+- The same conventions: right handed, Y up, cameras and objects face -Z, column major matrices, angles in radians
+- rotation3D is vec3(pitch, yaw, roll), applied roll then pitch then yaw, which is three.js Euler order 'YXZ'
+- Traps when porting code over:
+  - Vector3 methods return a new vector; three.js add, normalize and multiplyScalar change the vector itself, so ported
+    code that relies on that quietly computes the wrong thing
+  - Builders take diameters and full sizes; three.js SphereGeometry, CylinderGeometry and TorusGeometry take radii
+  - camera.fov is in radians, a three.js PerspectiveCamera fov is in degrees
+  - A plane lies in XZ facing +Y, a three.js PlaneGeometry stands in XY facing +Z
+  - Directional lights point toward where their light comes from, like three.js: render3D.sunDirection, and a
+    DirectionalLight3D shines from its position toward the origin
+  - Colors are plain 0 to 1 values with no color management, and a point light fades out by a radius, not by
+    physical intensity units
+
+```javascript
+// three.js                               LittleJS 3D
+scene.add(mesh)                           // new EngineObject3D(pos3D, mesh), or render3D.drawMesh each frame
+mesh.position .rotation .scale            // obj.pos3D .rotation3D .scale3D
+parent.add(child)                         // parent.addChild(child), and child.pos3D is then local
+parent.attach(child)                      // parent.attach(child), kept where it is; remove(child) is removeChild(child)
+new THREE.BoxGeometry(w, h, d)            // buildBox(vec3(w, h, d)), or render3D.boxMesh with scale3D
+new THREE.SphereGeometry(r)               // buildSphere(r*2), or render3D.sphereMesh with scale3D
+new THREE.PlaneGeometry(w, h)             // render3D.planeMesh with scale3D, lying flat
+new THREE.InstancedMesh(geometry, m, n)   // new InstancedMesh3D(mesh, n) with setMatrixAt, or setTransformAt from a
+                                          // position, rotation and scale, and setColorAt; its
+                                          // instances are in world space, the object's transform does not move them;
+                                          // objects and drawMesh batch by themselves too, rebuilt each frame
+material.color, material.map              // obj.color, and a TileInfo or TextureInfo as obj.tileInfo
+material.side = THREE.DoubleSide          // mesh.doubleSided = true
+material.emissiveIntensity                // obj.emissive
+material.normalMap, normalScale           // obj.normalMap, obj.normalScale (a number, three.js takes a Vector2)
+material.shininess (MeshPhongMaterial)    // obj.shininess, with obj.specular the strength
+material.reflectivity                     // obj.reflectivity, with render3D.environment or obj.environment the map
+material.metalness                        // none; a dark color with reflectivity reads as metal
+material.roughness (MeshStandardMaterial)  // obj.roughness, which sets obj.shininess: 0 a mirror, 1 matte
+material.emissiveMap, emissive            // obj.emissiveMap, obj.emissiveMapColor
+material.transparent, blending            // obj.transparent, obj.additive
+new THREE.ShaderMaterial({fragmentShader}) // obj.shader = new Shader(code), a mainImage snippet the engine wraps;
+                                          // set emissive = 1 for the snippet to do its own lighting; a
+                                          // vertexShader is new Shader(code, vertexCode) with a mainVertex snippet
+new THREE.AmbientLight(color)             // render3D.ambientColor
+new THREE.HemisphereLight(sky, ground)    // render3D.ambientColor and ambientGroundColor, which setSky sets from its colors
+new THREE.DirectionalLight(color)         // new DirectionalLight3D(pos3D, color), it shines from its position the
+                                          // same way; or render3D.sunDirection and sunColor, the one that shadows
+new THREE.PointLight(color, i, distance)  // new Light3D(pos3D, radius, color, intensity)
+new THREE.SpotLight(color, i, d, angle, penumbra) // a Light3D with coneAngle = angle and coneSoftness = penumbra,
+                                          // aimed by rotation3D instead of a target; render3D.shadowLight = light
+                                          // for its castShadow
+light.castShadow, light.shadow.camera     // render3D.shadows, shadowRange and shadowCenter
+scene.fog = new THREE.Fog(c, near, far)   // render3D.setFog(near, far, c)
+scene.background                          // render3D.setSky(topColor, horizonColor, bottomColor), or
+                                          // render3D.skyBox for a cube map
+scene.environment                         // render3D.environment
+material.envMap on one mesh               // obj.environment
+new THREE.CubeCamera(near, far, target)   // new CubeMap(size), then cubeMap.capture(pos3D) in place of update
+new THREE.CubeTextureLoader().load(urls)  // await loadCubeMap(urls), the same order
+OrbitControls                             // new CameraControl3D(target, distance)
+PointerLockControls                       // new FirstPersonCamera3D
+new THREE.Raycaster()                     // render3D.screenToRay, pick and engineObjectsRaycast3D
+OBJLoader                                 // loadOBJ(url) or parseOBJ(text)
+GLTFLoader                                // loadGLTF(url): model.createObject(pos) is the scene as objects, model.mesh
+                                          // is everything as one Mesh
+mixer.clipAction(clip).play()             // object.play(name) on the object createObject made, skinned characters
+crossFadeTo(next, seconds)                // object.play(next, true, 1, seconds); bone.getWorldPosition: getJointMatrix
+EffectComposer and UnrealBloomPass        // postProcessBloom()
+renderer.render(scene, camera)            // nothing to do, the engine draws every frame and handles resizing
+position.setUsage(THREE.DynamicDrawUsage) // mesh.dynamicDraw = true once, then mesh.dirty = true when the points
+                                          // move, like position.needsUpdate = true
+geometry.dispose()                        // optional here, a collected mesh frees its buffer; mesh.dispose()
+                                          // frees it now, and setMesh frees the mesh it replaces
+```
+
+## LittleJS 3D Levels
+- A 3D level is a list of objects as plain JSON, simple enough to write by hand
+- Box, Sphere, Cylinder and Light are built in, to block out and light a level with no code
+- A game names its own types, as objectLayersAddType does in 2D
+- The 3D level editor, in debug builds, edits the level a game loaded: 0 on the debug overlay
+
+```javascript
+level3DAddType(name, make, defaults={}, tileInfo) // A type by name: a class made with new make(pos3D, properties),
+                                                  // or an arrow function called with them, like a player start
+level3DAddMesh(name, mesh, tileInfo, color=WHITE, meshCollision=false) // A static prop type of a mesh, with color,
+                                                  // solid (its box) and meshCollision (its triangles) properties
+level3DLoad(level)                                // Make every object of a level, returns what was made
+level3DVoxelSetup(tileInfo, (map)=> {})           // The sheet a level's block map uses, and a function to set each
+                                                  // map up, its block types' faces; texture 0 without it
+
+// A level, rotation in degrees, and rotation, scale and properties left out when they are the default
+{"littlejs3D": 1, "objects": [
+    {"id": 1, "type": "Box", "pos": [0, 0.5, 0], "scale": [4, 1, 4], "properties": {"color": "#88aa55"}},
+    {"id": 2, "type": "Crate", "pos": [2, 1.5, 1], "rotation": [0, 45, 0], "properties": {"health": 5}},
+    {"id": 3, "type": "PlayerStart", "pos": [0, 2, 3]}]}
+
+// A level can set the scene too, in a scene block beside its objects; level3DLoad applies what the block has, what
+// it leaves out stays as the game set it, and a level with no block changes nothing
+{"littlejs3D": 1,
+ "scene": {"sky": ["#5aa6f0", "#d6ecff", "#d6ecff"], // top, horizon and bottom colors, as render3D.setSky
+           "ambient": 0.5,                            // how much of the sky colors lights the scene
+           "sunDirection": [0.5, 1, 0.3], "sunColor": "#ffffff",
+           "fog": [25, 70], "fogColor": "#d6ecff",    // start and end, an end of 0 for none; the horizon color
+                                                      // when the level has a sky and no fogColor
+           "shadows": true,
+           "lensFlare": true,                         // the sun's lens flare, a LensFlare3D made for it
+           "skyBox": ["px.png", "nx.png", "py.png", "ny.png", "pz.png", "nz.png"], // render3D.skyBox, six images
+           "environment": ["px.png", "nx.png", "py.png", "ny.png", "pz.png", "nz.png"]}, // as loadCubeMap takes
+                                                      // them, loaded in the background, the same urls once;
+                                                      // urls are from the page, not from the level's file
+ "objects": []}
+
+// A level can hold a map of blocks, made a VoxelMap when it loads: its corner, its size in cells, and its blocks
+// as runs of a count and a type, along x, then y, then z; here one row of 32 blocks of type 1 along x, the rest
+// empty; the 3D level editor's Blocks tool paints it
+{"littlejs3D": 1, "voxels": {"pos": [-16, 0, -16], "size": [32, 16, 32], "blocks": [32, 1, 16352, 0]}, "objects": []}
+
+// A level can hold a terrain, made a HeightMap when it loads: its center, its size in the world, how tall a full
+// height is, its color, and its heights, rows of 0 to 1; the 3D level editor's Terrain tool sculpts it
+{"littlejs3D": 1, "terrain": {"pos": [0, -3.2, 0], "size": [64, 64], "height": 16, "color": "#6a9955",
+    "heights": [[0.2, 0.2, 0.2], [0.2, 0.5, 0.2], [0.2, 0.2, 0.2]]}, "objects": []}
+
+// Prefabs - a prefab is a small level, objects about its own origin, placed many times under one name. The level
+// editor saves one as it saves a level, so it is the prefab editor too, and there every instance follows its prefab
+level3DAddPrefab(name, prefab)                    // Add {objects: [...]} as a type; its objects may be of other prefabs
+await level3DLoadPrefab(name, url)                // Fetch a prefab file and add it; a prefab used inside it is
+                                                  // named by its type, the game adds that one too
+level3DSpawn(type, pos3D, rotation3D, scale3D, properties) // Make one object of any type from code, a prefab's
+                                                  // instance or a plain type; rotation in radians
+prefab = new Prefab3D                             // what a prefab's type makes, a handle that draws nothing:
+prefab.parts                                      // what its objects made, objects of their own in the world where
+                                                  // the handle's place, turn and size put them, solid as if placed
+                                                  // by hand; move the handle and they follow with its next update,
+prefab.placeParts()                               // or at once; destroying the handle destroys them
+{"attached": true, "objects": [...]}              // an attached prefab's parts are the handle's children: one body
+                                                  // that moves together, its parts with no collision of their own,
+                                                  // a prefab inside it attached too; its handle is at the middle
+                                                  // of the box around them and its size3D is that box, so
+prefab.setCollision()                             // makes the body solid where it is seen, a vehicle or a creature
+prefab.originOffset                               // from the prefab's origin to that handle, in the prefab's space
+{"prefabs": {"Tower": {"objects": [...]}}, "objects": [{"type": "Tower", "pos": [5, 0, 5]}]} // a level's own
+                                                  // prefabs, added when it loads; one the game added keeps its place
+// an instance sized unevenly that holds turned parts is as near as boxes can be, a turned box can not be sheared
+
+// Built-in types and their properties
+Box, Sphere, Cylinder   // color, tile (-1 for none), solid (true); 1 unit across, the scale is the size
+Light                   // color, radius (5), intensity (1); cone (0), degrees from its forward to the edge of
+                        // its beam, makes it a spotlight aimed by its rotation, softness (.2), shadows (false);
+                        // lensFlare (false) gives it a lens flare
+```
+
+### 3D level editor
+Debug builds only. `0` on the debug overlay opens it for a level loaded with `level3DLoad`, the game pauses under it.
+To make it your own game's editor, with your own types, keys and panel buttons, see [EDITOR.md](EDITOR.md).
+The panel's Scene box edits the level's scene block: "Level sets the scene" starts one from what is on screen, and
+off leaves the sky, sun, fog, shadows and lens flare to the game.
+
+```javascript
+// Tools, the keys Unity, Unreal and Godot use
+Q select · W move · E rotate · R scale   // drag a handle, or the object itself
+B                                        // blocks: click or drag places the type picked in the panel, Shift
+                                         // removes, Ctrl repaints, P picks the type under the mouse; X is box
+                                         // fill, a drag fills the rectangle dragged, as tall as the panel's
+                                         // height; the panel adds the level's block map and resizes it
+T                                        // terrain: hold the mouse to raise the ground under the brush, Shift
+                                         // lowers, Ctrl smooths; X goes to the next brush: flatten, to the height
+                                         // pressed, and paint, a color on the ground, Shift takes it off, saved
+                                         // as "paint": {"colors": [...], "cells": [count, color, ...]}, 0 for
+                                         // the terrain's own color; the panel adds the level's terrain, up to 128
+                                         // cells a side, and has the brush's size and strength
+G                                        // grid snap, Ctrl flips it for a drag; steps are in the panel
+L                                        // own axes: the Move handles follow the object's turn, not the world
+End                                      // drop the selection to the ground
+// Selecting and editing
+Left click, Shift+click, left drag from empty space   // select, add or take away, box select
+Delete · Ctrl+C / X / V · Ctrl+D · Ctrl+Z / Y         // Ctrl+D duplicates
+Ctrl+G · Ctrl+Shift+G                    // make the selection a prefab, kept in the level's prefabs block, with
+                                         // one instance where it was; unpack an instance into its objects; the
+                                         // panel names it, exports it to a file and sets it attached, and its
+                                         // Load prefab button adds one from a file, by the file's name
+Enter · Backspace                        // open the selected instance's prefab to edit it alone, a prefab inside
+                                         // it the same way; Backspace with nothing selected goes back, and every
+                                         // instance follows; Save inside one writes the prefab's own file
+// The camera
+Right button                             // look, and WASD and QE fly while it is held, Shift faster
+Wheel · Middle drag or Space+drag · Alt+drag · F      // zoom, pan, orbit, frame the selection
+// Playing
+Esc                                      // play and edit
+Restart · Reset to file                  // panel buttons: rebuild with your edits, or go back to the file
+levelEditor.onRestart = loadLevel        // the same hooks as the 2D editor
+levelEditor.onPlayFrom = (pos3D)=> {}
+levelEditor.use3D = undefined            // true or false picks the 3D or the 2D editor
+```
+
+## LittleJS Three.js Integration
+- Optional plugin that renders a three.js scene on a canvas behind the LittleJS canvas
+- You load three.js yourself (import map or bundler) and pass the module in
+- Aligned camera mode locks the 3D camera to the 2D camera so the z=0 plane matches world space
+- Recommended: `setGLEnable(false)` before engineInit so three.js owns the only WebGL context
+- Keep `canvasClearColor` transparent (the default) so the 3D scene shows through, set the background with `threeJS.scene.background`
+- Do not call `renderer.setPixelRatio`, the plugin manages canvas size and DPR
+- See `examples/threejs/` for a 3D platformer demo
+
+```javascript
+// Setup (call in gameInit), THREE is the three.js module you loaded
+new ThreeJSPlugin(THREE, cameraFOV=60) // creates global threeJS, renders automatically
+threeJS.scene                  // three.js scene, add lights and meshes here
+threeJS.camera                 // three.js perspective camera
+threeJS.cameraAlign2D = true   // lock camera to the LittleJS 2D camera (default)
+threeJS.alignCamera2D()        // align manually, called automatically when locked
+threeJS.cameraNear / cameraFar // near and far planes while aligned, set these rather than camera.near/far
+
+// Objects - littlejs physics drives a three.js mesh
+new ThreeJSObject(pos, size, mesh, z=0) // adds mesh to the scene, syncs transform
+obj.mesh                       // the three.js object3d
+obj.z                          // mesh height above the 2D plane
+obj.syncMesh()                 // copy the 2D transform to the mesh
+```
+
+## LittleJS Box2D Physics
+- Optional plugin wrapping the Box2D physics engine (via box2d.wasm.js)
+- Drop-in replacement for engine objects: `Box2dObject extends EngineObject`; Box2D moves it, so pos and angle are
+  read only, move it with `setPosition`, `setAngle` or `setTransform` and push it with velocities and forces
+- Joints, raycasting, polygon/circle/edge fixtures
+- Angular values are clockwise like `angle`: angular velocity, torque, joint angles and limits, motor speeds
+- The EngineObject's own physics fields do nothing on a Box2dObject, Box2D moves it: `velocity`, `angleVelocity`,
+  `damping`, `angleDamping`, `mass`, `friction`, `restitution` and `gravityScale`. Use `getLinearVelocity`,
+  `setLinearVelocity`, `setAngularVelocity`, `setLinearDamping`, `setAngularDamping`, `setMass`, the friction and
+  restitution given to its shapes, and `setGravityScale`; a debug build warns once when one is set
+- A world made again after `engineObjectsDestroy` does not step exactly as a fresh one, as Box2D reuses its ids, so
+  a replay or a lockstep game that needs the same steps every time reloads the page
+- See `examples/box2d/` for a full demo
+
+```javascript
+// Setup (call once, awaited in gameInit)
+await box2dInit()              // Loads the WASM and creates global box2d / Box2dPlugin
+box2dSetDebug(true)            // Toggle debug rendering of physics shapes (box2dDebug)
+setGravity(vec2(0,-20))        // World gravity is the engine's gravity, copied into the world every step; Box2D
+                               // reads it as units per second squared, its velocities are per second, not per frame
+
+// Bodies — extend EngineObject, integrate with physics
+new Box2dObject(pos, size, tileInfo, angle, color, bodyType, renderOrder) // Dynamic by default
+new Box2dStaticObject(pos, size, tileInfo, angle, color, renderOrder)     // Immovable
+new Box2dKinematicObject(pos, size, tileInfo, angle, color, renderOrder)  // Moves but ignores forces
+new Box2dTileLayer(tileLayer)                                  // Static collision from a TileCollisionLayer, built now
+b.buildCollision(friction=.2, restitution=0)                   // Build it again after changing the collision data
+obj.beginContact(otherObject, fixture, otherFixture, impactSpeed, contact) // override; fixture is which of this
+obj.endContact(otherObject, fixture, otherFixture)   // object's shapes touched, as addBox and the others returned it,
+// like a foot sensor; impactSpeed is how fast they closed along the normal as they hit, spin included, 0 for a sensor
+// contact is {point, normal, impulse}: where they touched, the other's surface normal pointing toward this object,
+// and an estimate of how hard they hit, counting mass and inertia (a stick heavy at its ends hits harder than one
+// heavy in the middle at the same speed); point and normal are undefined for a sensor, impulse 0
+// In beginContact/endContact the world is stepping: destroys and setTransform, setBodyType and setMassData
+// wait until after the step, and creating objects, fixtures or joints there is not allowed
+obj.preSolve(otherObject, fixture, otherFixture, contact) // override; each step while they touch, before the
+// contact is solved: contact is {point, normal, enabled, friction, restitution, surfaceSpeed}, and enabled = false
+// lets them pass through until they stop touching, like dropping through a platform; a sleeping body is not solved
+obj.oneWay = vec2(0, 1)                // One way as in 2D, a platform jumped up through: blocks only what first
+                                       // touches it from the far side, turns with the body; what passes gets no
+                                       // beginContact or endContact
+obj.setSurfaceSpeed(speed)             // A conveyor belt: its surface runs clockwise around it at speed, to the
+                                       // right across its top when positive, carrying what touches it (surfaceSpeed)
+
+// Common fixture setup (call from constructor or after creation)
+obj.addBox(size, offset, angle, density, friction, restitution, isSensor)
+obj.addCircle(diameter, offset, density, friction, restitution, isSensor)
+obj.addPoly(points, density, friction, restitution, isSensor)      // points are local to the body, 3 to 8 of
+                                                                   // them, not all in a line
+obj.addEdgeList(points, density, friction, restitution, isSensor)
+obj.setFilterData(categoryBits=1, ignoreCategoryBits=0, groupIndex=0) // collides with every category not ignored,
+                                                                    // applies to the fixtures the body has now
+
+// Forces and motion
+obj.applyForce(force, pos)             // Force in Newtons at world pos (sustained)
+obj.applyAcceleration(accel, pos)      // Δvelocity = accel per call (mass-independent like EngineObject, per second)
+obj.applyImpulse(impulse, pos)         // Δvelocity = impulse / mass (instantaneous; use for one-shot hits)
+obj.applyTorque(torque)
+obj.applyAngularAcceleration(accel)    // Δangular velocity = accel per call (mass-independent)
+obj.applyAngularImpulse(impulse)       // Δangular velocity = impulse / inertia (instantaneous)
+obj.setLinearVelocity(vel)
+obj.setAngularVelocity(av)
+obj.setAwake(awake=true)
+obj.setFixedRotation(isFixed=true)     // Stop the body from rotating
+obj.setBullet(isBullet=true)           // Continuous collision for fast bodies, so they don't pass through thin ones
+obj.setSensor(isSensor=true)           // The fixtures it has now detect contacts without colliding
+obj.setLinearDamping(damping)          // Box2D's damping, a rate: 0 is none, larger slows it faster, no upper limit
+obj.setAngularDamping(damping)         // the same for its turning, where an EngineObject's damping is 0 to 1
+obj.setGravityScale(scale=1)
+obj.setMassData(localCenter, mass, momentOfInertia) // undefined leaves that one as it is, inertia is about the
+                                                    // center of mass
+obj.getMass() / getCenterOfMass() / getInertia() // the center of mass in world space, setMassData takes a local one
+obj.getVelocityAtPoint(pos)            // Velocity of a world point on the body, its spin included
+
+// Raycasting and queries
+box2d.raycast(start, end, includeSensors=false)    // Returns the closest Box2dRaycastResult or undefined; sensors
+                                                   // are passed through unless includeSensors
+box2d.raycastAll(start, end, includeSensors=false) // Every Box2dRaycastResult along the ray, nearest first
+box2d.boxCast(pos, size, includeSensors=false) / boxCastAll(pos, size, includeSensors=false) // An object, or all
+                               // of them, whose shapes' bounding boxes overlap the box, so near the corner of a turned
+                               // box or a circle it can find one the box misses; sensors are passed through unless included
+box2d.circleCast(pos, diameter, includeSensors=false) / circleCastAll(pos, diameter, includeSensors=false) // The
+                               // nearest object, or all of them, whose position is in the circle, wherever its shapes
+                               // are; objects of only sensors are passed over unless included
+box2d.pointCast(pos, dynamicOnly=true, includeSensors=false) // The object with a shape under the point, sensors
+                               // passed through unless included, so a pickup radius does not grab from afar
+
+// Joints — all extend Box2dJoint; a joint goes along with either of its objects, check joint.isDestroyed()
+// before using a kept one, joint.isActive() is false then; collide=true lets the two bodies collide with each other
+new Box2dTargetJoint(object, fixedObject, worldPos) // Drag toward a point (mouse-follow)
+new Box2dDistanceJoint(objectA, objectB, anchorA, anchorB, collide=false)
+new Box2dPinJoint(objectA, objectB, pos=objectA.pos, collide=false) // pins the two together at pos, turning freely;
+                                                                    // a revolute joint
+new Box2dRopeJoint(objectA, objectB, anchorA, anchorB, extraLength=0, collide=false) // max length is the anchors'
+                                                                                   // distance plus extraLength
+new Box2dRevoluteJoint(objectA, objectB, anchor, collide=false)
+new Box2dPrismaticJoint(objectA, objectB, anchor, worldAxis=vec2(0,1), collide=false)
+new Box2dWheelJoint(objectA, objectB, anchor, worldAxis=vec2(0,1), collide=false)
+new Box2dWeldJoint(objectA, objectB, anchor, collide=false)
+new Box2dFrictionJoint(objectA, objectB, anchor, collide=false)
+new Box2dPulleyJoint(objectA, objectB, groundAnchorA, groundAnchorB, anchorA, anchorB, ratio=1, collide=false)
+new Box2dMotorJoint(objectA, objectB)
+new Box2dGearJoint(objectA, objectB, joint1, joint2, ratio=1) // turns objectB of each joint, which must be dynamic
+```
+
+## LittleJS Medals & Newgrounds
+- Achievement/medal system with on-screen popup, save/restore via localStorage
+- Optional Newgrounds plugin for medals held on the server and for scoreboards
+- While a player is logged in to Newgrounds, the server holds their NewgroundsMedals: they unlock once it confirms and
+  the local save leaves them alone; a plain Medal is never touched, and once the session is lost, at load or later,
+  the game plays as not logged in
+- Without a session the medal and scoreboard lists still come in, so the medals get their names and icons; unlocking
+  on the server and posting a score need a logged in player, and an unlock earned while not logged in stays local
+- See `examples/shorts/medals.js` for a demo
+
+```javascript
+// Medals
+new Medal(id, name, description='', icon='🏆', src)  // src is optional image url
+medal.unlock()                       // Mark unlocked, save, and queue the popup; the promise it returns is optional
+                                     // and resolves with whether the medal is unlocked, right away unless a server
+                                     // has to confirm
+medal.unlocked                       // True once unlocked; for a logged in NewgroundsMedal, once the server confirms
+medal.isLocal()                      // true while the local save holds the medal; false for a NewgroundsMedal while a
+                                     // player is logged in to Newgrounds, whose server holds it
+
+medals                               // Global { [id]: Medal } map
+medalsInit(saveName)                 // Restore unlocked state from localStorage under saveName, a different name
+                                     // from the game's own save data or each overwrites the other; skipping
+                                     // NewgroundsMedals while logged in; call it after making the medals, since it
+                                     // drops saved medals that do not exist (called before any, each medal reads its
+                                     // own unlock as it is made); still needed with Newgrounds, before or after
+medalsForEach(callback)              // Iterate all registered medals
+medalsReset()                        // Lock all medals and persist the cleared catalog; NewgroundsMedals while logged
+                                     // in are left alone
+medalsPreventUnlock                  // Block unlocks (testing / debug)
+
+// Display tuning
+medalDisplayTime / setMedalDisplayTime(seconds)
+medalDisplaySlideTime / setMedalDisplaySlideTime(seconds)
+medalDisplaySize / setMedalDisplaySize(vec2)
+
+// Newgrounds in a game: the App ID, the cipher and every medal and scoreboard id come from the project's API Tools page
+const medal_win = new NewgroundsMedal(81234, 'Win', 'Beat the game'); // its id on Newgrounds
+const boardId = 14567;               // a scoreboard id
+async function gameInit()
+{
+    medalsInit('My Game');
+    new NewgroundsPlugin('12345:AbCdEfGh', 'cipherFromApiTools=='); // the cipher only with encryption on
+    const response = await newgrounds.getScores(boardId, undefined, false, 0, 10, 'A'); // top 10 of all time
+    const scores = response?.result?.data?.scores || []; // each with user.name, value and formatted_value
+}
+// later, in game code
+medal_win.unlock();
+newgrounds.postScore(boardId, score);
+
+// Newgrounds plugin (a session only comes from the Newgrounds host)
+new NewgroundsMedal(id, name, description, icon, src) // when logged in, unlock() asks the server and the medal only
+                                     // unlocks and shows once it confirms; await the promise for the outcome
+new NewgroundsPlugin(app_id, cipher) // sets the newgrounds global, logs a view and fetches the lists; with the app's
+                                     // cipher, medal unlocks and posted scores are encrypted by the browser's own
+                                     // WebCrypto, so the page has to be https or localhost and no library is needed
+await newgrounds.ready               // resolves once the session is checked and the lists are in, empty if the server
+                                     // could not be reached; needed before reading the lists, user, a NewgroundsMedal's
+                                     // server fields and, when logged in, its unlocked state
+newgrounds.session_id                // the player's session id, null when not logged in or once the session is lost
+newgrounds.user                      // the logged in player once ready, with id, name, url, supporter; null otherwise
+newgrounds.medals                    // the server's medal list once ready; each NewgroundsMedal takes its name, image,
+                                     // value, difficulty and description with " (value)" added
+newgrounds.scoreboards               // the server's scoreboard list once ready, each with its id and name
+newgrounds.postScore(id, value)      // needs a logged in player, value rounded to a whole number; result.data.success says if it
+                                     // posted; an answer that the session is gone drops it, like a failed session check
+await newgrounds.getScores(id, user, social, skip, limit, period) // the scores are in result.data.scores; period
+                                     // 'D' today (the server default), 'W', 'M', 'Y', 'A' all time; a user or social
+                                     // narrows it down, and without either it is the whole board even when logged in
+await newgrounds.cloudSave(slot, data) // any value JSON can hold, to a slot numbered from 1, as many as the app's
+                                     // settings give; needs a logged in player; true once saved, false with a
+                                     // warning for a value JSON can not hold
+await newgrounds.cloudLoad(slot)     // the value saved there, null when the slot is empty, undefined when it could
+                                     // not be loaded or the player is not logged in: never save over one undefined
+newgrounds.loadFailure(slot)         // why that slot's last cloudLoad gave undefined: 'notSave' for a file there that
+                                     // is not a save, where a game may offer to start over, else 'failed'; a saved
+                                     // null loads as null, as an empty slot does
+newgrounds.logEvent(name)            // count an event of the game's own, by name, on its stats page
+newgrounds.unlockMedal(id)           // low level request only, the medal is not changed; games call medal.unlock()
+newgrounds.pendingUnlocks            // advanced: the unlocks in flight or waiting to be resent, with their promises
+newgrounds.resendUnlocks()           // advanced: send the ones whose request did not reach the server again now, as
+                                     // the minute's session check does; one the server refused is not resent
+```
+
+## LittleJS Wavedash
+- Optional plugin for Wavedash achievements and leaderboards, the same shape as the Newgrounds one
+- Wavedash serves the game's page and puts its SDK in `window.Wavedash`, so nothing is bundled; off Wavedash every call
+  does nothing and medals unlock as any do
+- Make the plugin at the end of `gameInit`: it calls `Wavedash.init()`, until which Wavedash keeps its loading screen
+- Achievements are made with the Wavedash CLI, `--description` required; numbering the identifiers (`ACH_01_...`)
+  orders them, since Wavedash lists them by identifier
+- A game built with its own minifier keeps the SDK's names (`Wavedash`, `init`, `success`, `data`, `id` and the
+  methods) and real booleans: the SDK throws on a renamed call or a 1 for true (Terser's booleans_as_integers); the
+  engine's own builds keep both
+
+```javascript
+// the medals, each with the identifier of its achievement on Wavedash
+const medal_finish = new WavedashMedal(0, 'ACH_01_FINISH', 'Finish', 'Finish a level');
+function gameInit()
+{
+    medalsInit('My Game');
+    new WavedashPlugin({LEVEL_1: {lowerWins: true, display: 'milliseconds'}, HIGH_SCORE: {}}); // last, it calls init
+}
+// later, in game code
+medal_finish.unlock();               // Wavedash's toast on Wavedash, the engine's popup anywhere else
+wavedash.postScore('LEVEL_1', timeMs);
+
+new WavedashMedal(id, achievement, name, description, icon, src) // a Medal that is also a Wavedash achievement; its
+                                     // unlock is sent until Wavedash takes it, which it refuses until it has loaded
+                                     // the player's, a moment after launch; saved unlocks are sent too; one refused
+                                     // for a minute warns in the console with its identifier, a typo or not made
+medal.achievement                    // the identifier of its Wavedash achievement
+new WavedashPlugin(leaderboards)     // sets the wavedash global, calls Wavedash.init and makes the leaderboards: by
+                                     // name, lowerWins for times and golf (higher wins when left out) and display
+                                     // 'number' (the default), 'seconds', 'milliseconds' or 'ticks' (60 a second)
+wavedash.isActive()                  // whether the game is on Wavedash, its SDK on the page
+await wavedash.postScore(name, score) // a whole number, milliseconds for a time, Wavedash keeping the best; true once
+                                     // posted, false off Wavedash or when it failed or took over 15 seconds; a board
+                                     // not in the table is made then, higher wins
+await wavedash.getScores(name, offset=0, limit=10, friendsOnly=false) // the entries as Wavedash gives them,
+                                     // undefined off Wavedash or when they could not be read
+wavedash.leaderboards                // each board's id promise by its name
+await wavedash.cloudSave(slot, data) // any value JSON can hold, kept across devices as saves/slot#.json; at most 30
+                                     // saves a minute and 300 an hour, so at checkpoints; true once saved, false
+                                     // with a warning for a value JSON can not hold
+await wavedash.cloudLoad(slot)       // the value saved there, null when the slot is empty, undefined when it could
+                                     // not be loaded or off Wavedash: never save over one that loaded undefined
+wavedash.loadFailure(slot)           // why that slot's last cloudLoad gave undefined: 'notSave' for a file there that
+                                     // is not a save, where a game may offer to start over, else 'failed'; a saved
+                                     // null loads as null, as an empty slot does
+await wavedash.setStat(name, value, storeNow=false) // a stat made in the developer portal, kept a second later or
+                                     // at once; the player's stats load the first time one is used
+await wavedash.getStat(name)         // a stat's value, 0 for one never set or off Wavedash
+await wavedash.setPresence(status, details) // what the player is doing, kept with their presence; none clears it
+```
+
+## LittleJS Drawing Utilities
+- Optional plugin: nine-slice and three-slice helpers for scalable UI panels, plus a crescent shape
+- World-space (WebGL or 2D) and screen-space (2D by default, useWebGL for WebGL) variants
+- See `examples/shorts/nineSlice.js`, `examples/shorts/uiSlice.js` and `examples/shorts/crescent.js`
+
+```javascript
+// Nine-slice — 3x3 tile grid scaled to fit
+drawNineSlice(pos, size, startTile, color, borderSize, additiveColor, extraSpace, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+drawNineSliceScreen(pos, size, startTile, color=WHITE, borderSize=32, additiveColor, extraSpace=2, angle=0, useWebGL=false, context)
+
+// Three-slice — 1x3 tile strip (corner / side / center) rotated around the box
+drawThreeSlice(pos, size, startTile, color, borderSize, additiveColor, extraSpace, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+drawThreeSliceScreen(pos, size, startTile, color=WHITE, borderSize=32, additiveColor, extraSpace=2, angle=0, useWebGL=false, context)
+
+// TileSlice — a tile kept as a box style: slices 9 is a nine-slice, 3 a three-slice, 1 the whole tile stretched
+new TileSlice(tileInfo, slices=9, borderSize, extraSpace) // borderSize and extraSpace default to the draw's own
+slice.draw(pos, size, color=WHITE, additiveColor, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+slice.drawScreen(pos, size, color=WHITE, additiveColor, angle=0, useWebGL=false, context)
+
+// Crescent — moon-phase shape (percent: 0=new, .25=first quarter, .5=full, .75=last quarter)
+drawCrescent(pos, size=1, percent=0, color=WHITE, angle=0, invert=false, lineWidth=0, lineColor=BLACK, useWebGL=glEnable, screenSpace, context)
+                                      // lit side up at angle 0, invert draws the unlit part
+getCrescentPoints(pos, size=1, percent=0, angle=0, invert=false, sides=glCircleSides) // crescent points for drawPoly
+```
+
+## LittleJS Texture Sheets
+- Optional plugin: packs images into texture sheets at runtime and returns a TileInfo
+- Sheets are created and filled automatically, there is nothing to set up first
+- Grid images keep their layout, frames wrap to the next row, and `tileInfo.frame(n)` follows them; a tile layer or
+  ImageFont made from one counts its tiles the same way
+- See `examples/shorts/textureSheet.js`
+
+```javascript
+loadTiles(sources, tileSize, padding=1) // Pack tile images, or several tile sheets, into one tile set: each image cut
+                                      // into tiles, numbered from 0 in the order given; give the TileInfo it
+                                      // returns to tileLayersLoad or a TileLayer, and await spritesReady first
+tileInfo.tiles                        // a tile set's tiles, each where it was packed: a tile layer draws tile n
+                                      // from tiles[n], and the level editor's palette offers each
+loadSprite(src, frameSize, padding=1, sourcePadding=0) // Load an image and pack it, returns a TileInfo
+loadAtlas(imageSrc, jsonSrc, padding=1) // Load a TexturePacker or Aseprite atlas, returns name->TileInfo object
+parseAtlas(data)                      // Parse atlas json into named frame groups, used by loadAtlas
+spritesReady()                        // Promise resolved when all sprites are packed
+textureSheets                         // Array of TextureSheet created by loadSprite, loadAtlas and loadTiles
+new TextureSheet(size=2048)           // A texture that images are packed into
+sheet.tryAdd(imageSize, frameSize, padding, sourcePadding) // Reserve a spot, returns a TileInfo
+sheet.drawImage(image, tileInfo, update=true, sourcePadding=0) // Draw an image into a reserved spot
+sheet.updateTexture()                 // Upload batched images to WebGL
+
+// Settings
+textureSheetSize = 2048   // Size in pixels of texture sheets created by loadSprite, loadAtlas and loadTiles
+textureSheetPadding = 1   // Default padding around each frame packed by loadSprite, loadAtlas and loadTiles
+
+// Load a sprite and an animation, then wait for both
+async function gameInit()
+{
+    playerTile = loadSprite('player.png');
+    runTile = loadSprite('run.png', vec2(16));
+    await spritesReady();
+}
+```
+
+## LittleJS Tweakables
+- A panel to change values live while the game runs, debug builds only
+- Press 9 while the debug overlay is open to show it, or set debugTweakables = true to show it from the start
+- A number gets a slider when it has a min and max, a boolean a checkbox, a Color a picker and an alpha slider,
+  a Vector2 or Vector3 a number for each axis
+- Changes are saved and come back after a refresh, until the value in the code changes
+- Copy puts the changed values on the clipboard as lines of code, Reset puts back the code values
+- Paths are found by name, so only a script's globals work; an ES module game passes the object option
+- Release builds have none of its code, tweak and the rest do nothing, and the code's values are used as they are
+- See `examples/shorts/tweakables.js` for a demo
+
+```javascript
+tweak(path, options)       // Add a global, or a dotted path to a field on one, call it at the end of gameInit
+                           // options: {min, max, step, label, object}, the slider shows when min and max are set,
+                           // and a typed value is held to them
+tweak('speed', {object: settings}) // A field of an object, for an ES module game; with two objects that share a
+                                   // field, give each a label, the name it is known and saved by
+tweakDivider(label)        // Add a divider with a label for the tweaks after it
+tweakButton(label, callback) // Add a button that calls a function, like one to restart the level
+tweakEngineDefaults()      // Add gravity, timeScale, cameraScale and soundVolume
+```
+
+## LittleJS Level Editor
+- Press 0 while the debug overlay is open to pause the game and paint its tile layers, 0 again to keep playing
+- Edits the Tiled map the game passed to tileLayersLoad, so a game that loads it again gets the changes
+- Every change is autosaved and comes back after a reload, Save writes the map as Tiled JSON
+- Left paints, right click picks, right drag selects, middle or Space drag pans, the wheel zooms, 1-9 pick a layer
+- F fills, Delete clears the selection, Ctrl+C/X/V copy, cut and paste it as a stamp, R turns, M mirrors, ? lists the keys
+- Left drag a selection to move it, Escape or a right click puts it back
+- A map's object layers come after its tile layers: left places the palette's type or selects and drags,
+  right click picks, right drag box-selects, a selected object's properties show in the panel
+- The panel's Advanced section has Play from mouse, the level's size to resize it, and Reset to file
+- Debug builds only, release builds have none of its code
+- To make it your own game's editor, with your own types, keys and panel buttons, see [EDITOR.md](EDITOR.md)
+
+```javascript
+levelEditor.isOpen         // Is the editor open? read only
+levelEditor.open()         // Open the editor, pausing the game; close() plays on with the changes
+levelEditor.onTile = (layer, layerPos, tile)=> {} // What the game does with a painted tile, like set its
+                           // collision, tile undefined when erased
+levelEditor.onRestart = ()=> {} // Rebuild the level, adds a Restart button
+levelEditor.onPlayFrom = (pos)=> {} // Put the player at pos, adds Play from mouse to the Advanced section
+levelEditor.paletteTiles = [0, 1, 10] // The tiles the palette shows, in order; undefined shows the whole sheet
+levelEditor.use3D = undefined  // true opens the 3D level editor, false the 2D one; undefined the 3D one with a 3D level
+levelEditor.is3D           // Is the editor in use the 3D one? read only
+
+// Making it your own game's editor, the same calls in the 2D and the 3D editor; see EDITOR.md
+levelEditor.addKey('k', (shift)=> {}, 'K: what it does') // A key of your own: a letter, a name like 'F2', 'ctrl+k'
+levelEditor.addButton('Label', ()=> {}, 'title')         // A button of your own in the panel
+levelEditor.addTool('Name', {key, hint, onPress, onDrag, onRelease, onDraw}) // A tool of your own: while it is on
+                           // the left button is its; each callback gets {pos, cell, ray, shift, ctrl}, and a
+                           // press, drag and release are one undo
+levelEditor.tool           // The name of your tool that is on, undefined for one of the editor's
+levelEditor.onOpen = ()=> {}   onClose   onUpdate   onDraw // Moments the editor calls: opened, closed, each
+                           // frame while open, and while it draws the level, for overlays
+levelEditor.onPanel = (box)=> {}       // Once, when the panel is made: a box in it for your own controls
+levelEditor.onSave = (text, fileName)=> true // Save: return true when you kept the file yourself
+levelEditor.edit3D         // The 3D editor's edit functions: level, objects, selection, selected(), made(id),
+                           // change((list)=> ...), changePart(name, (part)=> ...), strokeEnd(), strokeCancel(),
+                           // place(type, pos3D), setTransform(object, pos3D, rotationDegrees, scale3D),
+                           // setProperty(object, name, value), pos(object), rotation(object), scale(object),
+                           // mousePoint(), undo(redo), toJSON()
+levelEditor.edit2D         // The 2D editor's: map, layer, objects, hover, selection, paint(cell, tile, direction,
+                           // mirror), changeObjects((list)=> ...), strokeEnd(), strokeCancel(), bulk(()=> ...),
+                           // undo(redo), toJSON(); a change is one undo once strokeEnd() is called
+class MyEditor extends LevelEditor { onRestart() {} onDraw() {} } // Or a class of your own, its methods the hooks
+setLevelEditor(new MyEditor)   // Make it the one in use, before the editor opens
+// In release builds LevelEditor takes all of this and calls none of it, so a game needs no guards
+```
+
+## LittleJS Debugging System
+- Press Escape key to toggle debug overlay
+- Number keys toggle debug functions while the overlay is open: 1 physics, 2 tiles (each tile layer's bounds, the
+  collision values on screen, and the tiles under the mouse; pressing 2 again steps through the layers one at a time,
+  then off), 3 particles, 4 raycasts, 5 gamepads, 6 sound, 7 screenshot, 9 tweakables panel,
+  0 level editor
+- C, while the overlay is open, is a free camera for a 3D game: the mouse looks once captured or with the right
+  button held, WASD and QE fly, Shift is faster and the wheel sets the speed; the game runs on and reads no keys or
+  mouse until C or Escape
+- +/- keys apply time scale to update while the overlay is open
+- setDebugKeysAlways(true) lets the number and +/- keys work with the overlay closed, for a game that does not use them
+- Debug primitive rendering system
+- Debug functions are only active in debug builds
+
+```javascript
+ASSERT(assert, output) // Asserts if the expression is false
+LOG(...output)         // Logs output to the console (stripped from release builds)
+debugRect(pos, size, color=WHITE, time=0, angle=0, fill)    // Draw debug rectangle
+debugCircle(pos, size, color=WHITE, time=0, fill)           // Draw debug circle
+debugPoint(pos, color, time, angle)                         // Draw debug point
+debugLine(posA, posB, color, width=.1, time)                // Draw debug line
+debugPoly(pos, points, color=WHITE, time=0, angle=0, fill)  // Draw debug polygon
+debugText(text, pos, size=1, color=WHITE, time=0, angle=0)  // Draw debug text
+debugOverlap(posA, sizeA, posB, sizeB, color) // Draw a debug overlap between two boxes
+// each debug draw also takes screenSpace as its last parameter, defaulting to drawScreenSpace; debugText takes a
+// font before it
+debugClear()                     // Clear all debug primitives
+debugScreenshot()                // Save a screenshot at the end of this frame
+debugShowErrors()                // Show full page error message when an error occurs
+createCanvasContext(width, height=width, willReadFrequently=false) // Offscreen canvas to draw into, returns its
+                                                    // 2D context; the canvas is context.canvas
+saveCanvas(canvas, filename='screenshot', type='image/png') // Save canvas to a file
+saveText(text, filename='text', type='text/plain')          // Save text to a file
+saveDataURL(url, filename='download', revokeTime)           // Save url to a file, revokeTime is ms before
+                                                            // URL.revokeObjectURL frees an object url
+
+// Debug settings
+debug                // Is debug enabled?
+debugPointSize = .5  // Size to render debug points by default
+debugLineWidth = 2   // Width in pixels of debug outlines, setDebugLineWidth(width)
+debugKey = 'Escape'  // Key code used to toggle debug mode
+debugKeysAlways = false // The number and +/- keys work with the overlay closed too, setDebugKeysAlways(enable=true)
+debugOverlay         // Is the debug overlay active? setDebugOverlay(show=true) opens or closes it from code
+debugTweakables = false // Is the tweakables panel shown? setDebugTweakables(show=true)
+debugWatermark       // Should watermark with FPS appear in debug mode?
+```
+
+[LittleJS Engine](https://github.com/KilledByAPixel/LittleJS) Copyright 2021 Frank Force
+
+![LittleJS Logo](examples/favicon.png)

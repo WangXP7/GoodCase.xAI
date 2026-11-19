@@ -1,0 +1,36 @@
+// Layout of the settings page: volume lines as a grid, the switches in two
+// columns, the lobby form in a row. The look comes from the td-* classes.
+
+.set-volume {
+  display: grid;
+  grid-template-columns: 110px 1fr 44px 26px;
+}
+
+.set-volume-value {
+  text-align: right;
+}
+
+.set-switches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.set-name {
+  width: 220px;
+}
+
+.set-lobby-url {
+  flex: 1;
+  text-align: right;
+}
+
+.set-lobby-add {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 8px;
+}

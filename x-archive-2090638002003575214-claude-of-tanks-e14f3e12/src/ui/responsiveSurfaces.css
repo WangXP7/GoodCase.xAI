@@ -1,0 +1,904 @@
+@import './battleHudLayout.css';
+
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+/* zh-CN sets no tracking on Chinese (src/ui/typeFaces.ts), so no indent either. Every game indent balances a centred
+   label's trailing tracking; with the tracking gone it pushed the label half an indent right of its axis (the
+   transition overlay's kicker and title, 264). An important declaration in the base layer outranks every surface's. */
+@layer base{:lang(zh-CN){text-indent:0!important}}
+@layer surfaces{
+:root{
+  --cot-edge:clamp(10px,1.7vw,28px);
+  --cot-control-floor:36px;
+}
+body[data-cot-input='coarse']{--cot-control-floor:44px}
+
+/* iOS Chrome/Firefox can size fixed boxes against a stale layout viewport.
+   Pin every fullscreen game surface to the measured visual viewport instead
+   of trusting svh/dvh there. The renderer's #app root uses the same contract
+   in index.html, so DOM chrome and the WebGL frame keep identical bounds. */
+body[data-cot-viewport='visual'] :is(
+  .cot-garage,.cot-hud,.cot-touch,.cot-touch-aim,.cot-bl,.cot-trans,
+  .cot-settings,.cot-resume,.cot-play,.cot-es,.cot-end,.cot-studio,
+  .cot-si-stats,.cot-kc,.cot-kc-fadeblk,.cot-cine-letterbox,.cot-modal-root
+){
+  width:var(--cot-viewport-width,100dvw);
+  height:var(--cot-viewport-height,100dvh);
+}
+
+/* BATTLE HUD -------------------------------------------------------------- */
+/* (a laptop's rosters hold a 13-character callsign as a tablet's do: 179 px at 1280 cut it to 12, gauntlet r3) */
+body[data-cot-width='laptop'] .cot-ear{width:clamp(186px,15vw,194px)}
+body[data-cot-width='laptop'] .cot-killfeed{left:clamp(184px,15vw,210px)}
+body[data-cot-width='tablet'] .cot-top{max-width:calc(100vw - 120px);padding:var(--s1) 26px 5px}
+/* (a tablet's rosters hold a 13-character callsign: at 160 px they cut it to 11, gauntlet r2) */
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-ear{width:180px}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-er{padding-inline:6px;font-size:var(--battle-fs-11)}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-ear{--ear-ic-w:25px}body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-er .ic{height:13px}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-er .n .nick{font-size:var(--battle-fs-11)}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-er .n .veh{font-size:var(--battle-fs-11)}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-killfeed{
+  top:66px;left:50%;transform:translateX(-50%);max-width:42%;align-items:center;
+}
+body[data-cot-width='tablet']:not(.cot-touch-layout) .cot-kf{font-size:var(--battle-fs-11);padding:var(--s1) var(--s2)}
+
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-ear,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-ear{display:none}
+/* (a phone's plate: the scores, bars and clock a size down, the band 36 px) */
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-top,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-top{
+  top:0;max-width:calc(100vw - 88px);min-height:36px;column-gap:var(--s2);padding:max(4px,env(safe-area-inset-top)) 22px 5px;
+}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-top .fg,
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-top .fe,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-top .fg,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-top .fe{font-size:20px}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-top .tm,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-top .tm{font-size:15px}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-top .sc .bar,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-top .sc .bar{width:20px}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-killfeed,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-killfeed{
+  top:60px;left:50%;transform:translateX(-50%);max-width:72%;align-items:center;
+}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-kf,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-kf{font-size:var(--battle-fs-11);padding:3px 6px}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-minimap,
+body[data-cot-width='compact']:not(.cot-touch-layout) .cot-minimap{
+  left:max(8px,env(safe-area-inset-left));right:auto;top:max(64px,calc(env(safe-area-inset-top) + 60px));
+  bottom:auto;width:calc(104px * var(--mm-k,1))!important;height:calc(104px * var(--mm-k,1))!important;
+}
+body[data-cot-width='phone']:not(.cot-touch-layout) .cot-dp{transform:scale(.7);transform-origin:left bottom}
+/* (the centre line: on a laptop the spectator bar narrows by the minimap's corner, 252 px, on both sides and stays centred;
+   a tablet's leaves it too little room there, so it stands left of the minimap) */
+body[data-cot-width='laptop'] .cot-spec{width:min(620px,calc(100vw - 504px))}
+body[data-cot-width='tablet'] .cot-spec{
+  left:16px;right:auto;width:min(620px,calc(100vw - 268px));transform:translateY(12px);
+}
+body[data-cot-width='tablet'] .cot-spec.in{transform:translateY(0)}
+body[data-cot-width='compact'] .cot-spec,
+body[data-cot-width='phone'] .cot-spec{bottom:252px}
+body[data-cot-width='phone'] .cot-spec{
+  left:var(--cot-edge);right:auto;width:calc(100vw - (var(--cot-edge) * 2));transform:translateY(12px);
+}
+body[data-cot-width='phone'] .cot-spec.in{transform:translateY(0)}
+
+
+/* PENETRATION / HIT REPORTS ---------------------------------------------- */
+body[data-cot-width='tablet'] .cot-si-cardhost{right:var(--cot-edge);width:300px}
+body[data-cot-width='compact'] .cot-si-cardhost,
+body[data-cot-width='phone'] .cot-si-cardhost{
+  right:max(8px,env(safe-area-inset-right));width:min(272px,calc(100vw - 16px));
+}
+body[data-cot-width='phone'] .cot-si-diag{display:none}
+body[data-cot-width='phone'] .cot-si-body{padding-bottom:5px}
+body[data-cot-height='short'] .cot-si-cardhost{max-height:calc(var(--cot-viewport-height,100dvh) - 126px);overflow-y:auto}
+
+body[data-cot-width='compact'] .cot-si-cardhost,
+body[data-cot-width='compact'] .cot-si-log,
+body[data-cot-width='phone'] .cot-si-cardhost,
+body[data-cot-width='phone'] .cot-si-log{
+  top:max(var(--cot-si-card-top,var(--cot-si-roster-bottom,252px)),calc(env(safe-area-inset-top) + 242px));
+}
+body[data-cot-width='compact'] .cot-si-cardhost,
+body[data-cot-width='compact'] .cot-si-log{
+  right:max(10px,env(safe-area-inset-right));width:min(286px,calc(100vw - 20px));
+}
+body[data-cot-width='phone'] .cot-si-cardhost,
+body[data-cot-width='phone'] .cot-si-log{right:max(8px,env(safe-area-inset-right));width:min(260px,calc(100vw - 16px))}
+body[data-cot-width='compact'] .cot-si-card,
+body[data-cot-width='phone'] .cot-si-card{min-height:0}
+body[data-cot-width='compact'] .cot-si-hd,
+body[data-cot-width='phone'] .cot-si-hd{min-height:40px;padding:5px var(--s2)}
+body[data-cot-width='compact'] .cot-si-badge,
+body[data-cot-width='phone'] .cot-si-badge{font-size:var(--battle-fs-12)}
+body[data-cot-width='compact'] .cot-si-dmg,
+body[data-cot-width='phone'] .cot-si-dmg{font-size:var(--battle-fs-18)}
+body[data-cot-width='compact'] .cot-si-sub,
+body[data-cot-width='phone'] .cot-si-sub{height:23px;padding:3px var(--s2);font-size:var(--battle-fs-11)}
+body[data-cot-width='compact'] .cot-si-body,
+body[data-cot-width='phone'] .cot-si-body{display:block;padding:var(--s1) var(--s2) 0}
+body[data-cot-width='compact'] .cot-si-rows,
+body[data-cot-width='phone'] .cot-si-rows{gap:2px 9px}
+body[data-cot-width='compact'] .cot-si-kv,
+body[data-cot-width='phone'] .cot-si-kv{font-size:var(--battle-fs-11);gap:var(--s1)}
+body[data-cot-width='compact'] .cot-si-pencap,
+body[data-cot-width='phone'] .cot-si-pencap{font-size:var(--battle-fs-11)}
+body[data-cot-width='compact'] .cot-si-diag{
+  grid-template-columns:78px 154px;margin:var(--s1) 0 0;padding:var(--s1) 6px;justify-content:center;gap:var(--s2);
+}
+body[data-cot-width='compact'] .cot-si-diag .box:first-child{width:78px!important;height:78px!important}
+body[data-cot-width='compact'] .cot-si-diag .box:nth-child(2){width:154px!important;height:77px!important}
+body[data-cot-width='compact'] .cot-si-zone{grid-column:auto;text-align:right;font-size:var(--battle-fs-11)}
+body[data-cot-width='compact'] .cot-si-zone .cap{display:block;margin-right:0}
+body[data-cot-width='compact'] .cot-si-mods,
+body[data-cot-width='phone'] .cot-si-mods{padding:5px 9px 0}
+body[data-cot-panels='overlay'] .cot-si-toasthost{
+  top:max(62px,calc(env(safe-area-inset-top) + 52px));bottom:auto;left:max(8px,env(safe-area-inset-left));
+  width:min(236px,42vw);min-height:84px;
+}
+body[data-cot-panels='overlay'] .cot-si-toast{height:26px;padding:var(--s1) 6px}
+body[data-cot-panels='overlay'] .cot-si-toast .l1{height:100%;font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-si-toast .l1 b{font-size:var(--battle-fs-11)}
+body.cot-touch-layout .cot-si-cardhost,
+body.cot-touch-layout .cot-si-log{display:none!important}
+body.cot-touch-layout .cot-si-toasthost{
+  left:max(8px,env(safe-area-inset-left));right:auto;
+  top:calc(max(8px,env(safe-area-inset-top)) + 108px);
+  width:min(200px,48vw);min-height:26px;
+}
+
+/* SETTINGS --------------------------------------------------------------- */
+/* the crew voice row stacks on phones and compact screens (main's crew packs, 2026-10-02; moved here from a
+   600 px media query in settings.ts, so the shared width classes own the breakpoint) */
+body[data-cot-width='compact'] .cot-set-crew-row,
+body[data-cot-width='phone'] .cot-set-crew-row{flex-direction:column;align-items:stretch;gap:10px}
+body[data-cot-width='compact'] .cot-set-crew-field,
+body[data-cot-width='phone'] .cot-set-crew-field{width:100%}
+body[data-cot-width='tablet'] .cot-set-panel{width:min(744px,calc(100vw - 32px));max-height:calc(var(--cot-viewport-height,100dvh) - 32px)}
+body[data-cot-width='compact'] .cot-settings,
+body[data-cot-width='phone'] .cot-settings{align-items:stretch;justify-content:stretch;padding:0;--cot-edge:var(--s4)}
+body[data-cot-width='compact'] .cot-set-panel,
+body[data-cot-width='phone'] .cot-set-panel{
+  width:100vw;max-width:none;height:var(--cot-viewport-height,100dvh);max-height:none;border-inline:0;display:flex;flex-direction:column;
+}
+body[data-cot-width='compact'] .cot-set-hdr,
+body[data-cot-width='phone'] .cot-set-hdr{flex:0 0 auto;padding:12px var(--cot-edge) 9px}
+body[data-cot-width='compact'] .cot-set-tabs,
+body[data-cot-width='phone'] .cot-set-tabs{
+  flex:0 0 auto;padding:0 calc(var(--cot-edge) - 4px);overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
+}
+body[data-cot-width='compact'] .cot-set-tab,
+body[data-cot-width='phone'] .cot-set-tab{min-height:var(--cot-control-floor);white-space:nowrap;flex:0 0 auto}
+/* Phone tabs size to their labels and share the spare width (a short label keeps a short underline); a row too wide
+   for a narrow phone scrolls instead of letting a label run past its plate; the first label starts on the panel's edge. */
+body[data-cot-width='phone'] .cot-set-tabs{gap:0;justify-content:space-between}
+body[data-cot-width='phone'] .cot-set-tab{flex:0 0 auto;padding-inline:4px;font-size:max(13px,var(--fs-13))}
+/* a phone tab's box reaches the touch floor by its own inset (a two-character label plus 9 px a side is 44 px), so every
+   label keeps its own width and the row's gaps come out even; the row's inset puts the first and last labels on the edge */
+:lang(zh-CN) body[data-cot-width='phone'] .cot-set-tab{padding-inline:calc(var(--s2) + 1px)}
+:lang(zh-CN) body[data-cot-width='phone'] .cot-set-tabs{padding-inline:calc(var(--cot-edge) - var(--s2) - 1px)}
+/* the scrolling tab row clips below its box, so a phone's indicator stands on the row's rule inside it */
+body[data-cot-width='phone'] .cot-set-tab.sel>span::after{bottom:0}
+body[data-cot-width='phone'] .cot-set-tab .ct{margin-left:3px;font-size:max(var(--fs-floor-11),var(--fs-11))}
+/* The crew-voice picker stacks under its label once the panel is full-screen. */
+body[data-cot-width='compact'] .cot-set-crew-row,
+body[data-cot-width='phone'] .cot-set-crew-row{flex-direction:column;align-items:stretch;gap:10px}
+body[data-cot-width='compact'] .cot-set-crew-field,
+body[data-cot-width='phone'] .cot-set-crew-field{width:100%}
+body[data-cot-width='compact'] .cot-set-body,
+body[data-cot-width='phone'] .cot-set-body{min-height:0;flex:1 1 auto;padding:0 var(--cot-edge) 14px}
+body[data-cot-width='compact'] .cot-set-ftr,
+body[data-cot-width='phone'] .cot-set-ftr{
+  flex:0 0 auto;flex-wrap:wrap;padding:var(--s3) var(--cot-edge) max(var(--s3),env(safe-area-inset-bottom));
+  background:rgba(5,8,11,.98);border-top:1px solid rgba(146,164,180,.18);
+}
+/* the footer sits on the sheet (one surface at every size) */
+body[data-cot-width='phone'] .cot-set-ftr{background:var(--surface-plate);border-top-color:var(--line-1)}
+body[data-cot-width='phone'] .cot-set-ftr .cot-set-btn{flex:1 1 120px;min-width:0}
+body[data-cot-width='phone'] .cot-set-btn.reset{margin-right:0}
+body[data-cot-width='phone'] .cot-set-row{align-items:flex-start;flex-direction:column;gap:8px;padding-block:10px}
+body[data-cot-width='phone'] .cot-set-row .chips,
+body[data-cot-width='phone'] .cot-set-slider,
+body[data-cot-width='phone'] .cot-settings .cot-c-seg,
+body[data-cot-width='phone'] .cot-set-menu{width:100%}
+body[data-cot-width='phone'] .cot-settings .cot-c-seg__opt{flex:1 1 0;min-width:0}
+body[data-cot-width='phone'] .cot-settings .cot-battle-times{width:100%}
+body[data-cot-width='phone'] .cot-settings .cot-time-choice{flex:1 1 0}
+body[data-cot-width='phone'] .cot-settings .cot-time-content{width:100%}
+body[data-cot-width='phone'] .cot-set-hud-editor{width:100%;margin-left:0}
+body[data-cot-width='phone'] .cot-set-slider input[type=range]{flex:1;width:auto;min-width:0}
+/* touch: every Settings control meets the control floor (44 px) */
+body[data-cot-input='coarse'] .cot-settings .cot-time-content{height:var(--cot-control-floor)}
+/* on touch a segmented control is 44 px like every other control: its options sit inside its 3 px inset (the slate plate
+   inside the track, as on desktop) and their hit areas reach the track's edge */
+body[data-cot-input='coarse'] .cot-settings .cot-c-seg__opt{position:relative;height:calc(var(--cot-control-floor) - 6px)}
+body[data-cot-input='coarse'] .cot-settings .cot-c-seg__opt::before{content:'';position:absolute;inset:-3px 0}
+body[data-cot-input='coarse'] .cot-set-slider input:is([type=range],[type=number]){height:var(--cot-control-floor)}
+body[data-cot-input='coarse'] .cot-settings .cot-c-swatch{width:var(--cot-control-floor);height:var(--cot-control-floor)}
+body[data-cot-input='coarse'] .cot-set-close{--h:var(--cot-control-floor)}
+body[data-cot-height='short'] .cot-settings{align-items:stretch;justify-content:stretch;padding:0}
+body[data-cot-height='short'] .cot-set-panel{width:100vw;max-width:none;height:var(--cot-viewport-height,100dvh);max-height:none;border-inline:0}
+body[data-cot-height='short'] .cot-set-body{min-height:0;flex:1 1 auto}
+body[data-cot-height='short'] .cot-set-hdr{padding-block:7px 5px}
+/* a short screen keeps the rows: the title steps aside (the dialog keeps its name) and the close sits at the tab row's end */
+body[data-cot-height='short'] .cot-settings .cot-set-hdr{position:absolute;top:0;right:0;height:var(--cot-control-floor);padding:0 var(--cot-edge);align-items:center}
+body[data-cot-height='short'] .cot-set-hdr h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* (.cot-settings: a tablet-wide short screen, 844x390, kept the tablet rule's 14 px and ran its tabs under the close) */
+body[data-cot-height='short'] .cot-settings .cot-set-tabs{padding-inline-end:calc(var(--cot-control-floor) + var(--cot-edge) * 2)}
+/* a phone on its side lays the tab row out as the upright phone does: labels share the spare width */
+body[data-cot-input='coarse'][data-cot-height='short'] .cot-set-tabs{gap:0;justify-content:space-between;padding-inline:calc(var(--cot-edge) - var(--s2) - 1px) calc(var(--cot-control-floor) + var(--cot-edge) * 2)}
+body[data-cot-input='coarse'][data-cot-height='short'] .cot-set-tab{padding-inline:4px}
+body[data-cot-input='coarse'][data-cot-height='short'] .cot-set-tab{padding-inline:calc(var(--s2) + 1px)}
+/* a phone on its side keeps the upright phone's 16 px edge, so the first tab sits on the plates' edge */
+body[data-cot-input='coarse'][data-cot-height='short'] .cot-settings{--cot-edge:var(--s4)}
+/* touch: a plate's top inset holds its heading (i)'s 44 px hit area inside the plate */
+body[data-cot-input='coarse'] .cot-set-card{padding-top:var(--s4)}
+body[data-cot-height='short'] .cot-set-preview{display:none}
+/* a compact screen keeps the preview to a strip, so the rows under it stay in view */
+/* a compact screen keeps the preview to a band across the content column, cropped to the tank's tracks */
+body[data-cot-height='compact'] .cot-set-preview{aspect-ratio:auto;height:200px}
+body[data-cot-height='compact'] .cot-set-preview img{object-position:50% 72%}
+body[data-cot-height='short'] .cot-set-ftr{padding-block:6px max(6px,env(safe-area-inset-bottom))}
+body[data-cot-width='tablet'] .cot-set-hdr{padding:var(--s3) var(--s4) var(--s2)}
+body[data-cot-width='tablet'] .cot-set-tabs{padding-inline:var(--s4)}
+body[data-cot-width='tablet'] .cot-set-tab{font-size:max(13px,var(--fs-13))}
+body[data-cot-width='tablet'] .cot-set-body{padding:0 var(--s4) var(--s3)}
+body[data-cot-width='tablet'] .cot-set-conflict{margin:var(--s2) var(--s4) 0}
+body[data-cot-width='tablet'] .cot-set-ftr{padding:var(--s3) var(--s4)}
+
+/* PLAY / PRIVATE ROOM ---------------------------------------------------- */
+body[data-cot-panels='overlay'] .cot-play{padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+body[data-cot-panels='overlay'] .cot-play .panel{width:min(960px,100%);max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+body[data-cot-width='tablet'] .cot-play .room-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+body[data-cot-width='compact'] .cot-play .rules,
+body[data-cot-width='phone'] .cot-play .rules{grid-template-columns:repeat(2,minmax(0,1fr))}
+body[data-cot-width='compact'] .cot-play .room-actions,
+body[data-cot-width='phone'] .cot-play .room-actions{grid-template-columns:1fr}
+body[data-cot-width='compact'] .cot-play .room-failure-actions,
+body[data-cot-width='phone'] .cot-play .room-failure-actions{display:grid;grid-template-columns:1fr}
+body[data-cot-width='compact'] .cot-play .player,
+body[data-cot-width='phone'] .cot-play .player{
+  display:flex;flex-wrap:wrap;align-items:baseline;min-height:0;gap:0 8px;padding-block:var(--s2);
+}
+/* both lines are a fixed 22 px (room for the 20 px HOST tag), so a host's, a player's and a spectator's rows are one height */
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player>*{height:22px;line-height:22px}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player .name{align-items:center}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player .name{order:1;flex:1 1 0}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player :is(.ready,.wait){order:2}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player::after{content:'';order:3;flex-basis:100%}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player .vehicle{order:4;flex:1 1 0;margin-top:4px}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player .team{order:5;margin-top:4px}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player :is(.ready,.wait):empty{display:none}
+body:is([data-cot-width='compact'],[data-cot-width='phone']) .cot-play .player.spectator .vehicle{align-self:flex-start}
+body[data-cot-width='compact'] .cot-play .player .vehicle,
+body[data-cot-width='phone'] .cot-play .player .vehicle{grid-column:1;grid-row:2}
+body[data-cot-width='compact'] .cot-play .player .team,
+body[data-cot-width='phone'] .cot-play .player .team{grid-column:2;grid-row:2;justify-content:flex-end;text-align:right}
+/* a phone's room head: the code and the seats on one row, Copy invite link under them */
+body[data-cot-width='phone'] .cot-play .roomhead{flex-wrap:wrap}
+body[data-cot-width='phone'] .cot-play .roomhead>.action{flex:1 1 100%}
+body[data-cot-width='phone'] .cot-play .seats-count{font-size:var(--fs-20)}
+/* a phone's lobby actions share one row, so the roster keeps more of the screen */
+body[data-cot-width='phone'] .cot-play .control-actions{flex-wrap:wrap;gap:var(--s3)}
+/* Rejoin battle takes its own row under the others: the primary comes last, as at every size */
+body[data-cot-width='phone'] .cot-play .control-actions .action[data-action='rejoin']{flex:1 1 100%}
+body[data-cot-width='phone'] .cot-play .version-refusal .cot-c-notice__acts{display:grid;grid-template-columns:1fr}
+body[data-cot-width='phone'] .cot-play .code{font-size:var(--fs-20)}
+body[data-cot-width='compact'] .cot-play .identity,
+body[data-cot-width='phone'] .cot-play .identity{display:grid;grid-template-columns:1fr;gap:var(--s2)}
+body[data-cot-width='compact'] .cot-play .room-action,
+body[data-cot-width='phone'] .cot-play .room-action{min-height:124px}
+/* a phone's roster card: the vehicle's name under the player's, on one edge (no picture) */
+body[data-cot-width='compact'] .cot-play .vehicle-icon,
+body[data-cot-width='phone'] .cot-play .vehicle-icon{display:none}
+body[data-cot-width='compact'] .cot-play .controls,
+body[data-cot-width='phone'] .cot-play .controls,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .controls{
+  align-items:stretch;flex-direction:column;
+}
+body[data-cot-width='compact'] .cot-play .control-options,
+body[data-cot-width='compact'] .cot-play .control-actions,
+body[data-cot-width='phone'] .cot-play .control-options,
+body[data-cot-width='phone'] .cot-play .control-actions,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .control-options,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .control-actions{width:100%}
+body[data-cot-width='compact'] .cot-play .control-actions,
+body[data-cot-width='phone'] .cot-play .control-actions,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .control-actions{margin-left:0}
+body[data-cot-width='compact'] .cot-play .control-options .field,
+body[data-cot-width='phone'] .cot-play .control-options .field,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .control-options .field{flex:1 1 130px;width:auto}
+body[data-cot-width='compact'] .cot-play .battlefield-card,
+body[data-cot-width='phone'] .cot-play .battlefield-card{grid-template-columns:1fr}
+body[data-cot-width='compact'] .cot-play .battlefield-art,
+body[data-cot-width='phone'] .cot-play .battlefield-art{min-height:82px;border-right:0;border-bottom:1px solid var(--line-1)}
+body[data-cot-width='compact'] .cot-play .battlefield-copy,
+body[data-cot-width='phone'] .cot-play .battlefield-copy{grid-column:auto;grid-template-columns:1fr;padding:var(--s4);gap:var(--s3)}
+body[data-cot-width='compact'] .cot-play .control-actions .action{flex:1 1 128px}
+body[data-cot-width='phone'] .cot-play .control-actions .action{flex:1 1 0;min-width:0;padding-inline:var(--s2)}
+/* Start carries the ready count (START 10/14): it takes the larger share of the row so its label keeps its padding */
+body[data-cot-width='phone'] .cot-play .control-actions .action[data-action='start']{flex-grow:1.5}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-play .room-actions{grid-template-columns:1fr}
+/* a short or compact screen: the lobby's controls end the roster, so the roster keeps the screen; the head is lower and stays */
+body:is([data-cot-height='short'],[data-cot-height='compact']) .cot-play .lobby.show .controls{position:static}
+body[data-cot-height='short'] .cot-play .play-head{padding-block:var(--s3)}
+/* a short screen with a refusal: the head scrolls with the room, so the roster keeps the screen */
+body[data-cot-height='short'] .cot-play .play-head:has(.version-refusal:not([hidden])){position:static}
+body[data-cot-height='short'] .cot-play .close{top:var(--s3)}
+/* a phone's sheet keeps an even 8 px all round */
+body[data-cot-width='phone'] .cot-play{padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+/* a phone's room is a whole-screen sheet: it covers the Garage's tab bar instead of ending inside it */
+body[data-cot-width='phone'] .cot-play .panel{min-height:100%}
+
+/* BATTLE LOADING --------------------------------------------------------- */
+body[data-cot-width='tablet'] .cot-bl,
+body[data-cot-width='compact'] .cot-bl,
+body[data-cot-width='phone'] .cot-bl{--bl-edge:max(10px,env(safe-area-inset-left))}
+body[data-cot-width='tablet'] .cot-bl .briefing,
+body[data-cot-width='compact'] .cot-bl .briefing,
+body[data-cot-width='phone'] .cot-bl .briefing{
+  width:calc(100vw - (var(--bl-edge) * 2));height:calc(var(--cot-viewport-height,100dvh) - max(14px,env(safe-area-inset-top)) - max(14px,env(safe-area-inset-bottom)));
+  min-height:0;padding:clamp(14px,2.4vh,var(--s5)) clamp(10px,2.4vw,22px) max(12px,env(safe-area-inset-bottom));
+}
+body[data-cot-width='compact'] .cot-bl .teams,
+body[data-cot-width='phone'] .cot-bl .teams,
+body[data-cot-width='tablet'] .cot-bl .teams{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s2)}
+/* (the sides 24 px apart where the VS gives way: at 8 an ally's driver met the enemy's as one cell, gauntlet r6) */
+body[data-cot-width='compact'] .cot-bl .teams,
+body[data-cot-width='tablet'] .cot-bl .teams{gap:var(--s5)}
+body[data-cot-width='tablet'] .cot-bl .vs,
+body[data-cot-width='compact'] .cot-bl .vs,
+body[data-cot-width='phone'] .cot-bl .vs{display:none}
+body[data-cot-height='standard'][data-cot-panels='persistent'] .cot-bl .team,
+body[data-cot-height='compact'][data-cot-panels='persistent'] .cot-bl .team{--bl-row-height:26px}
+body[data-cot-panels='overlay'] .cot-bl .cap{padding-bottom:10px}
+body[data-cot-panels='overlay'] .cot-bl .cap::before{margin-bottom:5px;font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-bl .mapname{margin-top:var(--s1);font-size:clamp(22px,6vw,34px)}
+body[data-cot-panels='overlay'] .cot-bl .rules .cot-c-chip{font-size:var(--battle-fs-11)}
+/* (the side's name centred on its plate: a bottom padding alone set it 6 px high, gauntlet r4) */
+body[data-cot-panels='overlay'] .cot-bl .thead{font-size:var(--battle-fs-11);padding:var(--s1) var(--s2)}
+body[data-cot-panels='overlay'] .cot-bl .team{--bl-row-height:24px;--bl-row-gap:2px;--bl-row-inset:4px}
+body[data-cot-panels='overlay'] .cot-bl .row{gap:5px;padding-inline:var(--s1)}
+body[data-cot-panels='overlay'] .cot-bl .row .tier{flex-basis:20px;font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-bl .row .sil{flex-basis:44px;max-height:22px}
+body[data-cot-panels='overlay'] .cot-bl .row .nm{font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-bl .foot{padding-top:9px}
+body[data-cot-panels='overlay'] .cot-bl .fmeta{margin-bottom:5px}
+body[data-cot-panels='overlay'] .cot-bl .fstage{font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-bl .fpct{font-size:var(--battle-fs-15)}
+body[data-cot-panels='overlay'] .cot-bl .count{margin-top:var(--s2);font-size:var(--battle-fs-11)}
+body[data-cot-panels='overlay'] .cot-bl .count b{font-size:16px}
+body[data-cot-width='phone'] .cot-bl .row{gap:3px;padding-inline:3px}
+body[data-cot-width='phone'] .cot-bl .row .tier{flex-basis:17px;font-size:var(--battle-fs-11)}
+body[data-cot-width='phone'] .cot-bl .row .sil{flex-basis:40px;max-height:20px}
+body[data-cot-width='phone'] .cot-bl .row .nm{font-size:var(--battle-fs-11)}
+body[data-cot-width='phone'] .cot-bl .thead{font-size:var(--battle-fs-11)}
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-bl .briefing{padding-inline:var(--s2)}
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-bl .team.foe .row{padding-left:2px}
+body[data-cot-height='short'] .cot-bl .briefing{width:calc(100vw - max(16px,env(safe-area-inset-left) + env(safe-area-inset-right)));height:calc(var(--cot-viewport-height,100dvh) - 10px);min-height:0;padding:var(--s1) max(10px,env(safe-area-inset-left)) max(7px,env(safe-area-inset-bottom))}
+body[data-cot-height='short'] .cot-bl .cap{padding-bottom:5px}
+body[data-cot-height='short'] .cot-bl .cap::before{display:none}
+body[data-cot-height='short'] .cot-bl .mapname{margin-top:3px;font-size:clamp(18px,3vw,26px)}
+body[data-cot-height='short'] .cot-bl .rules .cot-c-chip{font-size:var(--battle-fs-11)}
+/* (a 16 px gutter between the sides: at 8 an ally's driver ran into the enemy's vehicle as one line, gauntlet r3; rows
+   give way to 14 px, one line each, so fourteen a side fit at 844x390 under 26 px chips) */
+body[data-cot-height='short'] .cot-bl .teams{gap:var(--s4)}
+/* (a short side's rows take the room the teams have, to 24 px: at 18 a side of seven left 65 px empty over the progress,
+   gauntlet r4; a long side's still give way to 14) */
+body[data-cot-height='short'] .cot-bl .team{--bl-row-height:24px;--bl-row-gap:1px;--bl-row-min:15px}
+body[data-cot-height='short'] .cot-bl .row .fl[data-nation]{width:14px;height:10px}
+/* (15 px at the least: at 14 the 11 px names' descenders met the row's rule, gauntlet r15 at 568x256) */
+body[data-cot-height='short'] .cot-bl .rows{grid-template-rows:repeat(var(--bl-count),minmax(15px,var(--bl-row-height)))}
+body[data-cot-height='short'] .cot-bl .row :is(.nm,.cs){line-height:1}
+body[data-cot-height='short'] .cot-bl .rules .cot-c-chip{height:26px}
+body[data-cot-height='short'] .cot-bl .row{gap:5px;padding-inline:var(--s1)}
+body[data-cot-height='short'] .cot-bl .row .tier{flex-basis:20px;font-size:var(--battle-fs-11)}
+body[data-cot-height='short'] .cot-bl .row .sil{flex-basis:38px;max-height:14px}
+/* (a long side's 15 px rows: the name and the flag alone, the side render a smudge at 14 px, gauntlet r5) */
+body[data-cot-height='short'] .cot-bl .team.long .row .sil{display:none}
+body[data-cot-height='short'] .cot-bl .team.long .row .fl[data-nation]{width:12px;height:9px}
+body[data-cot-height='short'] .cot-bl .team.long .row{gap:var(--s2)}
+body[data-cot-height='short'] .cot-bl .row .nm{font-size:var(--battle-fs-11)}
+body[data-cot-height='short'] .cot-bl .foot{padding-top:5px}
+/* (on a short window's and a portrait phone's card the countdown stands in the progress row's place when it comes, its
+   own row's room going to the rosters: reserved under the bar, its 30 px left fourteen a side two rows short at 844x390
+   over an empty band, gauntlet r17) */
+body:is([data-cot-height='short'],[data-cot-width='phone'][data-cot-orientation='portrait']) .cot-bl .foot{position:relative}
+body:is([data-cot-height='short'],[data-cot-width='phone'][data-cot-orientation='portrait']) .cot-bl .count{position:absolute;inset:0;height:auto;margin:0;
+  display:flex;align-items:center;justify-content:center;line-height:1}
+body:is([data-cot-height='short'],[data-cot-width='phone'][data-cot-orientation='portrait']) .cot-bl .foot:has(>.count:not(:empty)) .fmeta{visibility:hidden}
+body[data-cot-height='short'] .cot-bl .fmeta{margin-bottom:3px}
+body[data-cot-height='short'] .cot-bl .fstage{font-size:var(--battle-fs-11)}
+body[data-cot-height='short'] .cot-bl .fpct{font-size:var(--battle-fs-13)}
+body[data-cot-height='short'] .cot-bl .count{margin-top:var(--s1);height:18px;line-height:18px}
+
+/* AFTER-ACTION REPORT ---------------------------------------------------- */
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es,
+body[data-cot-width='compact'] .cot-es,
+body[data-cot-width='phone'] .cot-es{
+  justify-content:flex-start;overflow-y:auto;padding:var(--s3) var(--cot-edge) 86px;
+}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-hero,
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-report,
+body[data-cot-width='compact'] .cot-es .es-hero,
+body[data-cot-width='compact'] .cot-es .es-report,
+body[data-cot-width='phone'] .cot-es .es-hero,
+body[data-cot-width='phone'] .cot-es .es-report{width:100%;max-width:100%}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-report,
+body[data-cot-width='compact'] .cot-es .es-report,
+body[data-cot-width='phone'] .cot-es .es-report{
+  grid-template-columns:1fr;height:auto;flex:0 0 auto;
+}
+body[data-cot-width='phone'] .cot-es .es-ban{font-size:clamp(30px,11vw,44px)}
+body[data-cot-width='phone'] .cot-es .es-sub{font-size:var(--battle-fs-11)}
+body[data-cot-width='phone'] .cot-es .es-meta{gap:var(--s2);font-size:var(--battle-fs-11);flex-wrap:wrap}
+body[data-cot-width='phone'] .cot-es .es-stat-grid.has-vehicle{grid-template-columns:92px repeat(2,minmax(0,1fr))}
+body[data-cot-width='phone'] .cot-es .es-tal{padding:9px var(--s2)}
+body[data-cot-width='phone'] .cot-es .es-tal .v,
+body[data-cot-width='phone'] .cot-es .es-tal.hot .v{font-size:25px}
+body[data-cot-width='phone'] .cot-es .es-mini{padding:var(--s2)}
+body[data-cot-width='phone'] .cot-es .es-mini .mv{font-size:17px}
+body[data-cot-width='phone'] .cot-es .es-rosters{grid-template-columns:1fr}
+body[data-cot-height='compact'] .cot-es,
+body[data-cot-height='standard'] .cot-es{justify-content:flex-start;overflow-y:auto;padding-top:var(--s3);padding-bottom:26px}
+body[data-cot-height='compact'] .cot-es .es-tal .v,
+body[data-cot-height='compact'] .cot-es .es-tal.hot .v,
+body[data-cot-height='standard'] .cot-es .es-tal .v,
+body[data-cot-height='standard'] .cot-es .es-tal.hot .v{font-size:30px}
+body[data-cot-height='compact'] .cot-es .es-report,
+body[data-cot-height='standard'] .cot-es .es-report{margin-top:9px}
+body[data-cot-width='phone'] .cot-es .es-actions,
+body[data-cot-height='short'] .cot-es .es-actions{
+  position:fixed;z-index:4;left:0;right:0;bottom:0;justify-content:center;margin:0;
+  padding:var(--s2) var(--cot-edge) max(8px,env(safe-area-inset-bottom));
+  /* (no rule of its own: the report's plate edge over it made two lines at 844x390, gauntlet r6, as r4 at 390) */
+  background:linear-gradient(180deg,oklch(from var(--surface-scene) l c h / .1),var(--hud-plate-strong) 28%);border-top:0;
+}
+/* (the kit's 48 px button's own 12 px label, the pause veil's: at 11 the same action read a step smaller here, gauntlet r13) */
+body[data-cot-width='phone'] .cot-es .es-action{min-width:0;flex:1;padding:0 var(--s2)}
+body[data-cot-height='short'] .cot-es{justify-content:flex-start;overflow-y:auto;padding-bottom:78px}
+body[data-cot-height='short'] .cot-es .es-ban{font-size:clamp(24px,9vh,38px)}
+body[data-cot-height='short'] .cot-es .es-tal .v,
+body[data-cot-height='short'] .cot-es .es-tal.hot .v{font-size:24px}
+body[data-cot-height='short'] .cot-es .es-report{height:300px;flex:0 0 300px;margin-top:var(--s2)}
+body[data-cot-height='short'] .cot-es .es-tal{min-height:0;text-align:center;padding:5px var(--s1)}
+body[data-cot-height='short'] .cot-es .es-tal .v{text-align:center}
+body[data-cot-height='short'] .cot-es .es-tal .k{margin-top:3px;font-size:var(--battle-fs-11);letter-spacing:.01em}
+body[data-cot-height='short'] .cot-es .es-dh,
+body[data-cot-height='short'] .cot-es .es-best{min-height:32px;padding:5px 9px}
+body[data-cot-height='short'] .cot-es .es-scoreboard{min-height:64px;padding:6px 10px}
+body[data-cot-height='short'] .cot-es .es-score-side .sn{font-size:var(--battle-fs-28)}
+body[data-cot-height='short'] .cot-es .es-rosters{gap:6px;padding:0 7px 6px}
+body[data-cot-height='short'] .cot-es .es-kill-block{padding:0 7px 6px}
+body[data-cot-height='short'] .cot-es .es-ph{letter-spacing:.1em;white-space:nowrap;gap:var(--s2);overflow:hidden}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-debrief.personal,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-debrief.personal,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-debrief.personal{height:390px}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-debrief.teams,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-debrief.teams,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-debrief.teams{height:auto;min-height:470px}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-roster-list,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-roster-list,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-roster-list{max-height:220px}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-rosters,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-rosters,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-rosters{grid-template-columns:1fr;gap:var(--s1)}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-actions,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-actions,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-actions{
+  position:fixed;z-index:4;left:0;right:0;bottom:0;justify-content:center;margin:0;
+  padding:var(--s2) 7px max(8px,env(safe-area-inset-bottom));
+  /* (no rule of its own: the report's plate edge 8 px over it made two parallel lines, gauntlet r4) */
+  background:linear-gradient(180deg,oklch(from var(--surface-scene) l c h / .15),var(--hud-plate-strong) 30%);border-top:0;
+}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-action,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-action,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-action{min-width:0;padding:0 var(--s4)}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-ph,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-ph,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-ph{letter-spacing:.1em;white-space:nowrap;gap:var(--s2);overflow:hidden}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-rematch,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-rematch,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-rematch{grid-template-columns:1fr}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-room-actions,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-room-actions,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-room-actions{width:100%;border-left:0;border-top:1px solid oklch(from var(--accent) l c h / .22)}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-room-actions .es-action,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-room-actions .es-action,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-room-actions .es-action{flex:1;min-width:0}
+body[data-cot-width='tablet'][data-cot-orientation='portrait'] .cot-es .es-room-player,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-es .es-room-player,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-es .es-room-player{min-width:100%}
+
+/* SCENE STUDIO ----------------------------------------------------------- */
+body[data-cot-width='laptop'] .cot-studio .dock{width:360px}
+body[data-cot-width='tablet'] .cot-studio .dock{width:min(390px,48vw)}
+body[data-cot-width='compact'] .cot-studio .dock,
+body[data-cot-width='phone'] .cot-studio .dock{
+  left:0;right:0;top:40%;bottom:0;width:auto;padding:12px var(--cot-edge) max(20px,env(safe-area-inset-bottom));
+  border-left:0;border-top:1px solid rgba(230,154,45,.45);box-shadow:0 -12px 30px rgba(0,0,0,.42);
+}
+body[data-cot-width='compact'] .cot-studio .badge,
+body[data-cot-width='phone'] .cot-studio .badge{top:max(8px,env(safe-area-inset-top));left:var(--cot-edge);right:var(--cot-edge)}
+body[data-cot-width='phone'] .cot-studio .badge .m{display:none}
+body[data-cot-width='phone'] .cot-studio .badge .t{font-size:max(var(--fs-floor-11),var(--fs-11));letter-spacing:.06em}
+body[data-cot-input='coarse'] .cot-studio button{min-height:44px}
+body[data-cot-input='coarse'] .cot-studio input,
+body[data-cot-input='coarse'] .cot-studio select{min-height:42px}
+body[data-cot-height='short'] .cot-studio .dock{left:42%;right:0;top:0;bottom:0;width:auto;padding-top:64px;border-top:0}
+body[data-cot-height='short'] .cot-studio .badge{right:calc(58% + 8px)}
+body[data-cot-height='short'] .cot-studio .mapBtn{height:94px}
+body[data-cot-width='compact'] .cot-studio .badge,
+body[data-cot-width='phone'] .cot-studio .badge{gap:6px;padding:6px 8px}
+body[data-cot-width='compact'] .cot-studio .badge .t,
+body[data-cot-width='phone'] .cot-studio .badge .t{font-size:max(var(--fs-floor-11),var(--fs-11));letter-spacing:.1em}
+body[data-cot-width='compact'] .cot-studio .badge button,
+body[data-cot-width='phone'] .cot-studio .badge button{font-size:max(var(--fs-floor-11),var(--fs-11));padding:5px 6px}
+body[data-cot-width='compact'] .cot-studio .mapBtn,
+body[data-cot-width='phone'] .cot-studio .mapBtn{height:126px}
+body[data-cot-width='compact'] .cot-studio .mapPop,
+body[data-cot-width='phone'] .cot-studio .mapPop{max-height:calc(var(--cot-viewport-height,100dvh) - 150px)}
+body[data-cot-width='compact'] .cot-studio .tlmarker,
+body[data-cot-width='phone'] .cot-studio .tlmarker{width:14px;height:14px;top:2px;min-height:0}
+body[data-cot-width='compact'] .cot-studio .shotcard,
+body[data-cot-width='phone'] .cot-studio .shotcard{grid-template-columns:28px minmax(0,1fr) 72px 28px 34px}
+body[data-cot-width='compact'] .cot-studio .foot,
+body[data-cot-width='phone'] .cot-studio .foot{display:none}
+body[data-cot-width='compact'] .cot-studio .busy,
+body[data-cot-width='phone'] .cot-studio .busy{top:64px;max-width:calc(100vw - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* TOUCH BATTLE CONTROLS -------------------------------------------------- */
+body[data-cot-width='compact'] .cot-touch .joy,
+body[data-cot-width='phone'] .cot-touch .joy{width:118px;height:118px}
+body[data-cot-width='compact'] .cot-touch .arrow.u,
+body[data-cot-width='compact'] .cot-touch .arrow.d,
+body[data-cot-width='phone'] .cot-touch .arrow.u,
+body[data-cot-width='phone'] .cot-touch .arrow.d{left:51px}
+body[data-cot-width='compact'] .cot-touch .arrow.l,
+body[data-cot-width='compact'] .cot-touch .arrow.r,
+body[data-cot-width='phone'] .cot-touch .arrow.l,
+body[data-cot-width='phone'] .cot-touch .arrow.r{top:48px}
+body[data-cot-width='compact'] .cot-touch .fire,
+body[data-cot-width='phone'] .cot-touch .fire{width:82px;height:82px}
+body[data-cot-width='compact'] .cot-touch .scope,
+body[data-cot-width='phone'] .cot-touch .scope{right:112px;width:54px;height:54px}
+body[data-cot-width='compact'] .cot-touch .autoaim,
+body[data-cot-width='phone'] .cot-touch .autoaim{right:172px;width:54px;height:54px}
+body[data-cot-width='compact'] .cot-touch .fire.alt,
+body[data-cot-width='phone'] .cot-touch .fire.alt{left:137px;bottom:136px;width:56px;height:56px}
+body.cot-touch-layout[data-cot-width='compact'] .cot-cons,
+body.cot-touch-layout[data-cot-width='phone'] .cot-cons{bottom:calc(max(22px,env(safe-area-inset-bottom)) + 110px)}
+body.cot-touch-layout[data-cot-width='compact'] .cot-special,
+body.cot-touch-layout[data-cot-width='phone'] .cot-special{
+  right:108px;width:56px;min-width:56px;height:56px;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 98px);
+}
+body.cot-touch-layout[data-cot-width='compact'] .cot-minimap,
+body.cot-touch-layout[data-cot-width='phone'] .cot-minimap{width:calc(92px * var(--mm-k,1))!important;height:calc(92px * var(--mm-k,1))!important}
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-touch .mobile-chrome{top:calc(max(8px,env(safe-area-inset-top)) + 48px)}
+body.cot-touch-layout[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-minimap{
+  top:calc(max(8px,env(safe-area-inset-top)) + 100px);
+}
+body.cot-touch-layout[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-si-toasthost{
+  top:calc(max(8px,env(safe-area-inset-top)) + 208px);
+}
+body.cot-touch-layout[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-net{
+  top:calc(max(8px,env(safe-area-inset-top)) + 100px);
+  left:calc(max(8px,env(safe-area-inset-left)) + 100px);
+}
+body.cot-touch-layout[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-killfeed{top:calc(max(4px,env(safe-area-inset-top)) + 130px)}
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-touch .autoaim,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-touch .autoaim{bottom:105px}
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-touch .fire.alt,
+/* (20 px higher, so its FIRE label clears AUTO AIM under it) */
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-touch .fire.alt{bottom:180px}
+
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .joy{width:100px;height:100px}
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .arrow.u,
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .arrow.d{left:42px}
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .arrow.l,
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .arrow.r{top:39px}
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .autoaim{right:152px}
+body.cot-touch-layout[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-special{right:96px}
+body[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-touch .fire.alt{left:108px}
+body.cot-touch-layout[data-cot-width-density='narrow'][data-cot-orientation='portrait'] .cot-drive{
+  left:max(12px,env(safe-area-inset-left));bottom:calc(max(22px,env(safe-area-inset-bottom)) + 128px);transform:scale(.7);
+}
+
+body.cot-touch-layout[data-cot-height='short'] .cot-cons{flex-direction:row;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 110px)}
+body.cot-touch-layout[data-cot-height='short'] .cot-shells{bottom:calc(max(22px,env(safe-area-inset-bottom)) + 168px)}
+body.cot-touch-layout[data-cot-height='short'] .cot-special{right:174px;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 110px)}
+
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .joy{
+  left:max(12px,env(safe-area-inset-left));bottom:max(24px,env(safe-area-inset-bottom));width:120px;height:120px;
+}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .knob{width:50px;height:50px;margin:-25px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .arrow.u{left:52px;top:7px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .arrow.d{left:52px;bottom:7px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .arrow.l{left:8px;top:49px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .arrow.r{right:8px;top:49px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .fire{
+  right:max(14px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:82px;height:82px;
+}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .fire svg{width:29px;height:46px}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .scope{
+  right:max(108px,calc(env(safe-area-inset-right) + 108px));bottom:max(39px,calc(env(safe-area-inset-bottom) + 39px));width:54px;height:54px;
+}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .autoaim{
+  right:max(170px,calc(env(safe-area-inset-right) + 170px));bottom:max(39px,calc(env(safe-area-inset-bottom) + 39px));width:54px;height:54px;
+}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .fire.alt{
+  left:max(140px,calc(env(safe-area-inset-left) + 140px));bottom:max(150px,calc(env(safe-area-inset-bottom) + 150px));width:56px;height:56px;
+}
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .fire .lb,
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .scope .lb,
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch .autoaim .lb{bottom:-15px;font-size:var(--battle-fs-11)}
+/* (the scope's and auto-aim's words share the fire button's line: their buttons stand 9 px higher, gauntlet r2) */
+body[data-cot-height='short'][data-cot-orientation='landscape'] .cot-touch :is(.scope,.autoaim) .lb{bottom:-24px}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-drive{
+  left:max(140px,calc(env(safe-area-inset-left) + 140px));bottom:max(18px,env(safe-area-inset-bottom));transform:scale(.72);
+}
+/* (its large step stops 8 px short of the score, left of it: the Horde's wider plate met its grid at 568x320, the layout
+   receipt; battleHudLayout.ts --hud-score-left) */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-minimap{width:min(calc(106px * var(--mm-k,1)),calc(var(--hud-score-left,100vw) - 20px))!important;height:min(calc(106px * var(--mm-k,1)),calc(var(--hud-score-left,100vw) - 20px))!important}
+/* The centre line (owner 2026-10-22: "a bunch of ui elements ... are not centered in screen"): a centred element stays on
+   the viewport's centre and narrows by the wider corner's reserve on both sides where a corner panel would reach it, never
+   shifts off the line. On a short landscape phone the toolbar's corner plate (158 px, hung from the corner) is that corner:
+   the score plate keeps 6 px from it at 568 px wide (240 px), 294 px where it fits (it was biased 18 px left). */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-top{
+  left:50%;max-width:calc(100vw - 2 * (env(safe-area-inset-right) + 164px));padding:4px 22px 5px;
+  /* (as tall as the toolbar's corner plate beside it, the top row's plates on one foot: 36 against 48, gauntlet r7) */
+  min-height:48px;box-sizing:border-box;
+}
+/* (the Horde's plate there drops its two hidden gauges for a wider gap: their held places ran WAVE and LEFT into the
+   plate's slants at 568x256, gauntlet r8) */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-top:has(.fg.wave){column-gap:14px}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-top:has(.fg.wave) .sc .bar{display:none}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-net{
+  top:calc(max(8px,env(safe-area-inset-top)) + 50px);left:auto;right:max(10px,env(safe-area-inset-right));
+}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-shells{
+  right:max(14px,env(safe-area-inset-right));bottom:calc(max(28px,env(safe-area-inset-bottom)) + 274px);gap:var(--s1);width:52px;height:48px;
+}
+/* (52 px wide as the portrait rail's, so a six-letter code clears both borders in zh too, gauntlet r4) */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-shell{width:52px;height:48px}
+/* a 48 px tall slot draws its shell smaller, so the tip stays clear of the top edge (critic r4b) and 3 px from the corner
+   count, standing 1 px higher so its foot keeps 3 px from the label (r6: 2.7 px to the count) */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-shell:not(.wide) canvas{bottom:12px;transform:translateX(-50%);--shell-k:.64}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-cons{
+  right:max(14px,env(safe-area-inset-right));bottom:calc(max(28px,env(safe-area-inset-bottom)) + 112px);gap:7px;
+}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-con{width:48px;height:48px}
+/* (its glyph 3 px up and left of the centre, so the corner's count keeps 2 px off it: the ∞ sat on the medkit's corner at
+   568x256, and over zh's larger glyph, gauntlet r10) */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-con svg{width:18px;height:18px;transform:translate(-3px,-3px)}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-special{
+  right:108px;bottom:calc(max(28px,env(safe-area-inset-bottom)) + 102px);width:56px;min-width:56px;height:56px;
+}
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-dp{
+  left:max(218px,calc(env(safe-area-inset-left) + 218px));bottom:max(7px,env(safe-area-inset-bottom));
+  transform:scale(.54);transform-origin:left bottom;
+}
+/* At handset landscape heights the center stack has three independent
+   signals: detection, transient system status, and physical muzzle warning.
+   The shared measured layout places them; cap alert width to keep the center lane clear. */
+body.cot-touch-layout[data-cot-height='short'][data-cot-orientation='landscape'] .cot-alert{
+  bottom:auto;max-width:180px;
+}
+
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .joy{width:108px;height:108px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .knob{width:46px;height:46px;margin:-23px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .arrow.u,
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .arrow.d{left:46px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .arrow.l,
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .arrow.r{top:43px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .fire{width:76px;height:76px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .scope{right:max(100px,calc(env(safe-area-inset-right) + 100px));width:50px;height:50px}
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .autoaim{right:max(158px,calc(env(safe-area-inset-right) + 158px));width:50px;height:50px}
+body.cot-touch-layout[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-drive{
+  left:max(126px,calc(env(safe-area-inset-left) + 126px));transform:scale(.68);
+}
+/* (the second FIRE over the dial's centre: 126 px and half its 73 px, less the button's 28; at 140 it stood 5 px right of
+   it at 844x390, gauntlet r17) */
+body[data-cot-height-density='tight'][data-cot-orientation='landscape'] .cot-touch .fire.alt{left:max(134px,calc(env(safe-area-inset-left) + 134px))}
+/* (every touch dial drops its unit and end marks: touchControls.ts) */
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-minimap{width:calc(92px * var(--mm-k,1))!important;height:calc(92px * var(--mm-k,1))!important}
+/* touchControls is battle-lazy and injects its base placement after this
+   stylesheet. These tight-height positions are deliberate cascade endpoints. */
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-cons{flex-direction:row;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 94px)!important}
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-shells{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 150px)!important}
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-special{right:160px;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 94px)!important}
+
+/* The portrait scope action shares the auto-aim row. Leaving it on the fire
+   row put its label over the canonical bottom-center health instrument. */
+body.cot-touch-layout[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-touch .scope,
+body.cot-touch-layout[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-touch .scope{
+  bottom:105px;
+}
+
+/* ROOM CHAT -------------------------------------------------------------- */
+body[data-cot-height='compact'] .cot-room-chat,
+body[data-cot-height='short'] .cot-room-chat{top:50%}
+body[data-cot-width='compact'] .cot-room-chat,
+body[data-cot-width='phone'] .cot-room-chat{
+  top:clamp(340px,calc(50% + 20px),calc(var(--cot-viewport-height,100dvh) - 80px));bottom:auto;width:min(360px,44vw);min-width:220px;
+}
+body.cot-touch-layout[data-cot-width='compact'] .cot-room-chat,
+body.cot-touch-layout[data-cot-width='phone'] .cot-room-chat{top:180px}
+
+/* KILL CAM --------------------------------------------------------------- */
+body[data-cot-width='tablet'] .cot-kc-annot{left:var(--cot-edge);width:290px}
+body[data-cot-width='tablet'] .cot-kc-killer{right:var(--cot-edge);width:260px}
+body[data-cot-width='compact'] .cot-kc-title,
+body[data-cot-width='phone'] .cot-kc-title{top:max(6px,env(safe-area-inset-top));min-width:0;width:min(280px,calc(100vw - 20px))}
+body[data-cot-width='compact'] .cot-kc-annot,
+body[data-cot-width='phone'] .cot-kc-annot{left:var(--cot-edge);width:min(280px,calc(100vw - (var(--cot-edge) * 2)))}
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-kc-killer,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-kc-killer{
+  top:max(66px,calc(env(safe-area-inset-top) + 58px));right:var(--cot-edge);bottom:auto;
+  width:min(360px,calc(100vw - (var(--cot-edge) * 2)));
+}
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-kc-annot,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-kc-annot{
+  bottom:max(48px,calc(env(safe-area-inset-bottom) + 34px));
+  width:min(360px,calc(100vw - (var(--cot-edge) * 2)));
+}
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-kc-killer,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-kc-killer,
+body[data-cot-width='compact'][data-cot-orientation='portrait'] .cot-kc-annot,
+body[data-cot-width='phone'][data-cot-orientation='portrait'] .cot-kc-annot{max-height:calc(31dvh - 12px);overflow:hidden}
+body[data-cot-height='short'] .cot-kc-annot{
+  left:var(--cot-edge);bottom:38px;width:min(200px,35vw);max-height:calc(var(--cot-viewport-height,100dvh) - 82px);overflow:hidden;
+  background:linear-gradient(145deg,var(--hud-plate),var(--hud-plate));
+}
+body[data-cot-height='short'] .cot-kc-killer{
+  right:var(--cot-edge);top:auto;bottom:38px;width:min(188px,33vw);max-height:calc(var(--cot-viewport-height,100dvh) - 82px);overflow:hidden;
+  background:linear-gradient(145deg,var(--hud-plate),var(--hud-plate));
+}
+body[data-cot-width='compact'] .cot-kc-title,
+body[data-cot-width='phone'] .cot-kc-title{padding-inline:18px}
+body[data-cot-width='compact'] .cot-kc-title .t,
+body[data-cot-width='phone'] .cot-kc-title .t{font-size:var(--battle-fs-13);letter-spacing:.34em}
+body[data-cot-width='compact'] .cot-kc-title .s,
+body[data-cot-width='phone'] .cot-kc-title .s{font-size:var(--battle-fs-11)}
+body[data-cot-width='compact'] .cot-kc-skip,
+body[data-cot-width='phone'] .cot-kc-skip{right:var(--cot-edge);bottom:10px}
+body[data-cot-width='compact'] .cot-kc-label,
+body[data-cot-width='phone'] .cot-kc-label{font-size:var(--battle-fs-11);padding:3px 6px var(--s1)}
+body[data-cot-width='compact'] .cot-kc-label .s,
+body[data-cot-width='phone'] .cot-kc-label .s{font-size:var(--battle-fs-11)}
+body[data-cot-width='compact'] .cot-kc-dmg,
+body[data-cot-width='phone'] .cot-kc-dmg{font-size:var(--battle-fs-20);padding:3px 7px var(--s1)}
+body[data-cot-height='short'] .cot-kc-title{top:4px;min-width:280px;padding-block:5px 6px}
+body[data-cot-height='short'] .cot-kc-skip{bottom:8px}
+body[data-cot-height='short'] .cot-kc-annot{padding-bottom:5px}
+body[data-cot-height='short'] .cot-kc-annot .hd{padding:var(--s1) 7px}
+body[data-cot-height='short'] .cot-kc-annot .hd .m{display:none}
+body[data-cot-height='short'] .cot-kc-annot .shellrow{gap:var(--s1)}
+body[data-cot-height='short'] .cot-kc-annot .hd .k{font-size:var(--battle-fs-11);line-height:1.12}
+body[data-cot-height='short'] .cot-kc-annot .hd .w{font-size:var(--battle-fs-11);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body[data-cot-height='short'] .cot-kc-rows{padding:var(--s1) 7px 0;gap:1px 7px}
+body[data-cot-height='short'] .cot-kc-kv{gap:var(--s1);font-size:var(--battle-fs-11);line-height:1.2;min-width:0}
+body[data-cot-height='short'] .cot-kc-kv>span{gap:3px;min-width:0}
+body[data-cot-height='short'] .cot-kc-kv b{white-space:nowrap}
+body[data-cot-height='short'] .cot-kc-pencap{display:none}
+body[data-cot-height='short'] .cot-kc-banner{margin:var(--s1) 7px 0}
+body[data-cot-height='short'] .cot-kc-killer{padding:0 7px 6px}
+body[data-cot-height='short'] .cot-kc-killer .kk{padding:5px 0 var(--s1);font-size:var(--battle-fs-11)}
+body[data-cot-height='short'] .cot-kc-killer .nm{margin-top:var(--s1);font-size:var(--battle-fs-12);gap:5px}
+body[data-cot-height='short'] .cot-kc-killer .nm .sil{width:42px;height:20px}
+body[data-cot-height='short'] .cot-kc-killer .rows{margin-top:var(--s1);padding-top:var(--s1);gap:1px 7px}
+body[data-cot-height='short'] .cot-kc-killer .kv{font-size:var(--battle-fs-11);gap:3px;min-width:0}
+body[data-cot-height='short'] .cot-kc-killer .kv b{white-space:nowrap}
+body[data-cot-height='short'] .cot-kc-micro,
+body[data-cot-height='short'] .cot-kc-label.nm{display:none!important}
+body[data-cot-height='compact'][data-cot-orientation='portrait'] .cot-kc-micro,
+body[data-cot-height='compact'][data-cot-orientation='portrait'] .cot-kc-label.nm{display:none!important}
+
+/* TRANSIENT / RECOVERY SURFACES ----------------------------------------- */
+body[data-cot-width] .cot-trans{box-sizing:border-box;padding:var(--cot-edge)}
+body[data-cot-width] .cot-trans .core{width:min(680px,100%);max-width:100%}
+body[data-cot-width] .cot-trans .title,
+body[data-cot-width] .cot-trans .sub,
+body[data-cot-width] .cot-trans .kick{
+  box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;line-height:1.12;
+}
+body[data-cot-width] .cot-trans .meter{width:min(400px,100%)}
+body[data-cot-width='compact'] .cot-trans .title,
+body[data-cot-width='phone'] .cot-trans .title{
+  font-size:clamp(20px,7vw,32px);letter-spacing:.1em;text-indent:.1em;
+}
+body[data-cot-width='compact'] .cot-trans .kick,
+body[data-cot-width='phone'] .cot-trans .kick{font-size:max(var(--fs-floor-11),var(--fs-11));letter-spacing:.16em;text-indent:.26em}
+body[data-cot-width='compact'] .cot-trans .sub,
+body[data-cot-width='phone'] .cot-trans .sub{font-size:max(var(--fs-floor-11),var(--fs-11));letter-spacing:.07em;text-indent:.14em}
+body[data-cot-height='short'] .cot-trans .mark{width:36px;height:36px}
+body[data-cot-height='short'] .cot-trans .kick{margin-top:8px}
+body[data-cot-height='short'] .cot-trans .title{margin-top:6px;font-size:clamp(19px,6vh,28px)}
+body[data-cot-height='short'] .cot-trans .sub{margin-top:5px}
+body[data-cot-height='short'] .cot-trans .meter{margin-top:17px}
+
+body[data-cot-width] .cot-resume{
+  box-sizing:border-box;padding:var(--cot-edge);text-align:center;
+}
+body[data-cot-width] .cot-resume .rz-plate{box-sizing:border-box;max-width:100%}
+body[data-cot-width] .cot-resume .rz-title{max-width:100%;overflow-wrap:anywhere;line-height:1.1}
+body[data-cot-width='compact'] .cot-resume .rz-plate,
+body[data-cot-width='phone'] .cot-resume .rz-plate{width:100%;padding:var(--s5) var(--s4);gap:var(--s4)}
+body[data-cot-width='compact'] .cot-resume .rz-title,
+body[data-cot-width='phone'] .cot-resume .rz-title{font-size:var(--fs-24)}
+body[data-cot-width='phone'] .cot-resume .rz-actions{display:grid;grid-template-columns:1fr;justify-self:stretch;width:100%}
+body[data-cot-width='phone'] .cot-resume .rz-actions>.cot-c-btn{width:100%}
+/* (a short landscape's plate fits its two buttons side by side, its padding the plate's own: at the window's width it left
+   84 px of empty plate either side of them at 568x256, gauntlet r13) */
+body[data-cot-height='short'] .cot-resume .rz-plate{width:auto;padding:var(--s4) var(--s5);gap:var(--s3)}
+
+body[data-cot-width] .cot-hints{
+  box-sizing:border-box;max-width:min(var(--hud-hints-width,100vw),calc(100vw - (var(--cot-edge) * 2)));justify-content:center;
+  flex-wrap:wrap;white-space:normal;
+}
+body[data-cot-width] .cot-hints .hg{white-space:nowrap}
+body[data-cot-width='compact'] .cot-hints,
+body[data-cot-width='phone'] .cot-hints{
+  gap:var(--s2) var(--s3);padding:6px 9px;
+  font-size:11px;letter-spacing:.01em;
+}
+body[data-cot-width='compact'] .cot-hints kbd,
+body[data-cot-width='phone'] .cot-hints kbd{min-width:20px;height:20px;padding:0 4px;font-size:max(var(--fs-floor-11),var(--fs-11))}
+body[data-cot-height='short'] .cot-hints{display:none!important}
+body[data-cot-panels='overlay']>.cot-gear{
+  top:max(12px,calc(env(safe-area-inset-top) + 8px));right:max(12px,calc(env(safe-area-inset-right) + 8px));
+  width:44px;height:44px;min-height:44px;
+}
+
+/* Opt-in engineering panels remain operable on the device being diagnosed. */
+body[data-cot-width='compact'] #cot-perfhud,
+body[data-cot-width='phone'] #cot-perfhud{
+  top:auto!important;bottom:max(8px,env(safe-area-inset-bottom))!important;
+  right:max(8px,env(safe-area-inset-right))!important;
+  left:max(8px,env(safe-area-inset-left))!important;width:auto!important;
+  max-height:64dvh!important;font-size:11px!important;
+  z-index:70!important;pointer-events:auto!important;touch-action:pan-y;overscroll-behavior:contain;
+}
+body[data-cot-width='compact'] #cot-perfhud:not(.mobile-expanded),
+body[data-cot-width='phone'] #cot-perfhud:not(.mobile-expanded){max-height:52px!important;overflow:hidden!important}
+body[data-cot-width='compact'] #cot-perfhud:not(.mobile-expanded) [data-grid],
+body[data-cot-width='phone'] #cot-perfhud:not(.mobile-expanded) [data-grid]{display:none!important}
+body[data-cot-width='compact'] #cot-perfhud .ph-mobile-toggle,
+body[data-cot-width='phone'] #cot-perfhud .ph-mobile-toggle{display:grid}
+body[data-cot-width='phone'] #cot-perfhud [data-grid]{grid-template-columns:1fr!important}
+body[data-cot-width='compact'] #cot-diag,
+body[data-cot-width='phone'] #cot-diag{
+  left:max(8px,env(safe-area-inset-left))!important;right:max(8px,env(safe-area-inset-right))!important;
+  bottom:max(8px,env(safe-area-inset-bottom))!important;width:auto!important;
+  max-height:62dvh!important;overflow:auto!important;font-size:11px!important;
+}
+
+body[data-cot-width] #cot-ctxlost{box-sizing:border-box;padding:var(--cot-edge)!important}
+body[data-cot-width] #cot-ctxlost>div{box-sizing:border-box;width:min(520px,100%)!important;max-width:100%!important}
+body[data-cot-width='compact'] #cot-ctxlost h2,
+body[data-cot-width='phone'] #cot-ctxlost h2{
+  font-size:clamp(16px,5.8vw,22px)!important;line-height:1.2!important;
+  overflow-wrap:anywhere;
+}
+body[data-cot-width='compact'] #cot-ctxlost-reload,
+body[data-cot-width='phone'] #cot-ctxlost-reload{max-width:100%;height:auto;min-height:var(--h);padding-block:var(--s2);white-space:normal}
+
+/* COARSE INPUT GEOMETRY -------------------------------------------------- */
+body[data-cot-input='coarse'] .cot-play button,
+body[data-cot-input='coarse'] .cot-play input,
+body[data-cot-input='coarse'] .cot-play .menu-select-trigger,
+body[data-cot-input='coarse'] .cot-play .menu-select-option{min-height:44px}
+/* the room's segmented settings are 44 px like its triggers, as Settings' are: the options sit inside the track's 3 px
+   inset and their hit areas reach its edge (a 50 px track put the foot's labels 6 px apart, Rooms r28) */
+body[data-cot-input='coarse'] .cot-play :is(.modes,.create-size,.room-size,.room-team,.sides-seg,.brain-seg) .cot-c-seg__opt{
+  position:relative;min-height:0;height:calc(var(--cot-control-floor) - 6px)}
+body[data-cot-input='coarse'] .cot-play .brain-allies .cot-c-toggle{min-height:var(--cot-control-floor)}
+body[data-cot-input='coarse'] .cot-play :is(.modes,.create-size,.room-size,.room-team,.sides-seg,.brain-seg) .cot-c-seg__opt::before{
+  content:'';position:absolute;inset:-3px 0}
+
+@media (prefers-reduced-motion:reduce){
+  body[data-cot-width] .cot-play *,body[data-cot-width] .cot-es *,body[data-cot-width] .cot-studio *{
+    scroll-behavior:auto!important;
+  }
+}
+}

@@ -1,0 +1,913 @@
+/* ==========================================================================
+   STARFALL — UI PANEL CHROME
+   Owned by src/ui/build.ts and src/ui/tactical.ts. `src/style.css` owns the
+   document shell and the `.sf-panel > .sf-in` primitive; everything here is
+   namespaced `sf-` and scoped to the panels so the two files can never fight
+   over a selector.
+
+   Look: etched glass over vacuum. Thin cyan rules, condensed uppercase type,
+   monospaced numerals, no rounded-corner "app" softness. Colour is reserved for
+   state — resources, warnings, team paint — never for decoration.
+
+   ROUND-1 CRITIQUE FIXES (verify/critique-round1.json, axis "ui"):
+
+     [C1] The `.sf-tile-reason` full-bleed "NEEDS STRIKE CRAFT D." overlay is
+          DELETED. Locked state is now carried by treatment — dimmed and
+          desaturated silhouette, a diagonal hatch wash, a lock badge, a dropped
+          cost — with the requirement text living in the inspector line and the
+          tooltip. Soft blocks (money / supply / queue) keep the tile at full
+          strength and only recolour the cost, because reviewer 2 asked us to
+          "pick one" rather than ship a half-dimmed mush.
+
+     [C2] Research nodes are 34 u tall with 11 u type, edges are orthogonal
+          hairlines with chevron heads, and the active project carries a
+          marching-ants ring. The graph scrolls rather than scaling down, so the
+          type size is independent of how much vertical room is left.
+
+     [C4] Screen inset reads `--sf-inset` (owned by style.css / hud.ts) so the
+          build panel, the minimap and the command bar share one gutter. Sizes
+          are fluid clamps against the viewport, not fixed px, so 1280x720 and
+          2560x1440 both read.
+
+     [C5] The queue gained a lead-job bar (name / percent / ETA), an explicit
+          CANCEL hint, and rally moved to two rows so the coordinate stops
+          ellipsising to "17.9k …".
+   ========================================================================== */
+
+.sf-panel {
+  --sf-accent: #5fd0ff;
+  --sf-font: 'Rajdhani', 'Eurostile', 'DIN Alternate', 'Roboto Condensed', system-ui, sans-serif;
+  --sf-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  --sf-bg: rgba(6, 11, 18, 0.82);
+  --sf-line: rgba(130, 190, 235, 0.24);
+  --sf-line-hot: rgba(150, 215, 255, 0.62);
+  --sf-text: #cfe4f5;
+  --sf-dim: #7d95ab;
+  --sf-good: #57e0a0;
+  --sf-warn: #ffc65c;
+  --sf-bad: #ff6b5a;
+  --sf-res: #9fe8ff;
+
+  /* Shared HUD gutter. style.css/hud.ts own `--sf-inset`; these are fallbacks
+     so the panel is still correctly placed if it is loaded standalone. [C4] */
+  --sf-gutter: var(--sf-inset, var(--s3, 16px));
+
+  font-family: var(--sf-font);
+  color: var(--sf-text);
+  /* Left at the historic fixed value on purpose: `.sf-panel` is also the
+     primitive every hud.ts panel is built on, and that file is owned by
+     another module. Fluid sizing is applied on `.sf-build` below, where it
+     only affects the panel this file actually owns. [C4] */
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* --------------------------------------------------------------------------
+   BUILD PANEL
+   -------------------------------------------------------------------------- */
+
+.sf-build {
+  position: absolute;
+  left: var(--sf-gutter);
+  bottom: var(--sf-gutter);
+  width: clamp(340px, 21vw, 470px);
+  font-size: clamp(11px, 0.63vw, 17px);
+  pointer-events: auto;
+  z-index: 30;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* `.sf-panel > .sf-in` from style.css paints the fill and inherits the chamfer.
+   The gradient is repeated here as a fallback so the build panel is never a
+   transparent hole if the token is missing. */
+.sf-build-in {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 11px 11px 13px;
+  /* Hard cap so the panel can never own the whole left edge of a short screen.
+     Combined with `min-height: 0` on the research section this makes the DAG
+     the thing that gives way on a viewport too short for everything, and it
+     gives way by SCROLLING rather than by scaling its type into
+     illegibility — the graph keeps its authored 11 u labels at every size.
+     At 1280x720 the whole tree still fits without scrolling. [C2][C4] */
+  /* Second cap, tighter than the one above and for a different reason: the
+     panel is bottom-anchored, so a tall one grows UP across the middle of the
+     play area. At 1600x900 it reached y=200 and swallowed right-clicks — a
+     right-click there hit a build tile and silently issued no order, which is
+     the reported "once selected I cannot right-click for more actions". The
+     panel may own the bottom-left corner; it may not own the upper-left sky. */
+  max-height: min(calc(100vh - 2 * var(--sf-gutter)), 66vh);
+  background: var(--panel-fill, linear-gradient(
+    170deg,
+    rgba(11, 19, 29, 0.72) 0%,
+    rgba(6, 11, 18, 0.80) 55%,
+    rgba(4, 8, 13, 0.87) 100%
+  ));
+  overflow: hidden;
+}
+
+/* [C4] "The production panel's cyan left accent rule stops partway down the
+   panel instead of running its full height." It now runs the full clipped
+   height, inside the clip so the chamfer eats it correctly. */
+.sf-build-in::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--sf-accent) 0%,
+    color-mix(in srgb, var(--sf-accent) 55%, transparent) 68%,
+    color-mix(in srgb, var(--sf-accent) 20%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.sf-build.is-idle { opacity: 0.74; }
+
+.sf-build-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sf-line);
+  padding-bottom: 5px;
+}
+
+.sf-build-title {
+  font-size: clamp(11px, 0.6vw, 16px);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--sf-accent);
+}
+
+.sf-build-econ {
+  font-family: var(--sf-mono);
+  font-size: clamp(10px, 0.55vw, 15px);
+  color: var(--sf-text);
+  display: flex;
+  gap: 6px;
+}
+
+.sf-econ-res { color: var(--sf-res); }
+.sf-econ-sep { color: var(--sf-dim); }
+
+.sf-build-producer {
+  margin-top: 5px;
+  font-size: clamp(10px, 0.53vw, 14px);
+  letter-spacing: 0.16em;
+  color: var(--sf-dim);
+}
+
+/* ---- build grid ---------------------------------------------------------- */
+
+.sf-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--sf-cols, 4), minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 7px;
+}
+
+/* Twelve tiles at four across is three rows; on a short screen that pushes the
+   research graph off the bottom, so go six across and lose a row instead of
+   shrinking the type everywhere. */
+@media (max-height: 880px) {
+  .sf-build { --sf-cols: 6; }
+}
+
+.sf-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: linear-gradient(160deg, rgba(30, 48, 66, 0.50), rgba(9, 16, 25, 0.78));
+  border: 1px solid var(--sf-line);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 90ms linear, transform 90ms ease-out, background 90ms linear;
+}
+
+.sf-tile::after {
+  /* Corner notch — reads as machined hardware rather than a web button. */
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  background: rgba(6, 11, 18, 0.95);
+  transform: rotate(45deg);
+  border-bottom: 1px solid var(--sf-line);
+}
+
+.sf-tile:hover {
+  border-color: var(--sf-line-hot);
+  background: linear-gradient(160deg, rgba(46, 78, 106, 0.62), rgba(12, 22, 34, 0.82));
+  transform: translateY(-1px);
+}
+
+.sf-tile:active { transform: translateY(0); }
+
+.sf-tile-icon {
+  position: absolute;
+  left: 50%;
+  top: 51%;
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* [C1] "the class codes sit on the thumbnail with no backing plate and are
+   partly occluded by the silhouette on the COL tile" — chamfered plate. */
+.sf-tile-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 5px 1px 4px;
+  font-family: var(--sf-mono);
+  font-size: clamp(8px, 0.42vw, 12px);
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  color: var(--sf-text);
+  background: rgba(4, 8, 14, 0.88);
+  border-right: 1px solid var(--sf-line);
+  border-bottom: 1px solid var(--sf-line);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  pointer-events: none;
+}
+
+.sf-tile-cost {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  padding: 0 2px;
+  font-family: var(--sf-mono);
+  font-size: clamp(9px, 0.47vw, 13px);
+  color: var(--sf-res);
+  text-shadow: 0 0 6px rgba(6, 11, 18, 0.95), 0 1px 2px rgba(6, 11, 18, 0.95);
+  pointer-events: none;
+}
+
+/* ---- locked state: treatment, not a wall of text  [C1] ------------------- */
+
+/* Hard research lock. */
+.sf-tile.is-gated { cursor: not-allowed; }
+.sf-tile.is-gated:hover { transform: none; border-color: var(--sf-line); background: linear-gradient(160deg, rgba(30, 48, 66, 0.50), rgba(9, 16, 25, 0.78)); }
+.sf-tile.is-gated .sf-tile-icon { filter: grayscale(1) brightness(0.52) contrast(0.95); opacity: 0.55; }
+.sf-tile.is-gated .sf-tile-tag { color: rgba(125, 149, 171, 0.55); }
+.sf-tile.is-gated .sf-tile-cost { display: none; }
+
+.sf-tile.is-gated::before {
+  /* Diagonal hatch wash: says "not available" without spending any type. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(130, 190, 235, 0.00) 0 6px,
+    rgba(130, 190, 235, 0.055) 6px 7px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sf-tile-lock {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: clamp(10px, 0.56vw, 15px);
+  height: auto;
+  display: none;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sf-tile.is-gated .sf-tile-lock { display: block; }
+.sf-lock-shackle { fill: none; stroke: rgba(190, 214, 234, 0.80); stroke-width: 1.5; }
+.sf-lock-body { fill: rgba(190, 214, 234, 0.80); }
+
+/* Soft block — can afford it later. Frame and thumbnail stay at full strength;
+   only the number changes, plus a warning rule along the foot. */
+.sf-tile.is-short { box-shadow: inset 0 -2px 0 0 rgba(255, 198, 92, 0.55); }
+.sf-tile.is-short .sf-tile-cost { color: var(--sf-warn); }
+
+/* ---- detail readout ------------------------------------------------------ */
+
+.sf-detail {
+  margin-top: 7px;
+  padding: 5px 8px 6px;
+  border: 1px solid var(--sf-line);
+  border-left: 2px solid rgba(130, 190, 235, 0.5);
+  background: rgba(8, 14, 22, 0.55);
+}
+
+.sf-detail-name {
+  font-size: clamp(12px, 0.66vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.sf-detail-stats {
+  margin-top: 1px;
+  font-family: var(--sf-mono);
+  font-size: clamp(9px, 0.48vw, 13px);
+  color: var(--sf-dim);
+}
+
+.sf-detail-note {
+  margin-top: 2px;
+  font-size: clamp(10px, 0.5vw, 14px);
+  letter-spacing: 0.10em;
+  color: var(--sf-good);
+}
+
+.sf-detail-note.is-bad { color: var(--sf-warn); }
+
+/* ---- sections ------------------------------------------------------------ */
+
+.sf-section { margin-top: 9px; }
+
+.sf-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sf-line);
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+}
+
+.sf-section-head .sf-section-label {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.sf-section-label {
+  font-size: clamp(9px, 0.45vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--sf-dim);
+  border-bottom: 1px solid var(--sf-line);
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+}
+
+/* [C5] The cancel affordance, stated instead of discovered. */
+.sf-section-hint {
+  font-size: clamp(8px, 0.4vw, 11px);
+  letter-spacing: 0.18em;
+  color: rgba(125, 149, 171, 0.65);
+}
+
+/* ---- build queue --------------------------------------------------------- */
+
+/* [C5] Lead-job readout. The arcs communicate ORDER well and duration badly;
+   this line answers "what is on the line and how long". */
+.sf-lead { margin-bottom: 6px; }
+
+.sf-lead-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sf-lead-name {
+  font-size: clamp(10px, 0.52vw, 14px);
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  color: var(--sf-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-lead-eta {
+  font-family: var(--sf-mono);
+  font-size: clamp(9px, 0.47vw, 13px);
+  color: var(--sf-res);
+  white-space: nowrap;
+}
+
+.sf-lead-bar {
+  position: relative;
+  height: 3px;
+  margin-top: 3px;
+  background: rgba(130, 190, 235, 0.14);
+  overflow: hidden;
+}
+
+.sf-lead-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--sf-accent);
+  box-shadow: 0 0 8px rgba(95, 208, 255, 0.65);
+  transition: width 120ms linear;
+}
+
+.sf-lead.is-idle .sf-lead-name { color: rgba(125, 149, 171, 0.6); letter-spacing: 0.2em; }
+.sf-lead.is-idle .sf-lead-bar { opacity: 0.4; }
+
+.sf-queue {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding-bottom: 11px;
+}
+
+/* An idle line should not reserve a slot strip it is not using — that dead
+   band was costing the research graph 50 px of the panel. */
+.sf-queue.is-empty {
+  min-height: 0;
+  padding-bottom: 0;
+}
+
+.sf-slot {
+  position: relative;
+  width: clamp(32px, 1.85vw, 46px);
+  height: clamp(32px, 1.85vw, 46px);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.sf-slot:hover .sf-arc-track { stroke: rgba(255, 107, 90, 0.55); }
+.sf-slot:hover::after {
+  content: '✕';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: clamp(13px, 0.7vw, 18px);
+  color: var(--sf-bad);
+  background: rgba(6, 11, 18, 0.78);
+  border-radius: 50%;
+}
+
+.sf-slot-arc {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.sf-arc-track {
+  fill: none;
+  stroke: rgba(130, 190, 235, 0.18);
+  stroke-width: 2.4;
+}
+
+.sf-arc-fill {
+  fill: none;
+  stroke: var(--sf-accent);
+  stroke-width: 2.4;
+  stroke-linecap: butt;
+  filter: drop-shadow(0 0 3px rgba(95, 208, 255, 0.7));
+  transition: stroke-dashoffset 90ms linear;
+}
+
+/* The head of the line gets a brighter ring so "next out of the hangar" is
+   visible without reading the labels. */
+.sf-slot:first-child .sf-arc-fill { stroke-width: 3.2; }
+
+.sf-slot-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.sf-slot-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  text-align: center;
+  font-family: var(--sf-mono);
+  font-size: clamp(8px, 0.4vw, 11px);
+  color: var(--sf-dim);
+  pointer-events: none;
+}
+
+.sf-queue-more {
+  font-family: var(--sf-mono);
+  font-size: clamp(10px, 0.52vw, 14px);
+  color: var(--sf-dim);
+  padding-left: 2px;
+}
+
+/* ---- rally  [C5] --------------------------------------------------------- */
+
+.sf-rally {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--sf-line);
+}
+
+.sf-rally-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sf-rally-gap { flex: 1 1 auto; }
+
+.sf-rally-label {
+  position: relative;
+  padding-left: 11px;
+  font-size: clamp(9px, 0.45vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--sf-dim);
+}
+
+/* State dot: hollow when the rally is unset, lit when it is placed. */
+.sf-rally-label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border: 1px solid var(--sf-dim);
+  background: transparent;
+}
+
+.sf-rally.is-set .sf-rally-label { color: var(--sf-text); }
+.sf-rally.is-set .sf-rally-label::before {
+  border-color: var(--sf-accent);
+  background: var(--sf-accent);
+  box-shadow: 0 0 6px rgba(95, 208, 255, 0.8);
+}
+
+/* Full-width own line, so a three-axis coordinate never ellipsises. */
+.sf-rally-val {
+  margin-top: 3px;
+  font-family: var(--sf-mono);
+  font-size: clamp(9px, 0.47vw, 13px);
+  color: var(--sf-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.sf-rally.is-set .sf-rally-val { color: var(--sf-res); }
+
+.sf-btn {
+  font-family: var(--sf-font);
+  font-size: clamp(9px, 0.45vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--sf-text);
+  background: rgba(20, 38, 55, 0.7);
+  border: 1px solid var(--sf-line);
+  padding: 3px 9px;
+  cursor: pointer;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  transition: background 90ms linear, border-color 90ms linear, color 90ms linear;
+}
+
+.sf-btn:hover {
+  background: rgba(38, 72, 100, 0.85);
+  border-color: var(--sf-line-hot);
+}
+
+.sf-btn:disabled {
+  cursor: default;
+  color: rgba(125, 149, 171, 0.42);
+  background: rgba(16, 26, 38, 0.5);
+  border-color: rgba(130, 190, 235, 0.10);
+}
+
+/* ---- research graph  [C2] ------------------------------------------------ */
+
+.sf-res-active { margin-bottom: 6px; }
+
+.sf-res-active-text {
+  font-family: var(--sf-mono);
+  font-size: clamp(9px, 0.48vw, 13px);
+  color: rgba(125, 149, 171, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-res-active.is-active .sf-res-active-text {
+  color: var(--sf-res);
+  text-shadow: 0 0 8px rgba(60, 160, 220, 0.45);
+}
+
+.sf-res-active-bar {
+  height: 2px;
+  margin-top: 3px;
+  background: rgba(130, 190, 235, 0.14);
+  overflow: hidden;
+}
+
+.sf-res-active-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--sf-accent);
+  box-shadow: 0 0 8px rgba(95, 208, 255, 0.65);
+  transition: width 140ms linear;
+}
+
+/* Scroll rather than scale: the DAG keeps its authored type size whatever the
+   viewport height, which is the whole point of the legibility fix. */
+.sf-research {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Collapsible RESEARCH header. A button, so it is keyboard reachable. */
+.sf-res-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sf-res-head:hover .sf-section-label { color: var(--ui-line-bright, #96d7ff); }
+
+.sf-res-caret {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ui-dim, #97b0c6);
+}
+
+/* Closed: the graph and the in-progress readout are gone entirely, so the
+   section costs one header row instead of a third of the panel. */
+.sf-research.is-closed .sf-res-scroll,
+.sf-research.is-closed .sf-res-active { display: none; }
+
+/* Open, it gets the room it needs — the panel is allowed to be taller while
+   the player is actually reading the tree. */
+.sf-build:has(.sf-research:not(.is-closed)) .sf-build-in {
+  max-height: min(calc(100vh - 2 * var(--sf-gutter)), 84vh);
+}
+
+.sf-res-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: clamp(150px, 34vh, 380px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(130, 190, 235, 0.28) transparent;
+  /* Fade the cut edge so a scrolled-off node reads as "more below" rather than
+     as a node that has been sliced in half by a bug. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - 14px), transparent 100%);
+}
+
+.sf-res-scroll::-webkit-scrollbar { width: 4px; }
+.sf-res-scroll::-webkit-scrollbar-track { background: transparent; }
+.sf-res-scroll::-webkit-scrollbar-thumb { background: rgba(130, 190, 235, 0.28); }
+
+.sf-res-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.sf-res-edge {
+  fill: none;
+  stroke: rgba(130, 190, 235, 0.20);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.sf-res-edge.is-live { stroke: rgba(150, 215, 255, 0.50); }
+.sf-res-edge.is-done { stroke: rgba(87, 224, 160, 0.42); }
+
+.sf-res-head {
+  fill: none;
+  stroke: rgba(130, 190, 235, 0.30);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sf-res-head.is-live { stroke: rgba(150, 215, 255, 0.65); }
+.sf-res-head.is-done { stroke: rgba(87, 224, 160, 0.55); }
+
+.sf-res-node { cursor: pointer; }
+
+.sf-res-box {
+  fill: rgba(9, 17, 26, 0.92);
+  stroke: rgba(130, 190, 235, 0.34);
+  stroke-width: 1;
+}
+
+.sf-res-fill { fill: rgba(95, 208, 255, 0.18); }
+
+.sf-res-ring {
+  fill: none;
+  stroke: var(--sf-accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sf-res-text {
+  font-family: var(--sf-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  fill: #cfe4f5;
+  pointer-events: none;
+}
+
+.sf-res-cost {
+  font-family: var(--sf-mono);
+  font-size: 8.5px;
+  fill: var(--sf-res);
+  pointer-events: none;
+}
+
+.sf-res-node:hover .sf-res-box { stroke: var(--sf-line-hot); }
+
+.sf-res-node.is-locked { cursor: not-allowed; }
+.sf-res-node.is-locked .sf-res-box { stroke: rgba(130, 190, 235, 0.12); fill: rgba(7, 12, 19, 0.9); }
+.sf-res-node.is-locked .sf-res-text { fill: rgba(207, 228, 245, 0.34); }
+.sf-res-node.is-locked .sf-res-cost { fill: rgba(159, 232, 255, 0.26); }
+
+.sf-res-node.is-poor .sf-res-cost { fill: var(--sf-warn); }
+
+/* The active project, unmistakable: bright frame, filled progress, and a
+   marching-ants ring that nothing else in the panel does. */
+.sf-res-node.is-active .sf-res-box {
+  stroke: var(--sf-accent);
+  stroke-width: 1.6;
+}
+.sf-res-node.is-active .sf-res-fill { fill: rgba(95, 208, 255, 0.34); }
+.sf-res-node.is-active .sf-res-text { fill: #ffffff; }
+.sf-res-node.is-active .sf-res-ring {
+  opacity: 0.95;
+  animation: sf-ants 1.4s linear infinite;
+}
+
+@keyframes sf-ants {
+  to { stroke-dashoffset: -18; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-res-node.is-active .sf-res-ring { animation: none; }
+}
+
+.sf-res-node.is-done { cursor: default; }
+.sf-res-node.is-done .sf-res-box { stroke: rgba(87, 224, 160, 0.55); }
+.sf-res-node.is-done .sf-res-fill { fill: rgba(87, 224, 160, 0.16); }
+.sf-res-node.is-done .sf-res-text { fill: var(--sf-good); }
+.sf-res-node.is-done .sf-res-cost { fill: rgba(87, 224, 160, 0.6); }
+
+/* --------------------------------------------------------------------------
+   TACTICAL OVERLAY
+   -------------------------------------------------------------------------- */
+
+.sf-tac-full {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.sf-tac-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Rajdhani', 'Eurostile', 'DIN Alternate', 'Roboto Condensed', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  color: rgba(150, 215, 255, 0.85);
+  text-shadow: 0 0 14px rgba(60, 160, 220, 0.55);
+  padding: 4px 16px;
+  border: 1px solid rgba(130, 190, 235, 0.28);
+  background: rgba(6, 11, 18, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 21;
+  white-space: nowrap;
+}
+
+/* [C4] Same shared gutter token as the build panel, so the two bottom-docked
+   regions sit on one baseline instead of two arbitrary 14 px insets. */
+.sf-minimap {
+  position: absolute;
+  right: var(--sf-inset, var(--s3, 16px));
+  bottom: var(--sf-inset, var(--s3, 16px));
+  width: 176px;
+  height: 176px;
+  border: 1px solid rgba(130, 190, 235, 0.24);
+  background: rgba(6, 11, 18, 0.72);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(20, 60, 90, 0.12);
+  pointer-events: none;
+  z-index: 25;
+}
+
+.sf-minimap::before {
+  /* Corner ticks — a chart frame, not a picture frame. */
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(130, 190, 235, 0.10);
+  clip-path: polygon(
+    0 0, 18px 0, 18px 1px, 1px 1px, 1px 18px, 0 18px,
+    0 100%, 18px 100%, 18px calc(100% - 1px), 1px calc(100% - 1px), 1px calc(100% - 18px), 0 calc(100% - 18px),
+    100% 100%, calc(100% - 18px) 100%, calc(100% - 18px) calc(100% - 1px), calc(100% - 1px) calc(100% - 1px), calc(100% - 1px) calc(100% - 18px), 100% calc(100% - 18px),
+    100% 0, calc(100% - 18px) 0, calc(100% - 18px) 1px, calc(100% - 1px) 1px, calc(100% - 1px) 18px, 100% 18px
+  );
+}
+
+.sf-minimap-canvas {
+  display: block;
+  width: 176px;
+  height: 176px;
+}
+
+/* ---------------------------------------------------------------------------
+   COLLAPSED PRODUCTION PANEL
+   ---------------------------------------------------------------------------
+   The panel is only relevant while a hull that owns a build queue is selected.
+   Kept open permanently it costs a large slice of the play area to show controls
+   the player cannot use, so it collapses to a labelled tab and expands the
+   moment a producer enters the selection (or the player pins it).
+--------------------------------------------------------------------------- */
+
+.sf-build-tab,
+.sf-build-close {
+  font-family: var(--sf-font);
+  color: var(--sf-text, #cfe4f5);
+  background: rgba(8, 14, 22, 0.82);
+  border: 1px solid var(--sf-line);
+  cursor: pointer;
+  padding: 0;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.sf-build-tab:hover,
+.sf-build-close:hover {
+  background: rgba(18, 34, 50, 0.92);
+  border-color: var(--sf-line-bright);
+  color: #fff;
+}
+
+/* --- collapsed tab --- */
+.sf-build-tab {
+  display: none;
+  width: 46px;
+  height: 92px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  box-shadow: inset 2px 0 0 var(--sf-accent, #5fd0ff);
+}
+
+.sf-build-tab-glyph { font-size: 1.15rem; line-height: 1; color: var(--sf-accent, #5fd0ff); }
+
+.sf-build-tab-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  opacity: 0.8;
+}
+
+/* --- close affordance, only while expanded --- */
+.sf-build-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  line-height: 16px;
+  font-size: 0.95rem;
+  z-index: 2;
+}
+
+/* --- state switch --- */
+.sf-build.is-collapsed { width: auto; }
+.sf-build.is-collapsed > .sf-build-in,
+.sf-build.is-collapsed > .sf-build-close { display: none; }
+.sf-build.is-collapsed > .sf-build-tab { display: flex; }

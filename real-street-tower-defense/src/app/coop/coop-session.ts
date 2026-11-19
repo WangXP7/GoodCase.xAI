@@ -1,0 +1,538 @@
+import { LockstepStats } from './lockstep-stats';
+import type { CoopRoomOptions } from './room-options';
+import type { PlayerStatus } from './protocol';
+import type { LockstepLink, StampedCommand } from './lockstep';
+import type { ClientInfo } from './client-info';
+import type { HashedEntities, HashPart } from './hash-check';
+import type { MapPart } from './map-transfer';
+import {
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type CoopRoomInfo,
+  type PublicRoom,
+  type RefusalReason,
+  type RoomListing,
+  type ServerMessage,
+} from './protocol';
+
+type Command = StampedCommand['command'];
+
+/** A request to the relay (create, join, the room list) fails after this long without an answer, ms */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/** The socket a session talks over; the browser's WebSocket fits. */
+export interface CoopSocket {
+  readonly readyState: number;
+  send(data: string): void;
+  close(): void;
+  onopen: ((event: unknown) => void) | null;
+  onmessage: ((event: { data: unknown }) => void) | null;
+  onclose: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+}
+
+/** The close code a relay that restarts sends: 1012 "service restart" (coop-server/server.ts CLOSE_RESTART) */
+const RELAY_RESTART_CODE = 1012;
+/** The close code for a client that kept sending too fast (coop-server/server.ts CLOSE_TOO_FAST, TODO E65) */
+const RELAY_TOO_FAST_CODE = 4008;
+
+/**
+ * In a room the relay sends every player the round trips every 5 s
+ * (coop-server/server.ts HEARTBEAT_MS), in a pause too. Nothing at all for
+ * this long reads as a half-open connection (a WLAN switch, standby), which
+ * the browser would only notice once the system gives up, ms.
+ */
+export const SILENCE_MS = 20_000;
+/** How often the silence is looked at, ms */
+const SILENCE_CHECK_MS = 1000;
+
+/**
+ * Why the connection closed, where it is known: the relay said so
+ * (`restart`, `too-fast`) or this client heard nothing from it (`silent`)
+ */
+export type CoopCloseReason = 'restart' | 'too-fast' | 'silent' | null;
+
+/** What the game needs to start: seed, roster, lanes, who is here, the link. */
+export interface CoopStart {
+  seed: number;
+  players: string[];
+  /** [player, spawn] pairs, a player in as many as they took (docs/WAVE_SYSTEM.md (Spuren)) */
+  lanes: [string, string][];
+  localId: string;
+  speed: number;
+  link: LockstepLink;
+  /** The host at the start and the room's options (D38) */
+  hostId: string;
+  options: CoopRoomOptions;
+}
+
+export class CoopRefusedError extends Error {
+  readonly reason: RefusalReason;
+  /** The host's game version, with 'version' */
+  readonly hostVersion: string | null;
+
+  constructor(reason: RefusalReason, hostVersion: string | null = null) {
+    super(`refused: ${reason}`);
+    this.reason = reason;
+    this.hostVersion = hostVersion;
+  }
+}
+
+/**
+ * The client's end of the relay's tick stream (LockstepLink over the
+ * session's socket): commands go out as `cmd`, closed ticks come back as
+ * `tick` and are kept until the simulation ran them.
+ */
+export class WebSocketLink implements LockstepLink {
+  private readonly received = new Map<number, readonly StampedCommand[]>();
+  private confirmed = -1;
+  readonly playerId: string;
+  private readonly out: (message: ClientMessage) => void;
+
+  constructor(playerId: string, out: (message: ClientMessage) => void) {
+    this.playerId = playerId;
+    this.out = out;
+  }
+
+  /** How smoothly this client runs, reported to the relay (PLAYTEST T19) */
+  private readonly stats = new LockstepStats();
+
+  send(command: Command): void {
+    this.stats.commandSent(performance.now());
+    this.out({ t: 'cmd', command });
+  }
+
+  confirmedTick(): number {
+    return this.confirmed;
+  }
+
+  commandsAt(tick: number): readonly StampedCommand[] {
+    return this.received.get(tick) ?? [];
+  }
+
+  /** Own commands ran in the simulation (not when their tick went to the worker): the input delay */
+  commandsRan(count: number): void {
+    const now = performance.now();
+    for (let i = 0; i < count; i++) this.stats.commandRan(now);
+  }
+
+  release(tick: number): void {
+    this.received.delete(tick);
+  }
+
+  reportHash(tick: number, hash: number, parts?: readonly number[]): void {
+    this.out(parts ? { t: 'hash', tick, hash, parts: [...parts] } : { t: 'hash', tick, hash });
+  }
+
+
+  noteFrame(steps: number, blocked: boolean, behind: number): void {
+    this.stats.frame(steps, blocked, behind);
+    const report = this.stats.reportDue(performance.now());
+    if (report) this.out({ t: 'stats', stats: report });
+  }
+
+  private tickListener: (() => void) | null = null;
+
+  onTick(listener: (() => void) | null): void {
+    this.tickListener = listener;
+  }
+
+  /** From the session: a tick closed at the relay. Ticks come in order over the one socket. */
+  receive(tick: number, commands: readonly StampedCommand[]): void {
+    this.stats.tickArrived(performance.now());
+    if (commands.length > 0) this.received.set(tick, commands);
+    this.confirmed = tick;
+    this.tickListener?.();
+  }
+}
+
+/**
+ * One player's connection to a coop relay (docs/COOP_PLAN.md, C4): hello,
+ * a room to create or join, the lobby (world, lanes, ready), the start and
+ * the game's tick stream. Framework-free; CoopService wires it into the game.
+ */
+export class CoopSession {
+  private socket: CoopSocket | null = null;
+  private pendingReply: { resolve: (value: unknown) => void; reject: (error: Error) => void; wants: ServerMessage['t'] } | null = null;
+  private linkNow: WebSocketLink | null = null;
+  /** When the relay was last heard, and the watchdog over it (SILENCE_MS) */
+  private heardAt = 0;
+  private silenceTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** This player's id at the relay, once connected */
+  playerId: string | null = null;
+  /** The room as the relay last told it, null outside one */
+  room: CoopRoomInfo | null = null;
+  /** The host's world package, once it came (a host has its own) */
+  world: unknown = null;
+
+  /** Room changes, the host's world, the start, and the rest of the stream; one handler each */
+  onRoom: ((room: CoopRoomInfo) => void) | null = null;
+  onWorld: ((world: unknown) => void) | null = null;
+  /** A piece of the host's custom map (coop/map-transfer.ts), before the world that names it */
+  onMap: ((piece: MapPart) => void) | null = null;
+  onStarted: ((start: CoopStart) => void) | null = null;
+  onSpeed: ((speed: number) => void) | null = null;
+  /** Each player's round trip to the relay, ms */
+  onRtt: ((rtt: [string, number | null][]) => void) | null = null;
+  /** The room waits for this player to catch up; null once it goes on */
+  onWaiting: ((playerId: string | null) => void) | null = null;
+  onHost: ((hostId: string) => void) | null = null;
+  onLeft: ((playerId: string) => void) | null = null;
+  onChat: ((from: string, text: string) => void) | null = null;
+  onPing: ((from: string, lat: number, lon: number, height: number) => void) | null = null;
+  /** Lobby: the host changes the map, a world follows */
+  onMoving: (() => void) | null = null;
+  /** The relay found the simulations apart (C5): the first tick, player id and hash each */
+  onDesync: ((tick: number, hashes: [string, number][], outOfStep: string[], parts: HashPart[] | null) => void) | null = null;
+  /** After a desync the room holds at the boundary of `tick` for a resync (C5b) */
+  onResync: ((tick: number) => void) | null = null;
+  /** Guest: the host's state for the resync at `tick` */
+  onResyncState: ((tick: number, gz: string, part: number, parts: number) => void) | null = null;
+  /** The room goes on after the resync at `tick` */
+  onResyncDone: ((tick: number, ok: boolean) => void) | null = null;
+  /** The relay's answer to a sent run log (TODO E38) */
+  onRunLog: ((ok: boolean, reason: string | null) => void) | null = null;
+  /** The relay keeps run logs a player agrees to send, from its welcome (TODO E38) */
+  collectRuns = false;
+  onRefused: ((reason: RefusalReason) => void) | null = null;
+  /**
+   * The connection closed, with why where the relay said so: `restart` (close
+   * code 1012, relay review M6), `too-fast` when it closed this client for
+   * sending too much (TODO E65), `silent` when nothing came from the relay
+   * for SILENCE_MS while in a room.
+   */
+  onClosed: ((reason: CoopCloseReason) => void) | null = null;
+
+  private readonly url: string;
+  private readonly hello: { name: string; gameVersion: string; configHash: string; client?: ClientInfo };
+  private readonly openSocket: (url: string) => CoopSocket;
+
+  constructor(
+    url: string,
+    hello: { name: string; gameVersion: string; configHash: string; client?: ClientInfo },
+    openSocket: (url: string) => CoopSocket = (to) => new WebSocket(to) as unknown as CoopSocket,
+  ) {
+    this.url = url;
+    this.hello = hello;
+    this.openSocket = openSocket;
+  }
+
+  /** The tick stream of a started game, null before. */
+  get link(): LockstepLink | null {
+    return this.linkNow;
+  }
+
+  get isHost(): boolean {
+    return this.room !== null && this.room.hostId === this.playerId;
+  }
+
+  /** Connect and say hello; resolves with this player's id, rejects after `timeoutMs` without a welcome. */
+  connect(timeoutMs = 5000): Promise<string> {
+    return new Promise((done, reject) => {
+      const socket = this.openSocket(this.url);
+      this.socket = socket;
+      const timer = setTimeout(() => {
+        this.fail(new Error(`no answer from ${this.url}`), reject);
+        this.close();
+      }, timeoutMs);
+      const resolve = (id: string) => {
+        clearTimeout(timer);
+        done(id);
+      };
+      socket.onopen = () => {
+        this.expect('welcome', resolve as (value: unknown) => void, (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+        this.out({ t: 'hello', protocol: PROTOCOL_VERSION, ...this.hello });
+        this.watch(socket);
+      };
+      socket.onmessage = (event) => {
+        this.heardAt = performance.now();
+        this.receive(String(event.data));
+      };
+      socket.onerror = () => {
+        clearTimeout(timer);
+        this.fail(new Error(`no coop relay at ${this.url}`), reject);
+      };
+      socket.onclose = (event) => {
+        clearTimeout(timer);
+        this.fail(new Error('the connection to the coop relay closed'), reject);
+        this.socket = null;
+        this.stopWatch();
+        const code = (event as { code?: number } | null)?.code;
+        this.onClosed?.(code === RELAY_RESTART_CODE ? 'restart' : code === RELAY_TOO_FAST_CODE ? 'too-fast' : null);
+      };
+    });
+  }
+
+  /** Open a room as its host. */
+  create(): Promise<CoopRoomInfo> {
+    return this.request({ t: 'create' }, 'room') as Promise<CoopRoomInfo>;
+  }
+
+  /** Join the room `code`; rejects with CoopRefusedError. */
+  join(code: string): Promise<CoopRoomInfo> {
+    return this.request({ t: 'join', room: code.trim().toUpperCase() }, 'room') as Promise<CoopRoomInfo>;
+  }
+
+  /** Host: the room's world and its spawns, the lanes to pick from. */
+  sendWorld(world: unknown, spawnIds: string[]): void {
+    this.world = world;
+    this.out({ t: 'world', world, spawnIds });
+  }
+
+  /** Host, lobby: a piece of the room's custom map, ahead of the world that names it */
+  sendMapPart(piece: MapPart): void {
+    this.out({ t: 'map', ...piece });
+  }
+
+  /** Lobby: take a free spawn as one more lane, or give one back (`take` false); null gives every lane back */
+  pick(spawnId: string | null, take = true): void {
+    this.out(spawnId !== null && !take ? { t: 'pick', spawnId, take: false } : { t: 'pick', spawnId });
+  }
+
+  /** Lobby: another name for this player. */
+  rename(name: string): void {
+    this.out({ t: 'rename', name });
+  }
+
+  /** Host, lobby: take `playerId` out of the room. */
+  kick(playerId: string): void {
+    this.out({ t: 'kick', playerId });
+  }
+
+  /** The relay's public rooms (D62); the session need not be in a room */
+  listRooms(): Promise<PublicRoom[]> {
+    return this.request({ t: 'rooms' }, 'rooms') as Promise<PublicRoom[]>;
+  }
+
+  /** Host: the room in the public list or not, its title, the host's city (D62, D63) */
+  setListing(listing: RoomListing): void {
+    this.out({ t: 'listing', listing });
+  }
+
+  /** Host: close the room to further players, or open it again. */
+  lock(locked: boolean): void {
+    this.out({ t: 'lock', locked });
+  }
+
+  ready(ready: boolean): void {
+    this.out({ t: 'ready', ready });
+  }
+
+  /** Host: start with `seed` once everyone is ready; `vacant` 'split' shares out the lanes nobody holds first */
+  start(seed: number, vacant?: 'split'): void {
+    this.out(vacant ? { t: 'start', seed, vacant } : { t: 'start', seed });
+  }
+
+  /** Host: game speed, 0 pauses (D15). */
+  setSpeed(speed: number): void {
+    this.out({ t: 'speed', speed });
+  }
+
+  /** After a desync: what each entity put into the hash at `tick` (TODO E32) */
+  hashDetail(tick: number, entities: HashedEntities): void {
+    this.out({ t: 'hash-detail', tick, entities });
+  }
+
+  chat(text: string): void {
+    this.out({ t: 'chat', text });
+  }
+
+  /** Host, resync: the state at the boundary of `tick`, or null when it cannot be sent (C5b) */
+  resyncState(tick: number, gz: string | null, part = 0, parts = 1): void {
+    this.out(gz === null ? { t: 'resync-state', tick, gz } : { t: 'resync-state', tick, gz, part, parts });
+  }
+
+  /** Guest, resync: the host's state is loaded, or not */
+  resynced(tick: number, ok: boolean): void {
+    this.out({ t: 'resynced', tick, ok });
+  }
+
+  /** After a game: the run log, gzip as base64 (TODO E38); only when the relay collects */
+  sendRunLog(gz: string): void {
+    if (this.collectRuns) this.out({ t: 'run-log', gz });
+  }
+
+  /** Lobby: what this client is doing now, for the others to see */
+  tellStatus(status: PlayerStatus): void {
+    this.out({ t: 'status', status });
+  }
+
+  /** Host, lobby: the room's options (D38) */
+  setOptions(options: CoopRoomOptions): void {
+    this.out({ t: 'options', options });
+  }
+
+  /** Host, lobby: the map is changing here; the guests hear it before the new world comes */
+  moving(): void {
+    this.out({ t: 'moving' });
+  }
+
+  /** A mark on the map for everyone in the room, this player included */
+  ping(lat: number, lon: number, height: number): void {
+    this.out({ t: 'ping', lat, lon, height });
+  }
+
+  close(): void {
+    const socket = this.socket;
+    this.socket = null;
+    this.stopWatch();
+    socket?.close();
+  }
+
+  /**
+   * The watchdog over the relay's heartbeat (SILENCE_MS), from the hello on.
+   * Outside a room the relay sends nothing unasked, so silence counts only in
+   * one. A check that came late means this page stood still (a hidden tab, a
+   * long block): what did not arrive may wait in its queue, so the silence
+   * starts again.
+   */
+  private watch(socket: CoopSocket): void {
+    this.stopWatch();
+    let checkedAt = performance.now();
+    this.heardAt = checkedAt;
+    this.silenceTimer = setInterval(() => {
+      const now = performance.now();
+      const late = now - checkedAt > SILENCE_MS / 2;
+      checkedAt = now;
+      if (late || this.room === null) this.heardAt = now;
+      else if (now - this.heardAt >= SILENCE_MS && this.socket === socket) this.lost(socket);
+    }, SILENCE_CHECK_MS);
+  }
+
+  private stopWatch(): void {
+    if (this.silenceTimer !== null) clearInterval(this.silenceTimer);
+    this.silenceTimer = null;
+  }
+
+  /**
+   * The relay went silent: drop the socket without waiting for a close
+   * handshake that a half-open connection never finishes, and end the
+   * session as a close would.
+   */
+  private lost(socket: CoopSocket): void {
+    socket.onmessage = null;
+    socket.onclose = null;
+    socket.onerror = null;
+    this.close();
+    this.fail(new Error('No word from the coop relay'));
+    this.onClosed?.('silent');
+  }
+
+  private out(message: ClientMessage): void {
+    const socket = this.socket;
+    if (socket && socket.readyState === 1) socket.send(JSON.stringify(message));
+  }
+
+  private request(message: ClientMessage, wants: ServerMessage['t']): Promise<unknown> {
+    // One answer awaited at a time: a second request would take the first one's answer
+    // (a refused join read as a failed room list), and the first would wait for ever
+    if (this.pendingReply) return Promise.reject(new Error(`Busy waiting for ${this.pendingReply.wants}`));
+    return new Promise((resolve, reject) => {
+      // A relay that ignores the request (a create while it closes) left it waiting for good,
+      // and every later request failed as busy
+      const timer = setTimeout(() => {
+        if (this.pendingReply?.wants === wants) this.fail(new Error('No answer from the relay'));
+      }, REQUEST_TIMEOUT_MS);
+      this.expect(
+        wants,
+        (value) => { clearTimeout(timer); resolve(value); },
+        (error) => { clearTimeout(timer); reject(error); },
+      );
+      this.out(message);
+    });
+  }
+
+  private expect(wants: ServerMessage['t'], resolve: (value: unknown) => void, reject: (error: Error) => void): void {
+    this.pendingReply = { wants, resolve, reject };
+  }
+
+  private fail(error: Error, reject?: (error: Error) => void): void {
+    const pending = this.pendingReply;
+    this.pendingReply = null;
+    if (pending) pending.reject(error);
+    else reject?.(error);
+  }
+
+  private settle(t: ServerMessage['t'], value: unknown): void {
+    const pending = this.pendingReply;
+    if (pending?.wants !== t) return;
+    this.pendingReply = null;
+    pending.resolve(value);
+  }
+
+  private receive(text: string): void {
+    let message: ServerMessage;
+    try {
+      message = JSON.parse(text) as ServerMessage;
+    } catch {
+      return;
+    }
+    switch (message.t) {
+      case 'welcome':
+        this.playerId = message.playerId;
+        this.collectRuns = message.collectRuns === true;
+        return this.settle('welcome', message.playerId);
+      case 'refused':
+        if (this.pendingReply) return this.fail(new CoopRefusedError(message.reason, message.hostVersion ?? null));
+        return this.onRefused?.(message.reason);
+      case 'room':
+        this.room = message.room;
+        this.onRoom?.(message.room);
+        return this.settle('room', message.room);
+      case 'world':
+        this.world = message.world;
+        return this.onWorld?.(message.world);
+      case 'map':
+        return this.onMap?.({ mapId: message.mapId, hash: message.hash, part: message.part, parts: message.parts, data: message.data });
+      case 'started': {
+        const link = new WebSocketLink(this.playerId!, (m) => this.out(m));
+        this.linkNow = link;
+        return this.onStarted?.({
+          seed: message.seed,
+          players: message.players,
+          lanes: message.lanes.map(([player, spawn]): [string, string] => [player, spawn]),
+          localId: this.playerId!,
+          speed: message.speed,
+          link,
+          hostId: message.hostId,
+          options: message.options,
+        });
+      }
+      case 'tick':
+        return this.linkNow?.receive(message.tick, message.commands);
+      case 'speed':
+        return this.onSpeed?.(message.speed);
+      case 'rtt':
+        return this.onRtt?.(message.rtt);
+      case 'rooms':
+        return this.settle('rooms', message.rooms);
+      case 'waiting':
+        return this.onWaiting?.(message.playerId);
+      case 'host':
+        if (this.room) this.room = { ...this.room, hostId: message.hostId };
+        return this.onHost?.(message.hostId);
+      case 'left':
+        return this.onLeft?.(message.playerId);
+      case 'chat':
+        return this.onChat?.(message.from, message.text);
+      case 'moving':
+        return this.onMoving?.();
+      case 'ping':
+        return this.onPing?.(message.from, message.lat, message.lon, message.height);
+      case 'desync':
+        return this.onDesync?.(message.tick, message.hashes, message.outOfStep ?? [], message.parts ?? null);
+      case 'run-log':
+        return this.onRunLog?.(message.ok, message.reason ?? null);
+      case 'resync':
+        return this.onResync?.(message.tick);
+      case 'resync-state':
+        return this.onResyncState?.(message.tick, message.gz, message.part ?? 0, message.parts ?? 1);
+      case 'resync-done':
+        return this.onResyncDone?.(message.tick, message.ok);
+    }
+  }
+}

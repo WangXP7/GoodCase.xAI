@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/xikhar/papertrails",
+  "commit": "5a284f71164ea3bd54ee788553e21f7f21a1b7b7",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 75,
+  "bytes": 20916245
+}

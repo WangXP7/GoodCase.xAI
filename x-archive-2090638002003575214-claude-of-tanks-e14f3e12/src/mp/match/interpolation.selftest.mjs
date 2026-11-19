@@ -1,0 +1,336 @@
+import assert from 'node:assert/strict';
+import { ENTITY_FLAGS, PHASE, quantizeAngle, zeroEntityRow } from '../wire/index.ts';
+import { RemoteInterpolator, hermite, monotoneHermite } from './interpolation.ts';
+
+const INTERVAL = 1000 / 30;
+
+function row(entityId, { x = 0, y = 0, z = 0, speed = 0, verticalSpeed = 0, yaw = 0, flags = 0, turretYaw = 0 } = {}) {
+  return { ...zeroEntityRow(entityId), x, y, z, speed, verticalSpeed, yaw, turretYaw, flags, hp: 100, maxHp: 100 };
+}
+
+/** A frame at `tick`; a row without a capture tick of its own was captured in this frame (a held row keeps the tick it was given). */
+function frame(tick, entities, extra = {}) {
+  return {
+    tick, serverTimeMs: Math.round(tick * 1000 / 60), ackedInputTick: tick, ackedFireSeq: 0, ackedActionSeq: 0, inputMarginTicks: 2,
+    meta: { phase: PHASE.PLAYING, countdownMs: 0, battleTimeMs: Math.round(tick * 1000 / 60), verdict: 0, verdictReason: '', destructibleRevision: 0 },
+    destroyed: [], entities: entities.map((row) => (row.held ? row : { ...row, tick })), shells: [], viewer: null, modeStateJson: null, ...extra,
+  };
+}
+
+// ------------------------------------------------------------ hermite primitives
+assert.equal(hermite(0, 1, 1, 1, 0.5, 1), 0.5, 'a straight line stays straight');
+assert.ok(monotoneHermite(0, 40, 1, 0, 0.5, 1) <= 1 && monotoneHermite(0, 40, 1, 0, 0.5, 1) >= 0, 'monotone never leaves the interval');
+assert.ok(hermite(0, 40, 1, 0, 0.5, 1) > 1, 'plain hermite overshoots with a stale tangent');
+assert.ok(monotoneHermite(0, -40, 1, 40, 0.5, 1) >= 0, 'a tangent against the secant is dropped');
+assert.equal(monotoneHermite(3, 5, 3, -5, 0.4, 1), 3, 'a flat segment stays flat whatever the tangents say');
+
+// ------------------------------------------------------------ steady motion at 2 intervals of delay
+{
+  const interp = new RemoteInterpolator();
+  const speedMps = 10;
+  const arrival = (serverTimeMs) => serverTimeMs + 50;
+  let tick = 0;
+  const pushFrame = () => {
+    const serverTimeMs = Math.round(tick * 1000 / 60);
+    const rows = [row(1, { z: Math.round(speedMps * serverTimeMs), speed: speedMps * 100, yaw: quantizeAngle(0) })];
+    assert.equal(interp.push(frame(tick, rows), serverTimeMs, arrival(serverTimeMs)), true);
+    tick += 2;
+  };
+  for (let n = 0; n < 6; n++) pushFrame();
+  assert.equal(interp.stats().arrivalJitterMs, 0, 'a perfectly regular arrival has no jitter');
+  assert.ok(Math.abs(interp.stats().targetDelayMs - 2 * INTERVAL) < 1e-9, 'the target delay is two intervals');
+  let serverNow = arrival(Math.round((tick - 2) * 1000 / 60)) - 50;
+  let last = null;
+  let maxStep = 0;
+  let minStep = Infinity;
+  let lastRender = -Infinity;
+  for (let f = 0; f < 120; f++) {
+    serverNow += 1000 / 60;
+    while (Math.round(tick * 1000 / 60) <= serverNow) pushFrame();
+    const sample = interp.sample(serverNow);
+    assert.ok(sample.renderTimeMs >= lastRender, 'the render clock never runs backward');
+    lastRender = sample.renderTimeMs;
+    assert.ok(Math.abs(serverNow - sample.renderTimeMs - interp.delay) < 1e-6, 'renders at now − delay');
+    const entity = sample.entities[0];
+    assert.equal(entity.entityId, 1);
+    assert.equal(sample.extrapolatedMs, 0, 'a filled buffer never extrapolates');
+    assert.ok(Math.abs(entity.vz - speedMps) < 1e-6 && Math.abs(entity.vx) < 1e-6, 'velocity decodes from speed along yaw');
+    if (last !== null) {
+      const step = entity.z - last;
+      maxStep = Math.max(maxStep, step);
+      minStep = Math.min(minStep, step);
+    }
+    last = entity.z;
+    assert.equal(entity.snapped, false);
+  }
+  assert.ok(maxStep < speedMps / 60 * 1.02 && minStep > speedMps / 60 * 0.98, `steps are v·dt (${minStep.toFixed(4)}..${maxStep.toFixed(4)})`);
+  assert.equal(interp.stats().extrapolatedSamples, 0);
+  assert.equal(interp.stats().snappedSamples, 0);
+}
+
+// ------------------------------------------------------------ jitter and loss grow the delay, bounded by 4 intervals
+{
+  const interp = new RemoteInterpolator();
+  let random = 0x9e37;
+  const next = () => { random = (Math.imul(random, 1664525) + 1013904223) >>> 0; return random / 0x100000000; };
+  for (let n = 0; n < 200; n++) {
+    const serverTimeMs = n * INTERVAL;
+    interp.push(frame(n * 2, [row(1)]), serverTimeMs, serverTimeMs + 60 + (next() * 2 - 1) * 25, n % 30 === 0);
+  }
+  const stats = interp.stats();
+  assert.ok(stats.arrivalJitterMs > 5, `arrival jitter is measured: ${stats.arrivalJitterMs}`);
+  assert.ok(stats.targetDelayMs > 2 * INTERVAL && stats.targetDelayMs <= 4 * INTERVAL, `target between 2 and 4 intervals: ${stats.targetDelayMs}`);
+  // The delay slews up at half the elapsed time and never beyond the target while the stream keeps flowing.
+  let serverNow = 200 * INTERVAL;
+  let previous = interp.delay;
+  let n = 200;
+  for (let f = 0; f < 60; f++) {
+    serverNow += 1000 / 60;
+    while (n * INTERVAL + 60 <= serverNow) { interp.push(frame(n * 2, [row(1)]), n * INTERVAL, n * INTERVAL + 60); n++; }
+    interp.sample(serverNow);
+    // Grows toward the target, and only ever follows the target down (a quiet stream lowers it slowly).
+    assert.ok(interp.delay <= Math.max(previous, interp.stats().targetDelayMs) + 1e-9 && interp.delay <= 4 * INTERVAL + 1e-9);
+    previous = interp.delay;
+  }
+  assert.ok(interp.delay > 2 * INTERVAL, 'the delay grew');
+  assert.equal(interp.stats().stalledSamples, 0, 'a flowing stream never stalls the render clock');
+  // Extreme jitter is clamped to four intervals.
+  for (; n < 320; n++) interp.push(frame(n * 2, [row(1)]), n * INTERVAL, n * INTERVAL + 60 + (n % 2 ? 200 : 0));
+  assert.ok(Math.abs(interp.stats().targetDelayMs - 4 * INTERVAL) < 1e-9, 'the ceiling is four intervals');
+}
+
+// ------------------------------------------------------------ extrapolation capped at one interval
+{
+  const interp = new RemoteInterpolator();
+  for (let n = 0; n < 4; n++) interp.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500 })]), n * INTERVAL, n * INTERVAL + 40);
+  const lastServerTime = 3 * INTERVAL;
+  const positions = [];
+  for (let f = 0; f < 14; f++) {
+    const sample = interp.sample(lastServerTime + 2 * INTERVAL + f * (1000 / 60));
+    positions.push([sample.entities[0].z, sample.extrapolatedMs]);
+  }
+  const extrapolated = positions.map(([, ms]) => ms);
+  assert.ok(Math.max(...extrapolated) <= INTERVAL + 1e-9, 'never more than one interval of extrapolation');
+  const final = positions.at(-1)[0];
+  assert.ok(Math.abs(final - (1.5 + 15 * INTERVAL / 1000)) < 1e-6, 'the entity holds one interval past the newest frame');
+  assert.ok(interp.stats().maxExtrapolatedMs <= INTERVAL + 1e-9);
+  assert.ok(interp.stats().extrapolatedSamples > 0);
+  assert.ok(interp.stats().stalledSamples > 0, 'a dry buffer stalls the render clock at the horizon');
+  // When the stream resumes after a short outage, presentation continues from the held pose: no jump, and the
+  // extra delay the stall left releases at a tenth of real time (the render clock runs at 1.1×).
+  const resumeAt = lastServerTime + 2 * INTERVAL + 13 * (1000 / 60);
+  const stalledDelay = interp.delay;
+  assert.ok(stalledDelay > 2 * INTERVAL + 100, `the stall grew the delay (${stalledDelay.toFixed(1)} ms)`);
+  let last = final;
+  let biggest = 0;
+  let m = 4;
+  for (let f = 14; f < 120; f++) {
+    const serverNow = lastServerTime + 2 * INTERVAL + f * (1000 / 60);
+    while (m < 60 && (m <= 5 ? resumeAt : m * INTERVAL + 40) <= serverNow) { interp.push(frame(m * 2, [row(1, { z: m * 500, speed: 1500 })]), m * INTERVAL, serverNow); m++; }
+    const sample = interp.sample(serverNow);
+    assert.equal(sample.resynced, false, 'a short outage is not a resync');
+    biggest = Math.max(biggest, sample.entities[0].z - last);
+    last = sample.entities[0].z;
+  }
+  assert.ok(biggest <= 15 * (1000 / 60) / 1000 * 1.11 + 1e-6, `resumption steps stay at v·dt × 1.1 (${biggest.toFixed(4)})`);
+  assert.ok(interp.delay < stalledDelay - 50, `the stall-grown delay releases toward the target (${interp.delay.toFixed(1)} ms)`);
+  assert.equal(interp.stats().resyncs, 0);
+  // A stall past the budget is an outage: the clock jumps once instead of playing back at 1.1× for seconds.
+  const outage = new RemoteInterpolator();
+  for (let n = 0; n < 4; n++) outage.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500 })]), n * INTERVAL, n * INTERVAL + 40);
+  for (let f = 0; f < 40; f++) outage.sample(3 * INTERVAL + 2 * INTERVAL + f * (1000 / 60));
+  assert.equal(outage.stats().resyncs, 0, 'the clock holds while the outage is inside the budget');
+  const resumed = 3 * INTERVAL + 2 * INTERVAL + 40 * (1000 / 60);
+  for (let n = 4; n < 30; n++) outage.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500 })]), n * INTERVAL, resumed);
+  const jump = outage.sample(resumed + 1);
+  assert.equal(jump.resynced, true, 'a stall beyond 400 ms resyncs once frames return');
+  assert.equal(jump.entities[0].snapped, true);
+  assert.ok(outage.delay <= 4 * INTERVAL + 1e-9, 'the delay returns to its target after the jump');
+  // An outage longer than the buffer holds resyncs once: the timeline jumps and every entity is flagged snapped.
+  const gap = new RemoteInterpolator({ capacity: 8 });
+  for (let n = 0; n < 4; n++) gap.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500 })]), n * INTERVAL, n * INTERVAL + 40);
+  gap.sample(3 * INTERVAL + 2 * INTERVAL);
+  for (let n = 40; n < 52; n++) gap.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500 })]), n * INTERVAL, 52 * INTERVAL);
+  const jumped = gap.sample(53 * INTERVAL);
+  assert.equal(jumped.resynced, true);
+  assert.equal(jumped.entities[0].snapped, true, 'a resynced sample presents as a teleport');
+  assert.equal(gap.stats().resyncs, 1);
+  assert.equal(gap.sample(53 * INTERVAL + 16).resynced, false, 'the next sample is ordinary again');
+}
+
+// ------------------------------------------------------------ shortest arc, teleport, visibility
+{
+  const interp = new RemoteInterpolator();
+  const nearPi = quantizeAngle(Math.PI - 0.05);
+  const pastPi = quantizeAngle(-Math.PI + 0.05);
+  interp.push(frame(0, [row(1, { yaw: nearPi, turretYaw: nearPi }), row(2, { x: 1000 })]), 0, 40);
+  interp.push(frame(2, [row(1, { yaw: pastPi, turretYaw: pastPi }), row(2, { x: 1500 })]), INTERVAL, INTERVAL + 40);
+  interp.push(frame(4, [row(1, { yaw: pastPi }), row(2, { x: 80000 })]), 2 * INTERVAL, 2 * INTERVAL + 40);
+  interp.push(frame(6, [row(1, { yaw: pastPi })]), 3 * INTERVAL, 3 * INTERVAL + 40);
+  const mid = interp.sample(2 * INTERVAL + INTERVAL / 2);
+  const hull = mid.entities.find((entity) => entity.entityId === 1);
+  assert.ok(Math.abs(Math.abs(hull.yaw) - Math.PI) < 0.06, `yaw crosses ±π on the short arc: ${hull.yaw}`);
+  assert.ok(Math.abs(Math.abs(hull.turretYaw) - Math.PI) < 0.06, 'turret yaw too');
+  assert.equal(hull.snapped, false);
+  const later = interp.sample(3 * INTERVAL + INTERVAL / 2);
+  const jumped = later.entities.find((entity) => entity.entityId === 2);
+  assert.equal(jumped.snapped, true, 'a 78 m jump is a teleport, not a blend');
+  assert.equal(jumped.x, 80);
+  const gone = interp.sample(4 * INTERVAL + INTERVAL / 2);
+  assert.equal(gone.entities.some((entity) => entity.entityId === 2), false, 'a hidden entity leaves the sample');
+  assert.equal(gone.entities.length, 1);
+  interp.push(frame(8, [row(1, { yaw: pastPi }), row(2, { x: 80500 })]), 4 * INTERVAL, 4 * INTERVAL + 40);
+  interp.push(frame(10, [row(1, { yaw: pastPi }), row(2, { x: 81000 })]), 5 * INTERVAL, 5 * INTERVAL + 40);
+  const back = interp.sample(6 * INTERVAL + INTERVAL / 2);
+  const returned = back.entities.find((entity) => entity.entityId === 2);
+  assert.ok(returned && returned.snapped === false, 'a returning entity blends again once it has two frames');
+}
+
+// ------------------------------------------------------------ grounded vs airborne height, shells, meta, mode state
+{
+  const interp = new RemoteInterpolator();
+  const shell = (id, z) => ({ id, shooterEntityId: 1, x: 0, y: 20000, z, vx: 0, vy: 0, vz: 9000, shellType: 0, flags: 0 });
+  interp.push(frame(0, [row(1, { y: 1000, verticalSpeed: 900 }), row(2, { y: 1000, verticalSpeed: 900, flags: ENTITY_FLAGS.AIRBORNE })],
+    { shells: [shell(7, 0)], modeStateJson: '{"a":1}' }), 0, 40);
+  interp.push(frame(2, [row(1, { y: 1000, verticalSpeed: 900 }), row(2, { y: 1000, verticalSpeed: 900, flags: ENTITY_FLAGS.AIRBORNE })],
+    { shells: [shell(7, 30000)], modeStateJson: '{"a":2}' }), INTERVAL, INTERVAL + 40);
+  const sample = interp.sample(2 * INTERVAL + INTERVAL / 4);
+  const grounded = sample.entities.find((entity) => entity.entityId === 1);
+  const airborne = sample.entities.find((entity) => entity.entityId === 2);
+  assert.equal(grounded.y, 1, 'a grounded chassis between two equal heights stays put (monotone)');
+  assert.ok(airborne.y > 1, 'an airborne hull follows its ballistic tangent');
+  assert.equal(sample.shells.length, 1);
+  assert.ok(sample.shells[0].z > 0 && sample.shells[0].z < 30, 'shells blend between frames');
+  assert.equal(sample.shells[0].shellType, 'AP');
+  assert.equal(sample.modeStateJson, '{"a":2}', 'mode state is the newer frame\'s JSON');
+  assert.ok(sample.meta.battleTimeMs > 0 && sample.meta.battleTimeMs < Math.round(2 * 1000 / 60), 'the battle clock interpolates');
+  assert.equal(sample.meta.phase, PHASE.PLAYING);
+  assert.equal(interp.push(frame(1, [row(1)]), 5, 50), false, 'an older tick is refused');
+  assert.deepEqual(sample.unseenShells, [], 'no round left the view: none named');
+  // wire 11 (round 2, U31): the sample names the rounds its newer frame names as out of view, the frame whose shell list
+  // the sample presents (a round gone from it on this sample is named on this sample)
+  interp.push(frame(4, [row(1, { y: 1000 }), row(2, { y: 1000, flags: ENTITY_FLAGS.AIRBORNE })], { shells: [], unseenShells: [7] }),
+    2 * INTERVAL, 2 * INTERVAL + 40);
+  interp.push(frame(6, [row(1, { y: 1000 }), row(2, { y: 1000, flags: ENTITY_FLAGS.AIRBORNE })], { shells: [] }), 3 * INTERVAL, 3 * INTERVAL + 40);
+  const left = interp.sample(3.5 * INTERVAL); // renders between the frames at INTERVAL and 2 * INTERVAL (two of delay)
+  assert.equal(left.tick, 4, 'the sample\'s newer frame is the first without the round');
+  assert.equal(left.shells.length, 0, 'the round is gone from the sample');
+  assert.deepEqual(left.unseenShells, [7], 'and the sample names it out of view: the newer frame\'s list');
+  const after = interp.sample(4.5 * INTERVAL);
+  assert.equal(after.tick, 6);
+  assert.deepEqual(after.unseenShells, [], 'a newer frame that names none: none');
+  interp.clear();
+  assert.equal(interp.sample(0), null, 'cleared: nothing to sample');
+  assert.equal(interp.bufferedFrames, 0);
+}
+
+// ------------------------------------------------------------ mixed cadences (P3b interest tiers): a held row is one sample, never a fresh pose
+{
+  const interp = new RemoteInterpolator();
+  const speedMps = 10;
+  const arrival = (serverTimeMs) => serverTimeMs + 50;
+  let tick = 0;
+  let farRow = null;
+  let midRow = null;
+  let refreshes = 0;
+  const pushFrame = () => {
+    const serverTimeMs = Math.round(tick * 1000 / 60);
+    const near = row(1, { z: Math.round(speedMps * serverTimeMs), speed: speedMps * 100 });
+    const snapshotIndex = tick / 2;
+    // entity 2 is on the far tier (every third snapshot), entity 3 on the middle one (every second): the frames between
+    // refreshes carry the row the viewer holds, its capture tick included — exactly what the delta codec reconstructs
+    if (farRow === null || snapshotIndex % 3 === 0) { farRow = { ...row(2, { x: Math.round(speedMps * serverTimeMs), speed: speedMps * 100, yaw: quantizeAngle(Math.PI / 2) }), tick, held: true }; refreshes++; }
+    if (midRow === null || snapshotIndex % 2 === 0) midRow = { ...row(3, { x: -Math.round(speedMps * serverTimeMs), speed: speedMps * 100, yaw: quantizeAngle(-Math.PI / 2) }), tick, held: true };
+    interp.push(frame(tick, [near, farRow, midRow]), serverTimeMs, arrival(serverTimeMs));
+    tick += 2;
+  };
+  for (let n = 0; n < 8; n++) pushFrame();
+  let serverNow = arrival(Math.round((tick - 2) * 1000 / 60)) - 50;
+  const steps = { 1: [], 2: [], 3: [] };
+  const last = { 1: null, 2: null, 3: null };
+  for (let f = 0; f < 240; f++) {
+    serverNow += 1000 / 60;
+    while (Math.round(tick * 1000 / 60) <= serverNow) pushFrame();
+    const sample = interp.sample(serverNow);
+    assert.equal(sample.extrapolatedMs, 0, 'a filled buffer never extrapolates the frames');
+    assert.equal(sample.entities.length, 3);
+    for (const entity of sample.entities) {
+      const along = entity.entityId === 1 ? entity.z : entity.entityId === 2 ? entity.x : -entity.x;
+      if (last[entity.entityId] !== null) steps[entity.entityId].push(along - last[entity.entityId]);
+      last[entity.entityId] = along;
+      assert.equal(entity.snapped, false, `entity ${entity.entityId} blends between its own samples`);
+    }
+  }
+  for (const id of [1, 2, 3]) {
+    const minStep = Math.min(...steps[id]);
+    const maxStep = Math.max(...steps[id]);
+    assert.ok(maxStep < speedMps / 60 * 1.02 && minStep > speedMps / 60 * 0.98, `entity ${id} steps are v·dt at its own cadence (${minStep.toFixed(4)}..${maxStep.toFixed(4)}); a held row read as a fresh pose would step 0, 0, 3·v·dt`);
+  }
+  assert.ok(refreshes <= Math.ceil(tick / 2 / 3) + 1, `the far entity was refreshed on a third of the ${tick / 2} frames (${refreshes})`);
+  assert.equal(interp.stats().snappedSamples, 0);
+  // The delay is two intervals behind the server's now and the newest frame itself is up to one interval old, so a
+  // third-snapshot entity at its worst phase is continued at most one interval past its own sample — the frame cap —
+  // and a second-snapshot one never is.
+  assert.ok(interp.stats().maxRowExtrapolatedMs <= INTERVAL + 1e-6, `a third-snapshot cadence is continued at most one interval past its sample (${interp.stats().maxRowExtrapolatedMs.toFixed(3)} ms)`);
+  // the buffer runs dry: the far entity continues from its own newest sample, at most its cadence past the frame cap, without stepping back
+  const dryFrom = serverNow;
+  let previousX = last[2];
+  let farthestMs = 0;
+  for (let f = 0; f < 12; f++) {
+    serverNow += 1000 / 60;
+    const sample = interp.sample(serverNow);
+    const far = sample.entities.find((entity) => entity.entityId === 2);
+    assert.ok(far.x >= previousX - 1e-9, 'the continued entity never steps back');
+    previousX = far.x;
+    farthestMs = Math.max(farthestMs, interp.stats().maxRowExtrapolatedMs);
+  }
+  // the frame cap (one interval past the newest frame) plus the far sample's age at that frame: one, two or three intervals by phase
+  assert.ok(farthestMs <= INTERVAL * 3 + 1e-6 && farthestMs >= INTERVAL - 1e-6, `continued at most the frame cap plus two held intervals past its own sample (${farthestMs.toFixed(1)} ms after ${(serverNow - dryFrom).toFixed(0)} ms dry)`);
+  // an entity at rest whose row is held for seconds, then moves: the old sample is a true pose, the first motion blends
+  const still = new RemoteInterpolator();
+  let restTick = 0;
+  const restRow = { ...row(4, { x: 1000 }), tick: 0, held: true };
+  for (; restTick < 180; restTick += 2) still.push(frame(restTick, [restRow]), Math.round(restTick * 1000 / 60), Math.round(restTick * 1000 / 60) + 40);
+  for (let n = 0; n < 6; n++, restTick += 2) still.push(frame(restTick, [row(4, { x: 1000 + n * 300, speed: 900 })]), Math.round(restTick * 1000 / 60), Math.round(restTick * 1000 / 60) + 40);
+  let previous = null;
+  for (let f = 0; f < 12; f++) {
+    const sample = still.sample(Math.round(182 * 1000 / 60) + f * (1000 / 60));
+    const entity = sample.entities[0];
+    assert.equal(entity.snapped, false, 'no snap when a long-held row starts moving');
+    if (previous !== null) assert.ok(entity.x >= previous - 1e-9 && entity.x - previous < 0.2, `monotone, bounded steps (${(entity.x - previous).toFixed(3)} m)`);
+    previous = entity.x;
+  }
+  console.log('mp interpolation: mixed cadences — a far entity refreshed every third snapshot and a middle one every second present at v·dt like the near one, continue from their own samples on a dry buffer, and a long-held resting row blends into motion');
+}
+
+// ------------------------------------------------------------ the rigid phase keeps no angular continuation (round 2, U14)
+// A remote hull in the rigid phase is extrapolated without continuing its angles: wire 10's TUMBLING alone (a plain
+// tumble: a stack kick, a landing on its side) as OVERTURNED or AUTO_RIGHTING (its sub-states) always were. Before, the
+// interpolator read the phase as OVERTURNED|AUTO_RIGHTING only, so a plain tumble was continued as short-arc ground motion,
+// and a TUMBLING change between two rows did not end the continuation either.
+{
+  const yawStep = 0.12; // rad a frame: a rolling hull
+  const continuedYaw = (flagsOf) => {
+    const interp = new RemoteInterpolator();
+    for (let n = 0; n < 4; n++) {
+      interp.push(frame(n * 2, [row(1, { z: n * 500, speed: 1500, yaw: quantizeAngle(n * yawStep), flags: flagsOf(n) })]),
+        n * INTERVAL, n * INTERVAL + 40);
+    }
+    // past the newest frame by half an interval: the continuation's own branch (continueRow)
+    const sample = interp.sample(3 * INTERVAL + 2 * INTERVAL + INTERVAL / 2);
+    assert.ok(sample.extrapolatedMs > 0, 'the sample is past the newest frame');
+    return sample.entities[0].yaw - 3 * yawStep;
+  };
+  const ground = continuedYaw(() => 0);
+  assert.ok(ground > yawStep * 0.3, `a supported hull continues its turn (${ground.toFixed(4)} rad past its newest yaw)`);
+  for (const [name, bits] of [['OVERTURNED', ENTITY_FLAGS.OVERTURNED], ['AUTO_RIGHTING', ENTITY_FLAGS.TUMBLING | ENTITY_FLAGS.AUTO_RIGHTING],
+    ['TUMBLING alone (a plain tumble)', ENTITY_FLAGS.TUMBLING]]) {
+    const extra = continuedYaw(() => bits);
+    assert.ok(Math.abs(extra) < 1e-3, `a hull in the rigid phase (${name}) keeps its newest yaw (${extra.toFixed(4)} rad past it)`);
+  }
+  const entering = continuedYaw((n) => (n === 3 ? 0 : ENTITY_FLAGS.TUMBLING));
+  assert.ok(Math.abs(entering) < 1e-3, `a hull that just left the tumble is not continued from its tumbling row (${entering.toFixed(4)} rad)`);
+  console.log('mp interpolation: the rigid phase, a plain tumble (TUMBLING alone) included, keeps no angular continuation');
+}
+
+console.log('mp interpolation: v·dt steps at two intervals of delay, jitter/loss adaptation bounded at four, one-interval extrapolation cap, shortest-arc angles, teleports snap, hidden entities leave, monotone ground / ballistic air, shells + meta pass');

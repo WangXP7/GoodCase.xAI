@@ -1,0 +1,3362 @@
+# Changelog
+
+Chronologische Liste aller erledigten Features und Fixes (neueste zuerst).
+
+---
+
+## 2026-10-04
+
+- [x] **Release 0.6.0** (`f6bf5f48`, Tag `v0.6.0`): Simulation im Worker, neuer Laufplan, wütende Bosse, Eliten,
+      Blutmond-Mutatoren, Spuren je Spawn; Installer, AppImage, Web und Relay-Image live.
+- [x] **Playtest 2026-10-04** (Ergebnisse in [docs/PLAYTEST.md](docs/PLAYTEST.md)): bestanden E95 (N1 bis N14), E71
+      (N15, W), E76 (W1.4), E34, E35, E36, E39, A2, C19, E37; Gesamtgefühl releasetauglich.
+- [x] **Fixes aus dem Playtest**: HQ-Darstellung kannte das HQ seit dem Worker-Umbau nicht, also keine Leckzahl,
+      kein Ton, kein Feuer (`bb775d7c`); Ticks im bemannten Tower entfernt (`191d5013`); App-CSP ließ das Stylesheet
+      von Angular 22.2 nicht zu (`2964f5fa`); Überschriften ohne Serifen (`80d0264e`); Name nur in der ersten Spur
+      (`6f1f78fe`); nach dem Benchmark zurück zum Ort (`233e63a9`); Wellen-Tooltip in Blöcken (`6f84ed62`).
+- [x] **Coop und Orte**: Host speichert das Coop-Replay (`beea8747`), Rückfrage vor Start mitten im Solo-Lauf
+      (`ed069762`), eingefügter 3DTD-Link öffnet den Ort mit allen Spawns (`3a4f02e4`), Favoriten mit allen Spuren
+      (`263b7a92`).
+- [x] **E112 (a), (b), (d), (e)**: Steuerungs-Hilfe in einer Reihe, Tasten als Kappen, Header mit Trennern (`0699f151`,
+      `915da012`).
+
+## 2026-10-03
+
+- [x] **Menschenähnlicher Bot** (E106, B1 bis B6): Wahrnehmung der Wellen, Bauplatz nach Sichtlinie, Schiedsrichter
+      nach Nutzen je Gold statt Prioritätsliste, Zielwahl, Verkauf, Forschungs-Slot, drei Profile, Gold im Coop.
+- [x] **Werkzeuge**: Browsertest `e2e/tests/bot-player.e2e.ts`, Lauf-Vergleich `tools/play-profile`.
+- [x] **CI**: Relay-Image mit `configs/timing.config.ts`, Lint in `replay-file.spec.ts`.
+- [x] **Aus TODO genommen, erledigt**: E99 (der neue Anfänger-Bot rüstet weiter auf statt zu horten).
+
+## 2026-10-02
+
+- [x] **Balance nach dem W60-Lauf** (E95): Wellen-HP beim Start bemessen, Druck-Regler 0,5 bis 2,5, echte Bosse
+      (Herbert-Wut, Ooze mit Brut, Golem King W40, Dragon Matriarch W50, Skarnax-Leck 150), Eliten.
+- [x] **Inhalt und Tempo**: Forschung mit Wellensperren und Kosten nach Einkommen, flachere Gold-Kurve, Archer,
+      Rakete und Tentacle aufgewertet, neuer Laufplan mit Rhythmus, Blutmond-Mutatoren, Regen und Phasing.
+- [x] **Rechenwerkzeug** `tools/balance-calc`: echter Wellenplaner gegen die Abwehr eines aufgezeichneten Laufs.
+- [x] **Darstellung** (E95): Geschosse fliegen bei hohem Tempo bis zum Treffer, Debug-Marker nur mit Overlay,
+      Soldier-Vorschau heller, Air-Warnung je Besitzer und sofort.
+- [x] **Spuren** (E96): jeder Spawn eine Spur, Startgold und Forschungskosten je Spur, Sperren ab Welle 1, im Coop
+      mehrere Spuren je Spieler (Protokoll 3), Längen-Leiste.
+- [x] **Eliten und Replays**: Elite-Größe auch in der Simulation; Replay-Dateien mit Größengrenze und Prüfung beim Laden.
+- [x] **Tower-Kandidaten**: Blender-Werkzeug zum Zerlegen und Vorführen (`tools/blender/split_tower.py`).
+- [x] **Aus TODO genommen, erledigt**: J2, E27, E58, E65, E72, E85, E87 bis E91; aufgegangen in E95: E54, E67, E69,
+      E70; E66 unter „Entschieden“.
+
+## 2026-10-01
+
+- [x] **Review gegen main** (Nachtlauf): 16 Regressionen des Worker-Umbaus behoben, u. a. Run-Log nach Ortswechsel
+      und bei hohem Tempo, Forschung nach Restore, Kill-Zuordnung im Coop beim Verkauf.
+- [x] **Robustheit und Bedienung** (zweites Review): Relay-Deckel, Timeouts für Relay und Ortssuche, Fehlerpfade der
+      Simulation, Tastatur und Fokus in Dialogen; Rest in E92.
+- [x] **Coop: Wächter für stille Verbindung** (`7379e953`): nach 20 s ohne Nachricht vom Relay Meldung statt Stillstand.
+- [x] **Ein Hinweisbanner** (`e4810de4`, `c7c29e4b`, `dec58755`): fehlende Modelle, Simulationsfehler und ein nicht
+      erreichbarer Kartenserver melden sich dort, mit Reload; nur ein abgelehnter Schlüssel führt zur Schlüsseleingabe.
+- [x] **Gunner-Modus** (`87ffcf96`, `003279c2`, `a4abc8e5`): feuert auch beim Schwenken, keine Paketflut beim Zielen,
+      danach wieder 30 Pakete pro Sekunde.
+- [x] **Route schwebt nach dem Laden** (`8ca156ce`, E93): Korridor-Region im richtigen Rahmen, Neubau auf neuen Tiles.
+- [x] **Spiellogik** (`378f4a64`, `0fa3953e`, `137c4f73`): Rückerstattung beim Verkauf des Forschungszentrums,
+      Kill-Budget im neuen Lauf, Zielstrategie greift sofort, erster Gegner einer Welle kommt sofort.
+- [x] **Sicherheit** (`3d812465`, `232b0e2b`): Bot-Server nur lokal und ohne Pfad-Ausbruch, Desktop speichert Läufe
+      auch ohne Update-Feed; Rest in E94.
+- [x] **Start- und Speicherfehler** (`34241767`, `5bed8ac5`): Worker-Start mit Banner, IndexedDB öffnet nach einem
+      Fehler neu.
+
+## 2026-09-30
+
+- [x] **E78 Messlauf** (`5f12875b` bis `ba500df6`): Pixeldichte 1, Gegner 0,5 m/s, Füllen trifft die Zielzahl genau,
+      `--profile` für CPU-Profile beider Threads.
+- [x] **E82 Performance-Panel** (`670604aa`): Worker je Teil, Einräumen, Spielschleife und Zeichnen; misst nur, solange
+      es offen ist.
+- [x] **E75 FPS-Anzeige in drei Stufen** (`955f5499`): Tempo und Sim-Auslastung, Sounds, dazu Ticks, Speicher-Modus und
+      Mini-Charts.
+- [x] **E74 Benchmark im Spiel** (`f2e16918`): Menü → Benchmark, DevWorld, 2000 bis 10 000 Gegner, Ergebnis zum Kopieren.
+- [x] **E77 Lebensbalken über 20 000** (`38b5dbf0`): Balken- und Gegner-Puffer wachsen mit der Gegnerzahl.
+- [x] **E79 Replay-Effekte** (`f003ced4`): Replay und Resync räumen die Show wieder ab (seit dem Worker-Umbau verloren).
+- [x] **E80 Replay-Sprünge** (`c2d18259`, `951caf9c`): Zwischenstände im Worker, weitere Sprünge 0,2 statt 2 bis 4 s.
+- [x] **Custom Wave ohne Spawn-Floor** (`4bb4620a`): der Delay des Debug-Panels gilt wieder, auch unter der Mindestpause
+      je Gegnertyp aus E50.
+
+## 2026-09-29
+
+- [x] **E57 Simulation im Worker** (Branch `simu-worker`, `889270eb` bis `d838479a`, [SIM_WORKER.md](docs/SIM_WORKER.md)):
+      Simulation im Web Worker, Tabellen im `SharedArrayBuffer` (COOP/COEP-Header für Web, Dev-Server, Desktop).
+      5000 Gegner, Tempo 4: Firefox 91 statt 44 FPS; Chromium hält 144 FPS bis rund 11000 statt 4900 Gegner, bei
+      5000 ohne Gewinn. E2E 15/15.
+- [x] **E73 Vorschau der Seitenleiste gebacken** (`4f6307f9`): eine Drehung je Modell einmal gebacken statt live
+      gerendert und kopiert; Firefox bei 5000 Gegnern 21 auf 44 FPS (`next`), 68 auf 91 (Worker).
+- [x] **H6 Tick und Bild entkoppeln**: mit E57 erledigt, das Bild wartet nicht mehr auf die Simulation.
+- [x] **Budget-Quelle** (`65ee649b` bis `5da214bc`, [WAVE_RUN_PLAN.md](docs/WAVE_RUN_PLAN.md)): Laufplan W1 bis W60,
+      HP aus einem Budget gegen die Abwehr, eine Grenze je Gegner aus der Zeit unter Feuer (auf der Route mit echter
+      Sichtlinie gemessen). Mit Bots kalibriert: Todeswelle 37 bis 40 gegen 30 bis 36 beim adaptiven Director. Noch
+      nicht Standard, `?waves=budget` schaltet um.
+- [x] **Wellenregeln aus der Quelle** (`be3537d6`): Leck, Gold, Boss und kommende Gegner liest das Spiel aus der
+      aktiven Quelle statt aus der Kampagne.
+- [x] **Coop: der Host bestimmt die Wellenquelle** (`fbc25318`, `2cf6ca5c`): der Gast übernimmt sie mit der Welt.
+- [x] **E58 Coop-Resync, erster Bau** (`b1b8b643`): nach einer Abweichung lädt der Gast den Stand des Hosts an einer
+      gehaltenen Tick-Grenze; im Browser mit Bots geprüft.
+- [x] **Snapshot zwischen den Wellen** (`5d00fcfb`): geladen sprang das Spiel in eine leere Welle und zahlte ihr Gold
+      noch einmal.
+- [x] **Bot baut erst aus** (`61000404`): vier Tower und einer mehr je Welle, dann Upgrades.
+- [x] **Werkzeuge** (`2cf6ca5c`, `69326185`, `7f92284a`, `a4f9d99c`): `tools/wave-report`, Runner mit Plan, Lauf-Log
+      und `--falsify-at-wave`, `e2e/perf/render-costs.ts`, E2E-Test der Budget-Quelle auf echter Karte.
+
+## 2026-09-28
+
+- [x] **E64 Coop Chrome gegen Firefox lief auseinander** (`4091f8fd`): Firefox übersprang nach 12 bis 17 Minuten im
+      Flächenschaden die Abnahme mit dem Abstand (vermutlich sein optimierender JIT). Schalter entfernt, Abfall ohne
+      Zweig; vorher 5 von 7 Räumen abgewichen, danach 0 von 4. Relay: Prüfsumme je Tick für lokale Fehlersuche, die
+      Nachrichtengrenze passt sich an (`f3d60dd5`, `5834e368`).
+- [x] **E28 Eigene Mathe in der Sim** (`fa471ecf`, `f4b7acf9`): sin, cos, atan2, exp, log, pow usw. deterministisch,
+      in Node, Chromium und Firefox bitgleich; Lint-Regel auch für three.js-Methoden mit Trig. Kein Tempo-Verlust.
+- [x] **Zielhöhe der Gegner fest in der Config** (`b82e26da`): maß vorher jeder Client selbst aus dem Modell.
+- [x] **E63 Prüfsummen-Lücken** (`ad0d7fe6`, `c1e6615d`): alle 14 geprüften Verfälschungen fallen sofort auf; alte
+      Replays laden ohne Summenprüfung.
+- [x] **Wellen-Snapshot mitten in der Welle** (`eee5a16f` bis `56a39005`): bitgenau fortsetzbar, auch Würmer, Oozes,
+      Fähigkeiten, Held. Grundlage für C5b; Übertragung nicht gebaut.
+- [x] **E53 Coop mit Bots** (`2bacf6ef`, `0bcef516`): Bot spielt einen Platz, Runner für viele Räume, Chromium oder
+      Firefox je Platz, Mitschnitt je Tab. 22 Läufe zu zweit: gemeinsames HQ trägt alle Lecks (siehe E66).
+- [x] **E62 Drei und vier Spieler** getestet: synchron, Gold je Spieler gleich; Relay-Option `--max-per-address`.
+- [x] **H13 Straßen parallel zu den Kacheln** (`21efe71d`, `20b39d2d`): Anfrage startet früher, Umkreis unverändert.
+- [x] **J4 Große Dateien aufgeteilt** (`cdcf0404` bis `48d82b7b`): Spielzustand, Coop-Dienst, Gegner-Manager,
+      Tiles-Engine, Routen-Raster, Korridor.
+- [x] **J3 Wackeliger Test** (`be0de098`): Zufallswert im Test, 0 von 2000 rot.
+- [x] **E59, H3 Leistung gemessen**: Firefox 1,7 bis 2,6 mal langsamer je Schritt; Projektil-Pool lohnt nicht
+      (GC 0,14 %).
+- [x] **J7, J8 Browser-Tests** alle 14 grün, drei Tests an Menü und doppelten Knopf angepasst.
+- [x] **E32 Kein Desync nach Kill-all** (gebaut 2026-09-26): der Stream `director` ist nicht mehr in der Prüfsumme.
+- [x] **E13 Kanone** (gebaut 2026-09-26): Upgrades 15 % teurer, Schadensanteil 28,9 % → 24,7 % (je 70 Könner-Läufe).
+- [x] **E16 Ooze-Warteschlange über die Wellennaht** (geklärt 2026-09-26): tritt nicht ein, belegt per Test.
+- [x] **E21 Abstand großer Gegner** (gebaut 2026-09-26): mindestens 600 ms in W14, W15, W25.
+- [x] **J5 Doppelte Helfer zusammengelegt** (gebaut 2026-09-26): Storage, Zeitformat, `coordKey`, Tiles-Interna.
+- [x] **J6 Spec-Typen** (gebaut 2026-09-26): ohne Fehler, der Release-Workflow prüft sie mit.
+
+## 2026-09-27
+
+- [x] **Spawn-Höhe aus den geteilten Zellen** (`6dfc0d5f`, aus E63 b): ohne Höhe am Startpunkt las der Spawn die
+      eigenen Tiles, der Koop lief ab dem ersten Gegner auseinander. Drei neue Lockstep-Fälle.
+- [x] **Lint: kein `Math.random` in der Sim** (`7a5f9cd0`, E63 c), sieben begründete Ausnahmen.
+- [x] **Forschung ohne `startTime`** (`baebbd67`, E63 d): Wanduhr-Feld, nie gelesen.
+- [x] **Math-Determinismus gemessen** (E28): App = Chrome/Edge aktuell bitgleich, Firefox und ältere V8 nicht;
+      eigene Implementierungen überall bitgleich, Kosten im Spiel vernachlässigbar. Umstellung offen.
+- [x] **Releases 0.5.0 und 0.5.1**: Coop live; Spielmenü, Update-Hinweis, Landing, README, Security-Review.
+- [x] **A3 Spielmenü** (`c169ba7c`): Zahnrad und Esc; Vollbild, Lautstärke, Map key, What's new, Keys, Credits,
+      Quit in der App mit Rückfrage; allein pausiert das Spiel. Keys, Credits und Map Key raus aus der Sidebar.
+- [x] **A4 Update-Hinweis über Dialogen** (`c169ba7c`): hängt im CDK-Overlay, „Restart now“ trotz Standortdialog.
+- [x] **J9 Coop-Video auf der Landing** (`2f931f37`): Abschnitte Co-op und Videos, Hero ist der Coop-Actionschnitt.
+- [x] **E40 Verbindungsverlust**: Dialog „Allein weiterspielen / Raum verlassen“ im Spiel.
+- [x] **E41 Director-Kleinteile**: Kompression und Anti-Windup aus der gelieferten Welle, Vorschau passend.
+- [x] **E42 Ton im Geschütz** nur für den eigenen bemannten Tower.
+- [x] **E43 Lightning-Sichtlinie**: Ziel wird nachgeprüft, Sprünge nur zu Sichtbarem.
+- [x] **E44 Run-Log/Relay**: Name, Kills verkaufter Tower, Cheats, Fähigkeiten-Schaden, Director-Felder beim Gast.
+- [x] **E45 Upgrades ×5/×10**: Shift+U und Ctrl+U, dazu Shift-/Ctrl-Klick.
+- [x] **E46 Game-Over-Screen**: Gold je Spieler, Mini-Charts je Welle.
+- [x] **E47 Druck-Multiplikator an einer Stelle**: nur im Kill-Budget, Deckel stetig
+      ([Plan](docs/archive/PRESSURE_ONE_PLACE_PLAN.md)).
+- [x] **E48 Regler-Messwert gekappt**: eine Welle zählt höchstens rund 3× Ziel.
+- [x] **E49 Leckschaden je Gegnertyp**, sichtbar in Vorschau, Tooltip und am HQ.
+- [x] **E50 Spawn-Boden je Typ**: Schwarm-Templates höchstens 600 je Lane (Ratten 1200).
+- [x] **E51 Kill-Modell kalibriert**: Realismus 0,85 bis W10, danach 1,0.
+
+## 2026-09-26
+
+- [x] **Coop-UI und Standortdialog überarbeitet** (`b6d7d61d`, [Plan](docs/archive/COOP_UI_REWORK_PLAN.md), U1 bis U8):
+      Standortdialog mit festen Tabs Place/World/Coop, Coop-Einstieg mit Umschalter Online/Same network, Raum als
+      Tabelle, gemeinsame Coop-Styles, Tab/Enter/Esc an Knöpfen korrekt, Squad-Box neben der Fähigkeitenleiste.
+      Nachtests T73 bis T75.
+- [x] **Fix: Beitritt hing still** (`11556575`): fragte die Raumliste parallel ab, nahm sie dem Beitritt die
+      Antwort weg; jetzt eine Anfrage je Session.
+
+## 2026-09-24
+
+- [x] **C18 Wellenstart- und Wellenende-Sound zu abrupt** (`258b1d5c`, `11aad33a`, `113e2adb`): Erst blendet die
+      Musik aus, dann kommen Start-Signal oder Horn in die Stille, der Vorlauf wird mit dem Spieltempo kürzer; die
+      drei Sounds blenden ein statt abgeschnitten zu beginnen. Nachtest S1 ok.
+- [x] **Wellengröße unabhängig vom Bauzeitpunkt** (`6c2d3a6c`): Der adaptive Director plant eine Welle am Ende der
+      Vorwelle statt beim Start; in der Pause Gebautes macht sie nicht mehr größer. Nachtest S2 ok.
+- [x] **E2 Replay als Neu-Simulation** (Branch `simulator`, 1b2e275c..HEAD): jede Welle des Laufs wird aus ihrem
+      Snapshot am Wellenstart und dem Befehlslog bit-genau nachgerechnet, mit Springen, Wellenwahl und Datei zum
+      Speichern und Laden. Dafür deterministische Simulation (Befehle an Sub-Step-Grenzen, Turmdrehung in der Sim,
+      Sicht als Daten, Prüfsumme), das Präsentations-Replay ist entfernt. Playtest Paket R ok. Doku:
+      [docs/REPLAY.md](docs/REPLAY.md), [docs/SIMULATOR_PLAN.md](docs/SIMULATOR_PLAN.md).
+
+## 2026-09-23
+
+- [x] **Tower bemannen** (`669a0591`): mit `C` in einen Projektil-Tower steigen, aus der Egoperspektive zielen
+      und feuern, nach den Regeln des Towers; Fehlschüsse fliegen frei. Doku: [docs/TOWER_CONTROL.md](docs/TOWER_CONTROL.md).
+- [x] **E22 Sound-Paket** (`c87f300b`, `4cf54995`, `6e520466`, `cd5ffed2`, `c73bcd0f`, `4222d1e2`, `83b97854`,
+      `b9b58a36`): acht Bugs (Zufallsrufe, Musik nach Neustart, Autoplay, Pegel des Hauptthemas u. a.),
+      Master-Regler und `M`, Tode, Treffer, stumme Gegner, Held, Spielmomente, UI-Töne mit eigenem Regler,
+      Boss-Signaturen, Musik für Boss, Blutmond und Game Over, Ducking. Plan und Stand:
+      [docs/archive/SOUND_PLAN.md](docs/archive/SOUND_PLAN.md).
+- [x] **E5 Raketen-Sound** (`6e520466`): neues Abschuss-Zischen statt des tiefen Knalls.
+- [x] **E4 Stone Golem: Schritte und Beben** (`6e520466`, `b9b58a36`): schwere Schritte im Takt der
+      Laufanimation, tiefer gespielt, mit Beben in Kameranähe.
+
+## 2026-09-21
+
+- [x] **G3 Forschung als Dialog mit echtem Graphen** (`c2ac9734`, `b030b88d`, `a803a4c8`, `8a177e7a`, `ca38a937`,
+      `54e94689`, `f641d0b3`, `96712b19`, `26398c6f`): Ebenen und Kanten rechnet `utils/dag-layout.ts` aus den
+      Vorbedingungen, die darstellende Baum-Komponente kennt nur Zustände (für den Heldenbaum G2 wiederverwendbar),
+      der Dialog füllt den Bildschirm und bringt Warteschlange und Detailpanel mit. Erreichbar über den Knopf im
+      Panel, den Knopf im Header und die Taste `Q`. Umsortieren der Warteschlange ist neu (`moveQueued`), der Rest
+      war schon da. Design des Claude-Designers umgesetzt, ohne die drei leeren Reiter und die Chips als Filter.
+- [x] **E10 Schaden je Gold je Tower-Typ** (`de9ad71a`, `c7e1e11e`, Nachtest L8): `towerSpending` je Typ im
+      Wellenblock (Format 2), der Python-Bericht rechnet Gold je Lauf, Gold-Anteil und Schaden je Gold. Die
+      Kennzahl beantwortet E13: die Kanone macht 3,56 Schaden je Gold gegen 1,54 beim nächsten Breitband-Tower.
+      Altläufe (Format 1) wertet ein Fallback über die `tower-built`/`tower-upgraded`-Ereignisse aus.
+- [x] **E11 Eine Leiche zu viel im Körper-Abgleich** (`acc90570`, Nachtest L9): Nicht die vermutete
+      `aliveCount`-Drift, sondern deren Ursache: `remove()` nimmt einen geleckten Gegner aus dem Spiel, lässt ihm
+      aber seine HP, und jede Ziel-Prüfung fragt nur `alive`. Ein Tower, der ihn als Ziel hielt, traf ihn weiter,
+      und der letzte Treffer lief den ganzen Kill-Pfad auf einem Körper, der schon als Leck verbucht war. `kill()`
+      weist jetzt ab, was der Manager nicht mehr hält; der Schaden zählt weiter, nur der Kill fällt weg.
+- [x] **H14 Raumindex für `findNearestStreetPoint`** (`3aec8a5a`, `475767cd`, Nachtest L10): Gitter über die
+      Segmente statt linearer Suche, 0,784 ms auf 0,002 ms bei 16402 Segmenten. Antwort identisch, Tie-Break
+      erhalten; einzige Ausnahme ist eine `NaN`-Koordinate, die früher ein beliebiges Segment zurückgab und jetzt
+      `null`. Index je Netz-Objekt in einer `WeakMap`, also nach einem Ortswechsel zwangsläufig neu.
+- [x] **H9 (Teil) `aria-label` an allen Icon-Buttons** (`98c1ca67`, `c8b196ac`, Nachtest L11): Der Teilpunkt war
+      schon erfüllt, alle 53 Icon-Buttons hatten eins. Gebaut wurde, was fehlte: `aria-pressed` an 25 Umschaltern,
+      `role="group"` an sechs mehrdeutigen Gruppen, vier zu dünne Labels geschärft. Der Rest von H9 (Presets,
+      Breakpoints, Touch-Ziele) steht noch offen.
+- [x] **B5 Strassen-Overlay und Intro-Flug behalten ihre eigenen Höhenabfragen** (`5b881751`, Entscheidung): Das
+      Overlay zeichnet bis 100 m neben der Route, dort gibt es keine Korridorzellen, und seine Höhe ist der
+      Vergleichswert für `maxCellAboveStreetM`. Der Flug braucht die Oberkante, die eine Zelle nicht führt, und
+      liest die eingefrorenen Höhen ohnehin. Begründung in ROUTE_CORRIDOR.md.
+- [x] **Biology-Tor, Stränge und ein Glyph je Forschung** (`ca38a937`): Vier gleichwertige Wurzeln wurden drei, der
+      organische Zweig hängt hinter `biology` (120, 8 s, neue Kategorie `gate`). Jede Forschung trägt jetzt einen
+      Strang (Ballistics, Arcane, Biology, Engineering) und ein eigenes Symbol; vier Icons waren doppelt vergeben.
+      Der Bot bewertet einen Torknoten mit 90 % des Besten dahinter, sonst wäre alles dahinter unerreichbar.
+
+---
+
+## 2026-09-20
+
+- [x] **E8 Tower gezielt aus- und einschalten** (`1b07d35f`, `391f3589`, `99f3758c`): Knopf "Hold fire" am Ende der
+      Zielwahl-Zeile im Tower-Panel, über `command:set-hold-fire` (der Replay zeichnet ihn auf). `Tower.findTarget()`
+      findet dann nichts, alle vier Kampfschleifen laufen in ihren Zweig ohne Ziel: kein Schuss, die Flamme geht
+      sofort aus, Richtung bleibt, Verkaufen und Aufrüsten gehen weiter. Der Tower wird auf 22 % Helligkeit
+      ausgegraut und trägt ein rotes Pause-Zeichen an der Stelle seines Rang-Abzeichens (gleicher Draw Call).
+      Passive Gebäude haben den Knopf nicht.
+- [x] **E9 Offscreen-Marker klickbar** (`6c6ea689`): Ein Klick auf einen Pfeil fährt die Kamera mit `focusGeo` zum
+      Boss des Sektors, sonst zum Gegner mit dem größten Routenfortschritt, dorthin, wo er beim Klick steht. Die
+      Pfeile sind Buttons mit `aria-label`, nur sie nehmen Klicks; der Benchmark mit 20.000 Gegnern bleibt gleich.
+- [x] **C11 Tank in der Sidebar-Vorschau** (`fad251ca`, `2b378657`, `c3efe07c`, Nachtest K3.3): Die Vorschau maß den
+      frischen `SkeletonUtils`-Klon mit veralteten Knochen-Matrizen; der Tank kam auf 88 × 194 × 139 m mit der Mitte
+      43 m daneben und kreiste aus dem Bild, der Pinguin 169 m daneben. Sie misst jetzt in der gezeigten Pose
+      (Clip auf Frame 0, `updateMatrixWorld(true)`), belegt durch einen Test mit den echten GLB-Dateien. Die 13
+      betroffenen `previewOffsetY` sind umgerechnet, Tank und Pinguin zielen auf die Körpermitte, der Ghost trägt
+      die Werte aus dem Enemy Debug des Users.
+- [x] **J1 Doku-Reste** (`46a57f10`): Rund 30 bekannte Grenzen aus den Worker-Berichten stehen jetzt in 13 Fach-Docs,
+      jeder Punkt vorher im Code geprüft. Weggelassen, weil erledigt oder überholt: "Skarnax Tail" in den Debug-Listen,
+      die fehlende Portal-Shader-Spec, der `centreMode`-Schalter, Zellrahmen nach neuer Messung; weggelassen, weil
+      nicht belegbar: die Ooze über den Wellenwechsel. Der Multiplayer-Teil war mit `6e341130` erledigt.
+- [x] **Route als Standard sichtbar** (`9f77d13a`): Wer das Spiel zum ersten Mal öffnet, sieht die rote Gegnerroute
+      sofort; gespeicherte Einstellungen gewinnen weiter.
+- [x] **Cheat-Kacheln "+HP" und "Credits" feiner einstellbar** (`acf5e3fe`, `84e0922f`): Klick +1000 (Shift
+      +100.000), Rechtsklick -10 (Shift -1000), Mausrad ±100 je Raste (Shift ±1000), Stufen für beide Kacheln in
+      `debug-cheat-amount.ts`. Ein Abzug stoppt bei 0 Credits, das HQ bleibt bei 0 HP stehen.
+
+---
+
+## 2026-09-19
+
+- [x] **H10 Electron-Desktop-Build** (auf Zuruf verschoben): Windows-App mit NSIS-Installer und Auto-Update aus GitHub
+      Releases, Plan E1 bis E46 in [ELECTRON_DESKTOP_PLAN.md](docs/ELECTRON_DESKTOP_PLAN.md). Erstes Release **v0.3.1**
+      am 2026-09-19 veröffentlicht; dazu Changelog für Spieler mit "What's new" (E45), Web und Landing deployen mit dem
+      Release statt bei jedem Push (E46), Ablauf `/release`. Nachtests K8.1 bis K8.3 und K8.5 ok, K8.4 (Hybrid-Laptop)
+      optional offen in `docs/PLAYTEST.md`.
+- [x] **A5 Merge-Ablauf** (auf Zuruf verschoben): `next` ist als v0.3.0 auf `main` (`7675a23d`, 2026-09-17), `main`
+      und `next` stehen auf GitHub auf diesem Commit; am 2026-09-19 mit `git ls-remote` festgestellt, TODO führte den
+      Punkt noch als offen. Die Einzelschritte (Build aus frischem Klon, Gate, Rückweg-Tag) sind hier nicht belegt.
+- [x] **Firefox-Performance bei großen Wellen** (`0e015ef7`, `a19fc291`, auf Zuruf nachgetragen): Bei 5000 Gegnern (x1)
+      Firefox von etwa 22 auf 59 FPS, die Simulation kostet 258 statt 527 ms je Sekunde (Produktions-Build gegen
+      Produktions-Build). Sound-Loop-Handles sind Zahlen statt String-Keys einer Map (SpiderMonkey atomisiert je
+      Lookup), `EntityManager` führt Copy-on-write-Listen statt `Array.from` bei jedem Hinzufügen und Entfernen,
+      Statuseffekte laufen nur für Gegner mit Effekten (`hasStatusEffects`), ein Objekt ohne spielenden Loop setzt zwei
+      Sub-Steps aus; ein wartender Loop übernimmt einen freien Slot dadurch bis zu zwei Schritte später. In v0.3.1.
+- [x] **Showcase-Orte mit festen Spawns** (`461ccfb0`, `6d43f623`, `363bc29a`, vom 2026-09-17, vom User gewählt und im
+      Spiel abgenommen, auf Zuruf nachgetragen): New York, San Francisco, London, Barcelona, Madrid, Prag, Amsterdam und
+      Sydney mit festem Spawn; Paris von der Place de l'Opéra an den Pont d'Iéna unter dem Eiffelturm, Spawn am Trocadéro;
+      Rom von der Piazza Venezia ins Kolosseum, Spawn an der Via dei Cerchi am Circus Maximus. Die Hinweise nennen den
+      Start der Route (Nominatim-Rückwärtssuche am Spawn). Tokyo und Rio unverändert.
+- [x] **Route endet auf einer mit dem Start verbundenen Straße** (`3797ae5f`, vom 2026-09-17, auf Zuruf nachgetragen):
+      Das Segment am nächsten zum HQ konnte auf einem abgeschnittenen Weg liegen (im Kolosseum eine Passage 29,5 m vom
+      HQ ohne geladene Verbindung), jeder A*-Lauf dorthin scheiterte, es gab weder Zufalls-Spawn noch Route. Der
+      Straßengraph nummeriert seine zusammenhängenden Teile einmal, das Routenende ist das nächste Segment im Teil des
+      Starts, höchstens `MAX_HQ_STREET_DISTANCE` weiter als das nächste überhaupt.
+- [x] **I3 Zähler ohne Leser** (auf Zuruf verschoben): `peekSkipCount` und `raycastCount` aus
+      `route-cell-sampler.ts` entfernt; `sampleFrame` bleibt, `GlobalRouteGrid.dumpStats` liest ihn.
+
+## 2026-09-17
+
+### Raketensilo für den Nuklearschlag
+
+Vom User im Spiel abgenommen (K7 in `docs/archive/PLAYTEST_2026-09.md`). Gebaut von den Workern silo-asset, silo-game
+und silo-vfx (`7872ddd4` bis `923e2ecb`), Gate grün auf `7e258f79` (5135 Tests), Review ohne Code-Befund.
+
+- [x] **Missile Silo** (`681a057c`, `2c05bba3`, `cfefbed1`): Die Forschung Nuclear Strike schaltet das Gebäude frei, 400
+      Credits, eines je Karte, verkaufbar. Einmal-Gebäude generisch über `TowerTypeConfig.unique` statt der Prüfung auf
+      die ID des Research Center; gewählt zeigt das Silo das neue `building-panel` (Text, Fähigkeit, Verkauf).
+- [x] **Nuklearschlag startet vom Silo** (`0b9e5e86`, `af3cfdf3`): `AbilityConfig.launchFrom`, ohne Silo kein Knopf
+      und Ablehnung `no-launch-site` (Hinweis bei K), Ladungen laufen weiter; `ability:used` trägt `launch`.
+      Vorwarnung fest 6,5 s (390 Sub-Steps) statt 1,5 s, Wirkung unverändert.
+- [x] **Rakete im Bogen** (`7809f4b2` bis `e33ad84d`, `97d400da` bis `242de00d`): Der GLB-Node `missile` hebt
+      dort ab, wo er im Silo steht, mit Zündblitz, Feuer und Rauch aus dem Schacht, Startwolke, Triebwerksflamme,
+      Rauchspur und Start-Shake, steigt auf einen hohen Scheitel und stürzt genau mit dem Atompilz ein
+      (`MissileFlight`, `MissileLaunchRenderer`, in Spielzeit).
+      Ton mit ElevenLabs: Zündung, Triebwerks-Loop an der Rakete, Pfeifen im Sturzflug. Im Silo steht die Rakete nur,
+      solange eine Ladung bereit ist (`ThreeTowerRenderer.setPartShown`).
+- [x] **Asset** (`87fb8ab1`, `75adb909`): `missile_silo.glb` (1 MB) mit den Nodes `silo` und `missile`, gebaut von
+      `tools/blender/missile_silo.py` aus dem Meshy-Modell; für eine neue Modellversion das Skript neu laufen lassen.
+- [x] **Bot** (`a0150968`): baut das Silo nach der Forschung und hält den Schlag über 6,5 s vor (`enemyAhead`).
+- [x] **Auto-Wave-Countdown** (`48601372`): zeigte bei manchen Uhrwerten einen Frame lang 11 statt 10 s
+      (Gleitkomma beim Aufrunden).
+
+### Nachtests und Befunde aus dem Playtest vom 16. und 17. September
+
+Vom User im Spiel abgenommen; Punkte und Ergebnisse in `docs/archive/PLAYTEST_2026-09.md` (K2 bis K6). Gebaut von den
+Workern plinthedge, cornerarc, hqleg, innerfold, portalclip und portalcentre, Gate grün auf `0c0b4570` (5045 Tests).
+
+- [x] **Nachtests K2 und K3**: Laden, Eichung und Rückfall (744, 746) ok; Skarnax mit Stimme, Textur, Beinen und
+      Schwanz ok, Tank-Modell ok, Kragsteine an der Dachkante ok (Sockel dazu siehe C10).
+- [x] **C10 Sockel an Dachkanten und Wänden** (`0b25c534` bis `0889daa0`, K4): Der Sockel reicht an einer Kante
+      höchstens 3 m hinab, darunter Kragsteine, an einer flachen Kante als Platte; Mitte oder innerer Ring über einem
+      Abbruch ("Too far over the edge") oder an einer Wand ("Not enough room"): rot. Der Trainings-Bot nimmt den ersten
+      Kandidaten, an dem ein Tower stehen kann.
+- [x] **C12 Gegner springen an Knicken** (`f2cc178f` bis `1276d1ff`, K5): Ecken im Bewegungsmodell auf einem Bogen
+      über die ganze Knick-Gruppe, Radius so weich, wie die seitliche Grenze erlaubt; Formation, Fortschritt und
+      Ankunft unverändert, Wurm und Held unverändert. Die Bögen entstehen beim Einfrieren in Zeitscheiben.
+- [x] **C13 Endstück zum HQ steigt aufs Dach** (`d81bad5c` bis `4707e72e`, K6): Das Endstück trägt die Straßenhöhe
+      weiter wie das Brückenende (`carried-height.ts`); ein Treffer mehr als 1,5 m über der getragenen Höhe ist kein
+      Boden. Audi NSU und Erlenbach BBH als Snapshot-Spec.
+- [x] **C14 Gegnerlinie faltet sich an Innenecken** (`28f91f24`): `bandPath` verwirft Stationen innen hinter dem
+      Gehrungspunkt. Rest: Zwei Knicke auf einem sehr kurzen Stück können noch kurz zurückgehen.
+- [x] **C15 Flaches Spawn-Portal** (`d7c80697` bis `df27ba7d`, `9eb07e31` bis `0c0b4570`): Der Rahmen ist nur noch
+      der Bogen mit den großen Hörnern, mittig um die Portalebene, Sigillen vorn und hinten; Asset aus
+      `tools/blender/spawn_portal.py` neu gebacken. Gegner, Healthbars und Ooze werden hinter der Ebene in einer
+      Clip-Box per Shader verworfen und treten mit leuchtendem Saum heraus; rote Linie, Routen-Animation und Grid-Overlay
+      enden an der Ebene. Nur Optik. Grenzen: Drache ragt unter Skala 1,5 kurz aus der Box; eine Route, die hinter der
+      Ebene zurückläuft, verschwindet dort erneut.
+- [x] **Zufalls-Spawn auf geradem Stück** (`cbdec4e5`): Ein Zufalls-Spawn rückt entlang seiner Route Richtung HQ, in
+      Schritten von 0,5 m und höchstens 30 m, bis die Route bis zur Portalebene um weniger als 5° abknickt; das Portal
+      steht dann nicht mehr schräg in einer Einmündung (Slip Street). Offener Rest: C16.
+- [x] **Route endet am günstigeren Ende des HQ-Segments** (`2ff5d843`): A* nimmt beide Enden des Segments am HQ als
+      Ziel statt des ersten Knotens des OSM-Ways; auf der Plaça de Catalunya läuft die Route über den Platz statt außen
+      herum. Vom User abgenommen.
+
+## 2026-09-16
+
+### Korridor vom User abgenommen
+
+Der User hat den Korridor am 2026-09-16 abgenommen ("Das gesamte Korridorthema ist jetzt mal soweit in Ordnung");
+der Nachtest K1 entfällt damit. Punkte in `docs/archive/PLAYTEST_2026-09.md`.
+
+- [x] **Korridor einmal fertig messen, dann einfrieren**: im Ladescreen auf 2,5 m gemessen, einmal gebaut und
+      eingefroren (`3f66a256`, `307df4b5`), das begehbare Band baut den Korridor (`89651d26`), Kette und Knick-Rahmen
+      (`75be147c` bis `47b29354`). Grund für DONE: Korridor vom User abgenommen.
+- [x] **Durchgang unter dem Weißen Turm (743)**: Jede Station trägt ihre eigene Straßenhöhe, die Durchgangsregeln
+      lesen sie (`b75eaa3e`); die rosa Zellen am Rathaus sind weg (`6cadea9d`).
+- [x] **Derselbe Korridor nach Navigation und `reset()` (745)**: Der Säulen-Cache castet in der Feldmitte, Stationen
+      messen exakt (`5cdcd13f`, `c2cf606a`).
+- [x] **Ein Ort, ein Korridor (747)**: HQ und Spawns kommen auf jedem Weg mit 5 Nachkommastellen ins Spiel
+      (`397041eb`); ein Durchgang entsteht, wo die Linie eine Überdeckung kreuzt, unabhängig von der Gitterlage
+      (`cac8c792`).
+- [x] **Kachel "Snapshot"**: speichert den ganzen Korridor als JSON (`8f672c0b`).
+
+### Listen und Doku aufgeräumt
+
+- [x] **Eine Liste offener Arbeit**: TODO.md auf die Gruppen A bis J gekürzt (`44020e87`), PLAYTEST.md nur noch
+      offene Nachtests (`27921cc3`), die fünf REVIEW-Handover und die alte Playtest-Liste im Archiv (`5e53a222`),
+      Run-Dump-Anforderungen in `docs/RUN_DUMP_PLAN.md`.
+- [x] **Veraltete Doku und Kommentare nachgezogen**: ARCHITECTURE, DEVWORLD, ROUTE_CORRIDOR, STATIC_WAVE_FALLBACK,
+      ROUTE_ALIGNED_CELLS_CONCEPT und Code-Kommentare zum eingefrorenen Korridor, zum lokalen Frame und zu gelöschten
+      Dateien (`9410922d`).
+- [x] **Weitere Dokumente im Archiv**: `HANDOVER_RULE_DIRECTOR.md` und `HANDOVER_TRAINING_REFRESH.md` (`2e848c85`),
+      `PERF_BUG_ANALYSIS_2026-05-28.md` mit den Benchmarks jetzt in ARCHITECTURE, die Abschnitte 0 bis 6 von
+      `PLAYER_AGENCY_CONCEPT.md` als `archive/PLAYER_AGENCY_CONCEPT_2026-09-11.md` (`fbd30436`).
+
+### Entscheidungen des Users
+
+Getroffen über die Klickliste vom 2026-09-16; keine Arbeit daraus.
+
+- [x] **ONNX-Modell und Training bleiben** im Repo (Opt-in im Debug-Fenster, Backend für Trainingsläufe).
+- [x] **Kette und Knick-Rahmen (Playtest 748) bleiben.**
+- [x] **Skarnax-Ringe**, die neben einem Transporter schräg im Korridor stehen, stören nicht.
+- [x] **Suchscheinwerfer bleibt, wie er ist** (kodiert sein Licht selbst, nicht über `displayLight`).
+- [x] **Dev-Menü, Konsolen-Globals und Dauer-Messungen bleiben im Release-Build**: Cheats, `__corridor`, `__rg`,
+      `__perf` usw., die Raycast-Zeitmessung und das `[Camera]`-Log.
+- [x] **32 Worker-Entscheidungen bestätigt**, die im Playtest ohne Einwand blieben, dazu "Shader-Prüfung mit
+      glslangValidator bleibt manuell" (ARCHITECTURE.md, Abschnitt 13). Die Entscheidungen stehen in `docs/archive/`:
+      REVIEW_SPRINT_2026-09-11 Nr. 1; -12 Nr. 1, 4, 7; -13 Nr. 3 bis 14, 16 bis 18; -14 Nr. 1, 4, 5, 11, 13, 16, 17,
+      19 bis 21, 24, 26, 28.
+
+### Bugs, Kosmetik und Aufräumen aus der Klickliste
+
+Gebaut von den Workern smallbugs2 und hygiene, Gate grün auf `77aa0771` (4957 Tests). Nicht im Browser angesehen.
+
+- [x] **A4 Replay-Knöpfe ausgeblendet** (WAVE-Panel, Game-Over), `REPLAY_CONFIG.offered = false`; die Aufnahme läuft
+      weiter (`c8a7e60f`).
+- [x] **E3 Bär dunkler**: `colorMultiplier` 1,3 auf 0,8, Leuchten 0,15 auf 0,05 (`38ab232c`).
+- [x] **A1 teilweise**: Stone Golem und Herbert als eigene Modelle in den Lizenzangaben (`fefb1522`).
+- [x] **B7 Schalter `centreMode` entfernt**, die Gegnerlinie läuft in der Bandmitte (`cf437e25`).
+- [x] **B13 Pathfinding-Worker entfernt**, er startete nie (`39be1a3f`).
+- [x] **C1 Tower-Sichtlinie für Zellen ohne Höhe** probt über der Höhe, auf der Gegner dort stehen (`03b2972b`).
+- [x] **C3 Overpass-Antwort mit Zeitlimit**: 30 s nach den Headern, dann der nächste Server (`57a35ce6`).
+- [x] **C4 Zufalls-Spawn** wird vor Abstands- und Routenprüfung gerundet (`631267ab`).
+- [x] **C2, C5 bis C9 geprüft, kein Fehler**: Tiefflug am Tor ist gewollt; `hasRoutes` wird vor jedem Ortsaufbau
+      geleert; `destroy()` beendet die Loops über `clear()`; das Replay sendet auf eigenen Bussen; beide `computed` lesen
+      Signale; alte VAT-Texturen belegen nach dem Restore keinen Grafikspeicher.
+- [x] **D2 Vorschau dreht nicht weiter**, wenn das Fenster den Fokus verliert; spät geladener Portalrahmen halb
+      transparent (`0c420c13`, `ddc6aeeb`).
+- [x] **D3 Anheuern ohne Route** zeigt "No route to stand on" (`da92952a`).
+- [x] **D4 "Skarnax Tail"** nicht mehr in Custom Wave und Enemy Debug (`0098e3b1`).
+- [x] **D5 DevWorld-Intro**: Konstante `PATH_HEIGHT_OFFSET` entfernt, sie wirkte nie (`2923369b`).
+- [x] **D6 Enemy Debugger**: Offset Y reicht von -3 bis 10 (`b868be54`).
+- [x] **I1 Code-Reste**: Korridor-Rückfall mit `finally` und Listener erst ab, dann an (`e461d72c`); `loadingStatus`,
+      `hasStreets()`, `heightProgress`, `RouteWaypoint.detour`, `isMixedWave`, tote Liniengeometrie, `resolution`,
+      Ladefortschritt im AssetManager, elf ungelesene Store-Durchreicher, drei ungelesene Config-Werte und 57 tote
+      Member entfernt; gemeinsame Konstanten für Grad und Meter; Trace-Klammer in `finally`; Ground-Marks-Hinweis nennt
+      die Ooze-Pfützen; 13 Info-Logs nur noch im Dev-Build (`5919c378` bis `87095490`).
+- [x] **I2 Tests und Werkzeuge**: Engine-Mock mit Tentakeln und Sockeln, Boss-Szenario ruft `applyMaxHpFraction`,
+      Stencil der Reichweitenringe als Spec, Testlücken Kachel und Referenz-Dialog, `bake-compare` mit `deathDuration`,
+      `tools/` in der Typprüfung (sechs Typfehler behoben), keine Warnungen mehr in der Testausgabe, `::ng-deep` raus,
+      Scorch-Marks-Test ohne Zufall (`14456d01` bis `77aa0771`).
+
+---
+
+## 2026-09-15
+
+### Nachtests vom 15.09., aus TODO.md übernommen
+
+Beim Aufräumen am 2026-09-16 aus TODO.md übernommen; bestätigt in den Nachtests 601 bis 737
+(`docs/archive/PLAYTEST_2026-09.md`).
+
+- [x] **Gegnermodelle: Blender-Runde**: 12 Modelle optimiert, VAT aller Typen 264,2 auf 105,2 MB (`99f2845` bis
+      `32195cb`), `Electrocuted_Fall` zurück im Pool (`05b2523`). Playtest 632, 634, 635, 715.
+- [x] **Mech und Ghost unter dem Modell-Budget** (`58161fd7`, `43a4d0a8`). Playtest 735.
+- [x] **zombie_v2 extern optimiert**: in Blender dezimiert, Textur neu gebacken (`4c8d21c`, `b09d24d`). Playtest 152,
+      715.
+- [x] **Nuklearschlag in Echtzeit, mit Warnsirene**: Nachhall in Spielzeit (`46a096d2`), VFX, Ton und Shake je
+      Fähigkeit (`4479bc9f`), Sirene in der Vorwarnung (`ac048b74`). Playtest 622 bis 624b, 733.
+- [x] **Fähigkeiten: Sounds und Laser-Bot**: eigene Sounds für Frostbombe und EMP (`fb7edff7`), Laser-Ton
+      (`cc389c68`), der Bot zielt mit dem Strahl der Fähigkeit (`d39fb314`). Playtest 713, 714, 729, 730, 733.
+- [x] **Held: Reste**: Eine Ablehnung beim Anheuern oder bei einer Fähigkeit nennt den Grund (`0961846d`), der Held
+      zählt im Fairness-Gate (`3bca58b6`). Playtest 637 bis 639. Explosivmunition mit Flächenschaden steht als
+      Konzept in TODO.md.
+- [x] **Konzept "Spieler aktiver einbinden" umgesetzt**: Nuklearschlag, Frostbombe, EMP, Orbitallaser und Held
+      (`docs/ABILITIES.md`, `docs/HERO.md`). Playtest 114 bis 123, 637 bis 639.
+- [x] **Boss-Intro: Reste**: kein Intro bei offenem Dialog (`77fb07b4`), Kameraeinstellung sucht freie Sicht
+      (`0188b22c`), Esc in der Tastenübersicht (`821c0cf6`). Playtest 609 bis 612b.
+- [x] **Route auf einer Brücke**: Das Brückenende behält seine Deck-Zellen (`427443a6`). Playtest 701 bis 704, 726.
+- [x] **Weltkarte im Spiel geprüft**: Zeichnen, Hover, Ziehen und Zoomen. Playtest 340 bis 346, 649.
+- [x] **Showcase-Orte und Recent**: Rio und Tokyo angespielt, Recent speichert erst nach stehender Route
+      (`df847ee8`). Playtest 630, 725.
+- [x] **Eigene Shader mit Ausgabe-Kodierung**: gleiches Bild mit und ohne Bloom (`9aab6a0e`). Playtest 626 bis 629.
+- [x] **Beschwörungskreis mit Bloom sichtbar** (`7c2530f6`). Playtest 248, 338, 629.
+- [x] **VAT nach Context-Restore im Browser gemessen**: Neu-Backen 4,5 s. Playtest 633a, 716.
+- [x] **Drache hat Sound**: kein Fehler, das Brüllen ist hörbar. Playtest 632.
+- [x] **Onboarding-Tipps entlang des Spielablaufs**: 7 Tipps (`4a219445`), "Tips" setzt am laufenden Spiel an
+      (`1d8d2aaa`), Research-Center-Tipp nach Welle 3. Playtest 502 bis 507, 728.
+- [x] **Globale Damage-Matrix-Übersicht** als Dialog (`46c350d` bis `324ca45`). Playtest 3, 160, 650.
+
+---
+
+## 2026-09-14
+
+### Fix-Session vom 14.09., aus TODO.md übernommen
+
+Beim Aufräumen am 2026-09-16 aus TODO.md übernommen; bestätigt im Playtest 2 vom 14.09. (Punkte 501 bis 570 in
+`docs/archive/REVIEW_FIX_2026-09-14.md`).
+
+- [x] **Upgrade per U mit Rückmeldung**: Welttext, Kachel-Blitz, bei Ablehnung der Grund (`68f69772`), dasselbe beim
+      Klick auf eine Kachel (`a2198b2a`). Playtest 517 bis 520.
+- [x] **Knopf "Keys" für die Tastenübersicht** (`edb6d630`). Playtest 524.
+- [x] **Intro-Flug: nur Esc und Maus brechen ab** (`f94813b7`). Playtest 525 bis 528.
+- [x] **Keine Hover-Reichweite beim Ziehen auf dem Tower** (`b1b684dd`). Playtest 521, 522.
+- [x] **Screenshot mit Logo und Adresse** als ein Block unten rechts (`2e2b266c`, `81ad0b9b`). Playtest 557 bis 559.
+- [x] **Fähigkeiten erst nach ihrer Forschung in der Leiste** (`586f493e`). Playtest 510 bis 513.
+- [x] **Blutmond-Scheinwerfer drehen mit dem Turm** (`6a42d3a5`). Playtest 501, 549 bis 552.
+- [x] **HQ umsetzen mit Rückmeldung**: Hinweis mit Korridor-Prozent (`ac5eafee`), Messung in 32-ms-Scheiben
+      (`b8f837fc`), nur der fehlende Teil der Straßen-Box (`3eb5a26e`); Paris 2,5 statt 6,1 s. Playtest 541 bis 544.
+- [x] **Alter Korridor verschwindet beim Ortswechsel** (`4132607f`, `a99e7095`). Playtest 535, 536.
+- [x] **Portal an Kurven, Spawn drehbar**: Ausrichtung am Austritt der Route (`5a061423`), R dreht im Rahmen der
+      Öffnung (`bfd2d312`), die Route beginnt am Fuß des Spawns (`83565c40`). Playtest 529 bis 534.
+- [x] **Favoriten ohne Grenze**, mit Namen, umbenennen und ordnen (`a30d8412`). Playtest 537 bis 540.
+- [x] **zombie_v2-Vorschau**: Rahmung und Material (`b2631a18`, `814dec34`). Playtest 515.
+- [x] **Spawn-Vorschau an gültigen Stellen grün** (`23483121`). Playtest 531.
+- [x] **"Impact Effects" wirkt auf den Knochen-Puff**: kein Defekt, per Test belegt (`0b1dbdf4`). Playtest 514.
+- [x] **Sockel unter Dächern**: In Tokyo zeigen die Tiles unter Flachdächern Boden, die Kommentare sind angeglichen
+      (`179b1804`). Playtest 429 bis 433.
+- [x] **Pause hält alle Sound-Loops** (`177ba53f`, `5ae79d52`). Playtest 545 bis 548.
+- [x] **Fähigkeitsleiste**: eine Zahlenquelle für den Rand (`49d8e06e`), drei Icons über NEXT passen (`f758f544`),
+      Abstand zum Info-Overlay (`d48dc0b7`). Playtest 323, 516.
+- [x] **Hover-Pick nimmt den vordersten Tower** (`57858cb0`). Playtest 523.
+
+### Nachtschichten 13. und 14.09., aus TODO.md übernommen
+
+Bestätigt im Playtest 2 vom 14.09. (Punkte 101 bis 440 in `docs/archive/REVIEW_SPRINT_2026-09-13.md` und `-14.md`).
+
+- [x] **`three-tiles-engine.ts` abgespeckt**: Render-Loop, Terrain-Abfragen, Szene, Picking und TilesRenderer-Setup
+      ausgelagert (`89871ab` bis `f8d1a97`, `d57026c` bis `1f7c867`). Playtest 164.
+- [x] **Kleinkram Runde 2**: Code ohne Aufrufer entfernt (`71f41ec`, `693571b`), Wachrichtung nach Debug-Gegnern
+      (`d6a5b06`), `poison-glob` im Sound-Budget (`3047750`), Charts über `writeGeneratedFile` (`9f4b0a5`),
+      verzögerter Rauch (`bd5112d`), Split des Skeletons (`99178cd` bis `0557aba`). Playtest 124 bis 127.
+- [x] **Canvas folgt der Fenstergröße** (`9619b82f`). Playtest 330.
+- [x] **Skeleton-Split: Reste**: Tower zielen weiter, wenn ein Debug-Skeleton splittet (`dde04a9c`), Debug-Gegner
+      stehen auf der Route (`cbd01d10`). Playtest 336. Die Balance wartet auf den Run-Dump.
+- [x] **Lazy-Chunks: Reste**: "Reload" statt neuer Credentials (`9504032d`), `@angular/animations` entfernt
+      (`82f23124`). Playtest 189, 191, 333, 334.
+- [x] **Steuerung und HUD**: Wellenstart hebt die Pause auf (`c3d6f89a`), Fokusfalle der Photo-Leiste (`ae0a5f39`),
+      Research-Queue wieder strikt (`a1bcb3d5`). Playtest 109, 135, 188, 331, 337, 508, 509.
+- [x] **Training-Debugger mit Outputs** statt Funktions-Inputs (`ca88d039`).
+- [x] **Steinsockel für Tower auf schrägen Dächern** (`7185812f` bis `10c9b178`). Playtest 309 bis 316, 401, 402.
+- [x] **Debug-Gegner schauen ab dem Spawn in Laufrichtung** (`7414ee13`). Playtest 329.
+- [x] **Kamera-Raycasts in Ruhe aus dem Cache** (`8380bd01`). Playtest 254, 305 bis 308.
+- [x] **Spawn-Portal statt Spawn-Marker** (`a214973` bis `cc8da0f`). Playtest 128 bis 133, 239 bis 249.
+- [x] **Skeleton als Schwarm, Split in zwei Minions** (`a177026`, `99178cd` bis `0557aba`). Playtest 39, 124 bis 127.
+
+### Sprint-Runde vom 12.09., aus TODO.md übernommen
+
+Bestätigt im Playtest 2 vom 14.09. (Punkte 1 bis 56 in `docs/archive/REVIEW_SPRINT_2026-09-12.md`). Die Einträge
+zum Training (Lazy-Loading, Dashboard, Backend-Struktur, Bot-Snapshots) sind nicht mit einem echten Trainingslauf
+geprüft; das Training bleibt (Entscheidung vom 2026-09-16).
+
+- [x] **Verhaltensprüfung nach dem Terrain- und Performance-Umbau**: Gift bei Timescale, Frost-Aura, Luft-Einheiten,
+      Terrain-Höhen. Playtest 5 bis 8; den Headless-Trainingslauf hat niemand geklickt.
+- [x] **Platzierungsregeln: eine Quelle für Spiel und Bots** (`9eecf67`).
+- [x] **Decision-Explainer im Wave-Debug-Fenster** (`0f3c364`). Playtest 22.
+- [x] **Debug-Fenster als ein Lazy-Chunk**, Spielstart etwa 147 kB kleiner (`eddeb82`). Playtest 50.
+- [x] **Schadensmatrix gespreizt**, Fairness-Floor 0,6 (`5b3102e`). Playtest 4; die Balance wartet auf den Run-Dump.
+- [x] **Boss jede fünfte Welle ab W31** (`9e46b11`), Wurm in der Rotation ab W35 (`7c6025b6`). Playtest 4.
+- [x] **Explosions-Partikel feingetunt** (`c904b3f` bis `6686dc1`). Playtest 30.
+- [x] **Screen Shake ohne Tile-Traversierung**, nur bei nahen Einschlägen (`142193c`). Playtest 32, 33.
+- [x] **Türme halten in der Welle ihre Richtung**, danach Wachrichtung (`c4cb08b`). Playtest 17 bis 19.
+- [x] **Kampfspuren als Decals** (`e404806`, `412cbff`). Playtest 31.
+- [x] **VFX-Einstellungen im Display-Menü** mit Presets (`8eb765f` bis `de1b57d`). Playtest 51.
+- [x] **Chaos Tower** (`0fcacd8` bis `12e9f1e`). Playtest 36, 37; die Balance wartet auf den Run-Dump.
+- [x] **Training-Code lazy geladen** statt über fileReplacements (`85d8402`, `ab6a7c1`, `88ddc55`).
+- [x] **Dashboard-Header** in Lauf- und Modellmetriken geteilt (`c2ee884`).
+- [x] **Design-Runde**: Header, goldener Knopf "Start Wave N", Dev-Menü als Kachelraster (`72073847`, `143dfb3e`,
+      `6deed167`). Playtest 46 bis 49.
+- [x] **training-backend in `core/`, `utils/`, `scripts/` gegliedert** (`058df7a`).
+- [x] **Bot-Snapshots lazy**, Test ergänzt (`f3b0c79`).
+- [x] **Ghost** gab es schon (`ghost` auf W13, W18, W23), Eintrag geschlossen.
+
+---
+
+## 2026-09-12
+
+### Sprint 2026-09-11, im Playtest bestätigt
+
+Umgesetzt auf `sprint/todo-2026-09-11` (Übersicht in
+`docs/archive/REVIEW_SPRINT_2026-09-11.md`), nach dem Playtest vom 2026-09-11 aus
+TODO.md übernommen. Einträge, die der Playtest nicht direkt geprüft hat,
+stehen weiter in TODO.md.
+
+- [x] **Tower-LOS pro Sweep statt pro Slice, verteilt über Frames**
+      Geänderte Zellen werden pro Tower gesammelt, nach dem Terrain-Sweep
+      einmal neu gerechnet, ein Tower pro Frame, Wartezeit höchstens 3 s
+      (`fac16de`, `2a9d320`, `d3c01b2`, `e6ed8c2`).
+      **Warum:** Derselbe Tower wurde pro Slice neu gerendert, beim großen
+      Reinzoomen fror das Bild 1 bis 2 s ein. Deckt auch den Zoom-In-Spike
+      aus 1.4 ab.
+
+- [x] **AA-Retrofit bekommt seine Luft-LOS**
+      Der Research-Handler reiht die Tower ein, statt vor dem Store-Update neu
+      zu rechnen (`1b11e46`). Weitere Research-Effekte, die eine Registrierung
+      entwerten, gibt es nicht (in HANDOVER_ROUTE_GRID_GPU_LOS.md).
+      **Warum:** Umgerüstete Gatlings bekamen keine vorberechnete Air-LOS,
+      schossen über den Raycast-Fallback und verpassten Zellen, die nur in
+      Flughöhe sichtbar sind.
+
+- [x] **Instancing: Flush trotz "Animationen aus", `activeCount` schrumpft**
+      Nur das Weiterzählen der Animation hängt am Schalter
+      (`3f71c64`); ein gemeinsamer `InstanceSlotAllocator` für Gegner,
+      Health-Bars, Projektile und Decals senkt `activeCount`, sobald die oberen
+      Slots frei werden (`a2025b7`, `55635e9`).
+      **Warum:** Mit Animationen aus froren Gegner ein; nach einer Peak-Welle
+      luden die Flushes dauerhaft Peak-große Buffer hoch.
+
+- [x] **Route-Grid-Zellschlüssel einheitlich mit `Math.floor`**
+      Alle Lookups laufen über `cellIndex()` (`333894e`).
+      **Warum:** Östlich und südlich des HQ landeten Gegner in der
+      Nachbarzelle, für Targeting und Bodenhöhe.
+
+- [x] **Wallsmasher-Rush wieder da, deterministisch**
+      Gehen und Rennen im Wechsel von 3 bis 8 s Spielzeit, geseedet aus der
+      Enemy-ID, Multiplikator wirkt im selben Sub-Step (`2d4806d`);
+      `baseSpeed` 7 auf 4 hält die mittlere Laufzeit (`a43fd26`).
+      **Warum:** Seit dem Entfernen des klassischen Renderers im April ging
+      der Wallsmasher nur noch.
+
+- [x] **`game-sidebar` in Panels zerlegt**
+      Wave-, Build-, Tower- und Research-Panel als eigene Components, Parent
+      von 743 auf 105 Zeilen; Kills und Research-Balken hängen an eigenen
+      Events (`1162a4c` bis `5041be1`).
+
+- [x] **Lightning-Bolts in einem Draw Call**
+      Ein Mesh mit `InstancedBufferGeometry` statt 192 Meshes (`e847bee`).
+
+- [x] **Upgrade-Kurven und Cannon**
+      Ab L16 nur noch 40 % des Zuwachses, Profile je Tower, Range-Track auf
+      10 Stufen ×1,03 gekappt (`90662f0`); Cannon mit 6 m Splash, höchstens
+      8 Zielen, 70 m Reichweite, siege gegen unarmored/light 0,5 (`401c6a1`).
+      Vorlage: `docs/archive/BALANCE_PROPOSAL_2026-09.md`.
+      **Warum:** L25 brachte das 14,5-Fache der Basis-DPS, die Cannon kam auf
+      213 m Reichweite.
+
+- [x] **`burn` gebaut**
+      20 % der Fire-Beam-DPS laufen als 3-s-Nachbrennen, DoT-Kills zählen für
+      den Quell-Tower (`9c01a1d`).
+
+- [x] **Projektile: Magic-Orb, Rakete, Muzzle Flash**
+      Magic schießt einen violett-cyanen `arcane-orb` (`c91a011`), die Rakete
+      ist als Rakete erkennbar und zieht Rauch statt Feuer (`e59383e`),
+      Muzzle Flash nur bei Archer, Gatling, Cannon und Rocket mit Größe je
+      Tower (`574ce33`), Geschosse zeigen in die echte Flugrichtung
+      (`330b173`). Der Raketen-Sound bleibt in TODO.md.
+
+- [x] **Zellfarben beim Platzieren**
+      Boden grün, Luft blau, verdeckt orange-rot; jede Ebene zeigt nur ihre
+      eigene Abdeckung (`5472a8f`, `e151a70`).
+      **Warum:** Beide Ebenen rechneten dieselbe Sammelfarbe und sahen
+      identisch aus.
+
+- [x] **Dev-Menü, Debug-Panels, Header, englische Texte**
+      Dev-Menü in zwei gruppierten Spalten (`6fa7913`), alle Debug-Panels
+      resizable mit gespeicherter Größe (`25ff7d4`), Header-Stats bündig mit
+      der Sidebar (`9720314`), alle sichtbaren Texte englisch mit einer
+      gemeinsamen Platzierungsprüfung (`cb2162a`). Die Optik von Header,
+      Next-Wave-Button und Dev-Menü steht als Design-Runde in TODO.md.
+
+- [x] **FPS-Limit und Preview-Drosselung**
+      60, 30 oder unbegrenzt im Display-Menü (`f7a207b`, `797a56f`),
+      Model-Previews mit 30 fps (`01780f5`).
+
+### Sprint 2026-09-11, per Tests belegt (im Spiel nicht direkt prüfbar)
+
+Auf Zuruf übernommen: Regressionstests schlagen auf dem alten Code fehl, ein
+Review-Agent hat die Stellen gegengelesen.
+
+- [x] **Stille Höhenänderungen erreichen andere Tower** (`ef1a1c7`): Höhen,
+      die beim Registrieren bewegt werden, werden nach der Schleife gemeldet.
+- [x] **Projektile laden nur die belegte Scheibe hoch** (`c6ec30f`), deckt
+      auch den G5-Rest ab.
+- [x] **Health-Bars ohne ungenutztes `instanceMatrix`** (`27aab53`): Mesh auf
+      `InstancedBufferGeometry`, 2,56 MB weniger.
+- [x] **Beam-Fallback-Radius** (`1e887b4`), später durch "Fire erfasst nur,
+      was die Flamme erreicht" (`a1302d0`) ersetzt.
+- [x] **Kleinkram aus dem Merge-Review** (`fd26179`, `b4df1d2`, `65f6b32`,
+      `8e92e9b`, `08ded24`): Beam-Blut-Throttle pro Gegner, Kill-Zählung nur
+      bei echtem Tod, `effectiveSpeed`-Getter entfernt, Wake-Check mit
+      Konstante, gemeinsamer Kandidaten-Helper.
+- [x] **Audio-Loop nach dem Entfernen des Gegners** (`aec28d6`): Token pro
+      Loop, verspätete Loops werden sofort gestoppt.
+- [x] **`global-route-grid.ts` aufgesplittet** (`d4c2475` bis `493998b`):
+      2199 auf 1253 Zeilen, fünf Module, Hot Path byte-gleich.
+
+### Entscheidungen aus dem Review (Einträge geschlossen)
+
+- **Color Grading:** bleibt ein Debug-Feature.
+- **L3, 3D-Reichweite für Luftziele:** Die Reichweite bleibt horizontal (2D).
+- **Attributions** (Skybox, stone-wall.jpg, Sounds): laut Nutzer erledigt.
+- **Gestrichen:** Golem und Dragon unter Enemy-Ideen (gibt es als Stone Golem
+  und Dragon), Floating-Text auf den `InstanceSlotAllocator` (anderes
+  Pool-Modell, kein Gewinn), Range-Monotonie absichern (keine Range-Debuffs
+  geplant).
+
+## 2026-09-10
+
+### Dependency-Update und was die neuen Libs hergeben
+
+- [x] **Alle Dependencies auf aktuellem Stand**
+      Angular 21 → 22.1, TypeScript 5.9 → 6.0, three 0.184 → 0.186,
+      3d-tiles-renderer 0.4.24 → 0.5.2, vitest 4 → 5, ESLint 9 → 10 mit
+      angular-eslint 22, jsdom 30, onnxruntime-web 1.29. TypeScript 7 bleibt
+      draußen, Angular 22 akzeptiert nur 6.0. Braucht Node ≥ 22.22.3 bzw. 24
+      und npm 11, npm 10 stürzt beim Auflösen mit `edgesOut` ab.
+      Nötige Anpassungen: `maxJobs` → `maxJobsPerOrigin`, `enableDoubleTapZoom`
+      aus, Canvas ohne `tabindex` (sonst brechen W/A/S/D einen Drag ab), fünf
+      Funde der neuen ESLint-10-Regeln, `rootDir` für TS 6.
+      Aus dem BACKLOG übernommen ("TypeScript 6 + Angular 22 Migration").
+      **Warum:** Angular 22 stand im Backlog, und 3d-tiles-renderer 0.5 bringt
+      Load-Regions, `userData.tile` und `errorFalloff`.
+
+- [x] **Routenkorridor bleibt fein geladen**
+      `RouteCorridorRegion` im `LoadRegionPlugin` hält alle Tiles entlang der
+      Gegnerrouten auf 5 m geometricError, egal wohin die Kamera schaut.
+      **Warum:** Die Lib aktiviert nur Tiles im Frustum, und Raycasts treffen
+      nur aktive Tiles. Zellen außerhalb des Bildes hatten kein Gelände, aus
+      der Ferne gesehene nur grobes, daher Gegner auf Dachhöhe.
+
+- [x] **LOD pro Raycast-Treffer aus `userData.tile`**
+      Die eigene Tile-Info-Map ist weg.
+      **Warum:** Sie wurde nur bei `tiles-load-end` neu gebaut, ein seitdem
+      aktiviertes Tile galt als gröbstes LOD.
+
+- [x] **Streaming-Budget**
+      `errorFalloff` für ferne Tiles, LRU nach Bytes (0,5/0,7 GiB) statt nach
+      Anzahl, Cache-Größe im Info-Overlay, Token-Refresh für Google, 2 s
+      Verzögerung beim Entladen, Frustum-Culling der Tile-Meshes durch three.
+      **Warum:** Die alten Item-Caps cachten weniger als die Lib-Defaults, und
+      abgelaufene Sessions ließen Tiles still ausfallen.
+
+- [x] **Shader-Ruckler weg, MSAA im Post-Pfad**
+      Das Muzzle-Flash-Licht bleibt dunkel in der Szene statt add/remove,
+      Tower-Modelle werden per `compileAsync` vorkompiliert, der Composer
+      rendert mit 4× MSAA, der Profiler zeigt die Zahl der Shader-Programme.
+      **Warum:** Jeder Schuss erzwang neue Programme für alle beleuchteten
+      Materialien, der erste Tower eines Typs kompilierte synchron, und mit
+      Bloom oder Color-Grading fehlte jede Kantenglättung.
+
+- [x] **Debug: LOD-Farbansicht**
+      Display → Tiles → LOD Colors färbt Tiles nach geometricError (dunkel =
+      fein, weiß ab 20 m). Wird bewusst nicht gespeichert.
+      **Warum:** Macht sichtbar, ob der Routenkorridor wirklich fein geladen ist.
+
+- [x] **Specs typprüfen sauber**
+      `tsc -p tsconfig.spec.json` von 36 Fehlern auf 0: `@/`-Alias und
+      Node-Typen in der Spec-tsconfig, `@types/node` als devDependency, dazu
+      veraltete Testobjekte und fehlende `override`. Produktionscode unberührt.
+      **Warum:** vitest prüft keine Typen, die Fehler sammelten sich unbemerkt.
+
+### Enemy-Hot-Path: 21 → 48 FPS bei 20k Gegnern
+
+- [x] **Gegner-Update lässt Arbeit weg, die nichts ändert**
+      Audio-Update nur für Gegner mit Loops, Geschwindigkeitsfaktor ohne
+      Map-Lookups, solange niemand rennt, Route- und Spatial-Grid merken sich
+      die Zelle am Gegner, Lebend-Flag statt Getter-Kette, `presentFrame` mit
+      gemerktem Instance-Slot und direkt geschriebener Matrix, das Model-Preview
+      rendert nicht mehr unsichtbar, der Profiler misst nur jeden 32. Gegner.
+      Die Simulation bleibt bit-identisch (Harness mit 480 Gegnern über 90
+      Frames: Positionen, Zellen, Matrizen, Event-Folge, RNG-Aufrufe).
+      Chrome-Trace unter gleichen Bedingungen, 20k Gegner: 21,2 → 30,2 FPS,
+      Frame 45,5 → 31,6 ms, `runSubStep` 32,7 → 20,3 ms pro Frame.
+      **Warum:** Die Zeit steckte nicht in Rechnungen, sondern im Anfassen
+      verstreuter Objekte und in Map-Lookups mit String-Keys, pro Gegner und
+      Sub-Step. SoA war im August genau daran gescheitert (`731f454`).
+
+- [x] **Blickrichtung pro Segment, Rotations-Glättung nur beim Drehen**
+      Das Heading wird im ersten Schritt, im Schritt über einen Wegpunkt und
+      im Schritt danach berechnet und dann bis zum nächsten Wegpunkt gehalten.
+      `transform.update` läuft nur noch für Gegner mit `isTurning`. Die
+      Simulation bleibt bit-identisch; nur die Rotation weicht um das
+      Rundungszittern ab (max. 8e-8 rad), sie ist rein visuell.
+      Chrome-Trace unter gleichen Bedingungen: 30,2 → 47,7 FPS, Frame 31,6 →
+      19,5 ms, Simulation ~10,1 → ~7,6 ms pro Sub-Step.
+      **Warum:** Jeder der 20k Gegner fasste pro Sub-Step sein Transform-Objekt
+      an, nur um festzustellen, dass nichts zu tun ist. Im Browser-Heap ist das
+      ein Cache-Miss pro Gegner; der Harness mit kompaktem Heap sah davon nur 5 %.
+
+- [x] **Performance-Panel höher und in der Größe veränderbar**
+      Startet mit 700 px Höhe statt höchstens 600 px mit Scrollbalken, lässt
+      sich am Griff unten rechts ziehen und merkt sich die Größe.
+
+---
+
+## 2026-09-07
+
+### Öffentliches Release: eigener Schlüssel, Landing Page, /play/
+
+- [x] **AGPL-3.0 statt gar keiner Lizenz**
+      `LICENSE` angelegt, README-Zeile ersetzt.
+      **Warum:** Ohne Lizenzdatei galt striktes Urheberrecht, das Projekt war
+      formal unbenutzbar. AGPL macht Weiterverwertung durch Dritte unattraktiv
+      und lässt eigene Kommerzialisierung als Alleinrechteinhaber offen.
+      **Bedingung:** keine fremden PRs ohne CLA mergen, sonst ist Umlizenzieren
+      dauerhaft blockiert.
+
+- [x] **Spieler bringen ihren eigenen Tile-Schlüssel mit**
+      `config.service.ts` löst Credentials zur Laufzeit auf: `localStorage` →
+      `fetch('runtime-config.json')` → `environment`. Dazu ein Token-Screen unter
+      `components/token-setup/` mit Cesium Ion und Google Maps, Test-Knopf gegen
+      die echten Auth-Endpunkte und Einstieg über `?tokensetup`.
+      Der Auth-Fehler wird in `three-tiles-engine.ts` gepuffert (`authErrorSeen`)
+      und beim Registrieren des Callbacks nachgefeuert, weil der 401 schon
+      während `initEngine()` kommt.
+      **Warum:** Vorher lag der Schlüssel im ausgelieferten Bundle im Klartext.
+      Tiles werden pro Anfrage abgerechnet, ein geteilter Schlüssel ist eine
+      offene Rechnung. Der fetch-Zweig ist derselbe, den ein späterer
+      Desktop-Build über den `app://`-Handler bedient, ohne `if (electron)`.
+
+- [x] **Production-Build von 393 MB auf 160 MB**
+      `angular.json` schließt für die `production`-Config `**/candidates/**` und
+      `**/onnx-wasm/**` aus. Dazu 83 absolute `/assets/...`-Pfade auf relativ
+      umgestellt, abgesichert durch `src/app/integration/asset-paths.spec.ts`.
+      **Warum:** Ohne relative Pfade bricht jeder Build, der nicht im Wurzel-
+      verzeichnis liegt — und genau dorthin zieht das Spiel jetzt um.
+
+- [x] **Spiel nach `/play/`, Landing Page ins Wurzelverzeichnis**
+      `deploy.yml` baut mit `--base-href=/play/` und deployt zweistufig.
+      `landing/index.html` ist eine einzelne Datei ohne Build, die Schriften
+      liegen selbst gehostet daneben, es lädt nichts von Dritten.
+      **Warum beim ersten Lauf dreimal gescheitert:** Der Hoster beantwortet
+      `RETR` auf eine nicht existierende Datei nicht mit 550, sondern kappt den
+      Data-Socket. Damit stirbt jeder erste Publish in ein leeres Verzeichnis
+      beim Lesen der Sync-State-Datei. Einmalig `dangerous-clean-slate: true`,
+      danach zurück auf inkrementell. Steht als Kommentar im Workflow.
+
+### Wave Director: vom ONNX-Modell auf Regeln, komplett clientseitig
+
+- [x] **Regel-Director ersetzt das trainierte Netz als Default**
+      Neu: `src/app/ai/core/rule-director.ts`. Er liefert dieselben fünf Zahlen wie
+      das Modell — Template-Index plus vier Formfaktoren (`count`, `spawn`, `hp`,
+      `variation`) — und geht durch denselben Decoder. Alles danach (Maske,
+      Range-Interpolation, DPS-Ramp, Endgame-Multiplikator, Fairness-Cap) ist
+      unverändert und wird geteilt.
+      **Warum:** Über einen Tag A/B-Runs mit identischen Bots, Curriculum und
+      Fairness-Gate war die trainierte Policy dreimal statistisch
+      ununterscheidbar von gleichverteiltem Zufall (mittlere Run-Länge 45,6
+      [42,49] gegen 44,7 [41,48]), während zwei triviale Heuristiken messbar mehr
+      Spannung erzeugten (Near-Miss 0,067–0,069 gegen 0,045). Das Netz hatte nach
+      Tausenden Episoden nichts gelernt: `log_std` unverändert vom Initialwert,
+      jeder Faktor-Mittelwert auf sigmoid(0) = 0,5. Die Ursache lag **vor** dem
+      Lernen — das Curriculum pinnt auf 49% der Wellen das Template, der
+      Fairness-Cap bindet auf 63% der Größen; die volle Spanne des count-Faktors
+      bewegte eine Welle von 19 auf 28 Gegner. Es gab fast nichts zu entscheiden
+      und deshalb nichts zu lernen.
+      Zwei bewusste Entwurfsentscheidungen: **Abwechslung wird erzwungen** (immer
+      das älteste erlaubte Template, statt Wiederholung nur teuer zu machen), und
+      **Schwierigkeit ist eine geschriebene Kurve** über die Wave-Nummer statt
+      einer Pro-Wave-Entscheidung — der Spieler heilt nie, seine HP sind ein
+      Run-Budget.
+
+- [x] **Fairness-Gate als Regelkreis in den Client geholt**
+      Neu: `src/app/ai/core/gate-controller.ts`. `fairMaxCount()` bekommt einen
+      neuen letzten Parameter `budgetMultiplier` (Default 1), den der Controller
+      aus der tatsächlichen Leck-Quote nachführt: Fenster 4 Wellen, Zielband
+      8–16%, Proportional-Gain 0,35, harte Rücknahme ×0,8 wenn ein Run endet,
+      geklammert auf 0,5–8.
+      **Warum:** `FAIRNESS_KILL_REALISM = 0.65` wurde auf den Wellen 1–10
+      gemessen und ist ab W11 falsch — der Cap hatte einen stehenden Bias und
+      keine Möglichkeit, ihn zu bemerken. Ohne Korrektur landete er auf „genau
+      das, was die Türme töten können", was garantiert, dass sie es töten: über
+      1834 Wellen töteten 70% aller Wellen alles und 80% richteten keinen Schaden
+      an. Zwei Fehlerformen des Python-Originals sind dabei vermieden — Regeln
+      auf die **Kill**-Quote liest die eigene Vorsicht als Spielraum (einseitiger
+      Druck, der Multiplikator lief an die Obergrenze und schaltete das Gate ab),
+      und eine feste Schrittweite von 5% braucht ~170 Wellen für eine Strecke,
+      die bei Runs von ~60 zurückzulegen ist.
+      Der Zustand ist **pro Run**: `restartGame()` ruft
+      `waveDirector.resetForNewGame()`. Über Runs hinweg akkumuliert wurde er zur
+      Ratsche — Median-Run-Länge 6 statt 80.
+
+- [x] **`onWaveResult()`-Hook im AIDataCollector — die Verdrahtung, an der es fast scheiterte**
+      Der Controller hängt an `AIDataCollectorService.onWaveResult()`, nicht am
+      Event `wave:completed`. Grund: `wave:completed` wird beim Fall der Basis
+      **nicht** emittiert, die Todes-Rücknahme wäre über das Event unerreichbar
+      gewesen. `addToHistory()` ist der einzige Punkt, den beide Pfade passieren
+      (regulärer Handler + Game-Over-Finaliser).
+      Zusätzlich: Zerstört der letzte Leaker einer Welle die Basis, feuern beide
+      für dieselbe Wave-Nummer — `wave:completed` ist deferred, `game:over`
+      immediate, der Finaliser ist also zuerst dran. Der Collector merkt sich die
+      finalisierte Wave-Nummer und verwirft das nachlaufende Event; sonst gäbe es
+      einen doppelten History-Eintrag und eine doppelte Gate-Rücknahme auf dem
+      häufigsten Weg, wie ein Run endet.
+
+- [x] **Kein ONNX mehr im Cold Start; `useAIDirector` per Default `true`**
+      `onnxruntime-web` (404 kB WASM) wird nicht mehr beim Start geladen — nur
+      noch durch expliziten `WaveDirectorService.loadModel()`-Aufruf. „Kein
+      Modell gefunden" ist kein Fehlerzustand mehr, sondern der Normalfall; der
+      frühere Zustand `'fallback'` (= „Fehler: kein Modell", warf aus
+      `getNextWave()`) existiert nicht mehr.
+      `GameStore.useAIDirector` steht damit per Default auf `true`. Der
+      Auto-Enable-`effect()` in `GameLoopFacadeService` ist **ersatzlos
+      entfernt**: er las `useAIDirector()` neben dem Modell-Status und feuerte
+      dadurch auf seinen eigenen Schreibvorgang neu — der UI-Toggle war
+      wirkungslos, der Fehlerpfad konnte den Director nicht abschalten, und ein
+      Store-Reset wurde sofort überschrieben.
+      Damit gilt „kein Backend im Spiel-Client" uneingeschränkt: kein Server,
+      kein Modell, keine ONNX-Runtime zur Laufzeit.
+      Dateien: `src/app/ai/core/{rule-director,gate-controller,wave-director.service,
+      ai-data-collector.service,templates}.ts`, `src/app/store/game.store.ts`,
+      `src/app/services/facade/game-loop-facade.service.ts`.
+      Tests: `rule-director.spec.ts`, `gate-controller.spec.ts`, `gate-wiring.spec.ts`.
+
+### Bot: Upgrades über beide Enden des Pfads
+
+- [x] **`NearSpawnUpgradeStrategy` → `PathCoverageUpgradeStrategy`**
+      Umbenannt (`near-spawn-upgrade.strategy.ts` → `path-coverage-upgrade.strategy.ts`)
+      und inhaltlich gedreht: es werden Türme an **beiden** Pfadenden aufgewertet,
+      nicht nur am Spawn. Dazu gewichtet `StrategicPlacementService` die
+      Platzierung jetzt U-förmig statt linear spawn-nah — neue exportierte
+      Funktion `endZoneProximity(t)`, Spawn-Ende behält einen leichten Vorsprung
+      (`END_ZONE_HQ_WEIGHT = 0.8`), damit die Eröffnungszüge unverändert bleiben.
+      **Warum:** Die Strategie schlägt jede Platzierungs-Strategie und feuert auf
+      den meisten Ticks — praktisch alles Upgrade-Gold landete in einem Cluster am
+      Spawn. Messbare Folge: eine binäre statt abgestufte Verteidigung (70% der
+      Wellen komplett getötet, 28% mit >5% Durchkommen, 2% dazwischen); über 1834
+      Wellen starben Gegner einer verlustfreien Welle im Median bei 12% des Pfads,
+      während jeder Gegner jenseits von 80% zu 95% an der Basis ankam. Es gab kein
+      „fast gestoppt" — eine Killzone am Spawn, dahinter ein ungedeckter Korridor.
+      Genau daran scheiterte das Reward-Signal des Wave Directors: Near-Misses
+      (>80% Pfad ohne Ankunft) waren in nur 2,2% der Wellen überhaupt erreichbar.
+      Dateien: `src/app/ai/training/strategies/upgrade/path-coverage-upgrade.strategy.ts`,
+      `src/app/services/world/strategic-placement.service.ts` (+ `.spec.ts`).
+
+---
+
+## 2026-08-27
+
+### Wave-Curriculum und Schema
+
+Beim Aufräumen am 2026-09-16 aus TODO.md übernommen, dort schon abgehakt.
+
+- [x] **Stone Golem im Wave-Curriculum**: `golem_squad` mit `minWave: 14`, steht auf W15, über das generierte Schema
+      auch im Backend sichtbar.
+- [x] **Wave-Template-Drift zwischen Frontend und Backend behoben**: Das Backend liest
+      `training-backend/generated/ai-schema.json` aus `npm run ai-schema`; `templates.py`, `wave_curriculum.py` und die
+      Gegnertabellen in `config.py` sind gelöscht.
+- [x] **Lightning in AI und Bot**: Schema v2 nimmt Lightning als 10. Tower und 8. Schadensart auf (162 Features),
+      der Bot hat es in `ALL_COMBAT_TOWERS` und `storm-mastery` in der Forschungsreihenfolge.
+
+---
+
+## 2026-06-06
+
+### Render-Hebel G3 + R1 aus Deep-Dive 2026-05 umgesetzt (TODO 1.5)
+
+- [x] **G3-Vollausbau — Health-Bar-Billboard komplett in den Vertex-Shader**
+      Die Health-Bars richteten sich bisher pro Frame über einen CPU-`Matrix4.compose()`
+      (Quaternion→Matrix + Scale) **pro lebendem Gegner** aus, plus `setMatrixAt` +
+      vollem 16-Float-`instanceMatrix`-Upload. `updateBillboard()` iterierte dafür alle
+      aktiven Instanzen.
+      Umbau analog FloatingText (`floating-text-material.ts`):
+      - Neue per-instance Attribute `aCenter` (vec3 Weltzentrum) und `aSize`
+        (vec2 Breite/Höhe) auf der geteilten `PlaneGeometry`; `instanceMatrix` wird
+        nicht mehr genutzt.
+      - Billboard-Ausrichtung im Vertex-Shader über die Uniforms `uCameraRight`/
+        `uCameraUp` (aus `camera.matrixWorld`-Spalten 0/1). Beide Pass-Materials
+        (Background/Foreground) teilen dieselben Uniform-`Vector3`-Instanzen → ein
+        Set pro Frame deckt beide Pässe ab.
+      - `updateBillboard()` iteriert **nicht mehr** über die Instanzen: nur 2 Uniform-
+        Writes + Flush des bewegten `aCenter`-Buffers (3 statt 16 Float/Instanz).
+        Kein `compose()`, kein `_billboardQuat`, kein `posCache`/`scaleCache` mehr.
+      - Versteckte/freie Slots: `aSize.x <= 0` → Early-Return im Vertex-Shader
+        (statt Position −10000). `clear()` füllt alle Sizes auf 0.
+      Öffentliche API (`add`/`update`/`hide`/`remove`/`updateBillboard`/`setVisible`/
+      `count`/`clear`/`dispose`) unverändert.
+      Datei: `src/app/three-engine/renderers/instanced-enemy/health-bar-instance.manager.ts`.
+
+- [x] **R1 — `matrixAutoUpdate`/`matrixWorldAutoUpdate` für statische Subtrees**
+      Der Szenengraph wurde pro Frame komplett durchmultipliziert. Umgesetzt wurde der
+      **sicher statische** Anteil (Subtree-Audit vorab):
+      - `scene.matrixAutoUpdate = false` — die Wurzel sitzt permanent am Origin und
+        propagiert kein unnötiges `force` mehr an alle Kinder; dynamische Kinder
+        (overlayGroup, tilesRenderer.group, Türme, Enemies, Projektile, VFX) behalten
+        `matrixWorldAutoUpdate=true` und werden unverändert aktualisiert.
+      - 4 Lights (Hemisphere/Sun/Fill/Ambient) nach einmaligem `updateMatrixWorld`
+        auf static → pro Frame übersprungen.
+      - **192 Lightning-Bolt-Pool-Meshes** auf static. Deren Geometrie kommt aus dem
+        Vertex-Shader (`uStart`/`uEnd`), der Mesh-Root bleibt identity — sie kosteten
+        bisher 192× `updateMatrix`+`matrixWorld`-Multiply **jeden Frame, auch unsichtbar**
+        (der dickste R1-Posten). Halo-Sprites bleiben dynamisch (bewegen sich).
+      - Die 2 Health-Bar-InstancedMesh-Roots auf static (Position kommt jetzt aus
+        `aCenter`, Root ist identity).
+      **Bewusst nicht umgesetzt** (Architektur, kein Versäumnis): Die Overlay-Objekte
+      (Straßen/Routen/Marker/Gebäude — je aggregierte Meshes, nicht „tausende") hängen
+      unter der pro Frame mit der ECEF-Tiles-Bewegung gesyncten `overlayGroup`. Three.js
+      propagiert dadurch zwangsläufig `force=true` an alle ihre Kinder; `matrixWorldAutoUpdate=false`
+      darauf wäre wirkungslos bzw. würde die Overlays von den Tiles desyncen. Der im
+      Report angenommene Massen-Hebel existiert in dieser Sync-Architektur nicht.
+      Dateien: `src/app/three-engine/three-tiles-engine.ts`,
+      `src/app/three-engine/renderers/lightning-bolt.renderer.ts`,
+      `.../instanced-enemy/health-bar-instance.manager.ts`.
+      Verifikation: Build + Lint + 885 Tests grün; visuell bestätigt (Health-Bars
+      korrekt kamerazugewandt + mitbewegt, Lightning unverändert).
+
+---
+
+## 2026-05-23
+
+### WaveConfig schedule-only — Static-Curriculum nativ multi-group (TODO 2.2)
+
+- [x] **WaveManager + Adapter auf einen einzigen Spawn-Pfad reduziert; Static-Curriculum spiegelt jetzt die AI-Templates inkl. Boss-Support und Mixed-Wellen**
+      Vorher hatte der WaveManager zwei parallele Spawn-Pipelines: einen
+      Schedule-Pfad (für mixed AI-Wellen) und einen Legacy-Single-Type-Pfad
+      (für statische Curriculum-Wellen + Debug-Panel). Der Static-Curriculum
+      konnte deswegen Boss-Wellen W10/W20/W30 nur als solo Herbert spawnen
+      und Mixed-Templates wie `dragon_elite` kollabierten zu Mono-Typ-Wellen
+      (Sekundär-Gegner verschwand komplett).
+      Refactor entlang des Memory-Eintrags „No parallel systems in refactors":
+      - **`WaveConfig` neu**: `{ schedule: SpawnSchedule }` — keine
+        Top-Level-`enemyCount`/`enemyType`/`enemySpeed`/`enemyHealth`/
+        `spawnMode`/`spawnDelay`/`getSpawnDelay`-Felder mehr.
+        `WaveManager.startWave` ist ein dünner Wrapper um den existierenden
+        scheduled-Pfad; Legacy-Branch (~65 LOC) raus.
+      - **`SpawnSchedule` erweitert** um optionales `spawnMode?: 'each' | 'random'`
+        damit die Round-Robin-Spawn-Point-Selection des alten Single-Pfads
+        erhalten bleibt.
+      - **Adapter** `wave-config-adapter.ts` von 3 Funktionen
+        (`adaptAIWaveConfigMixed/Single/Array` + Fallback) auf eine
+        konsolidiert: `adaptAIWaveConfig(aiConfig)` baut **immer** ein
+        Schedule, auch für 1-Group-Inputs (1 Group → N Schedule-Entries
+        desselben Typs, funktional identisch zum alten Single-Pfad).
+      - **`AIWaveConfig`** um optionales `spawnMode?` ergänzt; alle anderen
+        Felder unverändert → AI Director, ONNX-Inference, WebSocket-Backend
+        sehen keine Schnittstellen-Änderung.
+      - **`StaticWaveProfile` neu** mit `groups: readonly StaticWaveGroup[]`
+        + `pattern?: SpawnPattern`. 30 Profile umgeschrieben:
+        - Boss-Wellen W10/W20/W30 = Herbert + Tank- + Zombie-Support (analog
+          Template `boss_herbert`), Pattern `clustered`.
+        - Mixed-Templates W8 (`hornet_strike`), W12/W24 (`dragon_elite`),
+          W13/W23 (`ghost_surge`), W14/W25 (`mammoth_siege`), W16/W29
+          (`chaos_wave`), W18 (`armor_gauntlet`) als echte Multi-Group-
+          Profile mit `interleaved` Pattern.
+        - Single-Templates (W1-7, W11, W15, W17, W19, W21, W22, W26-28)
+          bleiben Single-Group.
+      - **`staticWaveResolvedFor(waveNum)`** returnt jetzt eine `AIWaveConfig`
+        — der Facade-Aufruf wird zu `adaptAIWaveConfig(staticWaveResolvedFor(w))`.
+        Endgame-HP-Ramp wird pro Gruppe in `healthMultiplier` gebaken.
+      - **`WaveDebugService`** kriegt `toAIWaveConfig()` (single- + mixed-Modus
+        in einer Methode); die alte `buildMixedWaveConfig`-Methode mit
+        Legacy-Feldern ist raus.
+      - **`GameLoopFacadeService.buildWaveConfig` + `buildStaticCurriculumWaveConfig`**
+        gehen beide durch `adaptAIWaveConfig(...)`. `startCustomWave` ruft
+        nur noch `buildWaveConfig` (kein mixed-mode-Fork mehr).
+      - **`GameStateManager.startWave`**: Single-Type-Display-Branch raus —
+        nur noch der Schedule-Aggregations-Branch, der die Sidebar mit den
+        Gruppen-Compositions füllt.
+      - **Test-Migration**: `wave.manager.spec.ts` Helper auf
+        `{ count, type, speed, health, spawnDelay, spawnMode }` umgebaut
+        (intern Schedule-Bau); die zwei NaN/negative-Guard-Tests entfernt
+        (existieren nicht mehr im scheduled-Pfad) und durch einen
+        Empty-Schedule-Test ersetzt. Integration-Tests
+        (`wave-enemy-spawning.spec.ts`, `game-state-flow.spec.ts`) nutzen
+        neuen `makeSingleTypeWaveConfig`-Helper in `test-helpers.ts`.
+      - **Neue Tests in `wave-curriculum.config.spec.ts`**: 30-Profile-
+        Integrität, Boss-Multi-Group + clustered-Pattern, Multi-Group-Resolve,
+        Endgame-HP-Ramp pro Gruppe, W31-Loop, Pattern-Pass-Through.
+      AI-Training-Pipeline ist null berührt: Python-Backend, ONNX-Model,
+      AIWaveConfig-Schema, Templates, Decoder, State-Encoder, Bots, Wave-
+      Outcome-Logging bleiben 1:1. Refactor sitzt komplett unterhalb des
+      AI-Outputs. Test-Suite 884/884 grün, Lint sauber. Docs:
+      `STATIC_WAVE_FALLBACK.md` + `WAVE_SYSTEM.md` aktualisiert.
+
+### Loading-Screen-Tipps faktisch überarbeitet (TODO 3.1)
+
+- [x] **5 falsche Tipps korrigiert, 2 neue Code-gestützte ergänzt**
+      Alle Tipps in `src/app/components/loading-screen/field-tips.ts`
+      gegen aktuelle Configs/Komponenten geprüft:
+      - **Frost "deals no damage"** — falsch, Ice Tower hat
+        `damage: 5` (`tower-types.config.ts:296`). Neu: "tiny chip damage,
+        treat as a slower".
+      - **Compass "click it to reset"** — falsch, Compass-Body ist nicht
+        klickbar; ein kleiner Refresh-Button erscheint daneben wenn
+        rotiert (`compass.component.ts:63-67`). Tipp beschreibt jetzt
+        den Reset-Button.
+      - **Research "permanent across runs"** — falsch, `resetGameState()`
+        ruft `resetResearchState()` (`tower-defense.store.ts:363`,
+        `research.store.ts:99`) und cleart alles. Tipp sagt jetzt
+        "carries through to the next wave" + Reset-Hinweis.
+      - **Range "diminishing returns"** — irreführend, Upgrade-Math ist
+        pures Compounding `1.04^level` ohne Falloff. Ersetzt durch das
+        echte Skalierungs-Argument: Cost ×1.25/Level → zweite Tower-Type
+        oft besser als Max-Out.
+      - **Chain/Splash "where two routes converge"** — falsch, das Spiel
+        hat aktuell nur einen Spawn. Tipp jetzt swarm-fokussiert.
+      - Neu: Damage-Number-Farbe/Größe signalisiert Matchup-Effectiveness
+        (`damage-matrix.config.ts EFFECTIVENESS_COLORS/SCALES`).
+      - Neu: Sell-Back ist 75 % vom Invest (`tower-types.config.ts SELL_RATIO`).
+      Commits `06b7418`, `4041bd7`.
+
+### `game-sidebar`: Research-Center Sell-Button vereinheitlicht (TODO 3.1)
+
+- [x] **RC-Sell-Button vom Inline-Tile am Tree-Ende in den Panel-Header verschoben**
+      Der Research Center hatte einen eigenen `td-sell-tile` als
+      Inline-Block unter dem Research-Tree — visuell aus der Reihe
+      gegenüber den Normal-Towern, deren Sell-Button (`td-header-sell-btn`)
+      im Panel-Header sitzt. Header der RC-Panel jetzt analog zum
+      Tower-Header (`td-tower-header` + Sell-Button rechts). Tote Styles
+      `.td-sell-section`, `.td-sell-section-inline`, `.td-sell-tile`,
+      `.td-sell-value` aus `game-sidebar.component.scss` entfernt (−60 LOC,
+      keine HTML-Referenzen mehr). Commit `db97298`.
+
+### VFX: Damage- und Reward-Floating-Texts räumlich getrennt (TODO 3.1)
+
+- [x] **Per-Instance `aLateralOffset`-Attribut in der Floating-Text-Pipeline**
+      Damage-Popups (rot, aus `combat-effect.service.ts`) und Reward-Popups
+      (gold, aus `game-state.manager.ts`) spawnten an exakt derselben
+      Welt-Position über dem getroffenen Gegner und überlagerten sich bei
+      großen Waves zu einem unleserlichen Blob.
+      Neuer `lateralOffset`-Config-Wert (Welt-Einheiten in Screen-Right-
+      Richtung) wird durch die Spawn-API in den GPU-Instance-Manager
+      gereicht und im Billboard-Vertex-Shader als neues Per-Instance-
+      Attribut `aLateralOffset` entlang `uCameraRight` addiert. Damit
+      bleibt der Split kamera-orientation-stabil.
+      Call-Sites: Damage-Numbers `-1.2` (links), Poison-DOT `-1.2` (links),
+      Reward-Popups `+1.2` (rechts). Zusätzlich zwei pre-existing
+      Integration-Tests (`enemy-movement-path.spec.ts`,
+      `game-state-flow.spec.ts`) gefixt, die seit `e4a3400` rot waren —
+      sie hatten keinen Wave-Number-Provider gesetzt → Wave 0 → 0g-Budget.
+      Test-Suite wieder 870/870 grün. Commit `c6f25e0`.
+
+### Per-Kill-Reward — deterministischer Akkumulator (TODO 2.2, W19 rat_tide Overshoot)
+
+- [x] **Reward-Floor 1g bei Mega-Swarms ersetzt durch Per-Wave-Akkumulator**
+      Alte Formel `Math.max(1, Math.round(budget / count))` (`enemy.manager.ts`)
+      floorte jeden Reward bei 1g — W19 `rat_tide` (Budget 8000, 5000 Enemies)
+      zahlte 5000g statt der vom Curriculum gewollten Cap aus und brach die
+      Economy-Balance.
+      Neuer Flow: pro Wave `remainingKillBudget` + `remainingRewardSlots` als
+      Felder im `EnemyManager`; jeder bezahlte Kill claimt
+      `floor(remainingBudget / remainingSlots)` und dekrementiert beide Zähler,
+      der letzte Slot bekommt den Rounding-Rest. Summe aller Kills = exakt
+      `goldBudgetForWave(wave).kill` wenn alle Enemies sterben; Extra-Kills
+      über die erwartete Wave-Size zahlen 0g; Leaks reduzieren das verdiente
+      Gold natürlich.
+      `awardCredits=false` (Debug-Kill-All) lässt den Akkumulator unangetastet
+      — Dev-Shortcuts verbrennen keine Budget-Slots.
+      Tests (`enemy.manager.spec.ts`, +137 LOC): Summe = Budget, W19-Regression,
+      Overshoot-Kills, Wave-Wechsel-Reset, Debug-Kill-Isolation, Zero-Budget,
+      Leaks. Commit `e4a3400`.
+
+## 2026-05-22
+
+### `game-sidebar.component.ts` — Inline-CSS in Component-Stylesheet ausgelagert (TODO 1.2)
+
+- [x] **~1140 LOC Inline-`styles` raus aus der Component, jetzt in `game-sidebar.component.scss`**
+      Der Inline-CSS-Block aus dem `@Component`-Decorator (`styles`) ist in eine
+      dedizierte `game-sidebar.component.scss` gewandert, eingebunden via `styleUrl`.
+      Der `:host`-Block mit `${TD_CSS_VARS}` bleibt im `styles` — TS-Konstanten
+      lassen sich in einem externen Stylesheet nicht interpolieren, und `styles.scss`
+      setzt diese Custom Properties nicht global (nur die Font-Tokens).
+      Die 5 Scrollbar-Interpolationen (`TD_SCROLLBAR_STYLES` / `TD_SCROLLBAR_WEBKIT`)
+      sind statisch im `.scss` aufgelöst — sie referenzieren nur `var(--td-*)`,
+      es wird kein Theme-Wert dupliziert.
+      `game-sidebar.component.ts`: **1868 → 725 LOC**. Verhaltens- und optikneutral,
+      Production-Build verifiziert grün. Der zweite Teil von MOD-2 (Fachdomänen in
+      Sub-Components trennen) bleibt offen → TODO 1.2.
+
+## 2026-05-21
+
+### `three-effects.renderer.ts` aufgesplittet — 2675-LOC-Monolith → Facade + 5 Module (TODO 1.2)
+
+- [x] **`ThreeEffectsRenderer` ist jetzt eine dünne Delegations-Facade; die Logik liegt in fokussierten Modulen**
+      Schrittweise extrahiert, jeder Schritt verhaltenserhaltend mit Build+Lint-Gate:
+      - `particle-shaders.ts` (176 LOC) — GLSL-Vertex/Fragment-Shader + Material-Factory
+        (analog `decal-shaders.ts`).
+      - `particle-pool-manager.ts` (679 LOC) — `ParticlePoolManager`: die 3 GPU-Pools
+        (trailAdditive/trailNormal/towerFire), Free-Lists, Buffer-Caches, Atlas-Texturen,
+        `updateBuffers`, `setUseShaderMaterial`.
+      - `aura-renderer.ts` (262 LOC) — `AuraRenderer`: orbitierende Frost-/Poison-Auren.
+      - `environment-effects-renderer.ts` (378 LOC) — `EnvironmentEffectsRenderer`:
+        HQ-Explosion, Fire-Flash, Tower-Inner-Fire.
+      - `particle-effects-renderer.ts` (1234 LOC) — `ParticleEffectsRenderer`:
+        Combat-VFX (blood/fire/explosion/smoke/trails/muzzle), Blut-/Eis-Decals,
+        zentrale `activeEffects`-Lifecycle-Map.
+      `three-effects.renderer.ts` selbst: **2675 → 644 LOC** — reine Facade
+      (FloatingText, Debug-Spheres, Konstruktor + `update`/`clear`/`dispose`-
+      Orchestrierung in load-bearing Reihenfolge). Konsumenten-API
+      (`tilesEngine.effects.*`) unverändert — kein Call-Site-Umbau nötig.
+      Verhaltenserhaltend: Build + Lint grün, volle Test-Suite 863 Tests grün.
+
+### Test-Coverage-Lücken TEST-6..10 geschlossen (+59 Tests)
+
+- [x] **TODO 1.3: HQDamageService, StatusEffectService, canTargetAirEffective und Pathfinding-Worker getestet; flaky Performance-Tests entschärft**
+      - `entities/tower-targeting.util.spec.ts` (13 Tests): `canTargetAirEffective`
+        — statisches `canTargetAir`-Flag, `aa-retrofit`-Whitelist (`dual-gatling`),
+        Ground-only-Tower.
+      - `services/combat/status-effect.service.spec.ts` (13 Tests): Game-Clock-
+        Provider-Stamping, `applySlow/applyPoison/applyEffect`-Delegation,
+        `removeExpired`, `hasActiveEffect`-Logik inkl. Duration-Boundary.
+      - `services/combat/hq-damage.service.spec.ts` (25 Tests): `initialize`
+        (Sound-Registrierung, Listener-Leak-Schutz bei Re-Init), `health:changed`-
+        Handler, `updateFireIntensity` (Flash vs. permanentes skaliertes Feuer),
+        `playDamageSound`-Throttle, `onTilesLoaded`-Caching, `triggerGameOverEffects`
+        (mit Fake-Timern), `healBase`, `reset`, `spawnDebugPoint`.
+      - `workers/pathfinding.worker.spec.ts` (8 Tests): Worker über sein
+        `message`-Protokoll getrieben (`init`/`findPath`/`clearGraph`) — A* auf
+        gerader Straße, disjunkte Komponenten, Fehler-Reply bei kaputtem Payload.
+      - `game-engine/performance.spec.ts` (TEST-10): harte Wall-Clock-Budgets
+        (5–50 ms) durch einen großzügigen Sanity-Cap (500 ms) ersetzt — funktionale
+        Assertions (Entity-Counts, Handler-Call-Counts, Listener-Leak) bleiben
+        strikt; Timing dient nur noch als Katastrophen-Guard. Beendet die
+        CI-Flakiness durch GC-/Scheduling-Jitter.
+      Volle Suite: 863 Tests grün (55 Dateien), `npm run lint` sauber.
+
+### IGameManager-Polymorphie — abgeschlossen (`destroy()` polymorph, Rest bewusst hardcoded)
+
+- [x] **TODO 1.2 „initialize()/update() polymorph übers Manager-Array" geklärt — nicht weiter umsetzbar**
+      `destroy()` läuft bereits polymorph über `GameStateManager.subManagers[]`
+      (parameterlos → iteriert sauber). `initialize()` und die per-Frame-
+      `update()`-Sequenz bleiben bewusst hardcoded:
+      - **initialize()**: jeder Manager hat eine andere Signatur — `TowerManager`
+        nutzt `initializeWithContext(...)`, `WaveManager` nimmt `spawnPoints +
+        paths`, `EnemyManager` braucht Folge-Wiring (`setWaveNumberProvider` …),
+        `ResearchManager` hat gar kein Lifecycle-`initialize`. Ein uniformer
+        `forEach` bräuchte unsichere `...unknown[]`-Casts und würde die
+        Per-Manager-Typprüfung verlieren — der explizite Code ist hier sauberer.
+      - **update()**: `runSubStep()` verschränkt die Manager mit
+        `eventBus.processQueue()` und bedingtem `towerCombat`; die Reihenfolge
+        ist load-bearing.
+      Die Design-Entscheidung ist jetzt im `subManagers`-Doc-Kommentar
+      (`game-state.manager.ts`) dauerhaft dokumentiert. Kein Verhaltens-Change.
+
+### Air-Enemy-Flughöhe-Drift am Hang — als kosmetisch akzeptiert (Option γ)
+
+- [x] **Offener Engine-Bug „Air-Flughöhe vs. LOS-Sample-Höhe am Hang" geschlossen — wontfix**
+      Air-Enemy fliegt path-relativ (`geoHeight + heightOffset`), während
+      Combat-Sample und Debug-Tube `getAirTargetY` (Cell-Mitte + 15m) nutzen;
+      am Hang driften die drei Höhenmodelle auseinander. Entscheidung: Option γ
+      — der Drift bleibt kosmetisch, Tower-Range ist typischerweise größer als
+      der Höhen-Drift, Combat funktioniert in der Praxis „gut genug". Kein
+      Code-Fix; Punkt aus TODO 1.1 entfernt. Wiedereinstieg falls bei einem
+      späteren Hang-Playtest doch Projektil-Misses auffallen: Option α (Enemy-Y
+      ans Cell-Grid binden) bzw. Option β (Combat-Sample an Pfad binden).
+
+---
+
+## 2026-05-20
+
+### Frost-/Poison-Aura folgt Air-Gegnern auf Flughöhe
+
+- [x] **Frost- und Poison-Aura sitzen jetzt auf Enemy-Mesh-Höhe statt am Boden**
+      Wurde ein fliegender Gegner (Bat, Hornet, Dragon) vom Ice Tower
+      verlangsamt, erschienen die kreisenden Frost-Orbs auf der
+      darunterliegenden Bodenposition statt um den Gegner herum. Ursache:
+      die Aura-Positionierung in `enemy.manager.ts` setzte `_tempLocalPos.y`
+      auf `geoHeight - origin.height` — also OHNE `heightOffset`, während
+      der Gegner-Mesh auf `(geoHeight + heightOffset) - origin.height` sitzt.
+      Bei Air-Units mit heightOffset 15-20m landete die Aura entsprechend
+      ~15-20m zu tief. Alle vier Aura-Pfade (Frost spawn/update, Poison
+      spawn/update) nutzen jetzt `(geoHeight + heightOffset) - origin.height`.
+      Im selben Commit: Poison-DoT-Tick-Einheiten korrigiert.
+      Datei: `src/app/managers/enemy.manager.ts`. (Commit `68b18c6`)
+
+---
+
+## 2026-05-18
+
+### Lint-Cleanup-Pass — `main` ist wieder grün
+
+- [x] **17 vorbestehende Lint-Probleme behoben (15 Errors + 2 Warnings)**
+      `npm run lint` war auf `main` rot — überwiegend auto-fixbare
+      Stil-Verstöße (`array-type`, `consistent-generic-constructors`),
+      die `eqeqeq`-Errors (`!=` → `!==`) einzeln auf Coercion-Verhalten
+      geprüft. `npm run lint` läuft jetzt sauber durch
+      (*„All files pass linting."*). (Commit `4da052e`)
+
+---
+
+## 2026-05-15
+
+### Cells als Single Source of Truth für Boden-Y (Pfad + Linie)
+
+- [x] **Rote Linie und gecachte Pfad-Heights kommen jetzt aus dem Route-Grid statt aus einer eigenen Raycast-Pipeline**
+      `path-route.service.ts buildRouteFromPath`: der per-Waypoint-Raycast-Loop
+      (`getGroundHeightEstimate` / `getTerrainHeightAtGeo` lateral sampling),
+      der nachgelagerte `smoothPathHeights`-Call, das Tile-Quality-Tracking
+      (`startTileQualityTracking`/`stopTileQualityTracking` + `QUALITY_REJECT_FACTOR`)
+      und der HQ-Sonderfall (letzter Waypoint nimmt vorletzte Höhe) sind alle weg.
+      Stattdessen liest jeder Waypoint seine Höhe aus `globalRouteGrid.getGroundLocalYAt(local.x, local.z)`.
+      Cells sind durch `sampleCellY` schon sanity-checked, LOD-versioniert und
+      self-heal-fähig — also genau die Eigenschaften, die das alte Smoothing
+      mühsam nachgebaut hat. `−108 LoC` in `path-route.service.ts`.
+- [x] **Neue API `getGroundLocalYAt(x, z)` auf `GlobalRouteGrid` + Service-Delegator**
+      Cell-first lookup mit Fallback auf `estimateTerrainY` (3×3 → 5×5 Median
+      der stabilen Nachbarn). Single `Map.get` + 2 Integer-Casts, billig genug
+      für Hot-Path-Konsumenten. Datei: `src/app/utils/global-route-grid.ts`.
+- [x] **`onTilesLoaded` refresht Cells bevor die Route-Linie liest**
+      `visualization-facade.service.ts`: `globalRouteGrid.updateTerrainHeights()`
+      läuft direkt vor `pathRoute.refreshRouteLines()`, sodass die Linie nach
+      einem Tile-Reload garantiert auf der frischen LOD landet (vorher passte
+      es nur durch Glück, da Cells eine separate Stabilisations-Loop hatten).
+- [x] **Movement bleibt bewusst auf Wegpunkt-Interpolation**
+      Erster Versuch las pro Frame direkt aus der Cell unter dem Gegner —
+      visuell zeigten sich kleine Höhensprünge bei jedem Cell-Grenzübergang
+      (Cell-Größe 2 m × ~5 m/s = ~0.4 Hz Sprünge). Rollback auf die alte
+      lineare Interpolation zwischen `path[i].height` und `path[i+1].height`.
+      Da Pfad-Heights jetzt aus Cells kommen, ist die Linie weiterhin
+      exakt mit den Gegnerfüssen aligned (minus die 1 m HEIGHT_ABOVE_GROUND-
+      Anhebung) — nur eben ohne 2-m-Treppen-Artefakt.
+      Trade-off: Gegner mit lateralem Offset haben weiterhin die Linien-Höhe,
+      nicht die Bürgersteig-Höhe. Akzeptiert, da das auch der Stand vor dem
+      Refactor war.
+- [x] **Doku angepasst**
+      `docs/ARCHITECTURE.md` Section "Pfad-Höhen": altes 3-stufiges Pipeline-
+      Diagramm + komplette "Tile-Quality Route Protection"-Section ersetzt
+      durch das neue Cells-as-SoT-Diagramm. `smoothPathHeights` als heute
+      noch von `street-rendering` verwendete Public-Methode klargestellt.
+
+### Strict `sampleCellY` + Convergence Loop + Tube Rebuild (Route-Grid-Schwebe-Bug)
+
+> Hintergrund: über 14 reproduzierbare Cases (`tmp/case 1..14` mit BEFORE/AFTER
+> JSON-Dump, Screenshot und info.txt) wurden die Wurzeln des "Route-Grid und
+> Air-Tube schweben über Boden" / "lokale Cell-Lücken"-Bugs vermessen. Die
+> ursprüngliche TODO-Hypothese ("LOD-Race nach sampled → besseres-LOD-Refresh")
+> hat sich in den Daten **nicht** bestätigt — keine einzige LOD-Promotion mit
+> abweichendem Y-Wert. Stattdessen vier eigenständige Defekte.
+
+- [x] **`sampleCellY` lehnt jetzt zwei Hit-Klassen ab und lässt Cells `unsampled`**
+      Datei: `src/app/utils/global-route-grid.ts`.
+      1. **"noLOD"** — Sample-Raycaster wired, aber Hit hat `tileDepth=0` oder
+         `tileGeometricError=Infinity` (= Mesh noch nicht dekodiert; Smoking-Gun
+         der Init-Race aus Cases 10/12 mit allen Cells stable @ 504 m statt
+         echtem -10..52 m).
+      2. **"outlier"** — Hit divergiert >50 m vom Median der stable 3×3-Nachbarn
+         (Tunnel/Brücke-Outlier, Sub-Fall B des Bugs).
+      Beide Pfade greifen nur wenn `terrainSampleRaycaster` verkabelt ist
+      (DevWorld/Tests bleiben unverändert). Neuer Helper `medianOfStableNeighbourY`
+      (private) + `estimateTerrainY` (public, 3×3 → 5×5 Median) — ≥3 stable
+      Nachbarn nötig, sonst `null` (keine false positives beim Erst-Sample).
+- [x] **rAF-getakteter Convergence-Loop nach Tile-Load-End**
+      `visualization-facade.service.ts scheduleRouteGridConvergence`: ruft
+      `retryUnsampledCells()` pro Frame, stoppt nach 2 aufeinanderfolgenden
+      Frames mit 0 Promotions oder bei 120 Frames Safety-Cap (~2s @ 60fps).
+      Ersetzt den vorherigen Single-Shot-Retry — keine harte Wartekonstante
+      mehr, passt sich an Hardware und Cache-State an.
+      `retryUnsampledCells()` returnt jetzt `{ promoted: number }`.
+- [x] **Air-Route-Tube wird bei Cell-Promotion neu gebaut (Defekt III)**
+      `tower-placement.service.ts onCellsPromoted`: triggert zusätzlich
+      `rebuildAirRouteLayer()` mit rAF-Debounce. Vorher heilte die Promotion
+      die Aggregate-Meshes, aber die Magenta-Tube blieb auf alten Höhen
+      stehen (Cases 2/5/6/10/12).
+- [x] **`route-altitude-tubes.ts` nutzt `estimateTerrainY` für unsampled Cells**
+      Vorher naive `cell.terrainHeight` → Knick nach unten auf
+      `routeAnchorY` (oft 0 → ~165 m unter Rest). Jetzt Neighbour-Median-
+      Interpolation auch wenn Cells dauerhaft unsampled bleiben (Wasser,
+      Tunnel).
+- [x] **`resetHeightsAndRetry` zerstört keine guten LOD-Daten mehr (Defekt IV)**
+      Nur noch Cells mit `tileDepth=0 || tileGeomErr=Infinity` werden zurückgesetzt,
+      gute Cells (Cases 1/7/8 mit `tileDepth≥18`) bleiben.
+
+### Route-Grid-Diagnose-Infrastruktur
+
+- [x] **DevTools-API `__rg.*` für Live-Inspektion**
+      `globalThis.__rg = { dumpStats, dumpCellsInBox, resetHeightsAndRetry, grid }`.
+      `dumpStats()` gibt Histogramme über Cell-States, Tile-Depths und
+      Geometric-Errors aus. `dumpCellsInBox({xMin,xMax,zMin,zMax})` listet
+      jede Cell im Bereich mit allen Sample-Metadaten. `resetHeightsAndRetry()`
+      wirft schlechte Cells weg und retriggert Sampling.
+      Datei: `src/app/services/world/global-route-grid.service.ts`.
+- [x] **State-Dump-Button im Dev-Menü** für reproduzierbare Bug-Cases
+      Schreibt einen vollständigen JSON-Snapshot des Cell-Grids (alle
+      Cells mit Position, Heights, Sample-State, Tile-Metadaten) zusammen
+      mit Screenshot in `tmp/case N/`. Hat die 14-Case-Analyse für den
+      sampleCellY-Fix erst möglich gemacht.
+
+### LOS-Pipeline: dynamischer Viz-Cap + Cubemap-Debug-Panel
+
+- [x] **`airRangeMultiplier`-Platzhalter raus, Viz-Cap dynamisch**
+      `refactor(los)`: Range-Berechnung läuft jetzt direkt mit dem Tower-
+      Range; die Viz nutzt einen aus der Engine berechneten dynamischen Cap
+      statt fest verdrahteter Konstanten. Vereinfacht den Code-Pfad und
+      entfernt Stale-Konstanten aus dem Air-Targeting-Refactor.
+- [x] **Cube-Render-Fix: `scene.background` + `environment` während Cube-Pass null**
+      Der versteckte 2-Tages-Bug der Air-LOS-Migration: die Skybox leakte
+      RGBA-Bytes als falsche "Depth"-Werte in die Cube-Faces, ignorierte
+      sowohl `child.visible` als auch `overrideMaterial`. Fix in
+      `tower-shadow-mapper.ts`: vor jedem Cube-Render `scene.background` und
+      `scene.environment` auf `null` setzen, danach wiederherstellen.
+      (Feedback-Memo: [feedback_cube_render_background.md] für künftige
+      Cube-Render-Sessions.)
+- [x] **Debug-Panel für Live-Cubemap-Inspektion**
+      Neuer Tab im Dev-Menü visualisiert die 6 Cube-Faces des gerade
+      ausgewählten Towers in Echtzeit, mit Pixel-Inspektor + Range-Visualisierung.
+      Zusammen mit dem Sub-Fix oben fertig — vorher gab's keinen sinnvollen
+      Weg, einen falschen Cube-Sample zu diagnostizieren.
+
+### Anti-Air-Indikator im Build-Menü
+
+- [x] **Wind-Icon-Badge auf Tower-Card + Targeting-Banner im Tooltip**
+      Tower-Karten im Build-Menü zeigen jetzt Air-Capability sofort.
+      Wind-Icon-Chip bottom-left auf der Preview-Canvas bei allen Tower
+      mit Air-Targeting; Air-only-Tower (Rocket) bekommen die stärkere
+      Teal-Gradient-Variante (`td-tower-card-aa-only`). Rich-Tooltip
+      bekommt einen neuen `targeting`-Block zwischen Stats und Armor-
+      Matrix mit drei Modi: "Ground-only" (tower-Icon, grauer Border-
+      Akzent), "Ground and Air" (wind-Icon, teal-dark Border), "Air-only"
+      (wind-Icon, teal-light Border + leichtes Background-Tint). Bei
+      AA-via-Research erscheint zusätzlich ein "via Research"-Chip.
+      Single source of truth ist `canTargetAirEffective` aus
+      `entities/tower-targeting.util.ts` — Card-Badge, Tooltip-Banner
+      und Combat lesen dieselbe Funktion, sodass die Anzeige bei
+      `aa-retrofit`-Research (aktuell `dual-gatling`) automatisch flippt.
+      Dateien: `components/game-sidebar/game-sidebar.component.{html,ts}`,
+      `components/tooltip/td-tooltip-content.component.ts`,
+      `components/tooltip/tooltip-data.types.ts`.
+
+---
+
+## 2026-05-14
+
+### GPU-Cube Combat-Resolve + Air-Height-Unification (Option B) — LOS-Migration finale Stage
+
+- [x] **Air-LOS und Air-Enemy-Flughöhe vereinheitlicht auf `terrain + 15 m` (Option B)**
+      Vor der Migration liefen drei verschiedene Air-Höhen parallel (Enemy-
+      Flughöhe, Cell-Sample-Höhe für Tower-LOS, Air-Route-Tube-Viz), die
+      auf flachem Terrain übereinstimmten, am Hang aber bis zu 30 m
+      auseinander driften konnten. Nach Diskussion zwischen Option A
+      (Enemy-Y an Cells binden, sichtbares Zickzackeln am Hang) und
+      Option B (alle drei auf `getAirTargetY(cell) = cell.terrainHeight +
+      airSampleYOffset`) → Option B. Caveat: in dichten Skyscraper-Szenen
+      kann ein Air-Unit durch eine Fassade clippen — bewusster Trade-off
+      für vorhersehbare Coverage-Visualisierung.
+- [x] **Combat-LOS-Resolve auf GPU-Cubemap-Pixel-Lesen umgestellt**
+      Vorher: pro Schuss synchroner Three.js-Raycast vom Tower-Tip zum
+      Ziel. Jetzt: jeder Tower hat einen pre-rendered Cubemap (Phase aus
+      Migration vom 13.05); das Combat-Resolve liest am Schuss-Zeitpunkt
+      ein einziges RGBA-Byte per `readPixels` aus der entsprechenden Face/
+      UV. Ein-Pixel-Read im Worst-Case ~50 µs, gegen ~95-600 ms vorher
+      bei Burst-Placement. Auch die Air-Sicht (höheres Sample-Y) nutzt
+      denselben Cubemap — eine einzige LOS-Quelle für Ground- und Air-
+      Targeting.
+- [x] **Combat-Tower Cooldown war 3× pro Sub-Step gedeckelt — Fire-Rate-Config wurde ignoriert**
+      Game-Loop-Substep-Bug: `tower.combat.update(dt)` lief N-mal pro Frame
+      (für x-Speed-Determinismus seit Mitte 2026-05), aber das Cooldown-
+      Decrement war noch im Per-Frame-Pfad. Folge: Towers feuerten exakt
+      so oft wie Frames gerendert wurden, nicht wie ihre Fire-Rate-Config
+      vorgab. Fix: Cooldown wird jetzt pro Sub-Step abgebaut, nicht pro
+      Frame. AI-Training mit x75 sieht jetzt die korrekte DPS-Kurve.
+
+---
+
+## 2026-05-13
+
+### GPU-Cubemap-driven LOS Pipeline (Ground production-ready) — die GROSSE Architektur-Änderung
+
+> Hintergrund: bei jeder Tower-Platzierung lief vorher ein synchroner
+> Three.js-Raycast-Burst über alle Cells im Range (95-600 ms Frame-Drop).
+> Selbst bei Camera-Bewegung wurde Tower-LOS neu berechnet (Stale-Tiles-
+> Fix). Auf langen Maps wurde das Game beim Bauen unspielbar.
+>
+> Lösung-Skizze in zwei Handover-Dokumenten (12./13.05): GPU-Cubemap als
+> Single Source of Truth — jeder Tower hat 6 vorgerenderte Faces seines
+> Sichtbereichs in einer kleinen Render-Target-Cubemap. Per-Cell-Sichtbarkeit
+> wird aus einem einzelnen Pixel-Lookup gewonnen. Eine Cubemap ist nach
+> Tower-Platzierung statisch (Geometrie bewegt sich nicht); Re-Render nur
+> bei Tile-Reload oder Range-Upgrade.
+
+- [x] **GPU-Cubemap-LOS-Pipeline für Ground-Targeting produktiv**
+      Jeder Tower rendert beim Platzieren einmal 6 Cube-Faces seines
+      Range-Würfels in ein `WebGLCubeRenderTarget`. Cells im Range
+      sampeln per `readPixels` an `(face, u, v)` ein 1×1-Pixel und
+      lesen daraus Sichtbarkeit. Pro Tower-Reg: 1 Cube-Render (~5-10 ms),
+      dann ~500 readPixels (~20 µs/each). Vorher: 500 synchrone Raycasts
+      à 1-2 ms = 500-1000 ms Frame-Drop. Architektur in
+      `tower-shadow-mapper.ts`, `gpu-cube-resolve.ts`.
+- [x] **Aggregate-Grids auf 2-State-Modell simplifiziert**
+      Vorher 4 Aggregate-Visualisierungen für jede Kombination aus
+      ground/air × visible/blocked. Mit GPU-Cube als Wahrheits-Quelle
+      reichten 2 (ground-aggregate, air-aggregate) — jede Cell zeigt
+      ihren maximalen Sichtbarkeitszustand über alle registrierten Tower
+      hinweg. Vereinfacht den Code und reduziert InstancedMesh-Capacity-
+      Druck.
+- [x] **Air-Research Debug-Infrastructure — 4 Layer-Toggles + Per-Tower-Filter**
+      Dev-Menü-Tab "LOS Debug" mit Layer-Schaltern für: Tower-Cubemap-
+      Render, Aggregate-Ground, Aggregate-Air, Per-Tower-Filter (nur den
+      ausgewählten Tower anzeigen). War essentiell, um die Air-LOS-Stage
+      einen Tag später überhaupt validieren zu können.
+- [x] **Air-Enemies + Air-Cells gemeinsam sichtbar (`depth-test` + `logdepthbuf`)**
+      Z-Fighting zwischen Air-Cell-Quads und durchfliegenden Air-Enemies
+      ergab unleserliche Viz. Fix: Air-Cell-Material nutzt `depthTest:
+      true` mit Three.js `logdepthbuf`-Chunk und einer kleinen
+      `polygonOffset` — Cells werden korrekt hinter Enemies gezeichnet.
+      (Memo: alle eigenen Shader brauchen den `logdepthbuf`-Chunk wegen
+      3D-Tiles-Logarithmic-Depth — bekannt aus früheren Sessions.)
+- [x] **Stable-Cells werden beim Preview-Drag nicht mehr resampled**
+      `perf(los)`: während des Mouse-Move bei Tower-Platzierung wurde
+      `sampleCellY` für jede Cell im Preview-Range gefeuert (~500 cells
+      × Drag-Frames = 30k Raycasts pro Sekunde). Stable Cells sind aber
+      schon korrekt — Re-Sample bringt nichts ausser einen Cache-Miss.
+      Neue `promoteUnsampledCellsInRadius`-Variante macht nur Promotion
+      (unsampled → sampled), Refresh bleibt der Tile-Load-Pipeline überlassen.
+
+---
+
+## 2026-05-12
+
+### Vorbereitung der GPU-LOS-Migration + Stone Golem + Polish
+
+- [x] **GPU-LOS-Pipeline-Rewrite Handover-Dokumente**
+      Zwei Handover-Docs (12./13.05) skizzieren die GPU-Cubemap-Architektur
+      vor der Implementierung: Konsumenten, Datenfluss, Migrations-
+      Reihenfolge, Tile-LOD-Race-Edge-Cases. Doku in `docs/`. Hat die
+      mehrtägige Migration koordiniert.
+- [x] **Skyline-Raycast als Single Source of Truth gecached**
+      `perf(route-grid)`: vorher rief jede `registerTower` /
+      `continuePreviewBuild`-Iteration den Skyline-Raycast für jede Cell
+      neu auf — ~33 % aller Raycasts während Placement-Preview waren
+      redundant. Jetzt: `sampleCellSkyline` idempotent (write-once), Cell
+      trackt `skylineSampled`-Flag, Re-Sampling nur wenn Flag false.
+      Datei: `src/app/utils/global-route-grid.ts`.
+- [x] **Stone Golem als neuer Enemy-Typ**
+      Fortified-Armor, massive, slow (Speed 2.5, 480 HP). Config in
+      `enemy-types.config.ts` registriert. **Hinweis:** Stone Golem ist
+      noch nicht im AI-Wave-Director-Curriculum (TODO 2.2) — taucht
+      aktuell nur per Manual-Spawn / Tests auf.
+- [x] **Loading-Screen fade-in beim ersten Tile-Render + Logo-Only Header**
+      Der dunkle Backdrop des Loading-Screens fadet jetzt sanft aus,
+      sobald die ersten Tiles in die Szene gemalt wurden — vorher harter
+      Schwarz/Welt-Cut. Header während des Ladens auf Logo-only reduziert
+      (kein Text). Dateien: `loading-screen.component.{html,ts,scss}`.
+- [x] **`fix(game-state)`: Command-Bus-Adapter wird bei Re-Init disposed**
+      Bei Location-Change wurde ein zweiter Adapter ohne Cleanup des
+      ersten gestartet — Doppel-Listener auf dem Event-Bus, sichtbar als
+      doppelter Tower-Damage in Re-Init-Szenarien. Dispose-Hook in
+      `game-state.manager.ts` bei jedem `initialize()`.
+
+---
+
+## 2026-05-11
+
+### InfoOverlay collapsed-State minimal
+
+- [x] **Nur die nackte FPS-Zahl im zugeklappten State**
+      `info-overlay.component.ts`: "FPS"-Label nur noch bei expanded gerendert,
+      `.v` verliert im collapsed `flex: 1` + 56px-Spaltenbreite — das Panel
+      intrinsic-sized um Zahl + Caret. Padding 2px 6px, Row-Gap 6px.
+
+- [x] **Background, Border, Shadow im collapsed entfernt**
+      Glass-Tint, Backdrop-Filter, Border und Box-Shadow sind im collapsed
+      transparent; ein 4-fach Cardinal-text-shadow (1px Outline) + weicher
+      Drop-Shadow hält Zahl + Caret (via `filter: drop-shadow`) auf hellem
+      Himmel, Wasser und bunten Map-Tiles lesbar. Auf Hover faded ein
+      schwacher Glass-Tint mit 4px-Blur ein, damit der Klick-Target
+      discoverable bleibt. Caret-Opacity bei 0.85 als Aufklapp-Affordance.
+
+### Kompass: Reset-Bearing-Button nach oben rechts
+
+- [x] **Reset-Button von unten-rechts auf oben-rechts verschoben**
+      `compass.component.ts`: Style-Selector `.td-compass__reset` von
+      `bottom: -2px` auf `top: -6px; right: -6px`. Der Button hängt jetzt
+      sichtbar getrennt am oberen-rechten Kompass-Rand, mit etwas mehr
+      Abstand zum runden Face.
+
+### Wallsmasher spawnt geräuschlos + eckige Armor-Glyphen
+
+- [x] **Wallsmasher: kein Spawn-Sound**
+      `enemy-types.config.ts`: `spawnSound` / `spawnSoundVolume` /
+      `spawnSoundRefDistance` beim Wallsmasher entfernt. `enemy.entity.ts:88,114`
+      gateet beide Pfade (Register + Play) durch `if (this.typeConfig.spawnSound)`,
+      ohne Property bleibt der Spawn lautlos. Gameplay-Entscheidung: Wallsmasher-
+      Rush soll visuelle Überraschung sein.
+
+- [x] **Armor-Glyphen quadratisch statt rund**
+      `combat-ui.config.ts`: Circle-Emojis 🟢🔵🟠🔴🟣 durch Square-Equivalents
+      🟩🟦🟧🟥🟪 ersetzt. Wirkt automatisch in Enemy-Group-Row und
+      Coming-Up-Wave-Preview. Tower-Tooltip nutzt weiterhin den CSS-Dot;
+      Formvokabular ist jetzt durchgehend eckig.
+
+### Enemy-Tooltip in laufender Wave auf Tower-Tooltip-Stil vereinheitlicht
+
+> Wave-Section zeigte Enemy-Details bislang über `[matTooltip]` als reine Pre-Line-
+> Stringbox an, während Tower-Cards im Build-Menü längst die strukturierte
+> `TdRichTooltipDirective` mit Card-Optik nutzen. Beide Tooltips teilen sich nun
+> Layout, Header-Typografie und das vs-Tabellen-Schema.
+
+- [x] **Enemy-Group-Row nutzt `tdRichTooltip` statt `matTooltip`**
+      `game-sidebar.component.html`: Enemy-Group-Row bindet `[tdRichTooltip]="getGroupTooltipData(group)"`.
+      Neue Methode `getGroupTooltipData()` liefert `TdTooltipData` analog zu
+      `getTowerCardTooltipData()` — Header (Enemy-Name + Armor-Kategorie, Accent
+      aus Armor-Typ), 3-Spalten-Stats `HP / SPEED / COUNT`, "vs Damage"-Tabelle
+      mit allen Schadenstypen sortiert nach Effektivität (Damage-Type-Farbe als
+      Dot, schwache Matchups gedimmt), und Scaling-Multiplikatoren als Flavor-Line
+      falls HP/Speed-Multiplier ≠ 1. Damit ergänzt das Tooltip die im Row bereits
+      sichtbare `🛡️ Heavy – Weak to Siege`-Zeile um die vollständige Damage-Matrix
+      für das jeweilige Enemy (deckt zugleich das TODO "UI: Rüstungstyp im
+      Wave-Preview anzeigen" ab).
+
+- [x] **`withPush(true)` für `TdRichTooltipDirective` aktiviert**
+      CDK-Overlay schiebt Tooltips jetzt zurück in den Viewport, wenn das Host-
+      Element nahe am oberen/unteren Bildschirmrand sitzt. Vorher klebte der
+      ~300px hohe Tooltip an den ersten Enemy-Group-Rows oben in der Sidebar am
+      Viewport-Rand und wurde abgeschnitten. Profitiert auch Tower-Cards.
+
+### Lightning Tower — Hitscan-Chain + Idle-Crackle + lokale Impact-Halos
+
+> Neuer Tower-Typ `lightning` (eigene Tower-Type-ID, **nicht** der existierende
+> `magic` Tower). Kettenblitz springt Hitscan-basiert zwischen Enemies, am Turm
+> sitzt durchgehend ein Idle-Crackle-Effekt am Tip. Jedes getroffene Ziel
+> bekommt zusätzlich einen kurzen lokalen Aufhell-Effekt am Aufschlagspunkt
+> (Workaround weil Google Photorealistic Tiles dynamische Lichter ignorieren).
+
+- [x] **Lightning Tower mit Hitscan-Chain + Idle-Crackle**
+      Eigener `lightning` Tower-Type (`tower-types.config.ts:354`).
+      `LightningBoltRenderer` mit Pool von 192 Bolts, Vertex-Shader rechnet
+      jagged shape aus zwei Endpunkten und seedbasiertem Noise, Fragment-Shader
+      faded über Lifetime. `registerIdleCrackle()` spawnt durchgehend Mikro-Bolts
+      am Tip. `vfx:chain-lightning` Event übergibt Polyline (Tip → primary →
+      jump1 → …), `VFXService.handleChainLightning` spawnt einen Bolt pro Segment.
+      Commit a5ba204.
+
+- [x] **Lokale Impact-Halos (additive Billboard-Overlays)**
+      Erste Iteration mit Auto-Bloom global war Sackgasse (alle emissiven
+      Materialien glühten dauerhaft). Zweite Iteration mit pooled PointLights
+      hatte null sichtbaren Effekt — Photorealistic 3D Tiles haben das Licht
+      im Albedo eingebrannt und reagieren nicht auf dynamische Three.js Lichter.
+      Final: `LightningBoltRenderer` hält einen Pool von 16 `Sprite`s mit
+      AdditiveBlending + Radial-Gradient-CanvasTexture, permanent in der Scene
+      mit Opacity 0 wenn frei (vermeidet Material-Recompiles). `BoltOptions.attachLight`
+      triggert pro Segment einen Halo am End-Punkt, der mit `(1-age)²` über die
+      Bolt-Lifetime ausfaded. Steal-oldest, clear() und dispose() geben Halos
+      sauber frei. Tuning: `lightDistance` (Durchmesser m, default 22),
+      `lightIntensity` (Peak-Opacity, default 1.2). Commit 4fb96ec.
+
+### Engine Cleanup-Pass — PRIO 1.2 / 1.3 / 1.4 (Commit f26fbe3)
+
+> Loop-driven Sammel-Commit, der den Großteil von PRIO 1 aus der TODO.md
+> abgeräumt hat. Build green, 642/642 vitest green.
+
+**1.4 CPU Hot-Path (8 items):**
+
+- [x] **GameEventBus empty debug-listeners skip** — forEach über `debugListeners`
+      übersprungen wenn Set leer ist (Hot-Path mit hoher Event-Rate).
+
+- [x] **UIStore localStorage Persistenz debouncen (500ms)** — Trailing-Debounce
+      um localStorage-Writes statt Sofort-Write bei jeder Store-Mutation.
+
+- [x] **Tower Placement Validation debouncen** — 1m Cursor-Bewegungs-Threshold +
+      gecachte resolvedHeight/Validation in `tower-placement.service.ts`.
+
+- [x] **Wave Completion Dirty-Flag statt Polling** — `checkWaveComplete`
+      short-circuit via Dirty-Flag (TRUE-Cache nur — silent death finalisation
+      macht FALSE-Caches unsicher).
+
+- [x] **Poison DOT deltaTime-Accumulator** — Per-Enemy ms-Akkumulator getrieben
+      von Sub-Step-deltaTime, multi-tick-safe bei hohen Timescales.
+
+- [x] **Projectile Trails distance-basiert** — Trail-Partikel spawnen pro 0.5m
+      gereister Strecke statt jeden 2. Frame; `trailDistanceAcc` auf der Entity.
+
+- [x] **Projectile Arc Tangent + Homing Recalc Rate** — Homing + Arc-Tangenten-
+      Richtung gecached, Recalc alle 3 Updates statt jedem Frame.
+
+- [x] **Wave Debugger 0ms Spawn + Batching-Slider** — Minimum Spawn-Delay
+      0.01ms → 0ms, neue `maxSpawnsPerFrame`-Property (default 3) + Slider im
+      Wave-Debug-Panel.
+
+**1.3 Test-Coverage (7 items, +99 Tests, -3 stale Specs):**
+
+- [x] **DAMAGE_MATRIX + `calculateDamage()` Tests** — +50 Tests, alle 7×5
+      Multiplier gepinnt + `getEffectiveness` Tier-Boundaries + `bonusMultiplier`-
+      Semantik.
+
+- [x] **`game-state-encoder.encode()` Schema-Test** — +26 Tests, jeder Slot des
+      156-Float-Feature-Vektors am dokumentierten Index verifiziert (DPS-Profile,
+      History, Capabilities).
+
+- [x] **`WaveManager.startScheduledWave()` Tests** — +7 Tests (Mixed-Wave-Delays,
+      Per-Entry delay/pauseAfter, Completion-Path).
+
+- [x] **`GameStateManager` Sub-Step-Loop Tests** — +7 Tests (Fixed-Timestep-
+      Akkumulation, MAX_SUBSTEPS Cap, Timescale-Skalierung, Game-Clock-Monotonie).
+
+- [x] **MovementComponent DOT-Stacking Spec** — +9 Tests für `applyStatusEffect`-
+      Refresh-Semantik.
+
+- [x] **Three.js Mock erweitern** — `Sprite`, `SpriteMaterial`, `Box3`
+      (setFromObject/getCenter/getSize), `PositionalAudio`, `BufferAttribute`
+      set-x/y/z-Methoden ergänzt. Schaltet SpatialAudio/combat-vfx/damage-
+      application-Tests frei.
+
+- [x] **Specs konkretisieren oder löschen** — 3 stale Specs entfernt
+      (`game-speed`, `three-tiles-engine`, `three-effects.renderer`) — testeten
+      Inline-Helper statt der echten Klasse.
+
+**1.2 Refactoring (Teil):**
+
+- [x] **`services/`-Subfolder-Split — `facade/`, `infrastructure/`, `location/`,
+      `world/`** — 38 Files in 4 thematische Subfolder verschoben, Cross-Tree-
+      Imports in ~50 externen Files umgeschrieben. Idempotenter Helper
+      `tools/split-services.mjs` (rewriting internal + external paths pro
+      Subfolder). Root-Level-Files (`tower-placement`, `camera-control`,
+      `camera-framing`, `economy`, `input-handler`, `keyboard-pan`) bewusst auf
+      `services/` Root belassen.
+
+- [x] **`IGameManager` durchziehen — Teilrollout (3 von 6 Managern)** —
+      ResearchManager auf IGameManager (`initialize/destroy` + `update(stepMs)`).
+      `GameStateManager` führt typisiertes `subManagers[]`, `dispose()` iteriert
+      polymorph über `.destroy()` statt hardcoded Aufruf-Liste. Verbleibende
+      Manager (EnemyManager, ProjectileManager, TowerManager — EntityManager +
+      WaveManager hatten IGameManager schon vorher) + komplette polymorphe
+      Init/Update-Iteration im Folge-Ticket.
+
+### Route-Cell-Grid Single-Source-Of-Truth Refactor (4 Phasen, ULTRA HIGH PRIO)
+
+> Vollständige architektonische Konsolidierung des Cell-Grids nach
+> 4-Agent-Analyse — Plan in `~/.claude/plans/das-h-rt-sich-gesamt-fluffy-orbit.md`.
+> Setzt fünf nicht-verhandelbare Prinzipien um: Single Source of Truth,
+> Quality-Versionierung, deterministischer Bootup-Moment, inkrementelle
+> Verfeinerung als First-Class-API, Single Viz-Mesh.
+
+- [x] **Phase 1 — Single-Source `sampleCellY` + Datenmodell**
+      `CellSample`-Typ (state + tileDepth + tileGeometricError + sampledAt) auf
+      jeder Cell. `sampleCellY(cell)` ist die **einzige** Funktion die
+      `cell.terrainHeight` nach Cell-Create schreibt — alle 5 Schreib-Stellen
+      (generateCorridorCells, updateTerrainHeights, registerTower,
+      registerTowerIncremental, continueTowerRegistration, continuePreviewBuild)
+      gehen durch sie hindurch. Cell-Init startet `unsampled` mit anchorY als
+      Fallback, sampleCellY promotet zu `stable` bei Raycast-Hit. Einheitliches
+      `[CELL-GRID]` Log-Prefix mit Sub-Tags (BOOTUP/SAMPLE/REFINE/VIZ-MODE/
+      TOWER-REG/HEIGHT-UPDATE/DISPOSE/CELL-GEN), Single `logGrid(tag, ...)`
+      Helper damit der Prefix nie driftet. Verhalten unverändert.
+
+- [x] **Phase 2 — Tile-LOD-aware sampleCellY + Tile-Load Self-Heal**
+      `CellSample` um `tileDepth` + `tileGeometricError` erweitert. Neue Typen
+      `TerrainSample` / `TerrainSampleRaycaster` in `three-tower.renderer.ts`.
+      `ThreeTilesEngine.getTerrainSampleAtLocal(x, z, anchorY?)` liefert hit +
+      tile-LOD-Info via persistenter `tileInfoMap` (rebuilt on tile-load-end).
+      `sampleCellY` implementiert **quality-versionierte Idempotenz**: ein
+      strikt-schlechterer-LOD-Sample (lower depth UND higher geometricError)
+      überschreibt einen stabilen Cache-Wert nicht. Stabil unter LOD-drops
+      während Streaming. Neue `retryUnsampledCells()` walkt nur die unsampled
+      Subset, getriggert aus `visualization-facade.onTilesLoaded` → Cells
+      heilen sich selbst während Tiles streamen.
+
+- [x] **Phase 3 — `refineCellsInRadius` als First-Class-Refinement-API**
+      `refineCellsInRadius(x, z, r)` walkt Cells im Radius, callt sampleCellY
+      auf jeder — promotet unsampled und refresht stable wenn Tile-LOD
+      verbessert. O(cells in radius) — ~100 Cells bei Rocket-Range 100m. Hooks
+      in `tower-placement.service`: vor `registerTowerProgressive` (LOS gegen
+      frische Heights) und vor `createPlacementPreview` (akkurate Preview-Coverage).
+      Schließt die „Tower an noch nicht ganz geladenem Map-Edge platziert"-Lücke.
+      Emittiert `onCellsPromoted` → existing tower-placement listener
+      recomputed LOS für betroffene andere Tower automatisch.
+
+- [x] **Phase 4 — Per-Tower-Viz-Mesh-Ownership zentral im Grid-Service**
+      `Tower.losVisualization` Property entfernt. `GlobalRouteGridService`
+      hält einen einzigen geteilten Per-Tower-Viz-Mesh-Slot mit
+      `showTowerViz(id, x, z, range, scene)` / `clearTowerViz()` /
+      `updateCurrentTowerVizAnimation()` / `getCurrentTowerVizId()` API.
+      `TowerManager.selectTower` triggert show auf Select, clear auf Deselect.
+      `tower-placement.service` legt den Mesh nicht mehr pro Tower an —
+      `registerTowerOnGrid` ruft nur dann showTowerViz wenn der frisch
+      platzierte Tower ohnehin selektiert ist. `unregisterTowerFromGrid`
+      und `recomputeTowerLOS` arbeiten gegen den geteilten Slot.
+      Game-Loop-Animation-Tick geht durch grid statt durch entity. Spec
+      angepasst auf observable selectTower-Verhalten. Single Source of
+      Truth jetzt auch auf Viz-Layer — ein Mesh in flight zu jedem Zeitpunkt.
+
+> **Out of Scope** (eigene Folge-TODOs):
+> Visual Polish (Snap-to-Surface mit Normalen, Edge/Glow,
+> per-State-Pulse-Frequenz), `GROUND_ANCHOR_TOLERANCE_M`-Finetuning,
+> BVH für Raycast-Performance, Multi-Tower-Highlight.
+
+### Route-Cell-Grid Polish-Block — 4 zusammenhängende Themen
+
+> Eine Session, vier verzahnte Verbesserungen am Route-Cell-Grid und seinen
+> Visualisierungen. Reihenfolge entspricht der Implementation.
+
+- [x] **LOS-Overlay: Ground vs Air visuell trennen**
+      Vorher färbte der Shader Cells grün sobald **ground ODER air** sichtbar war —
+      Air-fähige Tower (Rocket/Ice/aa-Gatling) wirkten dadurch im Overlay überzeichnet
+      mächtig, weil Air-Rays über Gebäuden fast immer frei sind.
+      **Lösung:** Zwei InstancedBufferAttribute (`aGroundVisible`, `aAirVisible`),
+      Fragment-Shader rendert 3-Wege-State: grün=ground (Priorität), blau=air-only,
+      rot=blocked. Gleiche Logik in `createTowerVisualization`, `createPlacementPreview`,
+      `continuePreviewBuild`. Globaler Debug-Overlay (`LOS_CELL_FRAGMENT`) zusätzlich
+      erweitert: State 3 (muted blue) für air-only, Enemy-Color auf Lila verschoben
+      um Verwechslung mit Air-Blau zu vermeiden, `isAirVisibleByAnyTower` + Air-
+      Registration werden im State-Computing berücksichtigt.
+      Dateien: `src/app/utils/global-route-grid.ts` (Shaders + alle drei Cell-Viz-Pfade).
+
+- [x] **LOS-Raycast-Doppelarbeit eliminiert: Preview→Place Transfer + Range-Upgrade Diff**
+      Hot-Path-Optimierung. Zwei klare Doppel-Raycast-Quellen identifiziert per
+      systematischer Exploration aller LOS-Call-Sites:
+      1. **Preview→Place:** `continuePreviewBuild` raycastete alle Cells für die
+         Shader-Visualisierung, danach raycastete `continueTowerRegistration`
+         dieselben Cells mit identischen Origin/Target/tipY für die Cell-Maps.
+         **Fix:** Neue `consumePreviewIntoTower(towerId, ...)` validiert
+         Position/Range/Targeting-Flags der aktiven Preview gegen die Place-Params
+         und transferiert die bereits berechneten Float32-Arrays direkt in
+         `cell.towerVisibility` / `cell.airVisibility`. Restliche Cells (falls
+         Preview noch nicht fertig war) laufen durch neue
+         `registerTowerProgressiveForCells` weiter.
+      2. **Range-Upgrade:** `recomputeTowerLOS` rief vorher `unregisterTowerFromGrid`
+         (löschte alle Cell-Map-Einträge) und dann `registerTower` (raycastete
+         alle Cells im neuen Range). Da Range-Upgrades nur erhöhen, waren die
+         alten Daten korrekt aber wurden weggeworfen.
+         **Fix:** Neue `registerTowerIncremental(...)` — für Cells mit
+         existierendem Cache-Eintrag Raycast skippen, nur neue Cells im Annulus
+         raycasten. Stale Cells außerhalb new range werden gelöscht.
+         `recomputeTowerLOS` disposed nur noch das Visualization-Mesh, der
+         Cell-Map-Cache bleibt erhalten.
+      Zusätzlich: `raycastLineOfSight` (`three-tiles-engine.ts`) allokationsfrei
+      gemacht — drei wiederverwendete Member-Buffer (`_losOrigin`, `_losDirection`,
+      `_losResults`) statt `new Vector3()` + `clone()` pro Aufruf. `batchSize`
+      in `createPlacementPreview` von 25 → 50 (doppelte Cells/Frame).
+      Dateien: `src/app/utils/global-route-grid.ts`, `src/app/services/global-route-grid.service.ts`,
+      `src/app/services/tower-placement.service.ts`, `src/app/three-engine/three-tiles-engine.ts`.
+
+- [x] **Cell-Y-Plausibilisierung: Brücken / Bäume / Stale-Y bei Toggle-Race**
+      Top-Down-Raycaster trifft das jeweils höchste Objekt — bei Fußgängerbrücken
+      und Straßenbäumen klebten Cells optisch auf Deck/Krone statt auf der Straße
+      darunter. Zusätzlich behielten Cells nach dem ersten Debug-Toggle ihre
+      Stale-Y aus der initialen Sample-Phase wenn Tiles noch nicht geladen waren.
+      **Lösung — Route-anchored Multi-Hit Sampling:**
+      - `RouteCell.routeAnchorY` neu — pro Cell der lineare-interpolierte Y-Wert
+        des nächstgelegenen Route-Punkts (Routes haben in `path-route.service.ts`
+        bereits geglättete terrain-Y-Werte). Wird in `generateFromRoutes`
+        durchgereicht über `generateCorridorCells(centerX, centerZ, anchorY, ...)`.
+      - `raycastTerrainHeight` (`three-tiles-engine.ts`) erweitert um optionalen
+        `anchorY`: nutzt `intersectObject` das ohnehin alle Hits sortiert zurückgibt.
+        Default = erster Hit (Legacy). Wenn erster Hit **klar überhalb**
+        (`> anchorY + tolerance`) → suche unter den weiteren Hits den höchsten
+        innerhalb `±tolerance` des Anchors und nimm den. Fällt **nicht** auf den
+        Anchor selbst zurück (unzuverlässige Anchor dürfen nichts kaputt machen) —
+        Worst Case = Legacy.
+      - `TerrainRaycaster`-Typ erweitert um `anchorY?`-Parameter.
+        `getTerrainHeightAtLocal` Public-Wrapper analog.
+      - Alle Re-Sample-Sites geben jetzt `cell.routeAnchorY` mit:
+        `updateTerrainHeights`, `registerTower`, `registerTowerIncremental`,
+        `continueTowerRegistration`, `continuePreviewBuild`, `initializePositions`.
+      - `updateTerrainHeights` ruft am Ende `initializePositions` für aktive
+        Viz auf → Mesh-Y wird auf neue Cell-Y aktualisiert, fixt Stale-Y-Toggle-Race.
+      Konstante `GROUND_ANCHOR_TOLERANCE_M = 3m` in `three-tiles-engine.ts` —
+      typische Bürgersteig/Rampen passen rein, Brückendecks (4-6m) und Baumkronen
+      werden verworfen.
+
+- [x] **Y-Divergenz zwischen Global-Overlay und Per-Tower-Overlay behoben**
+      Symptom: Bei aktivem Global-Debug-Overlay + selektiertem Tower waren die
+      Cells im Tower-Range als zwei leicht versetzte Layer sichtbar.
+      Ursache: System A (`initializePositions`) machte einen Live-Raycast für
+      jede Cell, System B (`createTowerVisualization`) und C
+      (`createPlacementPreview`) nutzten den gecachten `cell.terrainHeight`.
+      Bei minimalen Tile-State-Unterschieden zwischen den Sample-Zeitpunkten
+      kamen leicht unterschiedliche Y heraus.
+      **Fix Teil 1:** Live-Raycast in `initializePositions` entfernt — alle drei Systeme
+      lesen jetzt aus derselben Quelle `cell.terrainHeight`. Cache bleibt aktuell
+      durch `updateTerrainHeights → initializePositions` (siehe oben).
+      **Fix Teil 2 (Folge-Iteration):** Tower-Reg-Pfade (`registerTower`,
+      `registerTowerIncremental`, `continueTowerRegistration`) überschreiben
+      `cell.terrainHeight` mit frischen Samples (für aktuelle LOS-Berechnung
+      nachdem ggf. weitere Tiles gestreamt sind). Wenn diese vom Initial-Sample
+      abweichen, hatte System A weiterhin alte Y. Jetzt rufen die drei Pfade
+      am Ende `initializePositions()` auf, sodass Global-Viz mit Per-Tower-Viz
+      synchron bleibt. Sichtbar gemerkt bei Tower in Baum-Nähe — Per-Tower-Cells
+      „auf dem Baum" waren in Wahrheit korrekt-positioniert, während Global-Viz
+      noch alte Höhen anzeigte.
+      Die drei Viz-Systeme bleiben getrennt (unterschiedliche Daten, Lifecycles,
+      Shader), aber stacken jetzt auf identischer Y.
+
+- [x] **Rote „registered-but-blocked" Cells aus Global-Debug-Overlay entfernt**
+      `updateVisualization` markierte vorher Cells als rot wenn min. ein Tower
+      sie in Range hatte aber jeder Tower blockiert ist. Semantisch korrekt,
+      visuell zu laut auf dem globalen Toggle (rote Stellen ohne Kontext welcher
+      Tower betroffen). Jetzt fallen diese Cells auf Grau zurück — die rote
+      „blocked"-Info bleibt im Per-Tower-Overlay verfügbar wo der Kontext eindeutig ist.
+
+### TODO-Cleanup: Air-LoS bereits umgesetzt
+- [x] **Line-of-Sight für Air-Tower / Air-Targets**
+      Bereits in `1f156a4` (2026-05-09) implementiert — TODO-Eintrag war veraltet.
+      Grid-Layer (`global-route-grid.ts:455-465`) berechnet pro Cell `airVisibility`
+      gegen `skylineHeight + AIR_CLEARANCE_M`. Targeting (`tower-combat.service.ts:122-163`)
+      dispatcht per `enemy.typeConfig.isAirUnit`: Air-Enemies gehen durch
+      `isAirPositionVisibleFromTower`, Ground durch `isPositionVisibleFromTower`,
+      mit Runtime-Raycast-Fallback auf die korrekte Air-Höhe (`hasLineOfSight`).
+      `visibleCells` ist seitdem Union aus Ground+Air-sichtbaren Zellen.
+      Verbleibendes Visualisierungs-Symptom (Overlay zeigt grün sobald Ground ODER Air frei)
+      wurde im selben Run mit erledigt (siehe oben „LOS-Overlay: Ground vs Air visuell trennen").
+
+---
+
+## 2026-05-10
+
+### Refactor: PostProcessingPipeline aus three-tiles-engine extrahiert
+- [x] **Post-Processing-Pipeline (Bloom + Color Grading) als eigene Klasse**
+      EffectComposer + Render-/Bloom-/ColorGrading-/Output-Pass plus 9 Setter
+      aus `three-tiles-engine.ts` herausgelöst in
+      `three-engine/post-processing/post-processing-pipeline.ts`. three-tiles-engine
+      delegiert nur noch (`postProcessing.render()`, `setSize()`, `needsRender()`).
+      Net: −46 LOC im Mainfile, +93 LOC in eigener single-responsibility Klasse.
+      **Offen:** Camera-Setup (GlobeControls + Initial-Position) und Tile-Loading-State
+      sind noch im Mainfile — eigene Sessions, weil enger mit `tilesRenderer.initialize()`
+      verzahnt als Post-Processing. Bleibt als TODO.
+
+---
+
+## 2026-05-09
+
+### Housekeeping-Sprint (Tier 2 + Tier 3 + Tests, 16 Items in einem Loop)
+
+> 19 Commits, 556 Tests grün, Build clean. Zwei Items (`three-effects` Komplett-Split,
+> `services/` Komplett-Reorg in 6 Subfolder) bewusst zurückgestellt.
+
+#### Tier 2 — Cleanup-Aktionen
+- [x] **`canTargetAirEffective` Zirkular-Dep entities↔ai aufgelöst**
+      Funktion + `AA_RETROFIT_TOWERS`-Set aus `ai/core/tower-dps.util.ts` in eine neue
+      `entities/tower-targeting.util.ts` gezogen. tower.entity.ts importiert nicht mehr aus
+      ai/. ai/core/tower-dps.util.ts re-exportiert für bestehende Konsumenten
+      (dps-profile, defense-analyzer).
+- [x] **`canvas` + `@gltf-transform/core` aus npm entfernt**
+      depcheck-Treffer (in keinem Code referenziert, gltf-transform nur in Docs als CLI-Tip).
+      `@eslint/js` als explizite devDep gepinnt (vorher nur transitiv).
+- [x] **`enemy-types.ts` → `configs/enemy-types.config.ts`**
+      models/enemy-types.ts war eine Config-Datenbank (`ENEMY_TYPES = {…}`), kein Type-File —
+      configs/index.ts re-exportierte sie bereits als Eingeständnis. 18 Import-Sites umgezogen.
+- [x] **`ai/core/wave-curriculum.ts` → `configs/wave-curriculum.config.ts`**
+      Pure Balance-Daten — beendet die Layer-Inversion managers→ai. Backend-Mirror in
+      `training-backend/wave_curriculum.py` strukturell synchron, nur TS-Import-Pfade ändern sich.
+- [x] **CLAUDE.md Folder-Tree-Refresh**
+      `integration/`, `interfaces/`, `utils/` ergänzt; `models/`-Beschreibung präzisiert;
+      `entities/` zeigt jetzt auf `tower-targeting.util`; `game-engine/`-Wording auf
+      "Three.js-coupled, Angular-frei" korrigiert (vorher "framework-agnostic").
+- [x] **WaveDebug-Doppelmirror in UIStore entfernt**
+      6 Mirror-Signals (`enemyCount/Speed/Health/Type/spawnMode/spawnDelay`) auf UIStore
+      und Re-Exports in tower-defense.store gelöscht — `WaveDebugService` ist alleinige
+      Quelle. Beseitigt das Inkonsistenz-Bug-Risiko durch divergierende Defaults.
+
+#### Tier 3 — Strategische Refactorings
+- [x] **Geo-Konstanten zentralisiert (`METERS_PER_DEGREE_LAT`, `DEG_TO_RAD`)**
+      Aus `utils/geo-utils.ts` exportiert; ~14 Inline-Vorkommen (`111320`, `111000`,
+      `0.0174533`, `Math.PI/180`-in-Geo-Kontext) in managers, entities, three-engine,
+      services migriert. **Bug-Fix:** `movement.component.ts:40` und
+      `ai/core/defense-analyzer.ts:329-330` nutzten `111000` statt `111320` — ~0.3%
+      Lateral-Offset-Drift in Movement-Cache + Tower-Distance-Heuristik behoben.
+- [x] **Combat-Magic-Numbers in `combat-tuning.config.ts` extrahiert**
+      Sleep-Delay (Tower.SLEEP_DELAY), Sleep-Check-Intervall (500ms), Range-Margins
+      (standard 1.1×, beam 1.2×), Beam-Blood-Throttle (200ms), Poison-Tick-Intervall (500ms)
+      aus `tower-combat.service.ts`, `tower.entity.ts` und `enemy.manager.ts` in eine
+      Config gezogen. Game-Balancing ohne Code-Änderungen zugänglich.
+- [x] **Research-Sync via `research:state-changed` Snapshot-Event vereinheitlicht**
+      Vorher 50/50: completed via Event→Store, started/cancelled direkt von GSM via
+      `syncResearchStoreState()`. ResearchManager emittiert jetzt nach jeder State-Mutation
+      einen Snapshot-Event (active/completed/centerLevel/maxSlots); GameStateSyncService
+      konsumiert ihn. GSM hat 6 syncResearchStoreState-Calls + den Helper komplett verloren.
+- [x] **GameCommandsHandler + EconomyService aus GameStateManager extrahiert**
+      `managers/game-commands.handler.ts` ownt jetzt alle 11 `command:*`/`debug:*`-EventBus-
+      Subscriptions (~150 LOC). `services/economy.service.ts` ownt Wave-Completion-Bonus-
+      Mathematik + Perfect-Streak-Counter (~25 LOC). GSM hat einen neuen
+      `recomputeTowerRangeAfterUpgrade(tower)` Helper, der den geteilten LOS-/Range²-/
+      Range-Disc-Refresh-Pfad bündelt.
+- [x] **DebugStore eingeführt (10 Signals migriert)**
+      WaveDebugService/TowerDebugService/EnemyDebugService delegieren jetzt ihre State-
+      Signals an `store/debug.store.ts` (waveEnemy*, waveSpawnMode/Delay, towerSelectedId,
+      towerOverrides, enemyPlacementMode, enemyOverrides). Public API der Services
+      unverändert — Konsumenten lesen weiter `waveDebug.enemyCount()` etc., aber State
+      lebt in der Store-Schicht (SIGNAL-STORE-ARCHITECTURE.md).
+- [x] **`services/`-Subfolder eingeführt — teilweise (combat/ + debug/)**
+      `services/combat/` (8 Files: combat-effect, combat-vfx, damage-application+spec,
+      hq-damage, status-effect, tower-combat+spec) und `services/debug/` (7 Files:
+      wave-debug, tower-debug, enemy-debug, debug-window, sound-debug, performance-profiler,
+      debug-facade). 22 Import-Sites aktualisiert. **Offen:** `world/`, `location/`,
+      `facade/`, `infrastructure/` für eine separate Session.
+
+#### Tier 4 + Cleanup-Tests — 68 neue Test-Cases
+- [x] **ResearchStore Spec (20 Cases)**
+      Initial defaults (4), availableSlots/centerPlaced computed (4), isTowerUnlocked (5),
+      applyResearchEffects (6 — tier raise, no-regress, perk add, airTargeting,
+      unlock-tower no-op, multi-effect), resetResearchState (1).
+- [x] **GameStateSyncService echter Service-Test (21 Cases)**
+      Vorher testete der Spec eine Inline-Re-Implementierung der Subscriptions — jetzt
+      wird der echte Service mit gemockter Angular-DI instanziiert und durch echte
+      `eventBus.emit()`-Calls validiert. Inkl. tower:sold-clearing-selection-only-on-match,
+      research:state-changed-Snapshot, dispose()-detach.
+- [x] **DamageApplicationService Spec (12 Cases)**
+      Damage-Matrix-Passthrough, multiplier propagation, not-initialized→null, hit-blood-
+      gating, splash-flag forwarding, lethal-hit→deathBlood+kill, skipBloodEffects suppression,
+      kill-credit auf source tower, missing-tower no-throw, beam-damage canBleed-gating und
+      lethal-tick. DOT-Stacking auf MovementComponent ist eigenes Spec-Item.
+- [x] **TowerCombatService Spec (15 Cases)**
+      calculateHeading (4 — N/E/S/W), getEffectiveDPS (4 — config default, fallback,
+      damage-upgrade compounding, level-0), getEffectiveBeamWidth (3), Beam-State-Cleanup
+      (3 — stopTowerBeam removes per-tower entry, tolerates missing engine; stopAllBeams
+      clears throttle map), Config-Wiring (1 — BEAM_BLOOD_EFFECT_INTERVAL ⇔ COMBAT_TUNING).
+
+#### Lint-Pass (vor dem Sprint, gehört dazu)
+- [x] **60 ESLint-Errors bereinigt**
+      11 via `--fix` automatisch (Imports, const vs let). 49 manuell: unused imports/vars
+      entfernt oder mit `_` prefixed; `any` durch konkrete Typen ersetzt; `for-of` statt
+      Index-Loops in enemy.manager.ts; readonly Felder statt Getter mit Literalen in
+      instanced-enemy.renderer.ts; A11y (`tabindex`, `keydown`-Handler) bei click-only
+      Elementen; `td` als zusätzlicher Selector-Prefix in eslint.config.js zugelassen
+      (für TdIcon/TdRichTooltip aus dem UI-Refresh).
+
+---
+
+## 2026-05-08
+
+### Phase 5: Damage & Armor System (Infrastruktur komplett)
+- [x] **DamageType / ArmorType Types definiert**
+      Damage: `physical`, `pierce`, `siege`, `magic`, `fire`, `ice`, `poison`.
+      Armor: `unarmored`, `light`, `heavy`, `fortified`, `ethereal`.
+      Datei: `src/app/configs/combat/combat.types.ts`
+- [x] **Schadensmatrix mit echten Multiplikatoren**
+      Strategische Werte (z.B. `magic` vs `ethereal` ×1.75), keine
+      neutralen 1.0-Platzhalter mehr. Pipeline läuft über
+      `damage-application.service.ts` + `damage-calculator.ts`.
+      Datei: `src/app/configs/combat/damage-matrix.config.ts`
+- [x] **damageType an allen Tower-Configs**
+      Archer=physical, Gatling=pierce, Sniper=pierce, Cannon/Rocket=siege,
+      Magic=magic, Ice=ice, Fire=fire, Poison=poison.
+      Datei: `src/app/configs/tower-types.config.ts`
+- [x] **Flame Tower (`fire`)**
+      Kegel-Beam-Tower mit prozeduralem `ThreeFlameBeamRenderer`.
+      Wide-Burn-Upgrade modifiziert `beamWidth` (nicht Range).
+      Dateien: `tower-types.config.ts`, `tower-combat.service.ts`,
+      `three-engine/renderers/three-flame-beam.renderer.ts`
+- [x] **UI: Schadenstyp + Damage-Matchup-Tooltips im Tower-Panel**
+      Sidebar zeigt pro Tower welche Armor-Typen effektiv getroffen werden.
+      Dateien: `components/game-sidebar/game-sidebar.component.{ts,html}`
+- [x] **armorType an allen 16 Enemy-Configs**
+      zombie/rat/penguin (unarmored), bat/wallsmasher/hornet/spider (light),
+      tank/bear/zombie-soldier/dragon/mech (heavy), mammoth/herbert
+      (fortified), ghost/wraith (ethereal).
+      Datei: `src/app/models/enemy-types.ts`
+
+### Phase 6: AI Wave Director (Trainings-Pipeline)
+- [x] **PyTorch → ONNX Export Pipeline**
+      `npm run export-ai` exportiert das aktuelle Checkpoint nach
+      `public/assets/ai/`. Browser-Inferenz ohne Python-Backend.
+      Datei: `training-backend/scripts/export_to_tfjs.py`
+- [x] **Bot Tower-Limit erhöht (50 → 300)**
+      Strategist-Bot sieht im Training jetzt Endgame-DPS-Levels.
+      Voraussetzung für Phase-5.16-Curriculum + Endgame-Knobs.
+      Datei: `src/app/ai/training/bots/tower-bot.interface.ts`
+- [x] **Wave-Schedule / forced Templates pro Wave**
+      30 explizit gepinnte Waves, danach mod-30-Loop. Decoder forciert
+      das Curriculum-Template, NN tunt nur noch die 4 Continuous-Faktoren.
+      Dateien: `training-backend/wave_curriculum.py`,
+      `src/app/ai/core/wave-curriculum.ts`
+- [x] **State-Vektor: dpsByDamageType (Phase 5.9 Gap-5-Helper)**
+      10 Features im 156-State (Gap-5-effective-DPS-per-armor). NN
+      sieht direkt, gegen welche Armor-Klassen die verfügbare DPS
+      schwach ist — Voraussetzung für strategisches Tower-Mix-Lernen.
+      Datei: `src/app/ai/core/game-state-encoder.ts`
+- [x] **Phase 5.16 Wave-Curriculum + Endgame-Knobs + Gold-Budget**
+      Endgame-HP-Multiplier (W20+: +5 %/Wave, Cap ×4 bei W80),
+      Per-Leak-Damage-Skalierung (W1–10: 1 HP, …, W31+: 4 HP+),
+      deterministisches Gold-Budget (W1: 30/15, W30: 650/325, linear
+      extrapoliert). Frontend-Mirror in `wave-curriculum.ts`.
+
+### Visual / Performance
+- [x] **Freeze-Effect Performance via aTintColor**
+      Instanced VAT Shader nimmt Tint-Farbe pro Instanz (`aTintColor`-
+      Attribut) statt Material-Cloning. Kein FPS-Impact mehr beim
+      Einfrieren großer Mengen Enemies.
+      Datei: `src/app/three-engine/renderers/instanced-enemy/`
+
+---
+
+## 2026-03-15
+
+### Performance: Enemy System Optimierung (~37% schneller pro Enemy)
+- [x] **Runde 1 — JS-Hotpath Optimierungen**
+      `performance.now()` einmal pro Frame cachen (war 9000+ Calls), Single-Pass
+      Status-Effect-Update mit In-Place Array Compact (ersetzt 3 separate Iterationen),
+      `needsUpdate` GPU-Flags pro Pool batchen statt pro Instance, Integer-Hash-Keys
+      fuer Spatial Grids (keine String-Allokation), sqrt-Elimination im Heading-Check,
+      Segment-Perpendikularvektor cachen, statisches lookAt-Target, In-Place
+      `transform.setPosition()`. Ergebnis: ~2.83µs → ~1.84µs pro Enemy.
+      Dateien: `enemy.manager.ts`, `movement.component.ts`, `transform.component.ts`,
+      `spatial-grid.service.ts`, `global-route-grid.ts`, `enemy-instance.manager.ts`,
+      `health-bar-instance.manager.ts`, `instanced-enemy.renderer.ts`, `ellipsoid-sync.ts`
+- [x] **Runde 2 — Koordinaten & Math Optimierungen**
+      `geoToLocalSimple/Into()` inlined mit gecachtem Origin-Cosinus (kein Math.cos/sqrt),
+      doppelte Koordinaten-Konvertierung eliminiert (localPos zum Renderer durchgereicht),
+      `slowMultiplier` aus Status-Update durchgereicht (keine Re-Iteration),
+      `Math.pow` durch lineare Approximation ersetzt, Height-Cache Integer-Keys (Szudzik
+      Pairing statt toFixed), VAT totalTime pro Animationstyp vorberechnet, tintDirty
+      Bug-Fix (GPU-Flag wurde nie gesetzt). Ergebnis: ~1.84µs → ~1.79µs pro Enemy.
+      5000+ Enemies bei 67 FPS (vorher 3000 bei 61 FPS).
+
+### Performance: Progressive LOS & Street Rendering
+- [x] **Tower-Platzierung ruckelfrei**
+      `registerTowerProgressive()` berechnet LOS in Batches von 50 Zellen/Frame.
+      Tower bleibt inaktiv (`losReady=false`) bis Berechnung abgeschlossen (~130ms).
+      Combat-System ueberspringt Towers mit ausstehender LOS. Vorher: 95-380ms
+      Frame-Drop pro Platzierung. Nachher: 0ms pro Frame.
+      Dateien: `global-route-grid.ts`, `tower-placement.service.ts`,
+      `tower-combat.service.ts`, `tower.entity.ts`, `game-loop-facade.service.ts`
+- [x] **Street-Rendering ruckelfrei**
+      `renderStreets()` sammelt Arbeit und gibt sofort zurueck.
+      `continueStreetRender()` verarbeitet 50 Nodes/Frame progressiv.
+      Alte Strassen bleiben sichtbar bis neue fertig (kein Flackern).
+      Tile-Reload-Callback von 350-600ms auf 14-34ms reduziert.
+      Dateien: `street-rendering.service.ts`, `game-loop-facade.service.ts`,
+      `visualization-facade.service.ts`
+
+### Code Review: Projekt-weite Bereinigung (12 Agenten)
+- [x] **CombatEffectService.destroy()** hinzugefuegt + Aufruf in GameStateManager.dispose()
+- [x] **Wave-Completion Race Condition** — `getKillingCount()` pruefen bevor Wave complete
+- [x] **--td-red CSS-Variable** im Theme definiert (war undefiniert, 8+ Stellen)
+- [x] **TYPE_COOLDOWN_WAVES** Frontend 2→4 synced mit Backend
+- [x] **Concurrent Location Changes** Guard mit `isApplyingLocation()`
+- [x] **VARIATION_MAX** aus config.py importiert statt hardcoded in model.py
+- [x] **CombatComponent Dead Code** entfernt (setTarget, clearTarget, hasTarget, isInRange)
+- [x] **Three.js Mock** komplett ueberarbeitet (30+ Klassen, fixt 26 vorher fehlende Tests)
+- [x] **487/487 Tests** gruen, 39/39 Test-Files passed
+
+---
+
+## 2026-02-27
+
+### Fix: Gegner spawnen unter der Erde nach radikalem Zoom
+- [x] **Tile-Quality-Aware Route Protection**
+      Beim schnellen Rein-/Rauszoomen wechselten 3D Tiles auf Low-LOD, was zu
+      20m+ niedrigeren Terrain-Hoehen fuehrte. Route-Neuberechnung gegen diese
+      Low-LOD Tiles liess Gegner unter dem Terrain spawnen (620 betroffene Enemies
+      mit exakt 20.132m Desync im Debug-Log nachgewiesen).
+      **Fix:** Tile-Qualitaets-Tracking per `geometricError` (3D-Tiles-Standard LOD-Metrik).
+      Bei jeder Route-Berechnung wird via `forEachLoadedModel()` eine Scene→Tile Lookup-Map
+      gebaut. Waehrend der Hoehen-Raycasts wird per Parent-Walk das getroffene Tile
+      identifiziert und dessen `geometricError` aufgezeichnet. Neue Routen-Hoehen werden
+      nur akzeptiert wenn die Tile-Qualitaet nicht schlechter als 2× gegenueber der
+      vorherigen Berechnung ist. Visuelle Route-Linien werden immer aktualisiert.
+      Kein zusaetzlicher Raycast, Performance-Impact < 0.1ms pro Route.
+      Dateien: `three-tiles-engine.ts` (Tile Quality Tracking API),
+      `path-route.service.ts` (Quality-gated cachedPaths)
+
+### Nachtraegliche Bereinigung: bereits erledigte TODOs
+- [x] **Air Priority Sub-Strategie**
+      `closest`/`lowest-hp`/`highest-hp` als AirSubStrategy implementiert.
+      Tower-Entity, Targeting-Logik und Sidebar-UI unterstuetzen Auswahl.
+      Dateien: `tower-types.config.ts`, `tower.entity.ts`, `game-sidebar.component.ts`
+- [x] **Fire Tower "Wide Burn" Upgrade**
+      Modifiziert `beamWidth` (Flammen-Kegelbreite, ×1.3 pro Level), nicht Range.
+      Eigene `getEffectiveBeamWidth()` Logik in `tower-combat.service.ts`.
+      Dateien: `tower-types.config.ts`, `tower-combat.service.ts`
+- [x] **Kamera-Boundaries**
+      `minDistance=5`, `maxDistance=2000` auf EnvironmentControls gesetzt.
+      Dateien: `three-tiles-engine.ts`
+- [x] **Poison Tower**
+      DOT Damage, gruene Visuals, Splash Poisoning.
+      Dateien: `tower-types.config.ts`, `projectile-types.config.ts`
+- [x] **Floating Damage Numbers**
+      GPU-instanzierte Schadenszahlen ueber Gegnern, togglebar.
+      Dateien: `floating-text-instance.manager.ts`, `floating-text-material.ts`, `floating-text-atlas.ts`
+- [x] **Route-Terrain-Desync (BEKANNTE ISSUES)**
+      Durch Tile-Quality-Aware Route Protection behoben — Low-LOD Routen
+      werden nicht mehr als Gameplay-Hoehen akzeptiert.
+
+### TODO.md Cleanup
+- Erledigte Eintraege entfernt (Poison Tower, Floating Damage Numbers, Route-Desync,
+  Height-Refinement obsolet durch Tile-Quality-Fix)
+- console.log Zahl aktualisiert: ~196 → ~68 Stellen in ~18 Dateien
+
+---
+
+## 2026-02-25
+
+### Mixed Waves (Multi-Type Spawning)
+- [x] **Mixed Waves Infrastruktur**
+      Mehrere Enemy-Typen pro Wave mit 7 konfigurierbaren Spawn-Patterns
+      (interleaved, sequential, clustered, random, front-loaded, back-loaded, wave-in-wave).
+      SpawnSchedule-System loest Pattern-Logik zur Build-Time auf, WaveManager spielt
+      den Schedule sequentiell ab. Backwards-kompatibel via optionales `schedule` Feld
+      auf `WaveConfig`.
+      Dateien: `wave.manager.ts`, `spawn-schedule-builder.ts` (neu), `wave-config-adapter.ts`
+- [x] **Mixed Wave Debug Panel**
+      Mode-Toggle (Single/Mixed) im Wave-Debug-Panel. Mixed-Mode bietet
+      Gruppen-Karten (Typ, Count, HP/Speed-Multiplier), Pattern-Auswahl mit Icons,
+      konditionale Controls (Cluster Size, Sub-Wave Pause), Delay-Variation.
+      Dateien: `wave-debugger.component.ts`, `wave-debug.service.ts`, `game-loop-facade.service.ts`
+- [x] **Theme-Erweiterung: Teal/Gold Button-Varianten**
+      `tealLight`, `tealDark`, `goldLight` CSS-Variablen zum Design-System hinzugefuegt.
+      Dateien: `td-theme.ts`
+
+---
+
+## 2026-02-21
+
+### HQ-Placement ausserhalb der Street-Bounds
+- [x] **HQ kann jetzt ueberall auf der Karte platziert werden**
+      Auch in Bereichen ohne geladenes Strassennetz. Streets werden automatisch
+      nachgeladen, alter Spawn wird verworfen wenn >1500m entfernt und ein neuer
+      Random Spawn nahe dem neuen HQ generiert.
+      Dateien: `map-placement.service.ts`, `location-facade.service.ts`, `map-constants.config.ts`
+
+### Unused Enemy Model Candidates entfernt
+- [x] **6 GLB-Dateien aus `candidates/` entfernt**
+      asian_giant_hornet, bipedal_mech, dragon, fantasma_animado, flying_hornet, uber_soldier
+
+## 2026-02-15
+
+### Attributions Dialog
+- [x] **Attributions & Licenses Dialog** in Sidebar-Footer
+      WC3-styled Dialog mit allen 3D-Model-Lizenzen (Sketchfab, Poly Pizza),
+      Fonts, Sound Effects und Open Source Libraries. Strukturierte Config
+      in `attributions.config.ts` fuer einfache Pflege.
+
+### Info Overlay Caret
+- [x] **Info-Overlay Toggle an FPS-Anzeige verschoben**
+      Button aus Quick-Actions entfernt. Klickbares Caret neben FPS-Zeile
+      expanded/collapsed die Detail-Stats (Tiles, Enemies, Sounds, Streets).
+
+## 2026-02-14
+
+### Background Music Service
+- [x] **Phasen-basierte Hintergrundmusik**
+      Two-Channel A/B Crossfade-System spielt zufaellige Tracks pro Phase
+      (Build vs Wave). Neuer Track bei jeder Wave, Loop mit Crossfade.
+      Config in `background-music.config.ts`, 15 Tracks (2 Build, 13 Wave).
+- [x] **Main Theme beim Start**
+      Spielt via HTMLAudioElement vor Engine-Init, geloopt bis Game Ready,
+      dann Crossfade zu Build-Musik.
+- [x] **Musik-Dateien getrimmt**
+      Trailing Silence aus allen 15+1 Music-Files entfernt (ffmpeg).
+
+### Mammoth Enemy
+- [x] **Neuer Mammoth-Gegner**
+      Langsam (Speed 3), stark (400 HP), Siege-Archetyp ab Wave 7+.
+      Walk/Die-Animationen, seltener Mammoth-Call Sound (15-40s Intervall).
+
+### VAT Shader Emissive Support
+- [x] **Emissive-Unterstuetzung im instanced VAT Shader**
+      `emissiveIntensity` und `emissiveColor` Uniforms im Fragment Shader.
+      Behebt dunkle Darstellung von Mammoth, Rat, Spider, Zombie Soldier.
+
+### Tentacle Tower
+- [x] **Tentacle Tower mit GPU Bezier-Rendering**
+      Melee-Tower mit prozeduralem Tentakel-Rendering (kubische Bezier-Kurven).
+      `attackType: 'melee'`, `meleeStrikeDuration` fuer Nahkampf.
+
+### Zombie Soldier + Rat
+- [x] **Zwei neue Gegner-Typen**
+      Zombie Soldier (humanoid, mittel) und Rat (schnell, schwach).
+      Beide mit Walk/Die-Animationen und Instanced Rendering.
+
+### Two-Pass Health Bars
+- [x] **Verbessertes Health-Bar-Rendering**
+      Korrektes Depth-Testing mit Two-Pass Rendering.
+
+## 2026-02-13
+
+### Floating Damage Numbers
+
+- [x] **Rote Schadenszahlen bei Treffer**
+      GPU-instanced floating text (`-25`) über Gegnern bei Projektil-Hits.
+      Farbe `#FF4444`, schwebt hoch und blendet aus (800ms).
+      Textgröße skaliert mit Schaden (0.25 bei kleinem Splash → 0.55 bei vollem Hit).
+      Toggle via Display Options (persistiert in localStorage).
+- [x] **Splash-Damage Numbers**
+      Auch Splash-Treffer (Cannon, Ice-Shard) zeigen individuelle Schadenszahlen
+      pro getroffenen Gegner. Logik in CombatEffectService statt GameStateManager,
+      da dort Direct Hits + Splash zusammenlaufen.
+- [x] **Splash Radius reduziert**
+      Cannonball: 16m → 10m, Ice-Shard: 12m → 8m. Engerer, realistischerer AOE.
+
+### Performance Tier 2+3: Micro-Optimizations
+
+- [x] **Trig vorberechnen im Targeting-Fallback (2.1)**
+      `Math.cos()` und Range-Squaring aus dem per-Enemy-Filter gehoisted in tower-combat.service.ts
+- [x] **Distance² statt sqrt() fuer Range-Checks (2.2)**
+      Neue `fastDistanceSq()`/`geoDistanceFastSq()` in geo-utils.ts, Caller in tower.manager.ts und projectile.entity.ts konvertiert
+- [x] **Canvas Pool fuer Floating Text (2.4)**
+      Shared Canvas-Element statt `document.createElement('canvas')` pro Text in three-effects.renderer.ts
+- [x] **Audio stop() In-Place (2.5)**
+      Backward-Iteration + splice statt Array-Neuallokation in spatial-audio-playback.ts
+- [x] **Tower Animation Distance-LOD (2.8)**
+      3-Tier LOD (<50m full, <100m every 2nd, <200m every 4th, >200m skip) in three-tower.renderer.ts
+- [x] **Early-Exit bei 0 Enemies (3.1)**
+      Guard clause in game-state.manager.ts, ueberspringt enemyManager.update() wenn leer
+- [x] **Trail-Partikel Throttling (3.2)**
+      Spawn nur jeden 2. Frame in projectile.manager.ts (bitwise & 1)
+- [x] **Floating Text Free-Stack (3.3)**
+      O(1) Free-Index-Stack statt O(n) `.find()` in three-effects.renderer.ts
+- [x] **Konfigurierbares FPS-Limit (3.4)**
+      `setFpsLimit()`/`getFpsLimit()` in three-tiles-engine.ts, skip-frame in rAF-Loop, localStorage-Persistenz
+- [x] **Range-Indicator Material teilen (3.5)**
+      Shared Material statt `.clone()` pro Tower in three-tower.renderer.ts
+- [x] **Audio LRU Map (3.6)**
+      Map-basiertes LRU mit Zeitstempel-Counter statt indexOf+splice in audio-buffer-cache.ts
+- [x] **Floating Text Limit erhoeht**
+      maxFloatingTexts 50 → 200 in visual-effects.config.ts
+- [x] **17 neue Tests**
+      geo-utils (7), effects-renderer (4), audio-buffer-cache (6), Test-Mocks aktualisiert
+
+### GPU Instanced Enemy Rendering (VAT System)
+
+- [x] **GPU Instanced Enemy Renderer mit VAT-Animation**
+      Neues Rendering-System: Skelettanimationen in DataTextures gebacken (Vertex Animation Textures),
+      pro Enemy-Typ nur 1 InstancedMesh statt 1 Object3D pro Enemy. ~1000 → ~14 Draw Calls bei 500 Enemies.
+- [x] **VAT Texture Tiling fuer grosse Modelle**
+      Modelle mit >8192 Vertices (Wallsmasher: 17010, Herbert: 30831) werden auf mehrere Zeilen
+      in der VAT-Textur verteilt, um WebGL MAX_TEXTURE_SIZE nicht zu ueberschreiten.
+- [x] **Multi-Mesh Merge fuer statische Modelle**
+      `bakeStaticVAT` merged alle Sub-Meshes eines Modells in eine Geometrie (z.B. Tank: 7 Meshes).
+      Positionen und Normalen werden korrekt in Root-Space transformiert.
+- [x] **Per-Vertex Multi-Material Support**
+      Per-Vertex `aVertexColor` und `aUseMap` Attribute erlauben korrekte Darstellung von
+      Multi-Material-Modellen (Textur-Meshes + Farb-Meshes gemischt).
+- [x] **World-Space Beleuchtung im VAT Shader**
+      4-Punkt-Beleuchtung (Sun + Fill + Hemi + Ambient) in World-Space.
+      Normalen via `mat3(instanceMatrix) * normal` transformiert.
+- [x] **Instanzierte Health Bars**
+      Alle Health Bars in 1 Draw Call via InstancedMesh + prozeduralem Shader.
+      Billboard-Orientierung, Farbverlauf (Gruen→Gelb→Rot), Boss-Support.
+- [x] **Largest SkinnedMesh Selection**
+      Bei Modellen mit mehreren SkinnedMeshes (z.B. Spider) wird automatisch
+      das groesste nach Vertex-Count gewaehlt.
+- [x] **Enemy-Limit auf 20.000 erhoeht**
+      MAX_INSTANCES_PER_TYPE, MAX_HEALTH_BARS, Wave-Debug UI + Service Limits angepasst.
+- [x] **Boss-Fallback auf klassischen Renderer**
+      Boss-Enemies nutzen weiterhin ThreeEnemyRenderer mit vollem Object3D + AnimationMixer.
+- [x] **Dokumentation: INSTANCED_ENEMY_RENDERING.md**
+      Umfassende technische Dokumentation des VAT Instancing Systems.
+
+---
+
+## 2026-02-12
+
+- [x] **GameSpeedComponent ins UI eingebaut** `73818a1`
+      Speed-Button (1x/2x/4x) erscheint oben-mittig während aktiver Welle
+- [x] **Gatling Dual Fire** `84167e8`
+      Neues `firePoints` Config-Feld für Multi-Barrel-Tower, Projektile alternieren links/rechts (±0.9m)
+- [x] **Animation LOD Schwellen gelockert** `73818a1`
+      50/100/200m → 80/150/250m, >250m jetzt jeden 10. Frame statt komplett skip
+- [x] **Rechtsklick-Kontextmenü auf gesamtem Game-UI deaktiviert** `81b2f0a`
+      `contextmenu.preventDefault()` auf dem Root-Container, blockt Browser-Menü auf Canvas, Sidebar, Header, Buttons
+- [x] **Rechtsklick im Build-Mode fixt** `0b50cce`
+      Rechtsklick platziert keinen Turm mehr, stationärer Rechtsklick bricht Build ab, Rechts-Drag rotiert Kamera
+
+---
+
+## 2026-01-31
+
+### Phase 1: Engine Foundation (abgeschlossen)
+
+- [x] **Performance Instrumentation** `febf3bb`
+      Subsystem-Timings (Tower/Projectile/Combat/Events), Frame-Budget-Tracking, Bottleneck-Erkennung
+
+### Phase 2: Engine Performance (abgeschlossen)
+
+- [x] **TowerCombatService Fallback-Path optimieren** `78031de`
+      Nutzt jetzt `getEnemiesInRadius()` direkt statt brute-force
+- [x] **Animation LOD System** `397d6f8`
+      Distance-LOD: <50m=jeder Frame, 50-100m=jeder 3., 100-200m=jeder 6., >200m=skip
+      Staggered per Enemy, DeltaTime-Kompensation
+- [x] **Tiles Update Throttling**
+      Nur Update wenn Kamera >5m bewegt
+- [x] **Partikel Free-List**
+      O(1) Spawning per Free-Stack pro Pool, Fallback auf Round-Robin
+- [x] **Precision Qualifiers in Shadern**
+      `precision highp float;` in 8 Fragment-Shadern ergänzt
+- [x] **Magic Orb Shader vereinfachen** `44bdacd`
+      FBM 4→1, Voronoi 3×3→2×2, ~60-80 ALU (von 200-300)
+- [x] **Bounding Sphere Culling** `44bdacd`
+      `intersectsSphere` statt `containsPoint` in Tower-Renderer
+- [x] **Tower Frustum Culling** `2a47f45`
+- [x] **Selection Ring Geometry teilen** `4e89cc3`
+      Static shared Geometry + Material mit Ref-Counting
+- [x] **Partikel-Systeme konsolidieren** `fd5d524`
+      4 → 2 Draw Calls — Blood+Fire Pools entfernt, in Trail-Pools integriert
+- [x] **HQ Explosion Partikel reduzieren** `2a47f45`
+      1350 → 500 Partikel, größere Sizes als Kompensation
+- [x] **Spatial-Grid für Kollisionserkennung**
+      Uniform Grid, O(1) Insert/Remove, O(k) Radius-Queries
+      Integriert in TowerCombatService (Sleep-Check, Targeting)
+- [x] **A* MinHeap**
+      MinHeap Binary Heap in OsmStreetService + Pathfinding Worker
+- [x] **Sleeping Towers** `7f3e3e2`
+      Sleep nach 2s ohne Target, Wake via SpatialGrid hasEnemyInRadius
+
+### Phase 3: Engine Polish (teilweise abgeschlossen)
+
+- [x] **CombatEffectService refactoren** `a8bd3ce`
+      Aufgeteilt in: StatusEffectService, CombatVfxService, DamageApplicationService + Facade
+- [x] **spatial-audio.manager.ts splitten** `b521837`
+      4 Module: AudioBufferCache, AudioPoolManager, SpatialAudioPlayback, SpatialAudioManager
+- [x] **Tower-Distance-Berechnungen zentralisieren** `a8bd3ce`
+      Nutzt jetzt `geoDistanceFast()` aus `geo-utils.ts`
+- [x] **Custom-Error-Klassen** `a8bd3ce`
+      `GameError`, `AssetLoadError`, `PathfindingError`, `GameStateError` in `src/app/models/errors.ts`
+- [x] **Integration-Tests: Manager-Interaktionen** `b140a8a`
+      46 Tests in 5 Suites (Combat, Waves, Movement, Effects, Lifecycle)
+
+### Phase 4: Game Features (teilweise abgeschlossen)
+
+- [x] **Bloom Post-Processing** `7f05a6c`
+      UnrealBloomPass, default OFF, togglebar
+- [x] **Screen Shake bei Explosionen**
+      XZ-Shake mit Intensity-Presets (Bullet→Cannon→Rocket→HQ→Boss), togglebar
+- [x] **Muzzle Flash bei Tower-Schüssen**
+      3-5 Additive Partikel + PointLight bei Projectile-Towers
+- [x] **Freeze-Visual-Effect für Ice-Slow**
+      Blaue Emissive-Tint + 3 orbitierende Frost-Partikel
+- [x] **Sprite-Sheet-Partikel-System**
+      4×4 Atlas prozedural generiert, animierte Explosionen
+- [x] **Projektil-Trail-Streaks** `d6b1a17`
+      Ribbon-Renderer mit 6 Styles, 60 Instanzen/Typ, Alpha-Fade
+- [x] **Color-Grading-LUT** `b6fac01`
+      Dark Fantasy, Noir, Warm Sunset Presets, localStorage-Persistenz
+- [x] **Spielgeschwindigkeit-Auswahl (Timescale)** `3dc21fc`
+      UI ↔ GameStateManager bidirektional synchronisiert
+- [x] **Rechtsklick bricht Baumodus ab**
+      contextmenu-Handler cancelt Placement + preventDefault
+- [x] **Tower-Targeting-Strategien**
+      Implementiert: closest, lowest-hp, highest-hp, first, air-priority
+      Defaults pro Tower-Typ konfiguriert
+- [x] **Tower-Targeting-UI Selector**
+      Button-Leiste in Sidebar zwischen Stats und Upgrades
+      5 Strategien mit Material Icons + Tooltips, Teal-Highlight für aktive Strategie
+
+---
+
+## 2026-01-29
+
+### Engine Foundation — Phase 1 Abschluss
+
+- [x] **IGameManager Lifecycle-Interface**
+      Interface mit `initialize()`, `update(dt)`, `destroy()` — formaler Contract für alle Manager
+      EntityManager (abstrakt) + WaveManager implementieren IGameManager
+      Dateien: `game-engine/game-manager.interface.ts`, `managers/entity-manager.ts`, `managers/wave.manager.ts`
+
+- [x] **Timeout-Tracking in EnemyManager**
+      `activeTimeouts: Set` trackt alle setTimeout-Aufrufe (Death-Animations, Spawn-Delays)
+      Self-Cleaning Pattern: Callback löscht sich selbst aus dem Set
+      `clear()` + `destroy()` clearen alle pending Timeouts — verhindert Ghost-Callbacks nach Reset
+
+- [x] **Performance-Regression-Tests (8 Tests)**
+      EntityManager: add/update/remove/getById mit 200 Entities, explizite ms-Schwellenwerte
+      GameEventBus: 100 Handler × 100 Events, 1000 Emits, 500 deferred Queue, Subscribe/Unsubscribe
+      Datei: `game-engine/performance.spec.ts`
+
+- [x] **timing.config.ts — Magic Numbers eliminiert**
+      5 zentrale Konstanten: deathAnimationDuration (2000ms), defaultSpawnStartDelay (300ms),
+      losRecheckInterval (300ms), gameOverScreenDelay (3000ms), rewardPopupDuration (1200ms)
+      Ersetzt in: EnemyManager, GameStateManager, Tower Entity, HQDamageService
+
+- [x] **GamePhase Type Duplikat aufgelöst**
+      Zentraler Type `GamePhase` in `models/game.types.ts` (Single Source of Truth)
+      Re-Export in `wave.manager.ts` für Abwärtskompatibilität
+      `game-state-snapshot.ts` + `ai-data-collector.service.ts` auf Import umgestellt
+
+- [x] **Three.js Resource Disposal verbessert**
+      `disposeObject()` disposed jetzt alle Texture-Maps (roughnessMap, metalnessMap, emissiveMap, aoMap)
+      `dispose()` cleared towers Map explizit für GC
+      Datei: `three-engine/renderers/three-tower.renderer.ts`
+
+### Vitest Test-Infrastruktur
+
+- [x] **Vitest Setup + 79 Unit Tests**
+      `vitest.config.ts` (jsdom, globals), Three.js Mock, npm Scripts
+      12 Test-Dateien: GameEventBus (21), GameObject (7), HealthComponent (6),
+      TransformComponent (3), MovementComponent (6), CombatComponent (3),
+      Enemy Entity (5), Tower Entity (4), Projectile Entity (3),
+      EntityManager (9), Tower Types Config (8), Enemy Types Config (4)
+      Alle Tests grün in ~2.8s
+
+### EventBus-Entkopplung (Refactoring)
+
+- [x] **credits:changed Events** — Alle Credit-Mutationen emitten via `updateCredits()` Helper
+- [x] **VFX über EventBus** — `vfx:blood`/`vfx:explosion` via deferred Events statt Direct-Calls
+- [x] **Game Lifecycle Events** — game:started/paused/resumed bei Wave-Transitions
+- [x] **tower:upgraded Event** — Emittiert nach Upgrade mit tower, level, cost
+- [x] **Debug-Commands entkoppelt** — debug:spawn-enemy/kill-all/reset-wave als Events
+      Dateien: game-event-bus.ts, game-state.manager.ts, combat-effect.service.ts,
+      vfx.service.ts, enemy.manager.ts, wave.manager.ts, tower-defense.component.ts
+
+### Bugfixes
+
+- [x] **AI Wave NaN-Bug gefixt (Event-Reihenfolge)**
+      Problem: `game:started` wurde NACH `wave:started` emittiert → AIDataCollector.clearHistory()
+      löschte das gerade initialisierte Wave-Tracking → `damagePercent: undefined` in History →
+      `reduce(a + undefined) = NaN` → ONNX Model Input NaN → alle Outputs NaN → `enemyCount: NaN` →
+      Endlos-Spawn ab Wave 2.
+      Fix: `game:started`/`game:resumed` werden jetzt VOR `startWave()`/`beginWave()` emittiert.
+      Datei: `managers/game-state.manager.ts`
+
+- [x] **NaN-Guard in WaveManager (Sicherheitsnetz)**
+      `startWave()` validiert `enemyCount` gegen NaN/Infinity/negativ → Fallback auf 10.
+      Consecutive-Failure-Guard bricht Spawning ab wenn keine Paths verfügbar.
+      Datei: `managers/wave.manager.ts`
+
+### GameEventBus Analyse
+
+- [x] **Abhängigkeits-Analyse erstellt**
+      `docs/EVENTBUS-ANALYSIS.md` — 10 harte Abhängigkeiten, 5 fehlende Events,
+      2 suboptimale Nutzungen, Refactoring-Reihenfolge dokumentiert.
+      Hauptproblem: GameStateManager als God-Object, fehlende Event-Emissionen
+      (credits:changed, game:started/paused/resumed, tower:upgraded)
+
+---
+
+## 2026-01-28
+
+### Floating Text (Reward Popup) Bugfix
+
+- [x] **Exponentielle Vergroesserung gefixt**
+      Problem: Reward-Text (+Credits) wurde mit jedem Frame groesser
+      Ursache: `sprite.scale.clone()` holte aktuelle (bereits vergroesserte) Scale
+      Fix: `baseScaleX`/`baseScaleY` in FloatingTextInstance gespeichert
+      Dateien: `three-effects.renderer.ts`
+
+- [x] **Reward-Text Groesse angepasst**
+      Scale von 2.5 auf 0.75 reduziert (war viel zu gross)
+      Datei: `game-state.manager.ts`
+
+---
+
+## 2026-01-27
+
+### Tower Turret Rotation Fix
+
+- [x] **Neues Config-Feld `turretBarrelOffset` eingefuehrt**
+      Problem: Tuerme zielten ~180° falsch nach Config-Aenderungen (rotationY fuer visuelle Ausrichtung)
+      Ursache: `rotationY` wurde fuer zwei Zwecke verwendet:
+      1. Visuelle Basis-Ausrichtung (z.B. 180° damit Tower nach Sueden zeigt)
+      2. Turret-Barrel-Orientierung im Model (z.B. -90° bei dual-gatling)
+      Fix: Neues Feld `turretBarrelOffset` fuer Barrel-Orientierung im Model-Space
+      - archer: 0 (default, Laeufe zeigen -Z)
+      - dual-gatling: -1.5708 (-90°, Laeufe zeigen +X)
+      - ice: 1.047 (60°, Model-spezifisch)
+      - cannon, magic, rocket: 0 (default)
+      Dateien: `tower-types.config.ts`, `three-tower.renderer.ts`
+
+### Tower Placement Verbesserungen
+
+- [x] **Scan-Animation nach Tower-Platzierung**
+      Feature: Turrets drehen nach Platzierung 75° links, 75° rechts, dann zurueck zur Mitte
+      - 800ms Verzoegerung vor Scan-Start
+      - Scan wird sofort abgebrochen wenn Feind erkannt wird
+      - Magic Tower behaelt spezielles Idle-Spin-Verhalten nach Scan
+      Datei: `three-tower.renderer.ts`
+
+- [x] **Placement Sound hinzugefuegt**
+      Sound `building_placed.mp3` wird bei Tower-Platzierung abgespielt
+      - Raeumlicher Sound an Tower-Position (refDistance: 50, volume: 0.6)
+      - Sound wird als 'tower-placed' registriert bei Manager-Initialisierung
+      Datei: `tower.manager.ts`
+
+### Magic Tower Visual Improvements
+
+- [x] **Spiral Trail fuer Magic Tower**
+      Neuer Trail-Typ `spiral` fuer railgun-artigen Effekt statt feuer-artige Partikel
+      Config-Optionen:
+      - `trailType: 'spiral'` - Partikel rotieren um Projektil
+      - `spiralRadius: 1.5` - Radius der Spirale
+      - `spiralSpeed: 8.0` - Rotationsgeschwindigkeit
+      Magic Fireball verwendet jetzt Spiral-Trail mit roten Farben
+      Dateien: `projectile-types.config.ts`, `three-effects.renderer.ts`
+
+### Bugfixes
+
+- [x] **Debug Enemy Cleanup bei Wave-Ende**
+      Problem: Nach Wave-Ende blieben orphaned Debug-Enemy-Referenzen erhalten
+      - Enemies verschwanden visuell aber wurden weiter beschossen
+      - Combat lief weiter wegen `hasDebugEnemies` Check
+      Fix: `clearDebugEnemies()` wird jetzt aufgerufen bei:
+      - Wave Complete (checkWaveComplete)
+      - Game Over (triggerGameOver)
+      - Reset
+      Datei: `game-state.manager.ts`
+
+---
+
+## 2026-01-25
+
+### Bugfixes & Training Verbesserungen
+
+- [x] **Wave 1 Stuck Bug gefixt**
+      Problem: Nach Game Over blieb das Spiel manchmal auf Wave 1 stecken
+      Ursachen:
+      - `waveManager.reset()` setzte nicht `expectedEnemyCount`/`spawnedEnemyCount` zurueck
+      - Race Condition in `startWaveWithAI()` (mehrfache Aufrufe)
+      - `AutoStartWaveStrategy` blockierte wenn Bot auf 2. Tower wartete
+      Fix:
+      - Spawn-Counter Reset in `wave.manager.ts`
+      - `pendingAIWaveRequest` Flag gegen Race Conditions
+      - 5-Sekunden Timeout in `AutoStartWaveStrategy` zum Erzwingen des Wave-Starts
+      Dateien: `wave.manager.ts`, `tower-defense.component.ts`, `auto-start-wave.strategy.ts`
+
+- [x] **Reward-Anzeige Bug gefixt**
+      Problem: Floating Text zeigte statischen `typeConfig.reward` statt dynamischen Reward
+      (z.B. Herbert mit 55 HP zeigte +15 statt +1)
+      Fix: Floating Text von `combat-effect.service.ts` nach `game-state.manager.ts` verschoben
+      wo korrektes `event.credits` verfuegbar ist
+      Dateien: `combat-effect.service.ts`, `game-state.manager.ts`
+
+- [x] **Dynamische Rewards auf ~1/3 reduziert**
+      Vorher: HP/50, Speed/5, Scale 0.6, Cap 40
+      Nachher: HP/150, Speed/10, Scale 0.4, Cap 25
+      Grund: Rewards waren zu grosszuegig, Wirtschaft eskalierte zu schnell
+      Datei: `enemy.manager.ts`
+
+- [x] **Training-Limits erhoeht (nur AI Training)**
+      Tower-Limit: 20 → 50 (strategist bot)
+      Episode-Length: 20 → 100 Waves
+      Grund: Mehr Daten fuer spaete Spielphasen mit hoher DPS
+      Dateien: `tower-bot.interface.ts`, `config.py`
+
+### Game Rebalancing - Schwierigkeitsanpassung
+
+- [x] **Tower Balancing**
+      Archer: cost 20→45, sellValue 12→27 (Cost/DPS 0.80→1.80)
+      Magic: cost 150→120, sellValue 90→72
+      Cannon: cost 175→140, sellValue 120→84
+      Ice: cost 120→90, sellValue 72→54
+      Rocket: sellValue 120→60 (Bug-Fix: war > cost!)
+      Datei: `src/app/configs/tower-types.config.ts`
+
+- [x] **Wirtschaft verlangsamt**
+      startCredits: 70→50, waveBonus: 50→35
+      Kill-Rewards werden relevanter (~40% statt ~20%)
+      Datei: `src/app/configs/game-balance.config.ts`
+
+- [x] **Dynamische Enemy-Rewards**
+      HP-basierte Berechnung mit Speed-Bonus
+      scaleFactor mit sqrt() verhindert Inflation
+      Cap bei 1-40 Credits
+      Datei: `src/app/managers/enemy.manager.ts`
+
+- [x] **Bot-Fixes (StrategyBot)**
+      makeSuboptimalAction() implementiert (war leer)
+      Spar-Rate 60%→30% reduziert
+      Archer-Limit: max 4, dann Alternativen
+      Dateien: `strategy-bot.ts`, `distributed-placement.strategy.ts`
+
+- [x] **AI Parameter angepasst**
+      KILL_TIME_MIN: 1.5→2.0s (laengere Kaempfe)
+      KILL_TIME_MAX: 4.0→5.0s (mehr Range)
+      HEALTH_MULTIPLIER_MAX: 20.0 (neuer Cap)
+      Dateien: `config.py`, `server.py`
+
+- [x] **Legacy Bot-Klassen entfernt**
+      Geloescht: beginner-bot.ts, casual-bot.ts, strategist-bot.ts, smart-tower-bot.ts
+      Nur noch StrategyBot mit Strategy-Pattern
+      Datei: `src/app/ai/training/bots/index.ts`
+
+- [x] **Enemy-Types Cleanup**
+      damage-Feld komplett entfernt (wird nicht verwendet)
+      reward-Werte mit Kommentar "only without AI"
+      Datei: `src/app/models/enemy-types.ts`
+
+- [x] **Balancing-Dokumentation**
+      Vollstaendiger Plan in `docs/REBALANCING.md`
+      HP-Tabelle fuer alle Enemy-Typen bei verschiedenen healthMultiplier
+
+### AI Training v3.4 - Anti-Kollaps Fixes
+
+- [x] **Kollaps-Analyse nach 32k Episoden**
+      Training kollabierte bei E6000-8000 (Reward 0.43→0.02)
+      Ursachen: Type-Kollaps (89% herbert/tank/bat), Boring-Exploitation
+      Analyse-Script `analyze_log.py` fuer Trend-Erkennung
+
+- [x] **Config-Anpassungen**
+      ENTROPY_COEF: 0.04 → 0.08 (mehr Exploration)
+      REWARD_BORING_THRESHOLD: 0.20 → 0.30 (hoehere Schwelle)
+      REWARD_VARIETY_BONUS: 0.15 → 0.20 (staerkerer Diversity-Anreiz)
+      TYPE_COOLDOWN_WAVES: 2 → 4 (laengere Typ-Sperre)
+
+- [x] **Rollback zu Checkpoint 5000**
+      2679 Checkpoints nach E5000 geloescht
+      Training neu gestartet mit v3.4 Config
+      Type-Verteilung jetzt: 5 von 6 Typen bei ~20%
+
+- [x] **Dashboard Mobile-Support**
+      Server bindet auf 0.0.0.0:3002
+      Responsive CSS fuer Smartphones (<600px)
+      Zugriff via http://<ip>:3002 vom Handy
+
+- [x] **Dashboard Fixes**
+      JSON-Fehler bei best_reward=-inf gefixt
+      Progress Distribution Flatline-Bug gefixt
+
+### AI Wave Director System
+
+- [x] **AI Data Collection (Phase 5.1)**
+      AIDataCollectorService, GameStateSnapshot (74 Features inkl. DPS-Profile)
+      WaveResult Interface, Defense-Analyzer mit Vulnerability Detection
+      Dateien: `src/app/ai/core/`
+
+- [x] **Inference Pipeline (Phase 5.2)**
+      GameStateEncoder (74 Features), WaveDirectorService mit TensorFlow.js
+      Fallback Wave Generator (regelbasiert), Decision Explainer
+      WaveConfigAdapter für WaveManager-Integration
+
+- [x] **Training Infrastructure (Phase 5.3)**
+      Python Backend: WebSocket Server (:3001), PPO Trainer, Reward Function
+      Conv1D + Dense Model (DPS-Profile als räumlicher Input)
+      TrainingClientService (Browser), Strategy Bot System
+      Dateien: `training-backend/`, `src/app/ai/training/`
+
+- [x] **Training UI (Phase 5.4)**
+      Web Dashboard (FastAPI :3002): Live Charts, Model Metrics, DPS-Profiles
+      Training-Debugger Component (In-Game)
+      Bot-Selection via Backend, ONNX Model Export
+
+- [x] **Strategy Bot System**
+      StrategyBot mit Composition Pattern (pluggable Strategies)
+      5+ Strategies: AntiAir, Splash, Distributed, Upgrade, AutoWave
+      4 Skill Levels: Beginner, Casual, Strategist, Meta
+      Datei: `src/app/ai/training/bots/`, `strategies/`
+
+### Dokumentation
+
+- [x] **AI-Dokumentation reorganisiert**
+      AI_TRAINING_BACKEND.md → training-backend/docs/
+      AI_TRAINING_SESSION_NOTES.md → training-backend/docs/
+      BOT_SYSTEM.md → docs/
+      DEVWORLD.md erstellt (basierend auf Code-Analyse)
+
+- [x] **Veraltete Docs bereinigt**
+      MASSNAHMEN_review_20260120.md gelöscht (Duplikat von TODO.md)
+      DEVWORLD_PLAN.md gelöscht (bereits implementiert)
+      tasks/FPS_LIMIT.md gelöscht (in TODO.md integriert)
+
+- [x] **CLAUDE.md aktualisiert**
+      Neue Pfade für AI-Dokumentation
+      Training-Backend Sektion hinzugefügt
+
+### Code Quality
+
+- [x] **53 ESLint Fehler behoben**
+      Unused vars mit `_` prefix oder entfernt
+      Explicit any: proper types oder eslint-disable
+      Case declarations: block scope
+      Empty functions: eslint-disable
+
+---
+
+## 2026-01-20
+
+- [x] **Codebase auf Englisch umgestellt** - Vollständige Übersetzung
+      ~20 Dateien: UI-Strings, Tooltips, Error-Messages, Loading-States, Kommentare
+      Services, Components, HTML-Templates, Config-Dateien
+
+---
+
+## 2026-01-19
+
+- [x] **Koordinaten-Typen vereinheitlichen** - GeoPosition als Standard
+      Alle Typen auf `GeoPosition` ({lat, lon, height?}) konsolidiert
+      `LocationCoords` entfernt, `latitude/longitude` überall zu `lat/lon`
+
+- [x] **Scrollbar Styling** - Einheitliches Theme für Debug-Panels
+      Globale `TD_SCROLLBAR_STYLES` und `TD_SCROLLBAR_WEBKIT` in `td-theme.ts`
+      Angewendet auf: `event-debugger`, `sound-debugger`, `draggable-debug-panel`
+
+- [x] **TowerDefenseComponent Aufteilung abgeschlossen** - Keine weitere Aufteilung nötig
+      ~1797 Zeilen, davon Großteil Signal-Proxies, Lifecycle-Hooks und Service-Delegierungen
+      21 Services injiziert, Komponente fungiert korrekt als Orchestrator
+
+- [x] **Event Debug Panel Position Fix** - Panel springt nicht mehr beim Öffnen
+      `constrainToViewport()` mit `requestAnimationFrame` verzögert, damit DOM korrekte Größe hat
+
+- [x] **Browser Geolocation API** - Automatische Standortermittlung implementiert
+      `GeolocationService` mit Fallback-Kaskade: Browser GPS/WLAN → IP-API (ip-api.com)
+
+- [x] **World Dice** - Random Street Generator
+      Wikidata SPARQL für zufällige Stadt + Overpass API für Straße
+      Würfel-Button in Header + Location-Dialog
+
+- [x] **World Dice Loading Feedback** - Loading Overlay beim Würfeln
+      Steps: "Würfle Stadt..." (mit Detail) → "Lade Karte..." (mit Stadtname)
+
+- [x] **Location Sharing via URL** - Shareable Links funktionieren
+      URL-Parameter `?l=lat,lon&s=spawns` aktiv, Share-Button kopiert Link
+
+### Game Engine - Event Bus System (Phase 10 abgeschlossen)
+
+- [x] **game:over Event (Phase 10a)**
+      - `onGameOverCallback` aus GameStateManager entfernt
+      - GameStateManager emittiert `game:over` Event mit `reason: 'base-destroyed' | 'quit'`
+      - `getEventBus()` Getter hinzugefügt für externe Subscriptions
+      - TowerDefenseComponent subscribed zu `game:over` Event
+      - LocationChangeCoordinatorService: `onGameOver` aus Interface entfernt
+
+- [x] **EventBusDebugPanel (Phase 10b)**
+      - Neue Komponente: `event-debugger.component.ts`
+      - Zeigt alle Events in Echtzeit via `eventBus.onAny()`
+      - Filter nach Kategorie: enemy, tower, wave, game, vfx, audio
+      - Farbcodierte Event-Typen mit Timestamp
+      - Pause/Resume und Clear-Funktion
+      - **Resizable Panel** mit persistierter Größe
+      - Button in QuickActions (cell_tower Icon)
+      - GameEventBus erweitert um `onAny()` und `debugListeners`
+
+- [x] **DraggableDebugPanel Resize-Feature**
+      - `[resizable]` Input (default: false)
+      - `[size]` Input und `(sizeChange)` Output
+      - Resize-Handle unten rechts (drag_indicator Icon)
+      - Min-Size: 300x200px, Viewport-Constraints
+      - DebugWindowService: `WindowSize` Interface, `updateSize()`, `getSize()`
+      - Größe wird im localStorage persistiert (v4)
+
+- [x] **Event Cleanup**
+      - `damage:dealt` Event entfernt (redundant mit `projectile:hit`)
+      - Lint-Fixes: eslint-disable für legitimes `any`, unused vars
+
+- [x] **Event Bus Core implementiert**
+      - `GameEventBus` mit 20 Event-Typen (discriminated unions)
+      - Immediate Events (`emit`) für game-kritische Aktionen
+      - Deferred Events (`emitDeferred`) für VFX/Audio
+      - `processQueue()` am Frame-Ende
+      - WeakMap-basiertes Subscription-Tracking
+
+- [x] **Manager auf Event-System umgestellt**
+      - `ProjectileManager`: emittiert `projectile:hit`, `vfx:projectile-impact`
+      - `EnemyManager`: emittiert `enemy:died`, `enemy:reached-base`
+      - `WaveManager`: emittiert `wave:started`, `wave:completed`
+      - Alle drei: `@Injectable` entfernt, Constructor Injection
+      - Provider aus TowerDefenseComponent entfernt
+
+- [x] **Services event-driven**
+      - `VFXService`: subscribed zu `vfx:projectile-impact`
+      - `CombatEffectService`: subscribed zu `projectile:hit`
+      - `handleProjectileHit()` aus GameStateManager entfernt
+
+- [x] **Audio via Events (Phase 7)**
+      - `AudioService`: subscribed zu `audio:play` Events
+      - Event-Typ `audio:play` auf Geo-Koordinaten erweitert (`lat`, `lon`, `height`)
+      - `ProjectileManager`: emittiert `audio:play` statt direktem `spatialAudio.playAtGeo()`
+      - `HQDamageService`: emittiert `audio:play`, `initialize()` um `eventBus` erweitert
+      - Neue Datei: `src/app/game-engine/audio.service.ts` (56 LOC)
+
+- [x] **TowerManager refactored (Phase 8)**
+      - `@Injectable()` entfernt, Constructor Injection `(eventBus, osmService)`
+      - Emittiert `tower:placed` mit cost, neue `sell()` Methode emittiert `tower:sold`
+      - Event-Typ `tower:placed` auf `GeoPosition` geändert (statt Vector3)
+      - GameStateManager: `inject(OsmStreetService)` + manuelle TowerManager-Erstellung
+      - Provider aus TowerDefenseComponent entfernt
+      - **Alle 4 Entity-Manager jetzt framework-agnostic!**
+
+- [x] **health:changed Event (Phase 9)**
+      - GameStateManager emittiert `health:changed` statt direkter HQDamageService-Aufrufe
+      - HQDamageService subscribed zu `health:changed` (Fire-Intensity + Damage-Sound)
+      - Direkter `updateFireIntensity()` Aufruf aus Game-Loop entfernt
+      - HQDamageService jetzt vollständig event-driven
+
+- [x] **Architektur-Prinzip umgesetzt**
+      - Angular nur fuer UI, Game Engine framework-agnostic
+      - Hybrid: Events fuer Broadcasts, Spatial Grid fuer Queries
+      - Dokumentation: [EVENT_SYSTEM.md](docs/EVENT_SYSTEM.md)
+
+### Refactoring
+- [x] **Koordinaten-Typen vereinheitlicht**
+      - Alle Typen auf `GeoPosition` ({lat, lon, height?}) konsolidiert
+      - `LocationCoords` Interface entfernt (war identisch zu GeoPosition)
+      - `latitude/longitude` überall zu `lat/lon` geändert (~50 Stellen)
+      - `SpawnPoint` Interfaces konsolidiert (marker-visualization.service.ts als Quelle)
+      - Betroffene Dateien: location.types.ts, wave.manager.ts, tower-placement.service.ts,
+        street-rendering.service.ts, location-change-coordinator.service.ts, tower-defense.component.ts, u.a.
+
+- [x] **LocationChangeCoordinatorService extrahiert**
+      - Neue Datei: `src/app/services/location-change-coordinator.service.ts` (406 Zeilen)
+      - `onApplyNewLocation()` von 215 auf 60 Zeilen reduziert
+      - 7 Step-Methoden für Location-Change-Sequenz
+      - Callback-Pattern für Component-Interaktion
+      - TowerDefenseComponent: 1.954 → 1.799 Zeilen (-155)
+      - GOD Object Refactoring Phase 2 komplett abgeschlossen
+
+### Bugfixes
+- [x] **Route Overlay "Routen anzeigen"** funktioniert wieder korrekt
+      - Problem: Bei fehlendem Terrain (`originTerrainY === null`) wurde `showPathFromSpawn()` beendet ohne Route Line zu erstellen
+      - Fix: Fallback auf `0` statt `return` - Route Line wird immer erstellt
+      - Datei: `path-route.service.ts`
+
+- [x] **Wave Debug Panel Delay** wirkt sich jetzt auf laufende Welle aus
+      - Problem: `spawnDelay` wurde einmal zu Beginn der Welle gespeichert und nie aktualisiert
+      - Fix: Neues `getSpawnDelay?: () => number` in `WaveConfig` - wird bei jedem Spawn aufgerufen
+      - Dateien: `wave.manager.ts`, `tower-defense.component.ts`
+
+- [x] **Route-Grid Animation beschleunigt sich mit jeder Wave**
+      - Game Loop wurde bei jeder Wave erneut gestartet ohne den alten zu stoppen
+      - Mehrere Loops liefen parallel → `updateAnimation()` wurde N-mal pro Frame aufgerufen
+      - Fix: Guard in `startGameLoop()` verhindert mehrfache Loops
+
+### UI
+- [x] **Scrollbar Styling für Debug Panels**
+      - Neue Theme-Konstanten: `TD_SCROLLBAR_STYLES`, `TD_SCROLLBAR_WEBKIT`
+      - Dunkles Theme passend zum WC3-Style (Frame-Farben)
+      - Cross-browser: Firefox (scrollbar-color) + Webkit (::-webkit-scrollbar)
+      - Angewendet auf: event-debugger, sound-debugger, draggable-debug-panel
+
+- [x] **Text-Selektion in UI deaktiviert**
+      - `user-select: none` auf body
+      - Input/Textarea bleiben selektierbar
+
+### Architektur
+- [x] **Game Loop Refactoring - Immer laufend**
+      - **Problem**: Game Loop stoppte bei Wave-Ende → Projektile froren ein, Türme drehten nicht zu Idle
+      - **Lösung**: Kein separater Game Loop mehr, alles über Engine-Callback `onEngineUpdate()`
+      - Phase kontrolliert WAS passiert, nicht OB der Loop läuft
+      - `startGameLoop()` komplett entfernt
+      - `gameState.update()` refactored: Projektile + Tower-Idle immer, Rest nur während Wave
+      - `killAllEnemies()` vereinfacht: Wave endet automatisch via `checkWaveComplete()`
+
+---
+
+## 2026-01-18
+
+### Pathfinding
+- [x] **Gewichtetes Pathfinding nach Straßentyp**
+      - Primäre Straßen (primary, secondary, tertiary) bevorzugt
+      - Residential/Service Straßen mit höherem Gewicht bestraft
+      - Sauberer A* Algorithmus mit Typ-basiertem Weighting
+
+### Loading & UX
+- [x] **3D-Tiles Stats im Loading Screen**
+      - Zeigt "Warte auf 3D-Kacheln (X Kacheln geladen)"
+      - Retry-Mechanismus für sporadische 0-Tiles Probleme
+      - Detaillierte Debug-Logs für Troubleshooting
+- [x] **Detaillierter Loading-Screen**
+      - Separater Loading-Step "Warte auf 3D-Kacheln"
+      - Benutzerfreundliche Fehlermeldungen für OSM und WebGL
+      - Zeigt einzelne Schritte: Route, Assets, Tiles
+- [x] **Console-Trenner bei Location-Wechsel**
+      - `═══════ Location Change: [Name] ═══════` zur besseren Übersicht
+- [x] **Internationale Nominatim-Suche**
+      - `accept-language: *` Header für weltweite Ergebnisse
+      - Nicht mehr auf deutsche Ergebnisse beschränkt
+- [x] **Robustes Location-Loading**
+      - Error-Handling für fehlgeschlagene OSM-Requests
+      - Graceful Degradation bei Netzwerkproblemen
+
+### Bugfixes
+- [x] **Retry-Mechanismus für 3D-Tiles Loading nach F5**
+      - Fix für sporadisches "0 Kacheln geladen" Problem
+      - Max 50 Retries á 200ms (10 Sekunden gesamt)
+      - Force-Update bei persistentem Problem
+      - Siehe [TILES_LOADING_BUG.md](docs/archive/TILES_LOADING_BUG.md) für Details
+- [x] **Zombie-Textur Dateiname korrigiert**
+
+### Refactoring
+- [x] **Asset-Struktur vereinheitlicht und reorganisiert**
+      - Konsistente Ordnerstruktur für Models, Textures, Audio
+      - Alle Assets unter `assets/` mit klarer Hierarchie
+
+### Performance: Assets
+- [x] **Skybox WebP Conversion** - 48MB → 0.6MB (99% Reduktion!)
+      - 8192×4096 JPEG → 4096×2048 WebP
+      - `kloppenheim_06_puresky.webp`: 124KB (vorher 19MB)
+      - `qwantani_night_puresky.webp`: 532KB (vorher 29MB)
+
+### Audio System Refactoring
+- [x] **Sound-Systeme konsolidiert** - Zentrale Loop-Verwaltung im SpatialAudioManager
+      - `AudioComponent.activeLoops` → `SpatialAudioManager.activeLoops`
+      - Neue API: `createLoop()`, `updateLoopPosition()`, `pauseLoop()`, `resumeLoop()`, `stopLoop()`
+      - AudioComponent ist jetzt dünner Wrapper mit `loopHandles` Map
+      - Distance-Culling und Enemy-Budget zentral verwaltet
+      - Audio-Pool wird jetzt auch für Loops genutzt (vorher nur One-Shots)
+- [x] **LRU Audio Buffer Cache** - Begrenzt auf 20 Buffers
+      - `bufferAccessOrder[]` für LRU-Tracking
+      - `evictOldestBuffers()` entfernt älteste Einträge bei Überschreitung
+      - Verhindert unbegrenztes Wachstum (~30MB decoded Audio)
+
+### 🔴 Performance Prio 1: Kritisch (alle erledigt)
+
+- [x] **Shadow Flags entfernen** - GPU-Zyklen verschwendet für nie gerenderte Shadows
+- [x] **Event Listener Cleanup** - Memory Leak bei Location-Wechsel behoben
+- [x] **Timeout Cleanup bei Reset** - Timeouts feuern nicht mehr nach Game-Reset
+- [x] **RxJS takeUntilDestroyed** - Subscription Leaks behoben
+- [x] **Three.js Named Imports** - Tree-Shaking ermöglicht, -400KB Bundle
+- [x] **herbert_talk.mp3 gelöscht** - 1.6MB unbenutzte Datei entfernt
+- [x] **localStorage → IndexedDB** - StreetCacheService für große Caches
+- [x] **OnPush ChangeDetection** - Alle 16 Components umgestellt
+- [x] **Distance Audio Culling** - Sounds pausieren bei 500m+ Entfernung
+- [x] **Material Pooling** - Shared Materials pro Enemy-Typ statt Clone pro Instanz
+
+### UI/UX
+- [x] **Tooltips im Baumenü nach links**
+  - `matTooltipPosition="left"` für Tower-Cards und Upgrade-Buttons
+  - Verhindert Überlappen mit rechtem Bildschirmrand
+
+### Camera & Controls
+- [x] **Shift + WASD/Pfeiltasten für schnelleres Panning**
+  - Normal: 80 m/s, mit Shift: 200 m/s
+  - `KeyboardPanService` trackt jetzt Shift-Modifier
+
+### Air Tower Visualisierung
+- [x] **Air Tower zeigen alle Zellen in Reichweite grün**
+  - Pure Air Tower (`canTargetAir && !canTargetGround`) überspringen LOS-Checks
+  - `isPureAirTower` Parameter in `registerTower()` und `createPlacementPreview()`
+  - Sowohl nach dem Bauen als auch im Baumodus (Preview) korrekt
+
+### Performance & Storage
+- [x] **Straßen-Cache von LocalStorage auf IndexedDB migriert**
+  - `StreetCacheService` (bereits implementiert) jetzt in `OsmStreetService` integriert
+  - Unterstützt 50-100+ MB statt 5-10 MB localStorage Limit
+  - LRU-Eviction (max. 5 Locations gecacht)
+
+### Bugfix
+- [x] **Grid/Tower-Visualisierung Flashing - präventiver Fix**
+  - `animationTime` wird jetzt gewrappt um Float-Präzisionsprobleme bei langen Sessions zu vermeiden
+  - Problem war schwer reproduzierbar (1x aufgetreten)
+
+### Monetarisierung
+- [x] **Ad-Banner System implementiert**
+  - `AdBannerComponent` mit WC3-Style Design
+  - Monetag Vignette Banner Integration (Zone 10479931)
+  - Ads werden nur in Production geladen (`environment.production`)
+  - Adblocker-Detection mit Bait-Element-Methode
+  - Fallback-Panel bei Adblocker: Ko-fi Spenden-Button + GitHub Star
+  - Komponente in Sidebar integriert (über Footer)
+  - Kontextabhängige Größe vorbereitet (compact-Mode für aktive Wellen)
+
+### Code Quality
+- [x] **Environment-basierte Ad-Konfiguration**
+  - Kein Ad-Script in index.html (dynamisches Laden)
+  - Nur Production-Builds zeigen Werbung
+  - Development bleibt werbefrei für bessere DX
+
+### Performance & Privacy
+- [x] **Self-hosted Fonts (kein Google CDN)**
+  - `@fontsource/roboto` und `material-icons` npm Packages
+  - Fonts werden lokal aus dem Bundle geladen
+  - Keine externen Requests zu Google (DSGVO-konform)
+  - Schnelleres Laden (kein DNS-Lookup, kein Roundtrip)
+
+### DevOps
+- [x] **FTP-Deploy optimiert (nur geänderte Dateien)**
+  - `dangerous-clean-slate: false` statt true
+  - FTP-Action speichert State in `.ftp-deploy-sync-state.json`
+  - Nur neue/geänderte Dateien werden hochgeladen
+  - Alte Dateien mit alten Hashes werden automatisch gelöscht
+  - Deutlich schnellere Deploys nach initialem Sync
+
+---
+
+## 2026-01-17
+
+### Neue Features
+- [x] **Magic Tower mit animiertem Orb**
+  - Neues `magic_tower.glb` Model mit `tower_top` Orb-Teil
+  - Hover-Animation: sanftes Auf/Ab-Schweben (Amplitude 0.006, Speed 0.6 Hz)
+  - Idle-Rotation: langsame kontinuierliche Drehung wenn kein Ziel (0.3 rad/s)
+  - Zufälliger Phasen-Offset pro Tower für desynchronisierte Animationen
+  - `tower_top` zu erkannten Turret-Part-Namen hinzugefügt
+  - Sound bereits konfiguriert (`magic_cast.mp3` für fireball)
+
+### Bugfixes
+- [x] **Platzierte Tower bleiben grün nach Build-Preview**
+  - `cloneModel()` im AssetManager klont jetzt alle Materialien tief
+  - Verhindert Shared-State zwischen Model-Instanzen
+  - Betrifft: Build-Preview, platzierte Tower, Baumenü-Previews
+
+### Code Quality & Architektur
+- [x] **Globaler Asset Manager** - 4 separate Model-Caches konsolidiert
+  - Neuer `AssetManagerService` mit zentralem GLTFLoader/FBXLoader
+  - Reference Counting fuer korrekte GPU-Resource Disposal (Memory Leak gefixt!)
+  - Betroffene: ThreeTowerRenderer, ThreeEnemyRenderer, ModelPreviewService, TowerPlacementService
+  - ~218 Zeilen duplizierter Code entfernt
+  - Siehe: EXPERT_REVIEW_2026.md (Abschnitt 6.2, nicht mehr vorhanden)
+
+### Bugfixes
+- [x] **Wave endet nicht wenn alle Gegner tot sind**
+  - Root Cause: `kill()` dekrementierte `aliveCount` nur wenn `enemy.alive` true war
+  - Problem: `takeDamage()` setzte bereits `alive=false` bevor `kill()` aufgerufen wurde
+  - Fix: `aliveCount` wird jetzt immer in `kill()` dekrementiert (killingEnemies Set verhindert doppelte Zählung)
+- [x] **Gegneranzahl zeigte gespawnte statt lebende Gegner**
+  - Gleiche Ursache wie oben - `aliveCount` wurde bei Kills nicht reduziert
+  - Fix behebt beide Bugs gleichzeitig
+
+### Performance Optimierungen
+- [x] **Splash-Damage via Grid-Lookup optimiert**
+  - `GlobalRouteGrid.getEnemiesInRadius()` nutzt Zellen-basierte Suche
+  - O(cells_in_radius) statt O(all_enemies) mit Haversine-Distanz
+  - Betrifft: Cannon (16m), Ice-Shard (12m) Splash-Damage
+  - `EnemyManager.getEnemiesInRadius()` als @deprecated markiert
+- [x] **Reusable Vectors in ThreeEffectsRenderer**
+  - `tempVelocity` als Klassenvariable statt `velocity.clone()` pro Partikel
+  - 3 Hotspots in update() optimiert (Effect-Particles, Trail-Additive, Trail-Normal)
+  - ~99% weniger GC-Druck bei Partikel-Updates
+- [x] **Cached getAlive() Result im EnemyManager**
+  - Array wird gecacht und nur bei spawn/kill/remove/clear invalidiert
+  - getAliveCount() nutzt jetzt direkt das Signal statt Array-Allokation
+- [x] **Fast-Distance statt Haversine fuer lokale Berechnungen**
+  - `geoDistanceFast()` Wrapper in geo-utils.ts hinzugefuegt
+  - projectile.entity.ts: 2x geoDistance → geoDistanceFast
+  - ellipsoid-sync.ts: haversineDistance → fastDistance (6x schneller)
+  - Flat-Earth Approximation ausreichend genau fuer <200m Game-Distanzen
+
+### Sound System Audit & Performance Fixes
+- [x] **Kritische Memory Leaks behoben**
+  - setTimeout-Referenzen werden jetzt getrackt und bei Cleanup gecleaned
+  - stopAll() entfernt jetzt ordentlich alle Container aus der Scene
+  - Audio.disconnect() wird bei jedem Cleanup aufgerufen
+  - Enemy Timer (randomSoundTimer) werden bei destroy() robuster gestoppt
+- [x] **PositionalAudio-Pooling implementiert**
+  - Pool von 20 vorallozierten PositionalAudio-Objekten (wächst bis 50)
+  - Reduziert Garbage Collection Pressure erheblich
+  - Bei 100 Arrow-Sounds/Sekunde: 0 neue Objekte statt 100/s
+- [x] **Race Condition im Budget-System gefixt**
+  - Enemy-Sound-Budget wird sofort registriert (vor await-Calls)
+  - Verhindert Budget-Überschreitung bei parallelen Sound-Anfragen
+  - Alle Early-Exit-Pfade cleanen jetzt ordentlich das Budget
+- [x] **Algorithmus-Optimierungen**
+  - stop() Methode: O(n²) → O(n) durch direktes Filtern statt indexOf+splice
+  - update() bereits optimal (Position wird 1x berechnet für alle Loops)
+- [x] **Error Recovery verbessert**
+  - Retry-Mechanismus: 3 Versuche bei Buffer-Ladefehlern mit 1s Delay
+  - Besseres Logging für Debugging
+- [x] **Code-Vereinheitlichung**
+  - Enemy-Sound-Erkennung zentralisiert in SpatialAudioManager
+  - Nutzt ENEMY_SOUND_PATTERNS aus audio.config.ts (inkl. herbert)
+  - Duplizierte isEnemySound() Methode in AudioComponent entfernt
+- [x] **Dokumentation aktualisiert**
+  - SPATIAL_AUDIO.md mit Performance-Optimierungen-Sektion erweitert
+
+### Dokumentation (Phase 2 - Lücken schließen)
+- [x] **Geo-Utils vollständig dokumentiert** (ARCHITECTURE.md Sektion 8.1)
+  - haversineDistance vs fastDistance erklärt
+  - Wann welche Funktion verwenden (Hot-Path vs Einmalig)
+  - Performance-Vergleich (7x schneller bei fastDistance)
+  - Beispiele und Migration-Guide
+  - "Jedes Mal ein Thema" → Jetzt klar dokumentiert
+- [x] **Blood & Fire Effects ausführlich dokumentiert** (ARCHITECTURE.md Sektion 11)
+  - Blood Decal System: Instanced Rendering, Custom Shader, Config
+  - Fire Effects: Intensitätsstufen, Partikel+Sound+Licht, Lifecycle
+  - Performance-Details (500 Decals = 2 Draw Calls statt 700)
+  - Konfiguration in visual-effects.config.ts
+- [x] **Tower Upgrade System dokumentiert** (TOWER_CREATION.md)
+  - Upgrade-Konfiguration (Stats, Multi-Level, Kosten)
+  - Code-Beispiele für applyUpgrade()
+  - Range-Upgrade Spezialfall (LOS-Grid Neuberechnung)
+  - Praktische Beispiele (Archer Single, Magic Multi-Level)
+- [x] **ARCHITECTURE.md Animation-Sektion gekürzt**
+  - Von 40 auf 25 Zeilen reduziert
+  - Verweise auf ENEMY_CREATION.md für Details
+  - Fokus auf Architektur-Übersicht
+
+### Dokumentation (Phase 1 - Neue Docs)
+- [x] **ENEMY_CREATION.md erstellt**
+  - Analog zu TOWER_CREATION.md
+  - Enemy-Typen erstellen mit Animationen, Audio, Visual Effects
+  - Run-Animation-System, Air Units, Boss Enemies dokumentiert
+  - Checkliste und Troubleshooting
+- [x] **STATUS_EFFECTS.md erstellt**
+  - Status-Effekt-System vollständig dokumentiert
+  - Slow-Effect Stacking-Verhalten erklärt
+  - Freeze und Burn (geplant) beschrieben
+  - Performance-Optimierungen dokumentiert
+- [x] **WAVE_SYSTEM.md erstellt**
+  - Wave-Management und Spawning-System dokumentiert
+  - Gathering-Phase, Spawn-Modi (each/random)
+  - Progressive Difficulty, Boss Waves
+  - Testing und Debugging
+- [x] **ARCHITECTURE.md Dateistruktur korrigiert**
+  - `game/` Subfolder-Fehler behoben (Zeilen 728-813)
+  - Korrekte Ordnerstruktur (kein game/ Subfolder)
+  - Config-Dateien und Utils ergänzt
+  - Docs-Liste aktualisiert
+- [x] **INDEX.md aktualisiert**
+  - Drei neue Dokumentationen hinzugefügt
+  - Schnellnavigation erweitert
+- [x] **TODO.md aktualisiert**
+  - Erledigte Dokumentations-Tasks entfernt
+
+### Magic Tower
+- [x] **Magic Tower implementiert**
+  - Grundgerüst mit Stats: 40 DMG, 70 Range, 1.5 Feuerrate, 150 Credits
+  - Upgrade: "Arkane Macht" (+50% Schaden, 3 Stufen)
+  - Custom GLSL Shader für magische Projektile:
+    - Pulsierender Glow-Effekt (wirbelnde Voronoi + FBM Patterns)
+    - Farbverlauf: Violett → Cyan → Weiß
+    - Fresnel Edge-Glow, Additive Blending
+  - Trail-Partikel (violett-cyan, additive)
+  - Sound-Config vorbereitet (magic_cast.mp3)
+  - Verwendet Archer-Model als Placeholder
+
+### Performance
+- [x] **Instanced Decal Rendering**
+  - Blood/Ice Decals auf InstancedMesh umgestellt
+  - Custom Shader für Decals (fade-out, color tinting)
+  - ~250 Draw Calls → 2 Draw Calls (1 Blood-Pool, 1 Ice-Pool)
+  - Decal-Farben und Settings in visual-effects.config.ts ausgelagert
+
+### LOS & Tower Placement
+- [x] **LOS Berechnung performanter machen**
+  - Progressive LOS Preview: 25 Zellen pro Frame statt alle auf einmal
+  - Radiiert vom Turm-Zentrum nach außen (visuell ansprechend)
+  - Debounced bei 150ms um FPS-Drops zu vermeiden
+- [x] **Keine LOS Berechnung bei ungültiger Position**
+  - LOS Preview wird nur berechnet wenn Turm-Position valid ist
+  - Bei "zu nah an Straße" etc. wird Preview übersprungen
+
+### UI Improvements
+- [x] **Tower Info Panel redesigned**
+  - Stats als 2x2 Kacheln mit Icons (Schaden, Reichweite, Feuerrate, Kills)
+  - Upgrade-Button größer und prominenter mit Gold-Gradient
+  - Verkaufen-Button subtiler (transparent, rot bei Hover)
+  - Baumenü versteckt wenn Tower selektiert (CSS display:none)
+- [x] **Range Indicator vereinfacht**
+  - Doppelter Ring (weiß + gold) durch einzelnen Gold-Ring ersetzt
+
+### Fixes
+- [x] **Game Over Cleanup**
+  - Tower-Overlays und LOS-Visualisierungen korrekt bei Game Over
+  - Particle Pool Exhaustion bei HQ Explosion gefixt (stopFireImmediate)
+- [x] **Game Restart nach Game Over**
+  - GlobalRouteGrid wird bei Restart neu initialisiert
+  - Debug-Visualisierung wird korrekt neu erstellt
+  - Enemies werden aus Grid entfernt bei clear()
+
+---
+
+## 2026-01-16
+
+### Dokumentation
+- [x] **DONE.md zu Changelog umstrukturiert**
+  - Chronologische Sortierung (neueste zuerst)
+  - Datumsabschnitte für bessere Übersicht
+- [x] **CLAUDE.md aktualisiert**
+  - TODO/DONE Beschreibung erweitert (Changelog-Format erklärt)
+  - Service/Manager-Anzahl war bereits korrekt (19/7)
+  - Dokumentations-Tabelle bereits vollständig
+- [x] **src/app/README.md gelöscht**
+  - Komplett veraltet (POC-Status, falsche Tower-Liste, alte APIs)
+  - Ersetzt durch CLAUDE.md und docs/
+
+### Effects & Explosions
+- [x] **Projektile fliegen weiter wenn Ziel stirbt**
+  - Projektil speichert letzte Zielposition wenn Gegner mid-flight stirbt
+  - Flugbahn wird fortgesetzt zur letzten bekannten Position
+  - Explosion am Boden (terrainHeight + 1)
+  - Kein Damage-Handler bei Ground-Impact (nur visueller Effekt)
+  - Betrifft alle Projektiltypen (Cannon, Rocket, Ice, etc.)
+- [x] **Explosionshöhe für Air Units korrigiert**
+  - Ice/Fire Explosionen erscheinen jetzt auf korrekter Höhe bei Luftgegnern
+  - Berechnung: terrainHeight + heightOffset (+ 2 nur für Bodeneinheiten)
+  - Fledermäuse: Explosion auf 15m Flughöhe statt am Boden
+- [x] **HQ Explosion bei Zerstörung**
+  - Massive 3-Phasen-Explosion (1350 Partikel total)
+  - Phase 1: 450 Partikel zentrale Explosion
+  - Phase 2: 600 Partikel Ring-Expansion
+  - Phase 3: 300 Partikel aufsteigende Glut
+  - Bestehendes Feuer wird zu Inferno skaliert (nicht ersetzt)
+  - Feuer bleibt permanent (auch während Game Over Screen)
+  - Game Over Screen nach 3 Sekunden
+- [x] **Explosionen bei Rocket/Cannon Treffern**
+  - Rocket: 50 Partikel, Radius 8
+  - Cannon: 35 Partikel, Radius 6
+  - Konfigurierbar via EXPLOSION_PRESETS in visual-effects.config.ts
+
+### Code Quality (Expert Review Quick Wins)
+- [x] **visual-effects.config.ts erstellen** - Partikel/Decal-Configs zentralisiert
+  - Neues `configs/visual-effects.config.ts` mit PARTICLE_LIMITS, DECAL_CONFIG, FIRE_INTENSITY, EXPLOSION_PRESETS, EFFECT_COLORS
+  - Entfernt hardcoded Werte aus three-effects.renderer.ts
+- [x] **audio.config.ts erstellen** - Sound-Configs zentralisiert
+  - Neues `configs/audio.config.ts` mit AUDIO_LIMITS, ENEMY_SOUND_PATTERNS, SPATIAL_AUDIO_DEFAULTS, GAME_SOUNDS
+  - Entfernt aus: spatial-audio.manager.ts, game-state.manager.ts
+- [x] **game-balance.config.ts erstellen** - Game Balance Werte zentralisiert
+  - Neues `configs/game-balance.config.ts` mit player, waves, combat, effects, fire
+  - Entfernt hardcoded Werte aus game-state.manager.ts
+- [x] **PROJECTILE_SOUNDS in Config verschoben**
+  - Sound-Konfiguration von projectile.manager.ts nach projectile-types.config.ts
+  - Saubere Config-Struktur mit Interface `ProjectileSoundConfig`
+- [x] **placement.config.ts erstellen** - Placement-Constraints dedupliziert
+  - Neues `configs/placement.config.ts` mit MIN/MAX_DISTANCE Konstanten
+  - Entfernt aus: tower.manager.ts, tower-placement.service.ts
+- [x] **Reusable Vectors in ProjectileRenderer** - Object Allocation in Update-Loop eliminiert
+  - Statische `_tempPos`, `_tempRot`, `_tempScale` in ProjectileInstanceManager
+  - Keine `new Vector3()`/`new Quaternion()` mehr pro Frame
+- [x] **GeoUtilsService erstellen** - Haversine-Distanzberechnung 5x dedupliziert
+  - Neues `utils/geo-utils.ts` mit `haversineDistance()`, `fastDistance()`, `geoDistance()`
+  - Entfernt aus: enemy.manager.ts, tower.manager.ts, game-state.manager.ts, projectile.entity.ts, movement.component.ts
+
+---
+
+## Frühere Änderungen (undatiert)
+
+### Tower
+- [x] **ICE Tower mit Slow Effekt**
+  - Splash Damage Type (Gegner im Radius betroffen)
+  - Generelles Debuff-System mit Statuseffekten
+  - Kann Air und Ground Targets treffen
+  - Wenig Schaden, primär für Slow-Effekt
+  - Blauer Ice Partikel-Effekt für Projektil-Trail
+  - Eis-Explosion beim Auftreffen
+  - Hellblaue Eis-Decals auf dem Boden (analog Blutflecken)
+
+### LOS (Line of Sight)
+- [x] **Statisches Pfad-LOS-Grid**
+  - 2m Grid entlang Route (±7m Korridor)
+  - Bei Tower-Platzierung vorberechnet
+  - O(1) Lookup zur Laufzeit
+  - Shader-basierte Visualisierung mit Pulsing-Animation
+- [x] **Tower LOS-Prüfung von Hülle statt Mitte**
+  - Tower prüfen LOS ab ihrer äußeren Hülle, nicht vom Mittelpunkt
+  - Relevant wenn Tower auf Gebäuden steht
+- [x] **Hex-Grid Line-of-Sight Visualisierung**
+  - Flat-Top Hexagon-Grid über Turm-Reichweite
+  - Grün = sichtbar, Rot = blockiert (durch Gebäude)
+  - LineOfSightRaycaster raycastet von Turm-Spitze zu Hex-Zellen
+  - hasLineOfSight() API für Targeting-Entscheidungen
+  - Gebäude-Verdeckung funktioniert via 3D-Tiles Mesh-Intersection
+
+### Rendering
+- [x] **Rocket Tower Helligkeit angepasst** - War dunkler texturiert als andere Tower
+- [x] **Partikeleffekte für Projektile**
+  - Raketen: große Partikel + Explosion
+  - Normale Projektile: kleinere Partikel, keine Explosion
+  - Archer: keine Partikel
+- [x] **Dual Gatling Bogen-Bug gefixt** - Schoss fälschlicherweise im Bogen statt geradeaus
+- [x] **Leuchtspurmunition für Dual Gatling** - Dezente, kleine Leuchtspureffekte
+- [x] **Cannon, Magic, Sniper Tower deaktiviert** - Vorübergehend aus dem Spiel genommen
+
+### Performance
+- [x] **Animationen laufen langsamer bei niedrigen FPS** - Gefixt
+  - Ursache war hardcoded 16ms statt echter deltaTime
+  - Fix: Echte deltaTime Berechnung in three-tiles-engine.ts
+- [x] **Straßen-Overlay FPS-Drop gefixt** (35 FPS → 144 FPS)
+  - Problem: 200-600 separate THREE.Line Objekte mit je geklontem Material
+  - Fix: Alle Straßensegmente in ein THREE.LineSegments mit Merged BufferGeometry
+  - Ergebnis: 1 Draw Call statt 600+, ~10x bessere Performance
+- [x] **Straßen-Rendering in großen Städten optimiert** (Berlin: 14s → <1s)
+  - Problem: renderStreets() rief getTerrainHeightAtGeo() für jeden Node auf
+  - Fix: Route-Korridor-Filterung (nur Straßen im 100m-Korridor um Route)
+  - Ergebnis: 5000 → 150 Straßen, 50.000 → 1.500 Nodes
+- [x] **A* Graph-Caching**
+  - Problem: buildGraph() wurde bei jedem findPath() Aufruf neu erstellt
+  - Fix: Graph einmal bauen und cachen (getOrBuildGraph)
+
+### UI
+- [x] **Location Dialog Styling** - An TD-Style angepasst (gleicher Background, kein Purple)
+- [x] **Info Overlay** als transparente Angular Component oben links
+  - Zuschaltbar über Button in Quick Actions
+  - Zeigt: FPS, Tiles, Aktive Gegner, Aktive Sounds, Straßen-Count
+- [x] **Wave Debug Component optimiert**
+  - Kamera Debug und Log Textarea entfernt
+  - Heal HQ und Kill Wave Buttons repariert
+  - Slider erweitert: Anzahl bis 5000, Speed bis 100 m/s
+- [x] **Sidebar neu strukturiert** (WC3/Ancient Command Style)
+  - WELLE Section: Wave-Nummer, Gegner-Count, "Naechste Welle" Button
+  - BAUEN Section: Tower-Buttons mit Kosten
+  - TOWER Section: Details bei Selektion (Name, Stats, Upgrade/Verkaufen)
+  - DEBUG Section
+- [x] **3D Model Previews in Sidebar**
+  - ModelPreviewService mit geteiltem WebGL-Renderer
+  - Tower-Grid: 2x2 Kacheln mit rotierenden 3D-Modellen
+  - Enemy-Preview: Animierter Gegner (Walk-Animation)
+  - Siehe docs/MODEL_PREVIEW.md
+
+### Kamera
+- [x] **Kamera zurücksetzen Button repariert**
+- [x] **Initiale Position optimiert** - 45° Blickwinkel, Blickrichtung Norden, HQ im Zentrum
+- [x] **Automatisches Framing von HQ + Spawns**
+  - Initiale Kamera zeigt HQ und alle Spawn-Punkte im Bild
+  - Dynamische Kamera-Positionierung seitlich zur HQ-Spawn-Achse
+- [x] **Kompass-Overlay** - Oben rechts, rotiert mit Kamera-Heading
+
+### Gegner
+- [x] **Spawn-Verhalten optimiert**
+  - Gegner spawnen verzögert (konfigurierbar via Slider)
+  - "Gegner sammeln sich..." Phase optional (Gathering Mode)
+- [x] **Blutsystem**
+  - Blutflecken bei Treffer und Tod
+  - Decals faden nach 20s aus
+
+### Projektile
+- [x] **Line-of-Sight für Projektile** - Projektile erreichen Ziel nur bei bestehender Sichtverbindung
+
+### Türme
+- [x] **Tower Selektion** - Klick auf Tower selektiert ihn, Selection Ring Animation
+- [x] **Tower-Details in Sidebar** - Name, Schaden, Reichweite, Feuerrate, Kills, Verkaufen-Button
+- [x] **Radius-Anzeige** - Terrain-konform via TerrainRaycaster
+
+### Gameplay
+- [x] **Location-System** - User kann eigene Location wählen (siehe docs/LOCATION_SYSTEM.md)
+- [x] **Spawn-Punkte** - Zufällig 500m-1km vom HQ, muss auf Straße liegen
+
+### Audio
+- [x] **Spatial Audio** - Soundlautstärke abhängig von Kameraentfernung (siehe docs/SPATIAL_AUDIO.md)
+
+### Allgemein
+- [x] **Route-Animation (Knight Rider Effekt)**
+  - Animierte Visualisierung der Gegner-Route beim Spielstart
+  - Leuchtende rote/orange Dashes laufen von Spawn → HQ
+- [x] **Koordinaten-Paste im Location-Dialog**
+  - Unterstützte Formate: Dezimal, DMS, Cardinal, Google Maps URLs
+
+### Bug Fixes
+- [x] **CesiumIonAuthPlugin Import-Pfad aktualisiert**
+- [x] **Feuer am HQ bei Damage** funktioniert jetzt zuverlässig
+- [x] **Gegner laufen nicht mehr in der Luft** am HQ
+- [x] **Tower Selektion bei Pan** - Kein Deselect mehr bei Mausbewegung
+- [x] **Tower Selektion/Deselektion** - Frischer Raycaster pro Aufruf (LoS korrumpierte Zustand)
+- [x] **WASD in Eingabefeldern** - Keyboard-Events werden in Input-Feldern nicht mehr abgefangen

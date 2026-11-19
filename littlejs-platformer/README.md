@@ -1,0 +1,262 @@
+# LittleJS - The Tiny Fast JavaScript Game Engine
+
+<div align='center' markdown='1'>
+    
+![LittleJS Logo](examples/logo.png)
+
+[![NPM Package][npm]][npm-url]
+[![NPM Downloads][npm-downloads]][npmtrends-url]
+[![DeepScan][deepscan]][deepscan-url]
+[![MIT License][license]][license-url]
+[![Discord][discord]][discord-url]
+
+</div>
+
+## 🚂 All Aboard!
+
+LittleJS is a fast, lightweight, and fully open source HTML5 game engine designed for simplicity and performance.
+Its small footprint is packed with a comprehensive feature set including 2D and 3D rendering, physics, particles, sound, and input handling.
+The code is very clean and well documented with many examples to get you started quickly.
+
+**New here?** Open the [example browser](https://killedbyapixel.github.io/LittleJS/examples) and change the code of any example while it runs, or jump to [Quick Start](#quick-start) and have a game on screen in a minute.
+
+<div align='center' markdown='1'>
+
+## [Examples](https://killedbyapixel.github.io/LittleJS/examples) | [Arcade](https://killedbyapixel.github.io/LittleJSArcade) | [Docs](https://killedbyapixel.github.io/LittleJS/docs) | [Reference](https://github.com/KilledByAPixel/LittleJS/blob/main/REFERENCE.md) | [FAQ](https://github.com/KilledByAPixel/LittleJS/blob/main/FAQ.md) | [Trailer](https://youtu.be/V3ik8SKJF4g) | [Discord](https://discord.gg/zb7hcGkyZe)  | [AI](https://github.com/KilledByAPixel/LittleJS-AI)
+
+</div>
+
+![LittleJS Screenshot1](examples/screenshot.jpg)
+
+![LittleJS Screenshot2](examples/screenshot2.jpg)
+
+## LittleJS Features
+
+### ✨ Graphics
+
+- Blazing fast WebGL2 + Canvas2D hybrid rendering system
+- Apply [Shadertoy](https://www.shadertoy.com) style shaders for post-processing effects, or on any object or draw, with values the game sets each frame
+- 2D lights with soft shadows, tinted glass and emissive objects, a sun with long shadows, spotlight cones and gels, and normal maps
+- Robust particle effect system with a library of ready made effects and an [effect design tool](https://killedbyapixel.github.io/LittleJS/examples/particles/)
+- Parallax background layers that repeat across a level of any size
+- Follow cameras with smoothing, a dead zone, look ahead and level bounds, and camera shake
+- Your own icons inline in text, like a coin beside the score, written by name
+- Load sprites and animations into texture sheets at runtime, or import [TexturePacker](https://www.codeandweb.com/texturepacker) and [Aseprite](https://www.aseprite.org) atlases
+
+### 🧊 LittleJS 3D
+
+- Built-in 3D renderer that shares the canvas with your 2D game
+- 3D objects with the same physics, children and timers as 2D
+- Shape builders, extruded sprites and text, and OBJ and glTF model loading
+- Height map terrain, voxel maps and mesh colliders, with collision and raycasts
+- 3D levels and prefabs, built in the 3D level editor and loaded with one call
+- Shadow maps, colored lights, spotlights, lens flares, specular, emissive glow and fog
+- Reflections of a sky box or the scene itself, from mirror sharp to rough
+- Particles, trails, lit billboards and instanced drawing of thousands of meshes
+- Orbit, chase and first person cameras with mouse picking
+- Custom shaders on any object, with vertex code, uniforms and data for each instance
+- Optional [Three.js](https://threejs.org) plugin as an alternative renderer
+
+### 🔊 Audio
+
+- Sound and music with mp3, ogg, or wave files
+- Use [ZzFX](https://killedbyapixel.github.io/ZzFX/) sound generator to play sounds without asset files
+- Spatial audio with stereo panning
+- Audio effects plugin with filter, reverb, delay, distortion and compressor
+
+### 🎮 Input
+
+- Comprehensive input handling for mouse, keyboard, gamepad, and touch
+- Customizable on screen gamepad designed for mobile devices
+- Pinch to zoom on touch screens, read the same way as the mouse wheel
+
+### 💥 Physics
+
+- Robust arcade physics system with collision handling
+- Fast tilemap collision and raycasting, with one-way platforms that turn with their tiles
+- Swept bullet collision, so small fast objects never pass through a wall
+- Object collision that stays fast with thousands of objects
+- Full Box2D integration for realistic physics using [Box2D v2.3.1 wasm](https://github.com/kripken/box2d.js)
+
+### 🧩 Game Systems
+
+- UI system with buttons, sliders, text input and nine-slice skins
+- Tween system with easing curves, and a scene system for titles, menus and game states
+- Timers, seeded random numbers, and save data that persists between visits
+- Grid-based A* pathfinding plugin with optional path smoothing
+- Medals, leaderboards and cloud saves on [Newgrounds](https://www.newgrounds.com/) and [Wavedash](https://wavedash.com/)
+
+### 🚀 Flexibility
+
+- Compatible with all modern web browsers and mobile devices
+- Full TypeScript and Module support with example projects for both
+- [Vite](https://vite.dev) starter template for instant dev server with hot reload
+- Great for size coding competitions like [Js13kGames](https://js13kgames.com/)
+- Open Source and [MIT licensed](https://github.com/KilledByAPixel/LittleJS/blob/main/LICENSE)
+
+### 🛠️ Developer Tools
+
+- Live [example browser](https://killedbyapixel.github.io/LittleJS/examples) with a code editor and a write-up for every example
+- Built-in 2D and 3D level editors that edit your game while it runs, with undo, autosave and prefabs
+- Make the editors your own with your game's own object types, keys, buttons and tools, see the [editor guide](https://github.com/KilledByAPixel/LittleJS/blob/main/EDITOR.md)
+- 2D levels load and save as [Tiled](https://github.com/mapeditor/tiled) JSON, so Tiled can edit them too
+- Debug overlay, debug drawing, and a tweakables panel to change your game's values while it runs
+- Asserts and logging in the debug build, stripped from the release builds
+
+### 🤖 AI Friendly
+
+- The entire API is small and well documented so LLMs can produce high quality results
+- [LittleJS AI Tools](https://github.com/KilledByAPixel/LittleJS-AI) - Templates, examples, and prompts tuned for AI + LittleJS workflows
+- [LittleJS GPT](https://chatgpt.com/g/g-67c7c080b5bc81919736bc8815836be6-littlejs-game-maker) - Build LittleJS games right inside ChatGPT
+
+## Quick Start
+
+### Try it in the browser
+
+The [example browser](https://killedbyapixel.github.io/LittleJS/examples) runs every example beside its code. Edit the code and the example restarts with your change, and each one comes with a write-up of how it works and a few things to try. There is nothing to install.
+
+### One HTML file
+
+Download the latest release from GitHub, or run `npm install littlejsengine`, then save this as `index.html` with the script path pointing at the engine file. It loads nothing else, so it runs straight from the file with no server. Click to set off an explosion.
+
+```html
+<!DOCTYPE html>
+<script src="node_modules/littlejsengine/dist/littlejs.js"></script>
+<script>
+function gameInit() {}       // called once after the engine starts
+function gameUpdate()        // called 60 times a second for game logic
+{
+    if (mouseWasPressed(0))
+        particleEffect('explosion', mousePos);
+}
+function gameUpdatePost() {} // called after physics, even when paused
+function gameRender() {}     // called before objects are drawn
+function gameRenderPost()    // called after objects are drawn
+{
+    drawTextScreen('Hello World!', mainCanvasSize.scale(.5), 80);
+}
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+</script>
+```
+
+Those five functions are the whole shape of a LittleJS game. From here, the [Breakout tutorial](https://github.com/KilledByAPixel/LittleJS/tree/main/examples/breakoutTutorial) builds a complete game in about 30 minutes.
+
+### Start a project
+
+Pick the setup that suits you. All three use the same engine and the same API.
+
+**With Vite**, for a dev server that reloads on save and a build that leaves out the plugins you do not use:
+
+```
+npx degit KilledByAPixel/LittleJS/examples/vite-starter my-game
+cd my-game
+npm install
+npm run dev
+```
+
+**With npm**, in a project of your own. TypeScript types are included.
+
+```
+npm install littlejsengine
+```
+
+```javascript
+import * as LJS from 'littlejsengine';
+```
+
+**With a script tag and no build step**: clone this repository, or use Download ZIP on its GitHub page, and copy [examples/starter](https://github.com/KilledByAPixel/LittleJS/tree/main/examples/starter). Every engine name is a global, as in the example above. The examples are only in the repository; the npm package and the release zip hold the engine alone.
+
+A page that loads images or modules needs a local web server, since browsers block them from a file on disk. Vite brings its own. For the repository, serve its root, for example with `npx http-server`, then open `http://localhost:8080/examples/starter/`. The [FAQ](https://github.com/KilledByAPixel/LittleJS/blob/main/FAQ.md#do-i-need-a-local-server-to-run-littlejs-games-and-how-do-i-set-one-up) has more.
+
+## Learn
+
+- [Example Browser](https://killedbyapixel.github.io/LittleJS/examples) - The best place to learn: 100+ short examples, each with its code, how it works and edits to try
+- [Tutorial: Breakout](https://github.com/KilledByAPixel/LittleJS/tree/main/examples/breakoutTutorial) - Learn how to make a simple game from scratch
+- [Tutorial: Make a ski game](https://eoinmcgrath.com/little-ski/tutorial.html) - A tutorial by eoinmcg that shows how to make a pixel art style game
+- [Making Awesome Games With LittleJS](https://youtu.be/_dXKU0WgAj8) - A short talk about LittleJS with some tips on how to use it
+- [LittleJS FAQ](https://github.com/KilledByAPixel/LittleJS/blob/main/FAQ.md) - Answers to common questions, from setup to publishing
+
+## Documentation
+
+- [API Documentation](https://killedbyapixel.github.io/LittleJS/docs) - Every class, function and setting, searchable
+- [Quick Reference Sheet](https://github.com/KilledByAPixel/LittleJS/blob/main/REFERENCE.md) - The whole API in one file, made to be read by people and by AI coding tools
+- [Making Your Own Level Editor](https://github.com/KilledByAPixel/LittleJS/blob/main/EDITOR.md) - How to turn the built in 2D and 3D level editors into an editor for your own game
+- [Changelog](https://github.com/KilledByAPixel/LittleJS/blob/main/CHANGELOG.md) - What changed in each release
+- [JS13k Branch](https://github.com/KilledByAPixel/LittleJS/tree/js13k) - A special branch for size coding events that builds to a 7KB zip
+
+## Examples
+
+LittleJS comes with many examples, both for learning and to use as starter projects for new games.
+
+- [Example Browser](https://killedbyapixel.github.io/LittleJS/examples/) - 100+ single-file examples of individual engine features and small games, with editable source
+- [LittleJS Arcade](https://killedbyapixel.github.io/LittleJSArcade/) - Over 50 example games you can use as starter projects
+- [Breakout](https://killedbyapixel.github.io/LittleJS/examples/breakout/) - Block breaking game with post-processing effects
+- [Puzzle Game](https://killedbyapixel.github.io/LittleJS/examples/puzzle/) - Match 3 puzzle game with HD rendering and high score tracking
+- [Platformer](https://killedbyapixel.github.io/LittleJS/examples/platformer/) - Platformer/shooter demo that loads level data, with the level editor set up for it
+- [Box2D Demo](https://killedbyapixel.github.io/LittleJS/examples/box2d/) - Box2D plugin demonstration and testbed
+- [3D Example](https://killedbyapixel.github.io/LittleJS/examples/3d/) - The 3D plugin in one scene: terrain, shadows, lights, sprites, particles and bloom
+- [3D Racing Game](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Racing%20Game) - Built-in 3D plugin: terrain, shadows and a chase camera in one short file
+- [Three.js Platformer](https://killedbyapixel.github.io/LittleJS/examples/threejs/) - 3D platformer with LittleJS gameplay and Three.js rendering
+- [Particle System Designer](https://killedbyapixel.github.io/LittleJS/examples/particles/) - Particle system editor and visualizer
+
+## Builds
+
+| File | Mode | Module | Use case |
+|------|------|--------|----------|
+| [littlejs.js](https://github.com/KilledByAPixel/LittleJS/blob/main/dist/littlejs.js) | Debug | No | Debug mode with asserts |
+| [littlejs.release.js](https://github.com/KilledByAPixel/LittleJS/blob/main/dist/littlejs.release.js) | Release | No | Optimized for release |
+| [littlejs.min.js](https://github.com/KilledByAPixel/LittleJS/blob/main/dist/littlejs.min.js) | Release | No | Optimized for release and minified |
+| [littlejs.esm.js](https://github.com/KilledByAPixel/LittleJS/blob/main/dist/littlejs.esm.js) | Debug | ESM | Debug mode with asserts |
+| [littlejs.esm.min.js](https://github.com/KilledByAPixel/LittleJS/blob/main/dist/littlejs.esm.min.js) | Release | ESM | Optimized for release and minified |
+
+Develop with a debug build: it has the asserts that catch mistakes, the debug overlay (press Esc) and the level editors. Ship a release build, which leaves all of that out. TypeScript definitions are in `littlejs.d.ts`, which the npm package sets up on its own.
+
+Every build includes the plugins. littlejs.min.js is about 165 KB gzipped, and the 3D plugins are a large part of that. A bundler like Vite leaves out the plugins a game does not use, so a small 2D game comes to about 29 KB gzipped, and a lit 3D scene to about 72 KB.
+
+## Games Made With LittleJS
+
+Here are a few of the many amazing games created with LittleJS...
+
+- [Space Huggers](https://www.newgrounds.com/portal/view/819609) - Roguelike platformer shoot-em-up game with procedural levels. by [KilledByAPixel](https://frankforce.com/)
+- [Black Cat Squadron](https://js13kgames.com/games/black-cat-squadron) - One button shooter based on a WW2 Navy squadron. JS13k 5th place! by [repsej](https://github.com/repsej)
+- [L1ttl3 Paws](https://github.com/KilledByAPixel/JS13K2025) - Cat glider with procedural art and levels for JS13K! by [KilledByAPixel](https://frankforce.com/)
+- [KleptoKitty](https://js13kgames.com/games/kleptokitty) - Cat themed heist puzzle. JS13K 22nd place. by [eoinmcg](https://eoinmcg.itch.io/)
+- [The Way of the Dodo](https://js13kgames.com/2024/games/the-way-of-the-dodo) - Single button platformer. JS13k 5th place! by [repsej](https://github.com/repsej)
+- [Undergrowth](https://undergrowth.squidband.uk/) - An interactive music videogame for the band Squid. by [KilledByAPixel](https://frankforce.com/)
+- [204Snake!](https://www.newgrounds.com/portal/view/960100) - A puzzle game that combines 2048 with snake. LittleJS Jam 1st place! by [Sodoj](https://sodoj.itch.io/) and [Shai-P](https://shai-p.itch.io/)
+- [GATOR](https://www.newgrounds.com/portal/view/960757) - Retro platformer shooter game where you rescue animals. LittleJS Jam 2nd place! by [eoinmcg](https://eoinmcg.itch.io/)
+- [A Hedgehog's Search](https://willsm1111.itch.io/a-hedgehogs-search) - Adventure game starring a hedgehog. LittleJS Jam 3rd place! by [willsm1111](https://willsm1111.itch.io/)
+- [Wendol Village](https://js13kgames.com/2024/games/wendol-village) - Warcraft inspired RTS game. by [sanojian](https://github.com/sanojian)
+- [Dead Again](https://js13kgames.com/entries/dead-again) - Top down survival horror. by [sanojian & repsej](https://github.com/sanojian/js13k_2022)
+- [Isletopia](https://store.steampowered.com/app/1861260/Isletopia) - Relaxing strategy game of greenifying barren islands. by [Gamex Studio](https://x.com/gamesgamex)
+- [Tetrimals](https://nixn.itch.io/tetrimals) - A puzzle game mixing Tetris with animals. by [nixn](https://nixn.itch.io/)
+- [Bug&Bee](https://itch.io/jam/littlejs-game-jam-2025/results) - Low fi shoot em up with co-op gameplay. LittleJS Jam 1st place! by [eoinmcg](https://eoinmcg.itch.io/)
+- [Little Platformer](https://psemo.itch.io/little-platformer) - Platformer with many mechanics. LittleJS Jam 2nd place! by [PSEMO](https://psemo.itch.io/), [Solita666](https://itch.io/profile/solita666), [GabrielRG](https://gabrielrg.itch.io/), [Nate](https://natesassoon.itch.io/)
+- [Alien Escape Pinball](https://focaccai.itch.io/alien-pinball) - Pinball game with physics and aliens. by [Focaccai](https://www.focaccai.com/)
+- [LittleJS Jam 2024 Results](https://itch.io/jam/littlejs-jam-2024/results) - All the games from the first LittleJS Game Jam.
+- [LittleJS Jam 2025 Results](https://itch.io/jam/littlejs-game-jam-2025/results) - All the games from the second LittleJS Game Jam.
+
+![A collage of screenshots from games made with LittleJS](examples/games.jpg)
+
+*A sample of games built with LittleJS.*
+
+## Community
+
+- [Discord](https://discord.gg/zb7hcGkyZe) - Ask questions, show what you are making, and hear about the next LittleJS Game Jam
+- [Issues](https://github.com/KilledByAPixel/LittleJS/issues) - Report a bug or ask for a feature
+- Made a game with LittleJS? Share it on the Discord, it may end up in the list above
+
+LittleJS is [MIT licensed](https://github.com/KilledByAPixel/LittleJS/blob/main/LICENSE), free for any use.
+
+![LittleJS pixel-art favicon](examples/favicon.png)
+
+[npm]: https://img.shields.io/npm/v/littlejsengine
+[npm-url]: https://www.npmjs.com/package/littlejsengine
+[npm-downloads]: https://img.shields.io/npm/dw/littlejsengine
+[npmtrends-url]: https://www.npmtrends.com/littlejsengine
+[deepscan]: https://deepscan.io/api/teams/22950/projects/26229/branches/831487/badge/grade.svg
+[deepscan-url]: https://deepscan.io/dashboard#view=project&tid=22950&pid=26229&bid=831487
+[discord]: https://img.shields.io/discord/939926111469568050
+[discord-url]: https://discord.gg/zb7hcGkyZe
+[license]: https://img.shields.io/github/license/KilledByAPixel/LittleJS
+[license-url]: https://github.com/KilledByAPixel/LittleJS/blob/main/LICENSE

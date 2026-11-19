@@ -1,0 +1,17 @@
+{
+  "name": "@tinyworld/mmo-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure TinyWorld MMO economy and multiplayer contracts derived from the economy guide and the World of ClaudeCraft architecture pass.",
+  "exports": {
+    ".": "./src/index.js",
+    "./economy": "./src/economy.js",
+    "./integration-plan": "./src/integration-plan.js",
+    "./multiplayer": "./src/multiplayer.js"
+  },
+  "scripts": {
+    "test": "node --test ../../tests/tinyworld-mmo-core.test.mjs"
+  },
+  "sideEffects": false
+}

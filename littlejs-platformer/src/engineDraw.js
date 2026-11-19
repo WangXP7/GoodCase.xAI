@@ -1,0 +1,2430 @@
+/**
+ * LittleJS Drawing System
+ * - Hybrid rendering with both Canvas2D and WebGL support
+ * - Optimized tile sheet sprite rendering using WebGL batching
+ * - Primitive drawing for polygons, ellipses, and lines
+ * - Tile-based rendering with TileInfo and TextureInfo classes
+ * - Text rendering with custom fonts and ImageFont support
+ * - Color and additive color blending for effects
+ * - Rotation, mirroring, and scaling transformations
+ * - Camera system with position, scale, and rotation
+ * - Multiple canvas support (main, WebGL, work canvases)
+ * - Gradient fills and outlined shapes
+ * - Image manipulation and color tinting
+ *
+ * Rendering Architecture:
+ * - glCanvas: WebGL canvas for accelerated sprite batch rendering
+ * - mainCanvas: Canvas2D overlay for text, UI, and custom drawing
+ * - All draw functions default to WebGL when enabled, can force Canvas2D with useWebGL parameter
+ *
+ * @namespace Draw
+ */
+
+'use strict';
+
+/** The primary 2D canvas visible to the user
+ *  @type {HTMLCanvasElement}
+ *  @memberof Draw */
+let mainCanvas;
+
+/** 2d context for mainCanvas
+ *  - Scaled by canvasPixelRatio, so drawing to it is in css pixels
+ *  - getImageData and putImageData ignore that scale and work in backing store
+ *    pixels, so use workReadCanvas to read pixels back instead of this
+ *  @type {CanvasRenderingContext2D}
+ *  @memberof Draw */
+let mainContext;
+
+/** The default 2d context to use for drawing, usually mainContext
+ *  @type {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D}
+ *  @memberof Draw */
+let drawContext;
+
+/** Offscreen canvas that can be used for image processing
+ *  @type {OffscreenCanvas}
+ *  @memberof Draw */
+let workCanvas;
+
+/** Offscreen canvas that can be used for image processing
+ *  @type {OffscreenCanvasRenderingContext2D}
+ *  @memberof Draw */
+let workContext;
+
+/** Offscreen canvas with willReadFrequently that can be used for image processing
+ *  @type {OffscreenCanvas}
+ *  @memberof Draw */
+let workReadCanvas;
+
+/** Offscreen canvas with willReadFrequently that can be used for image processing
+ *  @type {OffscreenCanvasRenderingContext2D}
+ *  @memberof Draw */
+let workReadContext;
+
+/** Extra canvas to composite behind the engine canvases when combining canvases
+ *  Set by plugins that render to their own canvas below the LittleJS canvases
+ *  @type {HTMLCanvasElement}
+ *  @memberof Draw */
+let backgroundCanvas;
+
+/** The size of the main canvas (and other secondary canvases) in css pixels
+ *  - This is the screen space coordinate system, matching mousePos
+ *  - With canvasPixelRatio set the backing store is larger than this
+ *  @type {Vector2}
+ *  @memberof Draw */
+let mainCanvasSize = vec2();
+
+/** Array containing texture info for batch rendering system
+ *  @type {Array<TextureInfo>}
+ *  @memberof Draw */
+let textureInfos = [];
+
+/** Keeps track of how many draw calls there were each frame for debugging
+ *  @type {number}
+ *  @memberof Draw */
+let drawCount = 0;
+
+/** Keeps track of how many primitives were drawn each frame for debugging
+ *  A single draw call can render many primitives (e.g. a WebGL sprite batch).
+ *  @type {number}
+ *  @memberof Draw */
+let primitiveCount = 0;
+
+// internal predicates for tint short-circuiting in canvas2D draw paths
+// isWhite ignores alpha because alpha is applied via globalAlpha, not multiply
+// isBlack includes alpha so additive colors that only contribute alpha are not skipped
+/** @ignore
+ *  @param {Color} c */
+function isWhite(c) { return c.r >= 1 && c.g >= 1 && c.b >= 1; }
+/** @ignore
+ *  @param {Color} c */
+function isBlack(c) { return c.r <= 0 && c.g <= 0 && c.b <= 0 && c.a <= 0; }
+
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Create a tile info object using a grid based system
+ * - This can take vecs or floats for easier use and conversion
+ * - If an index is passed in, the tile size and index will determine the position
+ * @param {Vector2|number} [index] - Index of the tile in 1d or 2d form
+ * @param {Vector2|number} [size] - Size of tile in pixels
+ * @param {TextureInfo|number} [texture] - Texture index or info to use
+ * @param {number} [padding] - How many pixels padding around tiles
+ * @param {number} [bleed] - How many pixels smaller to draw tiles
+ * @return {TileInfo}
+ * @example
+ * tile(2)                       // a tile at index 2 using the default tile size of 16
+ * tile(5, 8)                    // a tile at index 5 using a tile size of 8
+ * tile(1, 16, 3)                // a tile at index 1 of size 16 on texture 3
+ * tile(vec2(4,8), vec2(30,10))  // a tile at index (4,8) with a size of (30,10)
+ * @memberof Draw */
+function tile(index=0, size=tileDefaultSize, texture=0, padding=tileDefaultPadding, bleed=tileDefaultBleed)
+{
+    ASSERT(isVector2(index) || typeof index === 'number', 'index must be a vec2 or number');
+    ASSERT(isVector2(size) || typeof size === 'number', 'size must be a vec2 or number');
+    ASSERT(isNumber(texture) || texture instanceof TextureInfo, 'texture must be a number or TextureInfo');
+    ASSERT(isNumber(padding), 'padding must be a number');
+
+    if (typeof size === 'number')
+    {
+        // if size is a number, make it a vector
+        ASSERT(size > 0, 'tile: size must be above 0', size);
+        size = new Vector2(size, size);
+    }
+
+    // create tile info object
+    const textureInfo = typeof texture === 'number' ?
+        textureInfos[texture] : texture;
+    if (!textureInfo?.size.x)
+    {
+        // no image: headless loads none and keeps the size; an image that failed to load, whose warning named it, gives
+        // a tile of no size, which draws nothing; a slot never given an image is a mistake a debug build points out
+        ASSERT(headlessMode || textureInfo instanceof TextureInfo,
+            'tile: no texture ' + texture + ', pass its image to engineInit and make tiles in gameInit or later');
+        return new TileInfo(new Vector2, headlessMode ? size.copy() : new Vector2, textureInfo, padding, bleed);
+    }
+
+    // get the position of the tile
+    const sizePaddedX = size.x + padding*2;
+    const sizePaddedY = size.y + padding*2;
+    let x, y;
+    if (typeof index === 'number')
+    {
+        // at least one, so the first tile of a texture no wider than it is its corner, not NaN
+        const cols = max(1, textureInfo.size.x / sizePaddedX |0);
+        x = index % cols;
+        y = index / cols |0;
+    }
+    else
+    {
+        x = index.x;
+        y = index.y;
+    }
+    const pos = new Vector2(x*sizePaddedX + padding, y*sizePaddedY + padding);
+    return new TileInfo(pos, size, textureInfo, padding, bleed);
+}
+
+/**
+ * Tile Info - Stores info about how to draw a tile
+ * @memberof Draw
+ */
+class TileInfo
+{
+    /** Create a tile info object
+     *  @param {Vector2} [pos=vec2()] - Top left corner of tile in pixels
+     *  @param {Vector2} [size] - Size of tile in pixels
+     *  @param {TextureInfo} [textureInfo] - Texture info to use
+     *  @param {number} [padding] - How many pixels padding around all sides of each tile (increases grid size, does not affect tile size)
+     *  @param {number} [bleed] - How many pixels smaller to shrink UVS of tiles (does not affect grid size, only UVs)
+     *  @param {number} [columns] - How many frames per row for frame(), 0 to keep frames on a single row
+     */
+    constructor(pos=vec2(), size=tileDefaultSize, textureInfo=textureInfos[0], padding=tileDefaultPadding, bleed=tileDefaultBleed, columns=0)
+    {
+        /** @property {Vector2} - Top left corner of tile in pixels */
+        this.pos = pos.copy();
+        /** @property {Vector2} - Size of tile in pixels */
+        this.size = size.copy();
+        /** @property {number} - How many pixels padding around tiles */
+        this.padding = padding;
+        /** @property {TextureInfo} - The texture info for this tile */
+        this.textureInfo = textureInfo;
+        /** @property {Array<TileInfo>|undefined} - A tile set's tiles, each wherever it was packed, as loadTiles makes
+         *  them: a tile layer given this tile info draws its tile n from tiles[n] and not from a grid on one sheet
+         *  @type {Array<TileInfo>|undefined} */
+        this.tiles = undefined;
+        /** @property {number} - Shrinks tile by this many pixels to prevent neighbors bleeding */
+        this.bleed = bleed;
+        /** @property {number} - How many frames per row for frame(), 0 to keep frames on a single row */
+        this.columns = columns;
+    }
+
+    /** Returns a copy of this tile offset by a vector
+    *  @param {Vector2} offset - Offset to apply in pixels
+    *  @return {TileInfo}
+    */
+    offset(offset)
+    { return new TileInfo(this.pos.add(offset), this.size, this.textureInfo, this.padding, this.bleed, this.columns); }
+
+    /** Returns a copy of this tile offset by a number of animation frames
+    *  - Frames step along the row and carry on at the start of the next row of the texture, counted as tile() counts,
+    *    for a tile on the texture's grid as tile() makes them
+    *  - With columns set they wrap down by that many frames from this one instead
+    *  @param {number} frame - Offset to apply in animation frames
+    *  @return {TileInfo}
+    */
+    frame(frame)
+    {
+        ASSERT(typeof frame === 'number', 'TileInfo.frame: frame must be a number', frame);
+        const w = this.size.x + this.padding*2;
+        const h = this.size.y + this.padding*2;
+        let x = (this.columns ? frame % this.columns : frame) * w;
+        let y = (this.columns ? frame / this.columns | 0 : 0) * h;
+        const across = this.textureInfo?.size.x / w | 0; // tiles across the texture, as tile() counts them
+        const onGrid = (this.pos.x - this.padding) % w === 0; // where tile() puts one, not a packed sheet's
+        const column = this.pos.x / w | 0, count = column + frame;
+        if (!this.columns && onGrid && column < across && count >= across)
+        {
+            // past the last column tile() counts: on along the texture's grid, rows down, as tile() counts its index,
+            // even where a last column whose right padding was trimmed would still fit
+            x = (count % across - column) * w;
+            y = (count / across | 0) * h;
+        }
+        ASSERT(!this.textureInfo || this.pos.x + x + this.size.x <= this.textureInfo.size.x, 'frame extends beyond texture width!');
+        ASSERT(!this.textureInfo || this.pos.y + y + this.size.y <= this.textureInfo.size.y, 'frame extends beyond texture height!');
+        return this.offset(new Vector2(x, y));
+    }
+
+    /** Set how many frames per row this tile uses, so frame() can wrap
+    *  @param {number} [columns] - Frames per row, 0 to keep frames on a single row
+    *  @return {TileInfo}
+    */
+    setColumns(columns=0)
+    {
+        ASSERT(isNumber(columns) && columns >= 0, 'columns must be a number >= 0');
+        this.columns = columns;
+        return this;
+    }
+
+    /**
+     * Returns a tile info for an index using this tile's size, texture and padding as reference
+     * - the index counts from the texture's origin like tile(), for a sprite packed in a texture sheet use frame()
+     * @param {Vector2|number} [index=0]
+     * @return {TileInfo}
+     */
+    index(index)
+    { return tile(index, this.size, this.textureInfo, this.padding, this.bleed).setColumns(this.columns); }
+
+    /**
+     * Set this tile to use a full image in a texture info
+     * @param {TextureInfo} [textureInfo]
+     * @return {TileInfo}
+     */
+    setFullImage(textureInfo=this.textureInfo)
+    {
+        this.textureInfo = textureInfo;
+        this.pos = new Vector2;
+        this.size = textureInfo.size.copy();
+        this.bleed = this.padding = this.columns = 0;
+        return this;
+    }
+}
+
+/**
+ * Texture Info - Stores info about each texture
+ * @memberof Draw
+ */
+class TextureInfo
+{
+    /**
+     * Create a TextureInfo, called automatically by the engine
+     * @param {HTMLImageElement|HTMLCanvasElement|OffscreenCanvas|ImageBitmap} image
+     * @param {boolean} [useWebGL] - Should use WebGL if available?
+     * @param {boolean|Array<number>} [wrap] - Should the texture wrap (REPEAT) or clamp (CLAMP_TO_EDGE)? Or the WebGL
+     *   modes across and down, like [gl.CLAMP_TO_EDGE, gl.MIRRORED_REPEAT], as a glTF sampler gives them
+     * @param {boolean} [pixelated] - Hard edged or smooth for this texture alone, undefined follows tilesPixelated
+     */
+    constructor(image, useWebGL=true, wrap=false, pixelated)
+    {
+        /** @property {HTMLImageElement|HTMLCanvasElement|OffscreenCanvas|ImageBitmap} - image source */
+        this.image = image;
+        /** @property {Vector2} - size of the image */
+        this.size = image ? vec2(image.width, image.height) : vec2();
+        /** @property {Vector2} - inverse of the size, cached for rendering */
+        this.sizeInverse = image ? vec2(1/image.width, 1/image.height) : vec2();
+        /** @property {WebGLTexture|undefined} - WebGL texture
+         *  @type {WebGLTexture|undefined} */
+        this.glTexture = undefined;
+        /** @property {boolean|Array<number>} - true for REPEAT wrap mode, false for CLAMP_TO_EDGE, or the WebGL modes
+         *  across and down
+         *  @type {boolean|Array<number>} */
+        this.wrap = wrap;
+        /** @property {boolean|undefined} - Hard edged or smooth for this texture alone, a soft glow in a pixel art
+         *  game or pixel art in a smooth one; undefined follows tilesPixelated
+         *  @type {boolean|undefined} */
+        this.pixelated = pixelated;
+        useWebGL && this.createWebGLTexture();
+    }
+
+    /** Creates the WebGL texture, updates if already created */
+    createWebGLTexture()
+    {
+        const image = this.image;
+        if (image?.width) // the image may have been resized since
+        {
+            this.size = vec2(image.width, image.height);
+            this.sizeInverse = vec2(1/image.width, 1/image.height);
+        }
+        glRegisterTextureInfo(this);
+    }
+
+    /** Put new pixels into part of the texture without uploading all of it, for a texture that changes as the game
+     *  runs, like an atlas decoded every frame where only a few tiles changed; what was batched with the old pixels
+     *  is drawn first
+     *  - x and y are image pixels from the top left, as a tile's pos is, and the rectangle must be inside the image
+     *  - With WebGL only the texture changes, so a lost context brings back the image as it was: keep the image up to
+     *    date too, or put the pixels in again from a plugin's glContextRestored
+     *  - Without WebGL the image is what is drawn, so it must be a canvas, and the pixels are written into it
+     *  - Call it outside the 3D pass, which may still hold draws that read the old pixels
+     *  @param {Uint8Array|Uint8ClampedArray|ImageData|HTMLImageElement|HTMLCanvasElement|OffscreenCanvas|ImageBitmap} pixels -
+     *    RGBA bytes, width * height * 4 of them, or an image put in at its own size
+     *  @param {number} [x]
+     *  @param {number} [y]
+     *  @param {number} [width] - Width of a byte array's rectangle, the whole image by default
+     *  @param {number} [height] - Height of a byte array's rectangle, the whole image by default */
+    updateData(pixels, x=0, y=0, width=this.size.x, height=this.size.y)
+    {
+        const isBytes = pixels instanceof Uint8Array || pixels instanceof Uint8ClampedArray;
+        if (!isBytes) // an image goes in at its own size, not the size it is laid out at
+        {
+            const image = /** @type {HTMLImageElement} */ (pixels); // naturalWidth is an img's own, undefined on the rest
+            width = image.naturalWidth || pixels.width, height = image.naturalHeight || pixels.height;
+        }
+        ASSERT(isBytes || !ArrayBuffer.isView(pixels) && width > 0 && height > 0,
+            'updateData needs RGBA bytes, a Uint8Array or Uint8ClampedArray, or an image');
+        ASSERT(!isBytes || pixels.length >= width * height * 4, 'updateData needs width * height * 4 bytes');
+        ASSERT(x >= 0 && y >= 0 && x + width <= this.size.x && y + height <= this.size.y,
+            'updateData rectangle must be inside the texture');
+        if (headlessMode) return;
+        if (glEnable && this.glTexture)
+            return glSetTextureSubData(this.glTexture, pixels, x, y, width, height);
+
+        // without WebGL the canvas itself is drawn
+        const image = this.image, context = image && 'getContext' in image ? image.getContext('2d') : undefined;
+        ASSERT(!!context, 'updateData without WebGL needs a canvas image');
+        if (!context) return;
+        if (isBytes || pixels instanceof ImageData)
+        {
+            const data = isBytes ? new ImageData(new Uint8ClampedArray(pixels.buffer, pixels.byteOffset,
+                width * height * 4), width, height) : pixels;
+            context.putImageData(data, x, y);
+        }
+        else
+        {
+            context.clearRect(x, y, width, height); // replaced, not drawn over
+            context.drawImage(pixels, x, y);
+        }
+    }
+
+    /** Destroys the WebGL texture */
+    destroyWebGLTexture() { glUnregisterTextureInfo(this); }
+
+    /** Check if the texture is webgl enabled
+     * @return {boolean} */
+    hasWebGL() { return !!this.glTexture; }
+
+    /** Set the wrap mode for this texture
+     *  @param {boolean|Array<number>} [wrap] - true for REPEAT, false for CLAMP_TO_EDGE, or the WebGL modes across
+     *    and down */
+    setWrap(wrap=true)
+    {
+        this.wrap = wrap;
+        glSetTextureWrap(this.glTexture, wrap);
+    }
+
+    /** Make this texture hard edged or smooth on its own, whatever tilesPixelated says for the rest; a change makes it
+     *  again from its image with the new filtering, since a smooth one is stored premultiplied with mipmaps, so
+     *  pixels put in with updateData are lost unless the image has them too, as after a lost context
+     *  @param {boolean} [pixelated] - undefined follows tilesPixelated again */
+    setPixelated(pixelated)
+    {
+        // the same setting keeps the texture as it is; undefined remakes it, to follow tilesPixelated as it is now
+        if (pixelated !== undefined && pixelated === this.pixelated) return;
+        this.pixelated = pixelated;
+        if (!this.glTexture) return;
+        this.destroyWebGLTexture();
+        this.createWebGLTexture();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * @callback SpriteAnimationEndCallback - Called once when a SpriteAnimation's play ends
+ * @return {void}
+ * @memberof Draw
+ */
+
+/**
+ * SpriteAnimation - Steps a tile through its frames over time: looping, once, or there and back
+ * - Driven by the engine time like a Timer, so it pauses with the game and needs no update call
+ * - Read tileInfo each frame for the frame to draw, from an object's update or before a drawTile
+ * - loop, play and pingPong each start over from the first frame; stop holds the current one
+ * - play(onEnd) calls onEnd once the play ends, on the first read after it, since there is no update to call it
+ * - Frames follow each other along the row and on into the next row of the sheet, as tileInfo.frame counts them
+ * - SpriteAnimator switches between a character's animations by name
+ * @example
+ * const walk = new SpriteAnimation(tile(0, 16), 4, .1); // four frames, a tenth of a second each
+ * const attack = new SpriteAnimation(tile(4, 16), 3, .05).play(); // once, then holds the last frame
+ * // in update: this.tileInfo = (attack.isDone ? walk : attack).tileInfo;
+ * @memberof Draw
+ */
+class SpriteAnimation
+{
+    /** Create an animation over a run of frames, looping from the start
+     *  @param {TileInfo} tileInfo - The first frame
+     *  @param {number} frameCount - How many frames, one or more
+     *  @param {number} [frameTime] - Seconds each frame shows for */
+    constructor(tileInfo, frameCount, frameTime=.1)
+    {
+        ASSERT(tileInfo instanceof TileInfo, 'the first frame must be a TileInfo');
+        ASSERT(frameCount >= 1 && frameTime > 0, 'an animation needs at least one frame and a positive frame time');
+        /** @property {TileInfo} - The first frame, the others follow it as tileInfo.frame counts them */
+        this.firstTile = tileInfo;
+        /** @property {number} - How many frames */
+        this.frameCount = frameCount;
+        /** @property {number} - Seconds each frame shows for */
+        this.frameTime = frameTime;
+        /** @property {number} - Rate multiplier, 2 plays twice as fast; set it before starting */
+        this.speed = 1;
+        /** @property {'loop'|'once'|'pingPong'} - How it runs, set by loop, play and pingPong
+         *  @type {'loop'|'once'|'pingPong'} */
+        this.mode = 'loop';
+        /** @property {number} - Engine time it started at */
+        this.startTime = time;
+        /** @property {number|undefined} - The frame held by stop, undefined while running
+         *  @type {number|undefined} */
+        this.heldFrame = undefined;
+        /** @property {SpriteAnimationEndCallback|undefined} - Called once when a play ends, on the first read after it
+         *  @type {SpriteAnimationEndCallback|undefined} */
+        this.onEnd = undefined;
+    }
+
+    /** Start over from the first frame and repeat forever
+     *  @return {SpriteAnimation} */
+    loop() { return this.restart('loop'); }
+
+    /** Start over from the first frame, run through once and hold the last frame, last to first at a negative speed
+     *  @param {function():void} [onEnd] - Called once when it ends, on the first read of it after that
+     *  @return {SpriteAnimation} */
+    play(onEnd)
+    {
+        this.restart('once');
+        this.onEnd = onEnd;
+        return this;
+    }
+
+    /** Start over from the first frame and run there and back forever
+     *  @return {SpriteAnimation} */
+    pingPong() { return this.restart('pingPong'); }
+
+    /** Hold the current frame
+     *  @return {SpriteAnimation} */
+    stop() { this.heldFrame = this.frame; return this; }
+
+    /** Start over from the first frame in a mode, with no end callback
+     *  @param {'loop'|'once'|'pingPong'} [mode] - The current mode when left out
+     *  @return {SpriteAnimation} */
+    restart(mode=this.mode)
+    {
+        this.mode = mode;
+        this.startTime = time;
+        this.heldFrame = undefined;
+        this.onEnd = undefined;
+        return this;
+    }
+
+    /** How many frames have gone by since the start, fractional
+     *  @return {number} */
+    get elapsedFrames() { return (time - this.startTime) * this.speed / this.frameTime; }
+
+    /** The frame showing now, 0 to frameCount-1
+     *  @return {number} */
+    get frame()
+    {
+        this.isDone; // a read after a play ends calls onEnd, which may start it over
+        if (this.heldFrame !== undefined)
+            return this.heldFrame;
+        const n = this.frameCount, f = floor(this.elapsedFrames);
+        if (this.mode == 'once') // backward it counts down from the last frame, showing it from the start
+            return clamp(this.speed < 0 ? n - 1 + ceil(this.elapsedFrames) : f, 0, n - 1);
+        if (this.mode == 'loop')
+            return mod(f, n);
+        const period = max(2 * n - 2, 1), k = mod(f, period); // there and back, the ends once each
+        return k < n ? k : period - k;
+    }
+
+    /** The tile of the frame showing now
+     *  @return {TileInfo} */
+    get tileInfo() { return this.firstTile.frame(this.frame); }
+
+    /** True once a play has shown its last frame for its time, the first read after that calls onEnd
+     *  @return {boolean} */
+    get isDone()
+    {
+        const done = this.mode == 'once' && this.heldFrame === undefined && abs(this.elapsedFrames) >= this.frameCount;
+        if (done && this.onEnd)
+        {
+            const onEnd = this.onEnd;
+            this.onEnd = undefined; // once, and it can start a new play with a callback of its own
+            onEnd();
+        }
+        return done;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * SpriteAnimator - A character's animations by name, like idle, walk and attack, and the one showing now
+ * - Each clip is a SpriteAnimation and keeps its own mode, loop, play or pingPong
+ * - set starts a clip over only when it changes or a play of it has ended, so it can be called every update
+ * - Read tileInfo each frame for the frame to draw, as with a SpriteAnimation
+ * @example
+ * const hero = new SpriteAnimator({
+ *     idle:   new SpriteAnimation(tile(0, 16), 2, .4),
+ *     walk:   new SpriteAnimation(tile(2, 16), 4, .1),
+ *     attack: new SpriteAnimation(tile(6, 16), 3, .05).play(),
+ * });
+ * hero.set('attack', ()=> hero.set('idle')); // back to idle when the attack ends
+ * // in update: this.tileInfo = hero.tileInfo;
+ * @memberof Draw
+ */
+class SpriteAnimator
+{
+    /** Create an animator from its clips, showing the first one
+     *  @param {Object<string, SpriteAnimation>} clips - The clips by name */
+    constructor(clips)
+    {
+        const names = Object.keys(clips);
+        ASSERT(names.length > 0, 'an animator needs at least one clip');
+        /** @property {Object<string, SpriteAnimation>} - The clips by name */
+        this.clips = clips;
+        /** @property {string} - The name of the clip showing now */
+        this.name = names[0];
+    }
+
+    /** Show a clip, starting it over in its own mode unless it is showing and has not ended
+     *  @param {string} name - The clip's name
+     *  @param {function():void} [onEnd] - Called once when a play clip ends, as with SpriteAnimation.play
+     *  @return {SpriteAnimator} */
+    set(name, onEnd)
+    {
+        ASSERT(this.clips[name], 'no clip named ' + name);
+        if (name == this.name && !this.clip.isDone)
+            return this;
+        this.name = name;
+        this.clip.restart();
+        this.clip.onEnd = onEnd;
+        return this;
+    }
+
+    /** The clip showing now
+     *  @return {SpriteAnimation} */
+    get clip() { return this.clips[this.name]; }
+
+    /** The clip showing now, once a clip that has ended has called its onEnd: the callback may switch clips, and a
+     *  read gives the clip it switched to, not the one that ended
+     *  @return {SpriteAnimation}
+     *  @ignore */
+    get settledClip()
+    {
+        // each clip's own isDone calls its onEnd once; a few switches in a row at most
+        for (let i = 4, clip; i-- && clip !== this.clip;)
+            (clip = this.clip).isDone;
+        return this.clip;
+    }
+
+    /** The tile of the frame showing now
+     *  @return {TileInfo} */
+    get tileInfo() { return this.settledClip.tileInfo; }
+
+    /** The frame of the clip showing now
+     *  @return {number} */
+    get frame() { return this.settledClip.frame; }
+
+    /** True once the clip showing now is a play that has ended
+     *  @return {boolean} */
+    get isDone() { return this.settledClip.isDone; }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/** A value a Shader's snippet reads as a uniform: a number, a boolean, a Vector2, a Vector3, a Color, a Matrix4, or a
+ *  list of 2, 3, 4, 9 or 16 numbers
+ *  @typedef {number|boolean|Vector2|Color|ArrayLike<number>|{x: number, y: number, z: number}|{m: Float32Array}} ShaderUniform
+ *  @memberof Draw */
+
+/**
+ * Shader - A custom fragment shader for objects and draws, 2D or 3D
+ * - Write a mainImage function in the post processing style, the renderer wraps it with its own program
+ * - It gives the surface color, then the object's color and additive color apply in 2D, and the lighting,
+ *   shadows and fog in 3D; set emissive to 1 on a 3D object for the snippet's color to be final
+ * - Set it as obj.shader, or use setShader for 2D draws and render3D.shader for 3D draws
+ * - Draws that share a Shader share a batch; with no Shader set nothing changes
+ * - In 2D it shades textured draws, untextured ones like drawRect draw as they are
+ * - A render target, like a tile layer drawn in WebGL, holds premultiplied color, and so does every image when
+ *   tilesPixelated is false; there iChannel0 reads premultiplied texels and the snippet's color is taken as
+ *   premultiplied too. premultipliedTexture is true there, so a snippet that changes the alpha, or makes a see
+ *   through color of its own, scales the rgb with it: `if (premultipliedTexture) c.rgb *= k;`
+ * - Compiled once per renderer by the first draw that needs it; a bad snippet throws with the GLSL log in debug
+ * - Make each Shader once, at init, and share it; every one made keeps its programs until dispose()
+ * - Names in both renderers: iChannel0 the texture, iTime, iResolution, premultipliedTexture, and localUV, 0 to 1
+ *   across the sprite or the mesh's own uv
+ * - Names in 3D only: worldPos, worldNormal, cameraPos, sunDirection, sunColor, ambientColor, ambientGroundColor,
+ *   lightCount, lights[i], lightColors[i] and shadow(), and viewProjection, the camera's matrix from the world to
+ *   the screen, for a snippet that sets its own depth: vec4 c = viewProjection * vec4(p, 1.); gl_FragDepth =
+ *   c.z / c.w * .5 + .5 puts it at world point p; only on the screen, the shadow map and sceneDepth draw the mesh
+ *   where it is
+ * - In 3D the snippet may also define void mainNormal(inout vec3 n), given the normal facing the camera after the
+ *   normal map, in world space, to bend it per pixel for waves or ripples; the lighting, specular, reflection and
+ *   fog then all use it, as they use a normal map
+ * - In 3D the shadow map is drawn without the Shader's fragment code, cut only by the texture's alpha, so a snippet
+ *   that removes parts of a surface still shadows with the whole of it
+ * - In 3D a second snippet, the vertex code, may define void mainVertex(inout vec3 pos, inout vec3 normal), given
+ *   each vertex's place and normal in world space, an instance's own in a batch, to move it for wind, waves or a
+ *   wobble; it runs in the shadow map and the camera's depth too, so a moved vertex casts and hides where it is
+ *   drawn. Its names: iTime, iResolution, cameraPos, iChannel0 (texture or texelFetch in the vertex stage), localUV,
+ *   modelMatrix, instanceData (the four numbers an InstancedMesh3D's setDataAt gives, the fragment code may read it
+ *   too) and vertexColor, the vertex color times the tint, which it may change. The object's bounds are not
+ *   moved with it, so one that moves vertices far needs room to be culled by, like a bigger radius
+ * - A Shader of vertex code alone, new Shader('', vertexCode), keeps the 3D plugin's own look; in 2D a Shader's
+ *   vertex code is not used
+ * - Values of the game's own, uniforms, are given by name when it is made and read by name in the snippets, which
+ *   need not declare them: new Shader(code, '', {glow: 1, tint: RED}), then shader.setUniform('glow', 2) as often as
+ *   needed, with no recompile; each is declared in the snippets that use it, so one may share a name with an input
+ *   of the engine's in the other stage, and is sent to a program only when it changed; a name the engine's shader
+ *   uses already, like tint or lightColor, fails to compile with the GLSL error naming it; a matrix list is column
+ *   by column; in 3D set a value outside the 3D pass, it holds for the frame
+ * @example
+ * const fade = new Shader(`
+ * void mainImage(out vec4 c, vec2 uv)
+ * {
+ *     c = texture(iChannel0, uv);
+ *     float fade = .5 + .5*sin(iTime);
+ *     c.a *= fade;
+ *     if (premultipliedTexture) c.rgb *= fade; // a tile layer, or any image with tilesPixelated false
+ * }`);
+ * obj.shader = fade;
+ * @memberof Draw
+ */
+class Shader
+{
+    /** Create a shader from a fragment snippet that defines void mainImage(out vec4 c, vec2 uv), and in 3D a vertex
+     *  snippet that defines void mainVertex(inout vec3 pos, inout vec3 normal)
+     *  @param {string} [fragmentCode] - Left out or empty with vertex code, the 3D plugin's own look
+     *  @param {string} [vertexCode] - 3D only
+     *  @param {Object<string, ShaderUniform>} [uniforms] - Values the snippets read by name, declared for them: a
+     *    number is a float, a boolean a bool, a Vector2 a vec2, a Vector3 a vec3, a Color a vec4, and a list of 2, 3,
+     *    4, 9 or 16 numbers, or a Matrix4, a vec2, vec3, vec4, mat3 or mat4; change one with setUniform */
+    constructor(fragmentCode='', vertexCode='', uniforms={})
+    {
+        ASSERT(isStringLike(fragmentCode) && isStringLike(vertexCode), 'a Shader takes its snippets as strings');
+        ASSERT(String(fragmentCode).includes('mainImage') || !fragmentCode && String(vertexCode).includes('mainVertex'),
+            'a Shader needs fragment code that defines mainImage, or vertex code alone');
+        ASSERT(!vertexCode || String(vertexCode).includes('mainVertex'), 'a Shader\'s vertex code defines mainVertex');
+        /** @property {string} - The mainImage snippet, empty for a 3D Shader of vertex code alone */
+        this.fragmentCode = String(fragmentCode);
+        /** @property {string} - The mainVertex snippet, 3D only, empty for none */
+        this.vertexCode = String(vertexCode);
+        /** @property {WebGLProgram|undefined} - The 2D program, compiled by the first draw that needs it, read only
+         *  @type {WebGLProgram|undefined} */
+        this.program = undefined;
+        /** @property {WebGLProgram|undefined} - The 3D program, compiled by the 3D plugin the same way, read only
+         *  @type {WebGLProgram|undefined} */
+        this.program3D = undefined;
+        /** @property {WebGLProgram|undefined} - The 3D depth program a Shader with vertex code draws the shadow map
+         *  and the camera's depth with, so a vertex it moves casts and hides where it is drawn, read only
+         *  @type {WebGLProgram|undefined} */
+        this.shadowProgram3D = undefined;
+        /** @property {boolean} - In 2D, write what mainImage gives as it is, with the draw's alpha, leaving out the
+         *  draw's color and additive color, for data rather than a picture, as the light system's normal pass does;
+         *  its output is taken as straight color, not premultiplied, whatever the texture; set it before the shader
+         *  first draws, its program is built then */
+        this.noTint = false;
+        // each uniform's GLSL type, fixed by its first value, and its value as the numbers sent, which setUniform
+        // changes and the version counts, so a program is sent them only when they changed since it last was
+        /** @type {Object<string, string>} */
+        this.uniformTypes = {};
+        /** @type {Object<string, number|Float32Array>} */
+        this.uniformValues = {};
+        this.uniformsVersion = 0;
+        for (const name in uniforms)
+        {
+            ASSERT(/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !name.startsWith('gl_'),
+                'a Shader uniform is named as a GLSL variable is', name);
+            const type = this.uniformTypes[name] = glUniformType(uniforms[name]);
+            ASSERT(!!type, 'a Shader uniform is a number, boolean, vector, Color, matrix or list of 2, 3, 4, 9 or 16 numbers',
+                name, uniforms[name]);
+            this.uniformValues[name] = glUniformData(uniforms[name], type);
+        }
+        glShaderObjects.push(this); // a lost context drops the programs of every one
+    }
+
+    /** Change a uniform's value: in 2D what was drawn with the shader before it keeps the old value, in 3D the
+     *  value holds for the frame, so set it outside the 3D pass
+     *  @param {string} name - One of those the shader was made with
+     *  @param {ShaderUniform} value - Of the same kind it was made with */
+    setUniform(name, value)
+    {
+        const type = this.uniformTypes[name];
+        ASSERT(!!type, 'setUniform: the Shader was not made with this uniform', name);
+        ASSERT(glUniformType(value) === type, 'setUniform: a uniform keeps the kind it was made with', name, value);
+        if (!type) return;
+        // the same value again, as one set every frame that has not changed, needs no flush and no send
+        const data = glUniformData(value, type), old = this.uniformValues[name];
+        if (typeof data === 'number' ? old === data :
+            typeof old !== 'number' && old?.length === data.length && data.every((v, i)=> old[i] === v))
+            return;
+        // what was batched with the old value is drawn first
+        glContext && !headlessMode && glBatchShader === this && glFlush();
+        this.uniformValues[name] = data;
+        ++this.uniformsVersion;
+    }
+
+    /** Let go of this shader: its compiled programs are freed and it leaves the engine's list of shaders, which
+     *  keeps every one made for a lost context, so a scene made again and again, or an editor trying snippets, does
+     *  not keep them all; calling it again does nothing, and a draw with it afterwards compiles it again and takes it
+     *  back, so only let go of one no object still draws with when it should stay freed */
+    dispose() { glShaderDispose(this); }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Drawing functions
+
+/** Draw textured tile centered in world space
+ *  @param {Vector2}  pos - Center of the tile in world space
+ *  @param {Vector2}  [size=vec2(1)] - Size of the tile in world space
+ *  @param {TileInfo} [tileInfo] - Tile info to use, untextured if undefined
+ *  @param {Color}    [color=WHITE] - Color to modulate with
+ *  @param {number}   [angle] - Angle to rotate by
+ *  @param {boolean}  [mirror] - Is the image flipped left to right?
+ *  @param {Color}    [additiveColor] - Additive color to be applied if any
+ *  @param {boolean}  [useWebGL=glEnable] - Use accelerated WebGL rendering?
+ *  @param {boolean}  [screenSpace=drawScreenSpace] - Are the pos and size in screen space?
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context] - Canvas 2D context to draw to
+ *  @memberof Draw */
+function drawTile(pos, size=vec2(1), tileInfo, color=WHITE,
+    angle=0, mirror, additiveColor, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(!tileInfo || tileInfo instanceof TileInfo, 'drawTile: tileInfo must be a TileInfo, color comes after it',
+        tileInfo);
+    ASSERT(isColor(color), 'color is invalid');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!additiveColor || isColor(additiveColor), 'additiveColor must be a color');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    const textureInfo = tileInfo?.textureInfo;
+    if (textureInfo && !(tileInfo.size.x && tileInfo.size.y && textureInfo.size.x))
+        return; // a tile with no area draws nothing, like a sprite still loading, and nor does an image that failed
+    const bleed = tileInfo?.bleed ?? 0;
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            [pos, size, angle] = screenToWorldTransform(pos, size, angle);
+        }
+        if (textureInfo)
+        {
+            ASSERT(!!textureInfo.glTexture, 'texture has no WebGL texture, draw it with useWebGL false');
+            // calculate uvs and render
+            const sizeInverse = textureInfo.sizeInverse;
+            const x = tileInfo.pos.x * sizeInverse.x;
+            const y = tileInfo.pos.y * sizeInverse.y;
+            const w = tileInfo.size.x * sizeInverse.x;
+            const h = tileInfo.size.y * sizeInverse.y;
+            glSetTexture(textureInfo.glTexture);
+            if (bleed)
+            {
+                const bleedX = sizeInverse.x*bleed;
+                const bleedY = sizeInverse.y*bleed;
+                glDraw(pos.x, pos.y, mirror ? -size.x : size.x, size.y, angle,
+                    x + bleedX,     y + bleedY,
+                    x - bleedX + w, y - bleedY + h,
+                    color.rgbaInt(), additiveColor && additiveColor.rgbaInt());
+            }
+            else
+            {
+                glDraw(pos.x, pos.y, mirror ? -size.x : size.x, size.y, angle,
+                    x, y, x + w, y + h,
+                    color.rgbaInt(), additiveColor && additiveColor.rgbaInt());
+            }
+        }
+        else
+        {
+            // untextured: color plus additive in one color, as the Canvas2D path below does
+            const combined = additiveColor ? color.add(additiveColor) : color;
+            glDrawUntextured(pos.x, pos.y, size.x, size.y, angle, combined.rgbaInt());
+        }
+    }
+    else
+    {
+        // normal canvas 2D rendering method (slower)
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, size, angle, mirror, (context)=>
+        {
+            if (textureInfo)
+            {
+                // un-flip Y so the image renders right-side up under drawCanvas2D's Y flip
+                context.scale(1, -1);
+                // smooth or pixelated as the texture says, as WebGL draws it, inside drawCanvas2D's save
+                textureInfo.pixelated === undefined || (context.imageSmoothingEnabled = !textureInfo.pixelated);
+                // calculate uvs and render
+                const x = tileInfo.pos.x,  y = tileInfo.pos.y;
+                const w = tileInfo.size.x, h = tileInfo.size.y;
+                drawImageColor(context, textureInfo.image, x, y, w, h, -.5, -.5, 1, 1, color, additiveColor, bleed);
+            }
+            else
+            {
+                // if no tile info, use untextured rect (Y-symmetric, no compensation needed)
+                const c = additiveColor ? color.add(additiveColor) : color;
+                context.fillStyle = c.toString();
+                context.fillRect(-.5, -.5, 1, 1);
+            }
+        }, screenSpace, context);
+    }
+}
+
+/** Draw colored rect centered on pos
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2(1)]
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [angle]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawRect(pos, size, color, angle, useWebGL, screenSpace, context)
+{
+    drawTile(pos, size, undefined, color, angle, false, undefined, useWebGL, screenSpace, context);
+}
+
+/** Draw a rect centered on pos with a gradient from top to bottom
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2(1)]
+ *  @param {Color}   [colorTop=WHITE]
+ *  @param {Color}   [colorBottom=CLEAR_WHITE]
+ *  @param {number}  [angle]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawRectGradient(pos, size=vec2(1), colorTop=WHITE, colorBottom=CLEAR_WHITE, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isColor(colorTop) && isColor(colorBottom), 'color is invalid');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            [pos, size, angle] = screenToWorldTransform(pos, size, angle);
+        }
+        // build 4 corner points for the rectangle
+        const points = [], colors = [];
+        const halfSizeX = size.x/2, halfSizeY = size.y/2;
+        const colorTopInt = colorTop.rgbaInt();
+        const colorBottomInt = colorBottom.rgbaInt();
+        const c = cos(-angle), s = sin(-angle);
+        for (let i=4; i--;)
+        {
+            const x = i & 1 ? halfSizeX : -halfSizeX;
+            const y = i & 2 ? halfSizeY : -halfSizeY;
+            const rx = x * c - y * s;
+            const ry = x * s + y * c;
+            const color = i & 2 ? colorTopInt : colorBottomInt;
+            points.push(vec2(pos.x + rx, pos.y + ry));
+            colors.push(color);
+        }
+        glDrawColoredPoints(points, colors);
+    }
+    else
+    {
+        // normal canvas 2D rendering method (slower)
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, size, angle, false, (context)=>
+        {
+            // gradient endpoints are flipped to match the Y flip inside drawCanvas2D
+            const gradient = context.createLinearGradient(0, .5, 0, -.5);
+            gradient.addColorStop(0, colorTop.toString());
+            gradient.addColorStop(1, colorBottom.toString());
+            context.fillStyle = gradient;
+            context.fillRect(-.5, -.5, 1, 1);
+        }, screenSpace, context);
+    }
+}
+
+/** Draw a texture tiled (wrapped) across a rectangle in world space.
+ *  Useful for backgrounds, repeating patterns, and seamless fills.
+ *  The whole texture is tiled — sub-region (TileInfo) wrapping is not supported.
+ *  @param {Vector2}  pos          - Center of the rect in world space
+ *  @param {Vector2}  size         - Size of the rect in world space
+ *  @param {Vector2}  wrapCount    - How many times the texture repeats (x, y)
+ *  @param {TextureInfo|number} [texture] - TextureInfo or texture index into textureInfos
+ *  @param {Color}    [color=WHITE] - Color to modulate with
+ *  @param {number}   [angle] - Angle to rotate by
+ *  @param {Color}    [additiveColor] - Additive color to be applied if any
+ *  @param {boolean}  [useWebGL=glEnable] - Use accelerated WebGL rendering?
+ *  @param {boolean}  [screenSpace=drawScreenSpace] - Are pos and size in screen space?
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context] - Canvas 2D context to draw to
+ *  @memberof Draw */
+function drawTextureWrapped(pos, size, wrapCount, texture=0, color=WHITE,
+    angle=0, additiveColor, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isVector2(wrapCount), 'wrapCount must be a vec2');
+    ASSERT(isColor(color), 'color is invalid');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!additiveColor || isColor(additiveColor), 'additiveColor must be a color');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+    ASSERT(!(texture instanceof TileInfo),
+        'pass a TextureInfo or texture index, not a TileInfo — use tileInfo.textureInfo');
+
+    // only a context passed in is drawn to in headless mode, before the texture lookup, textureInfos is empty there
+    if (headlessMode && !context) return;
+
+    // resolve texture argument: TextureInfo or index
+    const textureInfo = typeof texture === 'number' ? textureInfos[texture] : texture;
+    ASSERT(textureInfo instanceof TextureInfo, 'texture not loaded');
+    ASSERT(textureInfo.size.x > 0, 'texture not loaded');
+    ASSERT(textureInfo.wrap,
+        'drawTextureWrapped requires a wrap-enabled texture; call textureInfo.setWrap(true) first');
+
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            [pos, size, angle] = screenToWorldTransform(pos, size, angle);
+        }
+        ASSERT(!!textureInfo.glTexture, 'texture has no WebGL texture, draw it with useWebGL false');
+        glSetTexture(textureInfo.glTexture);
+        glDraw(pos.x, pos.y, size.x, size.y, angle,
+            0, 0, wrapCount.x, wrapCount.y,
+            color.rgbaInt(), additiveColor && additiveColor.rgbaInt());
+        return;
+    }
+
+    // Canvas2D path — increment counts here (WebGL counts via glFlush)
+    ++drawCount;
+    ++primitiveCount;
+
+    if (!screenSpace)
+    {
+        pos = worldToScreen(pos);
+        size = size.scale(cameraScale);
+        angle -= cameraAngle;
+    }
+
+    // pick image source: raw, or tinted bake. Match drawImageColor's
+    // "no tint needed" predicate so behavior stays consistent.
+    const noTint = !canvasColorTiles ||
+        isWhite(color) && (!additiveColor || isBlack(additiveColor));
+    // alpha is baked into pixels by bakeTintedImage's additive branch;
+    // in that case globalAlpha must NOT also apply color.a
+    const alphaBaked = !noTint && additiveColor && !isBlack(additiveColor);
+    let source = textureInfo.image;
+    if (!source?.width || !source.height) return; // a failed image, which a tint can not be baked from either
+    if (!noTint)
+    {
+        // a bake is a pass over every pixel, so it is kept for the image until its tint changes; a canvas, which has
+        // getContext, may have been drawn into since, so it is baked again at every draw, its copy kept at its size
+        const key = color.r + ',' + color.g + ',' + color.b + ',' + color.a +
+            (additiveColor ? ',' + additiveColor.r + ',' + additiveColor.g + ',' + additiveColor.b + ',' + additiveColor.a : '');
+        let baked = drawTextureWrappedBakes.get(source);
+        if (baked?.key !== key || 'getContext' in source)
+        {
+            const kept = baked?.context, fits = kept?.canvas.width === (source.width|0) &&
+                kept?.canvas.height === (source.height|0);
+            const bakeContext = fits ? kept : createCanvasContext(source.width|0, source.height|0, true);
+            bakeTintedImage(source, color, additiveColor, bakeContext);
+            drawTextureWrappedBakes.set(source, baked = {key, context: bakeContext});
+        }
+        source = baked.context.canvas;
+    }
+
+    context = context || drawContext;
+    context.save();
+    try
+    {
+        // smooth or pixelated as the texture says, as WebGL draws it
+        textureInfo.pixelated === undefined || (context.imageSmoothingEnabled = !textureInfo.pixelated);
+        context.translate(pos.x + .5, pos.y + .5);
+        context.rotate(angle);
+        context.globalAlpha = alphaBaked ? 1 : color.a;
+
+        // null for an image that failed to load, which draws nothing
+        const pattern = context.createPattern(source, 'repeat');
+        if (!pattern) return;
+        // map pattern-source pixels into user space so the rect contains
+        // wrapCount.x × wrapCount.y repeats
+        const m = new DOMMatrix()
+            .translate(-size.x/2, -size.y/2)
+            .scale(size.x / (wrapCount.x * source.width),
+                   size.y / (wrapCount.y * source.height));
+        pattern.setTransform(m);
+        context.fillStyle = pattern;
+        context.fillRect(-size.x/2, -size.y/2, size.x, size.y);
+    }
+    finally { context.restore(); } // puts back the alpha, the smoothing and the transform
+}
+
+/** Draw connected lines between a series of points
+ *  @param {Array<Vector2>} points - In its own space, y up, in screen space too, where drawLine's ends go down
+ *  @param {number}  [width]
+ *  @param {Color}   [color=WHITE]
+ *  @param {boolean} [wrap] - Should the last point connect to the first?
+ *  @param {Vector2} [pos=vec2()] - Offset to apply
+ *  @param {number}  [angle] - Angle to rotate by
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawLineList(points, width=.1, color=WHITE, wrap=false, pos=vec2(), angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isArray(points), 'points must be an array');
+    ASSERT(isNumber(width), 'width must be a number');
+    ASSERT(isColor(color), 'color is invalid');
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        let sx = 1, sy = 1;
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            let size;
+            [pos, size, angle] = screenToWorldTransform(pos, vec2(1), angle);
+            sx = size.x, sy = size.y;
+        }
+        glDrawOutlineTransform(points, color.rgbaInt(), width, pos.x, pos.y, sx, sy, angle, wrap);
+    }
+    else
+    {
+        // normal canvas 2D rendering method (slower)
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, vec2(1), angle, false, (context)=>
+        {
+            // Canvas2D ignores a width of 0 or below and keeps the last one, WebGL draws none for 0
+            // and a negative width as its size, the outline turned inside out
+            if (!width) return;
+            context.strokeStyle = color.toString();
+            context.lineWidth = abs(width);
+            context.beginPath();
+            for (let i=0; i<points.length; ++i)
+            {
+                const point = points[i];
+                context.lineTo(point.x, point.y);
+            }
+            wrap && context.closePath();
+            context.stroke();
+        }, screenSpace, context);
+    }
+}
+
+/** Draw colored line between two points
+ *  @param {Vector2} posA
+ *  @param {Vector2} posB
+ *  @param {number}  [width]
+ *  @param {Color}   [color=WHITE]
+ *  @param {Vector2} [pos=vec2()] - Offset to apply
+ *  @param {number}  [angle] - Angle to rotate by
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawLine(posA, posB, width=.1, color=WHITE, pos=vec2(), angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    const halfDelta = vec2((posB.x - posA.x)/2, (posB.y - posA.y)/2);
+    const size = vec2(width, halfDelta.length()*2);
+    const middle = posA.add(halfDelta);
+    pos = pos.add(angle ? middle.rotate(screenSpace ? -angle : angle) : middle); // screen y is down, so it turns back
+    if (screenSpace)
+        halfDelta.y *= -1;  // flip angle Y if screen space
+    angle += halfDelta.angle();
+    drawRect(pos, size, color, angle, useWebGL, screenSpace, context);
+}
+
+/** Draw colored regular polygon using passed in number of sides
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2(1)]
+ *  @param {number}  [sides]
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {number}  [angle]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawRegularPoly(pos, size=vec2(1), sides=3, color=WHITE, lineWidth=0, lineColor=BLACK, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isNumber(sides), 'sides must be a number');
+
+    // build regular polygon points, into vectors kept for the next, as drawPoly is done with them when it returns
+    const points = drawRegularPolyPoints, pool = drawRegularPolyPool;
+    points.length = 0;
+    const sizeX = size.x/2, sizeY = size.y/2;
+    for (let i=sides; i-- > 0;) // a count that is not whole, or below zero, still ends
+    {
+        const a = (i/sides)*PI*2, point = pool[points.length] ||= vec2();
+        point.x = sin(a)*sizeX, point.y = cos(a)*sizeY;
+        points.push(point);
+    }
+    drawPoly(points, color, lineWidth, lineColor, pos, angle, useWebGL, screenSpace, context);
+}
+
+// the points drawRegularPoly draws and the vectors it writes them into
+const drawRegularPolyPoints = [], drawRegularPolyPool = [];
+
+/** Draw colored polygon using passed in points
+ *  - WebGL fills a polygon whose edges do not cross, concave or not; a self crossing one, like a star through its
+ *    outer points, fills wrong there, so draw it as its simple outline or in parts
+ *  @param {Array<Vector2>} points - In its own space, y up, in screen space too, where drawLine's ends go down
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {Vector2} [pos=vec2()] - Offset to apply
+ *  @param {number}  [angle] - Angle to rotate by
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawPoly(points, color=WHITE, lineWidth=0, lineColor=BLACK, pos=vec2(), angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context=undefined)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isArray(points), 'points must be an array');
+    ASSERT(isColor(color) && isColor(lineColor), 'color is invalid');
+    ASSERT(isNumber(lineWidth), 'lineWidth must be a number');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        let sx = 1, sy = 1;
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            let size;
+            [pos, size, angle] = screenToWorldTransform(pos, vec2(1), angle);
+            sx = size.x, sy = size.y;
+        }
+        glDrawPointsTransform(points, color.rgbaInt(), pos.x, pos.y, sx, sy, angle);
+        if (lineWidth > 0)
+            glDrawOutlineTransform(points, lineColor.rgbaInt(), lineWidth, pos.x, pos.y, sx, sy, angle);
+    }
+    else
+    {
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, vec2(1), angle, false, context=>
+        {
+            context.fillStyle = color.toString();
+            context.beginPath();
+            for (const point of points)
+                context.lineTo(point.x, point.y);
+            context.closePath();
+            context.fill();
+            if (lineWidth > 0) // as in WebGL, Canvas2D would stroke a width below 0 with the last one
+            {
+                context.strokeStyle = lineColor.toString();
+                context.lineWidth = lineWidth;
+                context.stroke();
+            }
+        }, screenSpace, context);
+    }
+}
+
+// the unit rings drawEllipse fills with in WebGL, one for each side count
+const drawEllipseRings = new Map;
+
+/** Draw colored ellipse using passed in point
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2(1)] - Width and height diameter
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [angle]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawEllipse(pos, size=vec2(1), color=WHITE, angle=0, lineWidth=0, lineColor=BLACK, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isColor(color) && isColor(lineColor), 'color is invalid');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(isNumber(lineWidth), 'lineWidth must be a number');
+    ASSERT(lineWidth >= 0, 'lineWidth must be a positive value or 0');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    // clamp line width to prevent artifacts, a negative size draws mirrored
+    lineWidth = clamp(lineWidth, 0, min(abs(size.x), abs(size.y)));
+
+    if (useWebGL && glEnable)
+    {
+        const sides = glCircleSides;
+        if (lineWidth > 0)
+        {
+            // draw as a regular polygon, the outline is made from the points at their size
+            drawRegularPoly(pos, size, sides, color, lineWidth, lineColor, angle, useWebGL, screenSpace, context);
+            return;
+        }
+
+        // a fill is a unit ring scaled, made once for each side count and already in strip order
+        let ring = drawEllipseRings.get(sides);
+        if (!ring)
+        {
+            const points = [];
+            for (let i=sides; i-- > 0;)
+            {
+                const a = (i/sides)*PI*2;
+                points.push(vec2(sin(a), cos(a)));
+            }
+            drawEllipseRings.set(sides, ring = glPolyStrip(points));
+        }
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            [pos, size, angle] = screenToWorldTransform(pos, size, angle);
+        }
+        glDrawPointsTransform(ring, color.rgbaInt(), pos.x, pos.y, size.x/2, size.y/2, angle, false);
+    }
+    else
+    {
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, vec2(1), angle, false, context=>
+        {
+            context.fillStyle = color.toString();
+            context.beginPath();
+            context.ellipse(0, 0, abs(size.x)/2, abs(size.y)/2, 0, 0, 9); // it throws on a negative radius
+            context.fill();
+            if (lineWidth > 0)
+            {
+                context.strokeStyle = lineColor.toString();
+                context.lineWidth = lineWidth;
+                context.stroke();
+            }
+        }, screenSpace, context);
+    }
+}
+
+/** Draw colored circle using passed in point
+ *  @param {Vector2} pos
+ *  @param {number}  [size] - Diameter
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawCircle(pos, size=1, color=WHITE, lineWidth=0, lineColor=BLACK, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isNumber(size), 'size must be a number');
+    drawEllipse(pos, vec2(size), color, 0, lineWidth, lineColor, useWebGL, screenSpace, context);
+}
+
+let drawEllipseGradientOffset = 0;
+/** Draw an ellipse filled with a radial gradient from the center to the rim
+ *  - Best when batched with other untextured polys
+ *  - If drawing mostly textured sprites, bake the gradient into a texture and use drawTile instead
+ *  - Stacking gradients at the exact same position may show a faint vertical artifact
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2(1)] - Width and height diameter
+ *  @param {Color}   [colorInner=WHITE]
+ *  @param {Color}   [colorOuter=CLEAR_WHITE]
+ *  @param {number}  [angle]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawEllipseGradient(pos, size=vec2(1), colorInner=WHITE, colorOuter=CLEAR_WHITE, angle=0, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isColor(colorInner) && isColor(colorOuter), 'color is invalid');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(!context || !useWebGL, 'context only supported in canvas 2D mode');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    if (useWebGL && glEnable)
+    {
+        ASSERT(!!glContext, 'WebGL is not enabled!');
+        if (screenSpace)
+        {
+            if (glSkipScreenSpace) return;
+            [pos, size, angle] = screenToWorldTransform(pos, size, angle);
+        }
+        // fan as tristrip; rotate the boundary vertex by one slice per call
+        // so back-to-back gradients at the same position have their hole
+        // (from gpu edge-rule on the boundary line-degen) at different rim
+        // verts and don't visibly stack
+        const sides = glCircleSides;
+        const radiusX = size.x/2, radiusY = size.y/2;
+        const innerInt = colorInner.rgbaInt();
+        const outerInt = colorOuter.rgbaInt();
+        const offset = drawEllipseGradientOffset++;
+        const c = cos(-angle), s = sin(-angle);
+        const rim = (a) =>
+        {
+            const lx = sin(a)*radiusX, ly = cos(a)*radiusY;
+            return vec2(pos.x + lx*c - ly*s, pos.y + lx*s + ly*c);
+        };
+        const startA = (offset%sides)/sides*PI*2;
+        const points = [rim(startA)];
+        const colors = [outerInt];
+        for (let i=sides; i-- > 0;)
+        {
+            const a = ((i+offset)%sides)/sides*PI*2;
+            points.push(pos);
+            colors.push(innerInt);
+            points.push(rim(a));
+            colors.push(outerInt);
+        }
+        glDrawColoredPoints(points, colors);
+    }
+    else
+    {
+        // normal canvas 2D rendering method (slower)
+        ++drawCount;
+        ++primitiveCount;
+        drawCanvas2D(pos, size, angle, false, (context)=>
+        {
+            const gradient = context.createRadialGradient(0, 0, 0, 0, 0, .5);
+            gradient.addColorStop(0, colorInner.toString());
+            gradient.addColorStop(1, colorOuter.toString());
+            context.fillStyle = gradient;
+            context.beginPath();
+            context.ellipse(0, 0, .5, .5, 0, 0, 9);
+            context.fill();
+        }, screenSpace, context);
+    }
+}
+
+/** Draw a circle filled with a radial gradient from the center to the rim
+ *  - Best when batched with other untextured polys
+ *  - If drawing mostly textured sprites, bake the gradient into a texture and use drawTile instead
+ *  - Stacking gradients at the exact same position may show a faint vertical artifact
+ *  @param {Vector2} pos
+ *  @param {number}  [size] - Diameter
+ *  @param {Color}   [colorInner=WHITE]
+ *  @param {Color}   [colorOuter=CLEAR_WHITE]
+ *  @param {boolean} [useWebGL=glEnable]
+ *  @param {boolean} [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+ *  @memberof Draw */
+function drawCircleGradient(pos, size=1, colorInner=WHITE, colorOuter=CLEAR_WHITE, useWebGL=glEnable, screenSpace=drawScreenSpace, context)
+{
+    ASSERT(isNumber(size), 'size must be a number');
+    drawEllipseGradient(pos, vec2(size), colorInner, colorOuter, 0, useWebGL, screenSpace, context);
+}
+
+/**
+ * @callback Canvas2DDrawFunction - A function that draws to a 2D canvas context
+ * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} context
+ * @return {void}
+ * @memberof Draw
+ */
+
+/** Draw directly to a 2d canvas context in world space.
+ *  The Y axis is flipped so world-Y-up coordinates render right-side up
+ *  (matches the WebGL path). Callers whose drawing depends on Y direction
+ *  (e.g. linear gradients) should flip their own Y endpoints accordingly.
+ *  @param {Vector2}  pos
+ *  @param {Vector2}  size
+ *  @param {number}   [angle]
+ *  @param {boolean}  [mirror]
+ *  @param {Canvas2DDrawFunction} [drawFunction] - Needed, marked optional only because the ones before it are
+ *  @param {boolean}  [screenSpace=drawScreenSpace]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context=drawContext]
+ *  @memberof Draw */
+function drawCanvas2D(pos, size, angle=0, mirror=false, drawFunction, screenSpace=drawScreenSpace, context=drawContext)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+    ASSERT(isNumber(angle), 'angle must be a number');
+    ASSERT(typeof drawFunction === 'function', 'drawFunction must be a function');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+
+    if (!screenSpace)
+    {
+        pos = worldToScreen(pos);
+        size = size.scale(cameraScale);
+        angle -= cameraAngle;
+    }
+    context.save();
+    try
+    {
+        context.translate(pos.x+.5, pos.y+.5);
+        context.rotate(angle);
+        context.scale(mirror ? -size.x : size.x, -size.y);
+        drawFunction(context);
+    }
+    finally { context.restore(); } // a callback that throws leaves no transform or clip behind
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Text Drawing Functions
+
+/** Draw text on main canvas in world space
+ *  Automatically splits new lines into rows
+ *  @param {string|number}  text
+ *  @param {Vector2} pos
+ *  @param {number}  [size]
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {'left'|'center'|'right'} [textAlign]
+ *  @param {string}  [font=fontDefault]
+ *  @param {string}  [fontStyle]
+ *  @param {number}  [maxWidth]
+ *  @param {number}  [angle]
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context=drawContext]
+ *  @memberof Draw */
+function drawText(text, pos, size=1, color=WHITE, lineWidth=0, lineColor=BLACK, textAlign='center', font=fontDefault, fontStyle='', maxWidth, angle=0, context=drawContext)
+{
+    // checked before it is scaled, a vec2 size would come out NaN
+    ASSERT(isVector2(pos), 'drawText: pos must be a vec2', pos);
+    ASSERT(isNumber(size), 'drawText: size is a number, the height of the text in world units', size);
+
+    // convert to screen space
+    pos = worldToScreen(pos);
+    size *= cameraScale;
+    lineWidth *= cameraScale;
+    if (maxWidth !== undefined)
+        maxWidth *= cameraScale;
+    angle -= cameraAngle;
+
+    drawTextScreen(text, pos, size, color, lineWidth, lineColor, textAlign, font, fontStyle, maxWidth, angle, context);
+}
+
+// the fonts a debug build has checked the canvas takes, by style and family, as a size never decides it and a zooming
+// camera draws at a new size each frame, and a font it does not, which would draw as 10px sans-serif with no word,
+// warned of once; a family name with spaces and digits, as Press Start 2P, needs quotes
+const drawFontsChecked = new Set;
+function drawFontCheck(context, fontText, font, fontStyle)
+{
+    const key = fontStyle + '|' + font;
+    if (drawFontsChecked.has(key)) return;
+    drawFontsChecked.add(key);
+    const sentinel = '1px littlejs-font-check', was = context.font; // no font a game draws with
+    context.font = sentinel;
+    context.font = fontText;
+    if (context.font === sentinel)
+        context.font = was, // the font it had, as a draw without the check keeps it
+        console.warn(`the canvas does not take the font ${font}, so text draws as 10px sans-serif; ` +
+            `a family name with spaces or digits goes in quotes, as "'Press Start 2P'"`);
+}
+
+// the lines of a text, split at a Windows line ending too
+const textLines = (text)=> (text += '').includes('\r') ? text.split(/\r?\n/) : text.split('\n');
+
+// how many lines a text has, counted without splitting it
+function textLineCount(text)
+{
+    let count = 1;
+    for (let i = -1; (i = text.indexOf('\n', i + 1)) >= 0;)
+        ++count;
+    return count;
+}
+
+// the characters of a line of text as a reader counts them, each as its first code point: an emoji with its joiners
+// is one, and a letter with combining accents its letter; plain text takes the quick way, it is most of what is drawn,
+// so read character i with textCharacterCode
+const textIntl = /** @type {any} */ (globalThis.Intl); // Segmenter is newer than the library the source is checked with
+const textSegmenter = textIntl?.Segmenter && new textIntl.Segmenter;
+// a line with no mark, joiner or character past the 16 bit range, plain or accented letters of their own, Greek or
+// Japanese, has one code unit a character, so it is handed back as it is, read with charCodeAt, and nothing is made;
+// the class also holds what the segmenter joins that is not a mark: joiners, prepend, Thai and Lao SARA AM, Hangul
+// jamo extended and the halfwidth katakana voiced marks
+const textJoins = /[\p{M}\u200c\u200d\u0600-\u0605\u06dd\u070f\u0890\u0891\u08e2\u0d4e\u0e33\u0eb3\u1100-\u11ff\ua960-\ua97c\ud7b0-\ud7fb\uff9e\uff9f\u{10000}-\u{10ffff}]/u;
+/** @return {string|Array<number>} */
+function textCharacters(line)
+{
+    if (!textJoins.test(line))
+        return line;
+    // where graphemes can not be split, code points with the joiners, variation selectors and accents left out
+    return textSegmenter ? Array.from(textSegmenter.segment(line), (s)=> s.segment.codePointAt(0)) :
+        Array.from(line, (c)=> c.codePointAt(0)).filter((c)=> c !== 0x200d && c !== 0xfe0f && !(c >= 0x300 && c < 0x370));
+}
+
+// the characters of a text as a reader counts them, each a string, an emoji with its joiners one; code points where
+// graphemes can not be split, and code units for a text that needs nothing joined, the quick way
+const textGraphemes = (text)=> !textJoins.test(text) ? text.split('') :
+    textSegmenter ? Array.from(textSegmenter.segment(text), (s)=> s.segment) : [...text];
+
+// character i of what textCharacters gave, its code; a Latin letter with an accent of its own, as é, is its letter, as
+// an e with a combining accent is, for the fonts that draw only the plain letters
+const textCharacterCode = (characters, i)=>
+    textBaseLetter(typeof characters == 'string' ? characters.charCodeAt(i) : characters[i]);
+const textBaseLetters = new Map;
+function textBaseLetter(code)
+{
+    if (code < 0xc0 || code >= 0x250) return code;
+    let base = textBaseLetters.get(code);
+    base === undefined && textBaseLetters.set(code, base = String.fromCharCode(code).normalize('NFD').charCodeAt(0));
+    return base;
+}
+
+/** Draw text in screen space
+ *  Automatically splits new lines into rows
+ *  - An icon registered with setTextIcon is drawn where its name is written between colons, ':coin:'
+ *  @param {string|number}  text
+ *  @param {Vector2} pos
+ *  @param {number}  size
+ *  @param {Color}   [color=WHITE]
+ *  @param {number}  [lineWidth]
+ *  @param {Color}   [lineColor=BLACK]
+ *  @param {'left'|'center'|'right'} [textAlign]
+ *  @param {string}  [font=fontDefault]
+ *  @param {string}  [fontStyle]
+ *  @param {number}  [maxWidth]
+ *  @param {number}  [angle] - Clockwise, like the other screen space draws
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context=drawContext]
+ *  @memberof Draw */
+function drawTextScreen(text, pos, size, color=WHITE, lineWidth=0, lineColor=BLACK, textAlign='center', font=fontDefault, fontStyle='', maxWidth, angle=0, context=drawContext)
+{
+    ASSERT(isStringLike(text), 'drawTextScreen: text must be a string', text);
+    ASSERT(isVector2(pos), 'drawTextScreen: pos must be a vec2', pos);
+    ASSERT(isNumber(size), 'drawTextScreen: size is a number, the height of the text in pixels', size);
+    ASSERT(isColor(color), 'drawTextScreen: color must be a color', color);
+    ASSERT(isNumber(lineWidth), 'drawTextScreen: lineWidth must be a number', lineWidth);
+    ASSERT(isColor(lineColor), 'drawTextScreen: lineColor must be a color', lineColor);
+    ASSERT(['left','center','right'].includes(textAlign), 'drawTextScreen: textAlign must be left, center or right', textAlign);
+    ASSERT(isStringLike(font), 'font must be a string');
+    ASSERT(isStringLike(fontStyle), 'fontStyle must be a string');
+    ASSERT(isNumber(angle), 'angle must be a number');
+
+    if (headlessMode && !context) return; // headless has no canvas, only a context passed in is drawn to
+    
+    const lines = textLines(text); // a Windows line ending too
+    // save before style mutations so caller's context state is preserved
+    context.save();
+    try
+    {
+        context.fillStyle = color.toString();
+        context.strokeStyle = lineColor.toString();
+        context.lineWidth = lineWidth;
+        context.textAlign = textAlign;
+        const fontText = fontStyle + ' ' + size + 'px '+ font;
+        debug && drawFontCheck(context, fontText, font, fontStyle);
+        context.font = fontText;
+        context.textBaseline = 'middle';
+        context.translate(pos.x + .5, pos.y + .5); // a screen position is the center of a pixel, as for every other draw
+        context.rotate(angle);
+        let yOffset = -(lines.length-1) * size/2; // center vertically
+        lines.forEach(line=>
+        {
+            // only a line with a registered icon in it takes the icon path, every other draws as it always has
+            const runs = textIcons.size && !textIconsOff && line.includes(':') ? textIconRuns(line) : undefined;
+            if (runs)
+                drawTextIconLine(context, runs, yOffset, size, color, lineWidth, textAlign, maxWidth);
+            else
+            {
+                lineWidth && context.strokeText(line, 0, yOffset, maxWidth);
+                context.fillText(line, 0, yOffset, maxWidth);
+            }
+            yOffset += size;
+        });
+    }
+    finally { context.restore(); }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Icons in text
+
+// the icons text can show by name, see setTextIcon
+const textIcons = new Map;
+
+// set while uiSystem draws a text's shadow, so its icons are drawn as shapes in the shadow's color
+let textIconsSilhouette = false;
+// set while uiSystem draws text a player typed, which shows as it was typed
+let textIconsOff = false;
+
+/** Register a tile to show in text: written between colons in any text drawTextScreen draws, drawText and the UI
+ *  system's text included, it is drawn in its place, as tall as the text, 'Gold: :coin: 25'
+ *  - Only a registered name is replaced, so other text with colons, like a time of 5:30, stays as it is
+ *  - ImageFont text shows them too, each as tall as a character
+ *  @param {string} name - Letters, digits, _ and -
+ *  @param {TileInfo} [tileInfo] - Left out to take the name off
+ *  @example
+ *  setTextIcon('coin', tile(5));
+ *  drawTextScreen('Gold: :coin: 25', vec2(100, 50), 40);
+ *  @memberof Draw */
+function setTextIcon(name, tileInfo)
+{
+    ASSERT(isStringLike(name) && /^[A-Za-z0-9_-]+$/.test(name), 'setTextIcon: a name is letters, digits, _ and -', name);
+    ASSERT(!tileInfo || tileInfo instanceof TileInfo, 'setTextIcon: tileInfo must be a TileInfo', tileInfo);
+    tileInfo ? textIcons.set(name, tileInfo) : textIcons.delete(name);
+}
+
+// a line split into its text and its icons, in order, or undefined when no registered icon is in it
+function textIconRuns(line)
+{
+    const runs = [], pattern = /:([A-Za-z0-9_-]+):/g;
+    let last = 0, found = false, match;
+    while ((match = pattern.exec(line)))
+    {
+        const icon = textIcons.get(match[1]);
+        if (!icon)
+        {
+            pattern.lastIndex = match.index + 1; // the closing colon may open a name that is registered
+            continue;
+        }
+        match.index > last && runs.push(line.slice(last, match.index));
+        runs.push(icon);
+        last = pattern.lastIndex;
+        found = true;
+    }
+    if (!found) return;
+    last < line.length && runs.push(line.slice(last));
+    return runs;
+}
+
+// draw a line of text and icons, each icon as tall as the text and as wide as its tile's shape, the whole line placed
+// by the alignment and squeezed across to maxWidth as the text alone would be; icons fade with the text's alpha
+const textIconTint = new Color, textIconAdd = new Color(0, 0, 0, 0);
+function drawTextIconLine(context, runs, y, size, color, lineWidth, textAlign, maxWidth)
+{
+    const widths = runs.map(run=> typeof run == 'string' ? context.measureText(run).width :
+        run.size.y ? size * run.size.x / run.size.y : 0); // an image that failed to load takes no room
+    const total = widths.reduce((a, b)=> a + b, 0);
+    context.save();
+    try
+    {
+        context.textAlign = 'left';
+        if (maxWidth && total > maxWidth)
+            context.scale(maxWidth / total, 1); // about the line's anchor, so the alignment holds
+        // white, or for a shadow black with the shadow's color added on, either faded with the text
+        textIconTint.set(textIconsSilhouette ? 0 : 1, textIconsSilhouette ? 0 : 1, textIconsSilhouette ? 0 : 1, color.a);
+        textIconAdd.set(textIconsSilhouette ? color.r : 0, textIconsSilhouette ? color.g : 0, textIconsSilhouette ? color.b : 0, 0);
+        let x = textAlign === 'left' ? 0 : textAlign === 'right' ? -total : -total / 2;
+        runs.forEach((run, i)=>
+        {
+            if (typeof run == 'string')
+            {
+                lineWidth && context.strokeText(run, x, y);
+                context.fillText(run, x, y);
+            }
+            else if (run.textureInfo?.image && run.textureInfo.size.x)
+            {
+                const pixelated = run.textureInfo.pixelated ?? tilesPixelated;
+                context.imageSmoothingEnabled = !pixelated;
+                drawImageColor(context, run.textureInfo.image, run.pos.x, run.pos.y, run.size.x, run.size.y,
+                    x, y - size / 2, widths[i], size, textIconTint, textIconAdd, run.bleed);
+            }
+            x += widths[i];
+        });
+    }
+    finally { context.restore(); }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Drawing utilities
+
+/** Load a texture at a specific index after engineInit, the images passed to engineInit load this way
+ *  @param {number} textureIndex - Index to store the texture at, an unused one
+ *  @param {string} [src] - Image source path
+ *  @return {Promise<TextureInfo>} Resolves to the texture info once the image loads, or fails to with a warning
+ *  @memberof Draw */
+async function loadTexture(textureIndex, src)
+{
+    ASSERT(isNumber(textureIndex), 'textureIndex must be a number');
+    // engineInit's empty placeholder in slot 0, when it was given no images, or a load that failed can be replaced
+    const old = textureInfos[textureIndex];
+    ASSERT(!old?.size.x, 'textureIndex is already loaded!');
+    old?.destroyWebGLTexture();
+    ASSERT(!src || isStringLike(src), 'image src must be a string');
+    
+    const image = new Image;
+    if (src)
+    {
+        await engineAddLoad(new Promise(resolve => // startup waits for it
+        {
+            image.onload = resolve;
+            image.onerror = ()=>
+            {
+                console.warn('failed to load image: ' + src); // in release too, like the WebGL warning
+                resolve();
+            };
+            image.crossOrigin = 'anonymous';
+            image.src = src;
+        }));
+    }
+    
+    return textureInfos[textureIndex] = new TextureInfo(image);
+}
+
+/** Convert from screen to world space coordinates
+ *  @param {Vector2} screenPos
+ *  @return {Vector2}
+ *  @memberof Draw */
+function screenToWorld(screenPos)
+{
+    ASSERT(isVector2(screenPos), 'screenPos must be a vec2');
+
+    let x = (screenPos.x - mainCanvasSize.x/2 + .5) /  cameraScale;
+    let y = (screenPos.y - mainCanvasSize.y/2 + .5) / -cameraScale;
+    if (cameraAngle)
+    {
+        // apply camera rotation
+        const c = cos(-cameraAngle), s = sin(-cameraAngle);
+        const xr = x * c - y * s, yr = x * s + y * c;
+        x = xr; y = yr;
+    }
+    return new Vector2(x + cameraPos.x, y + cameraPos.y);
+}
+
+/** Convert from world to screen space coordinates
+ *  @param {Vector2} worldPos
+ *  @return {Vector2}
+ *  @memberof Draw */
+function worldToScreen(worldPos)
+{
+    ASSERT(isVector2(worldPos), 'worldPos must be a vec2');
+
+    let x = worldPos.x - cameraPos.x;
+    let y = worldPos.y - cameraPos.y;
+    if (cameraAngle)
+    {
+        // apply inverse camera rotation
+        const c = cos(cameraAngle), s = sin(cameraAngle);
+        const xr = x * c - y * s, yr = x * s + y * c;
+        x = xr; y = yr;
+    }
+    return new Vector2
+    (
+        x *  cameraScale + mainCanvasSize.x/2 - .5,
+        y * -cameraScale + mainCanvasSize.y/2 - .5
+    );
+}
+
+/** Convert from screen to world space coordinates for a directional vector (no translation)
+ *  @param {Vector2} screenDelta
+ *  @return {Vector2}
+ *  @memberof Draw */
+function screenToWorldDelta(screenDelta)
+{
+    ASSERT(isVector2(screenDelta), 'screenDelta must be a vec2');
+
+    let x = screenDelta.x /  cameraScale;
+    let y = screenDelta.y / -cameraScale;
+    if (cameraAngle)
+    {
+        // apply camera rotation
+        const c = cos(-cameraAngle), s = sin(-cameraAngle);
+        const xr = x * c - y * s, yr = x * s + y * c;
+        x = xr; y = yr;
+    }
+    return new Vector2(x, y);
+}
+
+/** Convert from world to screen space coordinates for a directional vector (no translation)
+ *  @param {Vector2} worldDelta
+ *  @return {Vector2}
+ *  @memberof Draw */
+function worldToScreenDelta(worldDelta)
+{
+    ASSERT(isVector2(worldDelta), 'worldDelta must be a vec2');
+
+    let x = worldDelta.x;
+    let y = worldDelta.y;
+    if (cameraAngle)
+    {
+        // apply inverse camera rotation
+        const c = cos(cameraAngle), s = sin(cameraAngle);
+        const xr = x * c - y * s, yr = x * s + y * c;
+        x = xr; y = yr;
+    }
+    return new Vector2(x *  cameraScale, y * -cameraScale);
+}
+
+/** Convert screen space transform to world space
+ *  @param {Vector2} screenPos
+ *  @param {Vector2} screenSize
+ *  @param {number} [screenAngle]
+ *  @return {[Vector2, Vector2, number]} - [pos, size, angle]
+ *  @memberof Draw */
+function screenToWorldTransform(screenPos, screenSize, screenAngle=0)
+{
+    ASSERT(isVector2(screenPos), 'screenPos must be a vec2');
+    ASSERT(isVector2(screenSize), 'screenSize must be a vec2');
+    ASSERT(isNumber(screenAngle), 'screenAngle must be a number');
+
+    return [
+        screenToWorld(screenPos),
+        screenSize.scale(1/cameraScale),
+        screenAngle + cameraAngle
+    ];
+}
+
+/** Get the size of the camera window in world space
+ *  @return {Vector2}
+ *  @memberof Draw */
+function getCameraSize() { return mainCanvasSize.scale(1/cameraScale); }
+
+/** Padding for each side of a rectangle, the sides left out are 0
+ *  @typedef {Object} CameraFitSides
+ *  @property {number} [top]
+ *  @property {number} [right]
+ *  @property {number} [bottom]
+ *  @property {number} [left]
+ *  @memberof Draw */
+
+/** Fit the camera to a rectangle in world space by setting cameraPos and cameraScale
+ *  - worldMargin pads the content rectangle in world units, so the gap scales with the content on resize
+ *  - screenInset reserves space in screen pixels on each viewport edge (for example a HUD band) and
+ *    re-centers the content away from that edge, so the reserved band stays a fixed pixel size on resize
+ *  - worldMargin and screenInset may each be a number for all sides, a Vector2 (x=left/right, y=top/bottom),
+ *    or an object with any of {top, right, bottom, left}
+ *  @param {Vector2} center - Center of the rectangle in world space
+ *  @param {Vector2} size - Size of the rectangle in world space
+ *  @param {number|Vector2|CameraFitSides} [worldMargin] - World space padding added around the content rectangle
+ *  @param {number|Vector2|CameraFitSides} [screenInset] - Screen space padding in pixels reserved on each viewport edge
+ *  @return {number} - The new camera scale
+ *  @memberof Draw */
+function cameraFit(center, size, worldMargin, screenInset)
+{
+    ASSERT(isVector2(center), 'center must be a vec2');
+    ASSERT(isVector2(size), 'size must be a vec2');
+
+    // pad the content
+    const margin = padSides(worldMargin);
+    const inset  = padSides(screenInset);
+    const worldW = size.x + margin.left + margin.right;
+    const worldH = size.y + margin.top  + margin.bottom;
+    const viewW  = mainCanvasSize.x - inset.left - inset.right;
+    const viewH  = mainCanvasSize.y - inset.top  - inset.bottom;
+
+    // bail on a degenerate rect or viewport rather than NaN the camera
+    if (!(worldW > 0 && worldH > 0 && viewW > 0 && viewH > 0))
+        return cameraScale;
+
+    // scale to fit the padded content, measured along the camera's axes when it is turned
+    const c = cos(cameraAngle), s = sin(cameraAngle);
+    const fitW = abs(c) * worldW + abs(s) * worldH, fitH = abs(s) * worldW + abs(c) * worldH;
+    cameraScale = min(viewW / fitW, viewH / fitH);
+
+    // calculate offset vectors, the inset is on the screen, so it turns back into the world with the camera
+    const marginVector = vec2(margin.right - margin.left, margin.top - margin.bottom).scale(.5);
+    const ix = (inset.right - inset.left) * .5 / cameraScale, iy = (inset.top - inset.bottom) * .5 / cameraScale;
+    const insetVector = vec2(ix * c + iy * s, iy * c - ix * s);
+
+    // apply the offsets and return camera scale
+    cameraPos = center.add(marginVector).add(insetVector);
+    return cameraScale;
+
+    function padSides(p)
+    {
+        // normalize a padding option to {top, right, bottom, left}
+        if (p === undefined || isNumber(p))
+            p = vec2(p);
+        if (isVector2(p))
+            return { top: p.y, right: p.x, bottom: p.y, left: p.x };
+        return {
+            top:    p.top    || 0,
+            right:  p.right  || 0,
+            bottom: p.bottom || 0,
+            left:   p.left   || 0,
+        };
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Camera shake
+
+// how much shake is left, 0 to 1, cameraShake adds to it and it fades by cameraShakeDecay a second; it turns the view,
+// and is never less than either axis, since every shake adds to it the most it adds to one
+let cameraShakeTrauma = 0;
+// how much shake is left on each axis, the part of it that moves the view along x and along y
+let cameraShakeAxes = vec2();
+// noise steps a second, how fast the shaken view wanders
+const CAMERA_SHAKE_FREQUENCY = 15;
+// the game's own cameraPos and cameraAngle, kept while a frame draws shaken, and the shaken ones set in their place
+let cameraShakeSavedPos, cameraShakeSavedAngle = 0, cameraShakeShakenPos, cameraShakeShakenAngle = 0;
+
+/** Shake the camera, for a hit or an explosion: adds to the shake, which fades on its own by cameraShakeDecay
+ *  - The view moves by smooth noise scaled by the shake squared, so a small one is gentle and a big one is wild,
+ *    up to cameraShakeDistance and cameraShakeAngle
+ *  - It moves only what is drawn, in 2D and in 3D: cameraPos and cameraAngle are the game's own between frames;
+ *    move the camera in an update, not while a frame draws, where cameraPos is the shaken one: a new cameraPos set
+ *    there is kept, shake and all, and one changed in place is put back after the frame
+ *  - It holds while the game is paused or at a time scale of 0
+ *  - A direction puts the shake more on one axis, vec2(0, 1) for a heavy landing; each axis fades on its own, so a
+ *    shake on one does not change the other's, and the turn adds the most each shake puts on one axis, so it is never
+ *    less than either
+ *  @param {number} [amount] - How much to add, the shake is at most 1
+ *  @param {Vector2} [direction] - How much of it goes to each axis, 0 to 1
+ *  @example
+ *  cameraShake(.6, vec2(.2, 1)); // a heavy landing, mostly up and down
+ *  @memberof Draw */
+function cameraShake(amount=.5, direction=vec2(1))
+{
+    ASSERT(isNumber(amount) && amount >= 0, 'cameraShake: amount must be a number, 0 or more', amount);
+    ASSERT(isVector2(direction), 'cameraShake: direction must be a vec2', direction);
+    amount = min(amount, 1); // the shake is at most 1, and Infinity times an axis of 0 would be NaN
+    const x = abs(direction.x), y = abs(direction.y);
+    cameraShakeAxes = vec2(min(1, cameraShakeAxes.x + amount * x), min(1, cameraShakeAxes.y + amount * y));
+    cameraShakeTrauma = min(1, cameraShakeTrauma + amount * max(x, y));
+}
+
+// how far the shake moves and turns the view now, nothing at all when there is no shake
+function cameraShakeOffset()
+{
+    if (!cameraShakeTrauma)
+        return {pos: vec2(), angle: 0};
+    const t = time * CAMERA_SHAKE_FREQUENCY, axes = cameraShakeAxes;
+    const wander = (seed)=> noise1D(t + seed) * 2 - 1;
+    const pos = vec2(wander(0) * axes.x ** 2, wander(100) * axes.y ** 2).scale(cameraShakeDistance);
+    return {pos, angle: wander(200) * cameraShakeTrauma ** 2 * cameraShakeAngle};
+}
+
+// fade the shake, called by the engine each update after gameUpdatePost
+function cameraShakeUpdate()
+{
+    if (!cameraShakeTrauma || paused || engineFrozenTick) return; // held while paused or at time scale 0, a hit stop
+    const fade = cameraShakeDecay * timeDelta, axes = cameraShakeAxes;
+    cameraShakeTrauma = max(0, cameraShakeTrauma - fade);
+    cameraShakeAxes = vec2(max(0, axes.x - fade), max(0, axes.y - fade));
+}
+
+// shake the view for the draw, called by the engine before a frame renders
+function cameraShakeBegin()
+{
+    cameraShakeSavedPos = undefined;
+    if (!cameraShakeTrauma) return;
+    const offset = cameraShakeOffset();
+    cameraShakeSavedPos = cameraPos, cameraShakeSavedAngle = cameraAngle;
+    cameraPos = cameraShakeShakenPos = cameraPos.add(offset.pos);
+    cameraAngle = cameraShakeShakenAngle = cameraAngle + offset.angle;
+}
+
+// give the game its own cameraPos and cameraAngle back, called by the engine after a frame renders; one the game set
+// while the frame drew is its own already, and is kept
+function cameraShakeEnd()
+{
+    if (!cameraShakeSavedPos) return;
+    if (cameraPos === cameraShakeShakenPos)
+        cameraPos = cameraShakeSavedPos;
+    if (cameraAngle === cameraShakeShakenAngle)
+        cameraAngle = cameraShakeSavedAngle;
+    cameraShakeSavedPos = cameraShakeShakenPos = undefined;
+}
+
+/** Check if a box, point, or circle is on screen with a circle test
+ *  If size is a Vector2, uses the length as diameter
+ *  This can be used to cull offscreen objects from render or update
+ *  @param {Vector2} pos - world space position
+ *  @param {Vector2|number} [size] - world space size or diameter
+ *  @return {boolean}
+ *  @memberof Draw */
+function isOnScreen(pos, size=0)
+{
+    ASSERT(isVector2(pos), 'pos must be a vec2');
+    ASSERT(isVector2(size) || isNumber(size), 'size must be a vec2 or number');
+
+    // cameraScale of 0 collapses world coords; nothing is visible
+    if (!cameraScale) return false;
+
+    // circle on screen test, worldToScreen inlined in doubled screen units so it compares against the full canvas size
+    let x = pos.x - cameraPos.x;
+    let y = pos.y - cameraPos.y;
+    if (cameraAngle)
+    {
+        // apply inverse camera rotation
+        const c = cos(cameraAngle), s = sin(cameraAngle);
+        const xr = x * c - y * s, yr = x * s + y * c;
+        x = xr; y = yr;
+    }
+    x *= cameraScale*2; y *= -cameraScale*2;
+
+    if (size instanceof Vector2)
+        size = size.length(); // use length of vector as diameter
+    size *= cameraScale;
+
+    // check against screen bounds
+    const w = mainCanvasSize.x, h = mainCanvasSize.y;
+    return x + size > -w && x - size < w &&
+           y + size > -h && y - size < h;
+}
+
+/** Enable additive blending
+ *  @param {boolean} [additive]
+ *  @memberof Draw */
+function setAdditiveBlendMode(additive=true)
+{
+    glAdditive = additive;
+    if (drawContext) // none headless
+        drawContext.globalCompositeOperation = additive ? 'lighter' : 'source-over';
+}
+
+/** Set the Shader that 2D draws use from now on, none for the engine's own
+ *  - The object render loop sets each object's own shader, so this is for draws in gameRender and gameRenderPost
+ *  @param {Shader} [shader]
+ *  @memberof Draw */
+function setShader(shader)
+{
+    ASSERT(!shader || shader instanceof Shader, 'shader must be a Shader');
+    glCustomShader = shader || undefined; // null is no shader too, so it batches with none
+}
+
+/** Set an extra canvas to composite behind the engine canvases when combining
+ *  Plugins that insert their own canvas below the LittleJS canvases should set
+ *  this so it appears in screenshots
+ *  @param {HTMLCanvasElement} [canvas]
+ *  @memberof Draw */
+function setBackgroundCanvas(canvas) { backgroundCanvas = canvas; }
+
+/** Combines LittleJS canvases onto the main canvas
+ *  This is necessary for things like screenshots and video
+ *  @memberof Draw */
+function combineCanvases()
+{
+    // this composites raw canvases so it works in backing store pixels,
+    // mainCanvasSize is css pixels and would throw away resolution
+    const w = mainCanvas.width, h = mainCanvas.height;
+    workCanvas.width = w;
+    workCanvas.height = h;
+    // remove background alpha — explicit fillStyle so a previous caller
+    // leaving workContext.fillStyle transparent can't silently no-op this
+    workContext.fillStyle = '#000';
+    workContext.fillRect(0,0,w,h);
+    if (backgroundCanvas)
+        workContext.drawImage(backgroundCanvas, 0, 0, w, h);
+    glCopyToContext(workContext);
+    workContext.drawImage(mainCanvas, 0, 0);
+
+    // draw back 1:1, mainContext is scaled to css pixels
+    mainContext.save();
+    mainContext.setTransform(1, 0, 0, 1, 0, 0);
+    mainContext.drawImage(workCanvas, 0, 0);
+    mainContext.restore();
+}
+
+// tint straight color pixels in place, rgb times color, plus additiveColor with alpha when it adds anything;
+// returns true when color.a went into the alpha, so it is not applied again as globalAlpha
+function tintImageData(data, color, additiveColor)
+{
+    if (additiveColor && !isBlack(additiveColor))
+    {
+        // multiply + additive (slower), color.a is baked into the alpha channel here
+        const colorMultiply = [clamp(color.r), clamp(color.g), clamp(color.b), clamp(color.a)];
+        const colorAdd = [additiveColor.r * 255, additiveColor.g * 255,
+                          additiveColor.b * 255, additiveColor.a * 255];
+        for (let i = 0; i < data.length; ++i)
+            data[i] = data[i] * colorMultiply[i&3] + colorAdd[i&3] |0;
+        return true;
+    }
+
+    // RGB only, faster — alpha left intact for the caller
+    for (let i = 0; i < data.length; i+=4)
+    {
+        data[i  ] *= clamp(color.r);
+        data[i+1] *= clamp(color.g);
+        data[i+2] *= clamp(color.b);
+    }
+    return false;
+}
+
+// Internal: bake a color/additive-color tint into a context's canvas, the work
+// canvas by default, at the image's native resolution. Returns that canvas,
+// suitable for passing to context.createPattern. Used by drawTextureWrapped's
+// Canvas2D path, which keeps a canvas of its own for each image. Caller is responsible for short-circuiting when no
+// tint is needed (i.e. color is white and additiveColor is black/none).
+function bakeTintedImage(image, color, additiveColor, context=workReadContext)
+{
+    const w = image.width|0, h = image.height|0;
+    context.canvas.width = w;
+    context.canvas.height = h;
+    context.drawImage(image, 0, 0);
+
+    const imageData = context.getImageData(0, 0, w, h);
+    tintImageData(imageData.data, color, additiveColor);
+    context.putImageData(imageData, 0, 0);
+    return context.canvas;
+}
+
+// the tinted bake drawTextureWrapped keeps for each image, its tint and the context it is in
+const drawTextureWrappedBakes = new WeakMap;
+
+/** Internal: draw an image with color and additive color applied in Canvas2D, drawTile calls it
+ *  This is slower than normal drawImage when color is applied
+ *  @ignore
+ *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} context
+ *  @param {HTMLImageElement|HTMLCanvasElement|OffscreenCanvas|ImageBitmap} image
+ *  @param {number} sx
+ *  @param {number} sy
+ *  @param {number} sWidth
+ *  @param {number} sHeight
+ *  @param {number} dx
+ *  @param {number} dy
+ *  @param {number} dWidth
+ *  @param {number} dHeight
+ *  @param {Color} color
+ *  @param {Color} [additiveColor]
+ *  @param {number} [bleed] - How many pixels to shrink the source, used to fix bleeding */
+function drawImageColor(context, image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight, color, additiveColor, bleed=0)
+{
+    const sx2 = bleed;
+    const sy2 = bleed;
+    sWidth  = max(1,sWidth|0);
+    sHeight = max(1,sHeight|0);
+    const sWidth2  = sWidth  - 2*bleed;
+    const sHeight2 = sHeight - 2*bleed;
+    if (!canvasColorTiles || isWhite(color) && (!additiveColor || isBlack(additiveColor)))
+    {
+        // white tint and nothing added, the texels are drawn as they are
+        context.globalAlpha = color.a;
+        context.drawImage(image, sx+sx2, sy+sy2, sWidth2, sHeight2, dx, dy, dWidth, dHeight);
+        context.globalAlpha = 1;
+    }
+    else
+    {
+        // copy to offscreen canvas, sized again only when the size changes: setting a size remakes the canvas even
+        // to the same one, and a game's tinted tiles are mostly of one size
+        if (workReadCanvas.width !== sWidth || workReadCanvas.height !== sHeight)
+            workReadCanvas.width = sWidth, workReadCanvas.height = sHeight;
+        else
+            workReadContext.clearRect(0, 0, sWidth, sHeight);
+        workReadContext.drawImage(image, sx|0, sy|0, sWidth, sHeight, 0, 0, sWidth, sHeight);
+
+        // tint image using offscreen work context
+        const imageData = workReadContext.getImageData(0, 0, sWidth, sHeight);
+        const alphaBaked = tintImageData(imageData.data, color, additiveColor);
+        workReadContext.putImageData(imageData, 0, 0);
+        if (!alphaBaked) context.globalAlpha = color.a;
+        context.drawImage(workReadCanvas, sx2, sy2, sWidth2, sHeight2, dx, dy, dWidth, dHeight);
+        if (!alphaBaked) context.globalAlpha = 1;
+    }
+}
+
+
+/** Returns true if fullscreen mode is active
+ *  @return {boolean}
+ *  @memberof Draw */
+function isFullscreen() { return !!document.fullscreenElement; }
+
+/** Toggle fullscreen mode
+ *  @memberof Draw */
+function toggleFullscreen()
+{
+    const rootElement = mainCanvas.parentElement;
+    if (isFullscreen())
+    {
+        if (document.exitFullscreen)
+            document.exitFullscreen()?.catch?.(()=> {}); // refused outside a click, it stays as it is
+    }
+    else if (rootElement.requestFullscreen)
+        rootElement.requestFullscreen()?.catch?.(()=> {});
+}
+
+/** Set the cursor style
+ *  @param {string}  [cursorStyle] - CSS cursor style (auto, none, crosshair, etc)
+ *  @memberof Draw */
+function setCursor(cursorStyle = 'auto')
+{
+    const rootElement = mainCanvas.parentElement;
+    rootElement.style.cursor = cursorStyle;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Engine font image, 8x8 font provided by the engine
+ *  @type {ImageFont}
+ *  @memberof Draw */
+let engineImageFont;
+
+/**
+ * Image Font Object - Draw text by using tiles in an image
+ * - 96 characters (from space to tilde) are stored in an image
+ * - A 8x8 default engine font is supplied for general use
+ * - This system is WebGL enabled for fast text rendering
+ * - Fonts can also be colored and scaled along each axis
+ *
+ * @memberof Draw
+ * @example
+ * // use built in font
+ * const font = engineImageFont;
+ *
+ * // draw text
+ * font.drawTextScreen('LittleJS\nHello World!', vec2(200, 50), 16);
+ */
+class ImageFont
+{
+    /** Create an image font
+     *  @param {TileInfo} tileInfo - Tile info of first character in font
+     */
+    constructor(tileInfo)
+    {
+        ASSERT(!!tileInfo, 'tileInfo is required for ImageFont');
+        
+        /** @property {TileInfo} - Tile info for the font */
+        this.tileInfo = tileInfo; // kept, not copied, so a loadSprite tile filled in once it loads is seen
+    }
+
+    /** Draw text in world space using the image font
+     *  - The text stays upright and ignores cameraAngle, each glyph is snapped to whole screen pixels to keep it crisp
+     *  @param {string|number} text
+     *  @param {Vector2} pos
+     *  @param {Vector2|number} [size]
+     *  @param {boolean} [center=true] - center each line on pos, and the lines of multi-line text around it
+     *  @param {Color} [color=WHITE]
+     *  @param {boolean} [useWebGL=glEnable]
+     *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context] 
+     */
+    drawText(text, pos, size=1, center, color, useWebGL, context)
+    {
+        ASSERT(isVector2(size) || typeof size === 'number', 'size must be a vec2 or number');
+
+        if (typeof size === 'number')
+        {
+            // if size is a number, make it a vector
+            ASSERT(size > 0, 'ImageFont.drawText: size must be above 0', size);
+            size *= cameraScale;
+            size = new Vector2(size, size);
+        }
+        else
+            size = size.scale(cameraScale);
+        // world text, only drawn through screen space, so it still casts in a pass that skips screen space draws
+        const skip = glSkipScreenSpace;
+        glSkipScreenSpace = false;
+        try { this.drawTextScreen(text, worldToScreen(pos), size, center, color, useWebGL, context); }
+        finally { glSkipScreenSpace = skip; }
+    }
+
+    /** Draw text in screen space using the image font
+     *  @param {string|number} text
+     *  @param {Vector2} pos
+     *  @param {Vector2|number} size
+     *  @param {boolean} [center] - center each line on pos, and the lines of multi-line text around it
+     *  @param {Color} [color=WHITE]
+     *  @param {boolean} [useWebGL=glEnable]
+     *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context]
+     */
+    drawTextScreen(text, pos, size, center=true, color=WHITE, useWebGL=glEnable, context)
+    {
+        ASSERT(isStringLike(text), 'text must be a string');
+        ASSERT(isVector2(pos), 'pos must be a vec2');
+        ASSERT(isVector2(size) || typeof size === 'number', 'size must be a vec2 or number');
+        ASSERT(typeof center === 'boolean', 'center must be a boolean, the color comes after it, unlike drawText');
+        ASSERT(isColor(color), 'color must be a color');
+        if (headlessMode && !context) return; // nothing to draw on, as the other draws, and the font has no texture
+
+        // if size is a number, make it a vector
+        const glyphSize = typeof size === 'number' ? new Vector2(size, size) : size;
+
+        // precache objects for drawing, a copy of the tile info each glyph moves, the font's own stays put
+        const drawPos = new Vector2;
+        const tileInfo = this.tileInfo.frame(0);
+
+        // draw each line of text, centered vertically like drawTextScreen when center is set
+        const lines = textLines(text); // a Windows line ending too
+        const centerOffsetY = center ? (lines.length-1) * glyphSize.y / 2 : 0;
+        lines.forEach((line, j)=>
+        {
+            // only a line with a registered icon in it takes the icon path, every other draws as it always has
+            const runs = textIcons.size && !textIconsOff && line.includes(':') ? textIconRuns(line) : undefined;
+            if (runs)
+            {
+                imageFontIconLine(this, runs, pos, j, glyphSize, centerOffsetY, center, color, useWebGL, context);
+                return;
+            }
+            const characters = textCharacters(line);
+            const centerOffset = center ? (characters.length-1) * glyphSize.x / 2 : 0;
+            for (let i=characters.length; i--;)
+            {
+                // get the glyph, out of range characters use the last one
+                const charCode = textCharacterCode(characters, i);
+                this.getGlyphPos(charCode < 32 || charCode > 127 ? 95 : charCode - 32, tileInfo.pos);
+
+                // snap the glyph edges to whole pixels
+                // tiles are drawn from their center, so snapping the center
+                // to a whole pixel puts the edges on half pixels when the
+                // size is even, and a row or column of the glyph then has
+                // no pixel center inside it and is not rasterized at all
+                // ceil picks the nearest aligned position, breaking ties
+                // downward to match how this used to truncate
+                drawPos.x = ceil(pos.x + i * glyphSize.x - centerOffset - glyphSize.x/2) + glyphSize.x/2 - .5;
+                drawPos.y = ceil(pos.y + j * glyphSize.y - centerOffsetY - glyphSize.y/2) + glyphSize.y/2 - .5;
+                drawTile(drawPos, glyphSize, tileInfo, color, 0, false, undefined, useWebGL, true, context);
+            }
+        });
+    }
+
+    /** Get where a glyph sits in the texture: counted in the font's own columns when its tile has them, like a font
+     *  packed by loadSprite, otherwise along the texture's grid from the font's first tile, the way tile() lays it out
+     *  @param {number} index - Glyph number, 0 is the space and the characters follow in ASCII order
+     *  @param {Vector2} [pos] - Written into and returned, for a loop that places many
+     *  @return {Vector2} */
+    getGlyphPos(index, pos=new Vector2)
+    {
+        const t = this.tileInfo, padding = t.padding;
+        const w = t.size.x + padding*2, h = t.size.y + padding*2;
+        if (t.columns)
+            return pos.set(t.pos.x + index % t.columns * w, t.pos.y + (index / t.columns |0) * h);
+        const columns = t.textureInfo.size.x / w |0;
+        const glyph = ((t.pos.y - padding) / h |0) * columns + ((t.pos.x - padding) / w |0) + index;
+        return pos.set(glyph % columns * w + padding, (glyph / columns |0) * h + padding);
+    }
+}
+
+// a line of glyphs and icons, each icon as tall as a glyph and as wide as its tile's shape, in its own colors faded
+// with the text's alpha, the line centered by its whole width; each edge snapped as a glyph's is
+function imageFontIconLine(font, runs, pos, j, glyphSize, centerOffsetY, center, color, useWebGL, context)
+{
+    const items = [], widths = [];
+    for (const run of runs)
+    {
+        if (typeof run == 'string')
+        {
+            const characters = textCharacters(run);
+            for (let i = 0; i < characters.length; ++i)
+                items.push(textCharacterCode(characters, i)), widths.push(glyphSize.x);
+        }
+        else // an image that failed to load takes no room
+            items.push(run), widths.push(run.size.y ? glyphSize.y * run.size.x / run.size.y : 0);
+    }
+    const total = widths.reduce((a, b)=> a + b, 0);
+    const tileInfo = font.tileInfo.frame(0), drawPos = new Vector2, size = new Vector2;
+    const iconColor = new Color(1, 1, 1, color.a);
+    let x = pos.x - (center ? total / 2 : glyphSize.x / 2);
+    const y = ceil(pos.y + j * glyphSize.y - centerOffsetY - glyphSize.y/2) + glyphSize.y/2 - .5;
+    items.forEach((item, i)=>
+    {
+        const w = widths[i];
+        drawPos.set(ceil(x) + w/2 - .5, y);
+        x += w;
+        if (!w) return;
+        if (typeof item == 'number')
+        {
+            font.getGlyphPos(item < 32 || item > 127 ? 95 : item - 32, tileInfo.pos);
+            drawTile(drawPos, glyphSize, tileInfo, color, 0, false, undefined, useWebGL, true, context);
+        }
+        else
+            drawTile(drawPos, size.set(w, glyphSize.y), item, iconColor, 0, false, undefined, useWebGL, true,
+                context);
+    });
+}
+
+// how strong a light's glow is at a distance from its middle, 0 there to 1 at the edge: a bell, full in the middle
+// and nothing at the edge, fading faster the higher the falloff
+function engineGlowAlpha(r, falloff)
+{
+    const k = 3.5 * falloff, edge = Math.exp(-k);
+    return (Math.exp(-k * r * r) - edge) / (1 - edge);
+}
+
+// the soft round glow of the 2D and 3D lights, one texture for each falloff, rounded to a tenth so a changing falloff
+// makes only a few, each made once from a canvas; undefined headless or without a canvas
+const engineGlowTextures = new Map;
+function engineGlowTexture(falloff=1)
+{
+    ASSERT(isNumber(falloff) && falloff > 0, 'glowFalloff must be a number above 0');
+    const key = max(round(falloff * 10), 1) / 10;
+    let texture = engineGlowTextures.get(key);
+    if (texture || !glContext || !canvasAvailable()) return texture;
+    const size = 64, context = createCanvasContext(size), steps = 16;
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    for (let i = 0; i <= steps; ++i)
+        gradient.addColorStop(i / steps, 'rgba(255,255,255,' + engineGlowAlpha(i / steps, key).toFixed(4) + ')');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    engineGlowTextures.set(key, texture = new TextureInfo(context.canvas, true, false, false));
+    return texture;
+}
+
+// load engine font, called automatically on startup
+async function imageFontInit()
+{
+    const image = new Image;
+    await new Promise(resolve =>
+    {
+        image.onerror = image.onload = resolve;
+        image.crossOrigin = 'anonymous';
+        image.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAAeAQMAAABnrVXaAAAABlBMVEUAAAD///+l2Z/dAAAAAXRSTlMAQObYZgAAAjpJREFUOMu9kzFu2zAUhn+CAROgqrk+B2l0BWYxMjlXeYaAtFtbdA1sGgHqRQfI0CNkSG5AwYB0BQ8d5Bsomwah6CPVeGg6tEPzAxLwyI+P78cP4u9lNO9OoMKnLMOobG5020/yaj/MrRcCGh1gBbyiLTPJEYaIiom5KM9Jq7KgynMGtb6L4GL4MF2H4LQKCXTvDVw2I4MsgZT7QLExdiutH+D08VOP3INXRrWX1/mmpbkNgAPYRVANb4xpcegYvhiNbIXauQICEjBuYLfMakaakWQeXxiZ0VDtuJCKs3ztMV59QtsHJNcRxDzfdL21ty3PrfIcXTN+E+GFAv6T5nbT9jd50/WFxb5ksdAv49qS6ouymG66ji08UMT6moykYLAo+V0j23GN4m829ZySAD5K7QsBfQTvOG8eE+gTeGYRAmnNAubN3hf5Zv9tJWDHp/VTuaSm7SN4fyINQqaNO3RMVxvpSPXnOChnRNvFcGY0gnwiPswYwTKVPE0zVtX3mTEIOoFzaqLrGuJaV+Uqumb71fVk/VoOH3cdLNQP/FHi8hV0CQNoqBZsUPlLPMsdCJro9QAaQQ0woDy9BJm0eTxCFnO9srcYlhNVlfR2EyTrph1uUtbUtAJifwRgrKuYdXVHeb0YI3QpawohQHkloI3J5FuVwI5ORxC9k2Tuz9Ir1IjgeIPGMHYkAZe2RuYkmWFmt3gGbTPOmBUWVTmRmHtGrfpzG/yuQNOKa6gBB/WA9khitPgl6/GP+gl2Af6tCbvaygAAAABJRU5ErkJggg==';
+    });
+    
+    const tilePos=vec2(), tileSize=vec2(8), padding=1, bleed=0;
+    const textureInfo = new TextureInfo(image);
+    const tileInfo = new TileInfo(tilePos, tileSize, textureInfo, padding, bleed);
+    engineImageFont = new ImageFont(tileInfo);
+}

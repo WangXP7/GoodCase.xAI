@@ -1,0 +1,56 @@
+// Layout of the cell report: over the whole canvas area, clickable only on
+// the panel at the top centre (below the HUD column). The box of a Shift drag
+// comes in client pixels and is drawn position: fixed; nothing between the
+// host and the page transforms. The selection colour is the one of the cells
+// on the map (--td-cell-selection).
+
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 21;
+}
+
+.crp {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 320px;
+  padding: 10px 12px;
+  pointer-events: auto;
+}
+
+.crp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.crp-count {
+  color: var(--td-cell-selection);
+}
+
+.crp-note {
+  height: 32px;
+}
+
+.crp-actions {
+  justify-content: stretch;
+
+  > * {
+    flex: 1;
+  }
+}
+
+.crp-box {
+  position: fixed;
+  border: 1px dashed var(--td-cell-selection);
+  background: color-mix(in srgb, var(--td-cell-selection) 12%, transparent);
+  pointer-events: none;
+}

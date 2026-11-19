@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worm Monster</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@1&family=Permanent+Marker"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      /* body has no height and only body sets a background, so the canvas at z-index -1 shows and takes the clicks. */
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #050101;
+      }
+
+      /* The loading screen and title: in the page so it shows before the scripts arrive. worm-monster.js fills the
+         bar, then swaps it for the Start button and lets the scene show through (--darkness); Start fades it out.
+         Over stats-gl. Every animation here is opacity or transform, so it keeps moving on the compositor while the
+         main thread builds shaders. */
+      #loading {
+        --fade: 0.1s;
+        --darkness: 0.8;
+        --blood: #a3161a;
+        --blood-bright: #cf2a30;
+        --bone: 232, 224, 204;
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        padding: 16px 16px max(56px, 5vh);
+        overflow: hidden;
+        color: rgba(var(--bone), 0.55);
+        font-family: 'IM Fell English SC', Georgia, serif;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        cursor: progress;
+        transition:
+          opacity var(--fade) ease-out,
+          visibility 0s linear var(--fade);
+      }
+      #loading.done {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #loading.ready {
+        cursor: default;
+      }
+      /* The backdrop: opaque while loading, thinned to --darkness once it waits for Start. */
+      #loading::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background: radial-gradient(ellipse at center, #140606 0%, #050101 70%);
+        transition: opacity 2.5s ease-in-out;
+      }
+      #loading.ready::before {
+        opacity: var(--darkness);
+      }
+      /* Film grain, jumping a few px each step. */
+      #loading::after {
+        content: '';
+        position: absolute;
+        inset: -64px;
+        z-index: -1;
+        pointer-events: none;
+        opacity: 0.07;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        animation: loading-grain 0.9s steps(1) infinite;
+      }
+      @keyframes loading-grain {
+        0% { transform: translate(0, 0); }
+        12% { transform: translate(-28px, 14px); }
+        25% { transform: translate(18px, -36px); }
+        37% { transform: translate(-44px, -20px); }
+        50% { transform: translate(32px, 40px); }
+        62% { transform: translate(-12px, 48px); }
+        75% { transform: translate(46px, -8px); }
+        87% { transform: translate(-36px, -46px); }
+      }
+
+      .loading-main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 56px;
+        min-height: 0;
+      }
+      .loading-title {
+        text-align: center;
+      }
+      .loading-name {
+        margin: 0;
+        font-weight: 400;
+        font-size: clamp(40px, 12vw, 136px);
+        line-height: 1;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        color: var(--blood);
+        text-shadow:
+          0 0 28px rgba(163, 22, 26, 0.45),
+          0 2px 2px rgba(0, 0, 0, 0.9);
+        animation: loading-flicker 7s linear infinite;
+      }
+      /* A dying tube light: mostly on, a stutter now and then. */
+      @keyframes loading-flicker {
+        0%, 31%, 33.5%, 35%, 71%, 72.5%, 100% { opacity: 1; }
+        32%, 34%, 71.8% { opacity: 0.3; }
+      }
+      .loading-tagline {
+        margin: 18px 0 0;
+        font-size: clamp(12px, 1.8vw, 17px);
+        letter-spacing: 0.32em;
+        color: rgba(var(--bone), 0.4);
+      }
+
+      /* The bar while it loads, then the Start button in its place. */
+      .loading-action {
+        display: grid;
+        place-items: center;
+        min-height: 72px;
+      }
+      .loading-progress,
+      .loading-button {
+        grid-area: 1 / 1;
+      }
+      .loading-progress {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+        transition:
+          opacity 0.15s ease-out,
+          visibility 0s linear 0.15s;
+      }
+      #loading.ready .loading-progress {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .loading-bar {
+        position: relative;
+        width: min(60vw, 320px);
+        height: 2px;
+        overflow: hidden;
+        background: rgba(var(--bone), 0.12);
+      }
+      .loading-fill {
+        position: absolute;
+        inset: 0;
+        background: var(--blood);
+        transform-origin: left;
+        transform: scaleX(0);
+        transition: transform 0.4s ease-out;
+      }
+      /* A glint along the bar. */
+      .loading-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 30%;
+        background: linear-gradient(90deg, transparent, rgba(var(--bone), 0.4), transparent);
+        animation: loading-glint 1.6s ease-in-out infinite;
+      }
+      @keyframes loading-glint {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(340%); }
+      }
+      .loading-stage {
+        margin: 0;
+        min-height: 22px;
+        font-size: clamp(14px, 2vw, 17px);
+        letter-spacing: 0.25em;
+        text-align: center;
+      }
+      .loading-button {
+        min-width: 200px;
+        padding: 16px 44px 16px calc(44px + 0.4em);
+        border: 1px solid rgba(163, 22, 26, 0.75);
+        background: rgba(163, 22, 26, 0.1);
+        color: rgba(var(--bone), 0.85);
+        font: inherit;
+        font-size: clamp(20px, 2.6vw, 24px);
+        letter-spacing: 0.4em;
+        cursor: pointer;
+        touch-action: manipulation;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.2s ease-out,
+          visibility 0s linear 0.2s,
+          background 0.3s,
+          color 0.3s,
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      #loading.ready .loading-button {
+        opacity: 1;
+        visibility: visible;
+        animation: loading-heartbeat 1.4s ease-in-out 0.2s infinite;
+        transition:
+          opacity 0.2s ease-out,
+          visibility 0s,
+          background 0.3s,
+          color 0.3s,
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      .loading-button:focus-visible,
+      .loading-button:active {
+        outline: none;
+        border-color: var(--blood-bright);
+        background: rgba(163, 22, 26, 0.38);
+        color: #fff;
+        box-shadow:
+          0 0 36px rgba(163, 22, 26, 0.6),
+          inset 0 0 18px rgba(0, 0, 0, 0.5);
+      }
+      /* Lub-dub, then a rest. */
+      @keyframes loading-heartbeat {
+        0%, 40%, 100% { transform: scale(1); }
+        10% { transform: scale(1.05); }
+        20% { transform: scale(1); }
+        28% { transform: scale(1.03); }
+      }
+
+      /* The tip at the bottom: an icon and a line, one at a time, crossfading; a click or tap shows the next. Stacked in
+         one cell, so the row keeps the tallest tip's height. */
+      .loading-tips {
+        display: grid;
+        justify-self: center;
+        width: min(100%, 640px);
+        margin: 0;
+        padding: 16px 0 0;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .loading-tips:focus-visible {
+        outline: 1px solid rgba(var(--bone), 0.5);
+        outline-offset: 6px;
+      }
+      .loading-tip {
+        grid-area: 1 / 1;
+        justify-self: center;
+        align-self: center;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.45s ease-in-out,
+          visibility 0s linear 0.45s;
+      }
+      .loading-tip.shown {
+        opacity: 1;
+        visibility: visible;
+        transition:
+          opacity 0.45s ease-in-out,
+          visibility 0s;
+      }
+      .loading-tip-icon {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        color: var(--blood-bright);
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 6px rgba(163, 22, 26, 0.5));
+      }
+      .loading-tip-icon .ring {
+        stroke-width: 1.5;
+        opacity: 0.6;
+      }
+      .loading-tip-icon .solid {
+        fill: currentColor;
+        stroke: none;
+      }
+      /* With no card under it, a shadow keeps it legible over the scene. */
+      .loading-tip-text {
+        min-width: 0;
+        font-family: 'IM Fell English', Georgia, serif;
+        font-style: italic;
+        font-size: clamp(15px, 1.9vw, 18px);
+        line-height: 1.45;
+        color: rgba(var(--bone), 0.8);
+        text-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.9),
+          0 0 14px rgba(0, 0, 0, 0.85);
+        transition: color 0.3s;
+      }
+      .loading-tips:active .loading-tip-text {
+        color: rgba(var(--bone), 0.95);
+      }
+      /* Keys and on-screen buttons, as the game shows them. */
+      .loading-tip kbd {
+        display: inline-block;
+        min-width: 26px;
+        margin: 0 2px;
+        padding: 1px 7px 2px;
+        border: 1px solid rgba(var(--bone), 0.45);
+        border-bottom-width: 3px;
+        border-radius: 5px;
+        background: rgba(var(--bone), 0.08);
+        color: rgba(var(--bone), 0.95);
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-size: 12px;
+        font-style: normal;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        line-height: 16px;
+        text-align: center;
+        text-transform: uppercase;
+        vertical-align: 2px;
+      }
+      .loading-tip kbd.touch {
+        border-bottom-width: 1px;
+        border-radius: 999px;
+        padding: 1px 9px;
+      }
+      /* Each tip in the words of its input: the keyboard and mouse, or the touch screen. */
+      .on-touch {
+        display: none;
+      }
+      @media (pointer: coarse) {
+        .on-keys {
+          display: none;
+        }
+        .on-touch {
+          display: inline;
+        }
+      }
+      /* Hover only where there is one: on a touch screen it sticks after a tap. */
+      @media (hover: hover) {
+        .loading-button:hover {
+          border-color: var(--blood-bright);
+          background: rgba(163, 22, 26, 0.38);
+          color: #fff;
+          box-shadow:
+            0 0 36px rgba(163, 22, 26, 0.6),
+            inset 0 0 18px rgba(0, 0, 0, 0.5);
+        }
+        .loading-tips:hover .loading-tip-text {
+          color: rgba(var(--bone), 0.95);
+        }
+      }
+
+      #loading.failed {
+        cursor: default;
+      }
+      #loading.failed .loading-bar::after {
+        animation: none;
+      }
+      #loading.failed .loading-stage {
+        max-width: 80vw;
+        color: #ff6b6b;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        letter-spacing: 0;
+      }
+      /* Phones on their side, and other short screens. */
+      @media (max-height: 520px) {
+        #loading {
+          padding-bottom: 52px;
+        }
+        .loading-main {
+          gap: 22px;
+        }
+        .loading-name {
+          font-size: clamp(36px, 9vh, 72px);
+        }
+        .loading-tagline {
+          margin-top: 8px;
+        }
+        .loading-action {
+          min-height: 60px;
+        }
+        .loading-button {
+          padding-top: 12px;
+          padding-bottom: 12px;
+        }
+        .loading-tips {
+          padding-top: 10px;
+        }
+      }
+      @media (max-width: 480px) {
+        .loading-main {
+          gap: 44px;
+        }
+        .loading-tip {
+          gap: 12px;
+        }
+        .loading-tip-icon {
+          width: 30px;
+          height: 30px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #loading::after,
+        .loading-name,
+        .loading-bar::after,
+        #loading.ready .loading-button {
+          animation: none;
+        }
+      }
+    </style>
+    <script src="../utils/importmap.js"></script>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="loading-main">
+        <header class="loading-title">
+          <h1 class="loading-name">Worm Monster</h1>
+          <p class="loading-tagline">He's been feeling huggy lately</p>
+        </header>
+        <div class="loading-action">
+          <div class="loading-progress">
+            <div class="loading-bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100">
+              <div class="loading-fill"></div>
+            </div>
+            <p class="loading-stage" aria-live="polite">Loading</p>
+          </div>
+          <button class="loading-button" type="button">Start</button>
+        </div>
+      </div>
+      <button class="loading-tips" type="button" title="Next tip">
+        <span class="loading-tip">
+          <svg class="loading-tip-icon" viewBox="0 0 40 40" aria-hidden="true">
+            <circle class="ring" cx="20" cy="20" r="18" />
+            <circle class="solid" cx="20" cy="13" r="1.8" />
+            <path d="M20 18.5v10" />
+          </svg>
+          <span class="loading-tip-text"
+            ><span class="on-keys">Hold <kbd>Shift</kbd> to run.</span
+            ><span class="on-touch">Push <kbd class="touch">Walk</kbd> all the way to run.</span> It won't save you, but
+            it'll feel like a plan.</span
+          >
+        </span>
+        <span class="loading-tip">
+          <svg class="loading-tip-icon" viewBox="0 0 40 40" aria-hidden="true">
+            <circle class="ring" cx="20" cy="20" r="18" />
+            <path d="M20 10.5c3.6 5 6.2 8.3 6.2 11.8a6.2 6.2 0 0 1-12.4 0c0-3.5 2.6-6.8 6.2-11.8z" />
+          </svg>
+          <span class="loading-tip-text">Wash your hands after touching the worms. And before. And for the rest of your life.</span>
+        </span>
+        <span class="loading-tip">
+          <svg class="loading-tip-icon" viewBox="0 0 40 40" aria-hidden="true">
+            <circle class="ring" cx="20" cy="20" r="18" />
+            <circle class="solid" cx="11.4" cy="28.6" r="1.9" />
+            <path d="M12.8 27.2l4.4-4.4" />
+            <path d="M17 23l4.2-4.2" stroke-width="3.6" />
+            <path d="M21 19l5.4-5.4" stroke-width="5.8" />
+          </svg>
+          <span class="loading-tip-text"
+            ><span class="on-keys"><kbd>Click</kbd> to swing the bat.</span
+            ><span class="on-touch">Tap <kbd class="touch">Hit</kbd> to swing the bat.</span> Hitting a man made of worms
+            legally counts as gardening.</span
+          >
+        </span>
+      </button>
+    </div>
+    <script>
+      // a tip from the first frame; worm-monster.js deals the rest
+      {
+        const tips = document.querySelectorAll('#loading .loading-tip')
+        tips[Math.floor(Math.random() * tips.length)].classList.add('shown')
+      }
+    </script>
+    <script type="module" src="./worm-monster.js"></script>
+  </body>
+</html>

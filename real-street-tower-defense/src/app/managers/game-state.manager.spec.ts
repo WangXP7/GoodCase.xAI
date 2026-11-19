@@ -1,0 +1,1024 @@
+import { beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
+
+// Mock three.js
+vi.mock('three', async () => await import('@/test/mocks/three.mock'));
+
+// Mock Angular's inject() to return stubs for all injected services
+const mockServices: Record<string, unknown> = {};
+vi.mock('@angular/core', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@angular/core');
+  return {
+    ...actual,
+    Injectable: () => (target: unknown) => target,
+    effect: vi.fn(),
+    inject: (token: { name?: string }) => {
+      const name = token?.name ?? 'unknown';
+      if (!mockServices[name]) {
+        mockServices[name] = createStubService(name);
+      }
+      return mockServices[name];
+    },
+  };
+});
+
+function createStubService(name: string): Record<string, unknown> {
+  const stubs: Record<string, Record<string, unknown>> = {
+    SimCoords: createTestCoords() as unknown as Record<string, unknown>,
+    SimOps: createTestOps() as unknown as Record<string, unknown>,
+    GlobalRouteGridService: {
+      clear: vi.fn(),
+      initialize: vi.fn(),
+      isInitialized: vi.fn().mockReturnValue(false),
+      generateFromRoutes: vi.fn(),
+      applyLosMask: vi.fn().mockReturnValue([]),
+      unregisterTower: vi.fn(),
+    },
+    CombatEffectService: {
+      initialize: vi.fn(),
+      resetAbilityDamage: vi.fn(),
+    },
+    StatusEffectService: {
+      setGameClockProvider: vi.fn(),
+      applySlow: vi.fn(),
+      applyPoison: vi.fn(),
+      applyEffect: vi.fn(),
+      removeExpired: vi.fn(),
+      hasActiveEffect: vi.fn().mockReturnValue(false),
+    },
+    TowerCombatService: {
+      initialize: vi.fn(),
+      turnTowersToGuard: vi.fn(),
+      turnToGuardHeading: vi.fn(),
+      updateTowerShooting: vi.fn(),
+      updateBeamTowers: vi.fn(),
+      updateMeleeTowers: vi.fn(),
+      updateChainTowers: vi.fn(),
+      stopAllBeams: vi.fn(),
+      stopTowerBeam: vi.fn(),
+      stopAllMelee: vi.fn(),
+    },
+    SpatialGridService: {
+      updateEnemy: vi.fn(),
+      removeEnemy: vi.fn(),
+      hasEnemyInRadius: vi.fn().mockReturnValue(false),
+      getEnemyIdsInRadius: vi.fn().mockReturnValue([]),
+      clear: vi.fn(),
+      getEnemyGrid: vi.fn().mockReturnValue({ size: 0 }),
+    },
+    EconomyService: {
+      computeWaveCompletionBonus: vi.fn().mockReturnValue(0),
+      reset: vi.fn(),
+      perfectStreak: 0,
+    },
+  };
+  return stubs[name] ?? {};
+}
+
+import { GameClock } from './game-state/game-clock';
+import { GameStateManager } from './game-state.manager';
+import { GAME_BALANCE } from '../configs/game-balance.config';
+import { TOWER_TYPES } from '../configs/tower-types.config';
+import { getResearch } from '../configs/research/research-tree.config';
+import { GameEventBus } from '../game-engine/game-event-bus';
+import { createTestCoords, createTestOps, type SinkSpy } from '../integration/test-helpers';
+import { skippedWavesGold } from '../services/economy.service';
+import { LOCAL_PLAYER_ID } from './game-state/command-log';
+
+function getEventBus(gsm: GameStateManager): GameEventBus {
+  return gsm.getEventBus();
+}
+
+/** The renderer calls of the manager under test */
+function sinkOf(): SinkSpy {
+  return (mockServices['SimOps'] as { sink: SinkSpy }).sink;
+}
+
+const BASE_POSITION = { lat: 48.77, lon: 9.18, height: 0 };
+const SPAWN_POINTS = [
+  { id: 'sp-1', name: 'North', lat: 48.78, lon: 9.18, height: 0 },
+];
+
+describe('GameStateManager', () => {
+  let gsm: GameStateManager;
+
+  beforeEach(() => {
+    Object.keys(mockServices).forEach(k => delete mockServices[k]);
+    gsm = new GameStateManager();
+  });
+
+  describe('initial state', () => {
+    it('starts with correct initial health', () => {
+      expect(gsm.baseHealth()).toBe(GAME_BALANCE.player.startHealth);
+    });
+
+    it('starts with correct initial credits', () => {
+      expect(gsm.credits()).toBe(GAME_BALANCE.player.startCredits);
+    });
+
+    it('has an event bus', () => {
+      expect(getEventBus(gsm)).toBeDefined();
+    });
+  });
+
+  describe('initialize()', () => {
+    it('registers event handlers on the EventBus', () => {
+      gsm.initialize(BASE_POSITION, SPAWN_POINTS as never[], new Map());
+
+      const bus = getEventBus(gsm);
+      expect(bus.hasListeners('command:place-tower')).toBe(true);
+      expect(bus.hasListeners('command:sell-tower')).toBe(true);
+      expect(bus.hasListeners('command:upgrade-tower')).toBe(true);
+      expect(bus.hasListeners('command:start-wave')).toBe(true);
+      expect(bus.hasListeners('command:restart-game')).toBe(true);
+      expect(bus.hasListeners('command:use-ability')).toBe(true);
+      expect(bus.hasListeners('enemy:reached-base')).toBe(true);
+      expect(bus.hasListeners('enemy:died')).toBe(true);
+    });
+  });
+
+  describe('after initialize()', () => {
+    let bus: GameEventBus;
+
+    beforeEach(() => {
+      gsm.initialize(BASE_POSITION, SPAWN_POINTS as never[], new Map());
+      bus = getEventBus(gsm);
+    });
+
+    describe('credits management', () => {
+      it('spendCredits() deducts when sufficient', () => {
+        const initial = gsm.credits();
+        const result = gsm.spendCredits(10, 'cheat');
+        expect(result).toBe(true);
+        expect(gsm.credits()).toBe(initial - 10);
+      });
+
+      it('spendCredits() returns false when insufficient', () => {
+        const result = gsm.spendCredits(999999, 'cheat');
+        expect(result).toBe(false);
+        expect(gsm.credits()).toBe(GAME_BALANCE.player.startCredits);
+      });
+
+      it('spendCredits() emits credits:changed event', () => {
+        const handler = vi.fn();
+        bus.on('credits:changed', handler);
+
+        gsm.spendCredits(5, 'cheat');
+
+        expect(handler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'credits:changed',
+            credits: GAME_BALANCE.player.startCredits - 5,
+            delta: -5,
+          })
+        );
+      });
+    });
+
+    describe('health management', () => {
+      it('enemy:reached-base reduces health', () => {
+        const initialHealth = gsm.baseHealth();
+        bus.emit({
+          type: 'enemy:reached-base',
+          enemy: { id: 'e1' } as never,
+          damage: 10,
+        });
+        expect(gsm.baseHealth()).toBe(initialHealth - 10);
+      });
+
+      it('an ooze flowing in costs HP for every metre of it', () => {
+        const before = gsm.baseHealth();
+        bus.emit({ type: 'enemy:leaking', enemy: { id: 'ooze' } as never, damage: 2 });
+        expect(gsm.baseHealth()).toBe(before - 2);
+        bus.emit({ type: 'enemy:leaking', enemy: { id: 'ooze' } as never, damage: 3 });
+        bus.emit({ type: 'enemy:reached-base', enemy: { id: 'ooze' } as never, damage: 1 });
+        expect(gsm.baseHealth()).toBe(before - 6);
+      });
+
+      it('a wave costs what walks in, however much that is', () => {
+        // A wave used to cost at most 18 HP however many enemies got through,
+        // so five hundred of them did the same damage as two. The wave the
+        // player loses has to be allowed to decide the run (2026-09-20).
+        const before = gsm.baseHealth();
+        bus.emit({ type: 'enemy:reached-base', enemy: { id: 'e1' } as never, damage: 30 });
+        expect(gsm.baseHealth()).toBe(before - 30);
+        bus.emit({ type: 'enemy:reached-base', enemy: { id: 'e2' } as never, damage: 30 });
+        expect(gsm.baseHealth()).toBe(before - 60);
+      });
+
+      it('health does not go below 0', () => {
+        bus.emit({ type: 'enemy:reached-base', enemy: { id: 'e1' } as never, damage: 9999 });
+        expect(gsm.baseHealth()).toBe(0);
+      });
+
+      it('enemy:reached-base emits health:changed event', () => {
+        const handler = vi.fn();
+        bus.on('health:changed', handler);
+
+        bus.emit({
+          type: 'enemy:reached-base',
+          enemy: { id: 'e1' } as never,
+          damage: 15,
+        });
+
+        expect(handler).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'health:changed',
+            health: GAME_BALANCE.player.startHealth - 15,
+            delta: -15,
+          })
+        );
+      });
+    });
+
+    describe('enemy:died credits', () => {
+      it('awards credits on enemy death', () => {
+        const initial = gsm.credits();
+        bus.emit({
+          type: 'enemy:died',
+          enemy: {
+            position: { lat: 48.77, lon: 9.18, height: 0 },
+            transform: { terrainHeight: 0 },
+            heightOffset: 0,
+          } as never,
+          credits: 25,
+          killedBy: null,
+        });
+        expect(gsm.credits()).toBe(initial + 25);
+      });
+
+      it('does not award credits when credits=0', () => {
+        const initial = gsm.credits();
+        bus.emit({
+          type: 'enemy:died',
+          enemy: {
+            position: { lat: 48.77, lon: 9.18, height: 0 },
+            transform: { terrainHeight: 0 },
+          } as never,
+          credits: 0,
+          killedBy: null,
+        });
+        expect(gsm.credits()).toBe(initial);
+      });
+    });
+
+    describe('placeTower()', () => {
+      it('returns null if not enough credits', () => {
+        gsm.spendCredits(gsm.credits(), 'cheat');
+        const result = gsm.placeTower(BASE_POSITION, 'archer');
+        expect(result).toBeNull();
+      });
+
+      it('returns null for invalid tower type', () => {
+        const result = gsm.placeTower(BASE_POSITION, 'nonexistent' as never);
+        expect(result).toBeNull();
+      });
+
+      it('deducts cost on successful placement', () => {
+        const initial = gsm.credits();
+        const tower = gsm.placeTower(BASE_POSITION, 'archer');
+        if (tower) {
+          expect(gsm.credits()).toBeLessThan(initial);
+        }
+      });
+
+      it('hands plinth height and overhang of a place command to the tower manager', () => {
+        const place = vi.spyOn(gsm.towerManager, 'placeTower').mockReturnValue(null);
+        const position = { ...BASE_POSITION, height: 7 };
+        bus.emit({
+          type: 'command:place-tower', position, typeId: 'archer', rotation: 0.5, plinthHeight: 1.5, plinthOverhang: [3, 4],
+        });
+        bus.emit({ type: 'command:place-tower', position, typeId: 'archer' });
+
+        expect(place.mock.calls).toEqual([
+          [position, 'archer', 0.5, 1.5, [3, 4], false, LOCAL_PLAYER_ID],
+          [position, 'archer', 0, 0, [], false, LOCAL_PLAYER_ID],
+        ]);
+      });
+
+      it('refuses a second one-per-map building while the first stands, and takes no credits for it', () => {
+        const typeId = 'research-center';
+        expect(TOWER_TYPES[typeId].unique).toBe(true);
+        // Not before wave 1 (TODO E123); from the build phase after it
+        expect(gsm.placeTower(BASE_POSITION, typeId)).toBeNull();
+        gsm.waveManager.waveNumber.set(1);
+        const first = gsm.placeTower(BASE_POSITION, typeId);
+        expect(first).not.toBeNull();
+        const credits = gsm.credits();
+        expect(gsm.placeTower({ ...BASE_POSITION, lat: BASE_POSITION.lat + 0.001 }, typeId)).toBeNull();
+        expect(gsm.credits()).toBe(credits);
+
+        gsm.sellTower(first!);
+        expect(gsm.placeTower({ ...BASE_POSITION, lat: BASE_POSITION.lat + 0.001 }, typeId)).not.toBeNull();
+      });
+
+      it('towerCount counts the towers standing now, also when read before the first one', () => {
+        // The corridor lock asks when the location loads, before any tower stands
+        expect(gsm.towerCount()).toBe(0);
+        gsm.towerManager.placeTower(BASE_POSITION, 'archer', 0);
+        expect(gsm.towerCount()).toBe(1);
+        gsm.towerManager.placeTower({ ...BASE_POSITION, lat: BASE_POSITION.lat + 0.001 }, 'archer', 0);
+        expect(gsm.towerCount()).toBe(2);
+      });
+    });
+
+    describe('command:set-targeting', () => {
+      it('sets the strategy and the air sub-strategy of the tower, each only when given', () => {
+        const tower = { ownerId: LOCAL_PLAYER_ID, targetingStrategy: 'closest', airSubStrategy: 'closest', clearTarget: vi.fn() };
+        vi.spyOn(gsm.towerManager, 'getById').mockImplementation((id) => (id === 't1' ? tower as never : null));
+
+        bus.emit({ type: 'command:set-targeting', towerId: 't1', strategy: 'air-priority' });
+        expect(tower).toMatchObject({ targetingStrategy: 'air-priority', airSubStrategy: 'closest' });
+        // The new strategy picks from the next sub-step on, not once the kept target is gone
+        expect(tower.clearTarget).toHaveBeenCalledTimes(1);
+        bus.emit({ type: 'command:set-targeting', towerId: 't1', strategy: 'air-priority' });
+        expect(tower.clearTarget).toHaveBeenCalledTimes(1);
+
+        bus.emit({ type: 'command:set-targeting', towerId: 't1', airSubStrategy: 'lowest-hp' });
+        expect(tower).toMatchObject({ targetingStrategy: 'air-priority', airSubStrategy: 'lowest-hp' });
+
+        // An unknown tower (sold meanwhile) changes nothing
+        bus.emit({ type: 'command:set-targeting', towerId: 'gone', strategy: 'first' });
+        expect(tower.targetingStrategy).toBe('air-priority');
+      });
+    });
+
+    describe('command:set-hold-fire', () => {
+      it('holds fire of a fighting tower and greys it out, not of a passive building', () => {
+        const archer = { id: 't1', ownerId: LOCAL_PLAYER_ID, holdFire: false, typeConfig: { id: 'archer', attackType: 'projectile' } };
+        const center = { id: 't2', holdFire: false, typeConfig: { id: 'research-center', attackType: 'passive' } };
+        const towers: Record<string, unknown> = { t1: archer, t2: center };
+        vi.spyOn(gsm.towerManager, 'getById').mockImplementation((id) => (towers[id] ?? null) as never);
+        const setHoldFire = sinkOf().towers.setHoldFire;
+        const badge = sinkOf().towerBadges.setHoldFire;
+
+        bus.emit({ type: 'command:set-hold-fire', towerId: 't1', holdFire: true });
+        expect(archer.holdFire).toBe(true);
+        expect(setHoldFire).toHaveBeenLastCalledWith('t1', true);
+        // A flame goes out at once, not only at the next sub-step
+        expect((mockServices['TowerCombatService'] as Record<string, Mock>)['stopTowerBeam']).toHaveBeenCalledWith('t1');
+        // The pause sign over the tower comes with the grey model
+        expect(badge).toHaveBeenLastCalledWith('t1', true);
+
+        bus.emit({ type: 'command:set-hold-fire', towerId: 't1', holdFire: false });
+        expect(archer.holdFire).toBe(false);
+        expect(setHoldFire).toHaveBeenLastCalledWith('t1', false);
+
+        setHoldFire.mockClear();
+        badge.mockClear();
+        bus.emit({ type: 'command:set-hold-fire', towerId: 't2', holdFire: true });
+        bus.emit({ type: 'command:set-hold-fire', towerId: 'gone', holdFire: true });
+        expect(center.holdFire).toBe(false);
+        expect(setHoldFire).not.toHaveBeenCalled();
+        expect(badge).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('corridor build under way (corridorPending)', () => {
+      beforeEach(() => {
+        gsm.setCorridorPending(true);
+      });
+
+      it('places no tower and takes no credits until the corridor is built', () => {
+        const place = vi.spyOn(gsm.towerManager, 'placeTower');
+        const credits = gsm.credits();
+        expect(gsm.placeTower(BASE_POSITION, 'archer')).toBeNull();
+        expect(place).not.toHaveBeenCalled();
+        expect(gsm.credits()).toBe(credits);
+
+        gsm.setCorridorPending(false);
+        expect(gsm.placeTower(BASE_POSITION, 'archer')).not.toBeNull();
+        expect(place).toHaveBeenCalledTimes(1);
+      });
+
+      it('starts no wave, with or without a config, until the corridor is built', () => {
+        const start = vi.spyOn(gsm.waveManager, 'startWave').mockImplementation(() => undefined);
+        const begin = vi.spyOn(gsm.waveManager, 'beginWave').mockImplementation(() => undefined);
+        // A world whose spawn has a route: without one the start is refused anyway (TODO E232)
+        vi.spyOn(gsm.waveManager, 'hasLanes').mockReturnValue(true);
+        gsm.startWave({ schedule: { entries: [] }, baseDelay: 100 } as never);
+        gsm.beginWave();
+        expect(start).not.toHaveBeenCalled();
+        expect(begin).not.toHaveBeenCalled();
+
+        gsm.setCorridorPending(false);
+        gsm.startWave({ schedule: { entries: [] }, baseDelay: 100 } as never);
+        gsm.beginWave();
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(begin).toHaveBeenCalledTimes(1);
+      });
+
+      it('waits for nothing once the corridor stands', () => {
+        gsm.setCorridorPending(false);
+        expect(gsm.corridorPending()).toBe(false);
+      });
+
+      it('places nothing and starts nothing before it has a world', () => {
+        const fresh = new GameStateManager();
+        expect(fresh.corridorPending()).toBe(true);
+        expect(fresh.placeTower(BASE_POSITION, 'archer')).toBeNull();
+      });
+    });
+
+    describe('command:use-ability', () => {
+      it('hands the ability and the target to the AbilityManager', () => {
+        const use = vi.spyOn(gsm.abilityManager, 'use');
+        bus.emit({
+          type: 'command:use-ability',
+          abilityId: 'nuclear-strike',
+          target: { lat: 48.771, lon: 9.181, height: 3 },
+        });
+        expect(use).toHaveBeenCalledWith('nuclear-strike', { lat: 48.771, lon: 9.181, height: 3 });
+      });
+
+      it('answers a locked ability with ability:rejected', () => {
+        const rejected = vi.fn();
+        bus.on('ability:rejected', rejected);
+        bus.emit({ type: 'command:use-ability', abilityId: 'nuclear-strike', target: { lat: 48.771, lon: 9.181 } });
+        expect(rejected).toHaveBeenCalledWith({
+          type: 'ability:rejected', playerId: 'local', local: true,
+          abilityId: 'nuclear-strike',
+          reason: 'locked',
+        });
+      });
+    });
+
+    describe('debug:ready-ability (Nuke ready)', () => {
+      it('lands with the sub-step\'s event queue, not at the click', () => {
+        bus.emitDeferred({ type: 'debug:ready-ability', abilityId: 'nuclear-strike' });
+        expect(gsm.abilityManager.getStatus('nuclear-strike').unlocked).toBe(false);
+
+        bus.processQueue();
+        const status = gsm.abilityManager.getStatus('nuclear-strike');
+        expect(status.unlocked).toBe(true);
+        expect(status.charges).toBe(status.maxCharges);
+      });
+
+      it('researches the strike with its prerequisites once, then refills on every click', () => {
+        const completed: string[] = [];
+        bus.on('research:completed', (event) => completed.push(event.researchId));
+        const refill = vi.spyOn(gsm.abilityManager, 'refillCharges');
+
+        bus.emit({ type: 'debug:ready-ability', abilityId: 'nuclear-strike' });
+        expect(completed).toContain('advanced-weaponry');
+        expect(completed[completed.length - 1]).toBe('nuclear-strike');
+
+        completed.length = 0;
+        bus.emit({ type: 'debug:ready-ability', abilityId: 'nuclear-strike' });
+        expect(completed).toEqual([]);
+        expect(refill).toHaveBeenCalledTimes(2);
+        expect(refill).toHaveBeenCalledWith('nuclear-strike');
+      });
+    });
+
+    describe('jumpToWave() (dev cheat)', () => {
+      it('sets the counter so the next start is the given wave, and pays the skipped waves', () => {
+        const jumped = vi.fn();
+        bus.on('wave:jumped', jumped);
+        const credits = gsm.credits();
+
+        expect(gsm.jumpToWave(35, true)).toBe(true);
+
+        const gold = skippedWavesGold(1, 34);
+        expect(gsm.waveNumber()).toBe(34);
+        expect(gsm.phase()).toBe('setup');
+        expect(gsm.credits()).toBe(credits + gold);
+        expect(jumped).toHaveBeenCalledWith({ type: 'wave:jumped', from: 0, wave: 35, skipped: 34, credits: gold });
+        expect(gsm.enemyManager.getAll()).toEqual([]);
+      });
+
+      it('pays nothing without the gold grant', () => {
+        const credits = gsm.credits();
+        gsm.jumpToWave(14, false);
+        expect(gsm.waveNumber()).toBe(13);
+        expect(gsm.credits()).toBe(credits);
+      });
+
+      it('recharges the abilities by the skipped waves and leaves research alone', () => {
+        const advance = vi.spyOn(gsm.abilityManager, 'advanceWaves');
+        const research = vi.spyOn(gsm.researchManager, 'update');
+        gsm.jumpToWave(10, true);
+        expect(advance).toHaveBeenCalledWith(9);
+        expect(research).not.toHaveBeenCalled();
+      });
+
+      it('refuses during a wave, backwards and onto the next wave', () => {
+        const jumped = vi.fn();
+        bus.on('wave:jumped', jumped);
+        gsm.jumpToWave(20, false);
+        expect(gsm.jumpToWave(15, false)).toBe(false);
+        expect(gsm.jumpToWave(20, false)).toBe(false);
+        expect(gsm.jumpToWave(20.5, false)).toBe(false);
+
+        gsm.waveManager.phase.set('wave');
+        expect(gsm.jumpToWave(40, false)).toBe(false);
+        expect(gsm.waveNumber()).toBe(19);
+        expect(jumped).toHaveBeenCalledTimes(1);
+      });
+
+      it('runs through the command pipeline as debug:jump-to-wave', () => {
+        bus.emit({ type: 'debug:jump-to-wave', wave: 45, grantGold: false });
+        expect(gsm.waveNumber()).toBe(44);
+      });
+
+      it('still sends game:started once, before the first wave of the run', () => {
+        const started = vi.fn();
+        bus.on('game:started', started);
+        vi.spyOn(gsm.waveManager, 'beginWave').mockImplementation(() => undefined);
+
+        gsm.jumpToWave(35, false);
+        gsm.beginWave();
+        gsm.beginWave();
+        expect(started).toHaveBeenCalledTimes(1);
+
+        gsm.reset();
+        gsm.beginWave();
+        expect(started).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('debug:ready-hero (Hero ready)', () => {
+      beforeEach(() => {
+        // A world with a route to stand on
+        gsm.initialize(BASE_POSITION, SPAWN_POINTS as never[], new Map([['sp-1', [
+          { lat: BASE_POSITION.lat + 0.001, lon: BASE_POSITION.lon },
+          { lat: BASE_POSITION.lat, lon: BASE_POSITION.lon },
+        ]]]));
+        bus = getEventBus(gsm);
+      });
+
+      it('lands with the sub-step\'s event queue: the research with its prerequisites, then the hire for free', () => {
+        const credits = gsm.credits();
+        const completed: string[] = [];
+        bus.on('research:completed', (event) => completed.push(event.researchId));
+
+        bus.emitDeferred({ type: 'debug:ready-hero' });
+        expect(gsm.heroManager.getHero()).toBeNull();
+
+        bus.processQueue();
+        expect(completed).toEqual(['gatling-tech', 'siege-engineering', 'mercenary-contract']);
+        expect(gsm.heroManager.getStatus()).toMatchObject({ unlocked: true, hired: true });
+        expect(gsm.credits()).toBe(credits);
+      });
+
+      it('changes nothing once he is hired', () => {
+        bus.emit({ type: 'debug:ready-hero' });
+        const hero = gsm.heroManager.getHero();
+        bus.emit({ type: 'debug:ready-hero' });
+        expect(gsm.heroManager.getHero()).toBe(hero);
+      });
+
+      it('stands a hero hired in a pause at once, though no sub-step runs', () => {
+        gsm.researchManager.completeResearch(getResearch('mercenary-contract')!.id);
+        gsm.addCredits(getResearch('mercenary-contract')!.cost + 1000, 'cheat');
+        gsm.update(1, undefined);
+        gsm.paused.set(true);
+        const clock = gsm.gameTimeMs;
+
+        bus.emit({ type: 'command:hire-hero' }); // the ability bar's button, not deferred
+        gsm.update(500, undefined);
+        gsm.update(1000, undefined);
+
+        expect(gsm.heroManager.getStatus().hired).toBe(true);
+        // What the frame packet hands the renderer (PacketWriter), with no sub-step run
+        expect(gsm.heroManager.getPresentation()).not.toBeNull();
+        expect(gsm.gameTimeMs).toBe(clock);
+      });
+    });
+
+    describe('research:completed', () => {
+      it('asks for the line of sight of the towers the AA retrofit gives air targeting', () => {
+        (mockServices['GlobalRouteGridService'] as { isInitialized: Mock }).isInitialized.mockReturnValue(true);
+        gsm.addCredits(1000, 'cheat');
+        gsm.researchManager.completeResearch('gatling-tech');
+        const gatling = gsm.placeTower(BASE_POSITION, 'dual-gatling');
+        gsm.placeTower({ ...BASE_POSITION, lat: BASE_POSITION.lat + 0.001 }, 'archer');
+        expect(gatling).not.toBeNull();
+        // Both wait for their first sight; give the gatling one
+        const needed: [string, string, boolean][] = [];
+        bus.on('tower:los-needed', (event) => needed.push([event.towerId, event.reason, event.canTargetAir]));
+        expect(gsm.towerLos.applyMask(gatling!, { range: 20, ground: true, air: false, bits: new Uint8Array(0) })).toBe(true);
+
+        gsm.researchManager.completeResearch('aa-retrofit');
+
+        // The gatling asks again, now with air; the archer still waits for its first
+        expect(needed).toEqual([[gatling!.id, 'retrofit', true]]);
+      });
+    });
+
+    describe('research queue', () => {
+      it('starts a queued research in the sub-step a slot frees, paid only then', () => {
+        const first = getResearch('gatling-tech')!;
+        const queued = getResearch('ice-magic')!;
+        gsm.addCredits(first.cost + queued.cost, 'cheat');
+        gsm.researchManager.onCenterPlaced(); // 1 slot
+        bus.emit({ type: 'command:start-research', researchId: first.id });
+        const afterStart = gsm.credits();
+
+        bus.emit({ type: 'command:queue-research', researchId: queued.id });
+        expect(gsm.credits()).toBe(afterStart);
+
+        // Run the game clock past the first research at the training speed
+        gsm.setGameSpeed(75);
+        let t = 1;
+        gsm.update(t, undefined);
+        while (!gsm.researchManager.isCompleted(first.id) && t < 10_000) {
+          t += 50;
+          gsm.update(t, undefined);
+        }
+
+        expect(gsm.researchManager.isActive(queued.id)).toBe(true);
+        expect(gsm.credits()).toBe(afterStart - queued.cost);
+      });
+
+      it('does not start anything from the queue while paused', () => {
+        gsm.addCredits(1000, 'cheat');
+        gsm.researchManager.onCenterPlaced();
+        bus.emit({ type: 'command:queue-research', researchId: 'ice-magic' });
+        gsm.paused.set(true);
+        gsm.update(1, undefined);
+        gsm.update(100, undefined);
+        expect(gsm.researchManager.isActive('ice-magic')).toBe(false);
+
+        gsm.paused.set(false);
+        gsm.update(140, undefined);
+        expect(gsm.researchManager.isActive('ice-magic')).toBe(true);
+      });
+
+      it('leaves command:start-research as it was: refused when every slot is busy', () => {
+        gsm.addCredits(1000, 'cheat');
+        gsm.researchManager.onCenterPlaced();
+        bus.emit({ type: 'command:start-research', researchId: 'gatling-tech' });
+        bus.emit({ type: 'command:start-research', researchId: 'ice-magic' });
+        expect(gsm.researchManager.isActive('ice-magic')).toBe(false);
+        expect(gsm.researchManager.getQueuedResearches()).toEqual([]);
+      });
+    });
+
+    describe('guard heading', () => {
+      const combat = () => mockServices['TowerCombatService'] as Record<string, ReturnType<typeof vi.fn>>;
+
+      it('turns the towers to their guard heading once a wave is completed', () => {
+        bus.emit({ type: 'wave:completed', wave: 1, credits: 0, perfect: true, closeCall: false, hpLost: 0 });
+        expect(combat()['turnTowersToGuard']).toHaveBeenCalledWith(gsm.towerManager);
+      });
+
+      it('follows a new guard heading after a range upgrade between waves', () => {
+        const tower = gsm.placeTower(BASE_POSITION, 'archer')!;
+        gsm.recomputeTowerRangeAfterUpgrade(tower);
+        expect(combat()['turnToGuardHeading']).toHaveBeenCalledWith(tower);
+      });
+
+      it('keeps the heading after a range upgrade during a wave', () => {
+        const tower = gsm.placeTower(BASE_POSITION, 'archer')!;
+        gsm.waveManager.phase.set('wave');
+        gsm.recomputeTowerRangeAfterUpgrade(tower);
+        expect(combat()['turnToGuardHeading']).not.toHaveBeenCalled();
+      });
+
+      it('recomputes the guard headings when the routes change', () => {
+        const tower = gsm.placeTower(BASE_POSITION, 'archer')!;
+        expect(tower.guardHeading).toBeNull();
+
+        // North to south, a few meters east of the tower: a new world's routes
+        gsm.initialize(BASE_POSITION, SPAWN_POINTS as never[], new Map([['sp-1', [
+          { lat: BASE_POSITION.lat + 0.01, lon: BASE_POSITION.lon + 0.00005 },
+          { lat: BASE_POSITION.lat - 0.01, lon: BASE_POSITION.lon + 0.00005 },
+        ]]]));
+
+        // Entered from the north, slightly east of it.
+        expect(tower.guardHeading).toBeGreaterThan(0);
+        expect(tower.guardHeading).toBeLessThan(Math.PI / 4);
+        expect(combat()['turnTowersToGuard']).toHaveBeenCalledWith(gsm.towerManager);
+      });
+
+      // Debug enemies fought between waves never complete a wave
+      describe('once the last enemy outside a wave is gone', () => {
+        const enemy = (id: string) => ({
+          id,
+          position: { lat: 48.77, lon: 9.18, height: 0 },
+          transform: { terrainHeight: 0 },
+        }) as never;
+
+        beforeEach(() => combat()['turnTowersToGuard'].mockClear());
+
+        it('turns the towers to guard when the last one dies', () => {
+          const [a, b] = [enemy('a'), enemy('b')];
+          const alive = vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([b]);
+          bus.emit({ type: 'enemy:died', enemy: a, credits: 0 , killedBy: null });
+          expect(combat()['turnTowersToGuard']).not.toHaveBeenCalled();
+
+          alive.mockReturnValue([]);
+          bus.emit({ type: 'enemy:died', enemy: b, credits: 0 , killedBy: null });
+          expect(combat()['turnTowersToGuard']).toHaveBeenCalledWith(gsm.towerManager);
+        });
+
+        it('counts an enemy that reaches the base as gone', () => {
+          // Still alive while the event runs, removed after it
+          const a = enemy('a');
+          vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([a]);
+          bus.emit({ type: 'enemy:reached-base', enemy: a, damage: 0 });
+          expect(combat()['turnTowersToGuard']).toHaveBeenCalledWith(gsm.towerManager);
+        });
+
+        it('turns them when the enemy debugger removes the last one', () => {
+          vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([]);
+          bus.emit({ type: 'debug:remove-enemy', enemyId: 'a' });
+          expect(combat()['turnTowersToGuard']).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves the turn to the wave end during a wave', () => {
+          vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([]);
+          gsm.waveManager.phase.set('wave');
+          bus.emit({ type: 'enemy:died', enemy: enemy('a'), credits: 0 , killedBy: null });
+          expect(combat()['turnTowersToGuard']).not.toHaveBeenCalled();
+        });
+
+        it('waits for the children of an enemy that splits', () => {
+          // A debug skeleton: its minions spawn right after its enemy:died
+          vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([]);
+          const skeleton = {
+            ...(enemy('s') as object),
+            alive: false,
+            typeConfig: { splitOnDeath: { type: 'skeleton-minion', count: 2, spread: 0.3 } },
+          } as never;
+          bus.emit({ type: 'enemy:died', enemy: skeleton, credits: 0 , killedBy: null });
+          expect(combat()['turnTowersToGuard']).not.toHaveBeenCalled();
+        });
+
+        it('turns them after a kill-all, which splits nothing', () => {
+          vi.spyOn(gsm.enemyManager, 'getAlive').mockReturnValue([]);
+          bus.emit({ type: 'debug:kill-all' });
+          expect(combat()['turnTowersToGuard']).toHaveBeenCalledWith(gsm.towerManager);
+        });
+      });
+    });
+
+    describe('reset()', () => {
+      it('resets health to start value', () => {
+        bus.emit({
+          type: 'enemy:reached-base',
+          enemy: { id: 'e1' } as never,
+          damage: 50,
+        });
+        gsm.reset();
+        expect(gsm.baseHealth()).toBe(GAME_BALANCE.player.startHealth);
+      });
+
+      it('resets credits to start value', () => {
+        gsm.spendCredits(20, 'cheat');
+        gsm.reset();
+        expect(gsm.credits()).toBe(GAME_BALANCE.player.startCredits);
+      });
+
+      it('can be called multiple times without error', () => {
+        expect(() => gsm.reset()).not.toThrow();
+        expect(() => gsm.reset()).not.toThrow();
+        expect(gsm.baseHealth()).toBe(GAME_BALANCE.player.startHealth);
+        expect(gsm.credits()).toBe(GAME_BALANCE.player.startCredits);
+      });
+
+      it('clears the ooze renderer, a killed ooze\'s collapsing band and debris included, which a wave end leaves', () => {
+        const clear = sinkOf().oozes.clear;
+        clear.mockClear();
+        gsm.reset();
+        expect(clear).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('healBase()', () => {
+      it('restores health to the start value', () => {
+        const start = GAME_BALANCE.player.startHealth;
+        bus.emit({
+          type: 'enemy:reached-base',
+          enemy: { id: 'e1' } as never,
+          damage: 10,
+        });
+        expect(gsm.baseHealth()).toBe(start - 10);
+        gsm.healBase();
+        expect(gsm.baseHealth()).toBe(start);
+      });
+    });
+
+    describe('setGameSpeed()', () => {
+      it('sets timescale within bounds', () => {
+        gsm.setGameSpeed(3.0);
+        expect(gsm.gameSpeed()).toBe(3.0);
+      });
+
+      it('clamps minimum to 0.1', () => {
+        gsm.setGameSpeed(0.01);
+        expect(gsm.gameSpeed()).toBe(0.1);
+      });
+
+      it('clamps maximum to 75', () => {
+        gsm.setGameSpeed(100);
+        expect(gsm.gameSpeed()).toBe(75);
+      });
+    });
+
+    describe('command events', () => {
+      it('command:restart-game calls reset', () => {
+        const resetSpy = vi.spyOn(gsm, 'reset');
+        bus.emit({ type: 'command:restart-game' });
+        expect(resetSpy).toHaveBeenCalled();
+      });
+
+      it('debug:add-credits increases credits', () => {
+        const initial = gsm.credits();
+        bus.emit({ type: 'debug:add-credits', amount: 100 } as never);
+        expect(gsm.credits()).toBe(initial + 100);
+      });
+
+      it('debug:add-credits takes credits, never past zero', () => {
+        bus.emit({ type: 'debug:add-credits', amount: -100 } as never);
+        expect(gsm.credits()).toBe(GAME_BALANCE.player.startCredits - 100);
+
+        bus.emit({ type: 'debug:add-credits', amount: -100000 } as never);
+        expect(gsm.credits()).toBe(0);
+      });
+
+      it('debug:add-health changes health (clamped)', () => {
+        bus.emit({
+          type: 'enemy:reached-base',
+          enemy: { id: 'e1' } as never,
+          damage: 15,
+        });
+        const start = GAME_BALANCE.player.startHealth;
+        expect(gsm.baseHealth()).toBe(start - 15);
+        bus.emit({ type: 'debug:add-health', amount: 5 } as never);
+        expect(gsm.baseHealth()).toBe(start - 10);
+      });
+
+      it('debug:add-health allows exceeding start health (debug)', () => {
+        bus.emit({ type: 'debug:add-health', amount: 1000 } as never);
+        expect(gsm.baseHealth()).toBe(GAME_BALANCE.player.startHealth + 1000);
+      });
+    });
+
+    describe('sub-step loop (fixed-timestep accumulation)', () => {
+      it('runs one sub-step per FIXED_STEP_MS of game-time', () => {
+        const onSub = vi.fn();
+        gsm.update(1, onSub);                             // first call sets lastUpdateTime, raw delta ~16ms
+        gsm.update(1 + GameClock.FIXED_STEP_MS, onSub);   // 1 sub-step worth
+        // Expect at least one sub-step. The first call may also fire one
+        // depending on the initial-delta fallback (16ms default).
+        expect(onSub.mock.calls.length).toBeGreaterThanOrEqual(1);
+      });
+
+      it('accumulates remainder across frames (no game-time loss)', () => {
+        const onSub = vi.fn();
+        // First call seeds lastUpdateTime; deltas applied from second call on.
+        gsm.update(0, onSub);
+        const stepsAfterFirst = onSub.mock.calls.length;
+        // Two half-step frames should together produce ≥ 1 extra sub-step.
+        gsm.update(8, onSub);    // 8ms — below threshold alone
+        gsm.update(16, onSub);   // accumulator now passes threshold
+        expect(onSub.mock.calls.length).toBeGreaterThan(stepsAfterFirst);
+      });
+
+      it('gameTimeMs increases monotonically by stepMs per sub-step', () => {
+        const onSub = vi.fn();
+        let lastTime = gsm.gameTimeMs;
+        for (let i = 0; i < 5; i++) {
+          gsm.update(i * 17, onSub);
+          expect(gsm.gameTimeMs).toBeGreaterThanOrEqual(lastTime);
+          lastTime = gsm.gameTimeMs;
+        }
+        // After several frames at ~17ms each, game-time should have advanced.
+        expect(gsm.gameTimeMs).toBeGreaterThan(0);
+      });
+
+      it('does not try to catch up an arbitrarily large wall-clock gap', () => {
+        const onSub = vi.fn();
+        // Seed with a NON-ZERO time so the next delta computes properly
+        // (lastUpdateTime=0 is treated as "first frame" via a truthiness check).
+        gsm.update(1, onSub);
+        gsm.update(17, onSub);
+        const stepsAfterSeed = onSub.mock.calls.length;
+
+        // A 60-second jump: what a loop that stood produces when it goes on
+        // (a hidden tab, a long call). The backlog is capped
+        // (GameClock.MAX_BACKLOG_MS), so the loop works off a quarter of a
+        // second rather than a minute.
+        gsm.update(60_017, onSub);
+
+        const stepsThisFrame = onSub.mock.calls.length - stepsAfterSeed;
+        expect(stepsThisFrame).toBeGreaterThan(0);
+        expect(stepsThisFrame).toBeLessThanOrEqual(15);
+      });
+
+      it('starts no further sub-step after the deadline and carries the rest into the next call', () => {
+        const onSub = vi.fn();
+        gsm.update(1, onSub);
+        gsm.update(17, onSub);
+        const seeded = onSub.mock.calls.length;
+
+        // 100 ms and what was carried are due, some sub-steps; the deadline has passed already: one runs
+        const due = Math.floor((132 - seeded * GameClock.FIXED_STEP_MS) / GameClock.FIXED_STEP_MS);
+        expect(due).toBeGreaterThan(1);
+        gsm.update(117, onSub, performance.now() - 1);
+        expect(onSub.mock.calls.length - seeded).toBe(1);
+        expect(gsm.dueInMs()).toBe(0);
+        // The rest with the next call, at the same wall clock
+        gsm.update(117, onSub);
+        expect(onSub.mock.calls.length - seeded).toBe(due);
+        expect(gsm.dueInMs()).toBeGreaterThan(0);
+
+        gsm.paused.set(true);
+        expect(gsm.dueInMs()).toBe(Infinity);
+      });
+
+      it('scales sub-step count by training timescale', () => {
+        const baselineHits = vi.fn();
+        gsm.setGameSpeed(1.0);
+        gsm.update(0, baselineHits);
+        gsm.update(100, baselineHits); // 100ms wall × 1× = 100ms game-time
+        const baseline = baselineHits.mock.calls.length;
+
+        // Reset for a fresh frame budget.
+        const sped = vi.fn();
+        const gsm2 = new GameStateManager();
+        gsm2.initialize(BASE_POSITION, SPAWN_POINTS as never[], new Map());
+        gsm2.setGameSpeed(5.0);
+        gsm2.update(0, sped);
+        gsm2.update(100, sped); // 100ms wall × 5× = 500ms game-time
+        // 5× timescale should yield ≥ 4× the sub-step count of 1×.
+        expect(sped.mock.calls.length).toBeGreaterThanOrEqual(baseline * 4);
+      });
+
+      it('does not advance simulation when paused at gameover phase', () => {
+        // Trigger gameover. Damage is capped per wave, so drain it across
+        // several waves rather than in one hit.
+        for (let w = 0; w < 20; w++) {
+          gsm.startWave({ schedule: { entries: [] }, baseDelay: 100 } as never);
+          bus.emit({
+            type: 'enemy:reached-base',
+            enemy: { id: `e${w}` } as never,
+            damage: 9999,
+          });
+        }
+        expect(gsm.baseHealth()).toBe(0);
+
+        const onSub = vi.fn();
+        const gtBefore = gsm.gameTimeMs;
+        gsm.update(0, onSub);
+        gsm.update(100, onSub);
+        // Sub-steps may still tick — but if game-over phase has been set the
+        // sub-step loop breaks out after one tick. We just assert game-time
+        // hasn't run away wildly.
+        expect(gsm.gameTimeMs - gtBefore).toBeLessThan(1000);
+      });
+
+      describe('pause', () => {
+        it('runs no sub-step and keeps the game clock while paused', () => {
+          const onSub = vi.fn();
+          gsm.update(1, onSub);
+          gsm.update(17, onSub);
+          const steps = onSub.mock.calls.length;
+          const clock = gsm.gameTimeMs;
+
+          gsm.paused.set(true);
+          gsm.update(34, onSub);
+          gsm.update(500, onSub);
+          gsm.update(5000, onSub);
+
+          expect(onSub.mock.calls.length).toBe(steps);
+          expect(gsm.gameTimeMs).toBe(clock);
+        });
+
+        it('does not tick the wave spawner while paused', () => {
+          const tick = vi.spyOn(gsm.waveManager, 'tickSpawn');
+          gsm.waveManager.phase.set('wave');
+          gsm.paused.set(true);
+          gsm.update(1, undefined);
+          gsm.update(200, undefined);
+          expect(tick).not.toHaveBeenCalled();
+        });
+
+        it('does not catch up the paused wall time after resuming', () => {
+          const onSub = vi.fn();
+          gsm.update(1, onSub);
+          gsm.update(17, onSub);
+
+          gsm.paused.set(true);
+          for (let t = 1000; t <= 60_000; t += 1000) gsm.update(t, onSub);
+          const beforeResume = onSub.mock.calls.length;
+
+          gsm.paused.set(false);
+          gsm.update(60_017, onSub); // one normal frame after the pause
+
+          expect(onSub.mock.calls.length - beforeResume).toBeLessThanOrEqual(2);
+        });
+
+      });
+
+      it('reset() zeroes the game-clock and remainder', () => {
+        gsm.update(1, undefined);
+        gsm.update(101, undefined);
+        expect(gsm.gameTimeMs).toBeGreaterThan(0);
+        gsm.reset();
+        expect(gsm.gameTimeMs).toBe(0);
+      });
+    });
+  });
+});

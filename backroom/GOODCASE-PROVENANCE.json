@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/lo-th/backroom",
+  "commit": "79ba82b3ba25ea40c8ec633eeccd00b605f22ba6",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 103,
+  "bytes": 44285210
+}

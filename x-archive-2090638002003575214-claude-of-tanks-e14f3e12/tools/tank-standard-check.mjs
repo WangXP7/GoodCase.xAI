@@ -1,0 +1,357 @@
+import {isPhotoReference,photoReceiptPassed,stageARoute,stageAPassed} from './photo-reference-policy.mjs';
+import {readPhotoReference} from './photo-reference-record.mjs';
+import {FLEET_GROUP_BY_ID} from '../src/vehicles/fleetManifest.ts';
+import {readConceptDesign} from './first-party-concept-record.mjs';
+import {firstPartyConcept,partitionConceptIds,validateSelectedIds,conceptReceiptPassed} from './first-party-concept-policy.mjs';
+import {boundOrigin, toolServerOptions} from './tool-page-load.mjs';
+import { createCaptureLock } from './capture-lock.mjs';
+import { strictTrackClipPassed } from './track-clip-result.mjs';
+import { roofEquipmentVerdict } from './source-equipment-policy.mjs';
+import { approvedOpeningsVerdict } from './approved-openings.mjs';
+import { isArieteOpeningTarget } from './ariete-source-openings.mjs';
+import { runCapturedCommand } from './capture-command.mjs';
+import { withIsolatedCaptureBrowser } from './isolated-capture-browser.mjs';
+import { eachBrowserChunk } from './browser-id-chunks.mjs';
+import { createStageRunner, formatStageSummary, stageStatus, summarizeStages } from './standard-check-stages.mjs';
+import { contiguityPassed } from './contig-grid.mjs';
+import { CONTIG_HIDDEN_LEDGER, applyHiddenGaps, readHiddenLedger } from './contig-hidden-gaps.mjs';
+// TANK STANDARD CHECK v2 (docs/BUILD-STANDARD.md §F.3) — one command that
+// aggregates the standard's machine-checkable gates per tank. Owner, 2026-11-12: outside 3D models are tank-generation
+// comparison bases only, so no stage here reads one or a record measured on one; every stage checks the build against
+// itself, its own records and the game's rules.
+//   A.  a concept id proves its design record, a photo id its photo packet (fresh receipts); any other id has no
+//       A-stage evidence (N/A, never a failure)
+//   B4. track containment (tools/track-clip-audit.mjs --exact)
+//   B2. CONTIGUITY (v2): top-down ~6 cm scan on the procedural build via
+//       tools/standard-check-page.html — enclosed sky cells inside the plan
+//       silhouette remain raw holes. The grid is the hull-anchored lattice of
+//       tools/contig-grid.mjs (2026-10-16): fixed 6 cm cells in the vehicle
+//       frame, so an add-on that only moves the AABB cannot hide or reveal a
+//       gap, scanned at every sub-cell phase; a phase-only hole (one the
+//       primary raster misses) fails like an unexpected hole. The gaps the
+//       lattice finds and the pre-227 raster never saw are listed per id in
+//       docs/geometry-gate/contig-hidden.json (guards 229, the fleet audit):
+//       known work orders, reported on every run; any other gap, or a listed
+//       one grown past its box, fails. A vehicle with an approved exterior
+//       opening shows holes only inside it (tools/approved-openings.mjs);
+//       unexpected holes remain zero. FrontSide render truth doubles as
+//       the winding audit.
+//   B3. DECORATION census (v2): KIT.fittings marker roots on the procedural
+//       build — real rendered pintleMG/openYokeRws stock + other fitting
+//       dressing. Hand-authored decoration carries no markers and censuses
+//       ZERO: migrate the profile to KIT.fittings (kit.js) or carry a packet
+//       justification for a real hand-authored weapon. A photo id's packet and a vehicle in
+//       src/vehicles/roofWeaponPolicy.ts PINNED_ROOF_WEAPON_COUNT pin exact counts; others need mg>=1, except a
+//       vehicle whose real counterpart carries no roof weapon (NO_ROOF_WEAPON, VH.14 2026-10-14), which needs mg 0.
+// Usage:
+//   node tools/tank-standard-check.mjs --ids=a,b [--gate] [--no-render] [--stages]
+//   node tools/tank-standard-check.mjs --fixture     # KIT.fittings self-test
+// --stages (2026-10-16, test-speed R4b): run and report EVERY stage (A concept/photo, B4 clip, B2 contiguity,
+//   B3 decor) for every id instead of stopping at the first failing stage; print a per-stage summary and write
+//   <out>/stages.json. The exit stays 2 when any gated stage fails for any id or any stage itself fails
+//   (tools/standard-check-stages.mjs).
+// Own vite 74xx-77xx; cot-shots FIFO lock held around the render phase only
+// (track-clip manages its own turn).
+import { execFileSync } from 'node:child_process';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+
+// The equipment configuration of each photo id, from its photo document (the only configuration the gate reads).
+const configurations = {};
+const sourceReceipts = new Map();
+const openingReports = new Map();
+const conceptReports = new Map();
+const photoReports = new Map();
+
+const idArg = process.argv.find((a) => a.startsWith('--ids='));
+const wantFixture = process.argv.includes('--fixture');
+if (!idArg && !wantFixture) {
+  console.error('usage: node tools/tank-standard-check.mjs --ids=a,b [--gate] [--no-render] [--stages] | --fixture');
+  process.exit(1);
+}
+const ids = idArg ? idArg.slice(6).split(',') : [];
+if (ids.some(id=>!/^[a-z0-9_]+$/.test(id)) || new Set(ids).size!==ids.length) throw new Error('Expected unique tank IDs');
+if (ids.length) validateSelectedIds(ids,Object.keys(FLEET_GROUP_BY_ID));
+const reportRoot=path.resolve(process.argv.find(arg=>arg.startsWith('--out='))?.slice(6) || '.qa-dev/reports/tank-standard');
+const forceGate = process.argv.includes('--gate');
+const noRender = process.argv.includes('--no-render');
+// Without --stages every stage.run() propagates its failure exactly as the bare phase did.
+const stages = createStageRunner({ runAll: process.argv.includes('--stages'), log: (line) => console.error(line) });
+/** One phase child under the capture queue; its failure names the tool rather than the node binary. */
+async function runChild(tool, args) {
+  try {
+    await runCapturedCommand(process.execPath, [tool, ...args]);
+  } catch (error) {
+    const reason = String(error?.message ?? error).replace(`${process.execPath} `, '');
+    throw Object.assign(new Error(`${tool} ${reason}`), { status: error?.status, cause: error });
+  }
+}
+
+// --- exclusive render lock (same protocol as tools/screenshot.mjs) ----------
+
+// The server and browser start while the ticket waits, and the contiguity stage runs after the release
+// (2026-10-22, capture-hold): the hold covers the renders only.
+const captureLock = createCaptureLock();
+process.on('exit', () => captureLock.release());
+
+// Fresh native design proof replaces ONLY obsolete comparison assertions.
+const conceptStartedAt=Date.now();
+const conceptIds=partitionConceptIds(ids).concepts;
+const conceptDesignHashes=new Map();
+for(const id of conceptIds)await stages.run('concept',()=>{conceptDesignHashes.set(id,readConceptDesign(id).designSha256);},id);
+if(conceptIds.length) {
+  const out=path.join(reportRoot,'concepts');
+  await stages.run('concept',()=>runChild('tools/first-party-concept-check.mjs',[`--ids=${conceptIds.join(',')}`,`--out=${out}`]));
+  for(const id of conceptIds) await stages.run('concept',()=>{
+    const report=JSON.parse(readFileSync(path.join(out,`${id}.json`),'utf8'));
+    if(!conceptReceiptPassed(id,report,conceptStartedAt,conceptDesignHashes.get(id)))throw new Error(`${id}: missing/stale concept proof`);
+    conceptReports.set(id,report);
+  },id);
+}
+
+// Photographic approval changes only numerical 3D comparison. It still needs
+// fresh dimensions/configuration and every unchanged downstream physical gate.
+const photoStartedAt=Date.now();
+const photoIds=ids.filter(isPhotoReference);
+const photoDocuments=new Map();
+for(const id of photoIds)await stages.run('photo',()=>{photoDocuments.set(id,readPhotoReference(id));},id);
+if(photoIds.length){
+  // The equipment configuration comes from the photo document alone, so B3 reports its own verdict even when the
+  // photo proof below fails (--stages); without --stages a failed proof still stops the run before B3.
+  for(const [id,doc] of photoDocuments)
+    configurations[id]={id,comparisonPurpose:'photographic-reference',roofMachineGuns:doc.target.roofMachineGuns,packetSha256:doc.packetSha256};
+  const out=path.join(reportRoot,'photos');
+  await stages.run('photo',()=>runChild('tools/photo-reference-check.mjs',[`--ids=${photoIds.join(',')}`,`--out=${out}`]));
+  for(const id of photoIds) await stages.run('photo',()=>{
+    const doc=photoDocuments.get(id),report=JSON.parse(readFileSync(path.join(out,`${id}.json`),'utf8'));
+    if(!doc||!photoReceiptPassed(id,report,doc.packet,doc.packetSha256,photoStartedAt))throw new Error(`${id}: missing/stale photo physical proof`);
+    photoReports.set(id,report);
+  },id);
+}
+
+// --- phase 1: containment (one batched run; manages its own lock) -----------
+const clip = new Map();
+function readClipRows(out) {
+  for (const line of out.split('\n')) {
+    const m = line.match(/\[track-clip\] (\S+)\s+front\s+(\S+) rear\s+(\S+)/);
+    const s = line.match(/\| strict sweep (\S+)\/(\S+)/);
+    if (m) clip.set(m[1], { front: m[2], rear: m[3], sweepBand: s?.[1] ?? '—', sweepShoe: s?.[2] ?? '—' });
+  }
+}
+if (ids.length) {
+  try {
+    readClipRows(execFileSync('node', ['tools/track-clip-audit.mjs', '--exact', '--strict', `--ids=${ids.join(',')}`,
+      `--out-dir=${path.join(reportRoot, 'tracks')}`],
+      { encoding: 'utf8' }));
+  } catch (e) {
+    console.error('[standard-check] track-clip audit failed:', e.message.slice(0, 120));
+    // --stages: keep the rows the audit printed before it failed (an id without a row still fails B4), and fail the
+    // run on the audit's own failure.
+    if (stages.runAll) {
+      readClipRows(String(e.stdout ?? ''));
+      stages.fail('clip', e);
+    }
+  }
+}
+
+// --- phase 2: census + contiguity via the committed page --------------------
+async function readLowQualityScan(page,base,id) {
+  try {
+    await page.goto(`${base}?id=${id}&quality=low`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction('window.__STANDARD_READY === true', { polling: 50 });
+    return await page.evaluate('window.__STANDARD');
+  } catch(error) {
+    return {id,quality:'low',error:String(error.message || error)};
+  }
+}
+/** One server and browser on the committed page, in its own capture hold (the server and browser warm while queued). */
+async function withStandardPage(run) {
+  return await withIsolatedCaptureBrowser({
+    root: process.cwd(), logLevel: 'error',
+    // R4c (2026-10-16): 127.0.0.1 and the address really bound, never `localhost` (an IPv6 bind can leave 127.0.0.1 to another server)
+    server: toolServerOptions(7400, { span: 400 }),
+  }, {
+    headless: 'new',
+    args: ['--use-gl=angle', '--enable-webgl', '--no-sandbox', '--disable-dev-shm-usage'],
+  }, async ({ server, browser }) => {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(120000);
+    return run({ browser, page, base: `${boundOrigin(server)}/tools/standard-check-page.html` });
+  }, { capture: { lock: captureLock, waitMs: 20 * 60 * 1000 } });
+}
+const standard = new Map(); // id -> { census, holes } | { error }
+const hiddenLedger = readHiddenLedger();
+let fixture = null;
+if ((ids.length && !noRender) || wantFixture) await stages.run('render', async () => {
+  {
+    // A fresh server and browser, each in its own hold, per chunk of ids (tools/browser-id-chunks.mjs); the fixture
+    // builds no fleet id and takes one of its own.
+    await eachBrowserChunk('tools/tank-standard-check.mjs', noRender ? [] : ids, (chunk, { track }) => withStandardPage(async ({ browser, page, base }) => {
+      track(browser);
+      let pageError = null;
+      page.on('pageerror', (e) => { pageError = String(e && e.message || e).slice(0, 160); });
+      for (const id of chunk) {
+        pageError = null;
+        try {
+          await page.goto(`${base}?id=${id}`, { waitUntil: 'domcontentloaded' });
+          await page.waitForFunction('window.__STANDARD_READY === true', { polling: 50 });
+          const r = await page.evaluate('window.__STANDARD');
+          if (!r.error && isArieteOpeningTarget(id)) {
+            r.qualityScans = {low:await readLowQualityScan(page,base,id)};
+          }
+          standard.set(id, r.error ? { error: r.error } : r);
+        } catch (e) {
+          standard.set(id, { error: (pageError || e.message).slice(0, 160) });
+        }
+      }
+    }));
+    if (wantFixture) await withStandardPage(async ({ page, base }) => {
+      await page.goto(`${base}?fixture=fittings`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction('window.__FIXTURE_READY === true', { polling: 50 });
+      fixture = await page.evaluate('window.__FIXTURE');
+    });
+    // --stages: one id's source verification failing leaves every other id's B2/B3 evidence intact.
+    for (const id of ids) await stages.run('contiguity', async () => {
+      const configuration = configurations[id];
+      const photo=photoDocuments.get(id);
+      const sourceReceipt = photo ? {id,verified:true,path:photo.packetPath,sha256:photo.packetSha256} : null;
+      sourceReceipts.set(id, sourceReceipt);
+      const result = standard.get(id);
+      if (!result || result.error || !result.holes) return;
+      // the fleet audit's hidden gaps (tools/contig-hidden-gaps.mjs): listed gaps are known, anything else still fails
+      const hidden = applyHiddenGaps(result.holes, hiddenLedger?.rows?.[id]);
+      result.latticeHoles = result.holes;
+      result.holes = hidden.scan;
+      result.hiddenGaps = { listed: hidden.listed.length, removedPrimary: hidden.removedPrimary, closed: hidden.closed };
+      const low = result.qualityScans?.low;
+      openingReports.set(id, approvedOpeningsVerdict({ id, scan: result.holes,
+        lowScan: low && low.id === id && low.quality === 'low' && !low.error ? low.holes : null }));
+      mkdirSync(reportRoot,{recursive:true});
+      writeFileSync(path.join(reportRoot,`${id}.json`),JSON.stringify({
+        id,recordedAt:new Date().toISOString(),standard:result,
+        sourceReceipt,configuration:configuration??null,
+        concept:conceptReports.get(id)??null,
+        photographicReference:photoReports.get(id)??null,
+        equipment:roofEquipmentVerdict(id,result.census,configuration,sourceReceipt),
+        continuity:openingReports.get(id),
+      },null,2)+'\n');
+    }, id);
+  }
+});
+
+// --- fixture report ----------------------------------------------------------
+// A requested fixture that never reported (its render stage failed under --stages) is a failure, not a pass.
+let fixtureFailed = wantFixture && !fixture;
+if (fixture) {
+  console.log('[standard-check] KIT.fittings self-test');
+  for (const r of fixture.results) {
+    console.log(`  ${r.label.padEnd(18)} meshes ${String(r.meshes).padStart(2)}  hash ${r.hash.padEnd(8)}` +
+      `  top-cover ${String(r.coveredCells).padStart(4)} cells  enclosed ${r.holeCells}`);
+  }
+  if (fixture.failures.length) {
+    fixtureFailed = true;
+    for (const f of fixture.failures) console.log(`  FAIL: ${f}`);
+  }
+  console.log(`[standard-check] fixture ${fixture.ok ? 'PASS' : 'FAIL'} ` +
+    `(${fixture.results.length} builds, ${fixture.failures.length} failures)`);
+  if (!ids.length) process.exit(fixtureFailed || stages.failures.length ? 2 : 0);
+  console.log('');
+}
+
+// --- per-tank table ----------------------------------------------------------
+const CLIP_BAND = 0; // strict owner law: no non-running-gear solid may enter the animated sweep
+console.log('id                 | A stage                        | clip f/r+sweep | contig | decor');
+console.log('-------------------|--------------------------------|----------------|--------|------------');
+let fails = 0;
+const stageRows = []; // --stages: one verdict per stage per id (tools/standard-check-stages.mjs)
+for (const id of ids) {
+  let row = 'procedural: no record (N/A)';
+  const concept=firstPartyConcept(id);
+  const cl = clip.get(id);
+  const clipStr = cl ? `${cl.front}/${cl.rear}+${cl.sweepBand}/${cl.sweepShoe}` : '—';
+  const clipOk = strictTrackClipPassed(cl);
+  // Classified by id, not by document: a photo id whose document failed to load (--stages) fails its A stage.
+  const photoId=isPhotoReference(id), photo=photoDocuments.get(id);
+  // Stage A's route and verdict (photo-reference-policy.mjs): a concept or photo id proves its record; any other id has
+  // no A-stage evidence and is N/A (owner 2026-11-12: no outside model qualifies or fails a build).
+  const route = stageARoute(id, { concept: Boolean(concept) });
+  const gateOk = stageAPassed(route, {
+    photoProof: photoId && Boolean(photo) && photoReceiptPassed(id,photoReports.get(id),photo.packet,photo.packetSha256,photoStartedAt),
+    conceptProof: Boolean(concept) && conceptReceiptPassed(id,conceptReports.get(id),conceptStartedAt,conceptDesignHashes.get(id)) });
+  if(concept)row='concept design proof';
+  if(photoId)row='photo packet proof';
+
+  const st = standard.get(id);
+  let contigStr = 'SKIP', decorStr = 'SKIP', contigOk = true, decorOk = true;
+  if (!noRender) {
+    if (!st || st.error) {
+      contigStr = 'ERR'; decorStr = 'ERR'; contigOk = false; decorOk = false;
+      if (st && st.error) console.error(`[standard-check] ${id}: ${st.error}`);
+    } else if (!st.holes || st.holes.error) {
+      contigStr = 'ERR'; contigOk = false;
+      console.error(`[standard-check] ${id} hole scan: ${st.holes?.error ?? 'missing'}`);
+      decorOk = roofEquipmentVerdict(id, st.census, configurations[id], sourceReceipts.get(id)).passed;
+      decorStr = `mg${st.census?.mg}+${st.census?.dressing}d${decorOk ? ' ✓' : ' ✗'}`;
+    } else {
+      const holes = st.holes.holeCells;
+      const opening = openingReports.get(id);
+      const phaseOnly = st.holes.phaseOnlyCells;
+      contigOk = contiguityPassed(st.holes, opening);
+      contigStr = (opening?.intentionalCells
+        ? `${opening.unexpectedCells} unexpected/${holes} raw`
+        : `${holes}`) + (phaseOnly ? `+${phaseOnly}φ` : '') + (contigOk ? ' ✓' : ' ✗');
+      if (opening?.reason) console.error(`[standard-check] ${id}: ${opening.reason}`);
+      if (phaseOnly !== 0) {
+        console.error(`[standard-check] ${id} phase-only holes (the primary 6 cm raster misses them; another sub-cell ` +
+          `phase of the hull-anchored lattice sees them; ${CONTIG_HIDDEN_LEDGER} does not list them): ` + (st.holes.phaseOnlyGaps ?? [])
+          .map((g) => `(x ${g.x}, z ${g.z}) ${g.w}x${g.d} m gap ${g.gap} m`).join(', '));
+      }
+      if (st.hiddenGaps?.listed) {
+        console.error(`[standard-check] ${id}: ${st.hiddenGaps.listed} known hidden gap(s) listed in ${CONTIG_HIDDEN_LEDGER} ` +
+          `(the fleet audit's vehicle-lane work orders; node tools/contig-hidden-gaps.mjs --report)`);
+      }
+      if (st.hiddenGaps?.closed?.length) {
+        console.error(`[standard-check] ${id}: ${st.hiddenGaps.closed.length} listed hidden gap(s) no longer read: closed, ` +
+          'prune them (node tools/contig-phase-audit.mjs --ids=<id>, then node tools/contig-hidden-gaps.mjs --from=<audit.jsonl> --prune --ids=<id>)');
+      }
+      decorOk = roofEquipmentVerdict(id, st.census, configurations[id], sourceReceipts.get(id)).passed;
+      decorStr = `mg${st.census?.mg}+${st.census?.dressing}d${decorOk ? ' ✓' : ' ✗'}`;
+      if (!contigOk && st.holes.clusters?.length) {
+        console.error(`[standard-check] ${id} holes at ` +
+          st.holes.clusters.map((c) => `(x ${c.x}, z ${c.z}) ${c.cells}c`).join(', '));
+      }
+    }
+  }
+  if (!gateOk || !clipOk || !contigOk || !decorOk) fails++;
+  const aStage = concept ? 'concept' : photoId ? 'photo' : 'procedural';
+  stageRows.push({ id, stages: {
+    [aStage]: aStage === 'procedural' ? 'N/A' : stageStatus(true, gateOk),
+    clip: stageStatus(true, clipOk),
+    contiguity: stageStatus(!noRender, contigOk),
+    decor: stageStatus(!noRender, decorOk),
+  } });
+  console.log(
+    `${id.padEnd(19)}| ${(aStage === 'procedural' ? row : `${row} ${gateOk ? '✓' : '✗'}`).padEnd(31)}| ` +
+    `${clipStr.padStart(14)}${cl ? (clipOk ? ' ✓' : ' ✗') : '  '}| ${contigStr.padStart(6)} | ${decorStr}`);
+}
+if (ids.length) {
+  console.log(`\n[standard-check] ${ids.length - fails}/${ids.length} pass the machine-checkable gates ` +
+    `(fresh concept and photo proofs + clip<=${CLIP_BAND}${noRender ? '' : ' + unexpected holes=0 at every hull-anchored phase (φ = phase-only) + the equipment census'}).`);
+  if (!noRender) {
+    console.log('[standard-check] decor censuses KIT.fittings markers only (§B3): hand-authored ' +
+      'decoration predating the fittings library reads mg0+0d — migrate the profile to ' +
+      'KIT.fittings.<fn> or carry a packet justification for a real hand-authored weapon. Pinned counts (photo packets, roofWeaponPolicy.ts PINNED_ROOF_WEAPON_COUNT) are exact; other vehicles retain mg>=1, except those listed in src/vehicles/roofWeaponPolicy.ts (no roof weapon on the real vehicle: mg 0).');
+  }
+}
+let stageSummary = null;
+if (stages.runAll && ids.length) {
+  stageSummary = summarizeStages(stageRows, stages.failures);
+  console.log('');
+  for (const line of formatStageSummary(stageSummary)) console.log(line);
+  mkdirSync(reportRoot, { recursive: true });
+  writeFileSync(path.join(reportRoot, 'stages.json'), JSON.stringify({
+    recordedAt: new Date().toISOString(), ids, gate: forceGate, render: !noRender, summary: stageSummary, rows: stageRows,
+  }, null, 2) + '\n');
+}
+// Without --stages no failure is ever recorded (each stage.run() propagated it), so the exit is unchanged.
+process.exit(fails || fixtureFailed || stages.failures.length || (stageSummary && !stageSummary.passed) ? 2 : 0);

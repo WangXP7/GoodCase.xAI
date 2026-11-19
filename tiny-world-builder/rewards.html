@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Your Earned GOLD balance, referral link, and reward activity in Tiny World Builder." />
+<title>Rewards - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  (function rewardsAuthBootstrap() {
+    window.__tinyworldAuthReady = window.__tinyworldAuthReady || new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<style>
+/* ---- rewards page ---- */
+.rewards-section {
+  width: min(860px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 8px 0 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Beta Preview banner + pill — marks the economy as in-beta / preview data */
+.beta-banner {
+  background: #1e3a6b;
+  color: #dce8ff;
+  text-align: center;
+  padding: 9px 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.beta-banner strong { color: #fff; }
+.beta-pill {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: #3a72c8;
+  color: #fff;
+  font-size: 0.42em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Glass card shared idiom — matches leaderboard / badges */
+.rewards-card {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 2px rgba(20, 30, 50, 0.05),
+    0 18px 44px -16px rgba(40, 50, 80, 0.24);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  overflow: hidden;
+}
+
+.rewards-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 24px 0;
+}
+
+.rewards-card-title {
+  font-family: var(--display-font);
+  font-size: 16px;
+  font-weight: 700;
+  color: #111b45;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.rewards-card-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+  flex: 0 0 20px;
+}
+
+/* ---------- balance card ---------- */
+.rewards-balance-wrap {
+  padding: 20px 24px 24px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.rewards-balance-num {
+  font-family: var(--display-font);
+  font-size: clamp(52px, 10vw, 80px);
+  font-weight: 700;
+  line-height: 1;
+  color: #c9a227;
+  letter-spacing: -0.01em;
+}
+
+.rewards-balance-meta {
+  padding-bottom: 8px;
+}
+
+.rewards-balance-label {
+  font-family: var(--body-font);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rewards-coin-glyph {
+  width: 36px;
+  height: 36px;
+  color: #c9a227;
+  flex: 0 0 36px;
+}
+
+/* recent activity */
+.rewards-activity-heading {
+  padding: 4px 24px 10px;
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 0;
+}
+
+.rewards-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rewards-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  transition: background 0.1s;
+}
+
+.rewards-activity-item:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.rewards-delta {
+  font-family: var(--display-font);
+  font-size: 17px;
+  font-weight: 700;
+  min-width: 56px;
+  text-align: right;
+  flex: 0 0 56px;
+}
+
+.rewards-delta-credit { color: #1a6632; }
+.rewards-delta-debit  { color: #9a3020; }
+
+.rewards-activity-reason {
+  flex: 1;
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rewards-activity-time {
+  font-family: var(--body-font);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rewards-activity-empty {
+  padding: 24px 24px 28px;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---------- referral card ---------- */
+.rewards-referral-body {
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rewards-referral-explainer {
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.rewards-referral-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.rewards-referral-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(120, 130, 150, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  font: 14px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--ink);
+  outline: none;
+  min-width: 0;
+}
+
+.rewards-referral-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+}
+
+.rewards-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 14px/1 var(--body-font);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+  flex: 0 0 auto;
+}
+
+.rewards-copy-btn:hover { filter: brightness(1.1); }
+.rewards-copy-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.rewards-copy-confirm {
+  font-family: var(--body-font);
+  font-size: 12px;
+  color: #1a6632;
+  min-height: 16px;
+  transition: opacity 0.2s;
+}
+
+.rewards-referral-stats {
+  font-family: var(--body-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rewards-referral-stats-num {
+  font-family: var(--display-font);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ---------- claim card ---------- */
+.rewards-claim-body {
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rewards-claim-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.rewards-claim-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(120, 130, 150, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  font: 600 14px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--ink);
+  outline: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rewards-claim-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+}
+
+.rewards-claim-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 14px/1 var(--body-font);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rewards-claim-btn:hover { filter: brightness(1.1); }
+.rewards-claim-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+.rewards-claim-feedback {
+  font-family: var(--body-font);
+  font-size: 13px;
+  min-height: 18px;
+}
+
+.rewards-claim-feedback.ok  { color: #1a6632; }
+.rewards-claim-feedback.err { color: #9a3020; }
+
+/* ---------- sign-in gate ---------- */
+.rewards-signin-gate {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 18px 44px -16px rgba(40, 50, 80, 0.24);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  padding: 72px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.rewards-signin-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.rewards-signin-gate h2 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 28px;
+  font-weight: 700;
+  color: #111b45;
+}
+
+.rewards-signin-gate p {
+  margin: 0;
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 360px;
+  line-height: 1.55;
+}
+
+.rewards-signin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 15px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+  cursor: pointer;
+  border: none;
+}
+
+.rewards-signin-btn:hover { filter: brightness(1.1); }
+.rewards-signin-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- coming soon ---------- */
+.rewards-coming-soon {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ---------- resources & gold panel ---------- */
+.rewards-economy-body {
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rewards-economy-notice {
+  padding: 16px 24px 24px;
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* resource sell section */
+.rewards-resources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.rewards-resource-item {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(120, 130, 150, 0.18);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rewards-resource-name {
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rewards-resource-count {
+  font-family: var(--display-font);
+  font-size: 24px;
+  font-weight: 700;
+  color: #111b45;
+  line-height: 1;
+}
+
+.rewards-resource-rate {
+  font-family: var(--body-font);
+  font-size: 12px;
+  color: #c9a227;
+  font-weight: 600;
+}
+
+.rewards-sell-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rewards-sell-total {
+  font-family: var(--body-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+
+.rewards-sell-total-num {
+  font-family: var(--display-font);
+  font-size: 20px;
+  font-weight: 700;
+  color: #c9a227;
+}
+
+.rewards-sell-btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(180deg, #d4a62a 0%, #b8891e 100%);
+  color: #fff;
+  font: 600 14px/1 var(--body-font);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(180, 120, 20, 0.5);
+  transition: filter 0.12s;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rewards-sell-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.rewards-sell-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+.rewards-sell-feedback {
+  font-family: var(--body-font);
+  font-size: 13px;
+  min-height: 18px;
+  width: 100%;
+}
+
+.rewards-sell-feedback.ok  { color: #1a6632; }
+.rewards-sell-feedback.err { color: #9a3020; }
+
+/* buy gold section */
+.rewards-buy-divider {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 4px 0 0;
+}
+
+.rewards-buy-heading {
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rewards-buy-coming-soon {
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.rewards-packs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.rewards-pack-btn {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(120, 130, 150, 0.22);
+  background: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, box-shadow 0.12s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rewards-pack-btn:hover { background: rgba(255, 255, 255, 0.9); box-shadow: 0 2px 8px rgba(20,30,50,0.1); }
+.rewards-pack-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.rewards-pack-coins {
+  font-family: var(--display-font);
+  font-size: 20px;
+  font-weight: 700;
+  color: #c9a227;
+  line-height: 1;
+}
+
+.rewards-pack-name {
+  font-family: var(--body-font);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rewards-pack-price {
+  font-family: var(--body-font);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rewards-buy-feedback {
+  font-family: var(--body-font);
+  font-size: 13px;
+  min-height: 18px;
+}
+
+.rewards-buy-feedback.err { color: #9a3020; }
+
+/* send gold section */
+.rewards-send-divider {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 4px 0 0;
+}
+
+.rewards-send-heading {
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rewards-send-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.rewards-send-username {
+  flex: 2;
+  min-width: 100px;
+  padding: 10px 14px;
+  border: 1px solid rgba(120, 130, 150, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  font: 400 14px/1.4 var(--body-font);
+  color: var(--ink);
+  outline: none;
+}
+
+.rewards-send-username:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+}
+
+.rewards-send-amount {
+  flex: 1;
+  min-width: 70px;
+  padding: 10px 14px;
+  border: 1px solid rgba(120, 130, 150, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  font: 400 14px/1.4 var(--body-font);
+  color: var(--ink);
+  outline: none;
+}
+
+.rewards-send-amount:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+}
+
+.rewards-send-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(180deg, #d4a62a 0%, #b8891e 100%);
+  color: #fff;
+  font: 600 14px/1 var(--body-font);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(180, 120, 20, 0.5);
+  transition: filter 0.12s;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rewards-send-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.rewards-send-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+.rewards-send-feedback {
+  font-family: var(--body-font);
+  font-size: 13px;
+  min-height: 18px;
+  width: 100%;
+}
+
+.rewards-send-feedback.ok  { color: #1a6632; }
+.rewards-send-feedback.err { color: #9a3020; }
+
+@media (max-width: 600px) {
+  .rewards-balance-num { font-size: 52px; }
+  .rewards-referral-link-row { flex-direction: column; }
+  .rewards-copy-btn { align-self: flex-start; }
+  .rewards-claim-row { flex-direction: column; }
+  .rewards-claim-btn { align-self: flex-start; }
+  .rewards-resources-grid { grid-template-columns: 1fr 1fr; }
+  .rewards-packs-grid { grid-template-columns: 1fr 1fr; }
+  .rewards-send-row { flex-direction: column; }
+  .rewards-send-btn { align-self: flex-start; }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/badges">Badges</a>
+      <a href="/rewards" aria-current="page">Rewards</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="beta-banner" role="status">The Tinyverse economy is in <strong>Beta Preview</strong> — GOLD, balances, and tokens are preview data while we finish building.</div>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Rewards <span class="beta-pill" title="The Tinyverse economy is in beta. Balances are preview data.">Beta Preview</span></h1>
+        <p>Your Earned GOLD balance, referral link, and recent activity.</p>
+      </div>
+    </section>
+
+    <section class="rewards-section" aria-label="Rewards" id="rewards-section">
+      <!-- populated by script below -->
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var section = document.getElementById('rewards-section');
+    if (!section) return;
+
+    // ---- static SVG strings (not user data — safe innerHTML) ----
+    var SVG_COIN =
+      '<svg class="rewards-coin-glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="12" cy="12" r="10"/>' +
+      '<path d="M9.5 8.5h4a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h4.5"/>' +
+      '<path d="M12 7v1.5M12 15.5V17"/>' +
+      '</svg>';
+
+    var SVG_STAR =
+      '<svg class="rewards-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' +
+      '</svg>';
+
+    var SVG_SHARE =
+      '<svg class="rewards-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>' +
+      '<polyline points="16 6 12 2 8 6"/>' +
+      '<line x1="12" y1="2" x2="12" y2="15"/>' +
+      '</svg>';
+
+    var SVG_TAG =
+      '<svg class="rewards-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>' +
+      '<line x1="7" y1="7" x2="7.01" y2="7"/>' +
+      '</svg>';
+
+    var SVG_LOCK =
+      '<svg class="rewards-signin-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>' +
+      '<path d="M7 11V7a5 5 0 0 1 10 0v4"/>' +
+      '</svg>';
+
+    var SVG_BASKET =
+      '<svg class="rewards-card-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>' +
+      '<line x1="3" y1="6" x2="21" y2="6"/>' +
+      '<path d="M16 10a4 4 0 0 1-8 0"/>' +
+      '</svg>';
+
+    var SVG_ARROW =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+
+    var SVG_COPY =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+    // ---- helpers ----
+    function relativeTime(isoString) {
+      try {
+        var ms = Date.now() - new Date(isoString).getTime();
+        if (isNaN(ms)) return '';
+        var sec = Math.floor(ms / 1000);
+        if (sec < 60) return 'just now';
+        var min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm ago';
+        var hr = Math.floor(min / 60);
+        if (hr < 24) return hr + 'h ago';
+        var day = Math.floor(hr / 24);
+        if (day < 30) return day + 'd ago';
+        var mo = Math.floor(day / 30);
+        if (mo < 12) return mo + 'mo ago';
+        return Math.floor(mo / 12) + 'yr ago';
+      } catch (_) { return ''; }
+    }
+
+    function formatDelta(delta) {
+      var n = Number(delta);
+      if (n >= 0) return '+' + n;
+      return String(n);
+    }
+
+    // ---- auth check ----
+    function getLoggedInUser() {
+      try {
+        var Auth = window.TinyWorldAuth;
+        if (Auth && typeof Auth.getUser === 'function') {
+          // getUser() returns a Promise — we'll handle async below
+          return Auth.getUser();
+        }
+      } catch (_) {}
+      return Promise.resolve(null);
+    }
+
+    // ---- show signed-out gate ----
+    function showSignedOut() {
+      section.textContent = '';
+
+      var gate = document.createElement('div');
+      gate.className = 'rewards-signin-gate';
+      // SVG is static markup — safe innerHTML
+      gate.innerHTML = SVG_LOCK;
+
+      var h2 = document.createElement('h2');
+      h2.textContent = 'Sign in to view your rewards';
+      gate.appendChild(h2);
+
+      var p = document.createElement('p');
+      p.textContent = 'Your Earned GOLD balance and referral link are only visible when signed in.';
+      gate.appendChild(p);
+
+      var btn = document.createElement('button');
+      btn.className = 'rewards-signin-btn';
+      btn.type = 'button';
+      // Static SVG + static text — safe innerHTML
+      btn.innerHTML = '<span>Sign in</span>' + SVG_ARROW;
+      btn.addEventListener('click', function () {
+        try {
+          var Auth = window.TinyWorldAuth;
+          if (Auth && typeof Auth.login === 'function') {
+            Auth.login('', '', false).catch(function () {});
+          }
+        } catch (_) {}
+      });
+      gate.appendChild(btn);
+
+      section.appendChild(gate);
+    }
+
+    // ---- build balance card ----
+    function buildBalanceCard(balance, recent) {
+      var card = document.createElement('div');
+      card.className = 'rewards-card';
+
+      // header
+      var header = document.createElement('div');
+      header.className = 'rewards-card-header';
+      // static SVG — safe innerHTML
+      header.innerHTML = SVG_STAR;
+      var title = document.createElement('span');
+      title.className = 'rewards-card-title';
+      title.textContent = 'Your Earned GOLD';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      // balance row
+      var balanceWrap = document.createElement('div');
+      balanceWrap.className = 'rewards-balance-wrap';
+
+      // static SVG coin glyph — safe innerHTML
+      var coinEl = document.createElement('span');
+      coinEl.innerHTML = SVG_COIN;
+
+      var numEl = document.createElement('div');
+      numEl.className = 'rewards-balance-num';
+      numEl.setAttribute('aria-label', String(Number(balance)) + ' Earned GOLD');
+      // textContent — user data, never innerHTML
+      numEl.textContent = String(Number(balance) || 0);
+
+      var metaEl = document.createElement('div');
+      metaEl.className = 'rewards-balance-meta';
+      var labelEl = document.createElement('div');
+      labelEl.className = 'rewards-balance-label';
+      labelEl.textContent = 'Earned GOLD';
+      metaEl.appendChild(labelEl);
+
+      balanceWrap.appendChild(coinEl);
+      balanceWrap.appendChild(numEl);
+      balanceWrap.appendChild(metaEl);
+      card.appendChild(balanceWrap);
+
+      // recent activity
+      var actHeading = document.createElement('div');
+      actHeading.className = 'rewards-activity-heading';
+      actHeading.textContent = 'Recent activity';
+      card.appendChild(actHeading);
+
+      if (!recent || !recent.length) {
+        var emptyDiv = document.createElement('div');
+        emptyDiv.className = 'rewards-activity-empty';
+        emptyDiv.textContent = 'No activity yet.';
+        card.appendChild(emptyDiv);
+      } else {
+        var ul = document.createElement('ul');
+        ul.className = 'rewards-activity-list';
+        ul.setAttribute('aria-label', 'Recent activity');
+
+        recent.slice(0, 20).forEach(function (entry) {
+          var li = document.createElement('li');
+          li.className = 'rewards-activity-item';
+
+          var delta = Number(entry.delta) || 0;
+          var isCredit = delta >= 0;
+
+          var deltaEl = document.createElement('span');
+          deltaEl.className = 'rewards-delta ' + (isCredit ? 'rewards-delta-credit' : 'rewards-delta-debit');
+          // textContent — numeric user data
+          deltaEl.textContent = formatDelta(delta);
+
+          var reasonEl = document.createElement('span');
+          reasonEl.className = 'rewards-activity-reason';
+          // textContent — user-supplied string, never innerHTML
+          reasonEl.textContent = String(entry.reason || entry.type || '');
+
+          var timeEl = document.createElement('span');
+          timeEl.className = 'rewards-activity-time';
+          // textContent — computed string
+          timeEl.textContent = relativeTime(entry.createdAt);
+
+          li.appendChild(deltaEl);
+          li.appendChild(reasonEl);
+          li.appendChild(timeEl);
+          ul.appendChild(li);
+        });
+
+        card.appendChild(ul);
+      }
+
+      return card;
+    }
+
+    // ---- build referral card ----
+    function buildReferralCard(referralData) {
+      var code = String(referralData.code || '');
+      var link = String(referralData.link || '');
+      var referred = Number(referralData.referred) || 0;
+      var rewarded = Number(referralData.rewarded) || 0;
+
+      var card = document.createElement('div');
+      card.className = 'rewards-card';
+
+      // header
+      var header = document.createElement('div');
+      header.className = 'rewards-card-header';
+      // static SVG — safe innerHTML
+      header.innerHTML = SVG_SHARE;
+      var title = document.createElement('span');
+      title.className = 'rewards-card-title';
+      title.textContent = 'Invite friends, earn GOLD';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      // body
+      var body = document.createElement('div');
+      body.className = 'rewards-referral-body';
+
+      var explainer = document.createElement('p');
+      explainer.className = 'rewards-referral-explainer';
+      explainer.textContent =
+        'Friends who join with your link and publish a world earn you both Earned GOLD.';
+      body.appendChild(explainer);
+
+      // link row
+      var linkRow = document.createElement('div');
+      linkRow.className = 'rewards-referral-link-row';
+
+      var input = document.createElement('input');
+      input.className = 'rewards-referral-input';
+      input.type = 'text';
+      input.readOnly = true;
+      input.setAttribute('aria-label', 'Your referral link');
+      // .value assignment — not innerHTML
+      input.value = link || code;
+
+      var copyBtn = document.createElement('button');
+      copyBtn.className = 'rewards-copy-btn';
+      copyBtn.type = 'button';
+      // static SVG + static text — safe innerHTML
+      copyBtn.innerHTML = SVG_COPY + '<span>Copy</span>';
+
+      var copyConfirm = document.createElement('div');
+      copyConfirm.className = 'rewards-copy-confirm';
+      copyConfirm.setAttribute('aria-live', 'polite');
+      copyConfirm.textContent = '';
+
+      var copyTimeout = null;
+      copyBtn.addEventListener('click', function () {
+        var textToCopy = link || code;
+        if (!textToCopy) return;
+
+        function showCopied() {
+          copyBtn.querySelector('span').textContent = 'Copied!';
+          copyConfirm.textContent = 'Link copied to clipboard.';
+          clearTimeout(copyTimeout);
+          copyTimeout = setTimeout(function () {
+            copyBtn.querySelector('span').textContent = 'Copy';
+            copyConfirm.textContent = '';
+          }, 2200);
+        }
+
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(textToCopy).then(showCopied).catch(function () {
+            // Fallback: execCommand
+            try {
+              input.select();
+              document.execCommand('copy');
+              showCopied();
+            } catch (_) {}
+          });
+        } else {
+          // Fallback: execCommand
+          try {
+            input.select();
+            document.execCommand('copy');
+            showCopied();
+          } catch (_) {}
+        }
+      });
+
+      linkRow.appendChild(input);
+      linkRow.appendChild(copyBtn);
+      body.appendChild(linkRow);
+      body.appendChild(copyConfirm);
+
+      // stats row
+      var statsEl = document.createElement('div');
+      statsEl.className = 'rewards-referral-stats';
+
+      var statNum1 = document.createElement('span');
+      statNum1.className = 'rewards-referral-stats-num';
+      // textContent — numeric
+      statNum1.textContent = String(referred);
+
+      var statText1 = document.createElement('span');
+      statText1.textContent = referred === 1 ? 'invited' : 'invited';
+
+      var sep = document.createElement('span');
+      sep.setAttribute('aria-hidden', 'true');
+      sep.textContent = '·';
+
+      var statNum2 = document.createElement('span');
+      statNum2.className = 'rewards-referral-stats-num';
+      // textContent — numeric
+      statNum2.textContent = String(rewarded);
+
+      var statText2 = document.createElement('span');
+      statText2.textContent = 'rewarded';
+
+      statsEl.appendChild(statNum1);
+      statsEl.appendChild(statText1);
+      statsEl.appendChild(sep);
+      statsEl.appendChild(statNum2);
+      statsEl.appendChild(statText2);
+      body.appendChild(statsEl);
+
+      card.appendChild(body);
+      return card;
+    }
+
+    // ---- build claim card ----
+    function buildClaimCard() {
+      var card = document.createElement('div');
+      card.className = 'rewards-card';
+
+      // header
+      var header = document.createElement('div');
+      header.className = 'rewards-card-header';
+      // static SVG — safe innerHTML
+      header.innerHTML = SVG_TAG;
+      var title = document.createElement('span');
+      title.className = 'rewards-card-title';
+      title.textContent = 'Claim a referral code';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      var body = document.createElement('div');
+      body.className = 'rewards-claim-body';
+
+      var claimRow = document.createElement('div');
+      claimRow.className = 'rewards-claim-row';
+
+      var codeInput = document.createElement('input');
+      codeInput.className = 'rewards-claim-input';
+      codeInput.type = 'text';
+      codeInput.maxLength = 32;
+      codeInput.placeholder = 'Enter code (e.g. TW7K9XQ2)';
+      codeInput.setAttribute('aria-label', "Friend's referral code");
+
+      var claimBtn = document.createElement('button');
+      claimBtn.className = 'rewards-claim-btn';
+      claimBtn.type = 'button';
+      claimBtn.textContent = 'Claim';
+
+      claimRow.appendChild(codeInput);
+      claimRow.appendChild(claimBtn);
+      body.appendChild(claimRow);
+
+      var feedback = document.createElement('div');
+      feedback.className = 'rewards-claim-feedback';
+      feedback.setAttribute('aria-live', 'polite');
+      body.appendChild(feedback);
+
+      var CLAIM_MESSAGES = {
+        'already-referred':  'You have already used a referral code.',
+        'self-referral':     'You cannot claim your own referral code.',
+        'invalid-code':      'That code was not found. Double-check and try again.',
+        'not-found':         'That code was not found. Double-check and try again.',
+      };
+
+      claimBtn.addEventListener('click', function () {
+        var code = codeInput.value.trim().toUpperCase();
+        if (!code) {
+          feedback.className = 'rewards-claim-feedback err';
+          feedback.textContent = 'Please enter a referral code.';
+          return;
+        }
+
+        claimBtn.disabled = true;
+        feedback.className = 'rewards-claim-feedback';
+        feedback.textContent = 'Submitting...';
+
+        fetch('/api/me/referral', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ code: code }),
+        })
+          .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data }; }); })
+          .then(function (r) {
+            claimBtn.disabled = false;
+            if (r.data && r.data.ok) {
+              feedback.className = 'rewards-claim-feedback ok';
+              feedback.textContent = 'Code claimed! Your referral has been recorded.';
+              codeInput.value = '';
+            } else {
+              var reason = (r.data && r.data.reason) || '';
+              feedback.className = 'rewards-claim-feedback err';
+              // textContent — safe: mapping to hardcoded messages
+              feedback.textContent = CLAIM_MESSAGES[reason] || 'Something went wrong. Please try again.';
+            }
+          })
+          .catch(function () {
+            claimBtn.disabled = false;
+            feedback.className = 'rewards-claim-feedback err';
+            feedback.textContent = 'Could not reach the server. Please try again.';
+          });
+      });
+
+      card.appendChild(body);
+      return card;
+    }
+
+    // ---- sell rates (server is authoritative; client-side for display only) ----
+    var SELL_RATES = { fish: 1, meat: 2, plants: 1, ore: 3 };
+    var RESOURCE_LABELS = ['fish', 'meat', 'plants', 'ore'];
+
+    // ---- build economy card (sell resources + buy gold) ----
+    function buildEconomyCard(resourcesData, stripeData, reloadSignedIn, coinsData) {
+      var card = document.createElement('div');
+      card.className = 'rewards-card';
+
+      // header
+      var header = document.createElement('div');
+      header.className = 'rewards-card-header';
+      // static SVG — safe innerHTML
+      header.innerHTML = SVG_BASKET;
+      var title = document.createElement('span');
+      title.className = 'rewards-card-title';
+      title.textContent = 'Resources & GOLD';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      // ---- non-owner / 403 ----
+      if (resourcesData === 403 || stripeData === 403) {
+        var notice = document.createElement('div');
+        notice.className = 'rewards-economy-notice';
+        notice.textContent = 'The creator economy is in private testing.';
+        card.appendChild(notice);
+        return card;
+      }
+
+      var body = document.createElement('div');
+      body.className = 'rewards-economy-body';
+
+      // ---- sell section ----
+      var resources = resourcesData || {};
+      var amounts = {};
+      var totalGold = 0;
+      RESOURCE_LABELS.forEach(function (key) {
+        amounts[key] = Math.max(0, Number(resources[key]) || 0);
+        totalGold += amounts[key] * SELL_RATES[key];
+      });
+      var hasResources = totalGold > 0;
+
+      var grid = document.createElement('div');
+      grid.className = 'rewards-resources-grid';
+
+      RESOURCE_LABELS.forEach(function (key) {
+        var item = document.createElement('div');
+        item.className = 'rewards-resource-item';
+
+        var nameEl = document.createElement('div');
+        nameEl.className = 'rewards-resource-name';
+        nameEl.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+
+        var countEl = document.createElement('div');
+        countEl.className = 'rewards-resource-count';
+        countEl.textContent = amounts[key].toLocaleString();
+
+        var rateEl = document.createElement('div');
+        rateEl.className = 'rewards-resource-rate';
+        rateEl.textContent = SELL_RATES[key].toLocaleString() + ' GOLD / unit';
+
+        item.appendChild(nameEl);
+        item.appendChild(countEl);
+        item.appendChild(rateEl);
+        grid.appendChild(item);
+      });
+
+      body.appendChild(grid);
+
+      // sell footer
+      var sellFooter = document.createElement('div');
+      sellFooter.className = 'rewards-sell-footer';
+
+      var totalEl = document.createElement('div');
+      totalEl.className = 'rewards-sell-total';
+
+      var totalLabel = document.createElement('span');
+      totalLabel.textContent = 'Sell all for ';
+      var totalNum = document.createElement('span');
+      totalNum.className = 'rewards-sell-total-num';
+      totalNum.textContent = totalGold.toLocaleString();
+      var totalSuffix = document.createElement('span');
+      totalSuffix.textContent = ' GOLD';
+      totalEl.appendChild(totalLabel);
+      totalEl.appendChild(totalNum);
+      totalEl.appendChild(totalSuffix);
+
+      var sellBtn = document.createElement('button');
+      sellBtn.className = 'rewards-sell-btn';
+      sellBtn.type = 'button';
+      sellBtn.textContent = 'Sell all';
+      sellBtn.disabled = !hasResources;
+
+      var sellFeedback = document.createElement('div');
+      sellFeedback.className = 'rewards-sell-feedback';
+      sellFeedback.setAttribute('aria-live', 'polite');
+
+      if (!hasResources) {
+        sellFeedback.className = 'rewards-sell-feedback';
+        sellFeedback.textContent = 'Harvest resources in a world to earn GOLD here.';
+      }
+
+      sellFooter.appendChild(totalEl);
+      sellFooter.appendChild(sellBtn);
+      body.appendChild(sellFooter);
+      body.appendChild(sellFeedback);
+
+      // idempotency key — one per sell session, regenerate after ok
+      var sellIdempotencyKey = crypto.randomUUID();
+
+      sellBtn.addEventListener('click', function () {
+        if (!hasResources) return;
+        var confirmed = window.confirm(
+          'Sell all resources for ' + totalGold.toLocaleString() + ' GOLD?\n' +
+          'Fish: ' + amounts.fish.toLocaleString() + ', ' +
+          'Meat: ' + amounts.meat.toLocaleString() + ', ' +
+          'Plants: ' + amounts.plants.toLocaleString() + ', ' +
+          'Ore: ' + amounts.ore.toLocaleString()
+        );
+        if (!confirmed) return;
+
+        sellBtn.disabled = true;
+        sellFeedback.className = 'rewards-sell-feedback';
+        sellFeedback.textContent = 'Selling...';
+
+        fetch('/api/me/resources/sell', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            amounts: { fish: amounts.fish, meat: amounts.meat, plants: amounts.plants, ore: amounts.ore },
+            idempotencyKey: sellIdempotencyKey,
+          }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) { return { status: res.status, data: data }; });
+          })
+          .then(function (r) {
+            if (r.data && r.data.ok) {
+              // Regenerate key after successful sale
+              sellIdempotencyKey = crypto.randomUUID();
+              var earned = Number(r.data.gold) || totalGold;
+              sellFeedback.className = 'rewards-sell-feedback ok';
+              sellFeedback.textContent = '+' + earned.toLocaleString() + ' GOLD earned!';
+              // Reload the whole signed-in view to refresh resources + balance
+              if (typeof reloadSignedIn === 'function') {
+                setTimeout(reloadSignedIn, 1200);
+              } else {
+                sellBtn.disabled = false;
+              }
+            } else if (r.status === 409 && r.data && r.data.reason === 'insufficient-resources') {
+              sellFeedback.className = 'rewards-sell-feedback err';
+              sellFeedback.textContent = 'Not enough resources to sell. Refreshing counts...';
+              sellBtn.disabled = false;
+              if (typeof reloadSignedIn === 'function') setTimeout(reloadSignedIn, 1200);
+            } else {
+              var reason = (r.data && r.data.reason) ? String(r.data.reason) : '';
+              sellFeedback.className = 'rewards-sell-feedback err';
+              sellFeedback.textContent = reason
+                ? 'Could not sell: ' + reason + '. Please try again.'
+                : 'Something went wrong. Please try again.';
+              sellBtn.disabled = false;
+            }
+          })
+          .catch(function () {
+            sellFeedback.className = 'rewards-sell-feedback err';
+            sellFeedback.textContent = 'Could not reach the server. Please try again.';
+            sellBtn.disabled = false;
+          });
+      });
+
+      // ---- buy gold section ----
+      var divider = document.createElement('hr');
+      divider.className = 'rewards-buy-divider';
+      body.appendChild(divider);
+
+      var buyHeading = document.createElement('div');
+      buyHeading.className = 'rewards-buy-heading';
+      buyHeading.textContent = 'Buy GOLD';
+      body.appendChild(buyHeading);
+
+      var buyFeedback = document.createElement('div');
+      buyFeedback.className = 'rewards-buy-feedback';
+      buyFeedback.setAttribute('aria-live', 'polite');
+
+      var stripe = stripeData || {};
+      var stripeConfigured = stripe.configured === true;
+      var packs = (stripeConfigured && Array.isArray(stripe.packs)) ? stripe.packs : [];
+
+      if (!stripeConfigured || !packs.length) {
+        var comingSoon = document.createElement('div');
+        comingSoon.className = 'rewards-buy-coming-soon';
+        comingSoon.textContent = 'Buying GOLD with a card is coming soon.';
+        body.appendChild(comingSoon);
+      } else {
+        var packsGrid = document.createElement('div');
+        packsGrid.className = 'rewards-packs-grid';
+
+        var buyIdempotencyKey = crypto.randomUUID();
+
+        packs.forEach(function (pack) {
+          var packBtn = document.createElement('button');
+          packBtn.className = 'rewards-pack-btn';
+          packBtn.type = 'button';
+
+          var coinsEl = document.createElement('div');
+          coinsEl.className = 'rewards-pack-coins';
+          coinsEl.textContent = Number(pack.coins).toLocaleString() + ' GOLD';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'rewards-pack-name';
+          nameEl.textContent = String(pack.name || '');
+
+          var priceEl = document.createElement('div');
+          priceEl.className = 'rewards-pack-price';
+          var dollars = (Number(pack.amountCents) / 100).toFixed(2);
+          priceEl.textContent = '$' + dollars;
+
+          packBtn.appendChild(coinsEl);
+          packBtn.appendChild(nameEl);
+          packBtn.appendChild(priceEl);
+
+          packBtn.addEventListener('click', function () {
+            // Disable all pack buttons while in-flight
+            Array.prototype.forEach.call(packsGrid.querySelectorAll('.rewards-pack-btn'), function (b) {
+              b.disabled = true;
+            });
+            buyFeedback.className = 'rewards-buy-feedback';
+            buyFeedback.textContent = 'Redirecting to checkout...';
+
+            fetch('/api/stripe/checkout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ packId: String(pack.id), idempotencyKey: buyIdempotencyKey }),
+            })
+              .then(function (res) {
+                return res.json().then(function (data) { return { status: res.status, data: data }; });
+              })
+              .then(function (r) {
+                if (r.data && r.data.ok && r.data.url) {
+                  window.location = r.data.url;
+                  // Don't re-enable — navigation is happening
+                } else if (r.status === 503) {
+                  buyFeedback.className = 'rewards-buy-feedback';
+                  buyFeedback.textContent = 'Buying GOLD with a card is coming soon.';
+                  Array.prototype.forEach.call(packsGrid.querySelectorAll('.rewards-pack-btn'), function (b) {
+                    b.disabled = false;
+                  });
+                } else {
+                  buyFeedback.className = 'rewards-buy-feedback err';
+                  buyFeedback.textContent = 'Could not start checkout. Please try again.';
+                  Array.prototype.forEach.call(packsGrid.querySelectorAll('.rewards-pack-btn'), function (b) {
+                    b.disabled = false;
+                  });
+                }
+              })
+              .catch(function () {
+                buyFeedback.className = 'rewards-buy-feedback err';
+                buyFeedback.textContent = 'Could not reach the server. Please try again.';
+                Array.prototype.forEach.call(packsGrid.querySelectorAll('.rewards-pack-btn'), function (b) {
+                  b.disabled = false;
+                });
+              });
+          });
+
+          packsGrid.appendChild(packBtn);
+        });
+
+        body.appendChild(packsGrid);
+      }
+
+      body.appendChild(buyFeedback);
+
+      // ---- send gold section ----
+      var sendDivider = document.createElement('hr');
+      sendDivider.className = 'rewards-send-divider';
+      body.appendChild(sendDivider);
+
+      var sendHeading = document.createElement('div');
+      sendHeading.className = 'rewards-send-heading';
+      sendHeading.textContent = 'Send GOLD';
+      body.appendChild(sendHeading);
+
+      var sendRow = document.createElement('div');
+      sendRow.className = 'rewards-send-row';
+
+      var usernameInput = document.createElement('input');
+      usernameInput.className = 'rewards-send-username';
+      usernameInput.type = 'text';
+      usernameInput.placeholder = 'Recipient username';
+      usernameInput.setAttribute('autocomplete', 'off');
+      usernameInput.setAttribute('spellcheck', 'false');
+
+      var amountInput = document.createElement('input');
+      amountInput.className = 'rewards-send-amount';
+      amountInput.type = 'number';
+      amountInput.placeholder = 'Amount';
+      amountInput.min = '1';
+      amountInput.step = '1';
+
+      var sendBtn = document.createElement('button');
+      sendBtn.className = 'rewards-send-btn';
+      sendBtn.type = 'button';
+      sendBtn.textContent = 'Send';
+
+      sendRow.appendChild(usernameInput);
+      sendRow.appendChild(amountInput);
+      sendRow.appendChild(sendBtn);
+      body.appendChild(sendRow);
+
+      var sendFeedback = document.createElement('div');
+      sendFeedback.className = 'rewards-send-feedback';
+      sendFeedback.setAttribute('aria-live', 'polite');
+      body.appendChild(sendFeedback);
+
+      // idempotency key — regenerate only after a successful send
+      var sendIdempotencyKey = crypto.randomUUID();
+
+      sendBtn.addEventListener('click', function () {
+        var recipient = usernameInput.value.trim();
+        var rawAmount = amountInput.value.trim();
+        var amount = parseInt(rawAmount, 10);
+
+        // local validation
+        if (!recipient) {
+          sendFeedback.className = 'rewards-send-feedback err';
+          sendFeedback.textContent = 'Enter a recipient username.';
+          return;
+        }
+        if (!rawAmount || isNaN(amount) || amount < 1 || String(amount) !== rawAmount) {
+          sendFeedback.className = 'rewards-send-feedback err';
+          sendFeedback.textContent = 'Enter a positive whole number for the amount.';
+          return;
+        }
+
+        // optional client-side balance check when coinsData is available
+        var currentBalance = (coinsData && coinsData.balance != null) ? Number(coinsData.balance) : null;
+        if (currentBalance !== null && amount > currentBalance) {
+          sendFeedback.className = 'rewards-send-feedback err';
+          sendFeedback.textContent = 'Not enough GOLD.';
+          return;
+        }
+
+        var confirmed = window.confirm('Send ' + amount.toLocaleString() + ' GOLD to ' + recipient + '?');
+        if (!confirmed) return;
+
+        sendBtn.disabled = true;
+        sendFeedback.className = 'rewards-send-feedback';
+        sendFeedback.textContent = 'Sending...';
+
+        fetch('/api/me/coins/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ toUsername: recipient, amount: amount, idempotencyKey: sendIdempotencyKey }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) { return { status: res.status, data: data }; });
+          })
+          .then(function (r) {
+            if (r.data && r.data.ok) {
+              // Regenerate key after successful send
+              sendIdempotencyKey = crypto.randomUUID();
+              var sent = Number(r.data.sent) || amount;
+              var toUser = String(r.data.to || recipient);
+              sendFeedback.className = 'rewards-send-feedback ok';
+              sendFeedback.textContent = 'Sent ' + sent.toLocaleString() + ' GOLD to ' + toUser + '.';
+              usernameInput.value = '';
+              amountInput.value = '';
+              sendBtn.disabled = false;
+              if (typeof reloadSignedIn === 'function') {
+                setTimeout(reloadSignedIn, 1200);
+              }
+            } else if (r.status === 404 || (r.data && r.data.reason === 'recipient-not-found')) {
+              sendFeedback.className = 'rewards-send-feedback err';
+              sendFeedback.textContent = 'No player with that username.';
+              sendBtn.disabled = false;
+            } else if (r.status === 409 || (r.data && r.data.reason === 'insufficient-coins')) {
+              sendFeedback.className = 'rewards-send-feedback err';
+              sendFeedback.textContent = 'Not enough GOLD.';
+              sendBtn.disabled = false;
+            } else if (r.data && r.data.reason === 'self-transfer') {
+              sendFeedback.className = 'rewards-send-feedback err';
+              sendFeedback.textContent = 'You cannot send GOLD to yourself.';
+              sendBtn.disabled = false;
+            } else if (r.status === 403) {
+              sendFeedback.className = 'rewards-send-feedback err';
+              sendFeedback.textContent = 'GOLD transfers are in private testing.';
+              sendBtn.disabled = false;
+            } else {
+              sendFeedback.className = 'rewards-send-feedback err';
+              sendFeedback.textContent = 'Something went wrong. Please try again.';
+              sendBtn.disabled = false;
+            }
+          })
+          .catch(function () {
+            sendFeedback.className = 'rewards-send-feedback err';
+            sendFeedback.textContent = 'Could not reach the server. Please try again.';
+            sendBtn.disabled = false;
+          });
+      });
+
+      card.appendChild(body);
+      return card;
+    }
+
+    // ---- main render ----
+    function render(coinsData, referralData, resourcesData, stripeData, reloadSignedIn) {
+      section.textContent = '';
+
+      var balance = (coinsData && coinsData.balance != null) ? coinsData.balance : null;
+      var recent  = (coinsData && Array.isArray(coinsData.recent)) ? coinsData.recent : [];
+
+      if (balance !== null) {
+        section.appendChild(buildBalanceCard(balance, recent));
+      } else {
+        // API not ready / schema missing — graceful empty
+        var coming = document.createElement('div');
+        coming.className = 'rewards-card rewards-coming-soon';
+        coming.textContent = 'Rewards are coming soon.';
+        section.appendChild(coming);
+      }
+
+      // Economy panel: resources + gold (only when resourcesData or stripeData present, or 403)
+      if (resourcesData !== null || stripeData !== null) {
+        section.appendChild(buildEconomyCard(resourcesData, stripeData, reloadSignedIn, coinsData));
+      }
+
+      if (referralData && referralData.code) {
+        section.appendChild(buildReferralCard(referralData));
+        section.appendChild(buildClaimCard());
+      } else if (referralData) {
+        // Referral data present but no code yet (schema not ready)
+        section.appendChild(buildClaimCard());
+      }
+    }
+
+    // ---- load ----
+    function load() {
+      // Wait for auth to initialise
+      var authReady = window.__tinyworldAuthReady || Promise.resolve(false);
+
+      authReady
+        .catch(function () { return false; })
+        .then(function () {
+          return getLoggedInUser();
+        })
+        .then(function (user) {
+          if (!user) {
+            showSignedOut();
+            return null;
+          }
+
+          // Callback to reload the signed-in view (used after sale)
+          function reloadSignedIn() { load(); }
+
+          // Fetch all endpoints in parallel
+          var coinsPromise = fetch('/api/me/coins', { headers: { Accept: 'application/json' } })
+            .then(function (res) {
+              if (!res.ok) return null;
+              return res.json();
+            })
+            .catch(function () { return null; });
+
+          var referralPromise = fetch('/api/me/referral', { headers: { Accept: 'application/json' } })
+            .then(function (res) {
+              if (!res.ok) return null;
+              return res.json();
+            })
+            .catch(function () { return null; });
+
+          var resourcesPromise = fetch('/api/worlds/resources', { headers: { Accept: 'application/json' } })
+            .then(function (res) {
+              if (res.status === 403) return 403;
+              if (!res.ok) return null;
+              return res.json();
+            })
+            .catch(function () { return null; });
+
+          var stripePromise = fetch('/api/stripe/checkout', { headers: { Accept: 'application/json' } })
+            .then(function (res) {
+              if (res.status === 403) return 403;
+              if (!res.ok) return null;
+              return res.json();
+            })
+            .catch(function () { return null; });
+
+          return Promise.all([coinsPromise, referralPromise, resourcesPromise, stripePromise])
+            .then(function (results) {
+              return { results: results, reloadSignedIn: reloadSignedIn };
+            });
+        })
+        .then(function (payload) {
+          if (!payload) return; // signed out — already handled
+          var results = payload.results;
+          var reloadSignedIn = payload.reloadSignedIn;
+          var coinsData    = results[0];
+          var referralData = results[1];
+          var resourcesData = results[2];
+          var stripeData   = results[3];
+          render(coinsData, referralData, resourcesData, stripeData, reloadSignedIn);
+        })
+        .catch(function () {
+          // Final safety net — never throw to the user
+          section.textContent = '';
+          var coming = document.createElement('div');
+          coming.className = 'rewards-card rewards-coming-soon';
+          coming.textContent = 'Rewards are coming soon.';
+          section.appendChild(coming);
+        });
+    }
+
+    // Expose as test seam (mirrors window._leaderboardLoad pattern)
+    window._rewardsLoad = load;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  }());
+  </script>
+</body>
+</html>

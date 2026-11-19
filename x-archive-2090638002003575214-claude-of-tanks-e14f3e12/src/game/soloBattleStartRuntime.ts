@@ -1,0 +1,284 @@
+import type { CouchBattle } from './couchSeats.ts';
+import { chaseStartPitch } from '../engine/chaseStart.ts';
+import type { RuntimeValue } from '../runtimeTypes.ts';
+import type { DamagePanelController } from '../ui/damagePanel.ts';
+import { assertAppPhaseTransition, transitionAppPhase, type AppPhase } from './appLifecycle.ts';
+import { transitionBattleCountdown } from './preBattleCountdown.ts';
+import { resetWorldForBattle, type BattleResetWorld } from '../world/battleWorldReset.ts';
+import type { HudRuntime } from '../ui/hud.ts';
+
+type MaybePromise<T> = T | PromiseLike<T>;
+type DamagePanelSpec = Parameters<DamagePanelController['setTank']>[0];
+type DamagePanelVisual = Parameters<DamagePanelController['setTank']>[1];
+type EquipmentSelection = Parameters<DamagePanelController['setEquipment']>[0];
+
+export interface SoloBattleStartOptions {
+  deferVisuals?: boolean;
+  preBattleHold?: boolean;
+  randomRoster?: boolean;
+  gameMode?: string;
+  campaignOperationId?: string | null;
+  /** Watch mode (sim/matchRuleset.ts WATCH_RULES): every seat a bot's. */
+  watch?: boolean;
+  /** Couch mode (sim/matchRuleset.ts COUCH_RULES): the phones' seats and sides. */
+  couch?: CouchBattle;
+}
+
+interface SoloBattlePlayer {
+  id: string;
+  specId: string;
+  spec: DamagePanelSpec;
+  state: { yaw: number } | null;
+  visual: (DamagePanelVisual & { prewarmBurn?(): void }) | null | undefined;
+  equip?: EquipmentSelection;
+}
+
+interface SoloBattleGame {
+  preBattleS: number;
+  mapId: string;
+  phase: AppPhase;
+  player?: SoloBattlePlayer | null;
+  tanks: Array<{ specId: string; isPlayer?: boolean }>;
+}
+
+interface SoloBattleWorld extends BattleResetWorld {
+  mapId: string;
+}
+
+interface SoloBattleFx {
+  setFrozen(frozen: boolean): void;
+  resetAll(): void;
+}
+
+interface SoloBattleStartTrace {
+  specId: string;
+  stages: Record<string, number>;
+  totalMs?: number;
+}
+
+export interface SoloBattleStartRuntimeOptions {
+  state: {
+    game: SoloBattleGame;
+    getPendingMapId(): string;
+    setSelectedSpecId(specId: string): void;
+    rememberSpecId(specId: string): void;
+    setShotMode(active: boolean): void;
+    setCaptureHidden(hidden: boolean): void;
+    setSimulationAccumulator(value: number): void;
+    setCamoSweep(work: MaybePromise<RuntimeValue>): void;
+  };
+  world: {
+    resolveMapId(mapId: string): string;
+    switchMap(mapId: string): void;
+    getActive(): SoloBattleWorld;
+    setDormant(dormant: boolean): void;
+    scheduleBlackWatchdog(covered: boolean): void;
+  };
+  round: {
+    getFx(): SoloBattleFx;
+    settings: { isOpen(): boolean; close(options: { noRelock: boolean }): void };
+    killcam: { cancel(): void };
+    armorAim: { clear(): void };
+    resetDriveAim(): void;
+    setCamoBiome(mapId: string): void;
+    lendPlayerVisual(specId: string, useTank?: boolean): void;
+    setupBattle(
+      game: SoloBattleGame,
+      specId: string,
+      world: SoloBattleWorld,
+      options: {
+        random: boolean;
+        deferVisuals: boolean;
+        deferCamoRepaint: boolean;
+        deferOpeningRoutes: boolean;
+        gameMode?: string;
+        campaignOperationId?: string | null;
+        watch?: boolean;
+        couch?: CouchBattle;
+      },
+    ): void;
+    combatWarm: { reset(): void; drain(): RuntimeValue };
+    presentation: { primeDeploymentTerrainTiles(): void; resetSoloPoses(): void };
+    applyPlayerCamo(specId: string): void;
+    applyRosterCamo(options: {
+      priorityIds: readonly string[];
+      onlySpecIds: readonly string[];
+    }): MaybePromise<RuntimeValue>;
+  };
+  ui: {
+    hud: {
+      shotInfo: { setPlayer(playerId: string): void };
+      setMode: HudRuntime['setMode'];
+    };
+    playerActions: {
+      setTank(spec: RuntimeValue): void;
+      resetConsumables(): void;
+    };
+    damagePanel: {
+      setTank: DamagePanelController['setTank'];
+      setEquipment: DamagePanelController['setEquipment'];
+    };
+    hideGarage(): void;
+    hideEndOverlay(): void;
+    resetBattleResult(): void;
+    setGarageLighting(active: boolean): void;
+    emitConsumableReset(): void;
+    rig: { release(): void; snapArcade(distance: number, yaw: number, pitch: number): void };
+    stopShowroom(): void;
+    openBattle(): void;
+  };
+  now?: () => number;
+  recordTrace?: (trace: SoloBattleStartTrace) => void;
+}
+
+export interface SoloBattleStartRuntime {
+  start(specId: string, mapId?: string | null, options?: SoloBattleStartOptions): void;
+}
+
+/**
+ * Own the synchronous solo-round activation transaction after covered loading
+ * has acquired the world, roster builders, combat modules, and presentation
+ * owners. The caller chooses a tank/map; every reset and phase edge stays here.
+ */
+export function createSoloBattleStartRuntime({
+  state,
+  world,
+  round,
+  ui,
+  now = () => performance.now(),
+  recordTrace = () => {},
+}: SoloBattleStartRuntimeOptions): SoloBattleStartRuntime {
+  const required = [state?.getPendingMapId, state?.setSelectedSpecId,
+    state?.rememberSpecId, state?.setShotMode, state?.setCaptureHidden,
+    state?.setSimulationAccumulator, state?.setCamoSweep,
+    world?.resolveMapId, world?.switchMap, world?.getActive, world?.setDormant,
+    world?.scheduleBlackWatchdog, round?.getFx, round?.settings?.isOpen,
+    round?.settings?.close, round?.killcam?.cancel, round?.armorAim?.clear,
+    round?.resetDriveAim, round?.setCamoBiome, round?.lendPlayerVisual,
+    round?.setupBattle, round?.combatWarm?.reset, round?.combatWarm?.drain,
+    round?.presentation?.primeDeploymentTerrainTiles,
+    round?.presentation?.resetSoloPoses, round?.applyPlayerCamo,
+    round?.applyRosterCamo, ui?.hud?.shotInfo?.setPlayer, ui?.hud?.setMode,
+    ui?.playerActions?.setTank, ui?.playerActions?.resetConsumables,
+    ui?.damagePanel?.setTank, ui?.damagePanel?.setEquipment, ui?.hideGarage,
+    ui?.hideEndOverlay, ui?.resetBattleResult, ui?.setGarageLighting,
+    ui?.emitConsumableReset, ui?.rig?.release,
+    ui?.rig?.snapArcade, ui?.stopShowroom, ui?.openBattle, now, recordTrace];
+  if (!state?.game || required.some((value) => typeof value !== 'function')) {
+    throw new TypeError('solo battle start runtime requires every activation port');
+  }
+
+  return {
+    start(specId, mapId = null, {
+      deferVisuals = false,
+      preBattleHold = false,
+      randomRoster = true,
+      gameMode = 'standard',
+      campaignOperationId = null,
+      watch = false,
+      couch,
+    } = {}) {
+      if (!specId) throw new TypeError('solo battle start requires a vehicle specification');
+
+      const startedAt = now();
+      let markedAt = startedAt;
+      const trace: SoloBattleStartTrace = { specId, stages: {} };
+      const mark = (name: string): void => {
+        const marked = now();
+        trace.stages[name] = Math.round(marked - markedAt);
+        markedAt = marked;
+      };
+
+      const game = state.game;
+      // (2026-11-02 audit F1 review) refuse an illegal hand-over (a Studio's scene) before the roster, the map or the HUD
+      // move: the phase write below would throw only after all of them
+      assertAppPhaseTransition(game, 'battle', 'solo-start');
+      const fx = round.getFx();
+      // (audit F1) the countdown's owner: the player path arms the count its reveal opens; the debug entry skips it
+      transitionBattleCountdown(game, preBattleHold ? 'arm' : 'live');
+      state.setShotMode(false);
+      state.setCaptureHidden(false);
+      fx.setFrozen(false);
+      if (round.settings.isOpen()) round.settings.close({ noRelock: true });
+      round.killcam.cancel();
+      round.armorAim.clear();
+      mark('resetPresentation');
+
+      state.setSelectedSpecId(specId);
+      state.rememberSpecId(specId);
+      round.resetDriveAim();
+      world.switchMap(world.resolveMapId(mapId || state.getPendingMapId()));
+      world.setDormant(false);
+      const activeWorld = world.getActive();
+      // (round 3 A7/M4) the battle takes the world: its frame drives the falls and its sweeps run whatever a Studio left
+      resetWorldForBattle(activeWorld);
+      world.scheduleBlackWatchdog(preBattleHold);
+      game.mapId = activeWorld.mapId;
+      round.setCamoBiome(activeWorld.mapId);
+      mark('activateWorld');
+
+      round.lendPlayerVisual(specId, gameMode !== 'ac130');
+      mark('lendPlayerVisual');
+      round.setupBattle(game, specId, activeWorld, {
+        random: randomRoster,
+        deferVisuals,
+        deferCamoRepaint: true,
+        deferOpeningRoutes: deferVisuals,
+        ...(gameMode === 'standard' ? {} : { gameMode }),
+        ...(campaignOperationId ? { campaignOperationId } : {}),
+        ...(watch ? { watch } : {}),
+        ...(couch ? { couch } : {}),
+      });
+      round.combatWarm.reset();
+      mark('setupRoster');
+      round.presentation.primeDeploymentTerrainTiles();
+      mark('terrainTiles');
+      state.setSimulationAccumulator(0);
+      round.presentation.resetSoloPoses();
+
+      if (gameMode !== 'ac130') round.applyPlayerCamo(specId);
+      mark('playerCamo');
+      state.setCamoSweep(round.applyRosterCamo({
+        priorityIds: gameMode === 'ac130' ? [] : [specId],
+        // (ac130-fx-228) the pilot's own entity only: a bot sharing the pilot's garage spec still gets its camo
+        onlySpecIds: game.tanks.filter(entity => gameMode !== 'ac130' || !entity.isPlayer).map((entity) => entity.specId),
+      }));
+      mark('scheduleRosterCamo');
+
+      const player = game.player;
+      if (!player?.state) throw new Error('solo battle setup did not create a player with ready state');
+      ui.hud.shotInfo.setPlayer(player.id);
+      fx.resetAll();
+      mark('resetEffects');
+      ui.playerActions.setTank(player.spec);
+      // The panel borrows these materials immediately. Install the disarmed
+      // destruction hook before its asynchronous mask compile can begin.
+      if (gameMode !== 'ac130') {
+        player.visual?.prewarmBurn?.();
+        ui.damagePanel.setTank(player.spec, player.visual);
+        ui.damagePanel.setEquipment(player.equip ?? null);
+      }
+      ui.hideGarage();
+      ui.hideEndOverlay();
+      ui.resetBattleResult();
+      ui.hud.setMode('battle');
+      // (2026-11-02 audit F1) the one phase writer: checks the edge (a Studio never hands its scene to a battle),
+      // writes the phase and announces it; the Garage lights go out between the write and the announcement, as before
+      transitionAppPhase(game, 'battle', { reason: 'solo-start', beforeAnnounce: () => ui.setGarageLighting(false) });
+      ui.playerActions.resetConsumables();
+      ui.emitConsumableReset();
+      ui.rig.release();
+      ui.rig.snapArcade(2, player.state.yaw, chaseStartPitch((player.state as { _spring?: { pitch?: number } })._spring?.pitch,
+        (player.spec as { gunDepressionDeg?: number } | undefined)?.gunDepressionDeg));
+      ui.stopShowroom();
+      mark('uiAndCamera');
+      trace.totalMs = Math.round(now() - startedAt);
+      recordTrace(trace);
+
+      if (!deferVisuals) {
+        round.combatWarm.drain();
+        ui.openBattle();
+      }
+    },
+  };
+}

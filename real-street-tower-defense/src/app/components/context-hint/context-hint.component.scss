@@ -1,0 +1,123 @@
+// Layout of the hint box at the bottom centre of the map: title, text, a
+// warning, the keys, the actions. The look is a td-overlay strip; a warning
+// draws its edge red (is-error).
+@use '../../styles/game-ui' as ui;
+
+.context-hint-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  pointer-events: none;
+}
+
+/* Keys only, no title or text (the camera controls at the start): keys and
+   the button share one row, the button behind an engraved line, so no key
+   wraps onto a line of its own. Narrow screens stack them again. */
+.context-hint-container.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 18px;
+
+  /* One line wider than a tip box: the keys must not wrap */
+  &.interactive {
+    max-width: calc(100vw - 32px);
+  }
+
+  .actions-row {
+    align-self: stretch;
+    align-items: center;
+    padding: 0 0 0 18px;
+    border-top: 0;
+    @include ui.engraved-line-left;
+  }
+}
+
+@media (max-width: 720px) {
+  .context-hint-container.inline {
+    flex-direction: column;
+    align-items: stretch;
+
+    .actions-row {
+      padding: 6px 0 0;
+      border-left: 0;
+      @include ui.engraved-line-top;
+    }
+  }
+}
+
+/* With action buttons (first-run tips) the box takes clicks. It stays up
+   longer than a build hint, so it sits above the band of the off-screen
+   arrows (26px from the edge, chips up to 26px): no arrow hides under it. */
+.context-hint-container.interactive {
+  margin-bottom: 36px;
+  pointer-events: auto;
+  width: max-content;
+  max-width: min(460px, calc(100vw - 32px));
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.hints-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.hint-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// A mouse instead of a word: the icon in the key cap
+.hint-mouse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.warning-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    height var(--td-dur-fast) var(--td-ease-out),
+    opacity var(--td-dur-fast) var(--td-ease-out),
+    padding var(--td-dur-fast) var(--td-ease-out);
+
+  &.visible {
+    height: auto;
+    opacity: 1;
+    padding-bottom: 6px;
+    @include ui.engraved-line;
+  }
+
+  /* A warning with nothing under it (a refusal) needs no line */
+  &.visible:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+}
+
+.warning-text {
+  color: var(--td-error-text);
+}

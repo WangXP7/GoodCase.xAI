@@ -1,0 +1,17 @@
+// Layout of the display window: switches in a column, a heading line between
+// the groups.
+
+:host {
+  display: contents;
+}
+
+.display-options {
+  gap: 8px;
+}
+
+.separator {
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+

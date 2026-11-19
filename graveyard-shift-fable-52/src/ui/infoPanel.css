@@ -1,0 +1,54 @@
+/* The information panel beside the title and pause menus: tabs on top, one scrolling sheet under them.
+   Same card as the controls card (dark glass, red top edge). Sizes are in --u like the rest of the menus. */
+.gs-cardwrap { padding: max(24px, calc(54 * var(--u))) 0; }
+.gs-card.gs-info { display: flex; flex-direction: column; width: max(calc(700 * var(--u)), 460px); height: min(100%, calc(720 * var(--u))); max-height: 100%; padding: 0; pointer-events: auto; }
+
+.gs-tabs { display: flex; flex: none; padding: 0 max(12px, calc(22 * var(--u))); border-bottom: 1px solid rgba(236, 230, 214, .16); }
+.gs-tab { all: unset; box-sizing: border-box; cursor: pointer; white-space: nowrap; padding: max(13px, calc(20 * var(--u))) max(9px, calc(14 * var(--u))) max(11px, calc(17 * var(--u))); margin-bottom: -1px; border-bottom: 3px solid transparent; font: 600 max(12px, calc(15 * var(--u)))/1 var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); transition: color .12s, border-color .12s; }
+.gs-tab:hover { color: var(--ink); }
+.gs-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.gs-tab:focus-visible, .gs-sheet:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+.gs-sheet { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: max(16px, calc(26 * var(--u))) max(16px, calc(30 * var(--u))) max(16px, calc(28 * var(--u))); scrollbar-width: thin; scrollbar-color: rgba(236, 230, 214, .3) transparent; }
+.gs-sheet[hidden] { display: none; }
+.gs-info .gs-card-h, .gs-info .gs-card .a, .gs-info .a { font-family: var(--label); }
+.gs-info .gs-card-h { font-size: max(13px, calc(18 * var(--u))); letter-spacing: .14em; }
+.gs-info .a { font-size: max(13px, calc(18 * var(--u))); letter-spacing: .06em; }
+
+.gs-ilist { list-style: none; margin: 0; padding: 0; display: grid; gap: max(14px, calc(22 * var(--u))); }
+.gs-iitem + .gs-iitem { padding-top: max(14px, calc(22 * var(--u))); border-top: 1px solid rgba(236, 230, 214, .1); }
+.gs-itop { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 12px; row-gap: 2px; }
+.gs-ih { margin: 0; font: 600 max(13px, calc(18 * var(--u)))/1.25 var(--label); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+.gs-ip { margin: max(4px, calc(7 * var(--u))) 0 0; font: 400 max(13px, calc(16 * var(--u)))/1.45 var(--label); letter-spacing: .01em; color: rgba(236, 230, 214, .86); }
+.gs-icost { font: 600 max(13px, calc(16 * var(--u)))/1 var(--label); letter-spacing: .06em; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gs-inote { margin: 0 0 max(14px, calc(20 * var(--u))); font: 400 max(13px, calc(15 * var(--u)))/1.4 var(--label); color: var(--dim); }
+.gs-isub { list-style: none; margin: max(8px, calc(12 * var(--u))) 0 0; padding: 0 0 0 max(10px, calc(14 * var(--u))); border-left: 2px solid rgba(var(--accent-rgb), .55); display: grid; gap: max(4px, calc(7 * var(--u))); font: 400 max(13px, calc(16 * var(--u)))/1.4 var(--label); color: rgba(236, 230, 214, .86); }
+.gs-isub b { font-weight: 600; color: var(--ink); }
+
+.gs-wgroup + .gs-wgroup { margin-top: max(20px, calc(32 * var(--u))); }
+.gs-iclass { margin: 0 0 max(10px, calc(14 * var(--u))); padding-bottom: max(6px, calc(9 * var(--u))); border-bottom: 1px solid rgba(var(--accent-rgb), .5); font: 600 max(12px, calc(14 * var(--u)))/1 var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+.gs-srcs { font: 600 max(11px, calc(13 * var(--u)))/1.3 var(--label); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.gs-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: max(10px, calc(18 * var(--u))); margin: max(8px, calc(12 * var(--u))) 0 0; }
+.gs-bars dt { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font: 600 max(11px, calc(13 * var(--u)))/1 var(--label); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.gs-bars dt .v { color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.gs-bar { display: block; margin: max(5px, calc(7 * var(--u))) 0 0; height: max(4px, calc(6 * var(--u))); background: rgba(236, 230, 214, .12); }
+.gs-bar i { display: block; height: 100%; background: var(--accent); }
+.gs-wup { margin: max(7px, calc(10 * var(--u))) 0 0; font: 500 max(12px, calc(14 * var(--u)))/1.3 var(--label); letter-spacing: .03em; color: var(--dim); }
+
+/* phones and tablets in touch mode: the panel fills the space beside the menu buttons and scrolls inside itself */
+.gs-touch .gs-cardwrap { padding: calc(var(--st) + 10px) 0 calc(var(--sb) + 10px); }
+.gs-touch .gs-card.gs-info { width: 100%; height: 100%; padding: 0; }
+.gs-touch .gs-tabs { padding: 0 6px; }
+.gs-touch .gs-tab { display: flex; align-items: center; min-height: 44px; padding: 0 10px; margin-bottom: -1px; font-size: 13px; letter-spacing: .06em; }
+.gs-touch .gs-sheet { padding: 12px 14px 14px; -webkit-overflow-scrolling: touch; }
+.gs-touch .gs-ilist { gap: 12px; }
+.gs-touch .gs-iitem + .gs-iitem { padding-top: 12px; }
+.gs-touch .gs-ih { font-size: 14px; }
+.gs-touch .gs-ip, .gs-touch .gs-isub { font-size: 13.5px; }
+.gs-touch .gs-info .gs-card-h { font-size: 14px; }
+.gs-touch .gs-info .a { font-size: 13px; }
+.gs-touch .gs-bars { gap: 10px; }
+@media (max-width: 719px) {
+  .gs-touch .gs-tabs { padding: 0 2px; }
+  .gs-touch .gs-tab { padding: 0 8px; font-size: 12px; letter-spacing: .04em; }
+}

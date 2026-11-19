@@ -1,0 +1,32 @@
+// Layout of What's new: one group per release, version and date on a line.
+
+.wn-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--td-sp-2);
+}
+
+.wn-version {
+  font-size: var(--td-fs-lead);
+}
+
+.wn-release.is-current .wn-version,
+.wn-tag {
+  color: var(--td-brass-light);
+}
+
+.wn-date {
+  margin-left: auto;
+}
+
+.wn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.wn-earlier summary {
+  cursor: pointer;
+}

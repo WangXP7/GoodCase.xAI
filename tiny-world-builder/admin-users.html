@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="TinyWorld admin user management." />
+<title>Admin Users - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  (function adminAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+</head>
+<body class="landing-page admin-users-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/news">News</a>
+      <a href="/tiny-world-builder">Builder</a>
+      <a href="/admin-users" aria-current="page">Admin</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section admin-users-hero" aria-labelledby="admin-users-title">
+      <div class="page-hero-copy">
+        <p class="eyebrow">God-admin only</p>
+        <h1 id="admin-users-title">User access</h1>
+        <p>Search accounts, edit profile fields, reset Identity passwords, and enable Tinyverse lobby/multiplayer access.</p>
+      </div>
+    </section>
+
+    <section class="admin-users-shell" aria-label="User administration">
+      <form class="admin-users-auth" id="admin-users-auth" hidden>
+        <div>
+          <strong>Admin sign in</strong>
+          <span>Use a world-admin account to manage user access.</span>
+        </div>
+        <label>
+          <span>Email</span>
+          <input id="admin-auth-email" type="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <label>
+          <span>Password</span>
+          <input id="admin-auth-password" type="password" autocomplete="current-password" placeholder="Password" />
+        </label>
+        <button class="primary-action" id="admin-auth-login" type="submit">Sign in</button>
+        <button class="secondary-action" id="admin-auth-logout" type="button" hidden>Sign out</button>
+        <span class="admin-users-auth-status" id="admin-auth-status"></span>
+      </form>
+      <div class="admin-users-toolbar">
+        <label>
+          <span>Search users</span>
+          <input id="admin-user-search" type="search" placeholder="email, username, X, GitHub, display name" autocomplete="off" />
+        </label>
+        <label>
+          <span>Flags</span>
+          <select id="admin-user-flag">
+            <option value="all">All users</option>
+            <option value="tinyverse">Tinyverse allowlist</option>
+            <option value="no-access">Not Tinyverse</option>
+            <option value="legacy-flag">Legacy lobby flag</option>
+            <option value="profile-incomplete">Profile incomplete</option>
+            <option value="missing-email">Missing email</option>
+            <option value="missing-socials">Missing socials</option>
+            <option value="reset">Password reset</option>
+            <option value="archived">Archived/merged</option>
+            <option value="wallet">Wallet/no email</option>
+          </select>
+        </label>
+        <label>
+          <span>Created</span>
+          <select id="admin-user-created">
+            <option value="all">Any time</option>
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+          </select>
+        </label>
+        <label>
+          <span>Last seen</span>
+          <select id="admin-user-seen">
+            <option value="all">Any time</option>
+            <option value="online">Online now</option>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="never">Never seen</option>
+          </select>
+        </label>
+        <label>
+          <span>Sort</span>
+          <select id="admin-user-sort">
+            <option value="updated_desc">Recently updated</option>
+            <option value="created_desc">Newest first</option>
+            <option value="created_asc">Oldest first</option>
+            <option value="seen_desc">Last seen</option>
+            <option value="email_asc">Email A-Z</option>
+            <option value="username_asc">Username A-Z</option>
+          </select>
+        </label>
+        <label>
+          <span>Per page</span>
+          <select id="admin-user-limit">
+            <option value="250">250</option>
+            <option value="100">100</option>
+            <option value="500">500</option>
+            <option value="50">50</option>
+          </select>
+        </label>
+        <button class="primary-action" id="admin-user-search-btn" type="button">Search</button>
+        <button class="secondary-action" id="admin-user-refresh-btn" type="button">Refresh</button>
+        <button class="secondary-action" id="admin-user-confirm-emails" type="button">Confirm emails</button>
+      </div>
+      <p class="admin-users-status" id="admin-users-status">Checking admin access…</p>
+      <div class="admin-users-pagination" aria-label="User pages">
+        <button class="secondary-action" id="admin-user-prev" type="button">Previous</button>
+        <span id="admin-users-page-info">0 users</span>
+        <button class="secondary-action" id="admin-user-next" type="button">Next</button>
+      </div>
+      <div class="admin-users-layout">
+        <div class="admin-users-list-wrap">
+          <table class="admin-users-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Socials</th>
+                <th>Flags</th>
+                <th>Created</th>
+                <th>Last seen</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-list"></tbody>
+          </table>
+        </div>
+        <form class="admin-user-editor" id="admin-user-editor" hidden>
+          <div class="admin-user-editor-head">
+            <h2>Edit account</h2>
+            <span id="admin-user-id-pill"></span>
+          </div>
+          <input id="admin-user-id" type="hidden" />
+          <label>Username<input id="admin-user-username" type="text" autocomplete="off" required /></label>
+          <label>Email<input id="admin-user-email" type="email" autocomplete="off" /></label>
+          <label>Display name<input id="admin-user-display" type="text" autocomplete="off" required /></label>
+          <label>X handle<input id="admin-user-twitter" type="text" autocomplete="off" placeholder="jasonkneen" /></label>
+          <label>GitHub handle<input id="admin-user-github" type="text" autocomplete="off" placeholder="jasonkneen" /></label>
+          <label>Avatar/image URL<input id="admin-user-image" type="url" autocomplete="off" /></label>
+          <label>About<textarea id="admin-user-about" rows="5"></textarea></label>
+          <label class="admin-user-check"><input id="admin-user-lobby" type="checkbox" /> Enable Tinyverse lobby + multiplayer access</label>
+          <p class="admin-reset-note" id="admin-reset-note"></p>
+          <div class="admin-user-actions">
+            <button class="primary-action" type="submit">Save account</button>
+            <button class="secondary-action" id="admin-user-reset-password" type="button">Reset password</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="scripts/admin-users.js" defer></script>
+</body>
+</html>

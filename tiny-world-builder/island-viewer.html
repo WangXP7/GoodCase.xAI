@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TinyWorld Island Viewer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles/island-viewer.css">
+</head>
+<body>
+  <main class="iv-shell">
+    <section class="iv-topbar" aria-label="Island viewer controls">
+      <div class="iv-brand">
+        <span class="iv-kicker">TinyWorld</span>
+        <h1>Island Viewer</h1>
+      </div>
+      <div class="iv-status" id="iv-status" role="status">Starting TinyWorld island renderer...</div>
+      <div class="iv-actions" aria-label="Viewer actions">
+        <button type="button" class="iv-primary" id="iv-new">New Island</button>
+        <button type="button" id="iv-load-button">Load</button>
+        <button type="button" id="iv-save-reveal">Save</button>
+        <button type="button" id="iv-dev-toggle" hidden>Defaults</button>
+        <input id="iv-load-file" type="file" accept=".json,application/json" hidden>
+      </div>
+    </section>
+
+    <section class="iv-frame-wrap" id="app" aria-label="Rendered TinyWorld island">
+      <noscript>Island Viewer needs JavaScript to render TinyWorld islands.</noscript>
+    </section>
+  </main>
+
+  <aside class="iv-dev-panel" id="iv-dev-panel" hidden aria-label="Island viewer defaults">
+    <form id="iv-dev-form">
+      <div class="iv-dev-head">
+        <div>
+          <span class="iv-kicker">Developer</span>
+          <h2>Viewer Defaults</h2>
+        </div>
+        <button type="button" id="iv-dev-close" aria-label="Close viewer defaults">Close</button>
+      </div>
+
+      <div class="iv-dev-grid">
+        <label>
+          <span>Grid</span>
+          <select id="iv-grid-size">
+            <option value="8">8 x 8</option>
+          </select>
+        </label>
+        <label class="iv-wide">
+          <span>Seed</span>
+          <input id="iv-seed" type="text" autocomplete="off">
+        </label>
+
+        <label>
+          <span>Resolution</span>
+          <input id="iv-render-resolution" type="range" min="50" max="125" step="5">
+          <output id="iv-render-resolution-value"></output>
+        </label>
+        <label>
+          <span>Shadow</span>
+          <select id="iv-shadow-quality">
+            <option value="low">Low</option>
+            <option value="balanced">Balanced</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label>
+          <span>Lighting</span>
+          <input id="iv-lighting" type="range" min="50" max="500" step="1">
+          <output id="iv-lighting-value"></output>
+        </label>
+        <label>
+          <span>Sun</span>
+          <input id="iv-sun-strength" type="range" min="0" max="1000" step="5">
+          <output id="iv-sun-strength-value"></output>
+        </label>
+        <label>
+          <span>Sun angle</span>
+          <input id="iv-sun-angle" type="range" min="0" max="359" step="1">
+          <output id="iv-sun-angle-value"></output>
+        </label>
+        <label>
+          <span>Time cycle</span>
+          <select id="iv-time-cycle">
+            <option value="live">Live</option>
+            <option value="fixed">Fixed</option>
+          </select>
+        </label>
+        <label>
+          <span>Time of day</span>
+          <input id="iv-time-of-day" type="range" min="0" max="1439" step="5">
+          <output id="iv-time-of-day-value"></output>
+        </label>
+        <label>
+          <span>Ambient fill</span>
+          <input id="iv-ambient-fill" type="range" min="0" max="500" step="1">
+          <output id="iv-ambient-fill-value"></output>
+        </label>
+        <label>
+          <span>Clouds</span>
+          <input id="iv-clouds" type="range" min="0" max="100" step="1">
+          <output id="iv-clouds-value"></output>
+        </label>
+        <label>
+          <span>Cloud height</span>
+          <input id="iv-cloud-height" type="range" min="9" max="16" step="0.5">
+          <output id="iv-cloud-height-value"></output>
+        </label>
+      </div>
+
+      <div class="iv-dev-checks">
+        <label><input id="iv-enhanced-water" type="checkbox"> Enhanced water</label>
+        <label><input id="iv-cloud-sea" type="checkbox"> Cloud sea</label>
+        <label><input id="iv-distant-worlds" type="checkbox"> Distant worlds</label>
+      </div>
+
+      <div class="iv-dev-actions">
+        <button type="button" id="iv-apply-defaults">Apply</button>
+        <button type="button" class="iv-primary" id="iv-save-defaults">Save Defaults</button>
+        <button type="button" id="iv-reset-defaults">Reset</button>
+      </div>
+    </form>
+  </aside>
+
+  <script id="tinyworld-island-viewer-defaults-bootstrap">
+  /* =====================================================================
+     Island Viewer defaults bootstrap — seeds only viewer-scoped defaults
+     from tinyworld-defaults.json. The embedded builder keeps its own
+     island-viewer render namespace and never receives normal builder keys.
+     ===================================================================== */
+  (function tinyworldIslandViewerDefaultsBootstrap() {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'tinyworld-defaults.json', false);
+      xhr.send(null);
+      if (xhr.status < 200 || xhr.status >= 300) return;
+      var data = JSON.parse(xhr.responseText || '{}');
+      if (!data || !data.settings || typeof data.settings !== 'object') return;
+      Object.keys(data.settings).forEach(function (key) {
+        if (typeof key !== 'string' || key.indexOf('tinyworld:island-viewer:') !== 0) return;
+        if (localStorage.getItem(key) !== null) return;
+        try { localStorage.setItem(key, String(data.settings[key])); } catch (_) {}
+      });
+    } catch (_) {}
+  })();
+  </script>
+  <script src="vendor/three/tinyworld-three.r185.min.js"></script>
+  <script src="scripts/island-viewer-engine-prelude.js"></script>
+  <script src="scripts/island-viewer-sequential-generator.js"></script>
+  <script src="engine/world/00-prelude.js"></script>
+  <script src="engine/world/26b-random-island-economy-profile.js"></script>
+  <script src="engine/world/01-render-core.js"></script>
+  <script src="engine/world/02-cameras-lighting.js"></script>
+  <script src="engine/world/03-geometry-materials.js"></script>
+  <script src="engine/world/04-textures.js"></script>
+  <script src="engine/world/05-tile-factory.js"></script>
+  <script src="engine/world/06-history-object-factories.js"></script>
+  <script src="engine/world/07-house-primitives.js"></script>
+  <script src="engine/world/08-voxel-stamp-renderer.js"></script>
+  <script src="engine/world/09b-voxel-build-factories.js"></script>
+  <script src="engine/world/10-world-data.js"></script>
+  <script src="engine/world/11-vehicle-crowd.js"></script>
+  <script src="engine/world/12-selection-tool.js"></script>
+  <script src="engine/world/13-distant-dressing-ghost.js"></script>
+  <script src="engine/world/15-ghost-generation-fade.js"></script>
+  <script src="engine/world/16-drop-anim-adjacency.js"></script>
+  <script src="engine/world/17-tile-renderers.js"></script>
+  <script src="engine/world/23-particles-clouds.js"></script>
+  <script src="scripts/island-viewer-engine-runtime.js"></script>
+  <script src="scripts/island-viewer.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/ethanplusai/zombies",
+  "commit": "4bc991d2a11b036df6a9e81baac0fc7d8d16972c",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 322,
+  "bytes": 7445111
+}

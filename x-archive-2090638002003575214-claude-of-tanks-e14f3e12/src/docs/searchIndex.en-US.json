@@ -1,0 +1,680 @@
+[
+ {
+  "href": "/docs/start",
+  "title": "From the Garage to a win",
+  "chapter": "Your first battle",
+  "text": "Five steps, in the order you meet them."
+ },
+ {
+  "href": "/docs/start#garage",
+  "title": "Pick a tank",
+  "chapter": "Your first battle",
+  "text": "01 The Garage opens on your fleet of 311 tanks. Pick one: its dossier shows the armor, the gun and how it moves, and the Tank Gallery opens its full anatomy."
+ },
+ {
+  "href": "/docs/start#deploy",
+  "title": "Deploy",
+  "chapter": "Your first battle",
+  "text": "02 Deploy sets the battle: one of 14 modes, one of 33 battlefields or a random one, the time of day, and the sides, 7 v 7 or 14 v 14."
+ },
+ {
+  "href": "/docs/start#drive",
+  "title": "Drive and aim",
+  "chapter": "Your first battle",
+  "text": "03 W A S D drive; the mouse turns the turret. L-SHIFT drops into the gunner's sight at ×2 / ×4 / ×8, the wheel zooms, and CAPS holds the gun while you look around."
+ },
+ {
+  "href": "/docs/start#fire",
+  "title": "Fire",
+  "chapter": "Your first battle",
+  "text": "04 LMB fires; hold it to fire at each reload pick the shell use the Repair Kit (35 s), the First Aid Kit (45 s) and the Fire Extinguisher (25 s); a kit's cooldown starts only once it has done something."
+ },
+ {
+  "href": "/docs/start#win",
+  "title": "Win",
+  "chapter": "Your first battle",
+  "text": "05 Standard Battle is won by destroying every enemy inside its 15-minute clock; every other mode sets its own goal. When you are knocked out, the camera follows your allies."
+ },
+ {
+  "href": "/docs/start#next",
+  "title": "Next",
+  "chapter": "Your first battle",
+  "text": "Replay the tutorial in the game The Garage tour and the first-battle steps, from the start. Controls and Watch Every key, the touch layout and Watch mode's three views. Game modes Every mode's goal, clock and rules, drawn on the map."
+ },
+ {
+  "href": "/docs/controls",
+  "title": "Every key, every view",
+  "chapter": "Controls and Watch",
+  "text": "Keyboard, mouse, gamepad and touch, then Watch mode's drone, ride along and take control."
+ },
+ {
+  "href": "/docs/controls#keys",
+  "title": "Keys, mouse and gamepad",
+  "chapter": "Controls and Watch",
+  "text": "Movement Combat Vehicle Flight Consumables Camera Interface\nAction · Keys · Gamepad · Move forward · W · – · Move back · S · – · Steer left · A · – · Steer right · D · – · Handbrake · SPACE · A · Flip tank · F · –\nAction · Keys · Gamepad · Fire gun · LMB · RT · Sniper mode · L-SHIFT · LT · Shell slot 1 · 1 · D-UP · Shell slot 2 · 2 · D-LEFT · Shell slot 3 · 3 · D-RIGHT · Auto-aim lock · T · – · Armor overlay (hitboxes) · H · – · Strike view · X · –\nAction · Keys · Gamepad · Suspension · E · LB · ATGM · Q · – · Reload · C · D-DOWN · Drone · V · – · Smoke · G · – · Lights · N · – · Auto gun · B · –\nAction · Keys · Gamepad · Cycle sensor view · I · – · Drop ammunition supplies · J · – · Drop health supplies · K · –\nAction · Keys · Gamepad · Repair kit · 4 · X · First aid kit · 5 · Y · Fire extinguisher · 6 · B\nAction · Keys · Gamepad · Gun hold (free aim) · CAPS L-ALT · RB · Aim / free look · RMB · – · Zoom in · WHEEL ↑ · – · Zoom out · WHEEL ↓ · –\nAction · Keys · Gamepad · Minimap zoom · M · BACK · Shot info log · L · – · Battle diagnostics · F9 · – · Network details · F3 · – · Leave battle · F4 · – · Reset Range · R · – · Moving Targets · Y · – · Settings menu · ESC · START"
+ },
+ {
+  "href": "/docs/controls#hold",
+  "title": "Hold or toggle",
+  "chapter": "Controls and Watch",
+  "text": "Settings › Accessibility can switch each of these between holding the key and pressing it once. Fire gun Handbrake Gun hold (free aim) Team rosters"
+ },
+ {
+  "href": "/docs/controls#touch",
+  "title": "Touch",
+  "chapter": "Controls and Watch",
+  "text": "On a phone or tablet the battle shows its own controls. Left thumb: the joystick drives. Swipe anywhere else to aim. Tap Fire to shoot. Hold and drag to aim, release to fire; hold longer to keep firing. Drag into the cancel zone to hold the shot. Scope enters the gunner's sight. Pinch to step the sight's zoom. Auto Aim locks onto the enemy nearest the reticle. Rocket jumps or rights the tank, in modes that have a jump."
+ },
+ {
+  "href": "/docs/controls#watch",
+  "title": "Watch mode",
+  "chapter": "Controls and Watch",
+  "text": "Watch a bots' battle from the Garage: Watch sits beside Deploy. Every seat is a bot's, every tank is visible and nothing is recorded. It works in 13 modes. Drone Fly anywhere over the battle. You open 70 m up at 14 m/s; the wheel steps the speed (4 / 8 / 14 / 24 / 40 / 64 m/s) and Shift boosts ×2.5. W A S D Fly SPACE C Climb and descend L-SHIFT Boost WHEEL ↑ WHEEL ↓ Step the speed Ride along Follow any tank from behind, or look through its gunner's sight at ×2 / ×4 / ×8. F Ride the tank in the middle of the view Q E Next and previous tank L-SHIFT Gunner's sight V Back to the drone Take control Take over the tank you ride and fight it yourself. If it dies, the drone takes you back after 3.5 s. ENTER Take control, or hand it back"
+ },
+ {
+  "href": "/docs/controls#hud",
+  "title": "Your HUD",
+  "chapter": "Controls and Watch",
+  "text": "Settings › Gameplay › Edit HUD layout: move or hide each panel over a battlefield preview; Desktop, Phone portrait and Phone landscape each keep their own layout. F10 switches to the minimal battle HUD: the reticle, range, zoom and ammunition stay, the other panels hide. Press it again to bring them back. On touch screens, turn on Minimal battle HUD in Settings; a three-finger tap brings the full HUD back."
+ },
+ {
+  "href": "/docs/modes",
+  "title": "Every way to fight",
+  "chapter": "Game modes",
+  "text": "Every mode and its rules, read from the game itself. Pick one in Deploy."
+ },
+ {
+  "href": "/docs/modes#glance",
+  "title": "At a glance",
+  "chapter": "Game modes",
+  "text": "Your spawn Enemy spawn A A Zone or sector Flag base Goal Ball\nMode · Win by · Clock · Respawn · Sides · Standard Battle · Destroy every enemy · 15 min · – · 7 v 7 · Capture the Flag · 3 captures · 15 min · 6 s · 7 v 7 · Zone Control · 750 points · 15 min · 6 s · 7 v 7 · Gravity Mode · 750 points · 12 min · 6 s · 7 v 7 · Air Support · First to 2000 · 12 min · 8 s · 7 v 7 · Gun Game · A kill with all 5 guns · 15 min · 4 s · 7 v 7 · Drone · 20 kills · 10 min · 6 s · 7 v 7 · Realistic · Destroy every enemy · 15 min · – · 7 v 7 · Endless Horde · Survive the waves · – · – · 5 v 20 · Frontline Assault · Take every sector, hold the last 20 s · 12 min · – · 4 v 12 · AC-130 · Escort half to extraction · 8 min · – · 5 v 12 · Juggernaut · Kill the boss, or outlast the clock · 10 min · 6 s · 1 v 12 · Infected · Survive 3 min · 3 min · 5 s · 10 v 5 · Turbo Ball · 5 goals · 10 min · 3 s · 7 v 7 · Proving Ground · Practice, no score · – · 3 s · 5 lanes"
+ },
+ {
+  "href": "/docs/modes#team",
+  "title": "Team battles",
+  "chapter": "Game modes",
+  "text": "Standard Battle Destroy the opposing team before time expires. Clock 15 min Sides 7 v 7 Respawn – Capture the Flag Steal the enemy flag and return it home. First to 3 captures wins. Clock 15 min Sides 7 v 7 Respawn 6 s Zone Control Capture and hold three sectors. First team to 750 points wins. Clock 15 min Sides 7 v 7 Respawn 6 s Gravity Mode Gravity drops to 0.38 g, so every tank jumps far. Hold the zones with respawns and boost caches until one team reaches 750 points. Clock 12 min Sides 7 v 7 Respawn 6 s 0.38 g gravity +25 % speed +20 % hull -10 % damage +11 % reload rate unlimited rounds jump 9.5 m/s (F) ×3 recoil launch boost caches every 22 s ×0.9 impact knock landings rebound 30 % fall damage above 10.5 m/s Air Support Hold the three sectors and earn support points from combat. Raise your binoculars to call a recon pass, artillery, a strafing run, a precision bomb or an AC-130 orbit onto a mark. Every strike warns the side it targets. Clock 12 min Sides 7 v 7 Respawn 8 s Recon 120 pts · 3 s warning Artillery 300 pts · 6 s warning Strafing run 400 pts · 5 s warning Precision bomb 450 pts · 7 s warning AC-130 800 pts · 8 s warning Gun Game Every 2 confirmed kills advance your weapon. Complete all 5 stages to win for your team. Clock 15 min Sides 7 v 7 Respawn 4 s 2 kills per weapon · five stages unlimited rounds Drone Launch an FPV attack drone from your tank. Steer with your sight; fly into an enemy to detonate. Your parked tank stays vulnerable. Clock 10 min Sides 7 v 7 Respawn 6 s Realistic Normal spotting, catastrophic penetrations. Disable critical modules, incapacitate the crew or detonate ammunition. No hull HP attrition or automatic repairs. Clock 15 min Sides 7 v 7 Respawn – Module and crew destruction only no consumables\nVerdant Fields\nVerdant Fields\nA A B B C C Verdant Fields\nA A B B C C Olympus Basin"
+ },
+ {
+  "href": "/docs/modes#survive",
+  "title": "Survive and escort",
+  "chapter": "Game modes",
+  "text": "Endless Horde Survive ever-larger waves of fragile hostiles and hunt floating repair caches. Clock – Sides 5 v 20 Respawn – +100 % / -85 % hull unlimited rounds horde first wave 6, more every wave 16 on the field · 8 s between waves 30 % repair between waves Frontline Assault Break the enemy line: take three trench sectors in turn against escalating counter-attacks, then hold the last one. Clock 12 min Sides 4 v 12 Respawn – +80 % / 0 % hull unlimited rounds frontline Hold the final sector for 20 s 3 defenders per sector, 0 % hull AC-130 Protect vulnerable allied vehicles driving to extraction. Save at least half before they are destroyed or time runs out. All human players provide air support. Clock 8 min Sides 5 v 12 Respawn – All tanks visible unlimited rounds no consumables ac130 Juggernaut Become the armored boss or join the hunters. Hunters respawn; destroy the juggernaut before the clock runs out. Clock 10 min Sides 1 v 12 Respawn 6 s Juggernaut: ×8 hull · ×0.5 reload time unlimited rounds juggernaut Infected Survivors have 130% health against a swarm of infected at 20%; fallen survivors join the swarm. Hold out for 3 minutes. Clock 3 min Sides 10 v 5 Respawn 5 s Destroyed survivors become infected +30 % / -80 % hull unlimited rounds infected\nVerdant Fields\nE E Verdant Fields"
+ },
+ {
+  "href": "/docs/modes#arcade",
+  "title": "Arcade",
+  "chapter": "Game modes",
+  "text": "Turbo Ball Super-fast armed tanks drive or shoot the ball into the enemy goal. Clock 10 min Sides 7 v 7 Respawn 3 s 0.6 g gravity +85 % speed +50 % hull -50 % damage +43 % reload rate unlimited rounds no equipment no consumables no module, crew or fire damage jump 13 m/s (F) ×12 recoil launch ×2.5 impact knock landings rebound 28 % fall damage above 15 m/s\nVerdant Fields"
+ },
+ {
+  "href": "/docs/modes#practice",
+  "title": "Practice",
+  "chapter": "Game modes",
+  "text": "Proving Ground Take any tank onto a measured range: target hulls at set ranges and angles show every penetration outcome. No enemies, no clock, nothing recorded. Clock – Sides 5 lanes Respawn 3 s All tanks visible unlimited rounds nothing recorded"
+ },
+ {
+  "href": "/docs/tanks",
+  "title": "The fleet and its kit",
+  "chapter": "Tanks and equipment",
+  "text": "What each class does, how each role plays, and the equipment and kits every tank carries."
+ },
+ {
+  "href": "/docs/tanks#classes",
+  "title": "Classes",
+  "chapter": "Tanks and equipment",
+  "text": "Tier X Main battle tank 211 AbramsX Tier III Medium tank 16 Centurion Mk 13 Tier I Heavy tank 1 KV-2 Tier X Light tank 15 BMP-3M Dragun 125 Tier X Infantry fighting vehicle 39 Griffin 50 mm Tier III Armored personnel carrier 3 M113AS4 Tier X Tank destroyer 8 Object 695 Tier VI Self-propelled anti-aircraft 13 ItPsv Leopard 2 (Leopard 2 Marksman) Tier X Fire support vehicle 5 ZTZ-100 Prototype Open any of them in the Tank Gallery"
+ },
+ {
+  "href": "/docs/tanks#roles",
+  "title": "Battle roles",
+  "chapter": "Tanks and equipment",
+  "text": "A role is how the tank plays: the bots drive it that way, and the Garage filters by it. Breakthrough 85 Heavy armor and hit points: leads the push and absorbs fire. Frontline 66 Balanced main-line tank: armor, mobility and firepower in proportion. Flanker 57 Fast and agile: strikes the sides and relocates quickly. Sniper 27 Accurate long-range gun: fights from cover at distance. Scout 38 Spots for the team and avoids sustained fights. Support 38 Autocannons, missiles or fire support that back the tanks."
+ },
+ {
+  "href": "/docs/tanks#tiers",
+  "title": "Tiers and nations",
+  "chapter": "Tanks and equipment",
+  "text": "A tank's tier is its column in its nation's tech tree. X 40 IX 42 VIII 35 VII 20 VI 27 V 23 IV 26 III 30 II 32 I 36 17 nations Soviet Union 52 Germany 34 United States 32 United Kingdom 28 China 25 Ukraine 19 Poland 18 Israel 16 Japan 15 Sweden 13 France 12 Denmark 9 South Korea 8 Italy 8 Australia 8 Brazil 8 South Africa 6"
+ },
+ {
+  "href": "/docs/tanks#equipment",
+  "title": "Equipment",
+  "chapter": "Tanks and equipment",
+  "text": "Each tank mounts 3 of the 25 items, chosen in the Garage. Firepower Gun Rammer -10% reload time Manual loaders only Vertical Stabilizer -20% dispersion on the move Modern tanks only Gun Laying Drive -10% aim time Improved Ventilation +2.5% crew: reload, aim, view, camo Ready-Rack Stowage -6% reload time, -15% ammo rack durability Manual loaders only Fire-Control Computer -6% aim time, -10% dispersion on the move Modern tanks only Autoloader Service Kit -6% magazine reload, +50% autoloader and feed durability Autoloaders only Mobility Improved Rotation +10% hull and turret traverse Enhanced Suspension +50% track durability Powered Turret Drive +20% turret traverse Modern tanks only · Turreted vehicles only Reinforced Drivetrain +40% engine and +60% transmission durability Protection Spall Liner -25% HE splash damage, -50% crew hits from splash Side Skirts -12% HE splash damage, +25% track durability Turret Ring Guard +60% turret ring and +30% gun mount durability Turreted vehicles only Mantlet Shield +40% gun and +30% optics durability Survivability Toolbox +25% repair speed Wet Ammo Rack +50% ammo rack durability Safety Fuel Tanks +50% fuel tank durability, -50% engine fire chance Auto Extinguishers Fires burn half as long and self-extinguish 2x as often Modern tanks only Fire Blankets Fires burn 25% shorter and self-extinguish 1.5x as often Scouting Coated Optics +10% view range Binocular Telescope +25% view range while stationary Camouflage Net +12% concealment while stationary Exhaust Baffles +4% concealment, moving or still Thermal Sight +15% view range Modern tanks only"
+ },
+ {
+  "href": "/docs/tanks#kits",
+  "title": "Kits, smoke and the drone",
+  "chapter": "Tanks and equipment",
+  "text": "Kits are unlimited; each waits out its cooldown, which starts only once the kit has done something. Field Repair Kit Every damaged module back to working · 35 s cooldown Large Repair Kit Repairs every module, then 60 s of +50% self-repair · 60 s cooldown Spare Track Links Both tracks back to working · 12 s cooldown First Aid Kit Every injured crew member back · 45 s cooldown Field Rations 40 s: reload −5%, aim time −8% · 60 s cooldown Fire Extinguisher Puts out a fire · 25 s cooldown Automatic Fire Suppression 45 s: a fire that starts goes out at once · 60 s cooldown Governor Override 10 s: engine power +25%; may strain the engine · 45 s cooldown Ready-Rack Restock Refills each round type by 30% of its stowage · 90 s cooldown Smoke Grenade Reload One more smoke salvo, up to 3 · 40 s cooldown Fresh Foliage 60 s: +12% concealment while stationary · 60 s cooldown APS Interceptor 20 s: intercepts the next missile or HEAT round from the front · 45 s cooldown IR Jammer 12 s: missiles guided at you fly unguided · 40 s cooldown Smoke A screen that hangs for 18 s; 28 s between launches. Drone A 40 s battery, an 850 m link and 350 m spotting; 25 s before the next one after you lose it. Roof gun Fires on its own at enemies and drones in reach; B switches it."
+ },
+ {
+  "href": "/docs/fleet",
+  "title": "Every tank, side by side",
+  "chapter": "Every tank",
+  "text": "Every tank in the game, by nation, tier, era, class and role, each a way into its Gallery dossier."
+ },
+ {
+  "href": "/docs/fleet#fleet",
+  "title": "The fleet",
+  "chapter": "Every tank",
+  "text": "All nations All tiers All eras All classes All roles Hero Card Angle Side 311 tanks Tier X BMP-3M Dragun 125 Light Tier X Kurganets-25 IFV Tier X Object 148 Proto MBT Tier X Object 195 MBT Tier X Object 695 TD Tier X T-14 152 MBT Tier X T-14 Armata MBT Tier X T-90AM II MBT Tier X T-90M Proryv MBT Tier IX Object 477 Molot MBT Tier IX T-90A MBT Tier IX T-90A Burlak MBT Tier IX T-90A Burlak Prototype MBT Tier IX T-90A obr. 2004 MBT Tier IX T-90A obr. 2006 MBT Tier IX T-90A Vladimir MBT Tier IX T-90AM MBT Tier IX T-90MS obr. 2011 MBT Tier IX T-90MS Tagil MBT Tier IX T-90SM MBT Tier IX T-90SM obr. 2013 MBT Tier VIII T-72B3 Bastion-M MBT Tier VIII T-72B3M Bulat-M MBT Tier VIII T-80U Bars-M MBT Tier VII Object 292 MBT Tier VII T-90 MBT Tier VII T-90 obr. 1992 MBT Tier VI BMPT T-90 Fire support Tier VI BMPT Terminator Fire support Tier VI Pantsir-S1 (tracked) SPAA Tier VI T-72B3 MBT Tier VI T-72B3M obr. 2016 MBT Tier VI T-72B3M obr. 2022 MBT Tier VI T-80U MBT Tier VI T-80UK MBT Tier V 2K22M Tunguska-M SPAA Tier V BMPT Terminator 2 Fire support Tier V TOS-1A Tagil Fire support Tier IV T-80B MBT Tier IV T-80BV MBT Tier III T-64BV MBT Tier III T-64BV1 MBT Tier III T-72B obr. 1987 MBT Tier III T-72BU MBT Tier III T-72BU obr. 1989 MBT Tier III T-80 MBT Tier II BMP-3 IFV Tier II T-62MV-1 MBT Tier I BMP-2 IFV Tier I KV-2 Heavy Tier I T-55A Medium Tier I T-62 obr. 1975 MBT Tier X KF51 EVO MBT Tier X KF51 Panther MBT Tier X KF51-U MBT Tier X Leopard 2A7V MBT Tier IX Leopard 2A5 MBT Tier IX Leopard 2A5M MBT Tier IX Leopard 2A6 MBT Tier IX Leopard 2A6M MBT Tier VIII Leopard 2 Improved MBT Tier VIII Leopard 2 Revolution MBT Tier VIII Leopard 2 Revolution Proto MBT Tier VIII Leopard 2A4 MBT Tier VIII Leopard 2A4 OTCO MBT Tier VIII Leopard 2A4 V MBT Tier VIII Leopard 2A4M MBT Tier VIII Leopard 2A4M CAN MBT Tier VI Puma S1 IFV Tier VI SPz Wotan IFV Tier V Flakpanzer Gepard 1A2 SPAA Tier V KF41 Lynx IFV Tier V Marder 2 IFV Tier IV Leopard 2A3 MBT Tier IV Leopard 2A3 OTCO MBT Tier IV Schützenpanzer Puma IFV Tier III Leopard 2 Prototype MBT Tier III Leopard 2A2 MBT Tier III MBT-70 MBT Tier II M48 Super MBT Tier II Schützenpanzer Marder 1A3 IFV Tier I Jagdpanzer E100 TD Tier I Kpz M48A2GA2 MBT Tier I Leopard 1A2A1 MBT Tier I Leopard 1A5 MBT Tier I M41 (Bundeswehr) Light Tier X AbramsX MBT Tier X Griffin 50 mm IFV Tier X M1A2 Abrams SEPv3 MBT Tier X M1E3 Abrams MBT Tier IX M1A2 Abrams MBT Tier IX M1A2 Abrams SEPv2 MBT Tier IX M1A2 Abrams TUSK MBT Tier VIII M1A1 Abrams MBT Tier VIII M1A1 Abrams AIM MBT Tier VIII M1A1 Abrams FEP MBT Tier VIII M1A1 Abrams HA MBT Tier VIII M1A1 Abrams HC MBT Tier VIII M1A1 Abrams SA MBT Tier V M3A3 Bradley CFV IFV Tier V M6 Linebacker SPAA Tier IV M163 VADS SPAA Tier IV M551A1 TTS Light Tier III Griffin Viper TD Tier II M113A3 APC Tier II M2A2 Bradley IFV Tier II M3A2 Bradley IFV Tier II M551 Sheridan Light Tier II M60A2 Starship MBT Tier II T49 Light Tier II T95 (152 mm) TD Tier I M41A3 Walker Bulldog Light Tier I M46 Patton Medium Tier I M47 Patton Medium Tier I M48A3 Patton MBT Tier I M48A5 Patton MBT Tier I M60A1 Patton MBT Tier I M60A3 MBT Tier X Challenger 3 MBT Tier X Challenger 3 TD MBT Tier X Challenger 3 TD (RWS) MBT Tier IX Challenger 2 MBT Tier IX Challenger 2E MBT Tier VIII Challenger 1 Mk 1 MBT Tier VIII Challenger 1 Mk 2 MBT Tier VIII Challenger 1 Mk 3 MBT Tier VIII Challenger 3 Prototype MBT Tier VIII FV4030 /5 MBT Tier VIII FV4030 /6 MBT Tier VI ItPsv Leopard 2 (Leopard 2 Marksman) SPAA Tier V Ajax IFV Tier V Marksman ( T-55 ) SPAA Tier V Warrior TES(H) IFV Tier IV Chieftain Mk 10 MBT Tier IV Chieftain Mk 9 MBT Tier IV FV4034 MBT Tier III Centurion Mk 13 Medium Tier III Centurion Mk 5/2 Medium Tier III FV510 Warrior MILAN IFV Tier II Ares APC APC Tier II Centurion Mk 3 Medium Tier II Centurion Mk 5 AVRE Medium Tier II Chieftain Mk 3 MBT Tier II Chieftain Mk 5 MBT Tier II FV510 Warrior IFV Tier II Vickers MBT Mk 1 MBT Tier X Type 100 IFV IFV Tier X ZTZ-100 MBT Tier X ZTZ-100 Prototype Fire support Tier X ZTZ-20 MBT Tier X ZTZ-20 Prototype MBT Tier X ZTZ-99A2 MBT Tier IX ZTZ-99A MBT Tier IX ZTZ-99A2 Qinglong MBT Tier VIII VT-4A1 MBT Tier VII T-72B3 Qilin MBT Tier VII T-72B3 Zhuque MBT Tier VII T-72B3M Kunlun MBT Tier VII T-72B3M Xuanwu MBT Tier VII T-80U Yun MBT Tier VII VT-4A1 Baihu MBT Tier VI PGZ-09 SPAA Tier VI Type 96-72M Léi MBT Tier VI Type 96-80 Fēng MBT Tier VI Type 96B MBT Tier VI ZTZ-99 Longwei MBT Tier V PGZ-95 SPAA Tier V Type 96-72 Lóng (Concept) MBT Tier III AFT-10 TD Tier I Type 59 Medium Tier I ZTZ-85-III MBT Tier X T-84BM Oplot-M MBT Tier X T-84BM Oplot-T MBT Tier IX Challenger 2 (Ukraine) MBT Tier IX Leopard 2A6 UA MBT Tier IX M1A1 SA (Ukraine) MBT Tier IX M1A2 Abrams UA MBT Tier VII T-72B3 Sich MBT Tier VII T-72B3M Hetman MBT Tier VII T-72B3M Hetman II MBT Tier VII T-80U Zoria MBT Tier VI Object 478DU2 MBT Tier VI T-80U Kursk MBT Tier VI T-84U Oplot MBT Tier V T-80BV (Ukraine) MBT Tier IV CV9040C (Ukraine) IFV Tier IV M2A3 Bradley (Ukraine) IFV Tier IV T-64B1V mod. 2022 MBT Tier IV T-64BM1M MBT Tier IV T-64BV mod. 2017 MBT Tier X PL-01 Light Tier X PL-01 (105) Light Tier X PT-84 Orzeł MBT Tier X PT-84 Żbik MBT Tier X Upiór IFV IFV Tier IX PT-84 Sokół MBT Tier VII T-72B3M Wilk MBT Tier VII T-80U Husarz MBT Tier VI PZA Loara SPAA Tier VI T-72B3 Zubr MBT Tier VI T-72B3 Zubr II MBT Tier V Borsuk IFV Tier V PT-91A Twardy MBT Tier V T-72 Ryś (Concept) MBT Tier IV PT-64 Tur MBT Tier IV PT-91M Pendekar MBT Tier IV T-72M1 Jaguar MBT Tier III BWP-1 (Bojowy Wóz Piechoty 1) IFV Tier IX Merkava Mk 4 MBT Tier IX Merkava Mk 4 Barak MBT Tier IX Merkava Mk 4 Trophy MBT Tier IX Merkava Mk 4B MBT Tier VIII Merkava Mk 3 Baz MBT Tier VIII Merkava Mk 3C MBT Tier VIII Merkava Mk 3D MBT Tier IV Namer IFV IFV Tier III Merkava Mk 2B MBT Tier III Merkava Mk 2D MBT Tier III Sho't Kal Medium Tier II Magach 7C MBT Tier II Sabra Mk 2 MBT Tier I Magach 3 MBT Tier I Magach 6B MBT Tier I Merkava Mk 1B MBT Tier X Raijū IFV IFV Tier X Type 10 MBT Tier X Type 10 Kaitaku MBT Tier IX Type 10 ( TK-X ) MBT Tier IX Type 10B MBT Tier VIII STC-1 MBT Tier VIII STC-2 MBT Tier VIII Type 90 MBT Tier VIII Type 90 (B) MBT Tier VI Type 89 IFV Tier V Type 87 Self-Propelled Anti-Aircraft Gun SPAA Tier II Hayate IFV IFV Tier I M41 (JGSDF) Light Tier I STB-1 MBT Tier I Type 74 MBT Tier IX Stridsvagn 121 MBT Tier IX Stridsvagn 122 MBT Tier VII CV90 Mk 4 IFV Tier VII CV90 Mk 4 Concept IFV Tier V Lvkv 9040 SPAA Tier IV CV90 IFV Tier IV CV9040C IFV Tier III Strv 105 Medium Tier II CV90105 TML Light Tier II Stridsvagn 103A TD Tier II Stridsvagn 103B TD Tier II Stridsvagn 81 Medium Tier I UDES 03 TD Tier X Leclerc XLR MBT Tier IX AMX 56 MBT Tier IX Leclerc S2 MBT Tier IX Leclerc SXXI MBT Tier VIII Leclerc S1 MBT Tier IV AMX-10P 25 IFV Tier III AMX-10P IFV Tier III AMX-40 MBT Tier III AMX-40 Prototype MBT Tier I AMX-30 MBT Tier I AMX-30B MBT Tier I AMX-30B2 MBT Tier X Leopard 2A7 DK MBT Tier IX Leopard 2A5 DK MBT Tier VIII Christian II MBT Tier V CV9035 DK IFV Tier III Centurion Mk 5/2 DK Medium Tier II M41 DK-1 Light Tier I Leopard 1A3 DK MBT Tier I Leopard 1A5 DK MBT Tier I Leopard 1A5 DK-1 MBT Tier IX M1A2 SEPv3 (Aus) MBT Tier VIII M1A1 AIM SA MBT Tier VI AS21 Redback IFV Tier III M113AS4 APC Tier II Centurion Mk 5/1 (Aust) Medium Tier I Leopard AS1 MBT Tier I M113A1 FSV Light Tier I M113A1 MRV Light Tier X EE-T4 Osório MBT Tier IX EE-T3 Osório MBT Tier IV EE-T1 Osório (120) MBT Tier III EE-T1 Osório (105) MBT Tier III MB-3 Tamoyo 3 MBT Tier II MB-3 Tamoyo 1 Medium Tier I CCL X1 Pioneiro Light Tier I CCL X1A2 Carcará Light Tier VII C2 Ariete MBT Tier VII C2 Ariete Prototype MBT Tier VI C1 Ariete MBT Tier VI C1 Ariete Prototype (Serie 1) MBT Tier V LRMV Lynx IFV Tier IV C1 Ariete Preserie MBT Tier IV Dardo IFV Tier II Carro 45t Medium Tier X K2 Black Panther MBT Tier VIII K1A1 MBT Tier VII K2B MBT Tier VI XK2 Black Panther MBT Tier V K21 IFV Tier V K30 Biho SPAA Tier IV K1E1 MBT Tier III BMP-3 (ROK) IFV Tier III Olifant Mk 1B MBT Tier III Olifant Mk 2 MBT Tier III Olifant TTD MBT Tier II Olifant Mk 1 MBT Tier II Olifant Mk 1A MBT Tier II Semel Medium No tank matches. Clear Filters {\"total\":311,\"facets\":[{\"key\":\"nation\",\"label\":\"Nation\",\"options\":[{\"id\":\"\",\"name\":\"All nations\",\"count\":311,\"glyph\":\"globe\"},{\"id\":\"ru\",\"name\":\"Russia / USSR\",\"count\":52,\"chip\":\"Russia\"},{\"id\":\"de\",\"name\":\"Germany\",\"count\":34,\"chip\":\"Germany\"},{\"id\":\"us\",\"name\":\"United States\",\"count\":32,\"chip\":\"USA\"},{\"id\":\"gb\",\"name\":\"United Kingdom\",\"count\":28,\"chip\":\"UK\"},{\"id\":\"cn\",\"name\":\"China\",\"count\":25,\"chip\":\"China\"},{\"id\":\"ua\",\"name\":\"Ukraine\",\"count\":19,\"chip\":\"Ukraine\"},{\"id\":\"pl\",\"name\":\"Poland\",\"count\":18,\"chip\":\"Poland\"},{\"id\":\"il\",\"name\":\"Israel\",\"count\":16,\"chip\":\"Israel\"},{\"id\":\"jp\",\"name\":\"Japan\",\"count\":15,\"chip\":\"Japan\"},{\"id\":\"se\",\"name\":\"Sweden\",\"count\":13,\"chip\":\"Sweden\"},{\"id\":\"fr\",\"name\":\"France\",\"count\":12,\"chip\":\"France\"},{\"id\":\"dk\",\"name\":\"Denmark\",\"count\":9,\"chip\":\"Denmark\"},{\"id\":\"au\",\"name\":\"Australia\",\"count\":8,\"chip\":\"Australia\"},{\"id\":\"br\",\"name\":\"Brazil\",\"count\":8,\"chip\":\"Brazil\"},{\"id\":\"it\",\"name\":\"Italy\",\"count\":8,\"chip\":\"Italy\"},{\"id\":\"kr\",\"name\":\"South Korea\",\"count\":8,\"chip\":\"South Korea\"},{\"id\":\"za\",\"name\":\"South Africa\",\"count\":6,\"chip\":\"South Africa\"}]},{\"key\":\"tier\",\"label\":\"Tier\",\"options\":[{\"id\":\"\",\"name\":\"All tiers\",\"count\":311,\"glyph\":\"techTree\"},{\"id\":\"10\",\"name\":\"Tier X\",\"count\":40},{\"id\":\"9\",\"name\":\"Tier IX\",\"count\":42},{\"id\":\"8\",\"name\":\"Tier VIII\",\"count\":35},{\"id\":\"7\",\"name\":\"Tier VII\",\"count\":20},{\"id\":\"6\",\"name\":\"Tier VI\",\"count\":27},{\"id\":\"5\",\"name\":\"Tier V\",\"count\":23},{\"id\":\"4\",\"name\":\"Tier IV\",\"count\":26},{\"id\":\"3\",\"name\":\"Tier III\",\"count\":30},{\"id\":\"2\",\"name\":\"Tier II\",\"count\":32},{\"id\":\"1\",\"name\":\"Tier I\",\"count\":36}]},{\"key\":\"era\",\"label\":\"Era\",\"options\":[{\"id\":\"\",\"name\":\"All eras\",\"count\":311,\"glyph\":\"clock\"},{\"id\":\"next-generation\",\"name\":\"Next Gen\",\"count\":23,\"glyph\":\"eraNextGeneration\"},{\"id\":\"modern\",\"name\":\"Modern\",\"count\":183,\"glyph\":\"eraModern\"},{\"id\":\"cold-war\",\"name\":\"Cold War\",\"count\":102,\"glyph\":\"eraColdWar\"},{\"id\":\"ww2\",\"name\":\"WWII\",\"count\":3,\"glyph\":\"eraWorldWarII\"}]},{\"key\":\"class\",\"label\":\"Class\",\"options\":[{\"id\":\"\",\"name\":\"All classes\",\"count\":311,\"glyph\":\"vehicle\"},{\"id\":\"mbt\",\"name\":\"MBT\",\"count\":211,\"glyph\":\"classMbt\"},{\"id\":\"medium\",\"name\":\"Medium\",\"count\":16,\"glyph\":\"classMedium\"},{\"id\":\"heavy\",\"name\":\"Heavy\",\"count\":1,\"glyph\":\"classHeavy\"},{\"id\":\"light\",\"name\":\"Light\",\"count\":15,\"glyph\":\"classLight\"},{\"id\":\"ifv\",\"name\":\"IFV\",\"count\":39,\"glyph\":\"classIfv\"},{\"id\":\"apc\",\"name\":\"APC\",\"count\":3,\"glyph\":\"classApc\"},{\"id\":\"td\",\"name\":\"TD\",\"count\":8,\"glyph\":\"classTd\"},{\"id\":\"spaa\",\"name\":\"SPAA\",\"count\":13,\"glyph\":\"classSpaa\"},{\"id\":\"fire-support\",\"name\":\"Fire support\",\"count\":5,\"glyph\":\"classFireSupport\"}]},{\"key\":\"role\",\"label\":\"Role\",\"options\":[{\"id\":\"\",\"name\":\"All roles\",\"count\":311,\"glyph\":\"team\"},{\"id\":\"breakthrough\",\"name\":\"Breakthrough\",\"count\":85,\"glyph\":\"roleBreakthrough\"},{\"id\":\"frontline\",\"name\":\"Frontline\",\"count\":66,\"glyph\":\"roleFrontline\"},{\"id\":\"flanker\",\"name\":\"Flanker\",\"count\":57,\"glyph\":\"roleFlanker\"},{\"id\":\"sniper\",\"name\":\"Sniper\",\"count\":27,\"glyph\":\"roleSniper\"},{\"id\":\"scout\",\"name\":\"Scout\",\"count\":38,\"glyph\":\"roleScout\"},{\"id\":\"support\",\"name\":\"Support\",\"count\":38,\"glyph\":\"roleSupport\"}]}],\"words\":{\"nation:ru\":\"ru russia ussr ussr/russia 俄罗斯 soviet union 苏联\",\"nation:de\":\"de germany 德国\",\"nation:us\":\"us usa united states 美国\",\"nation:gb\":\"gb uk united kingdom 英国\",\"nation:cn\":\"cn china 中国\",\"nation:ua\":\"ua ukraine 乌克兰\",\"nation:pl\":\"pl poland 波兰\",\"nation:il\":\"il israel 以色列\",\"nation:jp\":\"jp japan 日本\",\"nation:se\":\"se sweden 瑞典\",\"nation:fr\":\"fr france 法国\",\"nation:dk\":\"dk denmark 丹麦\",\"nation:au\":\"au australia 澳大利亚\",\"nation:br\":\"br brazil 巴西\",\"nation:it\":\"it italy 意大利\",\"nation:kr\":\"kr south korea 韩国\",\"nation:za\":\"za south africa 南非\",\"tier:10\":\"10 x tier x级\",\"tier:9\":\"9 ix tier ix级\",\"tier:8\":\"8 viii tier viii级\",\"tier:7\":\"7 vii tier vii级\",\"tier:6\":\"6 vi tier vi级\",\"tier:5\":\"5 v tier v级\",\"tier:4\":\"4 iv tier iv级\",\"tier:3\":\"3 iii tier iii级\",\"tier:2\":\"2 ii tier ii级\",\"tier:1\":\"1 i tier i级\",\"era:next-generation\":\"next generation gen 下一代\",\"era:modern\":\"modern 现代\",\"era:cold-war\":\"cold war 冷战\",\"era:ww2\":\"ww2 wwii 二战\",\"era:interwar\":\"interwar 战间期\",\"class:mbt\":\"main battle tank mbt main-battle-tank 主战坦克\",\"class:medium\":\"medium tank medium-tank mt 中型坦克\",\"class:heavy\":\"heavy tank heavy-tank ht 重型坦克\",\"class:light\":\"light tank light-tank lt 轻型坦克\",\"class:ifv\":\"infantry fighting vehicle ifv infantry-fighting-vehicle cfv 步兵战车 步战车\",\"class:apc\":\"armored personnel carrier apc armoured 装甲运兵车 运兵车\",\"class:td\":\"tank destroyer td tank-destroyer casemate 坦克歼击车 歼击车\",\"class:spaa\":\"self-propelled anti-aircraft spaa aa anti-air air defense defence 自行防空车 防空车\",\"class:fire-support\":\"fire support vehicle fire-support fsv bmpt mrl rocket artillery tank 火力支援车\",\"role:breakthrough\":\"breakthrough assault brawler spearhead 突破\",\"role:frontline\":\"frontline front-line line all-rounder allrounder flexible 前线\",\"role:flanker\":\"flanker flank skirmisher 侧翼\",\"role:sniper\":\"sniper precision long-range overwatch 狙击\",\"role:scout\":\"scout recon reconnaissance spotter 侦察\",\"role:support\":\"support escort 支援\",\"status:service\":\"in service in-service production series 已服役\",\"status:prototype\":\"prototype proto demonstrator pre-series 原型车\",\"status:concept\":\"concept paper fictional 概念车\"},\"text\":{\"count\":\"{shown} of {total} tanks\",\"total\":\"{total} tanks\"}}"
+ },
+ {
+  "href": "/docs/combat",
+  "title": "How a shell becomes damage",
+  "chapter": "Armor, angling and spotting",
+  "text": "Penetration, angles, modules and crew, and who sees whom, charted from the game's own rules."
+ },
+ {
+  "href": "/docs/combat#penetration",
+  "title": "Penetration",
+  "chapter": "Armor, angling and spotting",
+  "text": "A shell goes through when its penetration, rolled 75–125 %, beats the armor it meets. Penetration falls linearly from its 100 m figure to its 1,000 m figure, then on to 2,000 m where the shell has one. Penetration and damage each roll 75–125 % of their figure. HEAT keeps its penetration at any range. The armor overlay In the sight, the armor overlay paints the enemy for the shell you have loaded: green goes through, amber may, red will not. It counts the angle, spaced armor, ERA and range. It is on from the start; H turns it off and on again, and so does Settings › Gameplay › Armor penetration shading.\nRange (m) mm OFL 120 F2 APFSDS · OECC 120 F1 HEAT"
+ },
+ {
+  "href": "/docs/combat#angling",
+  "title": "Angling",
+  "chapter": "Armor, angling and spotting",
+  "text": "Angle the plate and it gets thicker along the shell's path, until the shell bounces off. Effective armor is the plate divided by the cosine of the angle less the shell's normalization. APFSDS turns 2° toward the plate and bounces past 78°. AP turns 5° toward the plate and bounces past 70°. A shell 3× wider than the plate never bounces. A shell bounces at most 2 times; a HEAT jet dies on its first.\nImpact angle (°) mm AP, 75 mm bounces past 70° · APCR, 75 mm bounces past 70° · APFSDS, 120 mm bounces past 78° · HEAT, 120 mm\nLeclerc XLR: armor by thickness"
+ },
+ {
+  "href": "/docs/combat#special",
+  "title": "Spaced armor, ERA and HE",
+  "chapter": "Armor, angling and spotting",
+  "text": "Not every plate is solid steel, and not every shell needs to go through. Air gaps cost HEAT 5 % of its penetration per 10 cm. ERA takes a fixed bite out of HEAT and a share of a kinetic round; a tandem warhead goes through it unless the block is built against tandems. HE never bounces: it blasts what it hits, plate or not."
+ },
+ {
+  "href": "/docs/combat#modules",
+  "title": "Modules and crew",
+  "chapter": "Armor, angling and spotting",
+  "text": "A hit that goes through can break what is behind the plate. Broken modules repair themselves after 10 s. A damaged ammo rack slows the reload ×1.5; a destroyed one blows the tank up. A damaged engine catches fire 15 % of the time; a fire burns 10 ticks of 0.5 % hull and may go out by itself (12 % a tick). A shell that goes through hits a crew member 33 % of the time (10 % for HE splash); losing every crew member loses the tank. Damaged optics cut the view range by 50 %. A working radio shares what you see within 600 m; a damaged one within 300 m. The kill cam When you are knocked out, the kill cam replays the last shot through your tank, made see-through: the shell's path, each module and crew member it hit, the damage, and who fired.\nLeclerc XLR: modules and crew\nModule · Hit points · Chance to be hit · Gun · 150 · 33 % · Turret ring · 120 · 45 % · Gun mount · 120 · 45 % · Autoloader · 125 · 36 % · Weapon feed · 110 · 38 % · Roof gun · 80 · 65 % · Missile rack · 120 · 30 % · Engine · 160 · 45 % · Transmission · 140 · 45 % · Fuel tank · 120 · 45 % · Ammo rack · 150 · 27 % · Radio · 90 · 45 % · Optics · 80 · 45 % · Track L · 100 · 100 % · Track R · 100 · 100 %"
+ },
+ {
+  "href": "/docs/combat#spotting",
+  "title": "Spotting",
+  "chapter": "Armor, angling and spotting",
+  "text": "You see a tank when it is inside your view range less its camo, between 50 m and 445 m. Inside 50 m a tank is always seen, even through cover. A tank stays seen 5 s after the last sighting. The sixth-sense lamp lights 3 s after you are spotted and stays 8 s. Firing strips most of your camo for a moment; bushes near you turn see-through after you fire. Bushes and trees add up to 50 % camo; a camo paint that matches the map adds 3.5 %.\nTarget camo (%) m 445 m view range · 380 m view range · 300 m view range"
+ },
+ {
+  "href": "/docs/battlefields",
+  "title": "Every battlefield",
+  "chapter": "Battlefields",
+  "text": "The maps, their landscapes, the time of day and the practice range."
+ },
+ {
+  "href": "/docs/battlefields#maps",
+  "title": "Maps",
+  "chapter": "Battlefields",
+  "text": "Woodland 10 Desert 9 Urban 6 Maritime 5 Winter 4 Tropical 3 Night 1 Verdant Fields Sirocco Wadi Frosthollow Steinburg Saltmere Bay Amberford Tarkhan Steppe Cinder Junction Frontier Basin Nordhavn Fjord Jade River Delta Redrock Divide Monsoon Ridge Glacier Pass Obsidian Caldera Ironworks Ruinspires Suzhou Creek Titan Gorge Skybridge Chasm Tidegate Polders Copper Mesa Mine Kestrel Airfield Sunscar Oasis Whiteout Station Orchard Valley Longleaf Crossing Mangrove Reach Saltwind Narrows Highland Reservoir Olympus Basin Earthrise Basin Aegis Crossing"
+ },
+ {
+  "href": "/docs/battlefields#breaks",
+  "title": "What breaks",
+  "chapter": "Battlefields",
+  "text": "Buildings that collapse Shellfire and ramming wear a building down until it comes apart, changing the cover and the routes around it. Crush what you drive through A heavy hull fells fences, walls, trees, huts and stalls that cannot hold it, and what falls stays down. Map vehicles break Parked cars and trucks crumple under tracks, and a round sets them burning. Big cover, such as buildings, walls, rocks and hills, stops shots and blocks sight; signs, lamps and other small fittings never become invisible walls."
+ },
+ {
+  "href": "/docs/battlefields#gravity",
+  "title": "Gravity worlds",
+  "chapter": "Battlefields",
+  "text": "Gravity Mode plays under another sky: Mars 0.38 g · Moon 0.17 g · Earth 1 g. Its two off-world maps stay out of the random rotation."
+ },
+ {
+  "href": "/docs/battlefields#time",
+  "title": "Time of day",
+  "chapter": "Battlefields",
+  "text": "Deploy can set the time; left to chance, it falls like this. Day 60 % Sunset 30 % Night 10 %"
+ },
+ {
+  "href": "/docs/battlefields#proving",
+  "title": "The Proving Ground",
+  "chapter": "Battlefields",
+  "text": "Test drive opens Kestrel Airfield: 5 target lanes and a rack of plates, with no clock and no record. Lanes 100 m target turned 0° 200 m target turned 30° 300 m target turned 90° 450 m target turned 45° 650 m target turned 0° Plate rack 50 mm 100 mm 200 mm 300 mm 500 mm 100 mm · 45° 100 mm · 60° 60 mm · 82°"
+ },
+ {
+  "href": "/docs/multiplayer",
+  "title": "Play together",
+  "chapter": "Multiplayer",
+  "text": "Start a room, send the code, and fight beside your friends or against them."
+ },
+ {
+  "href": "/docs/multiplayer#rooms",
+  "title": "Start a room",
+  "chapter": "Multiplayer",
+  "text": "Private room Create a room and send its six-character code or invite link to your friends. Join a room Type the code from your host, or open their invite link. Local network One computer runs npm run server:mp (port 8792); everyone on the same network picks Local network and plays through it."
+ },
+ {
+  "href": "/docs/multiplayer#seats",
+  "title": "Seats",
+  "chapter": "Multiplayer",
+  "text": "Two sides and a gallery. The room sets its team size; empty seats can fill with bots. A room holds up to 28 players and 8 spectators. New players join the smaller side; the room's creator can lock team switching. Empty seats fill with bots unless the room turns that off. Everyone brings their own tank, camouflage and up to 3 equipment items; two players can pick the same tank. Names are up to 24 characters; a name already taken gets a number.\nTeam Alpha · v Team Bravo · Spectator · 7 a side by default up to 14 a side"
+ },
+ {
+  "href": "/docs/multiplayer#modes",
+  "title": "Modes",
+  "chapter": "Multiplayer",
+  "text": "A room plays any battle mode; the Proving Ground stays solo. Standard Battle Capture the Flag Zone Control Turbo Ball Endless Horde Frontline Assault Gravity Mode Juggernaut Infected Realistic Gun Game Drone AC-130 Air Support In Endless Horde and Frontline Assault, everyone deploys on one side, up to 7 players, against the waves."
+ },
+ {
+  "href": "/docs/multiplayer#start",
+  "title": "Ready up",
+  "chapter": "Multiplayer",
+  "text": "1 Pick your tank, camouflage and equipment, then press Ready. 2 The room's creator starts the battle once every connected player is ready. 3 The creator's browser hosts the battle; on a local network, the helper does."
+ },
+ {
+  "href": "/docs/multiplayer#leaving",
+  "title": "Leaving and rejoining",
+  "chapter": "Multiplayer",
+  "text": "Drop out and your seat waits 5 minutes; open the link again to take it back. If the host's browser goes away, the room hands the battle to another player within 8 s and play goes on. If the creator leaves, the room's settings pass to the longest-seated player after 30 s. A room closes 24 hours after its last message. Room chat keeps the last 48 messages, up to 240 characters each."
+ },
+ {
+  "href": "/docs/multiplayer#fair",
+  "title": "Fair play",
+  "chapter": "Multiplayer",
+  "text": "The host decides every hit, reload and result; the others send only their controls. You receive only the enemies your team has spotted: a hidden tank's position never reaches your browser."
+ },
+ {
+  "href": "/docs/audio",
+  "title": "Hear the battle the way a crew does",
+  "chapter": "Sound and radio",
+  "text": "What every shot, warning and engine tells you, and how to set the mix."
+ },
+ {
+  "href": "/docs/audio#hits",
+  "title": "Did it go in?",
+  "chapter": "Sound and radio",
+  "text": "No interface sound tells you a shot hit: you hear it at the target, late by the distance, and about half a second later your gunner calls it. How late you hear it Earth 100 m: 0.3 s 500 m: 1.5 s 1000 m: 2.9 s Mars 100 m: 0.4 s 500 m: 2.1 s 1000 m: 4.0 s\nYour crew says · It means · Penetration. Target. Through the armor. · The round went through. · No penetration. Didn't go through. · It hit but did not go through: aim for thinner armor. · Ricochet. Bounced. · It glanced off an angled plate. · Miss. Short. Adjusting. Over. · Nothing hit: correct your aim. · Good hit. Something's damaged. Critical hit. · It went in and broke a module. · Ammo rack hit. He's cooking off. Hit his ammo. He's done. · His ammunition is burning: he is about to blow. · Hit his engine. Engine hit. He's slowing. · His engine is hit: he slows down or catches fire. · His track's off. He's immobilized. Tracked him. He's not moving. · His track is off: he cannot move until he repairs it. · Their crew's hit. Crew hit inside. · One of his crew is down. · Target destroyed. Target down. Tank knocked out. · Your shot finished him."
+ },
+ {
+  "href": "/docs/audio#warnings",
+  "title": "Crew warnings",
+  "chapter": "Sound and radio",
+  "text": "When something happens to your tank, the crew says so before you see it.\nYour crew says · It means · We're hit. Taking hits. · A shot went into your tank. · Armor held. It bounced. · A shot hit you and did no harm. · Fire! Engine compartment! Fire in the hull! · You are burning: put it out or keep losing hull. · Ammo rack hit! Ammunition damaged! · Your ammunition is damaged: the reload slows. · Engine's damaged. Engine hit. Losing power. · Your engine is hit: less power, and it may catch fire. · Track's gone. We're immobilized. Lost a track. · A track is off: you cannot move until it is fixed. · Main gun's damaged. Gun's hit. · Your main gun is damaged until it is repaired. · Armor's failing. Can't take much more. We're badly hit. Keep moving. · Little hull is left: get to cover. · We're spotted. They have eyes on us. · An enemy has spotted you; the sixth-sense lamp lights too. · Missile incoming! Incoming missile, brace! · A guided missile is on its way: move or break its line of sight. · Drone inbound! Drone on us, overhead! · An enemy drone is overhead."
+ },
+ {
+  "href": "/docs/audio#procedure",
+  "title": "Fire command and mode calls",
+  "chapter": "Sound and radio",
+  "text": "When your sight settles on a spotted enemy with the gun loaded, the commander gives the fire command and the gunner answers. The AC-130 crew and every mode have calls of their own. In the AC-130 In the modes\nYour crew says · It means · Gunner, sabot, tank. Gunner. Sabot. Tank. · The commander names the round in the gun (sabot here; HEAT, HE or missile when that is loaded) and the target. · Identified. Identified. Tank. · The gunner has the target in the sight. · On the way. Firing. Shot. · The round is fired. · Re-engage. Target still up. Re-engage. · The round left the target standing and the gun is loaded again: fire again. · Target. Cease fire. Cease fire. Scan your sector. · Your kill left no spotted enemy within 1.5 km: stop firing.\nYour crew says · It means · In orbit. Cleared hot. Gunship on station. Cleared to engage. · The gunship is in its orbit and cleared to fire. · Tally. Armor moving. Sensor's captured. Vehicle. · The sensor has enemy armor in the sight. · Shifting fire. Shift fire. New target. · The last target is down; the sight is on the next one. · Rifle. Rifle. Missile tracking. · A missile is away. · Splash. Splash. No effect. · The rounds landed without hurting anything. · Good hits. Good hits. Target still moving. · The rounds are hurting the target. · Danger close. Danger close. Friendlies at the impact. · A heavy round landed within 35 m of a friendly tank: aim further off. · Rounds complete. Rounds complete. Assessing. · A burst of heavy rounds is over; the crew looks at what it did.\nYour crew says · It means · They dropped our flag. Recover it. Our flag's down in the field. · Their carrier dropped your flag: get to it before they do. · We're contesting their point. On their objective. Hold it. · Your side is in their point and stops their capture. · They scored. Goal against. Reset. · The other side scored. · Big wave. Lots of them. Swarm. They're everywhere. · A big wave of fast enemies is coming. · Counter-attack! Enemy counter-attack. Hold the line. · The enemy is attacking a line you took. · We've turned. Hunt the survivors. We're with them now. Find the survivors. · You were infected: now you hunt the survivors. · Juggernaut spotted! Eyes on the Juggernaut. · Your side has spotted the Juggernaut. · Last weapon. Finish it. Final gun. Two more and we win. · You are on the last weapon: two more kills win."
+ },
+ {
+  "href": "/docs/audio#radio",
+  "title": "Crew radio",
+  "chapter": "Sound and radio",
+  "text": "Each nation's crew speaks its own language, and any tank can carry a crew from another: 38 crews in all. American English British English German Russian Ukrainian Chinese French Swedish Japanese Korean Italian Polish Hebrew Danish Brazilian Portuguese Australian English Afrikaans 21 more crews speak languages with no country in the game, each in a real army's own procedure. Choose one in Settings for every tank: Spanish (Spain) Español (España) Spanish (Latin America) Español (Latinoamérica) Portuguese (Portugal) Português (Portugal) Dutch Nederlands Norwegian Norsk Finnish Suomi Greek Ελληνικά Czech Čeština Hungarian Magyar Romanian Română Turkish Türkçe Arabic العربية Persian فارسی Hindi हिन्दी Urdu اردو Bangla বাংলা Indonesian Indonesia Malay Melayu Vietnamese Tiếng Việt Thai ไทย Filipino One call plays at a time; survival warnings cut in front. A damaged radio narrows the voice, adds static and drops words. Settings › Sound › Crew voices: National crews follow each tank's nation, or pick any of the 38 languages for every tank's crew; the choice is saved across battles and reloads."
+ },
+ {
+  "href": "/docs/audio#gunfire",
+  "title": "Gunfire",
+  "chapter": "Sound and radio",
+  "text": "Every weapon fires one of 24 report classes; the bigger the gun, the louder and longer its report. Rifle-calibre machine gun 118 dB Heavy machine gun 124 dB 20 mm autocannon 128 dB 25 mm autocannon 130 dB 30 mm autocannon 132 dB Anti-tank missile 132 dB 35 mm autocannon 133.5 dB AC-130 autocannon 134 dB 40 mm autocannon 135 dB AC-130 missile 136 dB 50 mm autocannon 137 dB 76 mm gun 139 dB 84 mm gun 140 dB 90 mm gun 141 dB 100 mm gun 142.5 dB 105 mm gun 144 dB Heavy rocket 145 dB 120 mm gun 147 dB 125 mm gun 148 dB 165 mm gun 148 dB 130 mm gun 150 dB AC-130 howitzer 150 dB 152 mm gun 152 dB 170 mm gun 152 dB A distant shot is seen before it is heard, and hills between you and it muffle it. On Mars sound travels at 240 m/s and arrives 14 dB quieter and thinner. On the Moon almost nothing carries (60 dB less): you hear your own tank through its hull. In the sight your own gun sounds from inside the turret, and the world outside dulls."
+ },
+ {
+  "href": "/docs/audio#engines",
+  "title": "Engines and tracks",
+  "chapter": "Sound and radio",
+  "text": "Each hull carries its own powertrain's sound: gas turbines spool and whine, diesels shift and rumble. Tracks change with the ground and your speed: earth, hard surface, mud, sand, snow and water. An enemy drone buzzes where it flies and rises in pitch as it closes."
+ },
+ {
+  "href": "/docs/audio#settings",
+  "title": "Sound settings",
+  "chapter": "Sound and radio",
+  "text": "Settings › Sound has six sliders and two alarms; changes apply at once. Master volume Engine & mechanical volume Gunfire & impacts volume Ambience volume Interface & music volume Crew voices & alarms volume Critical-damage heartbeat pulse Concussion ringing Every sound is a recording made for Claude of Tanks with ElevenLabs before release; nothing is generated while you play."
+ },
+ {
+  "href": "/docs/studio",
+  "title": "Film your own battles",
+  "chapter": "Scene Studio",
+  "text": "Any battlefield, any tank and every effect the battle has, on a timeline you direct, taken away as stills or film."
+ },
+ {
+  "href": "/docs/studio#open",
+  "title": "Open the Studio",
+  "chapter": "Scene Studio",
+  "text": "From the top bar Open Studio in the top bar to start a new scene. Open in Studio Every film on this site has Open in Studio: it stages that film as it was shot. Copy scene link A scene link carries the whole scene; opening it rebuilds that scene in your Studio. Films from this site Object 148 Proto, Tarkhan Steppe Leopard 2 Improved, Ruinspires M1A2 Abrams, Sirocco Wadi Challenger 1 Mk 2, Saltwind Narrows Stridsvagn 121, Frosthollow ZTZ-99 Longwei, Titan Gorge"
+ },
+ {
+  "href": "/docs/studio#scene",
+  "title": "Set the scene",
+  "chapter": "Scene Studio",
+  "text": "Pick any battlefield, Olympus Basin and Earthrise Basin too, place tanks, aim their turrets and set their state. Time of day Dawn Morning Day Golden hour Sunset Blue hour Night Tank states Intact Engine smoking Burning Wrecked Burnt-out wreck Turret blown off Frames 16:9 Film 9:16 Vertical 1:1 Square"
+ },
+ {
+  "href": "/docs/studio#shots",
+  "title": "Shots and the timeline",
+  "chapter": "Scene Studio",
+  "text": "Add camera shots along the timeline; the camera moves from one to the next. Camera rigs Hero Tracking Rear chase Overhead Detail Lenses Wide · 58° Natural · 42° Tight · 28° Moves between shots Smooth Linear Cut Bézier Spline A sequence runs 1 to 20 s; a film up to 60 s. Speed ramps reach 8× for fast cuts and slow motion. Staged sequences Steel pursuit Track-level escort, a forward gun pass, then a rising battlefield reveal. Verdant Fields · Day · 8 s · 3 shots Desert crossfire A sunset engagement: approach, recoil and tracer, then the impact aftermath. Sirocco Wadi · Sunset · 8 s · 3 shots Coastal reconnaissance A moving coastal patrol with a rear follow, side portrait and sea-facing reveal. Saltmere Bay · Day · 8 s · 3 shots Golden-hour advance Two Leopards cross the farm fields in low gold light: a head-on portrait, a track-level pass, a reveal over the barns. Verdant Fields · Golden hour · 8 s · 3 shots Winter column A column grinds up the snow road at first light: a rear follow, a close look at the running gear, a high reveal. Frosthollow · Morning · 8 s · 3 shots Fields assault Four tanks advance under their own barrage: a column from behind, the second gun firing, the line opening up from above. Verdant Fields · Day · 8 s · 3 shots Night knockout Under a parachute flare a T-90 meets a Leopard at the church crossroads: the approach, the exchange, the kill. Frosthollow · Night · 8 s · 3 shots Furnace night Two heavies roll under the ironworks gantries by flarelight, guns trained down the yard. Ironworks · Night · 8 s · 3 shots Railyard salvo Three Abrams fire down the rails at golden hour while the far yard takes a barrage. Cinder Junction · Golden hour · 8 s · 3 shots Lakeside duel A Swedish pair meets a T-80 across the alpine lake: rear follow, the first round, the kill from above. Glacier Pass · Day · 8 s · 3 shots Dawn patrol Japanese armor moves out of the frontier farms at dawn: the tracks close up, a low pass, the basin from above. Frontier Basin · Dawn · 8 s · 3 shots Fjord road Challengers follow the shore road through the fjord village, the water beside them all the way. Nordhavn Fjord · Day · 8 s · 3 shots Harbor at golden hour A British column leaves the harbor as the light goes gold: head-on, from behind, then the whole bay. Nordhavn Fjord · Golden hour · 8 s · 3 shots Oasis sunset Merkavas cross the oasis as the sun sets behind the palms. Sunscar Oasis · Sunset · 8 s · 3 shots Orchard column Three Italian vehicles thread the orchard rows: from above, at track level, then the valley. Orchard Valley · Day · 8 s · 3 shots River village Chinese armor follows the delta road through a waking river village. Jade River Delta · Morning · 8 s · 3 shots Temple road A lone K2 climbs the monsoon road past the temple: its tracks, a low pass, the ridge from above. Monsoon Ridge · Morning · 8 s · 3 shots Reservoir at blue hour Chieftains skirt the reservoir after sunset, the lake still holding the light. Highland Reservoir · Blue hour · 8 s · 3 shots Walking barrage A night assault behind a walking barrage, lit by a flare: the guns, the column, the fire ahead. Verdant Fields · Night · 8 s · 3 shots Alpine village A Leopard and a CV90 roll through the mountain village under the peaks. Glacier Pass · Day · 8 s · 3 shots Sunset sprint A KF51 at full speed across the frontier at sunset: the gun from the front, the tracks, the dust trail from above. Frontier Basin · Sunset · 8 s · 3 shots"
+ },
+ {
+  "href": "/docs/studio#effects",
+  "title": "Effects",
+  "chapter": "Scene Studio",
+  "text": "Every effect is the battle's own, fired from the timeline at a tank, a point or a marker. Main gun shot Muzzle flash Tracer Impact Sparks Explosion Tank kill Dust burst Engine smoke Burning Track break Firing moment Frozen fireball Machine-gun burst Barrage Armour scars Exhaust belch Smoke screen Flare Embers Debris Shockwave Fire field"
+ },
+ {
+  "href": "/docs/studio#film",
+  "title": "Stills and film",
+  "chapter": "Scene Studio",
+  "text": "Take a still at any moment, or render the sequence to a film. Capture PNG saves the frame you see. Export film renders every frame offline with motion blur, drops none, and mixes in the battle's sound, as MP4 or WebM, whichever your browser encodes. Live recording captures the screen in real time instead. Size 1080p 1440p 2160p Rate 24 FPS 30 FPS 60 FPS Blur Off · 1 sample Draft · 4 samples Good · 8 samples Best · 16 samples Master · 32 samples Shake As authored Half Quarter Off"
+ },
+ {
+  "href": "/docs/studio#share",
+  "title": "Save and share",
+  "chapter": "Scene Studio",
+  "text": "Copy scene link: the scene travels inside the link. Save JSON downloads the scene file; Load JSON opens one. Slots keep scenes in this browser: click to load, Shift-click to save."
+ },
+ {
+  "href": "/docs/build",
+  "title": "A browser game built through verified loops",
+  "chapter": "How the game was built",
+  "text": "Claude of Tanks grew from a direct Three.js prototype into a typed, tested game through short implementation rounds: isolate one problem, change the smallest owner, prove it in the browser, record the result, and land it on main."
+ },
+ {
+  "href": "/docs/build#topic-section-1",
+  "title": "Start with hard constraints",
+  "chapter": "How the game was built",
+  "text": "The project is browser-native and built directly on Three.js rather than a general game engine. The simulation runs at a fixed 60 Hz, playable tanks use first-party procedural runtime geometry, and presentation pages stay isolated from the heavy game boot graph. Those constraints shaped the architecture: deterministic rules can run in Node, the renderer adapts independently, and every public claim can point to code, a test, a capture, or a measured receipt."
+ },
+ {
+  "href": "/docs/build#topic-section-2",
+  "title": "Separate rules from presentation",
+  "chapter": "How the game was built",
+  "text": "Movement, ballistics, armor, damage, spotting, match state, and bot decisions live behind renderer-free contracts. Three.js turns the latest state into cameras, rigs, lighting, effects, audio, and UI without becoming the authority for a hit. That boundary lets local battles and browser-hosted rooms share the same combat rules. It also lets lower-end visual settings reduce cost without changing gameplay."
+ },
+ {
+  "href": "/docs/build#topic-section-3",
+  "title": "Claude Code and Codex workflow",
+  "chapter": "How the game was built",
+  "text": "Claude Code and Codex were used as development tools across bounded tasks. Broad or risky work moved into isolated Git worktrees; each lane named the files it owned, preserved unrelated changes, and exchanged exact commit hashes and evidence before integration. The working rule was simple: main stays current, unfinished experiments stay isolated, and a branch is not proof. Only the integrated bytes count. Human direction set the target and acceptance bar; agents implemented, measured, reviewed, and documented against it."
+ },
+ {
+  "href": "/docs/build#topic-section-4",
+  "title": "Build, falsify, and measure",
+  "chapter": "How the game was built",
+  "text": "A typical round starts with a reproducible baseline, then attribution. The smallest plausible fix is tested with focused self-tests, browser interaction, console inspection, screenshots, and performance probes. A result must survive a second run or a deliberately hostile case before it is accepted. Visual work is judged from current pixels, not only numeric checks. Performance work records cold and warm conditions, device constraints, long tasks, frame gaps, GPU resources, and transition timings instead of reporting a single FPS number."
+ },
+ {
+  "href": "/docs/build#topic-section-5",
+  "title": "Make the workflow durable",
+  "chapter": "How the game was built",
+  "text": "Repository-level AGENTS.md, indexed subsystem SKILL.md files, and one maintained architecture decision record preserve ownership, invariants, required commands, and recurring failure modes without burying contributors in completed migration notes. When a manual process repeats, it becomes a script or a gate. That is why model screenshots, combat anatomy, vehicle icons, route probes, public metadata, and release checks are reproducible from the repository. Raw execution receipts stay in Git history or ignored QA artifacts."
+ },
+ {
+  "href": "/docs/build#topic-section-6",
+  "title": "Land only integrated proof",
+  "chapter": "How the game was built",
+  "text": "A finished change is committed as one coherent unit, rebased on the latest origin/main, and rechecked after integration. The final push verifies that its parent is still the remote tip so concurrent work cannot silently overwrite a newer landing. The public build then proves route isolation and writes a provenance receipt that hashes every file of its source tree. This keeps the playable site, source tree, documentation, and main branch describing the same game."
+ },
+ {
+  "href": "/docs/simulation",
+  "title": "Every hit has a path",
+  "chapter": "Simulation and authority",
+  "text": "The battle simulation advances at 60 Hz. Movement, aim, ballistics, armor, damage, reloads, spotting, and match results are resolved from authoritative state, not from the rendered frame."
+ },
+ {
+  "href": "/docs/simulation#topic-section-1",
+  "title": "Fixed-step battle loop",
+  "chapter": "Simulation and authority",
+  "text": "The authoritative step uses meters, seconds, radians, and a fixed 1/60-second interval. Input is sampled into explicit vehicle controls before movement, combat, spotting, and result evaluation run in a stable order. Render rate can change without changing the number or order of simulation steps. Frame-time spikes accumulate into bounded fixed steps. Authoritative randomness is seeded or injected. Wall-clock time and Math.random() are excluded from rules that affect a shot, reload, module state, or match result."
+ },
+ {
+  "href": "/docs/simulation#topic-section-2",
+  "title": "The host runs the match",
+  "chapter": "Simulation and authority",
+  "text": "The room Worker coordinates discovery and signaling. It does not run the sixty-step battle simulation. The host browser runs the match authority and exchanges WebRTC data with peers. Guests send inputs; the host resolves movement, firing, reloads, collisions, damage, bots and results. The local vehicle predicts movement and reconciles against acknowledged host state; remote vehicles interpolate snapshots. Nearby and recently engaged opponents refresh more often than distant visible actors. Combat events remain ordered independently of those interest tiers. Prediction improves responsiveness but cannot award a hit or change the authoritative result."
+ },
+ {
+  "href": "/docs/simulation#topic-section-3",
+  "title": "Visibility and trust",
+  "chapter": "Simulation and authority",
+  "text": "Guest snapshots contain only enemies the viewer is allowed to see. Filtering occurs before encoding, so hidden coordinates are not simply sent and concealed by the renderer. Team vision and spectator perspective also govern nameplates, minimaps and presentation. A browser host is still a participating player’s machine and must hold the authoritative world. Peer hosting should not be described as having the same trust boundary as an independent dedicated server. The protocol checks input ordering and message shape; it cannot turn an untrusted host into trusted tournament infrastructure."
+ },
+ {
+  "href": "/docs/simulation#topic-section-4",
+  "title": "Terrain and movement",
+  "chapter": "Simulation and authority",
+  "text": "Height fields answer vehicle support, projectile collision, camera clearance, and prop placement. Surface class affects grip and presentation. Roads, slopes, ridges, water edges, and hull-down positions are composed around the intended armored routes. Vehicle suspension samples the same ground surface used by movement and ballistic terrain queries."
+ },
+ {
+  "href": "/docs/simulation#topic-section-5",
+  "title": "Verification",
+  "chapter": "Simulation and authority",
+  "text": "Node-runnable self-tests cover movement, combat, spotting, missile guidance, special actions, AI aim, and the complete authoritative match. Browser probes add bore parity, projectile travel, live impact effects, and HUD alignment. Run node src/sim/combat.selftest.mjs, node src/sim/authoritativeMatch.selftest.mjs, and npm test after changing shared combat rules."
+ },
+ {
+  "href": "/docs/simulation#topic-section-6",
+  "title": "Driving, airtime and landing damage",
+  "chapter": "Simulation and authority",
+  "text": "Movement runs at a fixed sixty steps per second. Engine power, weight, forward and reverse limits, track condition, terrain resistance and hull rotation jointly determine handling. The renderer interpolates those states rather than changing movement with frame rate. Handbrake behavior is grounded; landing after a jump must not silently latch the brake. A fall is a physical impact, not just a height threshold. Mass, impact speed, attitude and mode physics affect the result. Reduced gravity changes both your arc and the terrain you can safely reach. Avoid blind drops at bridge abutments or cliff edges; use a route with a visible landing and enough room to settle."
+ },
+ {
+  "href": "/docs/models",
+  "title": "From reference to playable machine",
+  "chapter": "Procedural model pipeline",
+  "text": "Kevin B. Liu authored every playable tank as first-party procedural runtime geometry. References guide proportion and detail, but the shipped machine is rebuilt from code, connected to combat data, rendered into its own icon set, and released through measured and visual gates."
+ },
+ {
+  "href": "/docs/models#topic-section-1",
+  "title": "Research and reference intake",
+  "chapter": "Procedural model pipeline",
+  "text": "A model round begins with source photographs, published dimensions, and plan and side references of the real vehicle. The references guide recognizable shape; they are not an automatic truth when a reference itself is wrong. Proportion comes first: hull length and width, turret station, roof height, gun length, wheel count, track course, and major armor masses must read correctly before small fittings are added."
+ },
+ {
+  "href": "/docs/models#topic-section-2",
+  "title": "Build the visible machine from parts",
+  "chapter": "Procedural model pipeline",
+  "text": "Procedural builders assemble hull plates, turret shells, mantlets, barrels, running gear, optics, hatches, smoke launchers, baskets, antennas, armor kits, and stowage from reusable geometry and material vocabulary. Station-section measurements keep front, middle, and rear masses faithful instead of stretching one generic box. Camouflage-aware structural parts and neutral mechanical parts use explicit roles."
+ },
+ {
+  "href": "/docs/models#topic-section-3",
+  "title": "Rig articulation and running gear",
+  "chapter": "Procedural model pipeline",
+  "text": "Hull, turret, gun mount, recoil group, muzzle, wheels, return rollers, sprockets, idlers, and linked tracks have explicit owners. Turret equipment must rotate with the turret and remain visibly seated; hull equipment must not follow it. The muzzle bore must be open and resolve from the actual barrel hierarchy. Suspension samples terrain at each support station. Native running gear preserves the correct wheel count and track path while avoiding duplicated donor wheels, clipping shoes, or floating attachments."
+ },
+ {
+  "href": "/docs/models#topic-section-4",
+  "title": "Suspension and tracks",
+  "chapter": "Procedural model pipeline",
+  "text": "Each supported wheel samples terrain beneath its own station. The visual suspension settles to those contacts, the hull derives pitch and roll from support, and the track path is rebuilt around the moved wheels. Swedish siege suspension adds commanded hull attitude without breaking gun tracking. Track animation follows traveled distance and side speed. Damage can detach a side, remove its running band, throw a persistent ribbon, and leave loose running-gear pieces."
+ },
+ {
+  "href": "/docs/models#topic-section-5",
+  "title": "Author combat anatomy from the same shape",
+  "chapter": "Procedural model pipeline",
+  "text": "Armor plates, spaced layers, ERA, modules, ammunition, fuel, crew, and articulation anchors are calibrated to the checked vehicle frame. The game therefore uses the same authored shape for presentation, impact tracing, internal damage, and the technical side diagrams. Structural cupolas can participate in hit geometry. Sights, machine guns, baskets, antennas, and loose equipment remain presentation fittings unless gameplay explicitly gives them a physical role."
+ },
+ {
+  "href": "/docs/models#topic-section-6",
+  "title": "Generate icons and technical cards",
+  "chapter": "Procedural model pipeline",
+  "text": "The asset pipeline renders the current procedural rig into garage and gallery imagery, transparent silhouettes, armor diagrams, separate module and crew diagrams, tier treatments, and supporting presentation views. One deterministic angle capture now emits both portrait sizes through a shared framing policy, so a new tank cannot leave behind a hand-cropped or stale thumbnail. Use npm run tank:portraits -- --ids=<changed ids> and npm run tank:portraits:check -- --ids=<changed ids> for portrait-only work. The complete release sequence remains npm run tank:anatomy:update, npm run tank:anatomy:check, then npm run tank:release:check -- --ids=<changed ids> --gate."
+ },
+ {
+  "href": "/docs/models#topic-section-7",
+  "title": "Measure, inspect, and graduate",
+  "chapter": "Procedural model pipeline",
+  "text": "Automated gates check geometry fingerprints, dimensions, stations, floaters, track intersections, wheel quality, muzzle bores, materials, armor anatomy, markings, provenance, and deterministic asset freshness. Standard front, quarter, side, rear, top, close, and yaw views then expose defects a numeric score can miss. A model graduates only when every required view clears the visual acceptance floor, attachments have physical load paths, winding and backfaces are healthy, and the clean integrated release check passes. The Tank Gallery is the live inspection surface for that final procedural rig."
+ },
+ {
+  "href": "/docs/rendering",
+  "title": "Rendering can adapt without changing the rules",
+  "chapter": "Rendering and performance",
+  "text": "Three.js owns presentation only. Adaptive resolution, shadows, vegetation, post-processing, particles, and warmup can change with the device; the 60 Hz battle model remains unchanged."
+ },
+ {
+  "href": "/docs/rendering#topic-section-1",
+  "title": "Frame composition",
+  "chapter": "Rendering and performance",
+  "text": "The render path updates camera, visible vehicle rigs, world detail, presentation effects, lighting, shadows, and post-processing from the latest interpolated state. Established hot loops reuse scratch objects and pools rather than allocating each frame. Late transparent effects share depth information with the main scene. Muzzle light, tracer, sparks, smoke, dust, fire, and debris are admitted by distance and quality policy."
+ },
+ {
+  "href": "/docs/rendering#topic-section-2",
+  "title": "Lighting and post-processing",
+  "chapter": "Rendering and performance",
+  "text": "Biome lighting supplies sun direction, sky, fog, exposure, and shadow policy. Stable cascaded shadows follow the relevant camera region. The post chain combines ambient occlusion, anti-aliasing, bloom where useful, output grading, and the final dynamic render scale. Capture views pin quality and render scale so comparison images do not drift. Gameplay can reduce expensive layers under sustained load."
+ },
+ {
+  "href": "/docs/rendering#topic-section-3",
+  "title": "Adaptive quality",
+  "chapter": "Rendering and performance",
+  "text": "Desktop and mobile resolve separate starting profiles. Internal resolution, shadow work, vegetation density, effect budgets, and post features can step down independently. Hysteresis prevents rapid oscillation. Device diagnostics and measured overload, not user-agent labels alone, select the safe path. A quality change never alters shell travel, spotting, damage, or authoritative timing."
+ },
+ {
+  "href": "/docs/rendering#topic-section-4",
+  "title": "Keep boot and routes isolated",
+  "chapter": "Rendering and performance",
+  "text": "The garage does not build a battlefield until concrete Battle intent. Public pages do not import the playable renderer, and garage boot does not eagerly import the complete simulation or fleet graph. Exact vehicle-family and world work is acquired only when the selected route needs it. Cold-load probes disable caches and record network plus application work so a warm navigation cannot masquerade as first-visit performance."
+ },
+ {
+  "href": "/docs/rendering#topic-section-5",
+  "title": "Stage battle loading behind cover",
+  "chapter": "Rendering and performance",
+  "text": "Battle entry acquires the exact world and roster, uploads required textures, prepares effects, submits vehicle materials, warms shaders and post-processing, and establishes the first valid camera before reveal. Required work finishes before the countdown instead of surfacing as a black or frozen opening frame. Progress reflects owned stages. Stale work is cancelled when intent changes, and a retryable lifecycle owns recovery rather than scattering timers through the composition root."
+ },
+ {
+  "href": "/docs/rendering#topic-section-6",
+  "title": "Performance evidence",
+  "chapter": "Rendering and performance",
+  "text": "Performance traces record frame categories, renderer counters, dynamic scale, and transition budgets. Browser probes cover cold load, battle entry, map switching, the garage, and multiplayer rendering. Use npm run perf:dev, npm run perf:cold, npm run perf:transitions, and a production build for renderer work."
+ },
+ {
+  "href": "/docs/rendering#topic-section-7",
+  "title": "Headlights, shadows and smoke",
+  "chapter": "Rendering and performance",
+  "text": "Driving lights use actual model apertures and follow the hull’s pose. Their warm beams now illuminate farther ahead; only the nearest eligible sources occupy a fixed light pool, while the other visible lamp lenses may still glow. Switching lights off or destroying a tank removes its contribution. Periscopes, mirrors and unrelated armor must not glow just because they share a material. Ambient occlusion and cast shadows are separate. Turning AO off should not remove sun shadows. Shadow stability, cloud history and effects composition have dedicated checks for moving cameras, firing and quality changes. Smoke is both a rendered volume effect and a simulation visibility blocker; the picture and the spotting decision have separate owners that must agree."
+ },
+ {
+  "href": "/docs/rendering#topic-section-8",
+  "title": "Graphics recovery and stale sessions",
+  "chapter": "Rendering and performance",
+  "text": "The browser may reclaim a graphics context under memory pressure. The game pauses presentation and restores resources behind cover before resuming. Quality recovery should be bounded, preserve the battle state and avoid repeated allocation. A reload is the fallback when restoration cannot complete; it is not the normal way to switch maps or vehicles. When a regular tab behaves differently from a fresh tab, compare the served application version and saved graphics settings before attributing it to one render effect. Hashed assets and deployment-version checks protect against mixed releases. Record the map, vehicle, quality, viewport and reproduction steps with a report; a screenshot alone cannot establish whether the cause is stale assets, settings or GPU state."
+ },
+ {
+  "href": "/docs/ai",
+  "title": "One bot controller for every battlefield",
+  "chapter": "Bots and tactical AI",
+  "text": "Solo and authoritative multiplayer bots use the same renderer-free decision logic. They navigate a seeded battlefield graph, respect team and visibility rules, choose viable shots, use vehicle capabilities, and remain testable without a GPU."
+ },
+ {
+  "href": "/docs/ai#topic-section-1",
+  "title": "Perception and target choice",
+  "chapter": "Bots and tactical AI",
+  "text": "Bots consume the same team, visibility, range, health, and vehicle-state contracts used by authority. They do not read rendered objects or hidden client-only coordinates. Candidate targets are scored from current tactical state rather than selected by scene proximity alone. Difficulty changes reaction, aim quality, engagement distance, and decision pressure without granting information the bot should not have."
+ },
+ {
+  "href": "/docs/ai#topic-section-2",
+  "title": "Seeded route planning",
+  "chapter": "Bots and tactical AI",
+  "text": "One typed traversability grid is built per match from terrain mobility, world collision, openings, objectives, and vehicle capabilities. The planner supplies deterministic paths around blocked cells while local steering handles immediate alignment and avoidance. Route decisions can be reproduced in Node across every map, including heavy vehicles, tracked damage, steep slopes, and objective modes."
+ },
+ {
+  "href": "/docs/ai#topic-section-3",
+  "title": "Gun handling and fire control",
+  "chapter": "Bots and tactical AI",
+  "text": "The controller respects turret traverse, elevation and depression, bore obstruction, reloads, magazines, dispersion, shell velocity, penetration, and target motion. It aims for hittable armor and internal weak areas when the current weapon and angle make that shot credible. Autocannons, single-shot guns, autoloaders, and guided weapons share the same decision boundary but apply their own cadence and ammunition state."
+ },
+ {
+  "href": "/docs/ai#topic-section-4",
+  "title": "Team safety and pressure",
+  "chapter": "Bots and tactical AI",
+  "text": "Friendly vehicles are rejected from valid shot paths, and the controller avoids firing through allies. Bots spread their attention, move to useful lanes, support objectives, and keep enough separation to avoid turning one friendly cluster into an obstacle. Enemy bots and allied bots use the same logic. Team assignment changes targets and objectives, not competence."
+ },
+ {
+  "href": "/docs/ai#topic-section-5",
+  "title": "Survival and recovery",
+  "chapter": "Bots and tactical AI",
+  "text": "Bots consider exposure, cover, damaged tracks, disabled modules, repair opportunities, ammo state, and nearby threats. They can disengage from a losing angle, recover movement, re-path after destruction, and continue contributing instead of waiting in open ground. Mode objectives layer onto these survival decisions so capture, defense, escort, and horde pressure do not require separate fake movement systems."
+ },
+ {
+  "href": "/docs/ai#topic-section-6",
+  "title": "Verification",
+  "chapter": "Bots and tactical AI",
+  "text": "Focused AI tests cover aim, friendly-fire rejection, routes, difficulty, deterministic decisions, and authoritative bot integration. Map-wide server tests run the controller without rendering, while browser battles verify that visible movement, firing, and effects match those decisions. Bot changes run node src/game/ai.selftest.mjs, node src/sim/ai.aim.selftest.mjs, node src/sim/botRoutePlanner.selftest.mjs, and node server/authoritativeBots.selftest.mjs."
+ },
+ {
+  "href": "/docs/ai#topic-section-7",
+  "title": "Classic, Jev and coordinated objectives",
+  "chapter": "Bots and tactical AI",
+  "text": "Classic and Jev share the local driving, aiming, visibility and vehicle-system logic on both allied and enemy teams. Jev adds bounded team-level orders; it does not bypass spotting or replace the physical driver. Choose the brain and difficulty before the next match. An allied team should not retain an older behavior set just because it fights alongside the player. Flag teams distribute recovery, escort and raiding roles. Turbo Ball retains a striker long enough to circle behind the ball and line up a push, with screening and defensive support. Zone teams distribute capture pressure. Mobile units can flank while anchors maintain pressure; navigation includes right-of-way for the human, committed passing and safe reversing when vehicles block one another."
+ },
+ {
+  "href": "/docs/ai#topic-section-8",
+  "title": "Smoke, remote guns and safe jumps",
+  "chapter": "Bots and tactical AI",
+  "text": "Bots can deploy fitted smoke when withdrawing, under pressure or reloading, and operate remote automatic guns against eligible visible opponents. They only request a jump when the mode allows it and the prospective landing is affordable. Cliff and bridge approaches need a valid route; a direct line to the objective is not enough. Behavior tests include all 33 maps, flag and ball scenarios, congestion, fall-risk decisions and a large Jev team workload. Their guarantees are scoped to the tested scenarios: they catch regressions in decisions and bounded work, but do not prove that a bot will solve every possible terrain or traffic situation."
+ },
+ {
+  "href": "/docs/filming",
+  "title": "Fifty takes, filmed inside the game",
+  "chapter": "Filming the media",
+  "text": "The site's fifty takes, its portraits and its four films were shot in Scene Studio on the game's own maps, tanks and effects. Each take is code: staged by a search, judged as a schematic previz, reviewed in the engine, fixed at its source and rendered as a supersampled 4K final with its own sound."
+ },
+ {
+  "href": "/docs/filming#topic-section-1",
+  "title": "Shots written as code",
+  "chapter": "Filming the media",
+  "text": "Every take on the site is a scene document, not a recording: the map, the time of day and the weather, the cast and its paint, each tank's route and speed, where each gun points, the camera's rail and the moment for its still. tools/media-r5/site50.mjs writes all fifty from one table, so a change to the plan reaches every take that shares it. The shot library keeps each take's scene exactly as the Studio saves it, so a take opens in the Studio from a link: the viewer below opens every featured take that way. Each round is directed with notes: the lens on a three-dimensional track that swings close and far, tanks fast in every direction, fronts and quarters rather than rears, and a list of tanks that each lead a take of their own. Every round renders into folders of its own, so earlier versions stay beside the code that made them."
+ },
+ {
+  "href": "/docs/filming#topic-section-2",
+  "title": "One take, every stage",
+  "chapter": "Filming the media",
+  "text": "Round four is the first loop, before the motion note. Engine review 1 is the first motion plan rendered small in the engine, with everything it caught. Previz is round six's plan as a schematic camera, and engine review 2 is that plan in the engine after the fixes. Engine review 3 is round seven: the plan re-staged on the 2.0 maps, the scenes the 4K finals render from."
+ },
+ {
+  "href": "/docs/filming#topic-section-3",
+  "title": "The process",
+  "chapter": "Filming the media",
+  "text": "Ten steps take a shot from a note to the website. The checks run before any GPU time is spent, and every fix lands in the engine, the tools or the plan, never in a single frame."
+ },
+ {
+  "href": "/docs/filming#topic-section-4",
+  "title": "Motion search and previz",
+  "chapter": "Filming the media",
+  "text": "The motion search staged all 50 site takes and all 166 fleet takes. For each take it tries road and open-ground routes, columns and fans of escorts, guns held on their own targets and lens moves by kind (a swoop, a lead reveal, an orbit that rises, a cable run, a weave, an overtake), and it scores every candidate for close-to-far range, climb, front angles, speed and flank swings. The winners are written to a tracked plan file. Previz draws each plan as a schematic camera's eye beside the map, with the lens's distance and height across the take. Choreography is judged here, in seconds per take, before a single frame is rendered."
+ },
+ {
+  "href": "/docs/filming#topic-section-5",
+  "title": "The battlefield as the engine holds it",
+  "chapter": "Filming the media",
+  "text": "A survey of each map in the running game dumps every collision record (its footprint, height, crush threshold and canopy) with a 4 m grid of ground heights and water. An offline model rebuilds the battlefield from that dump and answers with the engine's own collision code. Routes are checked against it in 50 ms steps: a hull may crush what a battle hull would crush, and anything else fails the route, as does a start inside a building or a slope too steep to climb. The lens check samples the camera every 100 ms and casts five sightlines to the hero (its centre, nose, tail and both flanks) through every record and canopy; low cover never blocks, and a prop counts only when it is large on screen against the tank."
+ },
+ {
+  "href": "/docs/filming#topic-section-6",
+  "title": "What the Studio gained",
+  "chapter": "Filming the media",
+  "text": "A spline camera rail keeps fast moves smooth through every key. Each tank drives its own route at speed with its gun stabilised on a target, and a travel frame lets the lens ride a swerving tank without swinging with it. The Plan view shows the take from above (every route, the camera's track and view, the lens's distance and height) and scrubs with the timeline. Tanks on the timeline now crush what they overrun, by the battle's own rule: a hull fells a fence, a wall or a tree when it runs over it faster than that object gives way. The crushes are planned from the routes before playback, fire live as the timeline plays and replay settled after a seek, so any frame shows the same wreckage. At night the Studio's camera holds a moonlit exposure, 1.25 stops under the map's, instead of adapting the dark back toward day."
+ },
+ {
+  "href": "/docs/filming#topic-section-7",
+  "title": "The engine review",
+  "chapter": "Filming the media",
+  "text": "All fifty takes were rendered small in the game engine before any final. The first review caught three things the schematic could not: tanks driving through intact props in about half the takes, props in front of the lens in six, and eight night takes lit like day under a starry sky. Each fix went to its source: the Studio's crushes, the battlefield model and its lens check, and the night camera. The second review renders every take again at 960 pixels with a light probe on each. When the 2.0 maps changed the battlefields, the motion search re-staged the takes the new layouts broke, and a third review rendered all fifty on them before the finals start."
+ },
+ {
+  "href": "/docs/filming#topic-section-8",
+  "title": "4K finals and stills",
+  "chapter": "Filming the media",
+  "text": "Finals render at 3840 × 2160 and 30 frames per second, in deep focus: sharp from the lens to the horizon, with no depth-of-field blur in front of the tanks. Each frame is the average of 8 to 48 complete renders at sub-pixel offsets across a 60° shutter; fast motion adds renders until neighbouring ones are at most 1.5 pixels apart. The jittered average replaces the game's temporal anti-aliasing, bloom and the grade run once on the average, and a sharpening pass finishes the frame. Each take also renders two 4K stills at a 2 ms exposure: its key moment and a close portrait where the tank is largest on screen, each chosen with the whole tank in frame, centred, nothing in front of it and no burst of dust just before. About a hundred stills become posters, key art and social images; the films' ProRes masters are kept, and the site's formats are encoded from them."
+ },
+ {
+  "href": "/docs/filming#topic-section-9",
+  "title": "Sound",
+  "chapter": "Filming the media",
+  "text": "Nothing in the films' sound is synthesized. The battle effects are the game's own recordings, placed from each cut's edit list with the engine's resolvers (the gun's class, the engine family, the track set, the map's echo tail and its ambience), and the hero's crew calls its shots on the radio, in its own language, over the engine's intercom chain. The score is generated with Eleven Music from a composition plan written from the cut's cue sheet. Its hits (braams in the sheet's chords, a sub boom, risers, a reverse swell and taiko) are generated sound effects, several takes each; the best measured take is kept and placed on its downbeat. Each film is mastered to −14 LUFS."
+ },
+ {
+  "href": "/docs/filming#topic-section-10",
+  "title": "The films and the board",
+  "chapter": "Filming the media",
+  "text": "Four films are cut from the takes as HyperFrames compositions: a trailer, a 30-second cut, a 15-second vertical and the lineup. Their edit lists are generated from the takes, and the HTML compositions render frame-exact to video. The owner reviews every round on one board: each take's frames, previz, engine reviews and finals side by side, with the receipts of every change. Notes go back into the plan, the engine or the tools, and the next round renders beside the last."
+ },
+ {
+  "href": "/docs/filming#topic-section-11",
+  "title": "The pictures",
+  "chapter": "Filming the media",
+  "text": ""
+ }
+]

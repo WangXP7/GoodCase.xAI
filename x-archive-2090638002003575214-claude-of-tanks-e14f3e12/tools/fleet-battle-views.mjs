@@ -1,0 +1,143 @@
+// Deterministic low-geometry tank renders at representative battle distances.
+// These images make LOD changes reviewable at the exact screen scale where
+// they are intended to operate.
+//
+// Usage:
+//   node tools/fleet-battle-views.mjs --out=/tmp/fleet-before
+//   node tools/fleet-battle-views.mjs --ids=m1a1_abrams_hc,t90am --distances=40,60,90
+import { eachBrowserChunk } from './browser-id-chunks.mjs';
+import { WORKER_PAGES } from './browser-id-caps.mjs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { uniqueIds } from './id-list.mjs';
+import { readTankAssets } from './tank-assets-store.mjs';
+import { resolve } from 'node:path';
+import { createServer } from 'vite';
+import puppeteer from 'puppeteer';
+
+const args = process.argv.slice(2);
+const option = (name, fallback = '') => {
+  const inline = args.find((arg) => arg.startsWith(`--${name}=`));
+  if (inline) return inline.slice(name.length + 3);
+  const index = args.indexOf(`--${name}`);
+  return index >= 0 ? args[index + 1] : fallback;
+};
+const root = process.cwd();
+const outDir = resolve(option('out', '.qa-device/fleet-battle-views'));
+const selectedIds = uniqueIds(option('ids').split(',').map((id) => id.trim()).filter(Boolean), 'fleet-battle-views --ids');
+const distances = option('distances', '40,60,90,180').split(',')
+  .map(Number).filter((distance) => Number.isFinite(distance) && distance > 0);
+const vectorOption = (name) => {
+  const raw = option(name);
+  if (!raw) return undefined;
+  const values = raw.split(',').map(Number);
+  if (values.length !== 3 || !values.every(Number.isFinite)) throw new Error(`Invalid --${name}`);
+  return values;
+};
+const renderOptions = {
+  geometryQuality: option('quality', 'low'),
+  camera: vectorOption('camera'),
+  target: vectorOption('target'),
+  fov: Number(option('fov', '50')),
+  // FSP-06 eye-check: render size (default 640x360; --width=1280 --height=720 for the 1280 px chase review).
+  width: Number(option('width', '640')),
+  height: Number(option('height', '360')),
+};
+if (!['high', 'low'].includes(renderOptions.geometryQuality)
+    || !(renderOptions.fov > 0 && renderOptions.fov < 180)
+    || !(renderOptions.width >= 64 && renderOptions.width <= 4096 && renderOptions.height >= 64 && renderOptions.height <= 4096)) {
+  throw new Error('Invalid render options');
+}
+const requestedWorkers = Number.parseInt(option('workers', String(WORKER_PAGES)), 10);
+const workerCount = Number.isFinite(requestedWorkers)
+  ? Math.max(1, Math.min(6, requestedWorkers)) : WORKER_PAGES;
+const sourceManifest = readTankAssets(resolve(root, 'public/icons'));
+const ids = selectedIds.length ? selectedIds : Object.keys(sourceManifest.tanks || {});
+const cacheDir = resolve('/tmp', `cot-fleet-battle-views-vite-${process.pid}`);
+
+const server = await createServer({
+  root,
+  configFile: false,
+  cacheDir,
+  logLevel: 'error',
+  optimizeDeps: { noDiscovery: true },
+  server: {
+    host: '127.0.0.1',
+    port: 7800 + (process.pid % 100),
+    strictPort: true,
+    hmr: false,
+    watch: null,
+  },
+});
+await server.listen();
+const port = server.httpServer.address().port;
+const jobs = ids.flatMap((id) => distances.map((distance) => ({ id, distance })));
+const assets = Object.fromEntries(ids.map((id) => [id, { assets: {} }]));
+let completed = 0;
+mkdirSync(resolve(outDir, 'views'), { recursive: true });
+
+/** One browser chunk's jobs, shared by its worker pages. */
+async function renderChunk(browser, chunkJobs) {
+  let nextJob = 0;
+  await Promise.all(Array.from({ length: Math.min(workerCount, chunkJobs.length) }, async () => {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(120000);
+    await page.goto(`http://127.0.0.1:${port}/tools/fleet-battle-views.html`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForFunction('window.__BATTLE_VIEW_READY === true');
+    while (nextJob < chunkJobs.length) {
+      const { id, distance } = chunkJobs[nextJob++];
+      const rendered = await page.evaluate(
+        (tankId, distanceM, options) => window.__RENDER_BATTLE_VIEW(tankId, distanceM, options),
+        id,
+        distance,
+        renderOptions,
+      );
+      const view = `battle${distance}`;
+      const file = `views/${id}-${view}.png`;
+      const encoded = rendered.dataUrl.replace(/^data:image\/png;base64,/, '');
+      writeFileSync(resolve(outDir, file), Buffer.from(encoded, 'base64'));
+      assets[id].assets[view] = {
+        file,
+        mime: 'image/png',
+        width: rendered.width,
+        height: rendered.height,
+        distanceM: distance,
+        fillLoaded: rendered.fillLoaded === true,
+      };
+      completed++;
+      process.stdout.write(`\r[fleet-battle-views] ${completed}/${jobs.length} ${id} @ ${distance} m          `);
+    }
+    await page.close();
+  }));
+}
+
+try {
+  // A fresh browser per chunk of ids (tools/browser-id-chunks.mjs); the manifest below covers every id.
+  await eachBrowserChunk('tools/fleet-battle-views.mjs', ids, async (chunk, { launch }) => {
+    const browser = await launch(puppeteer, {
+      headless: 'new',
+      args: ['--use-gl=angle', '--enable-webgl', '--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    try {
+      await renderChunk(browser, jobs.filter((job) => chunk.includes(job.id)));
+    } finally {
+      await browser.close();
+    }
+  });
+} finally {
+  process.stdout.write('\n');
+  await server.close();
+  rmSync(cacheDir, { recursive: true, force: true });
+}
+
+const manifest = {
+  schemaVersion: 1,
+  generatedAt: new Date().toISOString(),
+  method: `procedural ${renderOptions.geometryQuality}-geometry render; deterministic camo seed 4242`,
+  renderOptions,
+  distancesM: distances,
+  tanks: assets,
+};
+writeFileSync(resolve(outDir, 'tank-assets.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(`[fleet-battle-views] wrote ${jobs.length} images for ${ids.length} tanks -> ${outDir}`);

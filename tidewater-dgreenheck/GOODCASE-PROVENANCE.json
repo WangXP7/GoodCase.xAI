@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/dgreenheck/tidewater",
+  "commit": "4811ba48d795197de5621985f404e765c0b7c0ef",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 429,
+  "bytes": 58821095
+}

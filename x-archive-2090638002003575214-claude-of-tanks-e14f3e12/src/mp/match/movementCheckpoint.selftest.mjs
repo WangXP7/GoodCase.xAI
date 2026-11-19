@@ -1,0 +1,203 @@
+import assert from 'node:assert/strict';
+import { Vector3 } from 'three';
+import { SIM_DT, applyShellKnock, createTankState, shellKnockMps, updateTank } from '../../sim/movement.ts';
+// The sim checkpoint is the layout's one codec (audit 2026-11-02); the wire names it.
+import { applyMovementPredictionState, captureMovementPredictionState } from '../../sim/movementPredictionState.ts';
+import {
+  MOVEMENT_CHECKPOINT_VALUES, MOVEMENT_CHECKPOINT_VERSION, applyMovementCheckpoint, captureMovementCheckpoint,
+} from './movementCheckpoint.ts';
+
+const SPEC = {
+  enginePowerHp: 1500, weightTons: 60, topSpeedKmh: 65, reverseSpeedKmh: 30, hullTraverseDegS: 42,
+  turretTraverseDegS: 40, gunPitchDegS: 25, gunElevationDeg: 20, gunDepressionDeg: 10, pivotStyle: 'neutral',
+  terrainResistance: { hard: 0.8, medium: 1, soft: 1.8 },
+  dims: { hullLengthM: 7.8, overallLengthM: 9.8, widthM: 3.7, heightM: 2.4 },
+  gun: { caliberMm: 120, baseAccuracy: 0.3, aimTimeS: 2, bloom: { move: 0.1, hullRot: 0.1, turret: 0.08, afterShot: 3 } },
+  armor: { boundingRadiusM: 4.8, turretPivot: [0, 1.5, 0], gunPivot: [0, 0.3, 0.2], gunBarrel: { lengthM: 5.3 } },
+};
+const height = (x, z) => 0.3 * Math.sin(z / 3) + 0.2 * Math.sin(x / 2.5);
+const FIELD = { getHeightAt: height, getHeightAtFast: height, getGroundType: () => 'hard' };
+
+function drive(ticks) {
+  const state = createTankState(SPEC, new Vector3(3, height(3, -4), -4), 0.4);
+  const entity = { spec: SPEC, state, combat: null, input: { throttle: 1, steer: 0.4, brake: false, aimLocked: false, aimPoint: new Vector3(80, 2, 60) } };
+  for (let n = 0; n < ticks; n++) updateTank(entity, FIELD, SIM_DT, null);
+  return state;
+}
+
+assert.equal(MOVEMENT_CHECKPOINT_VERSION, 9,
+  'bots lane (2026-10-02): the roof a hull rests on rides with the integrator; physics lane (2026-10-03): and its gravity tip, then the landing stroke and the dive, then the top track contact, then the side-to-side transfer, then the bump stops\' share of the dive; physics (268): then the body contact it rests on');
+assert.equal(MOVEMENT_CHECKPOINT_VALUES, 63, 'version 4 (48 values) + rebound, stroke, dive, dive rate + top contact + the held posture and its seated share (pitch, roll, their rates) + the stops\' share and its rate');
+
+// One codec: the wire's encoder and decoder are the sim's, so a layout change cannot reach one side only.
+assert.equal(captureMovementCheckpoint, captureMovementPredictionState, 'the wire capture is the sim codec');
+assert.equal(applyMovementCheckpoint, applyMovementPredictionState, 'the wire restore is the sim codec');
+
+const driven = drive(180);
+const ours = captureMovementCheckpoint(driven);
+const theirs = captureMovementPredictionState(driven);
+assert.ok(ours && theirs);
+assert.equal(ours.version, theirs.version);
+assert.equal(ours.flags, theirs.flags);
+assert.deepEqual(ours.values, theirs.values, 'the wire checkpoint is the authority layout value for value');
+assert.equal(ours.values.length, MOVEMENT_CHECKPOINT_VALUES);
+
+// Restoring onto a fresh state reproduces the driven integrator exactly (the fields the checkpoint owns).
+const restored = createTankState(SPEC, driven.pos, driven.yaw);
+assert.equal(applyMovementCheckpoint(restored, ours), true);
+const viaV1 = createTankState(SPEC, driven.pos, driven.yaw);
+assert.equal(applyMovementPredictionState(viaV1, theirs), true);
+assert.deepEqual(captureMovementCheckpoint(restored), ours, 'capture after apply is the identity');
+assert.deepEqual(captureMovementCheckpoint(viaV1), ours, 'v1 apply and v2 apply agree');
+for (const key of ['yawRate', '_spool', '_swayEst', '_perch', 'atGunLimit']) assert.equal(restored[key], driven[key], key);
+assert.deepEqual(restored._ride, driven._ride);
+assert.deepEqual(restored._spring, driven._spring);
+assert.deepEqual(restored._susp, driven._susp);
+assert.equal(restored._sup.rigid, driven._sup.rigid);
+assert.equal(restored._sup.cg, null, 'the geometry stays a local reference');
+
+// The wire carries f32: the round trip through Math.fround stays applicable and close.
+const rounded = { ...ours, values: ours.values.map((value) => Math.fround(value)) };
+const f32 = createTankState(SPEC, driven.pos, driven.yaw);
+assert.equal(applyMovementCheckpoint(f32, rounded), true);
+assert.ok(Math.abs(f32._ride.y - driven._ride.y) < 1e-4);
+
+// Version 5 appends its four values after the version-4 layout: a version-4 checkpoint (an older authority) still decodes,
+// as a hull with no landing stroke or dive in progress.
+const midStop = drive(150);
+midStop._susp.d = -0.02; midStop._susp.dv = 0.1; midStop._ride.rebound = 1.2; midStop._ride.stroke = 1;
+const v5 = captureMovementCheckpoint(midStop);
+assert.deepEqual(v5.values.slice(48, 52), [1.2, 1, -0.02, 0.1], 'the version-5 tail is rebound, stroke, dive, dive rate');
+const fromV4 = createTankState(SPEC, midStop.pos, midStop.yaw);
+fromV4._susp.d = 0.5; fromV4._ride.rebound = 3;
+assert.equal(applyMovementCheckpoint(fromV4, { version: 4, values: v5.values.slice(0, 48), flags: v5.flags }), true);
+assert.equal(fromV4._ride.y, midStop._ride.y, 'the version-4 prefix restores as before');
+assert.deepEqual([fromV4._ride.rebound, fromV4._ride.stroke, fromV4._susp.d, fromV4._susp.dv], [0, 0, 0, 0]);
+assert.equal(fromV4._sup.top, fromV4._sup.y, 'and its top contact at its seat');
+
+// Version 6 appends the top track contact after the version-5 layout: a version-5 checkpoint still decodes, its top
+// contact at its seat.
+midStop._sup.top = midStop._sup.y + 0.07;
+const v6 = captureMovementCheckpoint(midStop);
+assert.equal(v6.values[52], midStop._sup.top, 'the tail is the top contact');
+const fromV6 = createTankState(SPEC, midStop.pos, midStop.yaw);
+assert.equal(applyMovementCheckpoint(fromV6, v6), true);
+assert.equal(fromV6._sup.top, midStop._sup.top, 'the replay starts with the authority top contact');
+const fromV5 = createTankState(SPEC, midStop.pos, midStop.yaw);
+assert.equal(applyMovementCheckpoint(fromV5, { version: 5, values: v6.values.slice(0, 52), flags: v6.flags }), true);
+assert.deepEqual([fromV5._ride.rebound, fromV5._ride.stroke, fromV5._susp.d, fromV5._susp.dv], [1.2, 1, -0.02, 0.1], 'the version-5 tail restores');
+assert.equal(fromV5._sup.top, fromV5._sup.y, 'and its top contact at its seat');
+
+// Version 7 appends the posture held over the tracks on a grade and its share seated with them (_hold, _holdSeat: pitch,
+// roll and their rates) after the version-6 layout: a version-6 checkpoint still decodes, holding none.
+Object.assign(midStop._hold, { p: 0.019, r: -0.012, pv: 0.05, rv: -0.03 });
+Object.assign(midStop._holdSeat, { p: -0.004, r: 0.006, pv: 0.02, rv: -0.01 });
+const v7 = captureMovementCheckpoint(midStop);
+assert.deepEqual(v7.values.slice(53, 61), [0.019, -0.012, 0.05, -0.03, -0.004, 0.006, 0.02, -0.01],
+  'the tail is the held posture, its seated share and their rates');
+const fromV7 = createTankState(SPEC, midStop.pos, midStop.yaw);
+assert.equal(applyMovementCheckpoint(fromV7, v7), true);
+assert.deepEqual([fromV7._hold.p, fromV7._hold.r, fromV7._hold.pv, fromV7._hold.rv], [0.019, -0.012, 0.05, -0.03],
+  'the replay starts holding the authority posture');
+assert.deepEqual([fromV7._holdSeat.p, fromV7._holdSeat.r, fromV7._holdSeat.pv, fromV7._holdSeat.rv], [-0.004, 0.006, 0.02, -0.01],
+  'and its seated share');
+const fromV6Only = createTankState(SPEC, midStop.pos, midStop.yaw);
+Object.assign(fromV6Only._hold, { p: 0.5, r: 0.5, pv: 1, rv: 1 });
+Object.assign(fromV6Only._holdSeat, { p: 0.5, r: 0.5, pv: 1, rv: 1 });
+assert.equal(applyMovementCheckpoint(fromV6Only, { version: 6, values: v7.values.slice(0, 53), flags: v7.flags }), true);
+assert.equal(fromV6Only._sup.top, midStop._sup.top, 'the version-6 tail restores');
+assert.deepEqual([fromV6Only._hold.p, fromV6Only._hold.r, fromV6Only._hold.pv, fromV6Only._hold.rv,
+  fromV6Only._holdSeat.p, fromV6Only._holdSeat.r, fromV6Only._holdSeat.pv, fromV6Only._holdSeat.rv], [0, 0, 0, 0, 0, 0, 0, 0],
+  'and holds no posture');
+
+// Version 8 appends the share of the dive the bump stops took (_susp.c, _susp.cv) after the version-7 layout: a version-7
+// checkpoint still decodes, with nothing in the stops.
+Object.assign(midStop._susp, { d: 0.03, dv: 0.2, c: 0.011, cv: -0.15 });
+const v8 = captureMovementCheckpoint(midStop);
+assert.deepEqual(v8.values.slice(61, 63), [0.011, -0.15], 'the tail is the stops\' share and its rate');
+assert.deepEqual(v8.values, captureMovementPredictionState(midStop).values, 'both encoders carry it');
+const fromV8 = createTankState(SPEC, midStop.pos, midStop.yaw);
+assert.equal(applyMovementCheckpoint(fromV8, v8), true);
+assert.deepEqual([fromV8._susp.d, fromV8._susp.dv, fromV8._susp.c, fromV8._susp.cv], [0.03, 0.2, 0.011, -0.15],
+  'the replay splits the dive from the stops\' share as the authority does');
+const fromV7Only = createTankState(SPEC, midStop.pos, midStop.yaw);
+Object.assign(fromV7Only._susp, { c: 0.5, cv: 1 });
+assert.equal(applyMovementCheckpoint(fromV7Only, { version: 7, values: v8.values.slice(0, 61), flags: v8.flags }), true);
+assert.deepEqual([fromV7Only._hold.p, fromV7Only._holdSeat.r], [0.019, 0.006], 'the version-7 tail restores');
+assert.deepEqual([fromV7Only._susp.c, fromV7Only._susp.cv], [0, 0], 'and the stops hold nothing');
+const viaPrediction = createTankState(SPEC, midStop.pos, midStop.yaw);
+Object.assign(viaPrediction._susp, { c: 0.5, cv: 1 });
+assert.equal(applyMovementPredictionState(viaPrediction, { version: 7, values: v8.values.slice(0, 61), flags: v8.flags }), true);
+assert.deepEqual([viaPrediction._susp.c, viaPrediction._susp.cv], [0, 0], 'the prediction decoder reads a version-7 checkpoint alike');
+
+// Impact shoves (physics stream F4, 2026-10-13): the client's predictor never applies a hit. The shove the authority
+// applies, less what its tracks' grip absorbs (movement.ts applyShellKnock), lives in checkpointed fields only (the
+// recoil translation and the rock), so a replay restored from the checkpoint after a hit steps exactly as the authority.
+{
+  const step = (state, ticks) => {
+    const entity = { spec: SPEC, state, combat: null, input: { throttle: 0.6, steer: -0.3, brake: false, aimLocked: false, aimPoint: new Vector3(80, 2, 60) } };
+    for (let n = 0; n < ticks; n++) updateTank(entity, FIELD, SIM_DT, null);
+  };
+  for (const [calibre, label] of [[12.7, 'a 12.7 mm round'], [120, 'a 120 mm shell']]) {
+    const authority = drive(150), client = drive(150);
+    const recoil = [authority._spring.recoilVX, authority._spring.recoilVZ];
+    const knock = shellKnockMps(calibre, 900, SPEC.weightTons);
+    assert.ok(authority.grounded !== false && knock < 2.5, `${label}: a grounded hull, a shove under the ride's lift`);
+    applyShellKnock(authority, 0.6, 0, 0.8, knock, 1);
+    const moved = authority._spring.recoilVX !== recoil[0] || authority._spring.recoilVZ !== recoil[1];
+    assert.equal(moved, calibre > 20, `${label}: ${calibre > 20 ? 'shoves the hull past its grip' : 'is held by the tracks\' grip'}`);
+    assert.equal(applyMovementCheckpoint(client, captureMovementCheckpoint(authority)), true);
+    step(authority, 120); step(client, 120);
+    for (const key of ['x', 'y', 'z']) assert.equal(client.pos[key], authority.pos[key], `${label}: the replay's ${key} is the authority's`);
+    assert.equal(client.yaw, authority.yaw, `${label}: and its heading`);
+    assert.deepEqual(captureMovementCheckpoint(client), captureMovementCheckpoint(authority), `${label}: and its integrator`);
+  }
+}
+
+// Rejections leave the state untouched.
+const untouched = createTankState(SPEC, new Vector3(), 0);
+const before = JSON.stringify(captureMovementCheckpoint(untouched));
+assert.equal(applyMovementCheckpoint(untouched, { version: 3, values: ours.values.slice(0, 46), flags: ours.flags }), false);
+assert.equal(applyMovementCheckpoint(untouched, { version: 4, values: ours.values, flags: ours.flags }), false, 'a version-4 tag on 63 values');
+assert.equal(applyMovementCheckpoint(untouched, { version: 5, values: ours.values, flags: ours.flags }), false, 'a version-5 tag on 63 values');
+assert.equal(applyMovementCheckpoint(untouched, { version: 6, values: ours.values, flags: ours.flags }), false, 'a version-6 tag on 63 values');
+assert.equal(applyMovementCheckpoint(untouched, { version: 7, values: ours.values, flags: ours.flags }), false, 'a version-7 tag on 63 values');
+assert.equal(applyMovementCheckpoint(untouched, { version: 10, values: ours.values, flags: ours.flags }), false);
+assert.equal(applyMovementCheckpoint(untouched, { version: 9, values: ours.values.slice(1), flags: ours.flags }), false);
+assert.equal(applyMovementCheckpoint(untouched, { version: 9, values: ours.values.map(() => 2e6), flags: ours.flags }), false);
+assert.equal(applyMovementCheckpoint(untouched, { version: 9, values: ours.values, flags: 8192 }), false);
+assert.equal(applyMovementCheckpoint(untouched, { version: 8, values: ours.values, flags: 8192 }), false);
+assert.equal(JSON.stringify(captureMovementCheckpoint(untouched)), before);
+
+// Version 9 (physics, 268): the ends at which a hull rested on a body contact (flag bits 11 and 12) ride both encoders and
+// restore; a version-8 checkpoint (the same values) decodes as resting on none, whatever those bits (a version-8 encoder
+// never sets them)
+assert.equal(ours.flags & 6144, 0, 'a hull driving on open ground rests on no body contact');
+const onBody = drive(60);
+for (const ends of [1, 2, 3]) {
+  onBody._body.bodyRest = ends;
+  const bodyCheckpoint = captureMovementCheckpoint(onBody);
+  assert.equal(bodyCheckpoint.flags >> 11 & 3, ends, 'a hull resting on a body contact flags its ends');
+  assert.equal(captureMovementPredictionState(onBody).flags, bodyCheckpoint.flags, 'both encoders carry the ends');
+  const bodyRestored = createTankState(SPEC, onBody.pos, onBody.yaw);
+  assert.equal(applyMovementCheckpoint(bodyRestored, bodyCheckpoint), true);
+  assert.equal(bodyRestored._body.bodyRest, ends, 'the ends restore');
+  assert.equal(applyMovementCheckpoint(bodyRestored, { ...bodyCheckpoint, version: 8 }), true, 'a version-8 checkpoint still decodes');
+  assert.equal(bodyRestored._body.bodyRest, 0, 'a version-8 checkpoint rests on no body contact');
+  assert.deepEqual(captureMovementCheckpoint(bodyRestored).values, bodyCheckpoint.values, 'a version-8 checkpoint is version 9\'s values');
+}
+
+// Version 3: a hull resting on another hull's roof carries that roof; a free hull carries none (flag bit 10 clear).
+assert.equal(ours.flags & 1024, 0, 'a hull on the ground carries no roof');
+const resting = drive(60);
+resting._body.restSupportY = resting.pos.y + 0.4;
+const roof = captureMovementCheckpoint(resting);
+assert.equal(roof.flags & 1024, 1024, 'a seated hull flags its roof');
+assert.deepEqual(roof.values, captureMovementPredictionState(resting).values, 'both encoders carry the roof');
+const seated = createTankState(SPEC, resting.pos, resting.yaw);
+assert.equal(applyMovementCheckpoint(seated, roof), true);
+assert.equal(seated._body.restSupportY, resting._body.restSupportY, 'the replay starts on the roof');
+assert.equal(applyMovementCheckpoint(seated, ours), true);
+assert.ok(Number.isNaN(seated._body.restSupportY), 'a checkpoint without a roof clears it');
+
+console.log('mp movement checkpoint: 63-value version-9 layout identical to the authority encoder, versions 8, 7, 6, 5 and 4 still decode, the roof and the body contact a hull rests on carried and cleared, a hit\'s shove replayed exactly from the checkpoint, identity after apply, f32 tolerant, typed rejections pass');

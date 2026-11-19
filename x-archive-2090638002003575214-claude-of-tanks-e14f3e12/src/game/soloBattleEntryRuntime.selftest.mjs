@@ -1,0 +1,346 @@
+import assert from 'node:assert/strict';
+import { MAP_IDS } from '../world/maps/catalog.ts';
+import { readFile } from 'node:fs/promises';
+
+import { createBattleEntryLifecycle } from './battleEntryLifecycle.ts';
+import { createSoloBattleEntryRuntime } from './soloBattleEntryRuntime.ts';
+import { createSoloBattleLoadingAccess } from './soloBattleLoadingAccess.ts';
+import { createLazyAudio } from '../audio/lazyAudio.ts';
+
+const order = [];
+let shouldFail = true;
+let noticeRetry = null;
+let loadingArgs = null;
+const lifecycle = createBattleEntryLifecycle({
+  nextFrame: async () => {},
+  now: () => 0,
+});
+const runtime = createSoloBattleEntryRuntime({
+  lifecycle,
+  loading: {
+    async begin(...args) {
+      loadingArgs = args;
+      order.push('load');
+      if (shouldFail) throw new Error('cold chunk failed');
+    },
+  },
+  battleLoad: {
+    showPending: () => order.push('cover'),
+    hide: async () => { order.push('hide'); },
+  },
+  audio: { loadingOn: (active) => order.push(`loading:${active}`) },
+  enterGarage: () => order.push('garage'),
+  nextFrame: async () => { order.push('frame'); },
+  isVisibleSpecId: (id) => id === 'm1a1_abrams_hc',
+  getSelectedSpecId: () => 'leo2_improved',
+  getSelectedMapId: () => 'desert',
+  reportError: () => order.push('error'),
+  // entry resilience (2026-09-25): the player sees the reason after the Garage is painted and the loader faded
+  presentFailure: async (error, retry) => { order.push(`notice:${error.message}`); noticeRetry = retry; },
+  onFailure: (error) => order.push(`beacon:${error.message}`),
+});
+
+await runtime.beginSelected({ specId: 'invalid', randomRoster: false, gameMode: 'horde' });
+assert.deepEqual(loadingArgs, [
+  'leo2_improved', 'desert', { randomRoster: false, gameMode: 'horde' },
+]);
+assert.deepEqual(order, ['cover', 'load', 'error', 'beacon:cold chunk failed', 'loading:false', 'garage', 'frame', 'hide',
+  'notice:cold chunk failed'],
+  'failure restores and paints the Garage before the opaque loader fades, then shows the reason');
+assert.equal(lifecycle.pending, false);
+assert.equal(lifecycle.renderingCovered, false);
+
+// loading states (2026-10-27): the notice's one action runs the same entry again, the failed tank, field and rules
+assert.equal(typeof noticeRetry, 'function', 'the failure notice receives a retry');
+order.length = 0;
+shouldFail = false;
+noticeRetry();
+await new Promise((done) => setTimeout(done, 0));
+assert.deepEqual(loadingArgs, ['leo2_improved', 'desert', { randomRoster: false, gameMode: 'horde' }],
+  'the retry is the failed entry, not whatever the Garage selects now');
+assert.deepEqual(order, ['cover', 'load'], 'the retry covers and loads like the first press');
+
+order.length = 0;
+await runtime.beginSelected({ specId: 'm1a1_abrams_hc', mapId: 'winter' });
+assert.deepEqual(loadingArgs, [
+  'm1a1_abrams_hc', 'winter', { randomRoster: true, gameMode: 'standard' },
+]);
+assert.deepEqual(order, ['cover', 'load']);
+assert.equal(lifecycle.pending, false);
+assert.equal(lifecycle.renderingCovered, false);
+
+for (const mapId of MAP_IDS) {
+  await runtime.beginSelected({ specId: 'm1a1_abrams_hc', mapId, gameMode: 'mars' });
+  assert.deepEqual(loadingArgs, ['m1a1_abrams_hc', mapId, { randomRoster: true, gameMode: 'mars' }],
+    `${mapId}: Mars solo entry retains the selected battlefield and rules`);
+}
+
+assert.throws(() => createSoloBattleEntryRuntime({}), /requires every recovery port/);
+
+{
+  // A notice that cannot load (or throws) is reported and never masks the recovered Garage.
+  const events = [];
+  const noisy = createSoloBattleEntryRuntime({
+    lifecycle: createBattleEntryLifecycle({ nextFrame: async () => {}, now: () => 0 }),
+    loading: { async begin() { throw new Error('world build failed'); } },
+    battleLoad: { showPending: () => events.push('cover'), hide: async () => { events.push('hide'); } },
+    audio: { loadingOn: () => {} },
+    enterGarage: () => events.push('garage'),
+    nextFrame: async () => {},
+    isVisibleSpecId: () => true, getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'desert',
+    reportError: (message) => events.push(`report:${message}`),
+    presentFailure: () => { throw new Error('modal unavailable'); },
+    onFailure: () => { throw new Error('beacon unavailable'); },
+  });
+  await noisy.beginSelected();
+  assert.deepEqual(events, ['cover', 'report:[battle] entry failed', 'garage', 'hide', 'report:[battle] entry failure notice unavailable'],
+    'a throwing beacon or notice is only reported; the Garage recovery already completed');
+  assert.throws(() => createSoloBattleEntryRuntime({
+    lifecycle: createBattleEntryLifecycle({ nextFrame: async () => {} }), loading: { begin() {} },
+    battleLoad: { showPending() {} }, audio: { loadingOn() {} }, enterGarage() {}, nextFrame: async () => {},
+    isVisibleSpecId: () => true, getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'desert', presentFailure: 'nope',
+  }), /requires every recovery port/, 'a non-callable notice port is refused');
+}
+
+{
+  // (2026-11-02 audit F3 review) The recovery's own Garage return fails once: the cover still comes down (it stayed up
+  // for good over a frozen 'failed' return, with no Esc and no notice), and the return notice offers the return again.
+  const events = [];
+  let garageAttempts = 0;
+  let returnRetry = null;
+  const entryLifecycle = createBattleEntryLifecycle({ nextFrame: async () => {}, now: () => 0 });
+  const recovering = createSoloBattleEntryRuntime({
+    lifecycle: entryLifecycle,
+    loading: { async begin() { throw new Error('world build failed'); } },
+    battleLoad: { showPending: () => events.push('cover'), hide: async () => { events.push('hide'); } },
+    audio: { loadingOn: () => {} },
+    enterGarage: async () => {
+      garageAttempts += 1;
+      events.push(`garage:${garageAttempts}`);
+      if (garageAttempts === 1) throw new Error('restore failed');
+    },
+    nextFrame: async () => {},
+    isVisibleSpecId: () => true, getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'desert',
+    reportError: (message) => events.push(`report:${message}`),
+    presentFailure: () => events.push('entry-notice'),
+    presentReturnFailure: (error, retry) => { events.push(`return-notice:${error.message}`); returnRetry = retry; },
+  });
+  await recovering.beginSelected();
+  assert.deepEqual(events, ['cover', 'report:[battle] entry failed', 'garage:1',
+    'report:[battle] entry recovery return failed', 'hide', 'return-notice:restore failed'],
+  'a failed recovery return still releases the cover, then says so with its retry (not the entry notice)');
+  assert.equal(entryLifecycle.renderingCovered, false, 'the entry no longer covers rendering');
+  assert.equal(entryLifecycle.pending, false, 'and the latch is free');
+  assert.equal(typeof returnRetry, 'function');
+  returnRetry();
+  for (let index = 0; index < 6; index += 1) await Promise.resolve();
+  assert.equal(garageAttempts, 2, 'the notice\'s retry runs the return again');
+  assert.deepEqual(events.slice(-1), ['garage:2'], 'a retry that succeeds opens nothing more');
+}
+
+for (const outcome of ['success', 'import-failure', 'paint-failure']) {
+  const rejectImport = outcome !== 'success';
+  const events = [];
+  let resolveModule, rejectModule, releaseGarage, releasePaint, rejectPaint, releaseHide;
+  let imports = 0, contexts = 0, mixerLoads = 0, begins = 0;
+  let visible = false;
+  const entryLifecycle = createBattleEntryLifecycle({ nextFrame: async () => {} });
+  const audio = createLazyAudio({
+    hasStickyActivation: () => true,
+    createContext: () => { contexts++; return null; },
+    loadMixer: async () => { mixerLoads++; return null; },
+  });
+  const screen = {
+    showPending() { visible = true; events.push('pending:show'); },
+    show() { assert.equal(visible, true); events.push('loader:enrich'); },
+    async hide() {
+      events.push('cover:hide');
+      await new Promise(resolve => { releaseHide = resolve; });
+      visible = false;
+    },
+  };
+  const access = createSoloBattleLoadingAccess({
+    options: () => ({}),
+    load: () => {
+      imports++;
+      events.push('import');
+      return new Promise((resolve, reject) => { resolveModule = resolve; rejectModule = reject; });
+    },
+  });
+  const entry = createSoloBattleEntryRuntime({
+    lifecycle: entryLifecycle, loading: access, battleLoad: screen, audio,
+    enterGarage: async () => {
+      events.push('garage');
+      await new Promise(resolve => { releaseGarage = resolve; });
+    },
+    nextFrame: async () => {
+      assert.equal(entryLifecycle.renderingCovered, false, 'restored Garage can render behind its DOM cover');
+      events.push('garage:paint');
+      await new Promise((resolve, reject) => { releasePaint = resolve; rejectPaint = reject; });
+    },
+    isVisibleSpecId: () => true,
+    getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'random',
+    reportError: () => events.push('error'),
+  });
+  const pending = entry.beginSelected();
+  assert.equal(visible, true, 'accepted cold entry owns its visible cover before waiting for its loading module');
+  assert.equal(entryLifecycle.pending, true);
+  assert.equal(entryLifecycle.renderingCovered, true);
+  assert.deepEqual(events, ['pending:show'], 'cover is synchronous, before even the importer microtask');
+  await Promise.resolve();
+  assert.equal(imports, 1);
+  assert.deepEqual([contexts, mixerLoads, begins], [0, 0, 0], 'pending import does not prepare audio or start loading work');
+  await entry.beginSelected({ mapId: 'winter' });
+  assert.deepEqual(events, ['pending:show', 'import'], 'a second click cannot restage the active cover or launch another entry');
+
+  if (rejectImport) {
+    rejectModule(new Error('held cold import failed'));
+    for (let turn = 0; turn < 8 && !releaseGarage; turn++) await Promise.resolve();
+    assert.equal(typeof releaseGarage, 'function');
+    assert.equal(visible, true, 'failed import stays covered through asynchronous Garage restoration');
+    assert.equal(entryLifecycle.renderingCovered, true);
+    releaseGarage();
+    for (let turn = 0; turn < 8 && !releasePaint; turn++) await Promise.resolve();
+    assert.equal(typeof releasePaint, 'function');
+    assert.equal(visible, true, 'recovered Garage must receive its paint opportunity before cover exit');
+    assert.equal(releaseHide, undefined);
+    await entry.beginSelected();
+    assert.equal(events.filter(value => value === 'pending:show').length, 1, 'recovery retains the same exclusive entry owner');
+    if (outcome === 'paint-failure') {
+      const rejection = assert.rejects(pending, /recovered frame unavailable/);
+      rejectPaint(new Error('recovered frame unavailable'));
+      await rejection;
+      assert.equal(visible, true, 'failed recovery paint cannot expose an unpainted Garage');
+      assert.equal(releaseHide, undefined);
+      assert.equal(entryLifecycle.pending, false);
+      assert.equal(entryLifecycle.renderingCovered, false);
+      assert.deepEqual([contexts, mixerLoads, begins], [0, 0, 0]);
+      continue;
+    }
+    releasePaint();
+    for (let turn = 0; turn < 8 && !releaseHide; turn++) await Promise.resolve();
+    assert.equal(typeof releaseHide, 'function');
+    assert.equal(entryLifecycle.pending, true, 'entry ownership lasts through cover exit');
+    releaseHide();
+    await pending;
+    assert.equal(visible, false);
+    assert.deepEqual([contexts, mixerLoads, begins], [0, 0, 0], 'a rejected cold import never initializes sound');
+  } else {
+    resolveModule({ createSoloBattleLoadingRuntime: () => ({
+      async begin() {
+        begins++;
+        screen.show();
+        await audio.startLoadingAfterPaint(async () => { events.push('loader:paint'); });
+      },
+    }) });
+    await pending;
+    assert.equal(visible, true, 'the enriched loader retains the same cover without an intermediate hide');
+    assert.equal(events.includes('cover:hide'), false);
+    assert.ok(contexts > 0 && mixerLoads > 0, 'normal gesture-aware audio starts only after loading handoff');
+    assert.equal(begins, 1);
+  }
+  assert.equal(entryLifecycle.pending, false);
+  assert.equal(entryLifecycle.renderingCovered, false);
+}
+
+const mainSource = await readFile(new URL('../main.ts', import.meta.url), 'utf8');
+const soloComposition = mainSource.slice(mainSource.indexOf('function beginLocalBattle('), mainSource.indexOf('async function debugStartBattle('));
+assert.match(soloComposition, /mapId: operation\?\.mapId \?\? mapId,/,
+  'free Mars sorties preserve the selected map; campaigns retain their authored override');
+const entryComposition = mainSource.slice(mainSource.indexOf('const soloBattleEntry = createSoloBattleEntryRuntime({'));
+assert.match(entryComposition.slice(0, entryComposition.indexOf('\n});')),
+  /nextFrame: nextPaintFrame,/,
+  'browser recovery must cross the real post-rAF task boundary before fading its cover');
+assert.match(entryComposition.slice(0, entryComposition.indexOf('\n});')),
+  /presentFailure: \(error, retry\) => \{[\s\S]{0,160}return import\('\.\/ui\/garageReturnFailure\.ts'\)/,
+  'the solo failure notice is demand-loaded from the same failure-only owner as the return notice');
+assert.match(entryComposition.slice(0, entryComposition.indexOf('\n});')),
+  /onFailure: \(error\) => entryTelemetry\.send\(\{[\s\S]{0,160}kind: 'entry_result'/,
+  'a failed solo entry is beaconed as an entry_result');
+
+// 2026-10-13: the pending cover names the battlefield before the loading owner's import (Slow 4G: ~1.8 s); a failing
+// description never holds the cover back
+{
+  const covers = [];
+  const pendingLifecycle = createBattleEntryLifecycle({ nextFrame: async () => {} });
+  const make = (describePendingMap) => createSoloBattleEntryRuntime({
+    lifecycle: pendingLifecycle,
+    loading: { async begin(...args) { covers.push(['load', args[1]]); } },
+    battleLoad: { showPending: (map) => covers.push(['cover', map]), hide: async () => {} },
+    audio: { loadingOn() {} }, enterGarage() {}, nextFrame: async () => {},
+    isVisibleSpecId: () => true, getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'random',
+    ...(describePendingMap ? { describePendingMap } : {}),
+  });
+  await make((specId, mapId) => {
+    assert.equal(specId, 'm1a1_abrams_hc'); assert.equal(mapId, 'random');
+    return { mapId: 'railyard', mapName: 'Cinder Junction', thumb: '/maps/railyard.webp' };
+  }).beginSelected({});
+  assert.deepEqual(covers, [['cover', { mapId: 'railyard', mapName: 'Cinder Junction', thumb: '/maps/railyard.webp', modeId: 'standard' }],
+    ['load', 'random']], 'the cover is named before the loading owner runs, which still receives the request itself');
+  covers.length = 0;
+  await make(() => { throw new Error('no names yet'); }).beginSelected({ mapId: 'winter' });
+  assert.deepEqual(covers, [['cover', { mapId: 'winter', modeId: 'standard' }], ['load', 'winter']],
+    'a failing description falls back to the map id, the chosen mode with it');
+  covers.length = 0;
+  await make(null).beginSelected({ mapId: 'winter' });
+  assert.deepEqual(covers, [['cover', { mapId: 'winter', modeId: 'standard' }], ['load', 'winter']]);
+  // (the chosen mode names the cover's chip from its first frame: a campaign operation's with it, the 262 check)
+  covers.length = 0;
+  await make(() => null).beginSelected({ mapId: 'alpine', gameMode: 'frontline_assault', campaignOperationId: 'iron_ridge' });
+  assert.deepEqual(covers[0], ['cover', { mapId: 'alpine', modeId: 'frontline_assault', campaign: true, campaignOperationId: 'iron_ridge' }]);
+}
+// (round 2, app-flow review 2) The scene's edge decides a start before its announcement, its intent and its cover, at
+// the press and again after a return wait (canTakeScene; main: the app lifecycle's edge table). A start from the Studio
+// (the __DEBUG.beginSoloBattle hook) covered and loaded its world over the Studio, and only the solo start refused
+// studio -> battle after that load, whose recovery then ran a Garage return under the open Studio; a start queued behind
+// a return resumed with no check, so a Studio opened meanwhile was covered and loaded over as well.
+{
+  let scene = 'studio';
+  const events = [];
+  const make = (whenGarageSettled = () => null) => {
+    const latch = createBattleEntryLifecycle({ nextFrame: async () => {}, now: () => 0 });
+    const entry = createSoloBattleEntryRuntime({
+      lifecycle: latch,
+      loading: { begin: async () => { events.push(`load:${scene}`); } },
+      battleLoad: { showPending: () => events.push(`cover:${scene}`), hide: async () => {} },
+      audio: { loadingOn() {} }, enterGarage: () => events.push('garage'), nextFrame: async () => {},
+      isVisibleSpecId: () => true, getSelectedSpecId: () => 'm1a1_abrams_hc', getSelectedMapId: () => 'desert',
+      reportError: () => events.push('error'),
+      announce: () => events.push(`announce:${scene}`), recordIntent: () => events.push(`intent:${scene}`),
+      whenGarageSettled, canTakeScene: () => scene !== 'studio',
+    });
+    return { entry, latch };
+  };
+  const fromStudio = make();
+  await fromStudio.entry.beginSelected({});
+  await fromStudio.entry.begin('m1a1_abrams_hc', 'desert');
+  assert.deepEqual(events, [], 'a start over the Studio is refused before anything announces, covers or loads');
+  assert.equal(fromStudio.latch.entrySerial, 0, 'and takes no entry latch');
+  scene = 'garage';
+  let settle;
+  const returning = new Promise((resolve) => { settle = resolve; });
+  const queued = make(() => returning);
+  const pending = queued.entry.beginSelected({});
+  await Promise.resolve();
+  scene = 'studio'; // something opened the Studio while the start waited on the return
+  settle();
+  await pending;
+  assert.deepEqual(events, [], 'a start that waited is refused once the scene it waited for is not the Garage\'s to hand over');
+  scene = 'garage';
+  await make().entry.beginSelected({});
+  assert.deepEqual(events, ['announce:garage', 'intent:garage', 'cover:garage', 'load:garage'], 'from the Garage the start runs');
+}
+const pendingComposition = await readFile(new URL('../main.ts', import.meta.url), 'utf8');
+assert.match(pendingComposition, /describePendingMap: \(specId: string, mapId: string \| null, options\?: SoloBattleLoadingStartOptions\) => \{\n    const resolved = battleIntent\.peekMap\(specId, mapId \|\| worldRuntime\.pendingMapId\);/,
+  'the composition names the map the intent will consume, from the same pending map the loading owner falls back to');
+// (2026-10-26, the owner: "fix team lists in loading state") the cover lists both planned teams from its first frame
+assert.match(pendingComposition, /describePendingMap:[\s\S]{0,400}plannedCardTeams\(specId, \{/, 'the pending cover plans the battle\'s teams');
+
+// (improve-271 plan 034) the solo countdown opens the Frontline brief once per sortie (its show runs every count frame):
+// latched in the countdown's show, the latch reset when the count rolls out and when the Garage takes the screen
+assert.match(pendingComposition, /if \(game\.gameMode === 'frontline_assault' && !briefShownForCountdown\) \{\s*briefShownForCountdown = true;\s*if \(!missionBrief\.isShowing\(\)\) missionBrief\.show\(/,
+  'the countdown opens the brief only when the sortie has not shown it');
+assert.match(pendingComposition, /bus\.on\('battle:rollout', \(\) => \{ briefShownForCountdown = false; \}\);/, 'the latch resets when the count rolls out');
+assert.match(pendingComposition, /missionBrief\.hide\(\);\s*briefShownForCountdown = false;/, 'and when the Garage takes the screen');
+
+console.log('soloBattleEntryRuntime.selftest: selection, the named pending cover and covered failure recovery pass');

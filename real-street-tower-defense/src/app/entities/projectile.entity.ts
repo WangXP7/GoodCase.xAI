@@ -1,0 +1,425 @@
+import { GameObject } from '../core/game-object';
+import { ComponentType } from '../core/component';
+import {
+  TransformComponent,
+  CombatComponent,
+  MovementComponent,
+  RenderComponent,
+} from '../game-components';
+import { GeoPosition } from '../models/game.types';
+import {
+  ProjectileTypeId,
+  getProjectileType,
+  ProjectileTypeConfig,
+} from '../configs/projectile-types.config';
+import { TowerTypeId } from '../configs/tower-types.config';
+import { Enemy } from './enemy.entity';
+import {
+  geoDistanceFast,
+  geoDistanceFastSq,
+  METERS_PER_DEGREE_LAT,
+  DEG_TO_RAD,
+} from '../utils/geo-utils';
+import { getEnemyAimOffsetY } from '../utils/enemy-aim.util';
+import { DetMath } from '../utils/det-math';
+
+/**
+ * Projectile entity - combines Transform, Combat, Movement, and Render components
+ *
+ * Flight path is calculated based on start height and target enemy position.
+ * The projectile maintains its own flight height throughout its trajectory.
+ */
+export class Projectile extends GameObject {
+  readonly typeConfig: ProjectileTypeConfig;
+  /**
+   * The enemy it flies at, null for a free shot (a manned tower's miss,
+   * TowerCombatService.updateMannedTower): that one flies to `aimPoint`,
+   * hits nothing and is gone there (ProjectileManager.update).
+   */
+  readonly targetEnemy: Enemy | null;
+  readonly sourceTowerId: string;
+
+  private _transform!: TransformComponent;
+  private _combat!: CombatComponent;
+  private _movement!: MovementComponent;
+  private _render!: RenderComponent;
+
+  // Flight path properties
+  private _startHeight: number;
+  private _flightHeight: number;
+  private _totalDistance = 0;
+  private _traveledDistance = 0;
+
+  // Distance moved during the most recent updateTowardsTarget()
+  private _distanceThisFrame = 0;
+
+  // Homing projectiles (rockets) continuously update their direction
+  private _isHoming = false;
+
+  // Frame counter used to throttle the homing-recalc / arc-tangent recalc.
+  // Both are smooth-changing values; reusing the last computed direction for
+  // a few frames is imperceptible and saves the trig/sqrt cost.
+  private _directionRecalcMs = 0;
+
+  // Target lost tracking - projectile continues to last known position
+  private _targetLost = false;
+  private _lastTargetPosition: GeoPosition | null = null;
+  private _lastTargetTerrainHeight = 0;
+
+  /**
+   * A fixed point the shot flies to instead of the target's position, with
+   * its geo height: the tower's aim point on a body along the route (the
+   * ooze, BodyAim), or where a free shot ends. The hit still counts on
+   * `targetEnemy`. Null for a shot at any other enemy.
+   */
+  readonly aimPoint: Readonly<GeoPosition> | null;
+
+  constructor(
+    startPosition: GeoPosition,
+    targetEnemy: Enemy | null,
+    typeId: ProjectileTypeId,
+    damage: number,
+    startHeight: number,
+    /** Tower that fired the shot, or HERO_SOURCE_ID for the hero's */
+    sourceTowerId: string,
+    /**
+     * Tower type that fired the shot, null for a shot no tower fired (the
+     * hero's). Splash reads its air/ground targeting from it.
+     */
+    public readonly sourceTowerType: TowerTypeId | null,
+    public readonly damageType: import('../configs/combat/combat.types').DamageType = 'physical',
+    aimPoint?: GeoPosition,
+  ) {
+    super('projectile');
+    if (!targetEnemy && !aimPoint) throw new Error('A free shot needs an aim point');
+    this.typeConfig = getProjectileType(typeId);
+    this.targetEnemy = targetEnemy;
+    this.sourceTowerId = sourceTowerId;
+    this.aimPoint = aimPoint ? { lat: aimPoint.lat, lon: aimPoint.lon, height: aimPoint.height ?? 0 } : null;
+    this._startHeight = startHeight;
+    this._flightHeight = startHeight;
+
+    // Add components
+    this._transform = this.addComponent(
+      new TransformComponent(this),
+      ComponentType.TRANSFORM
+    );
+    this._combat = this.addComponent(
+      new CombatComponent(this, {
+        damage,
+        range: 0,
+        fireRate: 0,
+      }),
+      ComponentType.COMBAT
+    );
+    this._movement = this.addComponent(
+      new MovementComponent(this),
+      ComponentType.MOVEMENT
+    );
+    this._render = this.addComponent(
+      new RenderComponent(this),
+      ComponentType.RENDER
+    );
+
+    this._transform.setPosition(startPosition.lat, startPosition.lon, startHeight);
+    this._movement.speedMps = this.typeConfig.speed;
+
+    // Calculate total distance to target for progress tracking (fast approx, <200m)
+    this._totalDistance = geoDistanceFast(startPosition, this.flightTarget());
+
+    // Calculate initial direction vector
+    this._direction = this.calculateDirectionVector(startPosition, startHeight);
+
+    // Rockets are homing projectiles - they continuously update their direction
+    this._isHoming = this.typeConfig.visualType === 'rocket';
+  }
+
+  /**
+   * Calculate normalized direction vector from start to target
+   * Uses geo coordinates converted to local offsets
+   */
+  private calculateDirectionVector(
+    startPos: GeoPosition,
+    startHeight: number
+  ): { dx: number; dy: number; dz: number } {
+    const targetPos = this.flightTarget();
+    const targetHeight = this.getTargetHeight(); // Includes heightOffset for air units
+
+    // Calculate horizontal deltas (in geo coords, convert to local direction)
+    // +lon = East = -X in local, +lat = North = +Z in local
+    const dLon = targetPos.lon - startPos.lon;
+    const dLat = targetPos.lat - startPos.lat;
+
+    // Local deltas in meters, the same units as dy. A degree of longitude is
+    // cos(lat) shorter than a degree of latitude: scaling both by the same
+    // factor skewed the heading east/west (about 13° off at London's latitude).
+    const dx = -dLon * METERS_PER_DEGREE_LAT * DetMath.cos(startPos.lat * DEG_TO_RAD); // -X = East
+    const dz = dLat * METERS_PER_DEGREE_LAT; // +Z = North
+    const dy = targetHeight - startHeight; // Vertical difference
+
+    // Normalize
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (length < 0.001) {
+      return { dx: 0, dy: 0, dz: 1 }; // Default: forward
+    }
+
+    return {
+      dx: dx / length,
+      dy: dy / length,
+      dz: dz / length,
+    };
+  }
+
+  get transform(): TransformComponent {
+    return this._transform;
+  }
+  get combat(): CombatComponent {
+    return this._combat;
+  }
+  get movement(): MovementComponent {
+    return this._movement;
+  }
+  get render(): RenderComponent {
+    return this._render;
+  }
+
+  get position(): GeoPosition {
+    return this.transform.position;
+  }
+  get damage(): number {
+    return this.combat.damage;
+  }
+
+  /**
+   * Get current flight height (interpolated along trajectory)
+   */
+  get flightHeight(): number {
+    return this._flightHeight;
+  }
+
+  /**
+   * Get flight progress (0 = start, 1 = target)
+   */
+  get flightProgress(): number {
+    return this._totalDistance > 0 ? this._traveledDistance / this._totalDistance : 1;
+  }
+
+  /** Distance (m) covered during the most recent updateTowardsTarget(). */
+  get distanceThisFrame(): number {
+    return this._distanceThisFrame;
+  }
+
+  /**
+   * Get the fixed direction vector (calculated once at spawn, never changes)
+   * This is the normalized direction from start to target
+   */
+  get direction(): { dx: number; dy: number; dz: number } {
+    return this._direction;
+  }
+
+  private _direction: { dx: number; dy: number; dz: number } = { dx: 0, dy: 0, dz: 1 };
+
+  /**
+   * Check if this is a homing projectile (rockets)
+   */
+  get isHoming(): boolean {
+    return this._isHoming;
+  }
+
+  /**
+   * Check if this projectile has arc trajectory (arrows, cannonballs)
+   */
+  get hasArcTrajectory(): boolean {
+    return this.typeConfig.id === 'arrow' || this.typeConfig.id === 'cannonball';
+  }
+
+  /**
+   * Check if target was lost (enemy died mid-flight)
+   * Projectile continues to last known position and explodes on ground
+   */
+  get targetLost(): boolean {
+    return this._targetLost;
+  }
+
+  /**
+   * Move towards target enemy
+   * @returns true if hit target (or ground if target lost), false otherwise
+   */
+  updateTowardsTarget(deltaTime: number): boolean {
+    // Check if target just died - capture last position (a shot at a fixed
+    // aim point keeps flying there). A free shot has none to lose.
+    if (this.targetEnemy && !this.targetEnemy.alive && !this._targetLost) {
+      this._targetLost = true;
+      if (this.aimPoint) {
+        this._lastTargetPosition = { lat: this.aimPoint.lat, lon: this.aimPoint.lon };
+        this._lastTargetTerrainHeight = (this.aimPoint.height ?? 0) - 1;
+      } else {
+        this._lastTargetPosition = { ...this.targetEnemy.position };
+        this._lastTargetTerrainHeight = this.targetEnemy.transform.terrainHeight;
+      }
+    }
+
+    // Determine target position (live enemy or last known position)
+    const targetPos = this._targetLost ? this._lastTargetPosition! : this.flightTarget();
+    const distSq = geoDistanceFastSq(this.position, targetPos);
+    const moveDistance = (this.movement.speedMps * deltaTime) / 1000;
+
+    // Track traveled distance for progress calculation
+    this._traveledDistance += moveDistance;
+    this._distanceThisFrame = moveDistance;
+
+    if (distSq <= moveDistance * moveDistance) {
+      // Hit target (or ground if target was lost)
+      this.transform.setPosition(targetPos.lat, targetPos.lon);
+      // If target lost, hit ground level; otherwise hit enemy height
+      this._flightHeight = this._targetLost
+        ? this._lastTargetTerrainHeight + 1 // Ground impact
+        : this.getTargetHeight();
+      return true;
+    }
+
+    // Move towards target (compute actual distance only on non-hit path)
+    const dist = Math.sqrt(distSq);
+    const ratio = moveDistance / dist;
+    const newLat = this.position.lat + (targetPos.lat - this.position.lat) * ratio;
+    const newLon = this.position.lon + (targetPos.lon - this.position.lon) * ratio;
+
+    this.transform.setPosition(newLat, newLon);
+
+    // Calculate flight height along trajectory
+    this._flightHeight = this.calculateFlightHeight();
+
+    // Recalc the direction every DIRECTION_RECALC_MS — both homing and arc tangents
+    // change smoothly, so reusing the cached vector for a few frames is
+    // imperceptible and avoids the per-frame trig/sqrt.
+    this._directionRecalcMs += deltaTime;
+    if (this._directionRecalcMs >= Projectile.DIRECTION_RECALC_MS) {
+      this._directionRecalcMs = 0;
+      if (this._isHoming) {
+        this._direction = this.calculateDirectionVector(
+          { lat: newLat, lon: newLon },
+          this._flightHeight
+        );
+      } else if (this.hasArcTrajectory) {
+        this._direction = this.calculateArcTangentDirection();
+      }
+    }
+
+    return false;
+  }
+
+  /** Where it flies: the fixed aim point, or its enemy (the constructor makes sure there is one of them). */
+  private flightTarget(): GeoPosition {
+    return this.aimPoint ?? this.targetEnemy!.position;
+  }
+
+  /** Recalc cadence for direction (homing + arc tangent), game-time ms: the sub-step it has passed in. */
+  private static readonly DIRECTION_RECALC_MS = 50;
+
+  /**
+   * Calculate tangent direction for arc trajectory projectiles
+   * Returns normalized direction vector tangent to the parabolic arc
+   */
+  private calculateArcTangentDirection(): { dx: number; dy: number; dz: number } {
+    // Use last known position if target was lost
+    const targetPos = this._targetLost ? this._lastTargetPosition! : this.flightTarget();
+    const progress = this.flightProgress;
+
+    // Horizontal direction (unchanged - always points towards target), in
+    // meters like calculateDirectionVector()
+    const dLon = targetPos.lon - this.position.lon;
+    const dLat = targetPos.lat - this.position.lat;
+    const dx = -dLon * METERS_PER_DEGREE_LAT * DetMath.cos(this.position.lat * DEG_TO_RAD);
+    const dz = dLat * METERS_PER_DEGREE_LAT;
+
+    // Calculate horizontal magnitude for proper scaling
+    const horizontalMag = Math.sqrt(dx * dx + dz * dz);
+
+    // Calculate vertical tangent slope based on arc type
+    // Derivative of arc: d(arcOffset)/d(progress) = maxArc * 4 * (1 - 2*progress)
+    let arcSlope = 0;
+
+    if (this.typeConfig.id === 'arrow') {
+      const maxArcHeight = Math.min(this._totalDistance * 0.05, 10);
+      arcSlope = maxArcHeight * 4 * (1 - 2 * progress);
+    } else if (this.typeConfig.id === 'cannonball') {
+      const maxArcHeight = Math.min(this._totalDistance * 0.15, 25);
+      arcSlope = maxArcHeight * 4 * (1 - 2 * progress);
+    }
+
+    // Scale vertical component relative to horizontal travel
+    // arcSlope is in meters per unit progress, convert to match horizontal scale
+    const dy = arcSlope * (horizontalMag / this._totalDistance);
+
+    // Also add the base height change (linear from start to target)
+    const targetHeight = this.getTargetHeight();
+    const baseHeightSlope = (targetHeight - this._startHeight) / this._totalDistance;
+    const dyBase = baseHeightSlope * horizontalMag;
+
+    const totalDy = dy + dyBase;
+
+    // Normalize
+    const length = Math.sqrt(dx * dx + totalDy * totalDy + dz * dz);
+    if (length < 0.001) {
+      return { dx: 0, dy: 0, dz: 1 };
+    }
+
+    return {
+      dx: dx / length,
+      dy: totalDy / length,
+      dz: dz / length,
+    };
+  }
+
+  /**
+   * Calculate flight height at current position
+   * Creates arc trajectories for arrow and cannonball projectiles
+   * Homing projectiles (rockets) and bullets fly straight to target
+   */
+  private calculateFlightHeight(): number {
+    const targetHeight = this.getTargetHeight();
+    const progress = this.flightProgress;
+
+    // Linear interpolation between start and target height
+    const baseHeight = this._startHeight + (targetHeight - this._startHeight) * progress;
+
+    // Homing projectiles fly straight - no arc
+    if (this._isHoming) {
+      return baseHeight;
+    }
+
+    // Arc trajectory for arrows: slight arc
+    if (this.typeConfig.id === 'arrow') {
+      const maxArcHeight = Math.min(this._totalDistance * 0.05, 10);
+      const arcOffset = maxArcHeight * 4 * progress * (1 - progress);
+      return baseHeight + arcOffset;
+    }
+
+    // Arc trajectory for cannonballs: higher parabolic arc (~20° launch angle)
+    if (this.typeConfig.id === 'cannonball') {
+      // Higher arc for cannonballs - proportional to distance
+      const maxArcHeight = Math.min(this._totalDistance * 0.15, 25);
+      const arcOffset = maxArcHeight * 4 * progress * (1 - progress);
+      return baseHeight + arcOffset;
+    }
+
+    // All other projectiles (bullets, etc.) fly straight
+    return baseHeight;
+  }
+
+  /**
+   * Get target height (enemy position + model offset + visual centre).
+   *
+   * The aim offset is the model's measured vertical centre (see
+   * enemy-aim.util), so the shot converges on the body for tiny flyers
+   * (bat) and giant bosses (dragon) alike — instead of a fixed offset
+   * that overshoots small models and undershoots large ones.
+   */
+  private getTargetHeight(): number {
+    const enemy = this.targetEnemy;
+    if (this.aimPoint || !enemy) return this.aimPoint?.height ?? 0;
+    const enemyTerrainHeight = enemy.transform.terrainHeight ?? 0;
+    // Include enemy's heightOffset (e.g., 15m for flying units like bats)
+    return enemyTerrainHeight + enemy.heightOffset + getEnemyAimOffsetY(enemy);
+  }
+}

@@ -1,0 +1,194 @@
+/* Phone and tablet UI. Everything is scoped to #gs-ui.gs-touch (the input mode is touch), so the desktop
+   HUD is untouched. --k scales text and panels; --s (set from the layout) scales the buttons and the
+   top corners together, so a tablet's controls are larger than a phone's. Edges add env(safe-area-inset-*)
+   through --sl/--sr/--st/--sb. Nothing sits under a thumb: round and pause top-left, points and ammo
+   top-right, the prompt top-centre. */
+#gs-ui.gs-touch {
+  --k: 1.6;
+  --p: calc(var(--u) * var(--k));
+  --s: 1;
+  --m: calc(12px * var(--s));
+  --t-sm: max(13px, calc(13 * var(--p)));
+  --t-md: max(14px, calc(17 * var(--p)));
+  --colw: 300px;
+}
+
+/* ---------- the buttons ---------- */
+.gs-touchhud { position: absolute; inset: 0; pointer-events: none; visibility: hidden; opacity: 0; transition: opacity .18s, visibility 0s linear .18s; }
+.gs-touchhud.on { visibility: visible; opacity: 1; transition-delay: 0s; }
+.gs-tb {
+  position: absolute; left: 0; top: 0; box-sizing: border-box; display: grid; place-items: center; border-radius: 50%;
+  color: var(--ink); background: rgba(5, 7, 10, .45); border: max(2px, calc(2px * var(--s))) solid rgba(236, 230, 214, .72);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), inset 0 0 18px rgba(0, 0, 0, .35);
+  transition: background .08s, border-color .08s, color .08s, scale .08s, box-shadow .08s;
+}
+.gs-tb[hidden] { display: none; }
+.gs-tb .ico { width: 46%; height: 46%; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: butt; stroke-linejoin: miter; overflow: visible; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .8)); }
+.gs-tb-fire { border-color: rgba(var(--accent-rgb), .9); background: rgba(5, 7, 10, .5); }
+.gs-tb-fire .ico { width: 42%; height: 42%; }
+.gs-tb-pause, .gs-tb-swap { background: rgba(5, 7, 10, .4); border-color: rgba(236, 230, 214, .6); }
+.gs-tb-pause .ico, .gs-tb-swap .ico { width: 50%; height: 50%; }
+.gs-tb.down { background: rgba(var(--accent-rgb), .34); border-color: var(--accent); color: #fff; scale: .92; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 16px rgba(var(--accent-rgb), .5); }
+.gs-tb.needs { border-color: var(--accent); color: var(--accent); animation: gs-need 1s ease-in-out infinite; }
+@keyframes gs-need { 50% { box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 18px rgba(var(--accent-rgb), .7); } }
+
+/* the use button: verb and price, a rim that fills while a hold runs */
+.gs-tb-interact { background: rgba(5, 7, 10, .5); border-color: rgba(var(--accent-rgb), .85); gap: 0; align-content: center; animation: gs-tb-in .16s ease-out; }
+@keyframes gs-tb-in { from { scale: .7; opacity: 0; } to { scale: 1; opacity: 1; } }
+.gs-tb-interact .verb { font: 700 calc(19px * var(--s))/1 var(--display); letter-spacing: .06em; text-transform: uppercase; text-shadow: var(--shadow); }
+.gs-tb-interact.long .verb { font-size: calc(15px * var(--s)); letter-spacing: .03em; }
+.gs-tb-interact .price { font: 500 13px/1 var(--label); color: var(--accent); margin-top: 2px; min-height: 1px; text-shadow: var(--shadow); }
+.gs-tb-interact .ring { position: absolute; inset: -2px; width: calc(100% + 4px); height: calc(100% + 4px); opacity: 0; transition: opacity .12s; overflow: visible; pointer-events: none; }
+.gs-tb-interact.hold .ring { opacity: 1; }
+.gs-tb-interact .ring .track { fill: none; stroke: rgba(236, 230, 214, .2); stroke-width: 5; }
+.gs-tb-interact .ring .fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: butt; filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), .7)); }
+.gs-tb-interact.busy { border-color: rgba(var(--accent-rgb), .35); }
+
+/* ---------- HUD on touch ---------- */
+.gs-touch .gs-round { left: calc(var(--sl) + 66px * var(--s)); top: calc(var(--st) + 8px * var(--s)); bottom: auto; }
+.gs-touch .gs-round .lbl { margin-bottom: 4px; gap: 8px; }
+.gs-touch .gs-round .lbl::before { width: 22px; }
+.gs-touch .gs-round .num { font: 700 calc(58px * var(--s))/.78 var(--display); }
+.gs-touch .gs-round .sub { margin-top: 6px; }
+.gs-touch .gs-stats { right: calc(var(--sr) + var(--m)); top: calc(var(--st) + var(--m)); bottom: auto; gap: calc(6px * var(--s)); }
+.gs-touch .gs-pts { height: calc(32px * var(--s)); gap: 8px; align-items: center; }
+.gs-touch .gs-pts b { font-size: calc(32px * var(--s)); line-height: 1; }
+.gs-touch .gs-pts .pops { right: calc(100% + 14px); bottom: 0; }
+.gs-touch .gs-pts .pop { font-size: calc(26px * var(--s)); }
+.gs-touch .gs-ammo { position: relative; height: calc(60px * var(--s)); padding-right: calc(68px * var(--s)); display: flex; flex-direction: column; justify-content: center; align-items: flex-end; }
+.gs-touch .gs-ammo .wname { margin: 0 -.12em 4px 0; }
+.gs-touch .gs-ammo .mag b { font-size: calc(44px * var(--s)); }
+.gs-touch .gs-ammo .mag i { font-size: calc(24px * var(--s)); }
+.gs-touch .gs-ammo .mag em { font-size: calc(28px * var(--s)); }
+.gs-touch .gs-ammo .mag { gap: 8px; }
+.gs-touch .gs-ammo .pips { display: none; }
+.gs-touch .gs-ammo .hint { position: absolute; right: calc(68px * var(--s)); top: 100%; margin: 3px 0 0; white-space: nowrap; }
+.gs-touch .gs-prompt { top: calc(var(--st) + var(--m)); font-size: max(14px, calc(21 * var(--p))); }
+.gs-touch .gs-cross i { box-shadow: 0 0 0 1px rgba(0, 0, 0, .55); }
+.gs-touch .gs-cross .t, .gs-touch .gs-cross .b { height: calc(9 * var(--p)); width: 2px; left: -1px; }
+.gs-touch .gs-cross .t { bottom: calc(8 * var(--p)); } .gs-touch .gs-cross .b { top: calc(8 * var(--p)); }
+.gs-touch .gs-cross .l, .gs-touch .gs-cross .r { width: calc(9 * var(--p)); height: 2px; top: -1px; }
+.gs-touch .gs-cross .l { right: calc(8 * var(--p)); } .gs-touch .gs-cross .r { left: calc(8 * var(--p)); }
+.gs-touch .gs-hit { width: calc(46 * var(--p)); height: calc(46 * var(--p)); }
+.gs-touch .gs-corner.c-tl { top: calc(var(--st) + 58px * var(--s)); }
+.gs-touch .gs-corner.c-tr { top: calc(var(--st) + var(--m) + 106px * var(--s)); }
+.gs-touch .gs-corner.c-tc { top: calc(var(--st) + var(--m) + 30px * var(--s)); }
+
+/* left-handed: the same screen, mirrored */
+.gs-touch.gs-lefty .gs-round { left: auto; right: calc(var(--sr) + 66px * var(--s)); }
+.gs-touch.gs-lefty .gs-round .lbl { flex-direction: row-reverse; }
+.gs-touch.gs-lefty .gs-round, .gs-touch.gs-lefty .gs-round .sub { text-align: right; }
+.gs-touch.gs-lefty .gs-round .num { text-align: right; }
+.gs-touch.gs-lefty .gs-stats { right: auto; left: calc(var(--sl) + var(--m)); align-items: flex-start; text-align: left; }
+.gs-touch.gs-lefty .gs-pts { flex-direction: row-reverse; }
+.gs-touch.gs-lefty .gs-pts .pops { right: auto; left: calc(100% + 14px); }
+.gs-touch.gs-lefty .gs-pts .pop { right: auto; left: 0; }
+.gs-touch.gs-lefty .gs-ammo { padding-right: 0; padding-left: calc(68px * var(--s)); align-items: flex-start; }
+.gs-touch.gs-lefty .gs-ammo .mag { flex-direction: row; justify-content: flex-start; }
+.gs-touch.gs-lefty .gs-ammo .hint { right: auto; left: calc(68px * var(--s)); }
+.gs-touch.gs-lefty .gs-corner.c-tl { left: auto; right: calc(var(--sr) + var(--m)); align-items: flex-end; }
+.gs-touch.gs-lefty .gs-corner.c-tr { right: auto; left: calc(var(--sl) + var(--m)); align-items: flex-start; }
+
+/* ---------- menus on touch ---------- */
+.gs-only-touch { display: none !important; }
+.gs-touch .gs-only-touch { display: flex !important; }
+.gs-touch .gs-seg .gs-only-touch { display: inline-flex !important; }
+.gs-touch .gs-only-pointer { display: none !important; }
+.gs-touch .gs-col { left: calc(var(--sl) + 16px); width: min(var(--colw), calc(100vw - var(--sl) - var(--sr) - 32px)); min-width: 0; }
+.gs-touch .gs-exit { margin-bottom: 10px; }
+.gs-touch .gs-exit .sub { display: none; }
+.gs-touch .gs-title .gs-wm { --wm-size: 39px; }
+.gs-touch .gs-premise { display: none; }
+.gs-touch .gs-list { margin-top: 16px; gap: 8px; }
+.gs-touch .gs-row { min-height: 48px; align-items: center; padding: 4px 0; width: 100%; min-width: 0; }
+.gs-touch .gs-row .k { font-size: 28px; }
+.gs-touch .gs-row .lead { display: none; }
+.gs-touch .gs-row .hint { display: none; }
+.gs-touch .gs-row .k { white-space: nowrap; }
+.gs-touch .gs-row::before { display: none; }
+.gs-touch .gs-row:active .k, .gs-touch .gs-row:focus-visible .k { color: var(--accent); }
+.gs-touch .gs-row:active::after { transform: scaleX(1); }
+.gs-touch .gs-row.small { width: 100%; margin-top: 8px; }
+.gs-touch .gs-head { margin-bottom: 12px; }
+.gs-touch .gs-h { font-size: 54px; margin-top: 6px; }
+.gs-touch .gs-pause .gs-h { font-size: 54px; }
+
+.gs-touch .gs-cardwrap { left: calc(var(--sl) + 16px + var(--colw) + 20px); right: calc(var(--sr) + 16px); width: auto; }
+.gs-touch .gs-card { width: 100%; min-width: 0; padding: 12px 14px 10px; }
+.gs-touch .gs-card .gs-eyebrow { margin-bottom: 8px; font-size: 13px; }
+.gs-touch .gs-card-cols { gap: 14px; }
+.gs-touch .gs-card-col { gap: 3px; }
+.gs-touch .gs-card-col.tc { order: -1; }
+.gs-touch .gs-card-h { font-size: 16px; margin-bottom: 2px; }
+.gs-touch .gs-card .a { font-size: 14px; }
+.gs-touch .gs-card .k { font-size: 13px; }
+.gs-touch .gs-card .r { padding-bottom: 2px; }
+.gs-touch .gs-controls .gs-card { width: 100%; }
+
+/* settings: a heading pane on the left, the rows scroll on the right */
+.gs-touch .gs-settings .gs-col, .gs-touch .gs-controls .gs-col {
+  left: calc(var(--sl) + 16px); right: calc(var(--sr) + 16px); width: auto; display: grid; grid-template-columns: 190px 1fr; grid-template-rows: auto 1fr;
+  grid-template-areas: 'head rows' 'back rows'; column-gap: 24px; justify-content: stretch; padding: calc(var(--st) + 10px) 0 calc(var(--sb) + 10px);
+}
+.gs-touch .gs-settings .gs-head, .gs-touch .gs-controls .gs-head { grid-area: head; margin: 0; }
+.gs-touch .gs-settings .gs-back, .gs-touch .gs-controls .gs-back { grid-area: back; align-self: end; }
+.gs-touch .gs-settings .gs-setrows { grid-area: rows; width: auto; min-width: 0; gap: 0; overflow-y: auto; pointer-events: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; padding-right: 6px; }
+.gs-touch .gs-controls .gs-card { grid-area: rows; align-self: center; overflow-y: auto; max-height: 100%; pointer-events: auto; touch-action: pan-y; }
+.gs-touch .gs-set { min-height: 56px; align-items: center; border-bottom: 1px solid rgba(236, 230, 214, .1); padding: 4px 0; gap: 12px; }
+.gs-touch .gs-set .lead { display: none; }
+.gs-touch .gs-set .l { font-size: 22px; }
+.gs-touch .gs-set .lw { display: flex; flex-direction: column; gap: 3px; margin-right: auto; }
+.gs-touch .gs-set .note { font: 400 13px/1.2 var(--label); color: var(--dim); letter-spacing: .02em; }
+.gs-touch .gs-set .note:empty { display: none; }
+.gs-touch .gs-set > .ctl, .gs-touch .gs-set > .gs-seg { width: auto; min-width: 0; margin-left: auto; }
+.gs-touch .gs-seg { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.gs-touch .gs-seg .opt { min-height: 48px; min-width: 52px; display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; font-size: 13px; letter-spacing: .1em; border-bottom-width: 3px; }
+.gs-touch .gs-seg .opt:active { color: var(--ink); }
+.gs-touch .gs-set .note.warn { color: var(--accent); }
+.gs-touch .gs-range { width: 200px; height: 48px; touch-action: pan-y; }
+.gs-touch .gs-range::-webkit-slider-thumb { width: 14px; height: 30px; margin-top: -14px; }
+.gs-touch .gs-val { font-size: 13px; min-width: 3.6em; }
+
+/* the death screen: heading and round on the left, stats and Retry on the right */
+.gs-touch .gs-dead .gs-col { left: calc(var(--sl) + 16px); right: calc(var(--sr) + 16px); width: auto; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 32px; align-content: center; justify-content: stretch; padding: calc(var(--st) + 10px) 0 calc(var(--sb) + 10px); }
+.gs-touch .gs-dead .gs-head { grid-area: 1 / 1; margin: 0; }
+.gs-touch .gs-dead .gs-bigwrap { grid-area: 2 / 1; margin: 6px 0 0; }
+.gs-touch .gs-dead .gs-stats-list { grid-area: 1 / 2; align-self: end; margin: 0; width: 100%; gap: 8px; min-width: 0; }
+.gs-touch .gs-dead nav.gs-list { grid-area: 2 / 2; margin-top: 14px; align-self: start; }
+.gs-touch .gs-dead .gs-h { font-size: 54px; }
+.gs-touch .gs-bignum { font-size: 100px; margin-top: 8px; padding-top: 4px; }
+.gs-touch .gs-stat .l { font-size: 20px; }
+.gs-touch .gs-stat .v { font-size: 24px; }
+.gs-controls .gs-card .gs-eyebrow { display: none; }
+
+/* narrow phones (667 wide and under): a smaller wordmark, and the card shows only the touch column */
+@media (max-width: 719px) {
+  #gs-ui.gs-touch { --colw: 250px; }
+  .gs-touch .gs-title .gs-wm { --wm-size: 32px; }
+  .gs-touch .gs-row .k { font-size: 26px; }
+  .gs-touch .gs-card-col.kb { display: none; }
+}
+
+/* stick: a faint ring where the thumb goes, a base and knob under the thumb while it is down */
+.gs-stick-idle { position: absolute; left: 0; top: 0; width: 112px; height: 112px; box-sizing: border-box; border-radius: 50%; border: 2px dashed rgba(236, 230, 214, .32); background: radial-gradient(circle, rgba(236, 230, 214, .07) 0 28%, transparent 30%); transition: opacity .15s; }
+.gs-stick-idle::after { content: 'MOVE'; position: absolute; inset: auto 0 -22px 0; text-align: center; font: 500 13px/1 var(--label); letter-spacing: .12em; color: rgba(236, 230, 214, .45); text-shadow: var(--shadow); }
+.gs-stick-idle.away { opacity: 0; }
+.gs-stick { position: absolute; left: 0; top: 0; width: 112px; height: 112px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(236, 230, 214, .6); background: rgba(5, 7, 10, .4); opacity: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+.gs-stick.on { opacity: 1; }
+.gs-stick .knob { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: rgba(236, 230, 214, .55); border: 2px solid var(--accent); box-shadow: 0 0 12px rgba(var(--accent-rgb), .4); }
+
+/* ---------- an upright phone (it plays; orient.js only suggests sideways) ----------
+   The top corners fill the width, so the suggestion toast and the interact prompt go just under them,
+   above the round banner (25% here), and the top-centre line (objective, hint) under the banner, still
+   clear of the crosshair. The title and pause screens drop the controls card (no room). */
+@media (orientation: portrait) {
+  .gs-touch .gs-turn.play:not(.mini) { top: calc(var(--st) + 140px); }
+  #gs-ui.gs-touch .gs-banner { top: 25%; }
+  .gs-touch .gs-prompt { top: calc(var(--st) + 150px); }
+  #gs-ui.gs-touch .gs-corner.c-tc { top: calc(var(--st) + 280px); max-width: calc(100vw - 32px - var(--sl) - var(--sr)); }
+  .gs-touch .gs-title .gs-cardwrap, .gs-touch .gs-pause .gs-cardwrap { display: none; }
+}
+
+/* the weapon list under the ammo readout stays short enough to clear the melee and throw buttons below it */
+.gs-touch .gs-slots { gap: 1px; }
+.gs-touch .gs-slot { font-size: 13px; padding: .1em .6em .1em 1em; }

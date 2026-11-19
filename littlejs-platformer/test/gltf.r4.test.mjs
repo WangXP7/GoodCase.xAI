@@ -1,0 +1,149 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseGLTF, vec3, engineObjects } from '../dist/littlejs.esm.js';
+
+const near = (a, b, msg)=> assert.ok(Math.abs(a - b) < 1e-4, `${msg || ''} ${a} vs ${b}`);
+const nearVec = (v, w, msg)=> { near(v.x, w.x, msg + ' x'); near(v.y, w.y, msg + ' y'); near(v.z, w.z, msg + ' z'); };
+
+// a pop in: node 0 is a quad moved up one and turned a quarter about y, resting at a scale, with a child quad moved
+// right two; its one animation scales node 0 from 0 at the start to 1 at one second
+function popModel(restScale)
+{
+    const buffer = new ArrayBuffer(96), f = new Float32Array(buffer);
+    f.set([-1, -1, 0,  1, -1, 0,  1, 1, 0,  -1, 1, 0], 0);   // positions at 0, 48 bytes
+    new Uint16Array(buffer, 48, 6).set([0, 1, 2, 0, 2, 3]);  // indices at 48, 12 bytes
+    f.set([0, 1,  0, 0, 0,  1, 1, 1], 16);                   // key times at 64, scales at 72
+    return parseGLTF({
+        asset: { version: '2.0' },
+        buffers: [{ byteLength: 96, uri: 'data:application/octet-stream;base64,' + Buffer.from(buffer).toString('base64') }],
+        bufferViews: [
+            { buffer: 0, byteOffset: 0, byteLength: 48 },
+            { buffer: 0, byteOffset: 48, byteLength: 12 },
+            { buffer: 0, byteOffset: 64, byteLength: 8 },
+            { buffer: 0, byteOffset: 72, byteLength: 24 },
+        ],
+        accessors: [
+            { bufferView: 0, componentType: 5126, count: 4, type: 'VEC3' },
+            { bufferView: 1, componentType: 5123, count: 6, type: 'SCALAR' },
+            { bufferView: 2, componentType: 5126, count: 2, type: 'SCALAR' },
+            { bufferView: 3, componentType: 5126, count: 2, type: 'VEC3' },
+        ],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+        nodes: [
+            { name: 'pop', mesh: 0, translation: [0, 1, 0], rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2], scale: restScale, children: [1] },
+            { name: 'kid', mesh: 0, translation: [2, 0, 0] },
+        ],
+        scenes: [{ nodes: [0] }],
+        animations: [{ name: 'grow', samplers: [{ input: 2, output: 3 }], channels: [{ sampler: 0, target: { node: 0, path: 'scale' } }] }],
+    });
+}
+
+test('a node resting at scale 0 is baked at full size, its child too, and not onto a point', async () =>
+{
+    const zero = await popModel([0, 0, 0]), full = await popModel([1, 1, 1]);
+    assert.equal(zero.parts.length, 2);
+    for (let i = 0; i < 2; ++i)
+    for (let k = 0; k < 4; ++k)
+    {
+        nearVec(zero.parts[i].mesh.points[k], full.parts[i].mesh.points[k], `part ${i} point ${k}`);
+        nearVec(zero.parts[i].mesh.normals[k], full.parts[i].mesh.normals[k], `part ${i} normal ${k}`);
+    }
+});
+
+test('the pose of a node resting at scale 0 grows it as the animation says, like one authored at scale 1', async () =>
+{
+    const zero = await popModel([0, 0, 0]), full = await popModel([1, 1, 1]);
+    const grow = zero.getAnimation('grow'), fullGrow = full.getAnimation('grow');
+    for (const time of [0, .5, 1])
+    {
+        const pose = zero.getPose(grow, time), fullPose = full.getPose(fullGrow, time);
+        for (let i = 0; i < 2; ++i)
+        for (let k = 0; k < 4; ++k)
+        {
+            const p = pose[i].transformPoint(zero.parts[i].mesh.points[k]);
+            const q = fullPose[i].transformPoint(full.parts[i].mesh.points[k]);
+            nearVec(p, q, `time ${time} part ${i} point ${k}`);
+        }
+    }
+    // at the end it is at its full size, where its parts are baked
+    nearVec(zero.getPose(grow, 1)[0].getScale(), vec3(1, 1, 1), 'full size');
+    nearVec(zero.getPose(grow, 0)[0].getScale(), vec3(0, 0, 0), 'nothing at the start');
+});
+
+test('a model resting at scale 0 still shows it so, as one mesh and as an object before it plays', async () =>
+{
+    const zero = await popModel([0, 0, 0]), full = await popModel([1, 1, 1]);
+    // every point of both parts rests on the pop node's place, as the file has it
+    for (const p of zero.mesh.points)
+        nearVec(p, vec3(0, 1, 0), 'combined mesh');
+
+    const o = zero.createObject(), f = full.createObject();
+    try
+    {
+        const worldPoint = (part, p)=> part.getMatrix().transformPoint(p);
+        for (let i = 0; i < 2; ++i)
+            nearVec(worldPoint(o.parts[i], zero.parts[i].mesh.points[2]), vec3(0, 1, 0), `part ${i} before it plays`);
+        o.play('grow'); o.setAnimationTime(1);
+        f.play('grow'); f.setAnimationTime(1);
+        for (let i = 0; i < 2; ++i)
+        for (let k = 0; k < 4; ++k)
+            nearVec(worldPoint(o.parts[i], zero.parts[i].mesh.points[k]), worldPoint(f.parts[i], full.parts[i].mesh.points[k]),
+                `part ${i} point ${k} grown`);
+    }
+    finally { o.destroy(true); f.destroy(true); engineObjects.length = 0; }
+});
+
+// a .gltf with its buffer in a file of its own, the way an exporter writes it next to the model
+function splitModel(uri)
+{
+    const buffer = new ArrayBuffer(36); // one triangle
+    new Float32Array(buffer).set([-1, -1, 0,  1, -1, 0,  1, 1, 0]);
+    return {model: {asset: {version: '2.0'}, buffers: [{byteLength: 36, uri}], bufferViews: [{buffer: 0, byteLength: 36}],
+        accessors: [{bufferView: 0, componentType: 5126, count: 3, type: 'VEC3'}],
+        meshes: [{primitives: [{attributes: {POSITION: 0}, mode: 4}]}], nodes: [{mesh: 0}], scenes: [{nodes: [0]}]}, buffer};
+}
+
+test('a glTF given the files it refers to, as a drop of its folder gives them, finds them there', async ()=>
+{
+    const {model, buffer} = splitModel('parts/house%20mesh.bin');
+    const files = new Map([['house.gltf', new Blob([JSON.stringify(model)])], ['parts/house mesh.bin', new Blob([buffer])]]);
+    const loaded = await parseGLTF(model, '', files);
+    assert.equal(loaded.parts.length, 1);
+    // dropped as loose files the folder is lost, so a file is found by its name alone too
+    const loose = await parseGLTF(splitModel('parts/house%20mesh.bin').model, '', new Map([['house mesh.bin', new Blob([buffer])]]));
+    assert.equal(loose.parts.length, 1);
+});
+
+test('a glTF whose file is not among those given says which file it needs', async ()=>
+{
+    const {model} = splitModel('scene.bin');
+    await assert.rejects(parseGLTF(model, '', new Map()), /scene\.bin/);
+});
+
+test('a glTF in a folder of a drop finds its files from that folder, before any of the same name elsewhere', async ()=>
+{
+    const right = splitModel('mesh.bin'), wrong = new ArrayBuffer(36);
+    new Float32Array(wrong).set([0, 0, 0,  18, 0, 0,  0, 3, 0]);
+    const files = new Map([['Other/mesh.bin', new Blob([wrong])], ['Models/mesh.bin', new Blob([right.buffer])],
+        ['shared/tex.bin', new Blob([right.buffer])]]);
+    const model = await parseGLTF(right.model, 'Models/', files);
+    const b = model.getBounds();
+    assert.deepEqual([b.max.x - b.min.x, b.max.y - b.min.y], [2, 2], 'its own folder\'s mesh.bin');
+    // up a folder, and a name that is in the drop only once
+    assert.equal((await parseGLTF(splitModel('../shared/tex.bin').model, 'Models/', files)).parts.length, 1);
+    assert.equal((await parseGLTF(splitModel('elsewhere/tex.bin').model, 'Models/', files)).parts.length, 1, 'by its name');
+    // a name in the drop twice, and neither in the model's folder, is not guessed
+    await assert.rejects(parseGLTF(splitModel('mesh.bin').model, 'Lone/', files), /more than one/);
+});
+
+test('a file found by its name keeps its capitals, and one whose path lost its top folders in the drop is found by the rest', async ()=>
+{
+    const {model, buffer} = splitModel('Assets/Models/Adam_Mesh.bin');
+    const blob = new Blob([buffer]);
+    // dropped as loose files, the name alone, with capitals
+    assert.equal((await parseGLTF(model, '', new Map([['Adam_Mesh.bin', blob]]))).parts.length, 1, 'by its name');
+    // the contents of the model's folder dropped, so the Assets folder's own name is not in the paths, and a file of
+    // the same name elsewhere, so the name alone can not say which
+    const files = new Map([['Models/Adam_Mesh.bin', blob], ['Other/Adam_Mesh.bin', new Blob([new ArrayBuffer(4)])]]);
+    assert.equal((await parseGLTF(model, '', files)).parts.length, 1, 'by the end of its path');
+});

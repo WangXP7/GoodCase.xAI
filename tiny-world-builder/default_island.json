@@ -1,0 +1,2060 @@
+{
+  "v": 4,
+  "gridSize": 8,
+  "islands": [],
+  "moorings": [],
+  "cells": [
+    [
+      0,
+      0,
+      "grass",
+      "house",
+      2,
+      null,
+      1,
+      null,
+      null,
+      [
+        1.5707963267948966,
+        0,
+        0,
+        0
+      ]
+    ],
+    [
+      0,
+      1,
+      "grass",
+      "fence",
+      1,
+      null,
+      1,
+      "n",
+      null,
+      null
+    ],
+    [
+      0,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      0,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      0,
+      4,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      0,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      0,
+      6,
+      "grass",
+      "voxel-build",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        0.67640625,
+        0,
+        0,
+        0
+      ],
+      {
+        "voxelBuildId": "voxel_fantasy_tree-enhanced",
+        "objectScale": 0.83,
+        "scaleY": 1.007
+      }
+    ],
+    [
+      0,
+      7,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      0,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      1,
+      "grass",
+      "fence",
+      1,
+      null,
+      1,
+      "n",
+      null,
+      null
+    ],
+    [
+      1,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      4,
+      "grass",
+      "house",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        0,
+        -0.004500000000000004,
+        0.040382812499999914,
+        0
+      ]
+    ],
+    [
+      1,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      6,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      1,
+      7,
+      "grass",
+      "voxel-build",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        0.9944999999999998,
+        0,
+        0,
+        0
+      ],
+      {
+        "voxelBuildId": "voxel_fantasy_tree-enhanced",
+        "objectScale": 0.722,
+        "scaleY": 1.007
+      }
+    ],
+    [
+      2,
+      0,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      1,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      4,
+      "grass",
+      "house",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      6,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      2,
+      7,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      0,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      1,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      2,
+      "stone",
+      "fence",
+      1,
+      null,
+      1,
+      "w",
+      [
+        {
+          "k": "fence",
+          "s": "e",
+          "f": 1
+        }
+      ],
+      null
+    ],
+    [
+      3,
+      3,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      4,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      6,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      3,
+      7,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      0,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        0.190125,
+        0,
+        0,
+        0
+      ]
+    ],
+    [
+      4,
+      1,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      4,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      6,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      4,
+      7,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      0,
+      "grass",
+      "rock",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        3.0075067160897953,
+        0,
+        0,
+        0
+      ],
+      {
+        "scaleX": 2.7,
+        "scaleY": 1.663,
+        "scaleZ": 1.022,
+        "objectStyle": "normal"
+      }
+    ],
+    [
+      5,
+      1,
+      "grass",
+      "voxel-build",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        1.4215781249999997,
+        0,
+        0,
+        0
+      ],
+      {
+        "topColor": "#4e8a49",
+        "voxelBuildId": "voxel_fantasy_tree-enhanced",
+        "objectScale": 0.83,
+        "scaleY": 1.007
+      }
+    ],
+    [
+      5,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      4,
+      "grass",
+      "house",
+      2,
+      "manor",
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      6,
+      "dirt",
+      "wheat",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      5,
+      7,
+      "dirt",
+      "carrot",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      6,
+      0,
+      "grass",
+      "rock",
+      2,
+      null,
+      1,
+      null,
+      null,
+      [
+        1.5707963267948966,
+        0,
+        0,
+        0
+      ],
+      {
+        "scaleX": 1.18,
+        "objectStyle": "normal"
+      }
+    ],
+    [
+      6,
+      1,
+      "grass",
+      "voxel-build",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        1.4149687499999997,
+        0,
+        0,
+        0
+      ],
+      {
+        "voxelBuildId": "voxel_fantasy_tree-enhanced",
+        "objectScale": 0.722,
+        "scaleY": 1.007
+      }
+    ],
+    [
+      6,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      6,
+      3,
+      "grass",
+      "house",
+      3,
+      "tower",
+      1,
+      null,
+      null,
+      [
+        1.5707963267948966,
+        0,
+        0,
+        0
+      ]
+    ],
+    [
+      6,
+      4,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      6,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      6,
+      6,
+      "dirt",
+      "corn",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      6,
+      7,
+      "dirt",
+      "pumpkin",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      0,
+      "grass",
+      "rock",
+      3,
+      null,
+      1,
+      null,
+      null,
+      [
+        1.5707963267948966,
+        0,
+        0,
+        0
+      ],
+      {
+        "scaleX": 1.18,
+        "objectStyle": "normal"
+      }
+    ],
+    [
+      7,
+      1,
+      "grass",
+      "voxel-build",
+      1,
+      null,
+      1,
+      null,
+      null,
+      [
+        2.1645000000000003,
+        0,
+        0,
+        0
+      ],
+      {
+        "topColor": "#4e8a49",
+        "voxelBuildId": "voxel_fantasy_tree-enhanced",
+        "objectScale": 0.83,
+        "scaleY": 1.007
+      }
+    ],
+    [
+      7,
+      2,
+      "water",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      3,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      4,
+      "grass",
+      "tuft",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      5,
+      "stone",
+      null,
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      6,
+      "dirt",
+      "sunflower",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ],
+    [
+      7,
+      7,
+      "dirt",
+      "crop",
+      1,
+      null,
+      1,
+      null,
+      null,
+      null
+    ]
+  ],
+  "voxelBuildStamps": [
+    {
+      "id": "voxel_fantasy_tree-enhanced",
+      "name": "voxel_fantasy_tree enhanced",
+      "voxels": [
+        {
+          "x": -1,
+          "y": 0,
+          "z": -1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 0,
+          "y": 0,
+          "z": -1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "z": -1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": -1,
+          "y": 0,
+          "z": 1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 0,
+          "z": 1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 1,
+          "y": 0,
+          "z": 1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "z": -1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "z": -1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "z": -1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": -1,
+          "y": 1,
+          "z": 1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 1,
+          "z": 1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 1,
+          "y": 1,
+          "z": 1,
+          "color": "#5b3b24"
+        },
+        {
+          "x": -1,
+          "y": 2,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "z": -1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "z": 1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 1,
+          "y": 2,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": -1,
+          "y": 3,
+          "z": 0,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "z": -1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 0,
+          "y": 3,
+          "z": 1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 1,
+          "y": 3,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": -1,
+          "y": 4,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 0,
+          "y": 4,
+          "z": -1,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 4,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 0,
+          "y": 4,
+          "z": 1,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 1,
+          "y": 4,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": -2,
+          "y": 4,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": -3,
+          "y": 4,
+          "z": 0,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 2,
+          "y": 5,
+          "z": 0,
+          "color": "#7a5634"
+        },
+        {
+          "x": 3,
+          "y": 5,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 0,
+          "y": 5,
+          "z": -2,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": 0,
+          "y": 5,
+          "z": -3,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 5,
+          "z": 2,
+          "color": "#7a5634"
+        },
+        {
+          "x": 0,
+          "y": 5,
+          "z": 3,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": -1,
+          "y": 5,
+          "z": 0,
+          "color": "#5b3b24"
+        },
+        {
+          "x": 0,
+          "y": 5,
+          "z": 0,
+          "color": "#8a633a"
+        },
+        {
+          "x": 1,
+          "y": 5,
+          "z": 0,
+          "color": "#6b4a2d"
+        },
+        {
+          "x": -3,
+          "y": 6,
+          "z": -1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 6,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 6,
+          "z": -3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 0,
+          "y": 6,
+          "z": -3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 1,
+          "y": 6,
+          "z": -3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 2,
+          "y": 6,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 3,
+          "y": 6,
+          "z": -1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -4,
+          "y": 6,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -3,
+          "y": 6,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": -2,
+          "y": 6,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 6,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 6,
+          "z": 0,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 4,
+          "y": 6,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -3,
+          "y": 6,
+          "z": 1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 6,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 6,
+          "z": 3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 0,
+          "y": 6,
+          "z": 3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 1,
+          "y": 6,
+          "z": 3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 2,
+          "y": 6,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 3,
+          "y": 6,
+          "z": 1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -4,
+          "y": 7,
+          "z": -1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -3,
+          "y": 7,
+          "z": -2,
+          "color": "#4caf59"
+        },
+        {
+          "x": -2,
+          "y": 7,
+          "z": -3,
+          "color": "#58b866"
+        },
+        {
+          "x": -1,
+          "y": 7,
+          "z": -4,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 0,
+          "y": 7,
+          "z": -4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 1,
+          "y": 7,
+          "z": -4,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 7,
+          "z": -3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 7,
+          "z": -2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 4,
+          "y": 7,
+          "z": -1,
+          "color": "#27723d"
+        },
+        {
+          "x": -5,
+          "y": 7,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -4,
+          "y": 7,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": -3,
+          "y": 7,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": -2,
+          "y": 7,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": -1,
+          "y": 7,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 0,
+          "y": 7,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 7,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 2,
+          "y": 7,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 3,
+          "y": 7,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 4,
+          "y": 7,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 5,
+          "y": 7,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -4,
+          "y": 7,
+          "z": 1,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -3,
+          "y": 7,
+          "z": 2,
+          "color": "#4caf59"
+        },
+        {
+          "x": -2,
+          "y": 7,
+          "z": 3,
+          "color": "#58b866"
+        },
+        {
+          "x": -1,
+          "y": 7,
+          "z": 4,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 0,
+          "y": 7,
+          "z": 4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 1,
+          "y": 7,
+          "z": 4,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 7,
+          "z": 3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 7,
+          "z": 2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": 4,
+          "y": 7,
+          "z": 1,
+          "color": "#27723d"
+        },
+        {
+          "x": -3,
+          "y": 8,
+          "z": -3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 8,
+          "z": -4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 8,
+          "z": -4,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 0,
+          "y": 8,
+          "z": -5,
+          "color": "#4caf59"
+        },
+        {
+          "x": 1,
+          "y": 8,
+          "z": -4,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 8,
+          "z": -4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 3,
+          "y": 8,
+          "z": -3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -4,
+          "y": 8,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -3,
+          "y": 8,
+          "z": -1,
+          "color": "#58b866"
+        },
+        {
+          "x": -2,
+          "y": 8,
+          "z": -1,
+          "color": "#6bcb73"
+        },
+        {
+          "x": -1,
+          "y": 8,
+          "z": -1,
+          "color": "#4caf59"
+        },
+        {
+          "x": 0,
+          "y": 8,
+          "z": -1,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 8,
+          "z": -1,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 2,
+          "y": 8,
+          "z": -1,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 8,
+          "z": -1,
+          "color": "#58b866"
+        },
+        {
+          "x": 4,
+          "y": 8,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -5,
+          "y": 8,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -4,
+          "y": 8,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": -3,
+          "y": 8,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": -2,
+          "y": 8,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": -1,
+          "y": 8,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 0,
+          "y": 8,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 8,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 2,
+          "y": 8,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 3,
+          "y": 8,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 4,
+          "y": 8,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 5,
+          "y": 8,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -4,
+          "y": 8,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -3,
+          "y": 8,
+          "z": 1,
+          "color": "#58b866"
+        },
+        {
+          "x": -2,
+          "y": 8,
+          "z": 1,
+          "color": "#6bcb73"
+        },
+        {
+          "x": -1,
+          "y": 8,
+          "z": 1,
+          "color": "#4caf59"
+        },
+        {
+          "x": 0,
+          "y": 8,
+          "z": 1,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 8,
+          "z": 1,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 2,
+          "y": 8,
+          "z": 1,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 8,
+          "z": 1,
+          "color": "#58b866"
+        },
+        {
+          "x": -3,
+          "y": 8,
+          "z": 3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 8,
+          "z": 4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 8,
+          "z": 4,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 0,
+          "y": 8,
+          "z": 5,
+          "color": "#4caf59"
+        },
+        {
+          "x": 1,
+          "y": 8,
+          "z": 4,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 8,
+          "z": 4,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 3,
+          "y": 8,
+          "z": 3,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -3,
+          "y": 9,
+          "z": -2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 9,
+          "z": -3,
+          "color": "#4caf59"
+        },
+        {
+          "x": -1,
+          "y": 9,
+          "z": -3,
+          "color": "#58b866"
+        },
+        {
+          "x": 0,
+          "y": 9,
+          "z": -4,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 9,
+          "z": -3,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 9,
+          "z": -3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 9,
+          "z": -2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -4,
+          "y": 9,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -3,
+          "y": 9,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": -2,
+          "y": 9,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": -1,
+          "y": 9,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 0,
+          "y": 9,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 9,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 2,
+          "y": 9,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 3,
+          "y": 9,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 4,
+          "y": 9,
+          "z": 0,
+          "color": "#27723d"
+        },
+        {
+          "x": -3,
+          "y": 9,
+          "z": 2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 9,
+          "z": 3,
+          "color": "#4caf59"
+        },
+        {
+          "x": -1,
+          "y": 9,
+          "z": 3,
+          "color": "#58b866"
+        },
+        {
+          "x": 0,
+          "y": 9,
+          "z": 4,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 9,
+          "z": 3,
+          "color": "#58b866"
+        },
+        {
+          "x": 2,
+          "y": 9,
+          "z": 3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 3,
+          "y": 9,
+          "z": 2,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 10,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 10,
+          "z": -3,
+          "color": "#58b866"
+        },
+        {
+          "x": 0,
+          "y": 10,
+          "z": -3,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 10,
+          "z": -3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 2,
+          "y": 10,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -3,
+          "y": 10,
+          "z": 0,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 10,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": -1,
+          "y": 10,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 0,
+          "y": 10,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 10,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 2,
+          "y": 10,
+          "z": 0,
+          "color": "#58b866"
+        },
+        {
+          "x": 3,
+          "y": 10,
+          "z": 0,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -2,
+          "y": 10,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 10,
+          "z": 3,
+          "color": "#58b866"
+        },
+        {
+          "x": 0,
+          "y": 10,
+          "z": 3,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 1,
+          "y": 10,
+          "z": 3,
+          "color": "#4caf59"
+        },
+        {
+          "x": 2,
+          "y": 10,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -1,
+          "y": 11,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 0,
+          "y": 11,
+          "z": -2,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 11,
+          "z": -2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": -2,
+          "y": 11,
+          "z": 0,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -1,
+          "y": 11,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 0,
+          "y": 11,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 1,
+          "y": 11,
+          "z": 0,
+          "color": "#6bcb73"
+        },
+        {
+          "x": 2,
+          "y": 11,
+          "z": 0,
+          "color": "#2e7d44"
+        },
+        {
+          "x": -1,
+          "y": 11,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 0,
+          "y": 11,
+          "z": 2,
+          "color": "#58b866"
+        },
+        {
+          "x": 1,
+          "y": 11,
+          "z": 2,
+          "color": "#3f9b4f"
+        },
+        {
+          "x": 0,
+          "y": 12,
+          "z": -1,
+          "color": "#58b866"
+        },
+        {
+          "x": -1,
+          "y": 12,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 0,
+          "y": 12,
+          "z": 0,
+          "color": "#7dda83"
+        },
+        {
+          "x": 1,
+          "y": 12,
+          "z": 0,
+          "color": "#4caf59"
+        },
+        {
+          "x": 0,
+          "y": 12,
+          "z": 1,
+          "color": "#58b866"
+        },
+        {
+          "x": 0,
+          "y": 13,
+          "z": 0,
+          "color": "#c7f27a"
+        },
+        {
+          "x": 3,
+          "y": 9,
+          "z": -1,
+          "color": "#e7d85a"
+        }
+      ],
+      "customParts": [],
+      "footprint": 1.8
+    }
+  ],
+  "cameraMode": "perspective",
+  "toolId": "select",
+  "useLandscapeEngine": false,
+  "landscapeMeshMode": false,
+  "landscapeMeshBiome": "grassland",
+  "landscapeMeshStyle": "lowpoly",
+  "landscapeEngineSeed": null,
+  "landscapeEngineBiome": null,
+  "planetLandscape": null
+}

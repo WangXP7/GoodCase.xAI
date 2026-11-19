@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import '../vehicles/tankFactory.ts';
+import {Vector3, Group, Quaternion} from 'three';
+import {getSpec} from '../vehicles/specs.ts';
+import {createCombatState, selectedWeaponModuleState, tickModuleRepairs, resolveShellHit} from './damage.ts';
+import {auxiliaryCapabilities, requestAuxiliary, stepRoofGun} from './auxiliarySystems.ts';
+import {traceTank,tankPoseFromState,blastTargets} from './armor.ts';
+import {createTankState} from './movement.ts';
+import {createShell} from './ballistics.ts';
+const spec=getSpec('m2a2_bradley'), combat=createCombatState(spec);
+const missile=spec.gun.shells.find(s=>s.guided),cannon=spec.gun.shells.find(s=>!s.guided);
+assert(missile&&cannon);
+combat.modules.missileRack.state='red';
+assert.equal(selectedWeaponModuleState(combat,spec.gun,missile),'red');
+assert.equal(selectedWeaponModuleState(combat,spec.gun,cannon),'ok');
+combat.modules.missileRack.state='ok';combat.modules.gun.state='red';
+assert.equal(selectedWeaponModuleState(combat,spec.gun,missile),'ok','independent launcher survives main gun damage');
+assert.equal(selectedWeaponModuleState(combat,spec.gun,cannon),'red');
+combat.modules.gun.state='ok';combat.modules.feedSystem.state='red';
+assert.equal(selectedWeaponModuleState(combat,spec.gun,cannon),'red','autocannon cannot feed rounds when its feeder is destroyed');
+assert.equal(selectedWeaponModuleState(combat,spec.gun,missile),'ok');
+const round={name:'module probe',type:'APFSDS',caliberMm:120,pen100Mm:1200,pen1000Mm:1000,dmg:100,velocityMps:1000,moduleDmg:1000};
+for(const id of ['object148_proto','t90m_proryv','challenger3_proto']){
+ const spec=getSpec(id), combat=createCombatState(spec), state=createTankState(spec,new Vector3(12,3,7),.3);
+ const target={id,team:'blue',spec,combat,state};
+ const gun=auxiliaryCapabilities(spec).guns[0];
+ assert(combat.modules.roofGun,id+' has a real independent module');
+ for(const [yaw,pitch] of [[0,0],[1.4,.4],[-2,-.12]]){
+  combat.modules.roofGun.hp=combat.modules.roofGun.maxHp;combat.modules.roofGun.state='ok';
+  state.turretYaw=.7;state.roofGunYaw=yaw;state.roofGunPitch=pitch;
+  const hull=new Group(),turret=new Group(),mount=new Group(),barrel=new Group();
+  hull.position.copy(state.pos);hull.rotation.set(-state.visualPitch,state.yaw,state.visualRoll,'YXZ');
+  turret.position.fromArray(spec.armor.turretPivot);turret.rotation.y=state.turretYaw;hull.add(turret);
+  (gun.owner==='turret'?turret:hull).add(mount);mount.position.fromArray(gun.position);mount.scale.fromArray(gun.scale);
+  mount.quaternion.fromArray(gun.rotation).multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),yaw));
+  barrel.position.fromArray(gun.pivot);barrel.rotation.x=-pitch;mount.add(barrel);hull.updateMatrixWorld(true);
+  const part=gun.collisionParts[0],center=new Vector3(...part.min).add(new Vector3(...part.max)).multiplyScalar(.5).applyMatrix4(barrel.matrixWorld);
+  const from=center.clone().add(new Vector3(0,.06,0)),to=center.clone().add(new Vector3(0,-.06,0));
+  const pose=tankPoseFromState(state),hits=traceTank(from,to,pose,spec.armor);
+  assert(hits.some(h=>h.kind==='module'&&h.module==='roofGun'),id+' moving roof weapon has a matching damage volume');
+  assert(blastTargets(pose,spec.armor).some(b=>b.name==='roofGun'&&b.point.distanceTo(center)<1e-5),id+' blast and projectile frames agree');
+  const shell=createShell(round,'probe',false,from,new Vector3(0,-1,0),1);shell.pos.copy(to);
+  const event=resolveShellHit(shell,target,hits,()=>0);
+  assert(event.modulesHit.some(m=>m.module==='roofGun'),id+' actual projectile damage reaches roof module');
+ }
+ assert.equal(combat.modules.roofGun.state,'red');
+ // round 2 U9: the crew may switch a broken roof gun off (it starts on), never on
+ assert.equal(requestAuxiliary(target,'roofGun',1),true,'a broken roof gun can be switched off');
+ assert.equal(requestAuxiliary(target,'roofGun',1),false,'broken roof gun cannot activate');
+ combat.auxiliary={gunOn:true,gunYaw:0,gunPitch:0,nextShot:0,shots:0};
+ assert.equal(stepRoofGun(target,1,1/60,{entities:[],visible:()=>true,clear:()=>true}),false,'damage silences active automatic fire');
+ // 2026-11-02 audit M4: without throwing the crew's switch (it stayed off after the repair; roofGunRepair.selftest)
+ assert.equal(combat.auxiliary.gunOn,true,'the switch stays as the crew left it');
+ assert.equal(selectedWeaponModuleState(combat,spec.gun,spec.gun.shells[0]),'ok','main gun remains usable');
+ assert(tickModuleRepairs(combat,60).includes('roofGun'),'repair restores the independent roof station');
+ assert.equal(combat.modules.roofGun.state,'yellow');
+ assert.equal(requestAuxiliary(target,'roofGun',61),true,'a repaired roof gun takes the toggle again');
+}
+console.log('weaponModuleDamage: independent launchers/feed/roof damage and three articulated roof stations passed');

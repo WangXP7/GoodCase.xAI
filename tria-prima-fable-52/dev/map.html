@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>map check</title>
+<body style="margin: 0; background: #000">
+  <script type="module">
+    import { generateTerrain, WORLD, heightFn } from '../src/world/heightmap.js';
+    import { drawMap } from '../src/world/mapimage.js';
+    const t0 = performance.now();
+    const T = await generateTerrain();
+    const t1 = performance.now();
+    const c = drawMap(T, 1024);
+    document.body.appendChild(c);
+    let min = 1e9,
+      max = -1e9;
+    for (const v of T.h) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const probe = {};
+    for (const [k, x, z] of [
+      ['chapel', -10, 70],
+      ['gate', -118, 60],
+      ['gateN', -118, 72],
+      ['hollow', -245, 30],
+      ['islet', 184, 52],
+      ['mere', 215, 50],
+      ['scarIsle', 70, -255],
+      ['scarLava', 88, -255],
+      ['scarShelf', 108, -255],
+      ['scarRim', 133, -255],
+      ['canyon1', 49, -163],
+      ['canyonWall', 57, -161],
+      ['peak', -170, -255],
+      ['dock', 0, 300],
+      ['bridge', 20, -26],
+    ])
+      probe[k] = +T.heightAt(x, z).toFixed(1);
+    window.RESULT = { ms: Math.round(t1 - t0), min, max, probe };
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+    await fetch('/__shot?name=map_check', { method: 'POST', body: blob });
+    window.DONE = true;
+  </script>
+</body>

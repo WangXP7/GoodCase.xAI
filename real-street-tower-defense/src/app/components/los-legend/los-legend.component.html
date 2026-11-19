@@ -1,0 +1,11 @@
+<div class="los-legend td-overlay">
+  <div class="td-caps los-legend-title">Line of Sight</div>
+  <div class="los-legend-row">
+    @for (entry of entries(); track entry.label) {
+      <div class="los-legend-item">
+        <span class="td-swatch is-lg" [style.--td-mark]="entry.swatch"></span>
+        <span class="td-note">{{ entry.label }}</span>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,1133 @@
+import * as THREE from 'three';
+import { createCaptureFlag, type CaptureFlag } from '../fx/captureFlag.ts';
+import { objectiveRing, fitObjectiveSurface } from './objectiveSurface.ts';
+import { buildObjectivePost, objectivePostFormOf, type ObjectivePostForm, type ObjectivePostGeometry } from './objectivePosts.ts';
+import {
+  buildAirdropCanopy, buildAirdropCanopyDown, buildAirdropLoad, buildFlagStand, buildGoalGantry, buildGoalHoop, buildTurboBall,
+} from './modeObjects.ts';
+
+import type { MatchModePresentationState, ObjectiveTeam } from '../sim/matchModes.ts';
+import { createProvingRangeDressing, type ProvingRangeDressing } from './provingRangeDressing.ts';
+import { objectiveMarkersFor, type ObjectiveMarker } from '../ui/minimapObjectives.ts';
+import {
+  badgeLetter, drawCheck, drawGoalGlyph, drawHexBadge, drawLaneGlyph, drawPennant, drawPickupGlyph, drawSpawnGlyph,
+  laneLetter, OBJECTIVE_PALETTE, sideColor, sideFill, type GlyphLetter, type ObjectiveSide,
+} from '../ui/objectiveGlyphs.ts';
+import { drawGlyphLetter } from '../ui/objectiveGlyphLetters.ts';
+import { createAirSupportWorld } from './airSupportWorld.ts';
+
+/** The sprite letters' placement (one scratch: a sprite's texture paints at once). */
+const spriteLetter: GlyphLetter = { x: 0, y: 0, px: 0, color: '', halo: 0 };
+
+const ALLY = 0x6fe887;
+const ENEMY = 0xf26a62;
+const NEUTRAL = 0xe7edf1;
+const AMBER = 0xf3a536;
+const HEAL = 0x65e68a;
+const MAX_PICKUPS = 12;
+/** tactical map 2026-09-15: sprite icon texture edge (px) and the beacon column height (m). */
+const ICON_PX = 128;
+const BEACON_HEIGHT_M = 18;
+const ZONE_RADIUS_M = 26.5;
+const ARC_STEPS = 20;
+/** icons are invisible inside ICON_NEAR_M, full at ICON_FAR_M, and grow with distance past ICON_HOLD_M */
+const ICON_NEAR_M = 16;
+const ICON_FAR_M = 42;
+const ICON_HOLD_M = 120;
+const ICON_MAX_GROWTH = 3.5;
+/** The proving ground's lane boards keep growing to the far lane (owner backlog 2026-10-21: legible from the firing line),
+ *  their foot held at the tether's top so a grown board never covers its hull. */
+const LANE_MAX_GROWTH = 7;
+const LANE_BOARD_FOOT_M = 11 - 2.3;
+
+interface MarkerGroup extends THREE.Group {
+  userData: {
+    flagVisual?: CaptureFlag;
+    markerMaterial?: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
+    heal?: THREE.Object3D;
+    crate?: THREE.Object3D;
+    parachute?: THREE.Object3D;
+    cage?: THREE.Object3D;
+    ammo?: THREE.Object3D;
+    /** materials tinted by the viewer's side (own / enemy) on every update */
+    teamMaterials?: (THREE.MeshBasicMaterial | THREE.MeshStandardMaterial)[];
+    /** floating icon sprite above the objective */
+    icon?: THREE.Sprite;
+    /** capture-zone area disc and progress arc */
+    discMaterial?: THREE.MeshBasicMaterial;
+    arc?: THREE.Mesh;
+    arcMaterial?: THREE.MeshBasicMaterial;
+    beaconMaterial?: THREE.MeshBasicMaterial;
+    /** the light column's authored opacity before the viewer-distance fade */
+    beaconOpacity?: number;
+    /** (props lane A #28) a capture zone's physical post: its form and its pennant's material (the owner's colour) */
+    postForm?: ObjectivePostForm;
+    flagMaterial?: THREE.MeshStandardMaterial;
+    /** (#28) the air-drop's canopy collapsed beside its landed load; a flag base's stand and its form */
+    canopyDown?: THREE.Object3D;
+    standForm?: ObjectivePostForm;
+  };
+}
+
+function sideHex(side: ObjectiveSide): number {
+  return side === 'own' ? ALLY : side === 'enemy' ? ENEMY : side === 'contested' ? AMBER : NEUTRAL;
+}
+
+export interface MatchModeWorldPresentation {
+  readonly root: THREE.Group;
+  update(state: MatchModePresentationState | null, timeS: number): void;
+  dispose(): void;
+}
+
+/** (ac130-fx-228 r2) the live presentations, so the covered deployment can build their objectives before its scene
+ *  compile (stageMatchModeObjectives) */
+const livePresentations = new Set<MatchModeWorldPresentation>();
+
+/**
+ * (ac130-fx-228 r2) Build the objectives of every live presentation drawn in `scene` for `state` now. The battle's frame
+ * first hands the presentation its state on the first live frame, after the covered deployment's scene compile, so a
+ * mode's markers and posts (the AC-130's escort and extraction posts) compiled their programs at the reveal; the solo
+ * deployment calls this before that compile (soloBattleDeploymentRuntime.ts). The frame's own update follows unchanged.
+ */
+export function stageMatchModeObjectives(scene: THREE.Object3D, state: MatchModePresentationState | null,
+  timeS: number): number {
+  if (!state) return 0;
+  let staged = 0;
+  for (const presentation of livePresentations) {
+    let node: THREE.Object3D | null = presentation.root;
+    while (node && node !== scene) node = node.parent;
+    if (!node) continue;
+    presentation.update(state, timeS);
+    staged++;
+  }
+  return staged;
+}
+
+/** campaign slice 3 (2026-09-12): ground fit for dressing that spreads beyond an objective centre. */
+interface MatchModeWorldPresentationOptions {
+  groundHeight?: (x: number, z: number) => number;
+  /**
+   * tactical map 2026-09-15: the viewer's world position. Floating icons and
+   * light columns fade out within a few tank lengths (a badge over your own
+   * spawn would fill the screen) and icons hold a constant screen size beyond
+   * ICON_HOLD_M so a far zone letter stays legible.
+   */
+  viewerPosition?: () => { x: number; y: number; z: number } | null;
+  /**
+   * Engine hook folding a lit material into the cascaded-shadow setup; a lit
+   * material outside it is struck by every cascade light at once and blows
+   * out. Objective markers stay unlit and never need it.
+   */
+  setupMaterial?: (material: THREE.Material) => void;
+  releaseMaterial?: (material: THREE.Material) => void;
+  /** (props lane A #28) the battlefield's id: a capture zone's post takes the map's form (objectivePosts.ts) */
+  mapId?: () => string | null;
+}
+
+interface WorksPlacement { x: number; y: number; z: number; yaw: number }
+
+interface LineWorksPlan {
+  lines: number;
+  bags: WorksPlacement[];
+  planks: WorksPlacement[];
+  posts: WorksPlacement[];
+  pickets: WorksPlacement[];
+  crates: WorksPlacement[];
+  /** wire strands as flat xyz segment pairs */
+  wire: number[];
+}
+
+// campaign slice 3 (2026-09-12): each Frontline Assault sector is dressed as a
+// trench line — a sandbag parapet in a shallow chevron facing the attackers,
+// a timber revetment on posts behind it, ammunition crates in its lee and a
+// picket-and-wire belt out front. Lit, shadow-casting, instanced; planned
+// once per sector layout and refilled only when a new match lays new sectors.
+export const LINE_WORKS = Object.freeze({
+  lines: 3,
+  bagCourses: 3,
+  bagsPerWing: 10,
+  planksPerLine: 6,
+  postsPerLine: 8,
+  picketsPerLine: 7,
+  cratesPerLine: 4,
+  wireSegmentsPerLine: 24,
+  bagSize: [0.62, 0.26, 0.40] as const,
+  plankSize: [1.9, 0.85, 0.08] as const,
+  postSize: [0.12, 1.25, 0.12] as const,
+  picketSize: [0.07, 1.25, 0.07] as const,
+  crateSize: [0.9, 0.5, 0.5] as const,
+  parapetAheadM: 4.0,
+  revetmentAheadM: 1.6,
+  wireAheadM: 11.0,
+  wingSweepRad: 0.35,
+});
+const BAGS_PER_LINE = 2 * LINE_WORKS.bagCourses * LINE_WORKS.bagsPerWing;
+
+/** Deterministic 0..1 jitter so a sector layout always dresses the same way. */
+function worksJitter(seed: number): number {
+  const v = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/** Yaw that lays a box's long (x) axis along the world direction (dx, dz). */
+const yawAlong = (dx: number, dz: number): number => Math.atan2(-dz, dx);
+
+export function planLineWorks(
+  zones: ReadonlyArray<{ x: number; y: number; z: number }>,
+  groundHeight?: (x: number, z: number) => number,
+): LineWorksPlan {
+  const lines = zones.slice(0, LINE_WORKS.lines);
+  const plan: LineWorksPlan = {
+    lines: lines.length, bags: [], planks: [], posts: [], pickets: [], crates: [], wire: [],
+  };
+  if (!lines.length) return plan;
+  const first = lines[0];
+  const last = lines[lines.length - 1];
+  let ax = last.x - first.x;
+  let az = last.z - first.z;
+  const axisLength = Math.hypot(ax, az);
+  if (axisLength < 1e-6) { ax = 1; az = 0; } else { ax /= axisLength; az /= axisLength; }
+  const lx = -az;
+  const lz = ax;
+  for (const [index, zone] of lines.entries()) {
+    const ground = (x: number, z: number): number =>
+      groundHeight ? groundHeight(x, z) : zone.y - 0.12;
+    const seed = index * 131;
+    // sandbag parapet: apex toward the attackers (-axis), wings sweeping back
+    const px = zone.x - ax * LINE_WORKS.parapetAheadM;
+    const pz = zone.z - az * LINE_WORKS.parapetAheadM;
+    const sweepCos = Math.cos(LINE_WORKS.wingSweepRad);
+    const sweepSin = Math.sin(LINE_WORKS.wingSweepRad);
+    for (const wing of [-1, 1]) {
+      const dx = lx * wing * sweepCos + ax * sweepSin;
+      const dz = lz * wing * sweepCos + az * sweepSin;
+      const yaw = yawAlong(dx, dz);
+      for (let course = 0; course < LINE_WORKS.bagCourses; course++) {
+        for (let j = 0; j < LINE_WORKS.bagsPerWing; j++) {
+          const s = 0.5 + j * 0.66 + (course % 2) * 0.33;
+          const n = seed + wing * 7 + course * 29 + j;
+          const x = px + dx * s + (worksJitter(n) - 0.5) * 0.06;
+          const z = pz + dz * s + (worksJitter(n + 0.5) - 0.5) * 0.06;
+          plan.bags.push({
+            x, y: ground(x, z) + 0.10 + course * 0.19, z,
+            yaw: yaw + (worksJitter(n + 0.25) - 0.5) * 0.16,
+          });
+        }
+      }
+    }
+    // timber revetment: planks on posts a stride behind the parapet
+    const rx = zone.x - ax * LINE_WORKS.revetmentAheadM;
+    const rz = zone.z - az * LINE_WORKS.revetmentAheadM;
+    const plankYaw = yawAlong(lx, lz);
+    for (const wing of [-1, 1]) {
+      for (let j = 0; j < 3; j++) {
+        const s = wing * (1.0 + j * 1.95);
+        const x = rx + lx * s;
+        const z = rz + lz * s;
+        plan.planks.push({ x, y: ground(x, z) + 0.45, z, yaw: plankYaw });
+      }
+      for (let j = 0; j < 4; j++) {
+        const s = wing * (0.05 + j * 1.95);
+        const x = rx + lx * s;
+        const z = rz + lz * s;
+        plan.posts.push({ x, y: ground(x, z) + 0.62, z, yaw: plankYaw });
+      }
+    }
+    // ammunition crates in the lee of the revetment
+    const cx = zone.x + ax * 1.2;
+    const cz = zone.z + az * 1.2;
+    const crateSpots: ReadonlyArray<readonly [number, number, number]> = [
+      [-0.55, 0.25, 0], [0.55, 0.25, 0.12], [-0.5, 0.75, 0.3], [0.5, 0.75, -0.25],
+    ];
+    for (const [s, h, twist] of crateSpots) {
+      const x = cx + lx * s;
+      const z = cz + lz * s;
+      plan.crates.push({ x, y: ground(x, z) + h, z, yaw: plankYaw + twist });
+    }
+    // picket-and-wire belt out front
+    const wx = zone.x - ax * LINE_WORKS.wireAheadM;
+    const wz = zone.z - az * LINE_WORKS.wireAheadM;
+    const picketBases: Array<readonly [number, number, number]> = [];
+    for (let j = 0; j < LINE_WORKS.picketsPerLine; j++) {
+      const s = (j - (LINE_WORKS.picketsPerLine - 1) / 2) * 2.4;
+      const n = seed + 61 + j;
+      const x = wx + lx * s + ax * (worksJitter(n) - 0.5) * 0.9;
+      const z = wz + lz * s + az * (worksJitter(n) - 0.5) * 0.9;
+      const g = ground(x, z);
+      picketBases.push([x, g, z]);
+      plan.pickets.push({ x, y: g + 0.62, z, yaw: worksJitter(n + 0.7) * Math.PI });
+    }
+    for (let j = 0; j + 1 < picketBases.length; j++) {
+      const [x0, g0, z0] = picketBases[j];
+      const [x1, g1, z1] = picketBases[j + 1];
+      for (const h of [0.35, 0.72, 1.08]) plan.wire.push(x0, g0 + h, z0, x1, g1 + h, z1);
+      plan.wire.push(x0, g0 + 0.35, z0, x1, g1 + 1.08, z1);
+    }
+  }
+  return plan;
+}
+
+function teamColor(team: ObjectiveTeam): number {
+  return team === 'alpha' ? ALLY : ENEMY;
+}
+
+function basic(color: number, opacity = 1): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: opacity < 1,
+    opacity,
+    depthWrite: opacity >= 1,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+}
+
+/**
+ * Low-overhead battlefield markers for objective modes. Geometry is allocated
+ * only when a mode first needs it, never casts shadows, and updates retained
+ * meshes without allocating in the render loop. Frontline Assault adds lit,
+ * instanced trench works per sector (campaign slice 3, 2026-09-12); those do
+ * cast shadows, and are planned once per sector layout.
+ */
+export function createMatchModeWorldPresentation(
+  scene: THREE.Scene,
+  options: MatchModeWorldPresentationOptions = {},
+): MatchModeWorldPresentation {
+  const root = new THREE.Group();
+  root.name = 'match-mode-objectives';
+  root.visible = false;
+  root.renderOrder = 2;
+  scene.add(root);
+
+  let flagMarkers: MarkerGroup[] | null = null;
+  let flagBaseMarkers: MarkerGroup[] | null = null;
+  let zoneMarkers: MarkerGroup[] | null = null;
+  let ballMarker: THREE.Mesh | null = null;
+  let goalMarkers: MarkerGroup[] | null = null;
+  let pickupMarkers: MarkerGroup[] | null = null;
+  let spawnMarkers: MarkerGroup[] | null = null;
+  /** the proving ground's lane marks: an amber ring on each mark and the lane's board floating over it */
+  let laneMarkers: MarkerGroup[] = [];
+  let laneTether: THREE.CylinderGeometry | null = null;
+  /** the proving ground's furniture: the plate rack, the range boards, the drive course's boards and poles */
+  let rangeDressing: ProvingRangeDressing | null = null;
+  let airWorld: ReturnType<typeof createAirSupportWorld> | null = null;
+
+  // tactical map 2026-09-15: the same glyphs the minimap paints, rasterised
+  // once per (kind, side, label, status) into sprite textures that float
+  // above the objectives — a zone letter, a sector number, a flag pennant, a
+  // spawn mark, a goal, a cache — so the world and the map share one language.
+  const iconTextures = new Map<string, THREE.CanvasTexture>();
+  const iconTexture = (key: string, paint: (ctx: CanvasRenderingContext2D, c: number) => void): THREE.CanvasTexture => {
+    let texture = iconTextures.get(key);
+    if (texture) return texture;
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    if (canvas) {
+      canvas.width = ICON_PX; canvas.height = ICON_PX;
+      const ctx = canvas.getContext('2d');
+      if (ctx) paint(ctx, ICON_PX / 2);
+    }
+    texture = new THREE.CanvasTexture(canvas ?? ({ width: ICON_PX, height: ICON_PX } as unknown as HTMLCanvasElement));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    iconTextures.set(key, texture);
+    return texture;
+  };
+  const iconSprite = (name: string, scale: number, y: number): THREE.Sprite => {
+    const material = new THREE.SpriteMaterial({
+      transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.name = name;
+    sprite.scale.set(scale, scale, 1);
+    sprite.position.y = y;
+    sprite.renderOrder = 6;
+    sprite.userData.baseScale = scale;
+    return sprite;
+  };
+  // distance treatment for a marker's icon and light column
+  const fadeByViewer = (marker: MarkerGroup, maxGrowth = ICON_MAX_GROWTH): void => {
+    const viewer = options.viewerPosition?.();
+    if (!viewer) return;
+    const distance = Math.hypot(marker.position.x - viewer.x, marker.position.z - viewer.z);
+    const visibility = Math.max(0, Math.min(1, (distance - ICON_NEAR_M) / (ICON_FAR_M - ICON_NEAR_M)));
+    const icon = marker.userData.icon;
+    if (icon) {
+      const base = Number(icon.userData.baseScale) || icon.scale.x;
+      const growth = Math.max(1, Math.min(maxGrowth, distance / ICON_HOLD_M));
+      icon.scale.set(base * growth, base * growth, 1);
+      (icon.material as THREE.SpriteMaterial).opacity = visibility;
+      icon.visible = visibility > 0.02;
+    }
+    const column = marker.userData.beaconMaterial;
+    if (column) {
+      const full = Number(marker.userData.beaconOpacity ?? column.opacity);
+      marker.userData.beaconOpacity = full;
+      column.opacity = full * visibility;
+    }
+  };
+  const setIcon = (
+    sprite: THREE.Sprite | undefined, key: string, paint: (ctx: CanvasRenderingContext2D, c: number) => void,
+  ): void => {
+    if (!sprite) return;
+    const material = sprite.material as THREE.SpriteMaterial;
+    const texture = iconTexture(key, paint);
+    sprite.userData.iconKey = key;
+    if (material.map !== texture) {
+      material.map = texture;
+      material.needsUpdate = true;
+    }
+  };
+  // (improve-271 plan 023) a sprite already wearing `key` needs no paint closure this frame
+  const needsIcon = (sprite: THREE.Sprite | undefined, key: string): boolean => !!sprite && sprite.userData.iconKey !== key;
+  const FLAG_KEYS: Readonly<Record<ObjectiveSide, string>> = { own: 'flag:own', enemy: 'flag:enemy', neutral: 'flag:neutral', contested: 'flag:contested' };
+  const GOAL_KEYS: Readonly<Record<ObjectiveSide, string>> = { own: 'goal:own', enemy: 'goal:enemy', neutral: 'goal:neutral', contested: 'goal:contested' };
+  // the markers' views, rebuilt only when the one derivation hands over a new array: spawn, zone/sector and lane marks
+  // with their icon keys, in derivation order
+  let derivedFrom: readonly ObjectiveMarker[] | null = null;
+  const spawnMarks: ObjectiveMarker[] = [];
+  const spawnKeys: string[] = [];
+  const zoneMarks: ObjectiveMarker[] = [];
+  const zoneKeys: string[] = [];
+  const laneMarks: ObjectiveMarker[] = [];
+  const laneKeys: string[] = [];
+  const laneLabels: string[] = [];
+  const deriveViews = (marks: readonly ObjectiveMarker[]): boolean => {
+    if (marks === derivedFrom) return false;
+    derivedFrom = marks;
+    spawnMarks.length = spawnKeys.length = zoneMarks.length = zoneKeys.length = 0;
+    laneMarks.length = laneKeys.length = laneLabels.length = 0;
+    for (const mark of marks) {
+      if (mark.kind === 'spawn') {
+        spawnMarks.push(mark);
+        spawnKeys.push(`spawn:${mark.side}`);
+      } else if (mark.kind === 'zone' || mark.kind === 'sector') {
+        zoneMarks.push(mark);
+        zoneKeys.push(`${mark.kind}:${mark.side}:${mark.label ?? ''}:${mark.status ?? ''}`);
+      } else if (mark.kind === 'lane') {
+        const label = mark.rangeM != null ? String(mark.rangeM) : mark.label ?? '';
+        laneMarks.push(mark);
+        laneLabels.push(label);
+        laneKeys.push(`lane:${label}`);
+      }
+    }
+    return true;
+  };
+  let beaconGeometry: THREE.CylinderGeometry | null = null;
+  // additive light column: the objective is visible from across the map
+  const beacon = (color: number, opacity: number): THREE.Mesh => {
+    beaconGeometry ??= new THREE.CylinderGeometry(0.7, 1.5, BEACON_HEIGHT_M, 12, 1, true);
+    const material = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide,
+      toneMapped: false, blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(beaconGeometry, material);
+    mesh.name = 'beacon';
+    mesh.position.y = BEACON_HEIGHT_M / 2;
+    return mesh;
+  };
+  const perspectiveOf = (state: MatchModePresentationState): ObjectiveTeam =>
+    state.perspectiveTeam === 'bravo' ? 'bravo' : 'alpha';
+  const sideOf = (team: ObjectiveTeam, state: MatchModePresentationState): ObjectiveSide =>
+    team === perspectiveOf(state) ? 'own' : 'enemy';
+
+  const buildFlags = (): MarkerGroup[] => {
+    if (flagMarkers) return flagMarkers;
+    flagMarkers = (['alpha', 'bravo'] as const).map((team) => {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `${team}-flag`;
+      const flag = createCaptureFlag(teamColor(team));
+      flag.root.scale.setScalar(1.65);
+      const icon = iconSprite(`${team}-flag-icon`, 5.2, 7.2);
+      marker.userData.flagVisual = flag;
+      marker.userData.teamMaterials = [flag.material];
+      marker.userData.icon = icon;
+      marker.add(flag.root, icon);
+      root.add(marker);
+      return marker;
+    });
+    return flagMarkers;
+  };
+
+  // the flag's home: an outer halo ring and a light column that stay at the
+  // base while the flag itself travels with its carrier
+  /** (#28) Fill (or refill, on a new map) a flag base's stand with the battlefield's form. */
+  const dressStand = (marker: MarkerGroup): void => {
+    const form = objectivePostFormOf(options.mapId?.()), stand = marker.children[2] as THREE.Group | undefined;
+    if (!stand || (marker.userData.standForm === form && stand.children.length)) return;
+    for (const child of stand.children) (child as THREE.Mesh).geometry?.dispose();
+    stand.clear();
+    standMaterial ??= litObject({ vertexColors: true, roughness: 0.9, metalness: 0.02 });
+    const mesh = shadowed(new THREE.Mesh(buildFlagStand(form), standMaterial));
+    mesh.name = 'flag-stand-body';
+    stand.add(mesh);
+    marker.userData.standForm = form;
+  };
+  let standMaterial: THREE.MeshStandardMaterial | null = null;
+
+  const buildFlagBases = (): MarkerGroup[] => {
+    if (flagBaseMarkers) return flagBaseMarkers;
+
+    flagBaseMarkers = (['alpha', 'bravo'] as const).map((team) => {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `${team}-flag-base`;
+      const halo = new THREE.Mesh(objectiveRing(8.6, 9.6), basic(teamColor(team), 0.3));
+      halo.rotation.x = -Math.PI / 2;
+      halo.position.y = 0.1;
+      const column = beacon(teamColor(team), 0.14);
+      marker.userData.teamMaterials = [halo.material as THREE.MeshBasicMaterial];
+      marker.userData.beaconMaterial = column.material as THREE.MeshBasicMaterial;
+      // (#28) the flag's home stand, by the battlefield (dressStand fills it)
+      const stand = new THREE.Group();
+      stand.name = 'flag-stand';
+      marker.add(halo, column, stand);
+      root.add(marker);
+      return marker;
+    });
+    return flagBaseMarkers;
+  };
+
+  // team spawns (Zone Control both sides; the co-op modes the human side):
+  // ring, light column and the spawn mark floating above
+  const buildSpawns = (): MarkerGroup[] => {
+    if (spawnMarkers) return spawnMarkers;
+
+    spawnMarkers = (['alpha', 'bravo'] as const).map((team) => {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `${team}-spawn`;
+      const ring = new THREE.Mesh(objectiveRing(5.4, 6.6), basic(teamColor(team), 0.34));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.1;
+      const column = beacon(teamColor(team), 0.12);
+      const icon = iconSprite(`${team}-spawn-icon`, 6, 8.5);
+      marker.userData.teamMaterials = [ring.material as THREE.MeshBasicMaterial];
+      marker.userData.beaconMaterial = column.material as THREE.MeshBasicMaterial;
+      marker.userData.icon = icon;
+      marker.add(ring, column, icon);
+      marker.visible = false;
+      root.add(marker);
+      return marker;
+    });
+    return spawnMarkers;
+  };
+
+  // (props lane A #28, 2026-10-15; WORKLIST #28: "Replace the bare core pillar with a physical objective post per map,
+  // coloured by its owner through a pennant or flag rather than a translucent material") the zone's centre holds the
+  // map's post — a field-telephone post in its sandbags, a guyed comms mast, a desert cairn, a survey beacon — lit, in
+  // the cascades, its pennant in the owner's colour; one body geometry and one flag geometry a form, shared by the zones
+  let postGeometry: ObjectivePostGeometry | null = null;
+  let postMaterial: THREE.MeshStandardMaterial | null = null;
+  /** (#28) the mode objects' lit materials: in the cascades while they live, released with the presentation */
+  const modeLit: THREE.MeshStandardMaterial[] = [];
+  const litObject = (params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial => {
+    const material = new THREE.MeshStandardMaterial(params);
+    options.setupMaterial?.(material);
+    modeLit.push(material);
+    return material;
+  };
+  const shadowed = <T extends THREE.Mesh>(mesh: T): T => { mesh.castShadow = true; mesh.receiveShadow = true; return mesh; };
+  const postOf = (form: ObjectivePostForm): ObjectivePostGeometry => {
+    if (postGeometry?.form === form) return postGeometry;
+    postGeometry?.body.dispose(); postGeometry?.flag.dispose();
+    postGeometry = buildObjectivePost(form);
+    return postGeometry;
+  };
+  /** Fill (or refill, on a new map) a zone's post group with the map's form. */
+  const dressPost = (marker: MarkerGroup, post: THREE.Group, form: ObjectivePostForm): void => {
+    if (marker.userData.postForm === form && post.children.length) return;
+    const geometry = postOf(form);
+    if (!postMaterial) {
+      postMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.02 });
+      options.setupMaterial?.(postMaterial);
+    }
+    let flagMaterial = marker.userData.flagMaterial;
+    if (!flagMaterial) {
+      flagMaterial = new THREE.MeshStandardMaterial({ color: NEUTRAL, roughness: 0.85, metalness: 0, side: THREE.DoubleSide });
+      options.setupMaterial?.(flagMaterial);
+      marker.userData.flagMaterial = flagMaterial;
+    }
+    post.clear();
+    const body = new THREE.Mesh(geometry.body, postMaterial), flag = new THREE.Mesh(geometry.flag, flagMaterial);
+    body.name = 'objective-post-body'; flag.name = 'objective-post-flag';
+    body.castShadow = flag.castShadow = true;
+    body.receiveShadow = flag.receiveShadow = true;
+    post.add(body, flag);
+    marker.userData.postForm = form;
+  };
+
+  const buildZones = (): MarkerGroup[] => {
+    if (zoneMarkers) return zoneMarkers;
+
+    zoneMarkers = Array.from({ length: 3 }, (_, index) => {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `capture-zone-${index + 1}`;
+      const material = basic(NEUTRAL, 0.4);
+      const ring = new THREE.Mesh(objectiveRing(ZONE_RADIUS_M, 30), material);
+      ring.rotation.x = -Math.PI / 2;
+      const core = new THREE.Group();
+      core.name = 'objective-post';
+      dressPost(marker, core, objectivePostFormOf(options.mapId?.()));
+      marker.userData.markerMaterial = material;
+      // tactical map 2026-09-15: the zone reads as an area (tinted disc), its
+      // capture progress as an arc inside the ring, its letter / sector number
+      // as a floating badge
+      const discMaterial = basic(NEUTRAL, 0.09);
+      const disc = new THREE.Mesh(objectiveRing(0, ZONE_RADIUS_M), discMaterial);
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.05;
+      const arcMaterial = basic(NEUTRAL, 0.85);
+      const arc = new THREE.Mesh(objectiveRing(ZONE_RADIUS_M - 3.4, ZONE_RADIUS_M - 1.2), arcMaterial);
+      arc.rotation.x = -Math.PI / 2;
+      arc.position.y = 0.14;
+      arc.visible = false;
+      const icon = iconSprite(`capture-zone-${index + 1}-icon`, 7.5, 9.5);
+      marker.userData.discMaterial = discMaterial;
+      marker.userData.arc = arc;
+      marker.userData.arcMaterial = arcMaterial;
+      marker.userData.icon = icon;
+      marker.add(ring, core, disc, arc, icon);
+      root.add(marker);
+      return marker;
+    });
+    return zoneMarkers;
+  };
+
+  const buildTurbo = (): void => {
+    // (#28, WORKLIST mode:turbo-ball-and-goals: "a welded steel mooring buoy … with plate seams, weld beads, lifting lugs,
+    // stencilled numbers"; "a hoop built from bolted steel segments with marker lights, carried on a lattice or scaffold
+    // gantry standing on concrete footings, team paint … guy wires") lit, in the cascades, casting their shadows
+    if (!ballMarker) {
+      const material = litObject({ vertexColors: true, roughness: 0.5, metalness: 0.3, emissive: 0x25313a, emissiveIntensity: 0.2 });
+      ballMarker = shadowed(new THREE.Mesh(buildTurboBall(2.2), material));
+      ballMarker.name = 'turbo-ball';
+      root.add(ballMarker);
+    }
+    if (!goalMarkers) {
+      const hoopGeometry = buildGoalHoop(), gantryGeometry = buildGoalGantry();
+      const gantryMaterial = litObject({ vertexColors: true, roughness: 0.7, metalness: 0.35 });
+      goalMarkers = (['alpha', 'bravo'] as const).map((team) => {
+        const marker = new THREE.Group() as MarkerGroup;
+        marker.name = `${team}-turbo-goal`;
+        const material = litObject({ color: teamColor(team), roughness: 0.55, metalness: 0.2, vertexColors: true });
+        const frame = new THREE.Group();
+        frame.name = 'turbo-goal-frame';
+        const hoop = shadowed(new THREE.Mesh(hoopGeometry, material)), gantry = shadowed(new THREE.Mesh(gantryGeometry, gantryMaterial));
+        hoop.name = 'turbo-goal-hoop'; gantry.name = 'turbo-goal-gantry';
+        frame.add(hoop, gantry);
+        const icon = iconSprite(`${team}-turbo-goal-icon`, 8, 24);
+        marker.userData.markerMaterial = material;
+        marker.userData.icon = icon;
+        marker.add(frame, icon);
+        root.add(marker);
+        return marker;
+      });
+    }
+  };
+
+  let airdropParts: { load: THREE.BufferGeometry; canopy: THREE.BufferGeometry; down: THREE.BufferGeometry; material: THREE.MeshStandardMaterial } | null = null;
+  const buildPickups = (): MarkerGroup[] => {
+    if (pickupMarkers) return pickupMarkers;
+    const shellGeometry = new THREE.CylinderGeometry(0.18, 0.24, 1.35, 8);
+    const crossLong = new THREE.BoxGeometry(0.5, 2.1, 0.35);
+    const crossWide = new THREE.BoxGeometry(2.1, 0.5, 0.35);
+    const shellMaterial = basic(AMBER);
+    const healMaterial = basic(HEAL);
+    const shellOffsets = [-0.48, 0, 0.48];
+    pickupMarkers = Array.from({ length: MAX_PICKUPS }, (_, index) => {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `horde-pickup-${index + 1}`;
+      const shellGroup = new THREE.Group();
+      for (const x of shellOffsets) {
+        const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+        shell.position.x = x;
+        shell.rotation.z = Math.PI;
+        shellGroup.add(shell);
+      }
+      const healGroup = new THREE.Group();
+      healGroup.add(
+        new THREE.Mesh(crossLong, healMaterial),
+        new THREE.Mesh(crossWide, healMaterial),
+      );
+      const cage = new THREE.Mesh(
+        new THREE.OctahedronGeometry(2.05, 0),
+        basic(NEUTRAL, 0.26),
+      );
+      (cage.material as THREE.MeshBasicMaterial).wireframe = true;
+      const icon = iconSprite(`horde-pickup-${index + 1}-icon`, 3.4, 4.4);
+      // (#28, WORKLIST mode:airdrop-supply-crate) the load on its skid board under a gored canopy; the canopy collapsed
+      // beside it once it lands (its contents' panel the glyph on its face)
+      airdropParts ??= { load: buildAirdropLoad(), canopy: buildAirdropCanopy(), down: buildAirdropCanopyDown(),
+        material: litObject({ vertexColors: true, roughness: 0.9, metalness: 0.02, side: THREE.DoubleSide }) };
+      const crate = new THREE.Group();
+      crate.name = 'airdrop-crate';
+      const canopyDown = shadowed(new THREE.Mesh(airdropParts.down, airdropParts.material));
+      canopyDown.name = 'airdrop-canopy-down';
+      crate.add(shadowed(new THREE.Mesh(airdropParts.load, airdropParts.material)), canopyDown);
+      marker.userData.canopyDown = canopyDown;
+      const parachute=new THREE.Group();
+      parachute.add(shadowed(new THREE.Mesh(airdropParts.canopy, airdropParts.material)));
+      marker.userData.crate=crate;marker.userData.parachute=parachute;marker.userData.cage=cage;
+      marker.userData.heal = healGroup;
+      marker.userData.ammo = shellGroup;
+      marker.userData.icon = icon;
+      marker.add(cage, shellGroup, healGroup, icon, crate, parachute);
+      marker.visible = false;
+      root.add(marker);
+      return marker;
+    });
+    return pickupMarkers;
+  };
+
+
+  // campaign slice 3 (2026-09-12): Frontline Assault trench works.
+  interface LineWorks {
+    group: THREE.Group;
+    lines: number;
+    signature: string;
+    bags: THREE.InstancedMesh;
+    planks: THREE.InstancedMesh;
+    posts: THREE.InstancedMesh;
+    pickets: THREE.InstancedMesh;
+    crates: THREE.InstancedMesh;
+    wire: THREE.LineSegments;
+  }
+  let lineWorks: LineWorks | null = null;
+  const lit = (color: number, roughness: number, metalness = 0): THREE.MeshStandardMaterial => {
+    const material = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    options.setupMaterial?.(material);
+    return material;
+  };
+
+  const buildLineWorks = (lines: number): LineWorks => {
+    const group = new THREE.Group();
+    group.name = 'line-works';
+    const instanced = (
+      name: string, size: readonly [number, number, number], material: THREE.Material, count: number,
+    ): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size[0], size[1], size[2]), material, count);
+      mesh.name = name;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      group.add(mesh);
+      return mesh;
+    };
+    const timber = lit(0x5a4630, 0.9);
+    const bags = instanced('line-works-bags', LINE_WORKS.bagSize, lit(0x7d6f4e, 0.96), lines * BAGS_PER_LINE);
+    // a flattened capsule lying along x reads as a filled sack, not a brick
+    const sack = new THREE.CapsuleGeometry(LINE_WORKS.bagSize[2] * 0.5, LINE_WORKS.bagSize[0] - LINE_WORKS.bagSize[2], 2, 7);
+    sack.rotateZ(Math.PI / 2);
+    sack.scale(1, LINE_WORKS.bagSize[1] / LINE_WORKS.bagSize[2], 1);
+    bags.geometry.dispose();
+    bags.geometry = sack;
+    const planks = instanced('line-works-planks', LINE_WORKS.plankSize, timber, lines * LINE_WORKS.planksPerLine);
+    const posts = instanced('line-works-posts', LINE_WORKS.postSize, timber, lines * LINE_WORKS.postsPerLine);
+    const pickets = instanced('line-works-pickets', LINE_WORKS.picketSize, lit(0x3b3c3d, 0.7, 0.45),
+      lines * LINE_WORKS.picketsPerLine);
+    const crates = instanced('line-works-crates', LINE_WORKS.crateSize, lit(0x5f6a3e, 0.85),
+      lines * LINE_WORKS.cratesPerLine);
+    const wireGeometry = new THREE.BufferGeometry();
+    wireGeometry.setAttribute('position', new THREE.BufferAttribute(
+      new Float32Array(lines * LINE_WORKS.wireSegmentsPerLine * 6), 3));
+    const wire = new THREE.LineSegments(wireGeometry, new THREE.LineBasicMaterial({ color: 0x2a2724 }));
+    wire.name = 'line-works-wire';
+    wire.frustumCulled = false;
+    group.add(wire);
+    root.add(group);
+    return { group, lines, signature: '', bags, planks, posts, pickets, crates, wire };
+  };
+
+  const worksMatrix = new THREE.Matrix4();
+  const worksQuaternion = new THREE.Quaternion();
+  const worksPosition = new THREE.Vector3();
+  const worksUp = new THREE.Vector3(0, 1, 0);
+  const worksUnit = new THREE.Vector3(1, 1, 1);
+  const worksColor = new THREE.Color();
+  const fillInstances = (mesh: THREE.InstancedMesh, placements: WorksPlacement[], shade = 0): void => {
+    for (let i = 0; i < mesh.count; i++) {
+      const placement = placements[i];
+      if (placement) {
+        worksQuaternion.setFromAxisAngle(worksUp, placement.yaw);
+        worksPosition.set(placement.x, placement.y, placement.z);
+        worksMatrix.compose(worksPosition, worksQuaternion, worksUnit);
+      } else {
+        worksMatrix.makeScale(0, 0, 0);
+      }
+      mesh.setMatrixAt(i, worksMatrix);
+      if (shade > 0) {
+        // per-piece weathering so a wall of sacks or a stack of crates is not one flat tone
+        const tone = 1 - shade * 0.5 + worksJitter(i * 3.7 + 0.31) * shade;
+        mesh.setColorAt(i, worksColor.setScalar(tone));
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  };
+
+  const fillLineWorks = (works: LineWorks, state: MatchModePresentationState): void => {
+    const plan = planLineWorks(state.zones, options.groundHeight);
+    fillInstances(works.bags, plan.bags, 0.34);
+    fillInstances(works.planks, plan.planks, 0.18);
+    fillInstances(works.posts, plan.posts);
+    fillInstances(works.pickets, plan.pickets);
+    fillInstances(works.crates, plan.crates, 0.24);
+    const position = works.wire.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const array = position.array as Float32Array;
+    array.fill(0);
+    array.set(plan.wire.slice(0, array.length));
+    position.needsUpdate = true;
+    works.wire.geometry.computeBoundingSphere();
+  };
+
+  const disposeLineWorks = (): void => {
+    if (!lineWorks) return;
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    lineWorks.group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) geometries.add(mesh.geometry);
+      if (mesh.material && !Array.isArray(mesh.material)) materials.add(mesh.material);
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) {
+      if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) options.releaseMaterial?.(material);
+      material.dispose();
+    }
+    lineWorks.group.removeFromParent();
+    lineWorks = null;
+  };
+
+  const updateLineWorks = (state: MatchModePresentationState, changed: boolean): void => {
+    const lines = Math.min(state.zones.length, LINE_WORKS.lines);
+    if (!lines) return;
+    if (lineWorks && lineWorks.lines !== lines) disposeLineWorks();
+    if (!lineWorks) { lineWorks = buildLineWorks(lines); changed = true; }
+    // (improve-271 plan 023) the sectors' places are read again only when the mode state changed
+    if (changed) {
+      const signature = state.zones.slice(0, lines)
+        .map((zone) => `${zone.x.toFixed(2)}:${zone.z.toFixed(2)}`).join('|');
+      if (lineWorks.signature !== signature) {
+        fillLineWorks(lineWorks, state);
+        lineWorks.signature = signature;
+      }
+    }
+    lineWorks.group.visible = true;
+  };
+
+  const hideAll = (): void => {
+    if (lineWorks) lineWorks.group.visible = false;
+    if (flagMarkers) for (const marker of flagMarkers) marker.visible = false;
+    if (flagBaseMarkers) for (const marker of flagBaseMarkers) marker.visible = false;
+    if (spawnMarkers) for (const marker of spawnMarkers) marker.visible = false;
+    if (zoneMarkers) for (const marker of zoneMarkers) marker.visible = false;
+    if (ballMarker) ballMarker.visible = false;
+    if (goalMarkers) for (const marker of goalMarkers) marker.visible = false;
+    if (pickupMarkers) for (const marker of pickupMarkers) marker.visible = false;
+    for (const marker of laneMarkers) marker.visible = false;
+  };
+
+  const tintTeam = (marker: MarkerGroup, side: ObjectiveSide): void => {
+    const hex = sideHex(side);
+    for (const material of marker.userData.teamMaterials || []) material.color.setHex(hex);
+    marker.userData.beaconMaterial?.color.setHex(hex);
+  };
+
+  const updateFlags = (state: MatchModePresentationState, timeS: number): void => {
+    const markers = buildFlags();
+    const bases = buildFlagBases();
+    for (const [index, flag] of state.flags.entries()) {
+      const marker = markers[index];
+      if (!marker) break;
+      const side = sideOf(flag.team, state);
+      marker.visible = true;
+      marker.position.set(flag.x, flag.y - 2.5, flag.z);
+      marker.rotation.y = index * Math.PI;
+      marker.userData.flagVisual?.update(timeS);
+      if (flag.status === 'home') marker.position.y = flag.baseY;
+      tintTeam(marker, side);
+      if (needsIcon(marker.userData.icon, FLAG_KEYS[side])) {
+        setIcon(marker.userData.icon, FLAG_KEYS[side], (ctx, c) => drawPennant(ctx, c - 14, c + 8, 92, sideColor(side)));
+      }
+      fadeByViewer(marker);
+      const base = bases[index];
+      if (base) {
+        base.visible = true;
+        base.position.set(flag.baseX, flag.baseY, flag.baseZ);
+        dressStand(base);
+        fitObjectiveSurface(base.children[0] as THREE.Mesh, flag.baseX, flag.baseY, flag.baseZ, options.groundHeight);
+        tintTeam(base, side);
+        // the halo breathes while the flag is away
+        const halo = base.userData.teamMaterials?.[0];
+        if (halo) halo.opacity = flag.status === 'home' ? 0.3 : 0.32 + 0.22 * Math.sin(timeS * 4);
+        fadeByViewer(base);
+      }
+    }
+  };
+
+  const updateSpawns = (state: MatchModePresentationState): void => {
+    // in the world only a revive point is worth a beacon; the map marks every spawn
+    if (!state.respawns) return;
+    if (!spawnMarks.length) return;
+    const groups = buildSpawns();
+    for (let markIndex = 0; markIndex < spawnMarks.length; markIndex++) {
+      const mark = spawnMarks[markIndex]!;
+      let spawn: MatchModePresentationState['spawns'][number] | undefined;
+      for (const entry of state.spawns) if (entry.x === mark.x && entry.z === mark.z) { spawn = entry; break; }
+      const group = groups[spawn?.team === 'bravo' ? 1 : 0];
+      if (!group) continue;
+      group.visible = true;
+      group.position.set(mark.x, spawn?.y ?? (options.groundHeight?.(mark.x, mark.z) ?? 0), mark.z);
+      fitObjectiveSurface(group.children[0] as THREE.Mesh, group.position.x, group.position.y, group.position.z, options.groundHeight);
+      tintTeam(group, mark.side);
+      if (needsIcon(group.userData.icon, spawnKeys[markIndex]!)) {
+        setIcon(group.userData.icon, spawnKeys[markIndex]!, (ctx, c) =>
+          drawSpawnGlyph(ctx, c, c, 44, sideColor(mark.side), sideFill(mark.side), mark.side === 'enemy' ? 'enemy' : 'own'));
+      }
+      fadeByViewer(group);
+    }
+  };
+
+  const updateZones = (state: MatchModePresentationState): void => {
+    const markers = buildZones();
+    for (let index = 0; index < state.zones.length; index++) {
+      const zone = state.zones[index]!;
+      const marker = markers[index];
+      if (!marker) break;
+      marker.visible = true;
+      marker.position.set(zone.x, zone.y, zone.z);
+      dressPost(marker, marker.children[1] as THREE.Group, objectivePostFormOf(options.mapId?.()));
+      fitObjectiveSurface(marker.children[0] as THREE.Mesh, zone.x, zone.y, zone.z, options.groundHeight);
+      fitObjectiveSurface(marker.children[2] as THREE.Mesh, zone.x, zone.y, zone.z, options.groundHeight);
+      fitObjectiveSurface(marker.children[3] as THREE.Mesh, zone.x, zone.y, zone.z, options.groundHeight, .095);
+      const mark = zoneMarks[index];
+      const material = marker.userData.markerMaterial;
+      if (material) {
+        const color = mark ? sideHex(mark.side) : NEUTRAL;
+        material.color.setHex(color);
+        material.opacity = zone.contested ? 0.68 : 0.28 + Math.abs(zone.control) * 0.38;
+      }
+      marker.userData.flagMaterial?.color.setHex(mark ? sideHex(mark.side) : NEUTRAL);
+      if (!mark) continue;
+      const hex = sideHex(mark.side);
+      const disc = marker.userData.discMaterial;
+      if (disc) {
+        disc.color.setHex(hex);
+        disc.opacity = mark.status === 'locked' ? 0.05 : mark.side === 'neutral' ? 0.07 : 0.13;
+      }
+      const arc = marker.userData.arc;
+      const arcMaterial = marker.userData.arcMaterial;
+      const progress = mark.progress ?? 0;
+      if (arc && arcMaterial) {
+        const partial = progress > 0.01 && progress < 0.995 && !!mark.progressSide;
+        arc.visible = partial;
+        if (partial) {
+          // A full ring with a bounded index range keeps both the terrain fit
+          // and the GPU buffer stable as capture progresses. Ring indices are
+          // grouped by radial row, so reveal each angular slice through groups.
+          const geometry = arc.geometry as THREE.RingGeometry;
+          const step = Math.round(progress * ARC_STEPS);
+          if (arc.userData.progressStep !== step) {
+            const { thetaSegments, phiSegments } = geometry.parameters;
+            geometry.clearGroups();
+            const count = Math.round(thetaSegments * step / ARC_STEPS) * 6;
+            for (let row = 0; row < phiSegments; row++) geometry.addGroup(row * thetaSegments * 6, count, 0);
+            // Groups apply to material arrays; one shared material, no clones.
+            arc.material = [arcMaterial];
+            arc.userData.progressStep = step;
+          }
+          arcMaterial.color.setHex(sideHex(mark.progressSide ?? 'neutral'));
+        }
+      }
+      const label = mark.label ?? '';
+      const status = mark.status ?? '';
+      if (needsIcon(marker.userData.icon, zoneKeys[index]!)) {
+        setIcon(marker.userData.icon, zoneKeys[index]!, (ctx, c) => {
+          drawHexBadge(ctx, c, c, 46, {
+            fill: sideFill(mark.side), stroke: sideColor(mark.side), ringWidth: 9,
+            dashed: mark.side === 'contested' || status === 'locked',
+          });
+          drawGlyphLetter(ctx, label, badgeLetter(c, c, 46, OBJECTIVE_PALETTE.chalk, spriteLetter), "700 48px 'Cot UI', sans-serif");
+          if (status === 'taken') drawCheck(ctx, c + 30, c + 30, 22, sideColor(mark.side));
+        });
+      }
+      fadeByViewer(marker);
+    }
+  };
+
+  const updateTurboBall = (state: MatchModePresentationState, timeS: number): void => {
+    buildTurbo();
+    if (ballMarker && state.ball) {
+      ballMarker.visible = true;
+      ballMarker.position.set(state.ball.x, state.ball.y, state.ball.z);
+      ballMarker.rotation.set(timeS * 0.55, timeS * 0.8, timeS * 0.35);
+    }
+    if (!goalMarkers || state.goals.length !== goalMarkers.length) return;
+    const firstGoal = state.goals[0];
+    const secondGoal = state.goals[1];
+    const midX = (firstGoal.x + secondGoal.x) * 0.5;
+    const midY = (firstGoal.y + secondGoal.y) * 0.5 + 10;
+    const midZ = (firstGoal.z + secondGoal.z) * 0.5;
+    for (let index = 0; index < goalMarkers.length; index += 1) {
+      const goal = state.goals[index];
+      const marker = goalMarkers[index];
+      marker.visible = true;
+      marker.position.set(goal.x, goal.y, goal.z);
+      marker.lookAt(midX, midY, midZ);
+      const side = sideOf(goal.team, state);
+      marker.userData.markerMaterial?.color.setHex(sideHex(side));
+      if (needsIcon(marker.userData.icon, GOAL_KEYS[side])) {
+        setIcon(marker.userData.icon, GOAL_KEYS[side], (ctx, c) => drawGoalGlyph(ctx, c, c, 44, sideColor(side), sideFill(side)));
+      }
+      fadeByViewer(marker);
+    }
+  };
+
+  const updatePickups = (state: MatchModePresentationState, timeS: number): void => {
+    const markers = buildPickups();
+    let markerIndex = 0;
+    for (const pickup of state.pickups) {
+      if (pickup.active === false || markerIndex >= markers.length) continue;
+      const marker = markers[markerIndex];
+      markerIndex += 1;
+      marker.visible = true;
+      marker.position.set(
+        pickup.x,
+        pickup.y + (pickup.airDrop?0:Math.sin(timeS * 2.1 + markerIndex) * 0.45),
+        pickup.z,
+      );
+      marker.rotation.y = pickup.airDrop?0:timeS * 0.75 + markerIndex * 0.6;
+      if(marker.userData.crate)marker.userData.crate.visible=!!pickup.airDrop;
+      if(marker.userData.parachute)marker.userData.parachute.visible=!!pickup.airDrop&&pickup.y>(pickup.groundY??0)+.1;
+      // (#28) once down, the canopy lies collapsed beside the load
+      if (marker.userData.canopyDown) marker.userData.canopyDown.visible = !!pickup.airDrop && pickup.y <= (pickup.groundY ?? 0) + 0.1;
+      if(marker.userData.cage)marker.userData.cage.visible=!pickup.airDrop;
+      if(marker.userData.heal)marker.userData.heal.position.z=pickup.airDrop?1.02:0;
+      if(marker.userData.ammo)marker.userData.ammo.position.z=pickup.airDrop?1.02:0;
+      if (marker.userData.heal) marker.userData.heal.visible = pickup.kind === 'heal';
+      if (marker.userData.ammo) marker.userData.ammo.visible = pickup.kind === 'ammo';
+      const kind = pickup.kind === 'heal' ? 'heal' : 'ammo';
+      const key = kind === 'heal' ? 'pickup:heal' : 'pickup:ammo';
+      if (needsIcon(marker.userData.icon, key)) setIcon(marker.userData.icon, key, (ctx, c) => drawPickupGlyph(ctx, c, c, 44, kind));
+      fadeByViewer(marker);
+    }
+  };
+
+  // the proving ground (v2 progression, 2026-10-17): one marker per lane, grown on demand (the minimap's lane glyph)
+  const buildLanes = (count: number): MarkerGroup[] => {
+    while (laneMarkers.length < count) {
+      const marker = new THREE.Group() as MarkerGroup;
+      marker.name = `range-lane-${laneMarkers.length + 1}`;
+      const ring = new THREE.Mesh(objectiveRing(5.8, 6.5), basic(AMBER, 0.3));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.1;
+      // high over the hull: the laid hull's target plate sits just above it, the board well clear of the plate
+      const icon = iconSprite(`range-lane-${laneMarkers.length + 1}-icon`, 4.6, LANE_BOARD_FOOT_M + 2.3);
+      marker.userData.icon = icon;
+      // a thin tether from the ring up to the board: the board is the lane's marker, anchored to its mark
+      laneTether ??= new THREE.CylinderGeometry(0.05, 0.05, 1, 6, 1, true);
+      const tether = new THREE.Mesh(laneTether, basic(AMBER, 0.55));
+      tether.scale.y = LANE_BOARD_FOOT_M;
+      tether.position.y = LANE_BOARD_FOOT_M / 2;
+      marker.add(ring, tether, icon);
+      marker.visible = false;
+      root.add(marker);
+      laneMarkers.push(marker);
+    }
+    return laneMarkers;
+  };
+
+  const updateLanes = (): void => {
+    const markers = buildLanes(laneMarks.length);
+    for (let index = 0; index < laneMarks.length; index++) {
+      const mark = laneMarks[index]!;
+      const marker = markers[index]!;
+      marker.visible = true;
+      marker.position.set(mark.x, options.groundHeight?.(mark.x, mark.z) ?? 0, mark.z);
+      fitObjectiveSurface(marker.children[0] as THREE.Mesh, marker.position.x, marker.position.y, marker.position.z, options.groundHeight);
+      // over the field the lane's board reads its range (the minimap's smaller board keeps the lane's number)
+      const label = laneLabels[index]!;
+      if (needsIcon(marker.userData.icon, laneKeys[index]!)) {
+        const size = label.length > 2 ? 36 : 46;
+        setIcon(marker.userData.icon, laneKeys[index]!, (ctx, c) => {
+          drawLaneGlyph(ctx, c, c, 44);
+          drawGlyphLetter(ctx, label, laneLetter(c, c, 44, spriteLetter), `700 ${size}px system-ui, sans-serif`);
+        });
+      }
+      fadeByViewer(marker, LANE_MAX_GROWTH);
+      const icon = marker.userData.icon;
+      if (icon) icon.position.y = LANE_BOARD_FOOT_M + icon.scale.y / 2;
+    }
+  };
+
+  const update = (state: MatchModePresentationState | null, timeS: number): void => {
+    if (!state || state.id === 'standard') {
+      if (root.visible) root.traverse(object => { delete object.userData.surfacePlacement; });
+      root.visible = false;
+      return;
+    }
+    root.visible = true;
+    hideAll();
+    // one derivation shared with the minimap: sides from the viewer's team,
+    // zone letters / sector numbers and statuses, spawn marks per mode (retained: derived once per change of the mode
+    // state, its views and icon keys with it; improve-271 plan 023)
+    const changed = deriveViews(objectiveMarkersFor(state, timeS));
+    if (state.id === 'capture_the_flag') updateFlags(state, timeS);
+    else if (state.id === 'zone_control' || state.id === 'mars' || state.id === 'ac130' || state.id === 'air_support') updateZones(state);
+    else if (state.id === 'frontline_assault') {
+      updateZones(state);
+      updateLineWorks(state, changed);
+    }
+    else if (state.id === 'turbo_ball') updateTurboBall(state, timeS);
+    // Caches coexist with objectives (Mars has both zones and drops).
+    // Keep their lifecycle independent of the exclusive objective dispatch.
+    if (state.pickups.length || state.id === 'endless_horde') updatePickups(state, timeS);
+    if (state.range) {
+      updateLanes();
+      rangeDressing ??= createProvingRangeDressing(root, options);
+      rangeDressing.update(state.range);
+    } else rangeDressing?.update(null);
+    // (the proving ground's firing line has its start board and the map's mark: no revive beacon round the player's own
+    // hull, whose full-strength team ring flooded the tarmac at every start and reset)
+    if (!state.range) updateSpawns(state);
+    // Air Support (air-support-270): the call-ins' aircraft and their marks on the ground (airSupportWorld.ts)
+    if (state.air) {
+      airWorld ??= createAirSupportWorld(root, options);
+      airWorld.update(state.air, state.perspectiveTeam, timeS);
+    } else airWorld?.update(null, 'alpha', timeS);
+  };
+
+  const dispose = (): void => {
+    disposeLineWorks();
+    rangeDressing?.dispose();
+    rangeDressing = null;
+    airWorld?.dispose();
+    airWorld = null;
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      // sprites share three's one static plane; never dispose that
+      if (mesh.geometry && !(object as THREE.Sprite).isSprite) geometries.add(mesh.geometry);
+      const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of meshMaterials) if (material) materials.add(material);
+    });
+    if (beaconGeometry) geometries.add(beaconGeometry);
+    if (postGeometry) { geometries.add(postGeometry.body); geometries.add(postGeometry.flag); }
+    // the posts' lit materials leave the cascades with the presentation
+    if (postMaterial) { options.releaseMaterial?.(postMaterial); materials.add(postMaterial); }
+    for (const marker of zoneMarkers ?? []) if (marker.userData.flagMaterial) options.releaseMaterial?.(marker.userData.flagMaterial);
+    for (const material of modeLit) { options.releaseMaterial?.(material); materials.add(material); }
+    if (airdropParts) { geometries.add(airdropParts.load); geometries.add(airdropParts.canopy); geometries.add(airdropParts.down); }
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+    for (const texture of iconTextures.values()) texture.dispose();
+    iconTextures.clear();
+    root.removeFromParent();
+  };
+
+  const presentation: MatchModeWorldPresentation = {
+    root, update, dispose: () => { livePresentations.delete(presentation); dispose(); },
+  };
+  livePresentations.add(presentation);
+  return presentation;
+}

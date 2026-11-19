@@ -1,0 +1,973 @@
+import { Injectable, inject, Injector, effect, untracked } from '@angular/core';
+import { UIStore } from '../../store/ui.store';
+import type { ThreeTilesEngine } from '../../three-engine';
+import { CameraControlService } from '../camera-control.service';
+import { MarkerVisualizationService } from '../world/marker-visualization.service';
+import { NO_ROUTE_TEXT, PathAndRouteService } from '../world/path-route.service';
+import { InputHandlerService } from '../input-handler.service';
+import { TowerPlacementService } from '../tower-placement.service';
+import { AbilityTargetingService } from '../ability-targeting.service';
+import { HeroControlService } from '../hero-control.service';
+import { MapPlacementService } from '../world/map-placement.service';
+import { RelocationStatusService } from '../world/relocation-status.service';
+import { HeightUpdateService } from '../world/height-update.service';
+import { EngineInitializationService } from '../infrastructure/engine-initialization.service';
+import { WorldContext } from '../../world/world-context.service';
+import { CameraFramingService } from '../camera-framing.service';
+import { IntroCameraFlightService } from '../world/intro-camera-flight.service';
+import { StartShowService } from '../world/start-show.service';
+import { RouteAnimationService } from '../world/route-animation.service';
+import { KeyboardPanService } from '../keyboard-pan.service';
+import { StreetRenderingService } from '../world/street-rendering.service';
+import { BuildingRenderingService } from '../world/building-rendering.service';
+import { StrategicPlacementService } from '../world/strategic-placement.service';
+import { EnemyDebugService } from '../debug/enemy-debug.service';
+import { TowerDebugService } from '../debug/tower-debug.service';
+import { LosDebugService } from '../debug/los-debug.service';
+import { GlobalRouteGridService } from '../world/global-route-grid.service';
+import { LocationManagementService } from '../location/location-management.service';
+import { SubscriptionBag } from '../../game-engine/game-event-bus';
+import { StateSnapshotService } from '../../director/state-snapshot.service';
+import { SimClient } from '../../sim/client/sim-client.service';
+import { RouteGridVizService } from '../world/route-grid-viz.service';
+import { TowerSelectionService } from '../tower-selection.service';
+import { SimMirror } from '../../sim/client/mirror/sim-mirror';
+import { MainWorldService } from '../world/main-world.service';
+import { PresentationService } from '../../presentation/presentation.service';
+import { COOP } from '../coop.token';
+import { SpawnPoint as WaveSpawnPoint } from '../../managers/wave.manager';
+import { TowerTypeId } from '../../configs/tower-types.config';
+import { Vector3 } from 'three';
+import { FacadeComponentBridge } from './tower-defense-facade.service';
+import { TowerDefenseStore } from '../../store/tower-defense.store';
+import { EngineStore } from '../../store/engine.store';
+import { STREET_FILTER_RADIUS } from '../../configs/map-constants.config';
+import { CorridorBuild, type CorridorBuildResult, type CorridorProgress } from '../world/corridor-build';
+import { CorridorConsole } from '../debug/corridor-console';
+import { CorridorLodProbe } from '../debug/corridor-lod-probe';
+import { TilesConsole } from '../debug/tiles-console';
+import { CellReportService } from '../debug/cell-report.service';
+import { CorridorSnapshotService } from '../debug/corridor-snapshot.service';
+import { CorridorSnapshotReader } from '../debug/corridor-snapshot-reader';
+import { TowerTargetConsole } from '../debug/tower-target-console';
+import { IntroLoadingGate } from '../world/intro-loading-gate';
+import { CameraOverview } from '../camera-overview';
+import { DpsBinsOverlay } from '../debug/dps-bins-overlay';
+import { BuildingOverlay } from '../world/building-overlay';
+import type { BuildingFootprint } from '../location/osm-street.service';
+import { cameraTimeline } from '../../utils/camera-timeline';
+import { corridorTrace } from '../../utils/corridor-trace';
+import { perfTrace } from '../../utils/perf-trace';
+
+/**
+ * Sub-facade for visualization, camera, rendering, and height updates.
+ *
+ * Responsibilities:
+ * - Visualization service initialization
+ * - Street rendering and filtering
+ * - Height update scheduling
+ * - Route animations
+ * - Tiles loaded handling
+ * - Click handler setup
+ * - Game state initialization (routes, tower placement)
+ *
+ * Owned helpers (plain classes, built in the field initializers below):
+ * - CorridorBuild: the route corridor, built once per route set
+ * - CorridorConsole: `__corridor` in DevTools
+ * - CorridorLodProbe: `__corridor.probeLod()` and `fingerprint()`
+ * - CorridorSnapshotReader: what the corridor snapshot reads off the game
+ * - TilesConsole: `__tiles` in DevTools
+ * - TowerTargetConsole: `__towerTargets` in DevTools
+ * - IntroLoadingGate: loading screen held for the intro flight
+ * - CameraOverview: overview frame, initial view, camera debug toggles
+ * - DpsBinsOverlay: DPS profile bins
+ * - BuildingOverlay: OSM building footprints
+ */
+@Injectable()
+export class VisualizationFacadeService {
+  private readonly uiStore = inject(UIStore);
+  private readonly cameraControl = inject(CameraControlService);
+  private readonly markerViz = inject(MarkerVisualizationService);
+  private readonly pathRoute = inject(PathAndRouteService);
+  private readonly inputHandler = inject(InputHandlerService);
+  private readonly towerPlacement = inject(TowerPlacementService);
+  private readonly abilityTargeting = inject(AbilityTargetingService);
+  private readonly heroControl = inject(HeroControlService);
+  private readonly heightUpdate = inject(HeightUpdateService);
+  private readonly engineInit = inject(EngineInitializationService);
+  private readonly worldContext = inject(WorldContext);
+  private readonly cameraFraming = inject(CameraFramingService);
+  private readonly routeAnimation = inject(RouteAnimationService);
+  private readonly introFlight = inject(IntroCameraFlightService);
+  private readonly startShow = inject(StartShowService);
+
+  private readonly keyboardPan = inject(KeyboardPanService);
+  private readonly streetRendering = inject(StreetRenderingService);
+  private readonly buildingRendering = inject(BuildingRenderingService);
+  private readonly strategicPlacement = inject(StrategicPlacementService);
+  private readonly enemyDebug = inject(EnemyDebugService);
+  private readonly towerDebug = inject(TowerDebugService);
+  private readonly losDebug = inject(LosDebugService);
+  private readonly globalRouteGridService = inject(GlobalRouteGridService);
+  private readonly locationMgmt = inject(LocationManagementService);
+  private readonly stateSnapshots = inject(StateSnapshotService);
+  private readonly mapPlacement = inject(MapPlacementService);
+  private readonly store = inject(TowerDefenseStore);
+  private readonly engineStore = inject(EngineStore);
+  private readonly relocationStatus = inject(RelocationStatusService);
+  private readonly cellReport = inject(CellReportService);
+  private readonly corridorSnapshot = inject(CorridorSnapshotService);
+  private readonly sim = inject(SimClient);
+  private readonly gridViz = inject(RouteGridVizService);
+  private readonly selection = inject(TowerSelectionService);
+  private readonly mirror = inject(SimMirror);
+  private readonly world = inject(MainWorldService);
+  private readonly presentation = inject(PresentationService);
+  /** Coop, where the game runs one (component scope): the corridor is not rebuilt in it */
+  private readonly coop = inject(COOP, { optional: true });
+
+  /** The one owner of the route corridor, built once per route set (CorridorBuild). */
+  private readonly corridor = new CorridorBuild({
+    world: this.world,
+    grid: this.globalRouteGridService,
+    gridViz: this.gridViz,
+    scalars: () => this.mirror.scalars,
+    coopInGame: () => this.coop?.inGame() ?? false,
+    engineInit: this.engineInit,
+    pathRoute: this.pathRoute,
+    routeAnimation: this.routeAnimation,
+    store: this.store,
+  });
+
+  /** `__corridor.probeLod()` and `fingerprint()`, see CorridorLodProbe. */
+  private readonly lodProbe = new CorridorLodProbe({
+    mirror: this.mirror,
+    grid: this.globalRouteGridService,
+    engineInit: this.engineInit,
+    introFlight: this.introFlight,
+    pathRoute: this.pathRoute,
+    corridorBuilding: () => this.corridor.pending(),
+  });
+
+  /** `__corridor` in DevTools, see CorridorConsole. */
+  private readonly corridorConsole = new CorridorConsole({
+    mirror: this.mirror,
+    grid: this.globalRouteGridService,
+    gridViz: this.gridViz,
+    selection: this.selection,
+    engineInit: this.engineInit,
+    inputHandler: this.inputHandler,
+    pathRoute: this.pathRoute,
+    // A probe holds the tiles at another LOD: a change now would measure on them.
+    change: (apply) => (this.lodProbe.running
+      ? Promise.resolve('Not changed: __corridor.probeLod() is running.')
+      : this.corridor.change(apply)),
+    cellReport: this.cellReport,
+    lodProbe: this.lodProbe,
+    snapshot: this.corridorSnapshot,
+  });
+
+  /** What the corridor snapshot (Snapshot tile, `__corridor.snapshot()`) reads off the game, see CorridorSnapshotReader. */
+  private readonly snapshotReader = new CorridorSnapshotReader({
+    grid: this.globalRouteGridService,
+    engineInit: this.engineInit,
+    pathRoute: this.pathRoute,
+    store: this.store,
+    corridorBuilding: () => this.corridor.pending(),
+    lodProbeRunning: () => this.lodProbe.running,
+  });
+
+  /** `__tiles` in DevTools, see TilesConsole. */
+  private readonly tilesConsole = new TilesConsole({ engineInit: this.engineInit });
+
+  /** `__towerTargets` in DevTools, see TowerTargetConsole. */
+  private readonly towerTargetConsole = new TowerTargetConsole({ sim: this.sim });
+
+  /** Loading screen held for the intro flight on the first load, see IntroLoadingGate. */
+  private readonly introGate = new IntroLoadingGate({
+    engineInit: this.engineInit,
+    heightUpdate: this.heightUpdate,
+    pathRoute: this.pathRoute,
+    introFlight: this.introFlight,
+    recheck: () => this.checkAllLoaded(),
+  });
+
+  /** Overview frame and camera debug toggles, see CameraOverview. */
+  private readonly overview = new CameraOverview({
+    store: this.store,
+    engineStore: this.engineStore,
+    cameraControl: this.cameraControl,
+    cameraFraming: this.cameraFraming,
+    pathRoute: this.pathRoute,
+    introFlight: this.introFlight,
+    grid: () => this.globalRouteGridService,
+  });
+
+  /** DPS profile bins along the path, see DpsBinsOverlay. */
+  private readonly dpsBins = new DpsBinsOverlay({
+    grid: this.globalRouteGridService,
+    bus: this.sim.bus,
+    stateSnapshots: this.stateSnapshots,
+  });
+
+  /** OSM building footprints near the routes, see BuildingOverlay. */
+  private readonly buildings = new BuildingOverlay({
+    streets: () => this.worldContext.streets,
+    pathRoute: this.pathRoute,
+    buildingRendering: this.buildingRendering,
+    uiStore: this.uiStore,
+    store: this.store,
+    engine: () => this.bridge.getEngine() || this.engineInit.getEngine(),
+  });
+
+  /** Component bridge — set via initialize() */
+  private bridge!: FacadeComponentBridge;
+
+  /** Whether this sub-facade has been initialized */
+  private initialized = false;
+
+  /** EventBus subscription bag — cleaned up in dispose() */
+  private readonly eventBusSubs = new SubscriptionBag();
+
+  /**
+   * The fine tiles of the corridor (RegionLodState.tileSet) when a build had
+   * frozen blind, and the builds tried since on new tiles (retryBlindOnNewTiles)
+   */
+  private blindTileSet: string | null = null;
+  private blindRetries = 0;
+
+  /** The page was shown or hidden, see rebuildAfterBlindBuild(). */
+  private readonly onVisibilityChange = (): void => {
+    void this.rebuildAfterBlindBuild('visible after unmeasured freeze');
+  };
+
+  /**
+   * Initialize sub-facade with bridge and game state.
+   */
+  initialize(bridge: FacadeComponentBridge): void {
+    this.bridge = bridge;
+    this.initialized = true;
+    // The start menu showed the scene the whole width: the shows it held back play on the game's width
+    this.startShow.setStage(() => this.fitStage());
+
+    // Towers and waves wait while the corridor is built.
+    this.world.setCorridorPending(() => this.corridor.pending());
+    // A location that loads in a hidden tab gets no tiles at all, and the
+    // corridor freezes on nothing; build again when the page is shown.
+    // Off first: initialize() runs again on a location change.
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.corridorConsole.install();
+    this.corridorSnapshot.connect(this.snapshotReader);
+    this.tilesConsole.install();
+    this.towerTargetConsole.install();
+  }
+
+  /**
+   * The page became visible. A location that loaded in a hidden tab loaded
+   * no tiles: the browser stops rAF there, so the tiles renderer never
+   * traverses and never asks for any. The build then measured on nothing and
+   * froze the OSM street widths (CorridorBuild.frozeBlind). Nothing
+   * re-measures after a freeze, so build once more, now that tiles can load.
+   *
+   * At most one build per frozen build: `pending()` holds off a second
+   * visibility change while it runs, and the build that follows replaces
+   * `frozeBlind` with its own outcome. A build that is blind again leaves
+   * the flag up, so a later visibility change tries once more.
+   *
+   * Not while towers stand, a wave runs or enemies walk (rebuildBlocker):
+   * their LOS answers, cells and routes stand on the corridor in use. That
+   * is `build.revisit built=false` in the trace, and the warning of the
+   * blind build stays in the log; the next visibility change tries again,
+   * which is the queue for the next safe moment.
+   *
+   * The build takes seconds in a dense city and holds towers and waves back
+   * while it runs (corridorPending), so it shows the hint over the map that
+   * an HQ move shows (RelocationStatusService).
+   */
+  private async rebuildAfterBlindBuild(reason: string): Promise<void> {
+    if (!this.initialized || document.hidden) return;
+    if (!this.corridor.frozeBlind() || this.corridor.pending()) return;
+    const blocked = this.corridor.rebuildBlocker();
+    if (blocked) {
+      corridorTrace.log('build.revisit', { built: false, blocked, reason });
+      return;
+    }
+    corridorTrace.log('build.revisit', { built: true, reason });
+    console.log(`[Corridor] the corridor was built without tiles, building it again (${reason}).`);
+    this.relocationStatus.show('Building the corridor', 'Loading the corridor tiles');
+    const hint = this.relocationStatus.follow();
+    try {
+      await this.corridor.build(reason, hint.report);
+    } finally {
+      hint.end();
+    }
+    // A loading screen still up waited for this build: the first tiles that
+    // arrived while it ran found the corridor pending and asked no more
+    // (checkAllLoaded), so ask again, else it stands at the flight step for good
+    this.checkAllLoaded();
+  }
+
+  /** Builds at most on new tiles after one blind freeze, see retryBlindOnNewTiles() */
+  private static readonly BLIND_RETRIES = 3;
+
+  /**
+   * A build that froze blind on a page that stays visible waited for the
+   * visibility change that never came: the route stayed in the air until a
+   * reload (2026-10-01). Once the corridor's fine tiles are others than when
+   * it froze, build again, at most BLIND_RETRIES times per freeze; a build
+   * that measures ends it. Same guards as the build on visibility.
+   */
+  private retryBlindOnNewTiles(engine: ThreeTilesEngine): void {
+    if (!this.corridor.frozeBlind()) {
+      this.blindTileSet = null;
+      this.blindRetries = 0;
+      return;
+    }
+    const tileSet = engine.routeCorridorLod()?.tileSet ?? null;
+    if (tileSet === null || document.hidden || this.corridor.pending()) return;
+    if (this.blindTileSet === null) {
+      this.blindTileSet = tileSet;
+      return;
+    }
+    if (tileSet === this.blindTileSet || this.blindRetries >= VisualizationFacadeService.BLIND_RETRIES) return;
+    this.blindTileSet = tileSet;
+    this.blindRetries++;
+    void this.rebuildAfterBlindBuild('new corridor tiles after unmeasured freeze');
+  }
+
+  /**
+   * Reset state and cleanup on dispose.
+   */
+  dispose(): void {
+    this.startShow.setStage(null);
+    this.eventBusSubs.disposeAll();
+    if (this.initialized) this.world.setCorridorPending(null);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.corridor.dispose();
+    this.corridorConsole.uninstall();
+    this.corridorSnapshot.disconnect(this.snapshotReader);
+    this.tilesConsole.uninstall();
+    this.towerTargetConsole.uninstall();
+    this.introGate.dispose();
+    const engine = this.initialized ? this.bridge.getEngine() : null;
+    this.dpsBins.dispose(engine);
+    this.buildings.reset();
+    this.initialized = false;
+  }
+
+  /**
+   * Create Angular effects owned by this sub-facade.
+   * Called from the main facade during initEffects().
+   */
+  initEffects(injector: Injector): void {
+    // Effect: the OSM buildings follow the routes (another place, a new or moved spawn)
+    effect(() => {
+      this.pathRoute.routesVersion();
+      untracked(() => this.buildings.routesChanged());
+    }, { injector });
+
+    // Effect: the tower debug panel's dropdown follows the selected tower
+    effect(() => {
+      const tower = this.store.selectedTower();
+      if (tower) untracked(() => this.towerDebug.selectTower(tower.typeConfig.id));
+    }, { injector });
+
+    // Effect: Sync tower debug "Show Shoot Height" to renderer
+    effect(() => {
+      const showShootHeight = this.towerDebug.showShootHeight();
+      const engine = this.bridge.getEngine();
+      if (engine) {
+        engine.towers.setShowShootHeight(showShootHeight);
+      }
+    }, { injector });
+
+    // Effect: Apply tower debug overrides to renderer (live updates)
+    effect(() => {
+      const allOverrides = this.towerDebug.allOverrides();
+      const engine = this.bridge.getEngine();
+      if (!engine) return;
+      for (const typeId of Object.keys(allOverrides) as TowerTypeId[]) {
+        const overrides = allOverrides[typeId];
+        engine.towers.applyDebugOverrides(typeId, overrides);
+      }
+    }, { injector });
+  }
+
+  /**
+   * Subscribe to EventBus events owned by this sub-facade.
+   * Called from the main facade after game state is initialized.
+   */
+  subscribeToEventBus(): void {
+    // Defensive: clear any prior subscriptions so a future re-init path can't
+    // double-subscribe (consistent with combat-effect/hq-damage/game-state).
+    this.eventBusSubs.disposeAll();
+    const eventBus = this.sim.bus;
+
+    // Spawn portals surge at wave start and calm down after the wave
+    this.markerViz.subscribeToEventBus(eventBus);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Visualization & Service Initialization
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Initialize visualization services (markerViz, pathRoute, camera, animation, keyboard).
+   * Must be called after engine and streets are loaded.
+   */
+  initializeVisualizationServices(): void {
+    const engine = this.engineInit.getEngine();
+    const streetNetwork = this.bridge.getStreetNetwork();
+    if (!engine || !streetNetwork) {
+      console.warn('[VisualizationFacade] Cannot initialize - engine or streetNetwork not available');
+      return;
+    }
+
+    const base = this.store.baseCoords();
+    const baseCoords = { lat: base.lat, lon: base.lon };
+
+    // Initialize marker visualization service
+    this.markerViz.initialize(engine, baseCoords, this.store.heightDebugVisible);
+
+    // Initialize path and route service
+    const pathfindingService = this.worldContext.streets;
+    this.pathRoute.initialize(
+      engine,
+      streetNetwork,
+      baseCoords,
+      this.uiStore.routesVisible,
+      pathfindingService,
+      (spawnId, route, startGroundY) => this.markerViz.placeSpawnPortal(spawnId, route, startGroundY)
+    );
+
+    // Initialize camera control service
+    this.cameraControl.initialize(engine, { lat: baseCoords.lat, lon: baseCoords.lon });
+    // Overview frame on the camera's real lens, computed fresh for Reset
+    // Camera and the intro (CameraOverview).
+    this.overview.initialize(engine);
+
+    // Initialize route animation service
+    this.routeAnimation.initialize(engine);
+
+    // Initialize intro camera flight (spike)
+    this.introFlight.initialize(engine);
+
+    // Initialize keyboard panning service
+    this.keyboardPan.initialize(engine);
+  }
+
+  /**
+   * Add base marker to the map.
+   */
+  addBaseMarker(): void {
+    this.markerViz.addBaseMarker();
+  }
+
+  /**
+   * Setup the click handler.
+   */
+  setupClickHandlerWithGameState(): void {
+    const engine = this.bridge.getEngine() || this.engineInit.getEngine();
+    if (!engine) return;
+
+    this.inputHandler.initialize(
+      this.bridge.getCanvasElement(),
+      engine,
+      this.towerPlacement.buildMode,
+      (lat: number, lon: number, height: number) => this.bridge.onTerrainClick(lat, lon, height),
+      (lat: number, lon: number, hitPoint: Vector3) => this.bridge.onMouseMove(lat, lon, hitPoint)
+    );
+
+    this.inputHandler.setEnemyPlacementCallback(
+      () => this.enemyDebug.placementMode(),
+      (lat: number, lon: number, height: number) => this.bridge.handleEnemyPlacement(lat, lon, height)
+    );
+
+    this.inputHandler.setMapPlacementCallback(
+      () => this.mapPlacement.placementMode(),
+      (lat: number, lon: number, height: number) => this.bridge.onMapPlacementClick(lat, lon, height),
+      (lat: number, lon: number, hitPoint: Vector3) => this.bridge.onMapPlacementMove(lat, lon, hitPoint),
+    );
+
+    this.inputHandler.setAbilityTargetingCallback(
+      () => this.abilityTargeting.targeting(),
+      (lat: number, lon: number, height: number) => this.abilityTargeting.click(lat, lon, height),
+      (lat: number, lon: number, hitPoint: Vector3) => this.abilityTargeting.hover(lat, lon, hitPoint),
+      () => this.abilityTargeting.cancel(),
+    );
+
+    this.inputHandler.setHeroCallbacks({
+      selected: () => this.heroControl.selected(),
+      pick: (screenX: number, screenY: number) => this.heroControl.pick(screenX, screenY),
+      toggle: () => this.heroControl.toggle(),
+      click: (lat: number, lon: number, height: number) => this.heroControl.click(lat, lon, height),
+      move: (lat: number, lon: number, hitPoint: Vector3) => this.heroControl.hover(lat, lon, hitPoint),
+      cancel: () => this.heroControl.deselect(),
+    });
+
+    this.inputHandler.setCellReportCallbacks({
+      active: () => this.cellReport.active(),
+      click: (hitPoint: Vector3) => this.cellReport.click(hitPoint),
+      drag: (rect) => this.cellReport.box.set(rect),
+      select: (rect) => this.cellReport.select(rect),
+      end: () => this.cellReport.stop(),
+    });
+
+    this.inputHandler.initKeyboard({
+      exitBuildMode: () => this.bridge.exitBuildMode(),
+      exitMapPlacement: () => this.bridge.exitMapPlacement(),
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Game State Initialization
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Initialize game state with routes.
+   * @returns Route detail string
+   */
+  initializeGameState(): string | undefined {
+    if (!this.initialized) return undefined;
+
+    const engine = this.bridge.getEngine() || this.engineInit.getEngine();
+    const streetNetwork = this.bridge.getStreetNetwork();
+    if (!engine || !streetNetwork) return undefined;
+
+    const base = this.store.baseCoords();
+    const waveSpawnPoints: WaveSpawnPoint[] = this.store.spawnPoints().map((sp) => ({
+      id: sp.id,
+      name: sp.name,
+      lat: sp.lat,
+      lon: sp.lon,
+    }));
+
+    // The place on the main thread; its world goes to the simulation once
+    // the corridor build froze it (MainWorldService.sendToSim)
+    this.world.attach(engine, { lat: base.lat, lon: base.lon }, waveSpawnPoints);
+
+    // Initialize strategic placement service with street network
+    this.strategicPlacement.initialize(streetNetwork);
+
+    // Initialize enemy debug service
+    this.enemyDebug.initialize(engine, this.store.spawnPoints);
+
+    // Without a route no enemy could come: the place cannot be played, as a
+    // location change without one (TODO E232). Spawns without one next to
+    // others with one stay and send nothing; the banner says so
+    if (this.pathRoute.getCachedPaths().size === 0) {
+      console.error('[VisualizationFacade] No routes found - spawn and HQ may not be connected by streets');
+      this.uiStore.loadProblem.set({ text: `${NO_ROUTE_TEXT} Pick another place.`, blocksPlay: true });
+    } else {
+      this.pathRoute.warnUnroutedSpawns(this.store.spawnPoints());
+    }
+
+    // Initialize GlobalRouteGrid
+    void this.engineInit.setStepCurrent('grid');
+    this.engineInit.updateStepMeta('grid', 'Calculating grid...');
+    this.world.buildCells(true);
+    void this.engineInit.setStepDone('grid');
+
+    // Initialize tower placement
+    this.initializeTowerPlacement();
+
+    // Filter street network to route corridor
+    this.filterStreetNetworkToRoutes();
+
+    // Reframe camera
+    this.reframeCameraWithRoutes();
+
+    return this.pathRoute.getRouteDetail();
+  }
+
+  /**
+   * Initialize TowerPlacementService with all required dependencies.
+   */
+  initializeTowerPlacement(): void {
+    const engine = this.bridge.getEngine() || this.engineInit.getEngine();
+    const streetNetwork = this.bridge.getStreetNetwork();
+    if (!engine || !streetNetwork) {
+      console.warn('[VisualizationFacade] Cannot initialize TowerPlacement - engine or streetNetwork not available');
+      return;
+    }
+
+    const base = this.store.baseCoords();
+
+    this.towerPlacement.initialize(
+      engine,
+      streetNetwork,
+      this.worldContext.streets,
+      { lat: base.lat, lon: base.lon },
+    );
+
+    // Initialize map placement service (HQ/Spawn click-to-place)
+    this.mapPlacement.initialize(engine, streetNetwork, { lat: base.lat, lon: base.lon });
+
+    // Ability targeting (Nuclear Strike): aims with the engine, fires through the game state
+    this.abilityTargeting.initialize(engine);
+
+    // Hero: selection rings and the move preview with the engine, orders through the game state
+    this.heroControl.initialize(engine);
+
+    // LOS-Debug-Panel — beobachtet TowerManager-Selection + Cubemap
+    this.losDebug.initialize(engine, this.globalRouteGridService);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Street Filtering & Rendering
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Filter street network to only include streets near calculated routes.
+   */
+  filterStreetNetworkToRoutes(): void {
+    const streetNetwork = this.bridge.getStreetNetwork();
+    if (!streetNetwork) return;
+
+    const cachedPaths = this.pathRoute.getCachedPaths();
+    const routes: { lat: number; lon: number }[][] = [];
+
+    cachedPaths.forEach((path) => {
+      routes.push(path.map(p => ({ lat: p.lat, lon: p.lon })));
+    });
+
+    if (routes.length === 0) {
+      this.bridge.setFilteredStreetNetwork(streetNetwork);
+      return;
+    }
+
+    // A world that draws all its streets (DevWorld) gives the network back
+    const filtered = this.worldContext.streets.filterStreetsNearRoutes(
+      streetNetwork,
+      routes,
+      STREET_FILTER_RADIUS
+    );
+    this.bridge.setFilteredStreetNetwork(filtered);
+  }
+
+  /**
+   * Render streets on map.
+   */
+  renderStreets(): void {
+    const engine = this.bridge.getEngine() || this.engineInit.getEngine();
+    if (!engine) return;
+
+    const base = this.store.baseCoords();
+    this.streetRendering.renderStreets(
+      engine,
+      this.bridge.getFilteredStreetNetwork(),
+      this.bridge.getStreetNetwork(),
+      { lat: base.lat, lon: base.lon },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Height Updates
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Schedule overlay height updates, then build the route corridor behind
+   * the loading screen (CorridorBuild): the first load and a location change
+   * wait for both. The loading screen stays until the corridor is frozen
+   * (checkAllLoaded).
+   */
+  async scheduleOverlayHeightUpdate(): Promise<void> {
+    const engine = this.engineInit.getEngine();
+    if (!engine) {
+      console.warn('[VisualizationFacade] scheduleOverlayHeightUpdate - no engine!');
+      return;
+    }
+
+    // From now on towers, waves and the end of the loading screen wait for the corridor.
+    const ticket = this.corridor.expect();
+    this.heightUpdate.initialize(
+      engine,
+      // The markers only: the cells get their heights from the corridor build.
+      () => this.markerViz.updateMarkerHeights(),
+      () => this.renderStreets(),
+      (detail: string) => this.engineInit.setStepDone('view', detail),
+      (detail: string) => this.engineInit.updateStepMeta('view', detail),
+      () => this.checkAllLoaded(),
+      () => {
+        // Heights are known now: frame the overview on the real ground, for
+        // the map behind the loading screen while the corridor is built. The
+        // view the intro lands in waits for the frozen cells
+        // (buildCorridorBehindLoadingScreen).
+        cameraTimeline.record('heights.cameraCorrection', { introRunning: this.introFlight.isRunning() });
+        this.reframeCameraWithRoutes();
+      }
+    );
+
+    await this.heightUpdate.scheduleOverlayHeightUpdate();
+    await corridorTrace.within('heightUpdate.done', () => this.buildCorridorBehindLoadingScreen(ticket));
+  }
+
+  /**
+   * The corridor build of a location load, as the loading step "corridor":
+   * its steps as the step's meta, then the overview on the frozen cells and
+   * the next check whether loading is done. A build another load or move
+   * superseded ends without a word; that one asks again.
+   */
+  private async buildCorridorBehindLoadingScreen(ticket: number): Promise<void> {
+    void this.engineInit.setStepCurrent('corridor');
+    const result = await this.corridor.build(
+      'location load',
+      ({ step, percent }) => this.engineInit.updateStepMeta('corridor', percent === null ? step : `${step} ${percent} %`),
+      ticket,
+    );
+    if (!result) return;
+    void this.engineInit.setStepDone('corridor', `${result.stations} stations, ${result.cells} cells${result.timedOut ? ', tiles timed out' : ''}`);
+    // The overview so far stood on the cells from before the build, which the
+    // build replaced. Frame it on the frozen cells and store it as the view
+    // the intro lands in and Reset Camera returns to. The build is over, so
+    // this move cannot touch what it measured, and the camera refines as
+    // usual again (CorridorBuild.unmute). The loading screen still stands and
+    // takes the pointer, and the intro flight, where it runs, takes the
+    // camera after it. A build under the hint of a move (buildCorridor)
+    // leaves the camera alone.
+    cameraTimeline.record('corridor.cameraCorrection', { introRunning: this.introFlight.isRunning() });
+    this.reframeCameraWithRoutes();
+    this.saveInitialCameraPosition();
+    this.checkAllLoaded();
+  }
+
+  /**
+   * Build the corridor of routes built again without a location load (spawn
+   * or HQ moved in place), under the hint of the move (CorridorBuild.build).
+   */
+  buildCorridor(reason: string, report: (progress: CorridorProgress) => void): Promise<CorridorBuildResult | null> {
+    return this.corridor.build(reason, report);
+  }
+
+  /**
+   * Check if all loading is complete.
+   */
+  checkAllLoaded(): void {
+    const wasLoading = this.engineInit.loading();
+    const isApplying = this.locationMgmt.isApplyingLocation();
+
+    // While the corridor is built the loading screen waits for it, and no
+    // later step shows yet; its end asks again (buildCorridorBehindLoadingScreen).
+    if (wasLoading && this.corridor.pending()) return;
+
+    // First load only; a location change starts its flight from its own step 7.
+    if (wasLoading && !isApplying && this.introGate.hold()) return;
+
+    this.engineInit.checkAllLoaded(this.heightUpdate.heightsLoading);
+    const isNowLoading = this.engineInit.loading();
+
+    if (wasLoading && !isNowLoading) {
+      cameraTimeline.record('loading.done', { isApplying });
+      // The show waits for the main menu to close (StartShowService)
+      this.startShow.whenPlayed('music', () => this.presentation.onLoadingComplete());
+      this.startShow.whenPlayed('place', () => this.playStartShow(isApplying));
+    }
+  }
+
+  /**
+   * The stage for the shows the start menu held back (StartShowService): the
+   * canvas at the size header and sidebar left it, the overview framed for
+   * that width, stored as the view the intro lands in and Reset returns to.
+   * The canvas would follow by itself, but its observer comes a moment late.
+   */
+  private fitStage(): void {
+    const engine = this.initialized ? this.bridge.getEngine() : null;
+    if (!engine) return;
+    engine.fitToCanvas();
+    this.reframeCameraWithRoutes();
+    this.saveInitialCameraPosition();
+  }
+
+  /**
+   * The place is up and the player in front of it: the route animation and
+   * the intro flight (the build-phase music goes as a show of its own). A
+   * location change plays its own from its last step
+   * (LocationChangeExecutorService).
+   */
+  private playStartShow(isApplying: boolean): void {
+    if (!this.routeAnimation.isRunning() && !isApplying) {
+      const cachedPaths = this.pathRoute.getCachedPaths();
+      if (cachedPaths.size > 0) {
+        this.routeAnimation.startAnimation(cachedPaths, this.store.spawnPoints());
+      }
+    }
+
+    // Spike: intro camera flight HQ → spawn. Doubles as a tile prewarm for
+    // the route corridor. Guarded separately from the route animation:
+    // that one is often already running by the time loading completes
+    // (started from one of the spawn/location paths), and sharing its
+    // guard would silently swallow the flight.
+    // Toggle in DevTools via `__flight.setEnabled(false)`.
+    if (!this.introFlight.isRunning() && !isApplying) {
+      const cachedPaths = this.pathRoute.getCachedPaths();
+      if (cachedPaths.size > 0) {
+        this.introFlight.start(cachedPaths);
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Camera
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Store the last computed overview frame as the initial view (intro
+   * landing, Reset Camera, intro cancel), see CameraOverview.
+   */
+  saveInitialCameraPosition(): void {
+    this.overview.saveInitialPosition();
+  }
+
+  /**
+   * Toggle camera framing debug visualization.
+   */
+  toggleCameraFramingDebug(): void {
+    this.overview.toggleFramingDebug();
+  }
+
+  /**
+   * Toggle camera debug overlay.
+   */
+  toggleCameraDebug(): void {
+    this.overview.toggleCameraDebug();
+  }
+
+  /**
+   * Compute the overview frame around HQ, spawns and all routes and move the
+   * camera there, unless the intro flight has the camera; it lands in the
+   * overview anyway.
+   */
+  reframeCameraWithRoutes(): void {
+    this.overview.reframe();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Tiles Loaded
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Called when tiles finish loading (LOD changes).
+   */
+  onTilesLoaded(): void {
+    const engine = this.bridge.getEngine();
+    if (!engine || !this.bridge.getFilteredStreetNetwork()) return;
+
+    const t0 = performance.now();
+    // Everything below, and the frames it schedules, runs under this tile batch in the corridor trace.
+    const lodVersion = engine.terrain.lodVersion;
+    const trace = corridorTrace.enter(`tilesLoaded lod=${lodVersion}`);
+    try {
+      corridorTrace.tiles(lodVersion, () => engine.routeCorridorLod());
+      this.retryBlindOnNewTiles(engine);
+
+      this.renderStreets();
+      const tStreets = performance.now();
+
+      // Re-render buildings if loaded
+      this.buildings.rerender(engine);
+      const tBuildings = performance.now();
+
+      this.markerViz.updateMarkerHeights();
+      const tMarkers = performance.now();
+
+      // The cells, their heights, the route line and the corridor stay as the
+      // corridor build left them (CorridorBuild): a tile batch neither samples
+      // a cell nor rebuilds a line, nor resolves the LOS of a tower again
+      // (docs/LOS_PIPELINE.md). Before it, the loading screen stands and the
+      // build measures on the tiles it waits for itself.
+      //
+      // Nor does it touch the overlays of the cells (Route Grid, Air Route
+      // Grid, air route): they show frozen cells, and whatever makes cells
+      // draws them itself, the build at its end, a location change at its grid
+      // step. The overlay places its plates once, when it is made, so a batch
+      // that made it between a build's cells and the end of that build could
+      // leave it on the heights from before the cell fallback.
+      // The HQ's fire stands on the tiles; the debug point where the HQ is
+      this.presentation.host?.onTilesLoaded();
+      if (this.uiStore.specialPointsDebugVisible()) this.markerViz.spawnHQDebugPoint();
+      const tGameState = performance.now();
+
+      perfTrace.log(() =>
+        `[PerfTrace] onTilesLoaded: ${(tGameState - t0).toFixed(1)}ms total | ` +
+        `streets=${(tStreets - t0).toFixed(1)} ` +
+        `buildings=${(tBuildings - tStreets).toFixed(1)} ` +
+        `markers=${(tMarkers - tBuildings).toFixed(1)} ` +
+        `gameState=${(tGameState - tMarkers).toFixed(1)}ms`,
+      );
+      corridorTrace.cost('tilesLoaded', tGameState - t0);
+    } finally {
+      corridorTrace.exit(trace);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Toggle Delegations
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Toggle street rendering visibility.
+   */
+  onStreetsToggled(): void {
+    this.streetRendering.toggleVisibility();
+  }
+
+  /** The OSM building footprints of the routes now, null while none are loaded (the minimap, TODO E142) */
+  buildingFootprints(): BuildingFootprint[] | null {
+    return this.buildings.footprints();
+  }
+
+  /**
+   * Toggle building footprints visibility.
+   * Loads buildings on first toggle-on.
+   */
+  onBuildingsToggled(): void {
+    this.buildings.toggled();
+  }
+
+  /**
+   * Toggle route lines visibility.
+   */
+  onRoutesToggled(): void {
+    this.pathRoute.toggleRouteLinesVisibility();
+  }
+
+  /**
+   * Toggle special points debug (fire position markers, etc.).
+   */
+  onSpecialPointsDebugToggled(): void {
+    this.markerViz.toggleSpecialPointsDebug();
+  }
+
+  /**
+   * Play route animation for all cached paths.
+   */
+  onPlayRouteAnimation(): void {
+    const cachedPaths = this.pathRoute.getCachedPaths();
+    if (cachedPaths.size > 0) {
+      this.routeAnimation.startAnimation(cachedPaths, this.store.spawnPoints());
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // DPS Visualization
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Toggle DPS profile bins visualization.
+   */
+  onDpsBinsToggled(visible: boolean): void {
+    const engine = this.bridge.getEngine() || this.engineInit.getEngine();
+    if (!engine) return;
+    this.dpsBins.setVisible(visible, engine);
+  }
+
+  /**
+   * Clean up DPS visualization resources.
+   * Called on restart and dispose.
+   */
+  cleanupDpsVisualization(): void {
+    const engine = this.initialized ? this.bridge.getEngine() : null;
+    this.dpsBins.dispose(engine);
+  }
+}

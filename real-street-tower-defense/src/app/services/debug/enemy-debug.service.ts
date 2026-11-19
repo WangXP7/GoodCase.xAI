@@ -1,0 +1,544 @@
+import { Injectable, Signal, signal, computed, inject } from '@angular/core';
+import { ENEMY_TYPES, EnemyTypeId, getDebugEnemyTypes, getEnemyTypeIds } from '../../configs/enemy-types.config';
+import { RouteWaypoint } from '../../models/game.types';
+import { SimClient } from '../../sim/client/sim-client.service';
+import type { EnemyView } from '../../sim/client/views';
+import { GlobalRouteGridService } from '../world/global-route-grid.service';
+import { EventSubscription } from '../../game-engine';
+import { ThreeTilesEngine } from '../../three-engine';
+import { PathAndRouteService } from '../world/path-route.service';
+import { SpawnPoint } from '../world/marker-visualization.service';
+import { DebugStore, EnemyOverrides } from '../../store/debug.store';
+import type { SpawnStart } from '../../managers/enemy.manager';
+import { DEG_TO_RAD } from '../../utils/geo-utils';
+
+export type { EnemyOverrides };
+
+export interface DebugEnemy {
+  id: string;
+  /** The enemy's view (SimMirror), updated with every packet */
+  enemy: EnemyView;
+  typeId: EnemyTypeId;
+  placedAt: { lat: number; lon: number };
+  /** Per-enemy overrides (copied from type overrides at spawn, then editable) */
+  overrides: EnemyOverrides;
+}
+
+/**
+ * EnemyDebugService - Live-Tuning von Enemy-Konfigurationen
+ *
+ * Ermöglicht das Anpassen von Enemy-Werten (scale, baseHp, baseSpeed, etc.)
+ * über Slider im Debug-Panel mit manueller Platzierung auf der Route.
+ */
+@Injectable({ providedIn: 'root' })
+export class EnemyDebugService {
+  private readonly pathRoute = inject(PathAndRouteService);
+  private readonly debugStore = inject(DebugStore);
+  private readonly sim = inject(SimClient);
+  private readonly grid = inject(GlobalRouteGridService);
+
+  /** Aktuell ausgewählter Enemy-Typ für Slider — UI-Auswahl bleibt lokal. */
+  readonly selectedEnemyId = signal<EnemyTypeId>('zombie');
+
+  /** Placement-Mode aktiv — State im DebugStore. */
+  readonly placementMode = this.debugStore.enemyPlacementMode;
+
+  /** Overrides für ALLE Enemy-Typen — State im DebugStore. */
+  readonly allOverrides = this.debugStore.enemyOverrides;
+
+  /** Liste der platzierten Debug-Enemies */
+  readonly debugEnemies = signal<DebugEnemy[]>([]);
+
+  /** Aktuell selektierter Debug-Enemy (für Live-Editing) */
+  readonly selectedDebugEnemyId = signal<string | null>(null);
+
+  /** Die Enemy-Typen der Auswahl (getDebugEnemyTypes) */
+  readonly enemyTypes = computed(() => getDebugEnemyTypes().map((type) => type.id as EnemyTypeId));
+
+  /** Aktuelle Overrides für den ausgewählten Enemy-Typ (für Placement) */
+  readonly currentOverrides = computed(() => {
+    const id = this.selectedEnemyId();
+    return this.allOverrides()[id];
+  });
+
+  /** Aktuell selektierter Debug-Enemy (für Live-Editing) */
+  readonly selectedDebugEnemy = computed(() => {
+    const id = this.selectedDebugEnemyId();
+    if (!id) return null;
+    return this.debugEnemies().find(de => de.id === id) ?? null;
+  });
+
+  // --- Placement state (moved from component) ---
+  /**
+   * The placement sent with debug:spawn-enemy, waiting for its enemy:spawned:
+   * the command acts at the next tick, the first enemy spawned outside a wave
+   * after it is the placed one.
+   */
+  private pendingDebugPlacement: { typeId: EnemyTypeId; lat: number; lon: number } | null = null;
+  private engine: ThreeTilesEngine | null = null;
+  private spawnPoints!: Signal<SpawnPoint[]>;
+
+  /** Subscriptions for the enemy:spawned and enemy:split listeners (cleanup on re-init) */
+  private enemySpawnedSub: EventSubscription | null = null;
+  private enemySplitSub: EventSubscription | null = null;
+  private listEndSubs: EventSubscription[] = [];
+
+  /**
+   * Initialize with runtime dependencies (called after game state is ready).
+   * Also registers the enemy:spawned listener for debug placement.
+   */
+  initialize(engine: ThreeTilesEngine | null, spawnPoints: Signal<SpawnPoint[]>): void {
+    this.engine = engine;
+    this.spawnPoints = spawnPoints;
+
+    // Cleanup previous listeners on re-init
+    this.enemySpawnedSub?.dispose();
+    this.enemySplitSub?.dispose();
+    for (const sub of this.listEndSubs) sub.dispose();
+
+    // Register debug enemy placement (next spawned enemy after placement click)
+    const eventBus = this.sim.bus;
+    this.enemySpawnedSub = eventBus.onLive('enemy:spawned', (event) => {
+      const pending = this.pendingDebugPlacement;
+      // A wave's enemy comes out of its portal; the placed one does not
+      if (!pending || event.viaPortal || event.enemy.typeConfig.id !== pending.typeId) return;
+
+      this.pendingDebugPlacement = null;
+      this.registerDebugEnemy(event.enemy, pending.typeId, pending.lat, pending.lon);
+      this.exitPlacementMode();
+
+      console.log(`[EnemyDebug] Placed ${pending.typeId} at ${pending.lat.toFixed(6)}, ${pending.lon.toFixed(6)}`);
+    });
+
+    // What a debug enemy splits into is a debug enemy too: listed, shot at
+    // outside a wave and removed with the others.
+    this.enemySplitSub = eventBus.onLive('enemy:split', (event) => {
+      if (!this.getDebugEnemy(event.enemy.id)) return;
+      for (const child of event.children) {
+        this.registerDebugEnemy(child, child.typeConfig.id, child.position.lat, child.position.lon);
+      }
+    });
+
+    // The list ends where the simulation's enemies do: at the end of a wave,
+    // at game over, on a new run and on a restore. Enemy ids start over in a new run, so a
+    // kept entry would steer (debug:enemy-move, debug:enemy-speed) an enemy
+    // that is not the placed one.
+    this.listEndSubs = [
+      eventBus.on('wave:completed', () => this.clearDebugEnemies()),
+      eventBus.on('game:over', () => this.clearDebugEnemies()),
+      eventBus.on('game:reset', () => this.clearDebugEnemies()),
+      eventBus.on('sim:restored', () => this.clearDebugEnemies()),
+    ];
+  }
+
+  /**
+   * Update engine reference (e.g. after re-initialization).
+   */
+  setEngine(engine: ThreeTilesEngine | null): void {
+    this.engine = engine;
+  }
+
+  /** Initialisiert Overrides mit Original-Werten für alle Enemies */
+  private initAllOverrides(): Record<EnemyTypeId, EnemyOverrides> {
+    const result = {} as Record<EnemyTypeId, EnemyOverrides>;
+    for (const id of getEnemyTypeIds()) {
+      const config = ENEMY_TYPES[id];
+      result[id as EnemyTypeId] = {
+        scale: config.scale,
+        baseHp: config.baseHp,
+        baseSpeed: config.baseSpeed,
+        heightOffset: config.heightOffset,
+        healthBarOffset: config.healthBarOffset,
+        previewScale: config.previewScale ?? config.scale * 0.4,
+        previewCameraDistance: config.previewCameraDistance ?? 7,
+        previewCameraAngle: config.previewCameraAngle ?? Math.PI / 12,
+        previewOffsetY: config.previewOffsetY ?? 0,
+        rotation: 0,
+        animationSpeed: config.animationSpeed ?? 1.0,
+      };
+    }
+    return result;
+  }
+
+  /**
+   * Setzt den ausgewählten Enemy-Typ.
+   */
+  selectEnemy(id: EnemyTypeId): void {
+    this.selectedEnemyId.set(id);
+  }
+
+  /**
+   * Holt die Overrides für einen bestimmten Enemy-Typ.
+   */
+  getOverrides(id: EnemyTypeId): EnemyOverrides {
+    return this.allOverrides()[id];
+  }
+
+  /**
+   * Setzt einen einzelnen Override-Wert für den ausgewählten Enemy.
+   */
+  setOverride<K extends keyof EnemyOverrides>(key: K, value: number): void {
+    const id = this.selectedEnemyId();
+    const all = this.allOverrides();
+    this.allOverrides.set({
+      ...all,
+      [id]: {
+        ...all[id],
+        [key]: value,
+      },
+    });
+  }
+
+  /**
+   * Setzt alle Overrides auf Original-Werte zurück.
+   */
+  resetAllOverrides(): void {
+    this.allOverrides.set(this.initAllOverrides());
+  }
+
+  /**
+   * Toggled den Placement-Mode.
+   */
+  togglePlacementMode(): void {
+    this.placementMode.update(v => !v);
+  }
+
+  /**
+   * Deaktiviert den Placement-Mode.
+   */
+  exitPlacementMode(): void {
+    this.placementMode.set(false);
+  }
+
+  /**
+   * Registriert einen platzierten Debug-Enemy.
+   * Kopiert die aktuellen Type-Overrides als Startwerte.
+   */
+  registerDebugEnemy(enemy: EnemyView, typeId: EnemyTypeId, lat: number, lon: number): void {
+    const typeOverrides = this.allOverrides()[typeId];
+    this.debugEnemies.update(list => [
+      ...list,
+      {
+        id: enemy.id,
+        enemy,
+        typeId,
+        placedAt: { lat, lon },
+        overrides: { ...typeOverrides },
+      },
+    ]);
+  }
+
+  /**
+   * Toggled die Selektion eines Debug-Enemy.
+   */
+  toggleDebugEnemySelection(enemyId: string): void {
+    if (this.selectedDebugEnemyId() === enemyId) {
+      this.selectedDebugEnemyId.set(null);
+    } else {
+      this.selectedDebugEnemyId.set(enemyId);
+    }
+  }
+
+  /** Keys that affect the sidebar preview and should sync to type-level overrides */
+  private readonly PREVIEW_KEYS: ReadonlySet<string> = new Set([
+    'previewScale', 'previewCameraDistance', 'previewCameraAngle', 'previewOffsetY',
+  ]);
+
+  /**
+   * Aktualisiert einen Override-Wert für den selektierten Debug-Enemy.
+   * Preview-relevante Keys werden auch auf Type-Level synchronisiert,
+   * damit der Sidebar-Preview-Effect feuert.
+   */
+  updateSelectedOverride<K extends keyof EnemyOverrides>(key: K, value: number): void {
+    const id = this.selectedDebugEnemyId();
+    if (!id) return;
+
+    // Get typeId before updating for preview sync
+    const debugEnemy = this.debugEnemies().find(d => d.id === id);
+
+    this.debugEnemies.update(list =>
+      list.map(de => de.id === id
+        ? { ...de, overrides: { ...de.overrides, [key]: value } }
+        : de
+      )
+    );
+
+    // Sync preview-related overrides to type-level so sidebar preview updates
+    if (debugEnemy && this.PREVIEW_KEYS.has(key as string)) {
+      const all = this.allOverrides();
+      this.allOverrides.set({
+        ...all,
+        [debugEnemy.typeId]: { ...all[debugEnemy.typeId], [key]: value },
+      });
+    }
+  }
+
+  /**
+   * Entfernt einen Debug-Enemy aus der Liste.
+   * Löscht auch die Selektion falls dieser Enemy selektiert war.
+   */
+  removeDebugEnemy(enemyId: string): void {
+    if (this.selectedDebugEnemyId() === enemyId) {
+      this.selectedDebugEnemyId.set(null);
+    }
+    this.debugEnemies.update(list => list.filter(de => de.id !== enemyId));
+  }
+
+  /**
+   * Setzt die Overrides des selektierten Debug-Enemy auf Original zurück.
+   */
+  resetSelectedEnemy(): void {
+    const selected = this.selectedDebugEnemy();
+    if (!selected) return;
+
+    const config = ENEMY_TYPES[selected.typeId];
+    this.debugEnemies.update(list =>
+      list.map(de => de.id === selected.id
+        ? {
+            ...de,
+            overrides: {
+              scale: config.scale,
+              baseHp: config.baseHp,
+              baseSpeed: config.baseSpeed,
+              heightOffset: config.heightOffset,
+              healthBarOffset: config.healthBarOffset,
+              previewScale: config.previewScale ?? config.scale * 0.4,
+              previewCameraDistance: config.previewCameraDistance ?? 7,
+              previewCameraAngle: config.previewCameraAngle ?? Math.PI / 12,
+              previewOffsetY: config.previewOffsetY ?? 0,
+              rotation: 0,
+              animationSpeed: config.animationSpeed ?? 1.0,
+            }
+          }
+        : de
+      )
+    );
+  }
+
+  /**
+   * Holt einen Debug-Enemy anhand der ID.
+   */
+  getDebugEnemy(enemyId: string): DebugEnemy | undefined {
+    return this.debugEnemies().find(de => de.id === enemyId);
+  }
+
+  /**
+   * Leert die Debug-Enemy Liste (ohne Entities zu entfernen).
+   */
+  clearDebugEnemies(): void {
+    this.selectedDebugEnemyId.set(null);
+    this.debugEnemies.set([]);
+  }
+
+  /**
+   * Exportiert alle Enemy-Overrides als JSON-String.
+   */
+  exportAllAsJson(): string {
+    const overrides = this.allOverrides();
+    const exportData: Record<string, EnemyOverrides> = {};
+
+    for (const id of getEnemyTypeIds()) {
+      exportData[id] = {
+        scale: Math.round(overrides[id as EnemyTypeId].scale * 1000) / 1000,
+        baseHp: Math.round(overrides[id as EnemyTypeId].baseHp),
+        baseSpeed: Math.round(overrides[id as EnemyTypeId].baseSpeed * 10) / 10,
+        heightOffset: Math.round(overrides[id as EnemyTypeId].heightOffset * 10) / 10,
+        healthBarOffset: Math.round(overrides[id as EnemyTypeId].healthBarOffset * 10) / 10,
+        previewScale: Math.round(overrides[id as EnemyTypeId].previewScale * 1000) / 1000,
+        previewCameraDistance: Math.round(overrides[id as EnemyTypeId].previewCameraDistance * 10) / 10,
+        previewCameraAngle: Math.round(overrides[id as EnemyTypeId].previewCameraAngle * 100) / 100,
+        previewOffsetY: Math.round(overrides[id as EnemyTypeId].previewOffsetY * 10) / 10,
+        rotation: Math.round(overrides[id as EnemyTypeId].rotation * 1000) / 1000,
+        animationSpeed: Math.round(overrides[id as EnemyTypeId].animationSpeed * 100) / 100,
+      };
+    }
+
+    return JSON.stringify(exportData, null, 2);
+  }
+
+  /**
+   * Kopiert das komplette JSON in die Zwischenablage.
+   */
+  async copyJsonToClipboard(): Promise<void> {
+    const json = this.exportAllAsJson();
+    try {
+      await navigator.clipboard.writeText(json);
+      console.log('[EnemyDebug] JSON copied to clipboard');
+    } catch (err) {
+      console.error('[EnemyDebug] Failed to copy:', err);
+    }
+  }
+
+  // ─── Placement & Control (moved from TowerDefenseComponent) ───
+
+  /**
+   * Handle enemy placement from debug panel.
+   * Validates position is on route and spawns the enemy on it, see
+   * placementOnRoute().
+   */
+  handleEnemyPlacement(lat: number, lon: number, _height: number): void {
+    if (!this.engine) return;
+
+    // Convert to local coordinates for route grid validation
+    const local = this.engine.sync.geoToLocalSimple(lat, lon, 0);
+
+    // Validate: must be on route
+    const cell = this.grid.getCellAt(local.x, local.z);
+    if (!cell) {
+      console.warn('[EnemyDebug] Invalid placement - not on route');
+      return;
+    }
+
+    const placement = this.placementOnRoute(lat, lon, this.engine);
+    if (!placement) {
+      console.warn('[EnemyDebug] No route to place the enemy on');
+      return;
+    }
+
+    // Get overrides from debug service
+    const typeId = this.selectedEnemyId();
+    const overrides = this.currentOverrides();
+
+    // Spawn enemy via debug event (paused = idle, overrides applied via instanced system)
+    this.pendingDebugPlacement = { typeId, lat, lon };
+    this.sim.bus.emit({
+      type: 'debug:spawn-enemy',
+      enemyType: typeId,
+      count: 1,
+      path: placement.path,
+      start: placement.start,
+      speed: overrides.baseSpeed,
+      paused: true,
+      health: overrides.baseHp,
+    });
+  }
+
+  /**
+   * Where a click lands on the first spawn's route: the segment, and the
+   * progress on it, of the route's nearest point, on the centre line. The
+   * enemy walks the route itself from there like a split child (SpawnStart),
+   * not a copy of it, so it shares the route's profile and its progress
+   * along the route compares with the wave's enemies.
+   */
+  private placementOnRoute(
+    lat: number,
+    lon: number,
+    engine: ThreeTilesEngine,
+  ): { path: RouteWaypoint[]; start: SpawnStart } | null {
+    const spawns = this.spawnPoints();
+    if (spawns.length === 0) return null;
+    const path = this.pathRoute.getCachedPath(spawns[0].id);
+    if (!path || path.length < 2) return null;
+
+    // Nearest point of each segment, in degrees with the longitude scaled
+    // to the latitude's, so east and north measure alike
+    const cosLat = Math.cos(lat * DEG_TO_RAD);
+    let segmentIndex = 0;
+    let segmentProgress = 0;
+    let bestSq = Infinity;
+    for (let i = 0; i < path.length - 1; i++) {
+      const ax = (path[i].lon - lon) * cosLat;
+      const ay = path[i].lat - lat;
+      const dx = (path[i + 1].lon - path[i].lon) * cosLat;
+      const dy = path[i + 1].lat - path[i].lat;
+      const lenSq = dx * dx + dy * dy;
+      const t = lenSq > 0 ? Math.min(1, Math.max(0, -(ax * dx + ay * dy) / lenSq)) : 0;
+      const px = ax + dx * t;
+      const py = ay + dy * t;
+      const distSq = px * px + py * py;
+      if (distSq < bestSq) {
+        bestSq = distSq;
+        segmentIndex = i;
+        segmentProgress = t;
+      }
+    }
+
+    // Ground from the route's heights there, else sampled like EnemyManager.spawn()
+    const from = path[segmentIndex];
+    const to = path[segmentIndex + 1];
+    const height = from.height !== undefined && to.height !== undefined
+      ? from.height + (to.height - from.height) * segmentProgress
+      : from.height;
+    const groundHeight = height !== undefined && height !== 0
+      ? height
+      : (engine.getTerrainHeightAtGeo(lat, lon) ?? 0) + engine.sync.getOrigin().height;
+
+    return {
+      path,
+      start: { segmentIndex, segmentProgress, lateralFactor: 0, heightVariation: 0, groundHeight },
+    };
+  }
+
+  /**
+   * Remove a single debug enemy. A command, so the simulation sees it: once
+   * the last enemy outside a wave is gone, the towers turn to their guard
+   * heading.
+   */
+  onRemoveDebugEnemy(enemyId: string): void {
+    const de = this.getDebugEnemy(enemyId);
+    if (de) {
+      this.sim.bus.emit({ type: 'debug:remove-enemy', enemyId: de.enemy.id });
+      this.removeDebugEnemy(enemyId);
+    }
+  }
+
+  /**
+   * Clear all debug enemies, one debug:remove-enemy each (see
+   * onRemoveDebugEnemy). Enemies of a running wave stay.
+   */
+  onClearDebugEnemies(): void {
+    const eventBus = this.sim.bus;
+    for (const de of this.debugEnemies()) {
+      eventBus.emit({ type: 'debug:remove-enemy', enemyId: de.enemy.id });
+    }
+    this.clearDebugEnemies();
+  }
+
+  /**
+   * Walk for debug enemy: speed in the simulation, clip in the renderer.
+   */
+  onPlayWalkAnimation(enemyId: string): void {
+    if (!this.getDebugEnemy(enemyId)) return;
+    this.sim.bus.emit({ type: 'debug:enemy-move', enemyId, action: 'walk' });
+    this.engine?.enemies.startWalkAnimation(enemyId);
+  }
+
+  /**
+   * Run for debug enemy: speed in the simulation, clip in the renderer.
+   */
+  onPlayRunAnimation(enemyId: string): void {
+    if (!this.getDebugEnemy(enemyId)) return;
+    this.sim.bus.emit({ type: 'debug:enemy-move', enemyId, action: 'run' });
+    this.engine?.enemies.startRunAnimation(enemyId);
+  }
+
+  /**
+   * Start movement for debug enemy.
+   */
+  onStartEnemyMovement(enemyId: string): void {
+    const de = this.getDebugEnemy(enemyId);
+    if (de?.enemy && de.enemy.alive) {
+      this.sim.bus.emit({ type: 'debug:enemy-move', enemyId, action: 'start' });
+      this.engine?.enemies.startWalkAnimation(enemyId);
+    }
+  }
+
+  /**
+   * Stop movement for debug enemy.
+   */
+  onStopEnemyMovement(enemyId: string): void {
+    const de = this.getDebugEnemy(enemyId);
+    if (de?.enemy) {
+      this.sim.bus.emit({ type: 'debug:enemy-move', enemyId, action: 'stop' });
+    }
+  }
+
+  /**
+   * Dispose all subscriptions and cleanup.
+   */
+  dispose(): void {
+    this.enemySpawnedSub?.dispose();
+    this.enemySpawnedSub = null;
+    this.engine = null;
+  }
+}

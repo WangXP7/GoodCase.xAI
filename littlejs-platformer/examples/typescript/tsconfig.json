@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "es2020",
+    "target": "es2020",
+    "moduleResolution": "bundler",
+    "outDir": "build",
+    "rootDir": ".",
+    "types": []
+  },
+  // the engine's types, as the npm package gives them; the build in dist is what the import map loads
+  "files": ["../../dist/littlejs.d.ts"],
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "build"]
+}

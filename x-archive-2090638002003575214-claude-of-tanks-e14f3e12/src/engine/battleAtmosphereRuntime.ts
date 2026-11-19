@@ -1,0 +1,209 @@
+import type * as THREE from 'three';
+import { MARS_SKY_PRESET } from './marsAtmosphere.ts';
+import { isMapId, type MapId } from '../world/maps/catalog.ts';
+import type { MapSkyConfig } from '../world/maps/horizon.ts';
+import { selectBattleWeather, type BattleWeather, type BattleWeatherBiome, type BattleTimeOfDay, BATTLE_TIMES } from './battleWeatherPolicy.ts';
+import { setVehicleReadabilityScale } from '../vehicles/vehicleReadability.ts';
+
+export const BATTLE_WEATHER_BIOMES = Object.freeze({
+  verdant: 'temperate', desert: 'arid', winter: 'cold', urban: 'temperate',
+  coastal: 'coastal', autumn: 'temperate', steppe: 'arid', railyard: 'temperate',
+  frontier: 'temperate', fjord: 'coastal', delta: 'tropical', badlands: 'arid',
+  monsoon: 'tropical', alpine: 'cold', caldera: 'temperate', foundry: 'temperate',
+  ruinspires: 'arid', blackglass: 'temperate', titan_gorge: 'arid', skybridge: 'arid',
+  polders: 'coastal', copper_mesa: 'temperate', airfield: 'temperate', oasis: 'arid',
+  whiteout: 'cold', orchard: 'temperate', longleaf: 'temperate', mangrove: 'tropical',
+  saltwind: 'coastal', reservoir: 'temperate', mars: 'arid', moon: 'arid', cliffbridge: 'temperate',
+} satisfies Record<MapId, BattleWeatherBiome>);
+
+export interface BattleAtmosphereRuntimeOptions {
+  /** Root owns sky, CSM/hemi and post fog baseline as one covered transaction. */
+  applyPreset(preset: MapSkyConfig): void;
+  getAuthoredPreset(): MapSkyConfig;
+  getGameMode?(): string;
+  getWorldRoot?(): THREE.Object3D | null;
+  /**
+   * 2026-10-01 (the grounded light model): the share of the vehicles' shade readability lift the applied light still
+   * needs (lightModel.ts `vehicleReadability`: the adapting camera and an overcast deck already light the shade);
+   * 1 when absent.
+   */
+  getLightReadability?(): number;
+  /**
+   * 2026-10-08 (the nightsky lane): the renderer the far panorama re-bakes on for the light just applied
+   * (horizonPanorama.ts relight), inside this covered prepare; absent, the far country keeps its day bake and the night
+   * dim below.
+   */
+  getRenderer?(): unknown;
+}
+
+export interface BattleAtmosphereRuntime {
+  readonly weather: BattleWeather | null;
+  prepare(seed: number | undefined, mapId: string, times?: readonly BattleTimeOfDay[] | boolean): void;
+  reset(): void;
+  dispose(): void;
+}
+
+/** The sky preset a battle's time of day applies over the map's authored block (the receipts read it too). */
+export function battleTimePreset(authored: MapSkyConfig, timeOfDay: BattleTimeOfDay | null): MapSkyConfig {
+  return weatherPreset(authored, timeOfDay ? { timeOfDay } as BattleWeather : null);
+}
+
+function weatherPreset(authored: MapSkyConfig, weather: BattleWeather | null): MapSkyConfig {
+  const preset = { ...authored };
+  if (!weather) return preset;
+  if (weather.timeOfDay === 'sunset') {
+    Object.assign(preset, {
+      sunElevationDeg: 7, skyIntensity: .72, sunIntensity: 2.8,
+      sunColorHex: 0xffbf80, hemiIntensity: .58, fillIntensity: .38, envIntensity: .8,
+      cloudTintHex: 0xeab492, fogTintHex: 0xba8c83, fogMix: .38,
+    });
+  }
+  if (weather.timeOfDay === 'night') {
+    Object.assign(preset, {
+      // Moonlit, not pitch black: preserve plate/ground readability away from
+      // the small headlamp pool without adding a render pass or scene light.
+      // 2026-09-14 owner: "really really dark, make night a little more visible" — a brighter
+      // moon (0.42 -> 0.60), more sky bounce (0.46 -> 0.60) and fill (0.20 -> 0.30), a fuller
+      // environment (0.85 -> 1.0) and a slightly lifted night sky; still clearly night.
+      skyIntensity: .08, sunElevationDeg: 24, sunIntensity: .60,
+      sunColorHex: 0xafc3ec, hemiIntensity: .60, fillIntensity: .30, envIntensity: 1.0,
+      cloudTintHex: 0x3a4d68, fogTintHex: 0x3a4b62, fogMix: .66,
+    });
+  }
+  return preset;
+}
+
+function trackHorizonMaterial(
+  material: THREE.Material, selected: boolean,
+  eligible: Set<THREE.MeshBasicMaterial>, blocked: Set<THREE.MeshBasicMaterial>,
+): void {
+  const basic = material as THREE.MeshBasicMaterial;
+  if (basic.isMeshBasicMaterial) (selected ? eligible : blocked).add(basic);
+}
+
+/**
+ * 2026-10-08 (the nightsky lane; the owner: "on sunsets and nights, the far skybox is still like glowing instead of having
+ * the right lighting"): the far panorama is baked under the map's authored day sun and drawn unlit, and the camera's
+ * exposure opens up at night and at a low sun, so the day-lit far country glowed over a darker scene (sunset: no dim at
+ * all; night: the day's warm colours at a fifth). Every far panorama under the root re-bakes under the light just applied
+ * (horizonPanorama.ts relight: the key light's direction, the sun and sky terms over the day's, the live sky's haze),
+ * here inside the covered prepare. Returns the shells that carry it, which the night dim below leaves alone.
+ */
+function relightHorizonPanoramas(root: THREE.Object3D | null, renderer: unknown): Set<THREE.Object3D> {
+  const relit = new Set<THREE.Object3D>();
+  if (!root || !renderer) return relit;
+  root.traverse((object) => {
+    const handle = (object.userData as { horizonPanorama?: unknown }).horizonPanorama as
+      { mesh?: THREE.Object3D; relight?(renderer: unknown): boolean } | true | undefined;
+    if (!handle || handle === true || typeof handle.relight !== 'function' || !handle.mesh) return;
+    try {
+      if (handle.relight(renderer)) relit.add(handle.mesh);
+    } catch { /* the bake stands as it was, and the night dim with it */ }
+  });
+  return relit;
+}
+
+/** Before a time of day is applied: each far panorama keeps the sky still showing as its day reference when it is the
+ * map's authored day (world activation applies the map's sky after the warm-up, so a map entered straight into a night
+ * may not have baked under its day yet; horizonPanorama.ts noteDaySky). */
+function noteHorizonDaySky(root: THREE.Object3D | null): void {
+  root?.traverse((object) => {
+    const handle = (object.userData as { horizonPanorama?: unknown }).horizonPanorama as { noteDaySky?(): boolean } | true | undefined;
+    if (!handle || handle === true || typeof handle.noteDaySky !== 'function') return;
+    try { handle.noteDaySky(); } catch { /* the relight then keeps the bake as it is */ }
+  });
+}
+
+/** Named unlit horizons only. A material shared with any other world mesh
+ * cannot be dimmed without affecting that mesh, so leave that alias alone.
+ * A far panorama re-baked under the applied light (relightHorizonPanoramas) already carries the night and is left alone.
+ */
+function dimHorizon(root: THREE.Object3D | null, saved: Map<THREE.MeshBasicMaterial, THREE.Color>, relit: ReadonlySet<THREE.Object3D> = new Set()): void {
+  if (!root) return;
+  const eligible = new Set<THREE.MeshBasicMaterial>(), blocked = new Set<THREE.MeshBasicMaterial>();
+  root.traverse(object => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || relit.has(mesh)) return;
+    const selected = mesh.name === 'horizon-ring' || mesh.name === 'horizon-treeline'
+      || mesh.name === 'horizon-detail' || mesh.name === 'horizon-far-range'; // round 72: the far range dims with the ring
+    if (Array.isArray(mesh.material)) {
+      for (const material of mesh.material) trackHorizonMaterial(material, selected, eligible, blocked);
+    } else trackHorizonMaterial(mesh.material, selected, eligible, blocked);
+  });
+  for (const material of eligible) {
+    if (blocked.has(material)) continue;
+    saved.set(material, material.color.clone());
+    material.color.multiplyScalar(.20); // 2026-09-14: horizon dims to a fifth (was .12) so the skyline still reads at night
+  }
+}
+
+/** Match atmosphere owner, intentionally inert until explicit battle intent.
+ * prepare/reset may re-key sky/PMREM and belong behind a loading cover. The
+ * selected day/night presentation is fixed per match; no frame-loop update,
+ * precipitation resources or additional scene lights are owned here.
+ */
+export function createBattleAtmosphereRuntime(options: BattleAtmosphereRuntimeOptions): BattleAtmosphereRuntime {
+  let currentWeather: BattleWeather | null = null;
+  let authored: MapSkyConfig | null = null;
+  let preparedMap: MapId | null = null;
+  let preparedSeed: number | undefined;
+  let preparedRoot: THREE.Object3D | null = null;
+  let preparedMars = false;
+  const horizonColors = new Map<THREE.MeshBasicMaterial, THREE.Color>();
+  let disposed = false;
+
+  function restoreHorizon(): void {
+    for (const [material, color] of horizonColors) material.color.copy(color);
+    horizonColors.clear();
+  }
+
+  function prepare(seed: number | undefined, mapId: string, times: readonly BattleTimeOfDay[] | boolean = BATTLE_TIMES): void {
+    if (disposed) throw new Error('Battle atmosphere is disposed');
+    if (!isMapId(mapId)) throw new RangeError('Battle weather requires a catalog map id');
+    const mars = options.getGameMode?.() === 'mars' || mapId === 'mars' || mapId === 'moon';
+    const selected = seed === undefined ? null : selectBattleWeather(seed, BATTLE_WEATHER_BIOMES[mapId],
+      typeof times === 'boolean' ? (times ? BATTLE_TIMES : ['day']) : times);
+    // Space has an authored cold daylight key under the galaxy dome; terrestrial
+    // random night must not dim it or enable a second, conflicting lighting plan.
+    const next = mars && selected ? { ...selected, timeOfDay: 'day' as const } : selected;
+    const root = options.getWorldRoot?.() ?? null;
+    if (preparedMap === mapId && preparedSeed === next?.seed && preparedRoot === root && preparedMars === mars
+      && currentWeather?.timeOfDay === next?.timeOfDay) {
+      return;
+    }
+    const nextAuthored = { ...options.getAuthoredPreset() };
+    // (the nightsky lane) the far panoramas keep the map's day sky, while it still shows, as their relight's reference
+    noteHorizonDaySky(root);
+    options.applyPreset(mapId === 'moon' ? nextAuthored : mars ? { ...MARS_SKY_PRESET } : weatherPreset(nextAuthored, next));
+    // 2026-09-14: night .34 (was .24, night readability lifted with the moon); 2026-10-01: × the light's own share
+    const light = options.getLightReadability?.() ?? 1;
+    setVehicleReadabilityScale((next?.timeOfDay === 'night' ? .34 : 1) * (Number.isFinite(light) ? Math.min(1, Math.max(0, light)) : 1));
+    restoreHorizon();
+    const relit = relightHorizonPanoramas(root, options.getRenderer?.() ?? null);
+    if (next?.timeOfDay === 'night') dimHorizon(root, horizonColors, relit);
+    authored = nextAuthored;
+    currentWeather = next;
+    preparedMap = mapId;
+    preparedSeed = next?.seed;
+    preparedRoot = root;
+    preparedMars = mars;
+  }
+  function reset(): void {
+    setVehicleReadabilityScale(1);
+    restoreHorizon();
+    const restore = authored;
+    authored = null;
+    currentWeather = null;
+    preparedMap = null;
+    preparedSeed = undefined;
+    preparedRoot = null;
+    preparedMars = false;
+    if (restore) options.applyPreset(restore);
+  }
+  function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    reset();
+  }
+  return { get weather() { return currentWeather; }, prepare, reset, dispose };
+}

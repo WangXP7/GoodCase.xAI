@@ -1,0 +1,242 @@
+{
+  "tria-prima-fable-52": {
+    "upstream": "https://github.com/winchxyz/tria-prima",
+    "commit": "acce14089aeee01f3225a09a3a8a9532612359fb",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 181,
+    "bytes": 6988301
+  },
+  "x-archive-auth-2094239964162843048-f501587b": {
+    "upstream": "https://github.com/Vheissu/emerald-bayou",
+    "commit": "e87c03688263daadb1bfbf35efaddc5ab7d53912",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 244,
+    "bytes": 26241520
+  },
+  "graveyard-shift-fable-52": {
+    "upstream": "https://github.com/ethanplusai/zombies",
+    "commit": "4bc991d2a11b036df6a9e81baac0fc7d8d16972c",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 322,
+    "bytes": 7445111
+  },
+  "x-archive-auth-2081716631986983093-fa546a89": {
+    "upstream": "https://github.com/e01-ai/starfall",
+    "commit": "f062c9b2b7e770e184a328bcf7f2bf216554d3ee",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 121,
+    "bytes": 14913235
+  },
+  "x-archive-2090638002003575214-claude-of-tanks-e14f3e12": {
+    "upstream": "https://github.com/Kevin-Liu-01/Claude-of-Tanks",
+    "commit": "e5e937cb713fc2b6fc39b2abf4b3c3747996d1ea",
+    "license": "MIT",
+    "scope": "code-only",
+    "files": 3423,
+    "bytes": 61848383
+  },
+  "tidewater-dgreenheck": {
+    "upstream": "https://github.com/dgreenheck/tidewater",
+    "commit": "4811ba48d795197de5621985f404e765c0b7c0ef",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 429,
+    "bytes": 58821095
+  },
+  "marco-fugaro-worm-monster": {
+    "upstream": "https://github.com/marcofugaro/three-advanced-techniques",
+    "commit": "c6e4175baeb5daa8c66d2991d9991a31574dc273",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 61,
+    "bytes": 15770923
+  },
+  "drcollect-github-io-demolition-derby": {
+    "upstream": "https://github.com/drcollect/demolition-derby",
+    "commit": "f559fc60a7f2ee3a21a4faf77e998ae31ad67c43",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 105,
+    "bytes": 1510603
+  },
+  "vale-dos-vinhedos-lucas579686-chatgpt-site": {
+    "upstream": "https://github.com/LucasMarquesShiva/the-free-game",
+    "commit": "7798cd9771f99d5c99422789a9b94a69df6c3e3e",
+    "license": "MIT",
+    "scope": "code-only",
+    "files": 382,
+    "bytes": 2389926
+  },
+  "real-street-tower-defense": {
+    "upstream": "https://github.com/ingel81/3dtd",
+    "commit": "2a092a2b8d9f21c4826e3377acbcdbf64fe6923c",
+    "license": "AGPL-3.0",
+    "scope": "code-only",
+    "files": 2112,
+    "bytes": 17888356
+  },
+  "bruno-simon": {
+    "upstream": "https://github.com/brunosimon/folio-2025",
+    "commit": "70764a94756cc4de564e493c8ba46c4b5fe03ed1",
+    "license": "MIT",
+    "scope": "code-only",
+    "files": 143,
+    "bytes": 4585572
+  },
+  "papertrails": {
+    "upstream": "https://github.com/xikhar/papertrails",
+    "commit": "5a284f71164ea3bd54ee788553e21f7f21a1b7b7",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 75,
+    "bytes": 20916245
+  },
+  "slop-new-york": {
+    "upstream": "https://github.com/mrdoob/slop-newyork",
+    "commit": "2813185434ec4f11e105fff7fb87665fab81b558",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 108,
+    "bytes": 18978647
+  },
+  "infinity-castle": {
+    "upstream": "https://github.com/Thre4dripper/Infinity-Castle-ThreeJs",
+    "commit": "d0a9f2eb387684679dea5ef43ae9198389ee1e02",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 51,
+    "bytes": 1377158
+  },
+  "procedural-tokyo": {
+    "upstream": "https://github.com/jeantimex/tokyo",
+    "commit": "1984760653e4800adeadcb3505b1e92347415dc3",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 70,
+    "bytes": 4611226
+  },
+  "slop-singapore": {
+    "upstream": "https://github.com/zz85/slop-singapore",
+    "commit": "3b98b6765a658e7da241f11da569abb8b44d2822",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 162,
+    "bytes": 58457559
+  },
+  "starter-kit-racing": {
+    "upstream": "https://github.com/gitdolucas/Starter-Kit-Racing",
+    "commit": "e8cd9c08ac13e508a430c776576380bfdf4b4444",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 38,
+    "bytes": 3029418
+  },
+  "moon-rover": {
+    "upstream": "https://github.com/winchxyz/moon-rover",
+    "commit": "f5f25ba6bf7477c612b408b265c9275a4fd1200d",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 46,
+    "bytes": 2780108
+  },
+  "hexgl": {
+    "upstream": "https://github.com/BKcore/HexGL",
+    "commit": "6addc95a2fce3bf05f4d751823cc054c61a16d68",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 197,
+    "bytes": 17246586
+  },
+  "tiny-world-builder": {
+    "upstream": "https://github.com/jasonkneen/tiny-world-builder",
+    "commit": "19824acbff3148287b717e4bab4f1136bb6dc762",
+    "license": "AGPL-3.0",
+    "scope": "code-only",
+    "files": 2941,
+    "bytes": 12620655
+  },
+  "backroom": {
+    "upstream": "https://github.com/lo-th/backroom",
+    "commit": "79ba82b3ba25ea40c8ec633eeccd00b605f22ba6",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 103,
+    "bytes": 44285210
+  },
+  "threejs-descent": {
+    "upstream": "https://github.com/mrdoob/three-descent",
+    "commit": "e8570178df232cdc8e96d923c2fc2c760e67964a",
+    "license": "MIT",
+    "scope": "code-only",
+    "files": 63,
+    "bytes": 1543485
+  },
+  "threejs-quake": {
+    "upstream": "https://github.com/mrdoob/three-quake",
+    "commit": "6d6177b11f81f390d8e527dd5dd738d981eb13fa",
+    "license": "GPL-2.0",
+    "scope": "code-only",
+    "files": 114,
+    "bytes": 1499350
+  },
+  "toy-maker": {
+    "upstream": "https://github.com/mrdoob/toys",
+    "commit": "829e15e9821958a30a337b08def148b3590b3e08",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 5,
+    "bytes": 83190
+  },
+  "stick-and-steel": {
+    "upstream": "https://github.com/Rabneba/stick-steel",
+    "commit": "4c8e1d05a1ec47db93b687a81a82878727308b20",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 227,
+    "bytes": 1475402
+  },
+  "boba-bar": {
+    "upstream": "https://github.com/iamtechartist/boba-bar",
+    "commit": "a4bbb89dacb9a2ce4942df1815faadce17ca74a2",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 18,
+    "bytes": 177114
+  },
+  "cs-brasil-v2": {
+    "upstream": "https://github.com/corosolto/client",
+    "commit": "b814e8b7b4c6b35bbdd41237a6998d53675984d3",
+    "license": "AGPL-3.0",
+    "scope": "code-only",
+    "files": 2357,
+    "bytes": 32888856
+  },
+  "water-ring-toss": {
+    "upstream": "https://github.com/franky-adl/water-ring-toss-game",
+    "commit": "5a274a8e4cd2f2ed3a0aa58e73bc65c084aa430f",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 22,
+    "bytes": 4640776
+  },
+  "one-in-300m": {
+    "upstream": "https://github.com/satorunet/seisi",
+    "commit": "e36c43a2c289591478d243e55b88fcbe684cba30",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 13,
+    "bytes": 479476
+  },
+  "littlejs-platformer": {
+    "upstream": "https://github.com/KilledByAPixel/LittleJS",
+    "commit": "42619bd28010fb50e400686dcd475eccbd053256",
+    "license": "MIT",
+    "scope": "project-snapshot",
+    "files": 769,
+    "bytes": 22907092
+  }
+}

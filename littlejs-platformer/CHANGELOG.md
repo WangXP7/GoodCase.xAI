@@ -1,0 +1,655 @@
+# LittleJS Changelog
+
+What changed in each release, newest first. Releases before 1.20.0 are on the
+[GitHub releases page](https://github.com/KilledByAPixel/LittleJS/releases).
+
+## Unreleased
+
+Nothing yet.
+
+## 1.30.1 - 2026-11-12
+
+### Fixes
+- A game bundled with Vite or another bundler leaves out the plugins it does not use again: the 3D level's built-in types, the particle effect tables and a few 3D constants were made by statements that ran on load, which kept the 3D classes in every game, so a small 2D game bundled to about 57 KB gzipped; it is about 29 KB now. The tables are made by calls marked pure, and the minified ES module build keeps the marks
+- `setTouchGamepadDisplayTime(0)` shows the touch gamepad from the start on a touch device, as its doc says, where it waited for the first touch; using a real gamepad still hides it until the screen is touched again (from Mike on Discord)
+- A fast 3D object stops at a thin wall, floor or platform that is turned, as it does at an upright one, where it went through when it got past the middle in one frame
+- A gamepad button held through `inputClear()`, as when a confirm dialog is answered with it, gives no release when let go, as a key does
+- Loading a 3D level takes away the prefabs the last level brought that this one does not have, so they are not offered in Place or made by name; the game's own stay
+- The engine source loads one file at a time again, as the commented list in the starter and the shorts page has it: `engineLogo.js` comes before `engineSettings.js`
+- A touch anywhere brings back a touch gamepad a real gamepad hid, as the docs say, and not only a touch on one of its controls
+- An array or object a property default holds, in an object layer or a 3D level, is copied for each object, so changing one object's list does not change the others' or the map's
+- A plugin made again in a release build, as in a scene's enter: `PostProcessPlugin` uses the new one's options and gives the old one's shader and textures back, `Render3DPlugin` gives back the old one's programs, buffers and shadow map, `ThreeJSPlugin` takes the old renderer and canvas away and renders once a frame, and two `box2dInit()` calls in a row make one world
+- The 2D level editor: each layer a game makes in code remembers a save file of its own; a paste of objects keeps them where they were in their cells; moving a Box2D object moves its body; a game's `onTile` that throws leaves the edit undoable; a punctuation key on a Dvorak or AZERTY keyboard is not taken for the letter at its place; a Save that fails says why in the console
+- `particleEffect(name, pos, {angle})` with an angle that is not a number keeps the effect's own, as the other options do, and the docs say to follow an object with `attach`, which keeps the effect's angle
+- Release builds: `addChild` moves a child from the parent it had and refuses a loop; `HeightMap.getHeight` gives NaN for a position that is not a number in place of throwing; a video's or speech's volume that is not a number is silence in place of a throw; a browser that refuses an audio context runs without sound in place of stopping the engine
+- A page hidden with `soundPauseWhenHidden` pauses speech and `UIVideo` too; `tweakReset()` goes on past a tweak whose object is gone; `getNearestClearNode` with a range of Infinity searches the grid and returns
+- The sky dome shows with an orthographic camera whose near plane is at or behind it; a round lit sprite with a normal map still loading is lit the same instanced or blended; `render3D.emissiveMapColor` is always a Color; a timed 3D debug draw keeps the color it was given
+- `FollowCamera` look ahead does not turn when its target becomes a point, or comes back after none; `ImageFont` draws nothing in headless mode in place of throwing; `debugShowErrors()` runs in Node; `formatTime` does not wrap past 68 years; `loadAtlas` keeps the frames of an Aseprite tag of mixed sizes apart; a glTF file that fails to load gives back its textures however it fails
+- A D-pad button, or any past the touch gamepad's own, held on a real gamepad as the touch gamepad takes over is let go, where it stayed held
+- A 3D object grown in its collision callback meets the solids it grew into in the same frame, where it went on at its old size until the next
+- An `InstancedMesh3D` made with a sprite's tile before the sprite loaded draws the sprite once it has, where it kept the empty tile it was made with
+- A UI widget that throws while drawing leaves no transform or clip on the UI canvas
+- The 2D level editor draws over the light system, so a dark lit level does not hide its grid, brush and selection
+- `buildSphere`, `buildCapsule` and `buildTorus` round a fraction of rings or tube sides down, as the sides already were, where the shape came out open; the builders warn in debug builds when they round a count
+- Past the edge of `postProcessCurve` stays black with `postProcessChromatic`, `postProcessGlow`, a blur or the outline after it, where they read the picture's edge there, stretched out to the screen's edge, and chromatic aberration turned it purple
+
+## 1.30.0 - 2026-11-11
+
+### New Changes
+- `new MeshCollider(mesh, pos3D)` makes a mesh's triangles part of the 3D level's collision, as `HeightMap` and `VoxelMap` are: objects with `collideLevel` land on it, stand on a slope within their `groundAngle` without creeping down, slide along walls, climb steps lower than their round foot and follow a slope downhill, colliding as capsules as tall as their height and as wide as their narrowest side, or as their sphere; a fast one moves in steps so it does not pass through a thin wall. Any mesh works, a strip, an indexed one, a loaded model or one given its vertex data, turned and scaled with the collider, and its triangles are found through a grid; it draws nothing, Debug Physics draws its edges, and particles and picking hit it. The 3D Mesh Collider short walks a level of ramps, stairs and walls (from ZehRhayader on Discord)
+- A `level3DAddMesh` prop's `meshCollision` property collides by its mesh's triangles through a MeshCollider, so a ramp, rock or bridge placed in the 3D level editor is walked on as it is shaped; the type's default is a new last parameter
+- `InstancedMesh3D.setDataAt(i, x, y, z, w)` gives each instance four numbers of the game's own, which a `Shader`'s snippets read as `vec4 instanceData`, in the vertex code, the fragment code and the shadow map, like a tile's height or a sprite's foot line; `dataValues` holds them, made by the first one set, and `markDataDirty` takes a run written straight in. Only a Shader that reads it takes the input, so nothing else changes
+- The 3D Grass short sways a field of 20000 blades in one draw call: a vertex shader bends them by a `wind` uniform the game sets each frame and by each blade's own phase and softness from `setDataAt`
+- `particleEffect3D(name, pos3D, {roundLighting: true})` lights each particle as a ball, bright on the side toward each light, for smoke and clouds a light shines into; the 3D Particles short's fire now lights its smoke
+- 3D solid collision finds what is near each solid through a grid once there are 192 solids or more, three times `engineCollideGridMin`, as 2D does from 64, in place of checking every pair: 1000 solids, half of them falling onto the rest, take about 34 ms an update in place of 120 to 160, and 2000 about 57 in place of 500 to 600; it resolves exactly what checking every pair does, in the same order, so a game plays the same, with 2D's one caveat: a solid a callback moves that is neither of the pair is found where it is from the next update
+- Icons in text: `setTextIcon('coin', tile(5))` names a tile, and any text `drawTextScreen`, `drawText` or the UI system draws shows it where the name is written between colons, `'Gold: :coin: 25'`, as tall as the text, placed by the alignment, squeezed by `maxWidth` and faded with the text; in a UI text's shadow it is a shape of the shadow's color. `ImageFont` text shows them too, each as tall as a character, in the icon's own colors. Only a registered name is replaced, so a line without one, like a time of 5:30, draws as it always has. The Text and Image Font shorts show it (from DandelyLion on Discord)
+- A `Shader` takes values of the game's own, uniforms, for its snippets to read by name, in 2D and 3D: `new Shader(code, '', {glow: 1, tint: RED})`, then `shader.setUniform('glow', 2)` each frame, with no recompile; a number is a float, a boolean a bool, a `Vector2`, `Vector3` or `Color` a vec2 to vec4, and a list of 2, 3, 4, 9 or 16 numbers or a `Matrix4` a vector or a matrix. Each is declared for the snippets that use it, and sent only when it changed; in 2D what was drawn before a change keeps the old value, in 3D a value holds for the frame, and the shadow map's depth program gets them too
+- 3D billboards are lit: sprites, particles and `drawBillboard` take the lights, the sun, the ambient and the shadows, lit with no direction since they always face the camera, each light by how near it is, so a cloud of smoke is bright by a light inside it and dark in the shade; `obj.roundLighting` lights a sprite or a particle emitter as a ball bulging toward the camera, bright on the side toward each light, and a normal map lights one as a card facing the camera. Additive ones, like fire, sparks and a light's glow, are light of their own and stay unlit, and `emissive = 1` keeps any one its own colors. The 3D Lit Billboards short shows a cloud lit by a light drifting through it
+
+### Breaking Changes
+- 3D sprites, particles and `drawBillboard` were always unlit and are now lit, so they look different: darker in shade, tinted by the lights and the sun, and shadowed; set `emissive = 1` on a sprite object or particle emitter, or `render3D.emissive = 1` before a `drawBillboard` of your own, for the old look; additive ones are unchanged
+
+### Fixes
+- The gamepad sticks' dead zone is round, so a diagonal reads as soon as a straight push of the same length does and the direction is no longer pulled toward the axes; a gamepad button cleared with `inputClearKey` while held stays up until it is let go, as a key does
+- The 2D level editor keeps a number property as typed, an int when it and its default are whole and a float otherwise, and one the map holds as a float stays one, where a default like 2 rounded every value; a tile area's Clear, Cut, Copy and drag no longer take a tile object on its far edge, the start of the next cell, and take a rectangle or point by its top; a game's digit key works with Shift and on AZERTY; erasing takes away a tile the game put on an empty cell, which is not an undo step; `edit2D.selection` stays the same Set; an empty Size field resizes nothing; Play from mouse with the mouse over the panel starts where it was last on the level
+- The 3D level editor's Paste and Duplicate inside a prefab leave out an instance of that prefab, which would hold itself, Paste leaves out a type an undo took away, and a brush whose type an undo took away is put down, where a click wrote an object of no type into the level; P over the panel picks no block
+- `VoxelMap.raycast` from a block's face going away from it no longer hits that block at distance 0; a particle effect on a child emitter turns it from its parent; a held `UISlider` destroyed by its `onUpdate` stops calling `onChange`; `parseOBJ` refuses a face with a uv or normal index the file does not have, where it threw a TypeError; a 3D level property of null takes the default
+- `lightSystem.textureSize` set after the light system started makes the lightmap again at that size, where the lights were drawn into a corner; Newgrounds `postScore` rounds the score to a whole number, as Wavedash does, and asserts it is a number, where a string of digits passed; the tweakables gravity slider spans Box2D's range when Box2D is on, and a number typed past a tweak's range is held to it; `drawTextureWrapped` in Canvas2D and the instanced 3D draw put their state back when something in them throws
+- A plugin made a second time, as in a scene's enter, adds its hooks once, where in a release build the light map was laid on twice, the 3D pass drawn twice and a second Box2D world stepped as well; turning 3D shadows or the camera depth texture off gives their memory back; destroying every object while paused lets go of the solid lists too
+- A level file can not make more than 10000 parts for one prefab instance, an LDtk layer more than 32 layers of stacked tiles and opacities, or an example browser link more than a million characters of code, where a small file could make millions of objects or hang the tab; a saved tweak of the wrong type is dropped; a medal save key like `constructor` no longer stops `medalsReset`
+- A tile layer with many cells changed at once draws them in one batch, and the whole layer again when more than half changed, where each cell was a draw of its own; a uniform the shader compiler left out is looked up once, not every draw; `Shader.setUniform` with the value it has does nothing; additive draws, like glows and fire, are left out of the 2D shadow map, where they added nothing
+- A checked `UICheckbox` of no size, a `Camera3D` field of view or aspect of 0, `new Timer(Infinity).getPercent()` and `cameraShake(Infinity)` no longer give NaN; a sphere or lathe of more than a million faces asserts
+- The example browser's Live edit works again after a full example was shown, and Use strict on a full example no longer runs its placeholder text; the 3D example stops its engine sound when the level restarts
+- A `CanvasLayer`'s `drawTile` and `drawRect` say each one outside `redrawStart` is a draw of its own; an empty tile layer cell makes one Color, not two
+- A 2D or 3D level editor autosave of the wrong shape is dropped with a warning, where it failed every load; of the levels with no file, made in code, only the 8 newest autosaves are kept, where a game that makes a different one each run filled storage
+- `objectLayersAddType` and `level3DAddType` type `make` as a class or a function of the position, so a TypeScript arrow function factory checks
+- A 3D collision callback that moves its object, like a portal, has the rest of that object's contacts that update tested where it went, where they were tested where it was
+- A glTF OPAQUE material draws its texture solid when a MASK or BLEND material shares the texture, through a copy with its alpha set to 1, and a material no part draws with no longer counts, where either made the opaque part cut out
+- `computeNormals(false)` on a strip that folds gives each face its own normal at all three corners, by making the strip indexed, where a face took its neighbor's normals at the corners they share
+- `drawCanvas2D` puts the context back when its callback throws, and a particle that throws in `render` leaves the batch and the blend as they were, so a game that catches the error draws on unclipped and not additive
+- `setPixelated` with the setting a texture already has keeps the texture, where it remade it from its image and lost what `updateData` put in; a change still does, as documented
+- A `ThirdPersonCamera3D` taking over from another camera starts where the view is and eases to its target from there, where it jumped to where it last was; `snap()` on a camera that is not driving the view leaves it alone, the zoom of a `FollowCamera` and the camera of a `ThirdPersonCamera3D` with no target too; and a draw that throws in the 3D pass no longer leaves the camera shaken, or the 3D editor's camera in place, for the game's next update
+- A Box2D joint made to an object already destroyed is made destroyed in every joint type, where most threw reading the gone object's body, and a gear joint of a joint destroyed with its object no longer stops Box2D in a release build
+- A 3D child with mass is held by its parent, where gravity pulled it out of it
+- `addChild` and `attach` give back the child as its own type in TypeScript, so `player.addChild(new Gun).fire()` checks
+- A hidden solid layer, as an LDtk map's collision layer or a hidden Tiled one, casts its solid cells as squares in the light system's shadows, where it cast none (`shadowSquares`)
+- The post process reads the frame smoothly, so blurs, glow, the CRT curve and chromatic aberration no longer step from pixel to pixel when `tilesPixelated` is on, the default; `postProcess.pixelated = true` reads it hard edged
+- A light system with a sun and shadows off no longer makes the point lights' shadow textures and programs; a Sound made headless or with sound off keeps its range, taper and randomness
+- The camera's depth texture holds what is drawn unlit, a line or a mesh with `lighting` off, which was left out with the shadows
+- Turning the touch gamepad on in the middle of a touch lets go of the mouse button the finger held, and the first tap after it is off again presses
+- The 3D level editor: a level it made with no level loaded comes back from its autosave with its scene and its prefabs; Duplicate keeps the sizes of what was cut for the next paste; a brush that could not place stays in hand; a game's own key is kept from the browser, Ctrl+S or F5; a game hook that throws as it opens or closes no longer leaves the input captured; a failed Save says why in the console
+- The 2D level editor: keys wait for a drag of objects to let go, where an undo was moved again and lost the redo, and a game's tool reads Cmd as Ctrl on a Mac
+- A Shader's `iResolution` is the lightmap's size in the light system's passes, not the canvas's; updating a texture being drawn into draws what was queued first; turning WebGL off draws what was queued
+- `tile()` of a texture no wider than the tile with its padding gives its first tile, not NaN
+- With `debugShowErrors` an ASSERT throws its own error, which says what its values are, and `console.assert` an Error, not a string
+- Debug Tiles calls only the solid layer collision
+- A tweak added again for a new object, as after a restart, drives the new one from its number box
+- Wavedash gives an achievement up after its retries, where many unlocked at once used them all up at the start
+- `setScene` from a scene's leave is left out in a release build, where it called itself until the stack ran out; `PathFinder.getNode` is null at coordinates that are not whole; a CubeMap disposed after a lost context no longer deletes a texture of the old one
+- Asserts for a negative `setObjectMaxSpeed`, a `friction` outside 0 to 1, a camera scale or pixel ratio of 0, and a loading screen that is not a function; and types and docs: the flare shapes, a Wavedash board's display, a Newgrounds period, SpriteAnimation's modes, the 3D docs that left out MeshCollider, and others
+
+## 1.29.1 - 2026-11-02
+
+### New Changes
+- `mesh.setVertexData(vertexData, indices, vertexCount)` makes a mesh from vertices already in the GPU layout, for a big mesh a game generates, like terrain, which goes to the GPU as it is with no points made and packed again: a `Float32Array` of `RENDER3D_VERTEX_FLOATS` floats per vertex, place, normal, uv and the color as RGBA bytes, written by `meshWriteVertex`, and a `Uint32Array` or `Uint16Array` of triangles counter clockwise from the front, as `addTriangles` takes them. The arrays are kept and never changed, so a lost context uploads them again; the mesh draws, casts shadows, is instanced and is picked like any other, and the methods that read or change points, like `transform` and `combine`, assert on it
+- A 3D `Shader` can move vertices: `new Shader(fragmentCode, vertexCode)`, where the vertex code defines `void mainVertex(inout vec3 pos, inout vec3 normal)`, given each vertex's place and normal in world space, an instance's own in a batch, for wind in grass, waves or a wobble; it runs in the shadow map and the camera's depth too, so a moved vertex casts and hides where it is drawn. It reads `iTime`, `iResolution`, `cameraPos`, `iChannel0`, `localUV` and `modelMatrix`, and may change `vertexColor`, the color the fragment stage gets. `new Shader('', vertexCode)` keeps the plugin's own look; a Shader with no vertex code draws exactly as before. The object's bounds do not move with its vertices, so one moved far needs room to be culled by
+
+### Fixes
+- A 3D pick no longer hits a sliver at a strip mesh's pole, two corners all but one place, which rounding could make a hit anywhere along the ray, outside the mesh: `render3D.pick` along a sphere's diagonal said 4 for a sphere of size 2 seen from (5, 5, 5)
+
+## 1.29.0 - 2026-11-01
+
+### New Changes
+- `textureInfo.updateData(pixels, x, y, width, height)` puts new pixels into part of a texture, RGBA bytes or an image, and uploads only that rectangle, for a texture the game changes as it runs, like an atlas decoded every frame where only a few tiles changed; what was batched with the old pixels is drawn first, mipmaps are made again when it is next drawn from, and without WebGL the pixels go into the canvas image; with WebGL only the texture changes, so a lost context brings back the image as it was; `glSetTextureSubData` is the WebGL call under it
+- A 3D `Shader` snippet can read `viewProjection`, the camera's matrix from the world to the screen, so one that sets its own depth needs no near and far planes of its own: `vec4 c = viewProjection * vec4(p, 1.); gl_FragDepth = c.z / c.w * .5 + .5;` puts the fragment at world point `p`, a sprite in front of a wall it stands before
+- `randPick(items)` picks a random element of an array or a `Set`, and `randWeighted(items, weights)` one in proportion to its weight, `randWeighted(['coin', 'heart', 'gem'], [10, 3, 1])`; `RandomGenerator` has the seeded twins, `pick` and `weighted` (from DandelyLion on Discord)
+- `setMouseScreenTransform(transform)` bends every mouse and touch position as it comes in, for a game that bends its picture after drawing it, so clicks land on what is drawn under them; `postProcessCurveMouse(strength)` is the one for `postProcessCurve`, so `setMouseScreenTransform(postProcessCurveMouse(.1))` lines a curved screen's UI up with its input; only what is drawn into the curved picture lines up, so a UI on the main canvas, like `UISystemPlugin`'s, needs the post process made after it with `includeMainCanvas` on, and the level editors, which draw flat, get the mouse unbent (from ZehRhayader on Discord)
+- A `CanvasLayer` draws into itself as a `TileLayer` does: `drawRect` and `drawTile` in world space, where they show in the world whatever the layer's place, angle and mirror, on the GPU into its WebGL texture, and `redrawStart`, `drawLayerRect`, `drawLayerTile` and `clearLayerRect` in its pixels; a picture layer for decals, paint or fog of war with no tile grid, a world unit as many pixels as its canvas has across the size it shows at, so a turned draw keeps its shape when the canvas has the shape of that size, and a debug build warns when it does not. `TileLayer` has them from it, as before, by its `drawSize` when that is set
+- `layer.scroll(offset)` on a `CanvasLayer` moves it through the world while what is drawn in it stays where it is, snapped to whole pixels so it never blurs: a picture that follows something across a bigger world, like decals around a car, where the strip coming into view is empty for the game to draw; on the GPU it is one draw into a second texture the layer keeps, without WebGL the canvas is drawn onto itself
+- `onContextRestored()` on a `CanvasLayer`, called when a lost WebGL context comes back, does nothing by default: what was drawn into its texture is gone, and this is where a game draws it again
+- Normal maps for the 2D light system: give an object a `normalMap`, an image laid out like its sheet, turn on `lightSystem.normalMaps`, and every light shades it, point lights from their `height` above the scene and the sun from its `height` (1 is 45 degrees); turned, mirrored and animated sprites shade as they should, and what WebGL draws in front hides the normals behind it, as much as its own alpha covers, a normal map's alpha for an object that has one, and with the holes its own `Shader` cuts; Canvas2D draws, like world space text, hide nothing. Every object draws into a normal buffer once a frame while it is on, flat without a normal map, so it about doubles the scene's draws and every surface is shaded; off, nothing changes. `renderNormal()` draws an object into the normal buffer, `render()` by default, for an object to draw a shape of its own there, and `lightSystem.normalPass` is true while it does; `Shader.noTint` writes a snippet's color as it is, untinted, for data like normals. The Normal Maps short shows it
+- A tile layer shows its tiles without `redraw()`: one nothing has drawn into draws whole on its first render, and a cell changed with `setData` or `clearData` and no `redraw` argument is drawn on the next render, all the changed cells in one pass; `true` still draws the cell at once, and `false` leaves it as drawn, the old default, for a game that paints its cells by hand
+- `cameraShake(amount, direction)` takes a direction, a vec2 that weights each axis, `vec2(0, 1)` to shake only up and down for a heavy landing; each axis fades on its own, so a shake along one does not add to the other, and the view turns by the most each shake puts on one axis; with no direction it shakes as before
+- `touchGamepadButtonPos(button)` says where a touch gamepad button is on screen, its center and size in screen pixels and how visible the gamepad is, so a game can draw an icon of its own centered in it, like a contextual action, following the layout, the size and the screen's safe area (from Mike@Thea on Discord)
+- `soundPauseWhenBlurred`, off by default, pauses all sound while the window does not have focus, picking up where it was when it comes back, as `soundPauseWhenHidden` does for a hidden page; the game itself runs on (from DandelyLion on Discord)
+- `FirstPersonCamera3D` works on a gamepad, the touch gamepad's too: the left stick moves and the right stick looks, set by `moveStick`, `stick` and `stickSpeed`, as `ThirdPersonCamera3D` turns; it is on by default, so a game that uses the sticks for something else sets `stick` and `moveStick` to -1; the touch gamepad looks only with `touchGamepadRightStick` on
+- A `FollowCamera` shows its settings on the debug overlay: its dead zone, its offset and look ahead from the target to where the view wants its middle, and the sides of its bounds
+- More precise types in `littlejs.d.ts`, from 203 `any` to 86: particle effects are typed (`ParticleEffect`, `ParticleEffectSettings` and `ParticleEffectOptions`), so `particleEffect('fire', pos, {` completes every option with its description and TypeScript flags a misspelled one; so are the 3D level format (`Level3DObject`, `Level3DScene`, `Level3DVoxels`, `Level3DTerrain`, `Level3DPrefab`), a Tiled map's layers, objects, properties and tilesets (`TiledLayer`, `TiledObject`, `TiledProperty`, `TiledTileset`), the level editors' edit functions, glTF animation channels, atlas frames, `zzfx` and the sample arrays, and callbacks that return nothing; the Box2D and three.js objects, which have no types of their own, are named for what they are (`b2Body`, `b2Fixture`, `b2Joint`, `ThreeScene`, `ThreeObject3D` and the rest), still `any` under the name; types only, nothing changes at run time, though a TypeScript game that passed a value of the wrong type is now told so
+
+### Breaking Changes
+- `setData` and `clearData` with no `redraw` argument now draw the cell on the next render, where before it stayed as drawn: a game that changed cells after the first draw without redrawing them, to keep what it painted there, passes `false`; and a tile layer the game never redraws, which stayed blank, now shows its tiles, and a collision layer never drawn casts its shadows; a hand drawn `redrawStart()` on a tile layer first draws the cells that are waiting, while `redrawStart(true)` and `updateWebGL()` make the layer the game's own picture and drop them, and a cell set with no argument inside the layer's own redraw, its `onRedraw` too, draws at once, under what the game paints after it; a picture a game drew straight onto a tile layer's canvas with `useWebGL` off, never calling `redraw` or `updateWebGL`, is drawn over with its tiles on the first render
+- A `TileLayer`'s `drawRect` and `drawTile` follow its angle and mirror, as a `CanvasLayer`'s do: paint on a turned or mirrored tile layer lands where it shows in the world, where before it went in as if the layer were upright, and on one with a `drawSize` it lands where it shows, stretched to that size
+
+### Fixes
+- A game with no images and a 2D `DirectionalLight` or a background shadow caster no longer leaves the light system's own work texture bound for the draws after the light pass
+- `engineStep` under a `timeScale` other than 1 runs as many updates as the scale says from its first frame; before, the first step after a change ran one too few, so `engineStep(n)` at scale 2 ran 2n - 1
+- A release build going on past a frame that threw in the middle of a game's own `redrawStart` and `redrawEnd` closes the redraw; before, every frame after drew into the layer with the layer's camera, and the screen stood still
+- `setGLEnable` while the WebGL context is lost takes effect when it comes back; before, the context coming back put WebGL back as it was before the loss, and turning it on while lost drew with no textures
+- The touch gamepad keeps working when the browser refuses its pointer capture, as it does while the pointer is locked or in Chrome's device mode; before, the press threw and was lost. And `pointerLockRequest` does nothing for a press that came from a touch, so a `FirstPersonCamera3D` or `ThirdPersonCamera3D` with `lockPointer` no longer locks on a phone
+- An animation can cross a row of its sheet: `tileInfo.frame(n)`, and so `SpriteAnimation`, carries on at the start of the next row when a frame would go past the texture's edge, counted as `tile()` counts its index, so `new SpriteAnimation(tile(8, 8), 6)` on a sheet 10 tiles across plays tiles 8 to 13; before, it asserted. A tile with `columns` set wraps by them as before, and one off the grid, like a packed sheet's, still asserts
+
+## 1.28.0 - 2026-10-20
+
+### New Changes
+- Setting a child object's `pos` or `angle` works: it stays where it was put and moves with its parent from there, the change made its new `localPos` or `localAngle`; before, the parent put it back every frame, and a debug build only warned. Reading them is unchanged, they are in world space as before
+- `setWorldPos3D(pos)`, `setWorldRotation3D(rotation)` and `getWorldRotation3D()` on an `EngineObject3D`: put a child at a position or rotation in the world, setting its `pos3D` or `rotation3D`, which stay relative to the parent, and read its rotation in the world as `getWorldPos3D()` reads its place
+- The camera plugin, `plugins/camera.js`: `FollowCamera`, a 2D camera that follows a target with smoothing in seconds, an offset, a dead zone, a look ahead that slides across when the target turns, level bounds and zoom; the newest camera made drives the view, after the objects move, so it is never a frame behind
+- The platformer follows its player with a `FollowCamera`, looking ahead the way it runs and kept over the level, and its explosions shake the view; Top Down and Platform Physics use one too, the 3D example rolls its ball the way a `ThirdPersonCamera3D` faces, swinging behind it, and the Camera Shake and 3D Third Person shorts are new
+- `ThirdPersonCamera3D`: a camera on a pole from the player that swings around behind the way it moves, or its facing with `useFacing`, turned by the mouse or a gamepad stick or `turn()`, which holds the swing for a moment, and pulled in by a wall between it and the player
+- `cameraShake(amount)`: a shake for hits and explosions that fades by itself, smooth noise scaled by the shake squared, in 2D and 3D; it moves only what is drawn, so `cameraPos` and `cameraAngle` stay the game's own, and it holds while paused or at time scale 0, for a hit stop; `cameraShakeDistance`, `cameraShakeAngle` and `cameraShakeDecay` tune it, with setters
+- `engineAddPlugin` takes a sixth function, `updatePost`, called each tick after the objects update and before `gameUpdatePost`, paused included, for a plugin that follows an object, like a camera
+- A Box2D `beginContact` gets a fifth argument, `contact`: `point`, where the objects touched, `normal`, the other's surface normal pointing toward this object, and `impulse`, an estimate of how hard they hit from both objects' mass and inertia at the point, so a stick heavy at its ends hits harder than one heavy in the middle spinning at the same speed, which `impactSpeed` alone can not tell apart
+- Box2D one way platforms, conveyor belts and `preSolve`: `oneWay` on a `Box2dObject` works as in 2D, blocking only what first touches it from the far side and turning with the body; `setSurfaceSpeed(speed)` runs its surface clockwise around it, carrying what touches it; `preSolve(otherObject, fixture, otherFixture, contact)` is called each step before a contact is solved, where `contact.enabled = false` lets them pass through until they stop touching, as for dropping through a platform, and its friction, restitution and surface speed can be changed
+- The Box2D Platformer short: jump up through one way ledges, drop back through them with `preSolve`, and ride conveyor belts with crates
+
+### Breaking Changes
+- `CameraControl3D` and `FirstPersonCamera3D` are cameras of the camera plugin: they set `render3D.camera` in `updateCamera()`, after every object has moved, where before `update()` set it, so an object that reads `render3D.camera` in its own `update()` sees the last update's camera, and code that calls their `update()` by hand calls `updateCamera()` after it; the newest made drives the view, and destroying it hands the view to the one made before
+
+## 1.27.2 - 2026-10-15
+
+### New Changes
+- The particle designer has a Clear button beside Delete: after a confirm it deletes every effect in the list, leaving one new one, and Add Presets brings the built in ones back
+- The 3D example's island is a 3D level, made once from noise: Esc then 0 opens the 3D level editor on it, to sculpt and paint the terrain and place trees, sprites and orbs, with the edits autosaved; Save writes the level, and `levelFile` in its game.js loads that file in place of the noise. Before, 0 opened the 2D editor, which had nothing to edit and left the 3D view still
+
+### Fixes
+- A press on a level whose autosaved edits wait for Apply edits or Drop them, as when its file changed since they were made, says why it does nothing: the panel's box flashes, a line at the mouse and the hint line say to apply or drop them first, in both level editors; before, painting just did nothing
+
+## 1.27.1 - 2026-10-14
+
+### New Changes
+- `debugLineWidth` and `setDebugLineWidth(width)`: the width in pixels of the outlines debug shapes are drawn with, the physics boxes and the tile collision view among them, 2 as before, larger to make them easier to see
+- `render3D.fogDepth` measures fog by depth along the view instead of distance from the camera, and `render3D.fogFadeStart` / `fogFadeEnd` fade see through draws to transparent with distance, so a scene can melt into its sky instead of a fog color
+- `getVelocityAtPoint(pos)` on an object: the velocity of a point on it, its velocity and its spin together, so the tip of a spinning blade moves faster than its middle; a `Box2dObject` asks Box2D, about its center of mass
+- `collideWithTile` gets a third argument, `isHit`: true when the object overlaps the tile where its move put it, or a bullet's ray goes into it, and false for the places the physics only tries to find which side it hit, so a game can act on a hit once and ignore the rest
+- The Object Collect short: balls drifting through a square and a circle, colored by `engineObjectsCallback` while inside and counted by `engineObjectsCollect`, and a click pushes away the balls near the mouse
+- A debug build warns once when a game sets a child object's `pos` or `angle`, which its parent puts back every frame, naming `localPos` or `localAngle` to set instead
+- The example browser's Share button copies a link to the code as it is in the editor, crushed into the link with JSONCrush so nothing is stored anywhere; the link opens the example it was made from and runs the shared code
+- `PostProcessPlugin` and `setShaderCode` take a built in effect on its own, `new PostProcessPlugin(postProcessVignette())`, joining it with `postProcessEffects` as they would have needed; before, that failed to compile with an error about `uv`
+- `emitter.finishCallback` on `ParticleEmitter` and `ParticleEmitter3D`: called once with the emitter when it finishes, done emitting and its last particle gone, so a game can play a sound or start the next effect when an explosion is over; not when it is destroyed immediately, as a scene clear does
+- Box2D `beginContact` gets a fourth argument, `impactSpeed`: how fast the two bodies were closing along the contact normal as they touched, spin included, so a game can tell a hard hit from a graze; the Box2D Pool short's click goes by it
+
+### Fixes
+- `PostProcessPlugin` copies the frame into its texture on the GPU with `copyTexImage2D` instead of uploading the canvas, which Firefox read back to the CPU every frame; a game with a post process there ran several times slower, AstroBlast's glow at 7 fps where it now runs at 31
+- particleEffect's assert for an option it does not have lists the options it does, and names the one meant when only its case is off, `emitrate` for `emitRate`
+- The build scripts, the engine's and the starter, module and TypeScript examples', run their tools with node and no shell, so a file name can not run as a command; a data file with a space in its name no longer breaks the examples' zip, and a tool that is not installed fails with a message to run `npm install` instead of being downloaded by npx
+
+## 1.27.0 - 2026-10-08
+
+### New Changes
+- 2D lights have cones and gels, as 3D spotlights do: `light.coneAngle` makes a light a cone, like a flashlight or a car's headlights, looking along its up and turned by its `angle`, its edge fading by `coneSoftness`; `light.gel` is a picture the light shines through, a tile or a texture across its square that turns with it, so one light can be a car's headlights and tail lights. Shadows still fall through both, and a light with neither draws as before. The Light System short has a swinging searchlight, and Light Shadows a mouse light shining through colored panes
+- One way collision, platforms jumped up through and landed on: `layer.setOneWay(tile, direction)` makes the cells that draw a tile passable moving that way, up, down, left or right, so they block only what was wholly on their far side before it moved; turned and mirrored as each cell's tile is, so a platform turned a quarter is one way to the side. Objects, particles and raycasts all follow it, `collideWithTile` is not asked about a tile passed through, and returning false from it drops through. A solid object's `oneWay` does the same for objects, and a rising platform keeps its rider. The new Platform Physics short shows it with a lift, a crate, a bouncy ball and an ice floor
+- `obj.isBullet` for small fast objects: it moves through the tiles as a point along a ray, so it never passes through a tile at any speed and is not held to objectMaxSpeed for them; `collideWithTile` sees it where it meets the tile, so sparks start on the surface; it bounces by restitution and goes on with the rest of its move, so it rolls along a floor as a box does. One with a size that collides with solid objects is still held to objectMaxSpeed. The platformer's bullets use it in place of their own raycast
+- Cloud saves on Newgrounds and Wavedash, the same on both: `cloudSave(slot, data)` keeps any value JSON can hold for the player, `cloudLoad(slot)` gives it back, null for an empty slot and undefined for a load that failed, so a game does not save over a save it could not load, with `loadFailure(slot)` saying when the slot holds a file that is not a save, and off the platform or not logged in they do nothing; Wavedash stats, `setStat` and `getStat`, and presence, `setPresence(status, details)`; Newgrounds events, `logEvent(name)`. The Newgrounds calls are built from its API docs and not yet tried on the site
+
+### Fixes
+- An object of no size is no longer held to objectMaxSpeed by `collideSolidObjects`, since it never collides with solids; one with `collideLevel` and a mass still is
+- A Shader disposed before its first draw was drawn stayed in the engine's list of shaders, the flush compiling it put it back
+- A ParticleEmitter3D callback that changed a particle's `age` or `lifeTime` had the change thrown away, now it is kept as `pos` and `velocity` are
+- A light pass whose `renderLight` or `renderEmissive` throws hands back the screen, its viewport, texture and blend, where a game that caught the error went on drawing into the lightmap
+- A tile layer redraw whose `onRedraw` or tile draw throws hands back the camera, the canvas and the draw target, where it left the game drawing into the layer
+- 3D level editor: a scale drag keeps a mirrored axis mirrored, where it turned every negative axis to the smallest size; a turned object lands, drops and pastes by the box around it as turned; opening the editor lets go of a mouse the game captured; a frame that throws gives the game its camera back; an orthographic game camera's near is not copied to the editor's view; the box select is drawn over a 3D pass drawn after the 2D
+
+## 1.26.1 - 2026-10-08
+
+### New Changes
+- A 3D Shader may define `void mainNormal(inout vec3 n)`, given the world normal after the normal map, to bend it per pixel for waves, ripples or a flag; the lighting, shadows, specular, Fresnel, environment reflection and fog all use it
+- `postProcess.enabled`: false skips the post process pass, so an effect turns off and on without taking the plugin apart
+- `averageFPS` is public and kept in release builds, where it read 0 unless debug or the watermark was on; it starts at the first frame's rate rather than climbing from 0
+- `camera.align2DZ`: the z of the plane an align2D camera lines up with the 2D view, 0 as before
+- The right click menu is left on links, as it is on text fields
+
+### Fixes
+- A tap starts the audio with touch input off too
+
+## 1.26.0 - 2026-10-07
+
+### New Changes
+
+- The package exports its plugins and engine source, littlejsengine/plugins/* and littlejsengine/src/*, which it shipped but would not let a tool reach; they are plain scripts, for a script tag or a copy, while the ESM build already holds every plugin
+- DirectionalLight, a sun for the 2D light system: it lights the whole scene from one side, its sunDirection toward the sun as in 3D, foreground casters throw long shadows that fade by shadowLength, and a background marked castBackgroundShadow is lit only at the edges that face it, Frank Engine's look; one per scene, nothing changes for a game without one
+- Wavedash plugin: achievements and leaderboards on Wavedash, the same shape as the Newgrounds plugin. A `WavedashMedal` is a medal with the identifier of its Wavedash achievement, sent until Wavedash takes it and shown with Wavedash's own toast there; `new WavedashPlugin(leaderboards)` calls `Wavedash.init` and makes the game's leaderboards with how each sorts and shows; `wavedash.postScore` and `getScores`, which give up after 15 seconds. An achievement Wavedash refuses for a minute warns once with its identifier. Off Wavedash every call does nothing
+- Common mistakes say so: drawTile given a color where its tile goes asserts, engineInit takes one image file given as a string, a save that can not be read or written warns in release builds too, and the color constants like RED are frozen in release builds too, where changing one changed it everywhere
+- Clearer errors for common mistakes in debug builds: keyIsDown with a number past the mouse buttons, mouseIsDown with a name, a vec2 of strings or a number where a vec2 goes, setGravity, setCameraPos, setCanvasFixedSize, setCanvasMaxSize, setTileDefaultSize and setCanvasClearColor given a number, a Timer of a string, setHex of the wrong length, drawText with a vec2 size, ParticleEmitter arguments out of order, and changing a color constant each say what to pass; rgb and hsl warn once when given values out of 255 or percents
+- A failed assert's error says what went wrong, its message and values, where it said only 'Assert failed!' and left the message in the console, so the example browser's error box, a game's error overlay and a test now show it
+- 3D environment maps: `render3D.environment` is a cube map that reflective surfaces reflect, sharp at a high shininess and blurred at a low one, and `render3D.skyBox` draws one as the sky; `makeCubeMap` paints one in code from a color for each direction and `loadCubeMap` loads six images. A cube map made with no faces captures the scene around a point (`capture`), the way three.js's CubeCamera does, and an object's `environment` reflects one of its own. A 3D level's scene block may name a sky box and an environment as six image urls each, which the 3D editor's Scene box edits. An object's `roughness`, 0 a mirror to 1 matte, sets its shininess the way glTF and three.js measure it, and a glTF material's roughnessFactor is read into it, so a loaded model's highlights and reflections are as sharp as its file says; a part whose material has none is matte, its shininess 1 where it was 16, which shows only with specular or reflectivity set. The 3D Reflections short shows a chrome sphere reflecting the scene around it under a sky painted in code
+- A skinned glTF model bends about a fifth faster: the skin writes the GPU data as it bends, so the upload sends it without packing it again, and its joints' matrices are worked out with no garbage
+- The level editors autosave a big map or 3D level once the edits stop for a moment, where every stroke on a 512 by 512 map wrote megabytes; a small one is saved after every stroke as before, and anything waiting is written when the editor closes, the page hides, the map is saved or another one loads
+- The FAQ and REFERENCE say how far a world can go and how long a game can run before 32-bit floats on the GPU run out of precision
+- The TypeScript example is typed by the shipped littlejs.d.ts in strict mode and imports 'littlejsengine' as an npm game does, an import map giving the browser the build; the Vite starter installs 1.25, where its lock held 1.18.19
+- A Shader's or a post process's code comes after the engine's own in the shader, so a define in it can not rewrite the engine's names, where a #define of one, the vertex color say, changed what was drawn; the 3D shader drops see through texels at the end, after the normal map and texture reads that need the pixels around them
+- Examples: the raycaster walks on a phone, shorts sized for the example browser fill any window, the starter, module and TypeScript examples match again, 3D shorts share one mesh among objects of the same shape, as the instancing one teaches, and smaller fixes
+- Object collision with many solids is far faster: a mover checks only the solids near it, found through a grid, where it checked every one; 2000 movers went from about 1.3 s a frame to 12 ms in a test, and every contact resolves exactly as before, in the same order, but for a solid moved during physics by something other than its own update (a collision callback moving a third object, a lift's updatePhysics moving a crate), which is found where it went from the next update on
+- Input: a key, button or tap released and pressed again in one frame reads as both, where the release was lost, and a keydown the browser does not mark as a repeat for a key already held does not press it again, but with Cmd held it does, since a Mac sends no keyup for a key let go under Cmd
+- Canvas2D draws a texture smooth or pixelated as its own setting says, as WebGL does; the main canvas starts each frame with no alpha, filter or shadow a game left on it; toggleFullscreen refused by the browser leaves no error in the console
+- A tile layer's shadow is cast by its solid cells only, not by negative markers; a color with a NaN in it is black as text in a release build too; glDeleteTexture leaves the engine holding nothing of the texture
+- A tween whose callback throws no longer stops the other tweens moving that update, its error coming out after them
+- glTF: parseGLTF takes the bytes as a typed array or a Node Buffer too, and an accessor off its values' alignment, or a sparse one past its buffer, says so by name where it threw a bare RangeError
+- Matrix4.getRotation is exact just short of straight up or down, where it was off by up to 5e-4; getNearestClearNode searches each ring alone, the same node found
+- A tinted drawTextureWrapped on Canvas2D bakes its tint once and keeps it for an image, where it baked the whole image on every draw (a canvas, which a game may draw into, is still baked at every draw), and draws smooth or pixelated as its texture says
+- Level editor: a Save whose file was written is not taken for a failed one when what follows throws, which downloaded a copy; layers a game makes in code again and again no longer pile up in it; a map shrunk from the top drops a point or rectangle on its top edge
+- Docs: align2D with any canvas size, an exported prefab names the prefabs inside it, a large time scale costs as many updates, the engineStep example, and why a Box2D world made again does not step as a fresh one
+- A medal unlocked before medalsInit stays unlocked and is saved when it is called, where the save it loaded took it back; a later medalsInit with another save name starts from that save
+
+### Breaking Changes
+
+- The built in video capture is removed: key 8 on the debug overlay, `debugVideoCaptureStart`, `debugVideoCaptureStop` and `debugVideoCaptureIsActive`. A screen recorder does it better, and the FAQ shows how to save a game frame by frame at an exact 60 fps with `setEngineManualStep` and `engineStep`
+- Node 22.12 or later, the version CI runs: package.json's engines asks for it, so installing littlejsengine on Node 20 warns, or fails with engine-strict; a game in the browser needs no Node at all
+- The Electron example is removed, with Electron and electron-packager from the dev dependencies: a game for the desktop sets up Electron or another wrapper itself, loading its index.html as any page
+- render3d.js is in three files: `render3d.js`, the renderer, then `render3dMesh.js`, meshes and the basic builders, and `render3dObject.js`, EngineObject3D, instancing and lights; nothing changes for a game on a build in `dist`, one that loads the plugins one by one adds the two after `render3d.js`
+
+### Fixes
+
+- A ParallaxLayer casts no shadow in the light system, as a backdrop threw huge ones, a sun's above all; set its castShadow to true for one that should
+- A tween whose callback throws is ended, at any call: made, mid-run, restarted or starting a loop's next iteration, where it was called and threw at every update
+- A texture sheet load that throws, as an atlas whose data can not be read, is forgotten and loaded again on the next call, as a failed file already was; loadSprite and loadTiles too
+- A text field's Backspace takes off a whole character as a reader counts it, an emoji family too, and maxLength counts those; an image font draws a letter with an accent of its own, as é, as its letter
+- An EngineObject3D on a height map is kept above a ridge it goes over in one move, where only the ends of the move were checked; a short move starting on a voxel block's face hits it there
+- particleEffect keeps a negative speed and angle speed, and particleEffectFromEmitter of a finished emitter gives the time it emitted for, where it gave 0, for ever
+- loadSound and a glTF's buffers and images name the file they could not load, with the hint for a page opened from disk; writeSaveData says when the data can not be written as JSON rather than blaming storage
+- A lens flare made while the game is paused shows, as the 3D editor's Scene box makes one, where it waited for an update that never came, and follows the camera while the game stays paused
+- A release build goes on past an error in its first frame, as it does in any later one, where it stopped the game
+- The 3D settle of a shoved object sees a wall that blocks solids without being solid itself; a see-through part of an additive owner passes the fade assert
+- Examples: the platformer's bullets spark where they hit the wall; the Light Shadows short has a sun
+- setEnablePhysicsSolver(false) stops 3D collision too, solids, the level, the speed cap and 3D particles hitting the level, as it does in 2D, where 3D objects still collided
+- Shader.dispose() frees a shader's programs and takes it off the engine's list, which kept every Shader made for the life of the page; a scene that makes its shaders each time it starts can let them go
+- Wavedash: a board or achievement named like a built-in property, as constructor or toString, is one like any other
+- A Box2dObject's EngineObject physics fields, which Box2D does not read (velocity, angleVelocity, damping, angleDamping, mass, friction, restitution, gravityScale), are documented as unused with the Box2D call to use, and a debug build warns once when one is set; damping out of 0 to 1 asserts in setObjectDefaultDamping and setObjectDefaultAngleDamping, and on a 3D object as on a 2D one, so a debug build that set one out of range stops there now
+- A release build's second engineInit prints no second version line and hands back the first call's promise, done when the game is set up, where it was done at once
+- The script build no longer has a top level colorHex, so a game's own colorHex is not a redeclaration
+- Medals: a tab of the game opened before another tab unlocked a medal keeps that unlock when it saves its own, where it wrote the medal locked again; medalsReset still clears them all
+- A 3D object a collision callback sends across a height map's ridge stays where it was sent, and the object pushing it is not carried back, where the settle swept it back to the ridge
+- Sounds played or changed with a volume, rate or pan of NaN or Infinity, as a sound at the camera in a hidden page, play silent, at the normal rate or centered in a release build, where the browser's audio threw
+- Box2D in a release build takes NaN or Infinity in a joint's force, torque, frequency, limits, a mass and a pulley ratio of 0 as the nearest value it can take, makes no joint of an object to itself and no fixture of an infinite box or circle (addCircle returns undefined then), where the wasm stopped for good
+- UI: two quick taps in frames one after the other click twice, and a press over a button whose release was missed in a hitch releases and clicks it first, where a click and a release were lost; a held button let go of by the window losing focus is released, not clicked
+- A tween whose easing throws is ended, as one whose callback throws is
+- Shader.dispose() in the frame it drew in draws that batch first, where the batch compiled it again and kept it
+- tileCollisionRaycast on a layer away from the origin gives a hit inside the tile it met, where it could land on its edge, in the empty tile beside it
+- writeSaveData with data whose JSON is nothing, as a toJSON that returns nothing, writes nothing and says so, where it stored the text undefined
+- A lens flare whose sun or light is hidden when it is made starts hidden, where it showed at full and faded out over its fade time
+- A moving particle emitter, 2D or 3D, spreads each update's particles along its move since the last one, where they came out in a clump at where it is, so a fast emitter leaves an even trail instead of beads; a jump further than twice objectMaxSpeed in one update, a teleport or a respawn, spreads nothing, so an emitter moved by hand faster than that, as one following the mouse, is not spread either, and a local space emitter is unchanged
+- A sound whose file fails to load calls its onloadCallback too, with isLoaded false, so a game counting its sounds before it starts no longer waits for ever on a missing file; a callback written for success checks isLoaded()
+- The speed cap, objectMaxSpeed, is applied after damping and gravity, 2D and 3D alike: each axis of a colliding object's move is within it, gravity included, where a falling object moved the cap plus its gravity a frame; what does not collide is not capped, a velocity over the cap keeps the capped value, and a cap of 0 holds a colliding 3D object still as it does a 2D one
+- Audio: a one shot paused after its end and before its ended event stays at its end, where a resume played it again; a zzfx array's own randomness is kept to 0 to 1, as one passed in is; a sound at exactly its range, 2D or 3D, is out of it, not a silent voice
+- particleEffect: an option that is not a value of its kind keeps the effect's own value, saying so in a debug build, where it quietly became the library's default ({speed: null} on fire, an emitTime of '0.5' that never stopped); a vec2 emitSize is a rectangle, as ParticleEmitter takes one; an option of no name asserts in a debug build
+- A one shot particle effect gives the same count whichever frame it is made on, 1 at once and its rate for its emit time, where the rounding of time decided its last frame (an explosion gave 61 or 71); a burst shorter than a frame gives its rate for that time, and 2D and 3D emitters agree
+- Image fonts and 3D text read text as a reader counts characters: an emoji, joiners and all, is one box where it was two to eight, and a letter with a combining accent draws as its letter; text with Windows line endings breaks lines as `\n` does in image fonts, canvas text, 3D text and the UI, where the `\r` drew a box or a space and shifted the line
+- A font the canvas does not take, as a family name with spaces and digits like Press Start 2P left unquoted, warns once in a debug build, where the text drew as 10px sans-serif with no word; setFontDefault says to quote such names
+- setSoundVolume asserts its volume is a number, and a NaN one is not handed to the audio, where it threw every frame; setSoundEnable says it is a setting for before sounds are made, setSoundVolume(0) the way to mute while playing
+- 3D solids meet as in 2D: a fast object hitting a thin solid, or two solid objects meeting, are pushed back to the sides they came from, by where both were when the frame began, where the least overlap sent one on out the far side once past the other's middle; it holds the same whichever was made first and whichever of the two moves, a moving platform too, up to about the speeds 2D holds; turned boxes still push by least overlap. A 3D object shoved into a wall by another is settled against it the same frame, through the wall's collideWithObject, and the other takes what it could not move, so a pusher stops against a crate held by a wall and a heavy object resting on a light one no longer presses it into the floor
+- A 3D particle crossing a ridge of a height map, both ends of its move above the ground, hits it, where only the ends were checked and it passed through; a move over several slopes hits the first it meets, and one leaving the map hits before it leaves
+- A glTF model's parts, an attached prefab's parts and a voxel map's transparent blocks draw with the settings set on the model, handle or map (emissive, reflectivity, shader, shadows, renderAfter2D, renderOrder and the rest), each part keeping its own where the owner's is left at the default, so an unlit or rough glTF part keeps its file's material, and a part keeps its own values as its own (a part taken off draws with them); they kept the defaults
+- Level editor: a reload of the file a Save wrote drops the autosave the file now has, and does not add an empty Objects layer, where an Objects layer the editor made for an object taken back again kept its empty list in the autosave; an Objects layer a Save wrote stays when its objects go after
+- In a release build, the 3D renderer or the light system whose shaders do not build on a device says so once and draws nothing, where it drew every frame with programs that failed, and a device that fell back to Canvas2D is told 3D can not be drawn
+- Tile collision stops an object against a wall or a ceiling, as it already did on a floor, so a game sees objects stop up to a frame's move further on at walls and ceilings, where it went back to where it was the frame before and stopped short by up to a frame's move, a gap that never closed for a game setting its velocity every frame; a bounce starts from the tile too, and a box landing with its top on a grid line no longer snaps into the tile above it
+- A 3D particle emitter that outlives a scaled or turned parent keeps the parent's scale and turn, where it kept only its place and its particles fell at a quarter of the speed under a parent scaled by four; a particle's create callback reads the emitter's scale when it is emitted by hand before the first update or from inside another callback
+- A UI object moved to another parent or detached in its own update is updated once that update, where it could be updated twice
+
+### New Demos
+
+- [3D Reflections](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Reflections) - A chrome ball reflecting the scene around it, captured live, and balls from polished to rough under a sky painted in code
+
+## 1.25.0 - 2026-10-04
+
+### New Changes
+
+- glTF skinned animation: a rigged character plays its animations, its mesh bent by its joints each frame, the four strongest of up to eight a vertex, on the CPU, so shadows, picking and custom shaders work with it; `object.play(name, loop, speed, blend)` cross-fades from the pose it is in over `blend` seconds, and `object.getJointMatrix(name)` gives a joint's place to hang a sword on a hand
+- Tilt shift and depth of field post effects: `postProcessTiltShift(focus, size, blur)` keeps a band across the screen sharp, in 2D or 3D, and `postProcessDepthOfField(focus, range, blur)` keeps what is at a distance sharp, reading the 3D depth, with the edges of what is in focus kept crisp; the new 3D Focus Blur example focuses either with the mouse
+- `postProcess.values`: a game's own values for the post process shader, set every frame, and any effect setting may name one in place of a number, to change it live without making the shader again, all but glow's size; the shader is made at the first render, so values set right after the plugin is made are in it
+- The 3D Mesh example steps through a dropped model's animations with two buttons or the arrow keys, each cross-faded from the one before
+
+### Breaking Changes
+
+- The names deprecated in 1.20 are gone: `collideTiles` is `collideLevel`, the weld joint's `setSpringDampingRatio` and `getSpringDampingRatio` are `setDampingRatio` and `getDampingRatio` (the wheel joint keeps its own), and `NewgroundsPlugin.logView()`, which did nothing, is removed
+- `drawNineSliceScreen` and `drawThreeSliceScreen` take only the order since 1.20, a color after the tile and then the border size; a number in the color's place asserts in a debug build
+
+### Fixes
+
+- REFERENCE says where the draw functions' parameter orders differ, and has a section on what functions give back: what each raycast returns, overlaps and collide helpers, not found, how a failed load is reported and how each kind of thing is ended; the FAQ lists the global names a game's own top level declarations clash with in a script build
+- REFERENCE has a section on units and directions (angles in radians, clockwise in 2D, what is per frame and what is in seconds), says which vector and color methods give a copy, and names parameters as the code does; the Box2D shape methods, the vector helpers and a few others say what they return
+- In a browser with no audio, a zzfx sound and the page hiding do nothing, where they threw
+- A resume of the audio the browser refuses is caught, where it showed as an uncaught error in the console
+- `debug`, `debugOverlay` and `debugWatermark` are `false` in a release build, as their types say, where they were 0
+- `Box2dPinJoint`'s docs say its point defaults to objectA's position, which the d.ts showed as objectB's
+- TypeScript: `tileLayersLoad` and `objectLayersLoad` take a `TiledMap`, `level3DLoad` a `Level3D`, the types' defaults and properties are records, a tool's `pos` and `ray` and `onPlayFrom`'s position are typed, `levelEditor.open` and `close` return nothing, `Sound` takes a zzfx array as numbers, and `fetchJSON` gives `any`, as JSON is, so its result goes straight into any of them
+- A JSON, glTF or particle effect file that fails to read names the file, and says when it is a web page, as a dev server sends for a mistyped path, where it gave only "Unexpected token '<'"; an OBJ file with no faces warns, naming the file
+- In a release build `levelEditor.edit2D` is there and changes nothing, where it was undefined and a call on it threw, so a game needs no guard around it
+- A shader that fails to build on a device says why in the console in a release build too, where the screen stayed blank with no message: when the engine's own fails, the game draws with Canvas2D, a game's `Shader` that fails draws as if it had none, and a post process that fails leaves the frame as it is
+- The post process depth is read at full precision, where phones with Mali and Adreno GPUs read it at 11 bits and the outline drew false lines on flat ground; the outline draws nothing with no depth texture, and nothing wrong at the sky of a camera with no far plane, where both gave NaN pixels; a value or a setting may not be named as a GLSL word or a name the shader uses, which was a compile error or a value silently hidden; a setting below .01 keeps its digits
+- The 3D shader gives a mesh flattened to nothing on an axis no normal, where it was NaN, keeps the reflection's Fresnel term from NaN specks where a surface is seen head on, and treats fog that starts where it ends, and a shininess of 0, as defined
+- `lineTest`, and the tile raycasts on it, from a whole x or y heading down the grid start in the cell they head into, where they tested the cell behind first and could hit at the start
+- A particle whose `gravityScale` makes it rise lands on a ceiling, where its ground was the way the world's gravity points
+- `readSaveData` takes only an object from storage, where a stored string was spread into its letters
+- Faster where a game grows: path smoothing on a winding path checks lines from each corner, not each cell, a tween stopped among many no longer searches the list, a CSG cut leaves what is far from it alone, so a mesh cut many times does not grow slower to cut, and a paint stroke in the level editor draws the cells it changed, the whole layer only for a game's `onTile` or its own `onRedraw`
+- Examples: the breakout tutorial runs at every step, the platformer's debug explosion is on B, not the dodge key, the Box2D example's smoke rises and its explosion falls off, the raycaster has no fisheye, the 3D Mesh viewer's normals leave a rigged model alone, positions are copied where they were shared, and a list of smaller fixes across the shorts
+- An object whose child's update throws leaves the engine's list of children being updated as it was, where each throw kept them on it for good
+- Level editor: a turned or mirrored stamp turns or mirrors its objects too, each object's rotation with it, a box placed from the corner that becomes its own, a polygon's points and a tile object's image mirrored
+
+## 1.24.3 - 2026-10-03
+
+### Fixes
+
+- TypeScript: the d.ts keeps `undefined` where a value may be missing, so a game in strict mode can write `render3D.shader = undefined` and is told `light.flare`, `levelEditor.edit3D` or `uiSystem.keyInputObject` may be undefined; a game not in strict mode reads the same types as before
+- `box2d.boxCast` and `boxCastAll` say that they test each shape's bounding box, which can find an object near the corner of a turned box or a circle that the box does not touch
+- An image that failed to load gives tiles of no size, which draw nothing, where `tile()` gave NaN places in release builds and stopped debug builds at an assert; a texture slot never given an image still asserts in debug
+- A release build says when a sound, a `loadSprite` or a `loadAtlas` fails to load, as it did for textures and tile sets
+- A `Box2dObject` keeps one `pos` for life, moved in place each step as an EngineObject's is, so a camera holding it follows the body
+- `drawRectGradient` takes no size, as its docs say
+- A release build going on past an error logs each new error, not only the first, and an error every tick no longer runs the game at the screen's refresh rate
+- Under pointer lock a click is a press wherever the locked mouse was left, a letterbox bar too
+- A gamepad with no sticks keeps the one its d-pad stands in for, where its stick count flickered
+- A zzfx `Sound` made in a browser with no audio counts as loaded and plays nothing, where it threw
+- `glCompileShader`, `glCreateProgram` and `glCreateTexture` are typed as giving undefined with no WebGL
+- A release build going on past an error clears that frame's input, where a key press whose action threw was pressed again every frame
+- `loadSprite`, `loadTiles` and `loadAtlas` forget a load whose file failed, so loading it again tries again, where a failure once was kept for the session
+- glTF: a file the model names in subfolders is found when what is in its folder was dropped, not the folder, and a file found by its name alone may have capitals in it, where both said the file was not among those given; the 3D Mesh short keeps a dropped folder's name when other files come with it
+
+## 1.24.2 - 2026-10-03
+
+### New Changes
+
+- Tile sets from separate images: `loadTiles(['grass.png', 'brick.png', 'props.png'], 16)` packs tile images, or several tile sheets, into the texture sheets as one tile set, numbered in the order given, for `tileLayersLoad`, tile layers and the level editor's palette; an image that is not whole tiles gives the whole tiles in it, and a map's tileset margin or spacing does not replace the set
+- Spotlight gels: `light.gel` is a picture the shadow casting spotlight shines through, cast along its beam in its colors, like a slide or stained glass; with none a scene draws exactly as before. The 3D First Person flashlight has one on G
+- Less garbage each frame: objects are sorted only when one is out of render order and the destroyed taken out only when there are some, an object with mass that collides with nothing copies no position, and outlines and regular polygons are made into kept vectors, about 98 fewer for each outlined circle; a 3D pick makes no vectors for an object it misses
+- `Mesh.computeNormals(true)` is 5 to 7 times faster, the same normals to the last bit: a 960 point flag in 0.24 ms where it took 1.8, so a mesh can be bent every frame
+- `loadSprite`, `loadTiles` and `loadAtlas` give back what the first load did when the same image is loaded again with the same settings, packed once
+- A release build goes on past an error in a frame, logging the first, where one error froze the game for good; a debug build stops and shows it as before
+
+### Fixes
+
+- A Tiled property named as a method of the object it is for, like `update`, is left out, where it replaced the method; a debug build says so
+- `noise2D` stays noise however far out y is, where past about 24 million every row was one value; it gives the same values as before everywhere else
+- Medals: the save keeps the unlock of a medal the game has not made this time, and a medal made after `medalsInit` reads its unlock, so a medal made late or behind a flag is never lost; `medalsReset` locks those too
+- Older browsers: the engine starts with no `OffscreenCanvas` (Safari before 16.4), drawing into a canvas element in its place, and so do the textures it makes itself (normal maps from heights, particle shapes, light glows, lens flares, glTF's white texture), and uses neither `Array.prototype.at` nor `Object.hasOwn` (Safari before 15.4); the example browser's markdown has no lookbehind, which Safari before 16.4 could not read
+- On an iPhone the silent switch mutes the game, as it does a ringtone, and the player's music plays on beside it; `setSoundIgnoreSilentSwitch(true)` has the game play through the switch as media does (Safari 16.4 and up)
+- Level editor: the brush, its ghost and the palette read a tile past the end of a sheet as nothing, as the layer draws it, where a collision value picked up with the right button asserted every frame; the palette of a tile set filled in after it was first shown shows its tiles
+- A light's flare looks past four lamps around it to what is behind them, where the fourth counted as hidden
+- A click or tap in the bars around a letterboxed canvas presses nothing, where it pressed whatever was at the canvas edge
+- `showConfirmDialog` while one is open gives the one open, where a second broke UI navigation in release builds
+- The level editor's cut, copy and stamps keep an object's name, size, turn and visibility, where a paste made a bare point; objects moved with a selection or stamped land on their place to the digit, not a hair off
+- The 3D editor's terrain paint rounds no heights, and a sculpt stroke rounds only those it changed
+- A `UISlider` let go in the frame it moves takes that last place
+- A gamepad of fewer buttons put in the slot of another holds none of the other's buttons; a gamepad axis that reads NaN is centered, where it failed an assert in debug builds
+- `UITextInput` takes a keydown with no key, as autofill sends, where it threw
+- `parseOBJ` reads a comment after a face, carriage return line ends and a line carried on with a backslash, and a release build leaves out a face of a vertex the file does not have
+- `tileLayersFromLDtk` keeps a tile layer with no tiles as an empty layer, so a level of one loads and the editor can paint it
+- Level editor: a property set in the box keeps its place and a `file` or `object` property its type; a save leaves out the object layer made for a first object that was undone; a new object layer's id is past every layer's
+- 3D editor: taking a prefab out of the level takes its instances out of the game; a level's parts are saved in one order, so a level reloaded from its autosave saves the same
+- `writeSaveData` asserts its data is an object, which `readSaveData` reads back, and returns whether it was written, false when storage is full or unavailable
+- `parseAtlas` warns of two sprites with one name; `nearestPowerOfTwo` is never less than its value and is 1 for a value of 1 or less; a particle effect's name cut to 60 characters ends with no space
+- A tile layer's raycast toward a point far beyond the layer walks only across the layer, where a ray to a far constant took seconds
+- `debugShowErrors` shows a message as text, so a file name with markup in it can not add elements to the page
+- Canvas2D tints clamp the color to 0 to 1, as WebGL does
+- glTF: the keys of the files given may start with ./ or / or use backslashes, a uri above them is refused, and an accessor that reaches past its buffer is refused before its floats are made
+- A level whose prefab holds itself, several times over, loads at once with that prefab left out where it holds itself, in place of making thousands of objects
+- Small malformed files no longer make a loader run on: an Aseprite tag past its frames keeps to them, a glTF node reached twice and an accessor of millions with no buffer are refused, an LDtk level of millions of cells is refused and a tile or entity with no place is passed by
+- LDtk: an IntGrid layer whose rule tiles are on another tileset keeps its values for collision, its tiles left out with a warning
+- A collision layer named that no layer has says so in release builds too
+- A light's lens flare: its lamp is a mesh around the light that the ray meets near the light and that is thin, so a globe or a lamp post is its own fixture, while a room or a level mesh hides the light, even one close behind its wall
+- VoxelMap: the inside of a doubleSided face is split along the same diagonal as its outside, so it shows no seam
+- glTF: `parseGLTF(data, baseUrl, files)` finds the `.bin` and image files a `.gltf` names among files given, like a drop's, from the model's own folder, or by the file name alone when only one file has it; a file it can not find is named in the error, and an image that can not be read in a warning; the 3D Mesh example takes a `.gltf` dropped with its files or in its folder, and frees the model it replaces
+- Example browser: after the arrow keys move through the list, Enter keeps the example they went to, and Escape in the search clears it without also closing the list
+- 3D levels: a color that is not a string, and a number that is NaN or Infinity (1e999 in JSON), are read as the default, in place of an assert or a NaN
+- `tileLayersLoad` says so when a map is not a whole number of cells across and down, has no layers, or a layer's tiles do not fill it, in release builds too, in place of running on; every layer is checked before any is made. A game that relied on a release build loading such a map anyway now gets the error
+- A tile past the end of a sheet read by its columns draws nothing, as an LDtk IntGrid layer's values past the art did in the level editor, which asserted
+- A tween that loops or ping pongs with a duration of 0 or less, possible in release builds, ends its loops
+
+### New Demos
+
+- [Custom Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=Custom%20Editor) - A level editor made for one game: a class of its own with a tool that lays out rooms by a drag, a button, a key and an overlay
+
+## 1.24.1 - 2026-10-02
+
+### New Changes
+
+- A VoxelMap block type can be `doubleSided`, its faces shown from inside the block too, so the surface of water shows from under it
+- 3D Voxels: the player goes under water and walks on the bottom, in place of floating at the surface
+- `tileLayersLoad`'s `collisionLayer` may be a layer's name
+- `light.addFlare` takes the flare's color too
+- LDtk: an IntGrid layer is always a hidden layer of its values under its own name, its rule tiles in layers over it named with tiles, so `tileLayersLoad(map, tileInfo, 0, 'Collisions')` is solid where the values say, whatever the tiles stack or fade; a project of several worlds loads; a project with no tileset entry keeps its tiles
+- The example browser has a new look, in the dark colors of the docs site: a slim top bar in place of the title, the demo at 16:9, and the example list as rows under their headings. A handle between the code and its write-up drags to give one the other's space, by touch and the arrow keys too, and is remembered; a double click puts the quarter back. On a phone the example's name, between Prev and Next, opens a full screen picker with the search. The Screenshot button is gone. A button in the top bar switches between dark and light, the choice shared with the docs site
+
+### Breaking Changes
+
+- LDtk: an IntGrid layer with tiles is now a hidden layer of its values under its own name, its tiles in layers named with tiles over it, so the layer indices and names of such a level move; name the collision layer, `tileLayersLoad(map, tileInfo, 0, 'Collisions')`, in place of an index
+
+### Fixes
+
+- Box2D: `addRegularPoly` with a side count that is not a whole number no longer hangs, as the engine's own polygons do not since 1.23.1
+- The level editor's tile palette no longer asserts on a Tiled tileset with a margin or a spacing
+- LDtk: a see-through tile keeps its opacity, in a layer of its own; a layer whose tileset is another size is left out with a warning, in place of being read as stacks; a missing level says so in release builds too
+- A Tiled tileset's margin and spacing count from where the game's sheet starts, so a sheet inside an atlas keeps its place
+- 2D level editor: applying an autosave of another size leaves an object layer it does not know about as the file has it, and an autosave whose tiles do not fit its size no longer resizes the map
+- A light's lens flare is hidden by a room or a level mesh around it, seen from outside: only a lamp, a mesh around the light no wider than half its radius, is passed by
+- Example browser: Enter on a focused example selects it, a heading named in a write-up is no longer a link that does nothing, blocked or broken saved preferences no longer stop the page, and the handle drags with the main button only
+- 3D level editor: a broken autosave no longer blocks every edit until Drop, and one older than the last edits, which storage had no room for, says so as the 2D editor does
+
+## 1.24.0 - 2026-10-02
+
+### New Demos
+
+- [3D Lens Flare](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Lens%20Flare) - Now with hexagons, and flares on lamps as well as the sun
+- [Text](https://killedbyapixel.github.io/LittleJS/examples/?example=Text) - What drawText can do: sizes, outlines, alignment, fonts, rows and text placed in pixels
+- [Physics](https://killedbyapixel.github.io/LittleJS/examples/?example=Physics) - The engine's own objects falling, bouncing, sliding and floating, and a sensor
+- [Random](https://killedbyapixel.github.io/LittleJS/examples/?example=Random) - Random numbers, and a seeded generator that gives the same result every time
+
+### New Changes
+
+- Every short example has a write-up in the example browser: what it shows, how its code works, things to try in the editor and where to look next, with links to the docs and to other examples
+- Lens flares on lights: `light.addFlare()` gives a `Light3D` a lens flare of its own and returns it, `light.flare` is the flare, and it goes with the light; a `DirectionalLight3D` can have one too, far away like the sun's
+- Lens flares in the 3D level editor: a level's Light has a `lensFlare` property, and the Scene box has a Lens flare checkbox for the sun's, saved in the level's scene block
+- Lens flares have three more shapes, `hex`, `streak` and `star`; `flare.shapes` says what the ghosts are picked from, `glowSize` and `ghostSize` scale its parts, and an element may be a tile of the game's own (`tileInfo`), turned (`angle`) and wider than tall
+- 3D picking is triangle accurate: `render3D.pick`, `engineObjectsRaycast3D` and clicks in the 3D level editor hit a mesh on its triangles, not the box around it
+- LDtk levels load: `tileLayersFromLDtk(ldtk, level)` makes a level of an LDtk project a Tiled map for `tileLayersLoad` and `objectLayersLoad`, with its tile, auto and IntGrid layers, tiles stacked in a cell and see-through tiles, its entities as objects and their fields as properties
+- A Tiled tileset with a margin or a spacing, a sheet with gaps between its tiles, is read where its tiles are
+- The 3D Example has lens flares, on the sun and on each orb
+- CHANGELOG.md lists what changed in each release, and the site's root goes to the example browser
+
+### Breaking Changes
+
+- ZzFXM, the tracker music plugin, is removed: it was made for the js13k size limit. A game with a song in that format includes ZzFXM itself and hands its samples to a `Sound`
+- 3D picking hits only the faces that are drawn: a mesh seen from inside is no longer hit unless it is `doubleSided`
+- `LensFlare3D`: `getSunScreenPos` is now `getScreenPos` and `isSunHidden` is now `isHidden`, since a flare may be a light's; `visible` is 0 while the sun is off the screen; a flare pointed at a light is destroyed with it
+- The repository's `dist/` is now the last release, not the latest source: it is committed only for a release, and the site is built from the source
+
+### Fixes
+
+- A lens flare that is off the screen, or of a light that is off, no longer looks for what hides it every frame
+- 3D level editor: an edit of a level's scene, or its undo, no longer takes away a sun lens flare that an earlier level's scene gave the game
+- Shorts: the lander lands upright after a full turn, the maze reaches its top row and works at even sizes, a pocketed cue ball comes back, the 3D Voxels player floats in water, and more that writing them up turned up
+
+## 1.23.1 - 2026-10-02
+
+### New Changes
+
+- 3D sprites are batched: an object with a tile and no mesh, or a `drawBillboard`, that is not transparent is drawn as one instanced batch with the other sprites of its sheet, its clear pixels cut out, so many sprites cost little; transparent and additive sprites still draw sorted, one by one
+- A level's block map works in a game with no images: it shows plain colored blocks, where it used to fail
+- glTF: emission stronger than 1 from Blender is read (`KHR_materials_emissive_strength`), a texture is smooth or pixelated as its sampler says whatever the game's tiles are, and a model with basis textures says they are not read
+- The 2D level editor keeps the last 100 undo steps, as the 3D one does
+- The npm package and the release zip include REFERENCE.md and EDITOR.md
+- EDITOR.md says how to keep a level as a script for a game opened from disk, and what changing the editors' own tools takes
+- The deprecated names from 1.20 are kept until 1.25 at least
+
+### Fixes
+
+- A UI button pressed and released inside one frame was clicked twice
+- `drawRegularPoly`, and circles with `setGLCircleSides`, hung on a side count that was not a whole number
+- 2D level editor: a click on an object no longer rewrites its position with rounding noise and adds an undo step; applying saved edits to a file that gained an object layer leaves that layer alone; a level whose url has a `%20` in it matches its file again
+- 3D level editor: saves of a prefab are written in the order they were asked for when `onSave` is async, a prefab edit that was undone no longer comes back after a reload, and objects a game's tool adds without ids get ids
+- An attached prefab inside another prefab is placed where it belongs, and its collision box follows parts that are turned
+- `levelEditor.onSave` may be an async function in TypeScript too
+- A `Sound` made while sound is off counts as loaded, so a loading screen that waits for sounds finishes
+- A tween callback that throws no longer leaves the tween system allocating on every update
+- The build and the docs build leave `dist/` and `docs/` untouched when a step fails
+- A `Timer` set to a time below zero reads as done
+- `UIVideo` lets go of its video when it is destroyed
+- A texture atlas tag with no frames no longer drops the groups after it
+- `setAdditiveBlendMode` works in headless mode
+- The release build's `levelEditor` has `keys`, `buttons` and `tools`, as the debug one does
+
+## 1.23.0 - 2026-10-01
+
+### New Demos
+
+- [3D Prefab Maker](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Prefab%20Maker) - Build a prefab in the level editor and save it for a game to place
+- [3D Level Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Level%20Editor) - Now makes prefabs, flattens and paints terrain, and fills boxes of blocks
+- [Parallax](https://killedbyapixel.github.io/LittleJS/examples/?example=Parallax) - Rebuilt on the new parallax plugin, with ranges of mountains that repeat as the camera goes by
+
+### New Changes
+
+- 3D prefabs: a prefab is a small level placed many times. `level3DAddPrefab('House', data)` makes it a type, a level places it like a Box, and `level3DSpawn` places one from code; each part is a solid object of its own, or with `attached` the parts move with the instance as one body, for a vehicle or a creature
+- The 3D level editor is the prefab editor too: Ctrl+G makes the selection a prefab, Enter opens one to edit it alone and every instance follows, Ctrl+Shift+G unpacks one, and the panel exports a prefab to a file and loads one from a file; prefabs can hold prefabs, and are saved in the level
+- Make the level editors your own: `levelEditor.addKey`, `addButton` and `addTool` add a key, a panel button and a mouse tool of your game's own, `onOpen`, `onUpdate`, `onDraw`, `onPanel` and `onSave` are called by the editors, and `levelEditor.edit2D` and `edit3D` are the edit functions, each change an undo step. The same calls work in the 2D and the 3D editor
+- Or extend it: `class MyEditor extends LevelEditor` with the hooks as methods, then `setLevelEditor(new MyEditor)`. Release builds take all of it and call none of it, so a game needs no guards
+- New guide, [EDITOR.md](https://github.com/KilledByAPixel/LittleJS/blob/main/EDITOR.md): how to turn the built-in editors into an editor for your own game, written for people and AI assistants, with every example tested
+- Added the Parallax plugin: a `ParallaxLayer` follows the camera by a part of its movement and repeats across the view, so a level of any width has a background; it draws mountains by default, or anything you draw into it
+- Touch has a mouse wheel: a pinch of two fingers turns `mouseWheel`, so what zooms with the wheel zooms with a pinch, and `touchPinch` reads it by itself
+- 3D level editor: the Terrain tool has a flatten brush and a paint brush that colors the ground, the Blocks tool fills a box with a drag and resizes its map, and the Move handles can follow an object's own axes (L)
+- A `LensFlare3D` can be a light's flare: set `flare.light` and it sits at the lamp, in its color, hidden by what is in front of it
+- The example browser has Prev and Next buttons, to go through the examples on a phone
+- `Sound.range` can be set after a sound is made, and 3D sounds use it
+- Size: the full build is about 122 KB gzipped, up from 119 KB; a bundler like Vite leaves out the plugins you don't use
+- Fixes: a `SpriteAnimator` clip that ends and switches clips reads the new clip, glass and water blocks no longer hide the sun's lens flare, 3D particles appear at once like 2D ones, a spotlight that casts shadows lights no wider than its shadow map, the 3D editor's Scene box no longer undoes a field edited just before, and the example browser always shows the example picked last; the test suite grew from 1724 to 1848 tests
+
+### Upgrade Notes
+
+- With two fingers down the touch screen pinches: the second finger lets go of the button the first one pressed. A game that uses two fingers its own way calls `setTouchPinchWheel(false)` to get the old behavior back
+- A `ParticleEmitter3D` makes its first particle at once, where it used to wait one emit interval
+- A spotlight set as `render3D.shadowLight` has its cone capped at 1.35 radians, what its shadow map covers
+- `levelEditor.onRestart`, `onPlayFrom` and `onTile` are set the same way as before, but they are now empty methods when a game has not set them, so `if (levelEditor.onRestart)` is always true; nothing in a game needs to read them
+- The Parallax short moved to the plugins section, and the platformer example uses the plugin for its mountains
+- These names changed in 1.20 and the old ones still work for now: `collideTiles` is now `collideLevel`, and `Box2dWeldJoint.setSpringDampingRatio` is now `setDampingRatio`
+
+## 1.22.0 - 2026-10-01
+
+### New Demos
+
+- [Particle Effects](https://killedbyapixel.github.io/LittleJS/examples/?example=Particle%20Effects) - Every built-in particle effect, one line each
+- [Particle Options](https://killedbyapixel.github.io/LittleJS/examples/?example=Particle%20Options) - One effect, and what each option does to it
+- [3D Lens Flare](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Lens%20Flare) - The sun flares across the screen and hides behind pillars
+- [3D First Person](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20First%20Person) - Now with a night, and a flashlight that casts the shadows
+- [3D Level Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Level%20Editor) - Now paints blocks, sculpts terrain and sets the sky, sun and fog
+- [Tween Advanced](https://killedbyapixel.github.io/LittleJS/examples/?example=Tween%20Advanced) - Every tween feature in labeled rows
+- [Particle Designer](https://killedbyapixel.github.io/LittleJS/examples/particles/) - Rebuilt on the effects library, with a 3D preview
+
+### New Changes
+
+- Added the Particle Effects plugin: `particleEffect('fire', pos)` plays one of 24 built-in effects in one line, and `particleEffect3D` plays the same effect in 3D; the options scale it, turn its hue, change its saturation, swap in your own tile, or replace any setting, like `{emitTime: .5}` for a burst
+- The built-in effects are fire, torch, smoke, steam, explosion, sparks, hit, dust, debris, sparkle, magic, heal, poison, portal, rain, snow, leaves, bubbles, fireflies, trail, muzzle, blood, confetti and splash, each sized to fit a one unit object and drawn with shapes the plugin makes itself, so they need no image
+- The Particle Designer is rebuilt on the plugin: the built-in effects are its presets, Save Library writes the file `particleEffectsLoad` reads so a game plays your effects by name, and it previews an effect in 2D or 3D with the same options a game passes
+- `ParticleEmitter` has `scale`, which grows a whole effect, and `gravity`, its own fall; `ParticleEmitter3D` has `gravityScale` and `emitFlat`, which makes its spawn area a disc or a flat sheet
+- 3D level editor: the Blocks tool (B) paints a level's block map, the Terrain tool (T) sculpts its terrain with a brush, and the Scene box sets its sky, sun, fog and shadows; all three are saved in the level's JSON, undo and autosave with the rest, and `level3DLoad` makes them with no game code
+- Spotlights: a `Light3D` with a `coneAngle` shines along its own forward, with `coneSoftness` for where the fade starts, and `render3D.shadowLight` makes one spotlight cast the shadows in place of the sun, for a flashlight in the dark
+- Added `LensFlare3D`, the sun's lens flare: a glow at the sun and a row of discs and rings across the screen, with its size, count, brightness and colors to set, fading out when something hides the sun
+- 2D lights glow like the 3D ones: `light.glow` and `glowFalloff` on a `Light` of the light system
+- Built-in post processing effects: `postProcessEffects` joins scanlines, noise, vignette, curve, chromatic, glow and a 3D outline into one shader, with your own GLSL as a piece too
+- A texture can be smooth or pixelated on its own: `TextureInfo` takes `pixelated`, and `setPixelated` changes it
+- Textures the engine sizes itself, like the shadow maps, fall back to the largest size a device supports; `glClampTextureSize` does the same for your own
+- Faster: particles draw about 30% faster, `InstancedMesh3D` moves many instances with `setTransforms` and uploads less, the 3D draw state is checked with one number per draw, and ZzFX 1.4.0 generates sounds faster
+- `render3D.playSound` hears a sound with no range of its own out to `render3D.soundDefaultRange`, 100 units
+- Added a browser smoke suite, `npm run test:browser`: real WebGL in headless Chrome checks 2D draws, shaders, the 3D pass, spotlights, the lens flare, a lost and restored context, and that every short runs
+- Size: the full build is about 119 KB gzipped, up from 108 KB; a bundler like Vite leaves out the plugins you don't use
+- Fixes: post process feedback keeps the previous frame again, `loadGLTF` follows redirects and takes blob and data urls, overlapping Saves in the level editors write in order, and a scene `leave` that throws no longer blocks later switches; the test suite grew from 1562 to 1724 tests
+
+### Upgrade Notes
+
+- A sound with no range of its own is now heard to 100 units when played with `render3D.playSound`, where it was 40; pass a range to `new Sound`, or set `render3D.soundDefaultRange`, to change it. 2D sounds are unchanged
+- `particleEffect3D` and the particle designer's files use the plugin's effect format; an effect saved by the older designer still loads and keeps its tile
+- The light system writes the sizes it could make back to `shadowMapSize`, `shadowTextureSize` and `textureSize` when a device can not make the size asked for
+- The engine's own soft textures, the light glow and the particle shapes, are smooth even when `tilesPixelated` is on
+- The Tween System and Stress Test full examples are gone, the Tween Advanced short covers tweens
+- These names changed in 1.20 and the old ones still work for now: `collideTiles` is now `collideLevel`, and `Box2dWeldJoint.setSpringDampingRatio` is now `setDampingRatio`
+
+## 1.21.0 - 2026-09-29
+
+### New Demos
+
+- [3D Level Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Level%20Editor) - Place boxes, lights and coins, then walk around
+- [3D Materials](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Materials) - Bricks from a normal map made in code, a polished ball reflecting the sky, and glowing windows
+- [3D Ambient Occlusion](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Ambient%20Occlusion) - Creases and corners darkened from the new depth texture, side by side with plain
+- [3D Water](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Water) - Rain on a pool, its waves a cellular automaton, reflecting the sky
+- [Scenes](https://killedbyapixel.github.io/LittleJS/examples/?example=Scenes) - A title, a game with a pause overlay and game over, switched with `setScene`
+- [Animation](https://killedbyapixel.github.io/LittleJS/examples/?example=Animation) - Sprite animation, with clips switched by name
+- [3D Lights](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Lights) - The lamps now glow
+
+### New Changes
+
+- Added the 3D Level Editor, in debug builds only: press 0 on the debug overlay in a game that loaded a 3D level to pause it and place, move, rotate and scale its objects with handles, grid and ground snapping, undo, autosave, Save back to the level's JSON file and Reset to file
+- 3D levels: `level3DAddType`, `level3DAddMesh` and `level3DLoad` make a level's objects from plain JSON, with Box, Sphere, Cylinder and Light built in
+- Added a free camera, in debug builds only: press C on the debug overlay to fly around the running game while it reads no keyboard or mouse (`inputCapture`)
+- 3D materials: `normalMap` and `normalScale` bend the surface with no tangents needed, `normalMapFromHeight` makes a normal map in code, `shininess` sets the highlight's size, `reflectivity` reflects the sky with a Fresnel edge, and `emissiveMap` with `emissiveMapColor` makes parts of a surface glow; glTF models bring their normal and emissive textures
+- Turned boxes collide as turned: a box with a `rotation3D` collides as the box you see, so ramps, tilted platforms and turned walls just work, and the 3D box helpers take an optional rotation
+- Standing in 3D: resting on another object sets `groundObject`, and `groundAngle` (45 degrees by default) is the steepest slope an object stands on without sliding
+- The 2D physics settings work in 3D: `damping`, `angleDamping`, `friction` on the ground (a moving platform carries what rides it) and `clampSpeed`
+- Added `render3D.depthTexture`: the post process shader gets the 3D depth as `iChannel2` and reads it with `sceneDepth(uv)`, for ambient occlusion, fog and outlines
+- `Light3D` has a soft hazy `glow`, with `glowFalloff` for how fast it fades
+- 3D particles have the 2D emitter's callbacks, `particleCreateCallback`, `particleUpdateCallback`, `particleCollideCallback` and `particleDestroyCallback`, and `collideLevel` to bounce off height maps and voxel maps
+- Added a loading screen: after the splash, startup waits for the images, `gameInit` and everything loaded while it runs, and shows a loading bar if that takes more than half a second; `setLoadingScreen` draws your own, and `engineAddLoad` adds anything else you load
+- Added the Scene plugin: `setScene` and `getScene` switch between scenes with enter, leave, update and render hooks, clearing all but persistent objects
+- Added `setEngineVariableStep`: one update per display frame with `timeDelta` the frame's time, and frame times are smoothed to whole display frames in both modes
+- `SpriteAnimation.play(onEnd)` calls back when a play ends, and `SpriteAnimator` switches a character's clips by name
+- A mesh with `dynamicDraw` uploads faster, and `levelEditor.paletteTiles` picks the tiles the 2D level editor's palette shows
+- Size: the full build is about 107 KB gzipped, up from 100 KB; a bundler like Vite leaves out the plugins you don't use
+- Fixes: three external review passes and their fixes, and the test suite grew from 1313 to 1562 tests
+
+### Upgrade Notes
+
+- `clampSpeed` now only holds an object to `objectMaxSpeed` (1 unit a frame per axis) while it collides, with solids, or with tiles or the level while it has a mass, in 2D and 3D; something that does not collide, like a bullet you move yourself, now moves at its full speed instead of being slowed
+- In 3D, colliding objects are now held to `objectMaxSpeed`; set `clampSpeed = false` on fast colliding things, as in 2D
+- In 3D, an object standing on something now slows by `friction`, 0.8 by default; set `friction = 1` for none
+- In 3D, `damping` now slows objects with no mass too, and `angleDamping` slows `angleVelocity3D`; both are 1 by default, so nothing changes unless you set them
+- A turned 3D solid now collides as turned, so a spinning solid sweeps what it touches; sprites still collide upright
+- `engineObjectsCollect3D` finds a turned object by its turned box
+- The game loop now starts once `gameInit` and everything loaded while it ran are done, sounds from files included; call `setLoadingScreen()` to turn the loading screen off
+- These names changed in 1.20 and the old ones still work until 1.22: `collideTiles` is now `collideLevel`, and `Box2dWeldJoint.setSpringDampingRatio` is now `setDampingRatio`
+
+## 1.20.0 - 2026-09-28
+
+### New Demos
+
+- [3D Voxels](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Voxels) - Walk, jump, dig and build in a little Minecraft style world
+- [3D Mesh Operations](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Mesh%20Operations) - Bevels, CSG cuts, mirror and spin
+- [3D Sync 2D](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Sync%202D) - A 2D platformer with 2D physics and tile collision, drawn in 3D
+- [3D Mesh](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Mesh) - Load an OBJ or glTF model, or drop one in
+- [Level Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=Level%20Editor) - Paint a level and place objects, then play it
+- [Platformer](https://killedbyapixel.github.io/LittleJS/examples/platformer/) - Press Esc then 0 to open the level editor on a real game
+- [Light Shadows](https://killedbyapixel.github.io/LittleJS/examples/?example=Light%20Shadows) - Lights blocked by walls and tinted by glass
+- [Particle Designer](https://killedbyapixel.github.io/LittleJS/examples/particles/) - Reworked, with an effect library, presets and code export
+- [Tweakables](https://killedbyapixel.github.io/LittleJS/examples/?example=Tweakables) - Change values live from a debug panel
+- [UI Tile Slice](https://killedbyapixel.github.io/LittleJS/examples/?example=UI%20Tile%20Slice) - UI styled with nine-slice and tile art
+
+### New Changes
+
+- Added the Level Editor, in debug builds only: press 0 on the debug overlay to pause the game and paint its Tiled tile layers, with stamps, fill, selections, undo and redo, then Escape to play and edit again
+- The level editor places objects too: `objectLayersAddType` names your object classes, `objectLayersLoad` makes them from a Tiled object layer, and their properties are edited in the panel
+- It saves straight back to the level's Tiled JSON file where the browser allows it (Chrome and Edge), autosaves every change, and has `levelEditor` hooks for restart, play from the mouse, resizing and your own tile rules
+- Added the Tweakables plugin: `tweak()` puts any value on a debug panel (press 9) with sliders, checkboxes, colors and buttons
+- Added `VoxelMap`, a grid of blocks drawn in chunks with hidden faces left out, per face tiles, see-through and blending blocks, corner shading, collision and a grid raycast for digging and building
+- Level collision in 3D: objects with `collideLevel` land on and are stopped by height maps and voxel maps, `groundObject` says what they stand on, and `FirstPersonCamera3D` can jump (`jumpSpeed`) and set its `eyeHeight`
+- `HeightMap` is now an object that draws itself, with world space lookups wherever it is placed
+- Mesh operations: bevels and chamfers on the box, cylinder and cone builders, `mirror` and `spin`, and CSG `union`, `subtract` and `intersect`
+- Added the glTF plugin: `loadGLTF` and `parseGLTF` load .gltf and .glb models with textures, node animations, WebP images and glass
+- `InstancedMesh3D` keeps a set of instances on the GPU and draws them as one call, meshes upload as indexed triangle lists, and particles and objects allocate nothing per frame
+- 3D lighting: the sky lights the scene from above and below, and `Light3D` point lights make specular highlights
+- `sync2D` 3D objects start at their 3D position, so a 2D game with 3D looks just works
+- Light System: lights are blocked by shadow casters, colored glass tints what passes through, and `emissive` objects glow in the dark
+- Added `drawScreenSpace`, a setting that makes the draw functions default to screen space, for HUDs or a 3D game's 2D overlay
+- `TileSlice` draws a tile as a nine-slice, three-slice or plain box, and the UI system can style its widgets with tile art
+- Tiled maps keep their flipped and turned tiles, and the debug overlay's new Debug Tiles view (key 8) shows each tile layer's bounds and collision
+- The particle designer was rebuilt with an effect library, presets, grouped settings and code export, and `particleUpdateCallback` runs for each particle
+- The Newgrounds plugin was rewritten: medals unlock on the server, leaderboards work for guests too, and it uses the browser's WebCrypto with no dependencies
+- The example tile sheets now have a 1 pixel border around each tile, with `setTileDefaultPadding(1)`, and the starter builds its level from a string you can edit
+- Release builds no longer evaluate assert arguments, and `RandomGenerator` gives unrelated values for nearby seeds
+- Size: the core engine is about 36 KB gzipped and every build includes the plugins; a bundler like Vite leaves out the ones you don't use, so a small 2D game is about 26 KB and a lit 3D scene about 47 KB
+- Fixes: fifteen review passes fixed hundreds of bugs across the engine and plugins, the engine and plugins type check clean, and the test suite grew from 570 to 1313 tests
+
+### Upgrade Notes
+
+- These names changed in 1.20 and the old ones still work until 1.22:
+  - `collideTiles` is now `collideLevel`
+  - `Box2dWeldJoint.setSpringDampingRatio` and `getSpringDampingRatio` are now `setDampingRatio` and `getDampingRatio`
+  - `NewgroundsPlugin.logView()` does nothing, since the view is logged on start
+  - `drawNineSliceScreen` and `drawThreeSliceScreen` take a color after the start tile, before the border size; a number there still reads the old order
+- `setCollision()` now turns on level collision for 3D objects
+- A `HeightMap` draws itself, so remove any separate object you made to draw its mesh, and `terrain.size` is now `terrain.mapSize`
+- A flat `buildGrid` is flat shaded unless you pass `smooth`
+- The example tile sheets changed layout; if you copied `tiles.png` from an example, use it with `setTileDefaultPadding(1)`

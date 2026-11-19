@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>eval — paridade de viewmodel meshopt</title>
+<style>html,body{margin:0;height:100%;background:#26313c;overflow:hidden}#hud{position:fixed;left:6px;top:6px;font:11px monospace;color:#6f6;white-space:pre;z-index:9;text-shadow:0 0 3px #000}</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js?h=a47c475b7bea", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="hud">…</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* Casca de arnês do A/B de meshopt (lane glm/peso): carrega um -hires.glb pelo
+   GLTFLoader vendido (com MeshoptDecoder ligado), NÃO toca no mixer (pose de bind,
+   determinística) e desenha um quadro. A prova de paridade é o diff de pixel
+   antes/depois no tools/eval/vm-meshopt-ab.mjs; a de carga é esta página abrir. */
+const qp = new URLSearchParams(location.search);
+const W = 1600, H = 900;
+const hud = document.getElementById('hud');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x26313c);
+scene.add(new THREE.HemisphereLight(0xd8e9ff, 0x16202b, 2.4));
+const key = new THREE.DirectionalLight(0xffe8cf, 3.6); key.position.set(-2, 5, 3); scene.add(key);
+const rim = new THREE.DirectionalLight(0x8bc8ff, 2.2); rim.position.set(4, 2, -3); scene.add(rim);
+let camera = new THREE.PerspectiveCamera(30, W / H, 0.03, 50);
+camera.position.set(0.25, 0, 0.45);
+camera.lookAt(0, 0, 0);
+window.__vmMeshoptEval = { pronto: false, erro: null, trios: 0, clipes: [] };
+new GLTFLoader().load(`./models/viewmodels/coro/${qp.get('w') || 'ak'}-hires.glb`, (gltf) => {
+  const exported = gltf.scene.getObjectByName('AK_Hires_FP_Camera');
+  if (exported?.isPerspectiveCamera) { camera = exported; camera.aspect = W / H; camera.updateProjectionMatrix(); }
+  let tris = 0;
+  gltf.scene.traverse((o) => {
+    if (o.isMesh) {
+      o.frustumCulled = false;
+      const g = o.geometry;
+      tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+    }
+  });
+  scene.add(gltf.scene);
+  window.__vmMeshoptEval = { pronto: false, trios: Math.round(tris), clipes: gltf.animations.map((c) => c.name) };
+  hud.textContent = `tris ${Math.round(tris)} · clipes ${gltf.animations.length}`;
+  // render CONTÍNUO: um render único deixa o screenshot disputar o primeiro quadro
+  // (canvas WebGL nasce preto e o A/B mediau 25% de falso positivo por isso).
+  let quadros = 0;
+  renderer.setAnimationLoop(() => {
+    renderer.render(scene, camera);
+    if (++quadros === 3) window.__vmMeshoptEval.pronto = true;
+  });
+}, undefined, (error) => {
+  window.__vmMeshoptEval.erro = String(error?.message || error);
+  hud.textContent = `FALHOU: ${window.__vmMeshoptEval.erro}`;
+});
+</script>
+</body>
+</html>

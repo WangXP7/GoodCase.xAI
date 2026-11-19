@@ -1,0 +1,42 @@
+// Layout of the join steps: a row per step (mark, label, detail), the one
+// under way lit, the map's progress under it.
+
+:host {
+  display: flex;
+  flex-direction: column;
+}
+
+.blk {
+  padding: 12px var(--td-dock-gutter);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 10px;
+
+  .mark {
+    display: grid;
+    place-items: center;
+    color: var(--td-teal);
+  }
+
+  &.is-todo {
+    color: var(--td-text-disabled);
+
+    .mark {
+      color: var(--td-text-disabled);
+    }
+  }
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+}
+
+.bar {
+  margin: 4px 10px 0 40px;
+  list-style: none;
+}

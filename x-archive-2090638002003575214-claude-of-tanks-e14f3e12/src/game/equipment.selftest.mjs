@@ -1,0 +1,408 @@
+/**
+ * equipment.selftest.mjs — EQUIPMENT SYSTEM verification (plain node, no DOM).
+ * Run: node src/game/equipment.selftest.mjs
+ *
+ * Covers: catalog integrity (ids, categories, effect vocabulary, spotting
+ * table cross-refs), loadout sanitizing (slot cap, dedupe, era gate),
+ * multiplier folding, combat-state attachment (module durability scaling),
+ * and the LIVE sim hooks it can reach headlessly: reload (damage.ts
+ * startReload), fire self-extinguish (damage.ts tickFire), HE surface-burst
+ * splash reduction (damage.ts resolveShellHit), aim/traverse debuff folding
+ * (movement.ts via updateTank is exercised in the battle probe instead), and
+ * the spotting view/camo tables (sim/spotting.ts).
+ */
+import {
+  EQUIPMENT_CATALOG, EQUIPMENT_BY_ID, EQUIP_SLOTS,
+  sanitizeLoadout, computeEquipMults, applyEquipmentToCombat,
+  defaultLoadoutFor, AI_DEFAULT_LOADOUTS, equipEligible, equipIneligibility, EQUIP_LIMITS,
+} from '../sim/equipmentRules.ts';
+import * as garageEquipment from './equipment.ts';
+const { EQUIP_CATEGORIES, equipModifiedStats, equipmentPicker } = garageEquipment;
+import { matchRulesetFor, rulesetAllowsEquipment, rulesetLoadout } from '../sim/matchRuleset.ts';
+import {
+  createCombatState, startReload, tickFire, resolveShellHit, strainModule, repairAllModules,
+} from '../sim/damage.ts';
+import { createShell } from '../sim/ballistics.ts';
+import {
+  EQUIPMENT as SPOT_EQUIP, equipViewMult, equipCamoBonus,
+} from '../sim/spotting.ts';
+import { CONSUMABLE_BY_ID, CONSUMABLE_FOLIAGE_EQUIPMENT } from '../sim/consumableRules.ts';
+import { Vector3 } from 'three';
+
+let failures = 0;
+let checks = 0;
+function assert(cond, msg) {
+  checks++;
+  if (!cond) { failures++; console.error(`FAIL: ${msg}`); }
+  else console.log(`  ok  ${msg}`);
+}
+function near(actual, expected, tol, msg) {
+  assert(Math.abs(actual - expected) <= tol,
+    `${msg} — expected ${expected} ±${tol}, got ${actual}`);
+}
+
+// ---------------------------------------------------------------- fixtures --
+const V = (x, y, z) => new Vector3(x, y, z);
+const ww2Spec = {
+  id: 'fixture_ww2', era: 'ww2', role: 'heavy', hp: 1000,
+  hullTraverseDegS: 22,
+  gun: { caliberMm: 88, reloadS: 6.5, baseAccuracy: 0.34, aimTimeS: 2.4 },
+  armor: null,
+};
+const modernSpec = {
+  id: 'fixture_mbt', era: 'modern', role: 'mbt', hp: 2000,
+  hullTraverseDegS: 40,
+  gun: { caliberMm: 120, reloadS: 6.0, baseAccuracy: 0.30, aimTimeS: 1.8 },
+  armor: null,
+};
+const autoloaderSpec = {
+  ...modernSpec,
+  id: 'fixture_autoloader',
+  gun: {
+    ...modernSpec.gun,
+    autoloader: { magazineSize: 3, intraClipS: 2.4, fullReloadS: 20 },
+  },
+};
+
+console.log('[1] catalog integrity');
+{
+  const ids = new Set();
+  const cats = new Set(EQUIP_CATEGORIES.map((c) => c.id));
+  const KNOWN_EFFECTS = new Set([
+    'reload', 'aimTime', 'bloom', 'traverse', 'turret', 'repair',
+    'heSplash', 'crewHe', 'engineFire', 'fireTicks', 'extinguish', 'moduleHp',
+  ]);
+  // the owner's larger catalog (2026-10-24: "make equipment have a lot more options"): 15 to 25 items
+  assert(EQUIPMENT_CATALOG.length >= 15 && EQUIPMENT_CATALOG.length <= 25,
+    `catalog size in the 15-25 mandate window (${EQUIPMENT_CATALOG.length})`);
+  for (const it of EQUIPMENT_CATALOG) {
+    assert(!ids.has(it.id), `id '${it.id}' unique`);
+    ids.add(it.id);
+    assert(cats.has(it.cat), `'${it.id}' category '${it.cat}' listed in EQUIP_CATEGORIES`);
+    assert(it.era === 'all' || it.era === 'modern', `'${it.id}' era value valid`);
+    assert(typeof it.name === 'string' && typeof it.desc === 'string' && it.desc.length > 4,
+      `'${it.id}' carries name + effect description`);
+    for (const k of Object.keys(it.effects || {})) {
+      assert(KNOWN_EFFECTS.has(k), `'${it.id}' effect '${k}' is a wired vocabulary key`);
+    }
+    if (it.spot) {
+      assert(!!SPOT_EQUIP[it.id], `'${it.id}' marked spot ⇒ present in spotting.ts EQUIPMENT`);
+    }
+    const hasSim = Object.keys(it.effects || {}).length > 0;
+    assert(hasSim || it.spot, `'${it.id}' has at least one REAL effect (sim or spotting)`);
+  }
+  // spotting table carries no orphaned ids; the one consumable entry (consumables-260: the Fresh Foliage item's
+  // cs_foliage, sim/consumableRules.ts CONSUMABLE_FOLIAGE_EQUIPMENT) is the consumables catalog's, not equipment
+  for (const sid of Object.keys(SPOT_EQUIP)) {
+    if (sid === CONSUMABLE_FOLIAGE_EQUIPMENT) {
+      assert(CONSUMABLE_BY_ID.has('foliage') && !EQUIPMENT_BY_ID.has(sid), `spotting item '${sid}' is the foliage consumable's`);
+      continue;
+    }
+    assert(EQUIPMENT_BY_ID.has(sid), `spotting item '${sid}' exists in the catalog`);
+  }
+}
+
+console.log('[2] loadout sanitizing: slot cap, dedupe, unknown + era gate');
+{
+  const dirty = ['rammer', 'rammer', 'no_such_item', 'vents', 'optics', 'toolbox'];
+  const clean = sanitizeLoadout(dirty);
+  assert(clean.length === EQUIP_SLOTS, `clamped to ${EQUIP_SLOTS} slots`);
+  assert(clean[0] === 'rammer' && clean[1] === 'vents' && clean[2] === 'optics',
+    'order preserved, dupes + unknown ids dropped');
+  const gated = sanitizeLoadout(['vstab', 'auto_ext', 'rammer'], ww2Spec);
+  assert(gated.length === 1 && gated[0] === 'rammer',
+    'modern-only gear (vstab/auto_ext) dropped on a WWII spec');
+  const modern = sanitizeLoadout(['vstab', 'auto_ext', 'rammer'], modernSpec);
+  assert(modern.length === 3, 'same loadout legal on a modern spec');
+  assert(equipEligible('vstab', modernSpec) && !equipEligible('vstab', ww2Spec),
+    'equipEligible era gate');
+  assert(!equipEligible('rammer', autoloaderSpec),
+    'magazine autoloaders cannot mount a gun rammer');
+  const autoloader = sanitizeLoadout(['rammer', 'vents', 'vstab', 'optics'], autoloaderSpec);
+  assert(autoloader.join(',') === 'vents,vstab,optics',
+    'autoloading loadout drops rammer and fills remaining legal slots');
+}
+
+console.log('[3] multiplier folding');
+{
+  const m = computeEquipMults(['rammer', 'vents', 'rotation']);
+  near(m.reload, 0.90 * 0.975, 1e-9, 'rammer × vents reload stack');
+  near(m.aimTime, 0.975, 1e-9, 'vents aim-time');
+  near(m.traverse, 1.10, 1e-9, 'rotation hull traverse');
+  near(m.turret, 1.10, 1e-9, 'rotation turret traverse');
+  near(m.repair, 1, 1e-9, 'unequipped fields stay 1');
+  const s = computeEquipMults(['susp', 'wet_rack', 'fuel_safety']);
+  near(s.moduleHp.trackL, 1.5, 1e-9, 'suspension trackL HP');
+  near(s.moduleHp.trackR, 1.5, 1e-9, 'suspension trackR HP');
+  near(s.moduleHp.ammoRack, 1.5, 1e-9, 'wet rack ammoRack HP');
+  near(s.moduleHp.fuelTank, 1.5, 1e-9, 'safety fuel fuelTank HP');
+  near(s.engineFire, 0.5, 1e-9, 'safety fuel engine-fire odds');
+  const empty = computeEquipMults(null);
+  near(empty.reload * empty.aimTime * empty.bloom * empty.heSplash, 1, 1e-9,
+    'null loadout ⇒ all-1 record');
+}
+
+console.log('[4] combat-state attachment + module durability');
+{
+  const c = createCombatState(ww2Spec);
+  const baseRack = c.modules.ammoRack.maxHp;
+  const baseTrack = c.modules.trackL.maxHp;
+  const applied = applyEquipmentToCombat(c, ['wet_rack', 'susp', 'vstab'], ww2Spec);
+  assert(applied.length === 2 && !applied.includes('vstab'),
+    'attachment sanitizes (vstab dropped on WWII)');
+  near(c.modules.ammoRack.maxHp, baseRack * 1.5, 1e-9, 'ammo rack maxHp ×1.5');
+  near(c.modules.ammoRack.hp, baseRack * 1.5, 1e-9, 'ammo rack hp scaled with it');
+  near(c.modules.trackL.maxHp, baseTrack * 1.5, 1e-9, 'track maxHp ×1.5');
+  assert(Array.isArray(c.equip) && c.equipMults && typeof c.equipMults.reload === 'number',
+    'equip ids + equipMults attached to the combat state');
+}
+
+console.log('[4b] live re-equip: module HP follows the new kit (round 4 E7)');
+// A second applyEquipmentToCombat on the same state (a live re-equip) multiplied each module's maxHp and hp by the new
+// kit's factors on top of the old kit's, and never took the old factor off: the same kit again took a x1.5 ammo rack to
+// x2.25, and dropping the kit kept it. Now the old kit's factor comes off first and hp keeps its share of maxHp.
+{
+  const kitted = (ids) => {
+    const fresh = createCombatState(ww2Spec);
+    applyEquipmentToCombat(fresh, ids, ww2Spec);
+    return fresh;
+  };
+  const bare = createCombatState(ww2Spec);
+  const c = kitted(['wet_rack', 'drivetrain']);
+  // a Governor Override's strain through damage.ts's own law: the engine at 45 % of its kitted maxHp, yellow
+  assert(strainModule(c, 'engine', 0.45) && c.modules.engine.state === 'yellow', 're-equip: the strained engine reads yellow');
+  applyEquipmentToCombat(c, ['wet_rack', 'drivetrain'], ww2Spec); // the same kit again
+  near(c.modules.ammoRack.maxHp, bare.modules.ammoRack.maxHp * 1.5, 1e-9,
+    're-equip, same kit: the ammo rack stays x1.5 (not x2.25)');
+  near(c.modules.ammoRack.hp, c.modules.ammoRack.maxHp, 1e-9, 're-equip, same kit: the ammo rack at full hp');
+  near(c.modules.engine.maxHp, bare.modules.engine.maxHp * 1.4, 1e-9, 're-equip, same kit: the engine stays x1.4');
+  near(c.modules.engine.hp / c.modules.engine.maxHp, 0.45, 1e-9, 're-equip, same kit: the strained engine keeps its 45 %');
+  applyEquipmentToCombat(c, ['susp'], ww2Spec); // another kit: the wet rack and the drivetrain off, the suspension on
+  const susp = kitted(['susp']);
+  for (const name of Object.keys(bare.modules)) {
+    near(c.modules[name].maxHp, susp.modules[name].maxHp, 1e-9, `re-equip, new kit: ${name} maxHp is a fresh spawn's with it`);
+  }
+  near(c.modules.engine.hp / c.modules.engine.maxHp, 0.45, 1e-9, 're-equip, new kit: the engine keeps its 45 %');
+  assert(c.modules.engine.state === 'yellow' && c.modules.ammoRack.state === 'ok' && c.modules.trackL.hp === c.modules.trackL.maxHp,
+    're-equip, new kit: each module\'s state still reads its hp');
+  applyEquipmentToCombat(c, [], ww2Spec); // no kit
+  for (const name of Object.keys(bare.modules)) {
+    near(c.modules[name].maxHp, bare.modules[name].maxHp, 1e-9, `re-equip, no kit: ${name} maxHp is its own`);
+  }
+  repairAllModules(c); // a repair kit after the swaps fills each module to the maxHp it has now
+  near(c.modules.engine.hp, bare.modules.engine.maxHp, 1e-9, 're-equip, then a repair: the engine is full at its own maxHp');
+}
+
+console.log('[5] LIVE hook: reload (damage.ts startReload)');
+{
+  const bare = createCombatState(ww2Spec);
+  startReload(bare, ww2Spec);
+  near(bare.reload.totalS, 6.5, 1e-9, 'no equipment: spec reload');
+  const kitted = createCombatState(ww2Spec);
+  applyEquipmentToCombat(kitted, ['rammer'], ww2Spec);
+  startReload(kitted, ww2Spec);
+  near(kitted.reload.totalS, 6.5 * 0.9, 1e-9, 'rammer: 6.5 → 5.85 s');
+  const full = createCombatState(ww2Spec);
+  applyEquipmentToCombat(full, ['rammer', 'vents'], ww2Spec);
+  startReload(full, ww2Spec);
+  near(full.reload.totalS, 6.5 * 0.9 * 0.975, 1e-9, 'rammer + vents stack');
+  // stacks with the locked debuffs
+  full.crew.loader = false;
+  startReload(full, ww2Spec);
+  near(full.reload.totalS, 6.5 * 0.9 * 0.975 * 1.5, 1e-9,
+    'equipment stacks multiplicatively with the dead-loader ×1.5');
+}
+
+console.log('[6] LIVE hook: fire self-extinguish (damage.ts tickFire)');
+{
+  const mkBurning = (ids) => {
+    const c = createCombatState(modernSpec);
+    if (ids) applyEquipmentToCombat(c, ids, modernSpec);
+    c.fire.burning = true;
+    c.fire.ticksLeft = 10;
+    return { spec: modernSpec, combat: c };
+  };
+  // roll 0.2: base chance 0.12 ⇒ keeps burning; auto_ext 0.24 ⇒ out.
+  const bare = mkBurning(null);
+  tickFire(bare, () => 0.2);
+  assert(bare.combat.fire.burning === true, 'roll 0.2 vs base 0.12: still burning');
+  const kitted = mkBurning(['auto_ext']);
+  tickFire(kitted, () => 0.2);
+  assert(kitted.combat.fire.burning === false, 'roll 0.2 vs auto_ext 0.24: extinguished');
+}
+
+console.log('[7] LIVE hook: HE surface-burst splash (damage.ts resolveShellHit)');
+{
+  const HE = {
+    name: 'HE-122', type: 'HE', caliberMm: 122, pen100Mm: 61, pen1000Mm: 61,
+    dmg: 450, velocityMps: 770, moduleDmg: 122, tracer: 'HE',
+  };
+  const plate = {
+    name: 'thick_front', verts: [[-1, 0, 2], [1, 0, 2], [1, 2, 2], [-1, 2, 2]],
+    physicalMm: 120, keMm: 120, ceMm: 120, kind: 'main', era: null,
+    moduleLink: null, gunFollow: false,
+  };
+  const mkHit = () => [{
+    t: 0.4, kind: 'plate', plate, point: V(0, 1, 2), normal: V(0, 0, 1),
+    impactAngleDeg: 0,
+  }];
+  const mkShell = () => {
+    const s = createShell(HE, 'attacker_1', true, V(0, 1.5, 10), V(0, 0, -1), 1);
+    s.ageS = 100 / HE.velocityMps;
+    return s;
+  };
+  const shoot = (ids) => {
+    const spec = { ...modernSpec, id: 'he_target' };
+    const combat = createCombatState(spec);
+    if (ids) applyEquipmentToCombat(combat, ids, spec);
+    const target = { id: 'he_target', spec, state: { pos: V(0, 0, 0) }, combat };
+    const ev = resolveShellHit(mkShell(), target, mkHit(), () => 0.5);
+    return ev;
+  };
+  const bare = shoot(null);
+  const lined = shoot(['spall_liner']);
+  assert(bare.kind === 'he_splash' && lined.kind === 'he_splash',
+    `both resolve as surface bursts (${bare.kind}/${lined.kind})`);
+  assert(bare.damage > 0, `bare splash does damage (${bare.damage.toFixed(1)})`);
+  near(lined.damage, bare.damage * 0.75, 1e-6,
+    `spall liner soaks 25% of splash (${bare.damage.toFixed(1)} → ${lined.damage.toFixed(1)})`);
+}
+
+console.log('[8] spotting table: view/camo items (sim/spotting.ts)');
+{
+  near(equipViewMult(['optics'], true), 1.10, 1e-9, 'coated optics +10% view, moving');
+  near(equipViewMult(['optics', 'binoculars'], false), 1.10 * 1.25, 1e-9,
+    'optics × binoculars stack while stationary');
+  near(equipViewMult(['binoculars'], true), 1, 1e-9, 'binoculars OFF while moving');
+  near(equipCamoBonus(['camo_net'], false), 0.12, 1e-9, 'camo net +0.12 still');
+  near(equipCamoBonus(['camo_net'], true), 0, 1e-9, 'camo net OFF while moving');
+  near(equipViewMult(['vents'], true), 1.025, 1e-9, 'vents +2.5% view');
+}
+
+console.log('[9] AI parity defaults');
+{
+  for (const [cls, list] of Object.entries(AI_DEFAULT_LOADOUTS)) {
+    assert(list.length === EQUIP_SLOTS, `role '${cls}' default fills all ${EQUIP_SLOTS} slots`);
+    for (const id of list) assert(EQUIPMENT_BY_ID.has(id), `role '${cls}' id '${id}' exists`);
+  }
+  const heavyWw2 = defaultLoadoutFor(ww2Spec);
+  assert(heavyWw2.length === 3 && heavyWw2.every((id) => equipEligible(id, ww2Spec)),
+    `WWII heavy default is era-legal (${heavyWw2.join(', ')})`);
+  const mbt = defaultLoadoutFor(modernSpec);
+  assert(mbt.includes('vstab'), `modern MBT default fields the stabilizer (${mbt.join(', ')})`);
+  const autoMbt = defaultLoadoutFor(autoloaderSpec);
+  assert(autoMbt.join(',') === 'vents,vstab,optics',
+    `autoloading MBT default replaces rammer (${autoMbt.join(', ')})`);
+  const unknown = defaultLoadoutFor({ era: 'ww2', role: 'hovertank' });
+  assert(unknown.length === 3, 'unknown role falls back to the medium kit');
+}
+
+console.log('[10] garage stat helper');
+{
+  const st = equipModifiedStats(ww2Spec, ['rammer', 'gld', 'rotation']);
+  near(st.reloadS.mod, 6.5 * 0.9, 1e-9, 'modified reload for the card');
+  near(st.aimTimeS.mod, 2.4 * 0.9, 1e-9, 'modified aim time for the card');
+  near(st.traverseDegS.mod, 22 * 1.1, 1e-9, 'modified hull traverse for the card');
+  near(st.reloadS.base, 6.5, 1e-9, 'base kept alongside');
+}
+
+// ------------------------------------------- the larger catalog (2026-10-24) --
+{
+  const categories = EQUIP_CATEGORIES.filter((c) => c.id !== 'all').map((c) => c.id);
+  assert(categories.join() === 'fire,mobility,protection,survival,recon',
+    'five categories: firepower, mobility, protection, survivability, scouting');
+  for (const cat of categories) {
+    const count = EQUIPMENT_CATALOG.filter((item) => item.cat === cat).length;
+    assert(count >= 4, `${cat} offers at least four items (${count})`);
+  }
+  // the gates: a hand-loaded gun, an autoloader, a turret, a postwar hull
+  const turretless = { ...modernSpec, armor: { turretless: true } };
+  assert(equipIneligibility('rammer', autoloaderSpec) === 'manualLoader', 'no rammer on an autoloader');
+  assert(equipIneligibility('ready_rack', autoloaderSpec) === 'manualLoader', 'no ready rack on an autoloader');
+  assert(equipIneligibility('loader_kit', modernSpec) === 'autoloader', 'the loader kit needs an autoloader');
+  assert(equipIneligibility('loader_kit', autoloaderSpec) === null, 'and mounts on one');
+  assert(equipIneligibility('turret_drive', turretless) === 'turret', 'no turret drive on a turretless hull');
+  assert(equipIneligibility('ring_guard', turretless) === 'turret', 'no ring guard on a turretless hull');
+  assert(equipIneligibility('thermal_sight', ww2Spec) === 'era', 'no thermal sight on a wartime hull');
+  assert(equipIneligibility('fire_blankets', ww2Spec) === null, 'fire blankets fit every era');
+  assert(equipIneligibility('bogus', modernSpec) === 'unknown', 'an unknown id is refused');
+  assert(equipEligible('vstab') === false && equipEligible('rammer') === true, 'without a spec a modern item stays ineligible, as before');
+  assert(sanitizeLoadout(['loader_kit', 'rammer', 'ring_guard'], turretless).join() === 'rammer',
+    'a hand-loaded turretless hull keeps the rammer and drops the loader kit and the ring guard');
+  // stacked effects stay in their bounds; the bounds leave every bot loadout as it was
+  const stack = computeEquipMults(['rammer', 'ready_rack', 'vents']);
+  near(stack.reload, EQUIP_LIMITS.reload, 1e-12, 'three reload items stop at the reload bound');
+  const raw = (ids, key) => ids.reduce((product, id) => product * (EQUIPMENT_BY_ID.get(id).effects[key] ?? 1), 1);
+  for (const [role, ids] of Object.entries(AI_DEFAULT_LOADOUTS)) {
+    const m = computeEquipMults(ids);
+    for (const key of ['reload', 'aimTime', 'bloom', 'traverse', 'turret', 'repair', 'heSplash', 'crewHe', 'engineFire', 'fireTicks', 'extinguish']) {
+      near(m[key], raw(ids, key), 1e-12, `the ${role} bots' ${key} is untouched by the bounds`);
+    }
+  }
+  near(computeEquipMults(['wet_rack', 'ready_rack']).moduleHp.ammoRack, 1.5 * 0.85, 1e-12, 'a ready rack trades back some of a wet rack');
+  for (const id of ['exhaust_baffles', 'thermal_sight']) assert(!!SPOT_EQUIP[id], `${id}'s vision lives in the spotting table`);
+  near(equipViewMult(['optics', 'binoculars', 'thermal_sight'], false), 1.45, 1e-12, 'stacked view stops at its bound');
+  near(equipViewMult(['optics', 'binoculars', 'vents'], false), 1.1 * 1.25 * 1.025, 1e-12, 'the strongest earlier view stack is unchanged');
+  near(equipCamoBonus(['camo_net', 'vents', 'exhaust_baffles'], false), 0.16, 1e-12, 'stacked concealment stops at its bound');
+}
+
+// ------------------------------------------ the picker's data (2026-10-24) --
+{
+  const groups = equipmentPicker(autoloaderSpec, ['loader_kit', 'optics']);
+  assert(groups.map((g) => g.category.id).join() === 'fire,mobility,protection,survival,recon',
+    'the picker groups every category in catalog order, without "All"');
+  assert(groups.reduce((n, g) => n + g.items.length, 0) === EQUIPMENT_CATALOG.length, 'and lists every item once');
+  const entry = (list, id) => list.flatMap((g) => g.items).find((e) => e.item.id === id);
+  assert(entry(groups, 'loader_kit').fittedSlot === 0 && entry(groups, 'optics').fittedSlot === 1, 'it names the slot each item sits in');
+  assert(entry(groups, 'toolbox').fittedSlot === -1, 'and -1 for an item not fitted');
+  assert(entry(groups, 'rammer').lock === 'manualLoader', 'an autoloader sees the rammer locked by its loader');
+  assert(entry(groups, 'loader_kit').lock === null, 'and its kit open');
+  for (const g of groups) for (const e of g.items) {
+    assert(e.lock === equipIneligibility(e.item, autoloaderSpec), `${e.item.id}: the picker's lock is the gate spawn applies`);
+  }
+  // a mode's rules: AC-130 plays without scouting, so its picker locks the category and spawn drops it
+  const ac130 = matchRulesetFor('ac130');
+  const modeGroups = equipmentPicker(modernSpec, [], (id) => rulesetAllowsEquipment(ac130, id));
+  for (const e of modeGroups.find((g) => g.category.id === 'recon').items) {
+    assert(e.lock === 'mode' || e.lock === 'era', `${e.item.id}: locked by AC-130's rules`);
+  }
+  const open = modeGroups.flatMap((g) => g.items).filter((e) => e.lock === null).map((e) => e.item.id);
+  assert(rulesetLoadout(ac130, open).join() === open.join(), 'every item the AC-130 picker leaves open survives the mode filter');
+  assert(equipmentPicker(modernSpec, []).flatMap((g) => g.items).every((e) => e.lock !== 'mode'), 'no filter, no mode locks');
+}
+
+// ----------------------------- the Garage slot's caption (2026-10-25) --
+// a slot shows the short name under its glyph in about 54 px at 11 px: ten characters in English, five in Chinese
+{
+  const { readFileSync } = await import('node:fs');
+  const catalogs = [['en-US', 10], ['zh-CN', 5]].map(([locale, max]) => [locale, max,
+    JSON.parse(readFileSync(new URL(`../ui/i18nCatalog.${locale}.json`, import.meta.url), 'utf8'))]);
+  for (const item of EQUIPMENT_CATALOG) {
+    assert(item.short.length <= 10, `${item.id}: the catalog's own short "${item.short}" fits the slot`);
+    for (const [locale, max, catalog] of catalogs) {
+      const short = catalog[`equipment.${item.id}.short`] ?? '';
+      assert(short.length > 0 && short.length <= max, `${item.id}: the ${locale} short "${short}" fits the slot`);
+    }
+  }
+}
+
+// ----------------------------- one source of truth (2026-10-25, item 253) --
+// the rules live in the DOM-free slice the rooms Worker's rulesets reach; the Garage module re-exports its objects
+{
+  const { readFileSync } = await import('node:fs');
+  for (const name of ['EQUIPMENT_CATALOG', 'EQUIPMENT_BY_ID', 'EQUIP_SLOTS', 'sanitizeLoadout', 'computeEquipMults',
+    'applyEquipmentToCombat', 'defaultLoadoutFor']) {
+    assert(garageEquipment[name] === { EQUIPMENT_CATALOG, EQUIPMENT_BY_ID, EQUIP_SLOTS, sanitizeLoadout, computeEquipMults,
+      applyEquipmentToCombat, defaultLoadoutFor }[name], `game/equipment.ts re-exports the slice's ${name}`);
+  }
+  const rules = readFileSync(new URL('../sim/equipmentRules.ts', import.meta.url), 'utf8');
+  const imports = [...rules.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]);
+  assert(imports.every((spec) => !/\/(game|vehicles)\//.test(spec) && !spec.startsWith('../')),
+    `sim/equipmentRules.ts imports only sim-local modules (${imports.join(', ')})`);
+}
+
+if (failures) {
+  console.error(`\nequipment.selftest: ${failures}/${checks} checks FAILED`);
+  process.exit(1);
+}
+console.log(`\nequipment.selftest: all ${checks} checks passed`);

@@ -1,0 +1,63 @@
+// Layout of the token step: it covers the whole page (header and sidebar
+// too: a half-visible HUD behind a screen that blocks play reads as a broken
+// game), the dialog in the middle.
+
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: block;
+  background: var(--td-bg-dark);
+  overflow-y: auto;
+}
+
+.token-setup {
+  box-sizing: border-box;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--td-sp-5);
+}
+
+.td-dlg {
+  max-height: none;
+}
+
+.td-dlg-body {
+  overflow: visible;
+}
+
+.token-coop {
+  color: var(--td-brass-light);
+}
+
+.token-tabs {
+  align-self: flex-start;
+}
+
+.token-steps {
+  margin: 0;
+  padding: var(--td-sp-3) var(--td-sp-4) var(--td-sp-3) 34px;
+  line-height: 1.75;
+}
+
+.token-form {
+  flex-wrap: nowrap;
+  gap: var(--td-sp-2);
+}
+
+.token-input {
+  flex: 1;
+}
+
+.token-maps {
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-3);
+  padding: var(--td-sp-3) var(--td-sp-4);
+
+  .td-text {
+    flex: 1;
+    margin: 0;
+  }
+}

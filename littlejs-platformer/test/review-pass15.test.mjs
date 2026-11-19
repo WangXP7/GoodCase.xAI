@@ -1,0 +1,177 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadEngine } from './vmEngine.mjs';
+
+// The small fixes of review pass 15.
+
+// a canvas context that ignores a font string it can not parse, as a browser does, and counts the fonts set on it
+function fontContext()
+{
+    const context = { font: '10px sans-serif', sets: 0 };
+    const valid = (value)=> !/\s\d\w*\s*$/.test(value) || /['"][^'"]*['"]\s*$/.test(value);
+    return new Proxy(Object.assign(context, { save() {}, restore() {}, fillText() {}, strokeText() {}, translate() {},
+        rotate() {}, measureText: ()=> ({ width: 1 }) }), { set: (t, k, v)=>
+        {
+            if (k === 'font') { ++t.sets; valid(v) && (t.font = v); } else t[k] = v;
+            return true;
+        } });
+}
+
+test('the debug font check runs once a font, not once a size, and a 7px serif is not taken for a refused font', () =>
+{
+    const context = fontContext(), warnings = [];
+    const { run } = loadEngine({ fontContext: context, console: { ...console, warn: (...a)=> warnings.push(a.join(' ')) } });
+    run('setHeadlessMode(true)');
+    const draw = (size, family)=> run(`drawTextScreen('hi', vec2(), ${size}, WHITE, 0, BLACK, 'center',
+        ${JSON.stringify(family)}, '', undefined, 0, fontContext)`);
+    for (let size = 1; size <= 100; ++size)
+        draw(size + .5, 'arial');
+    assert.ok(context.sets <= 100 + 2, 'one check for the family, then a set a draw: ' + context.sets);
+    draw(7, 'serif');
+    assert.deepEqual(warnings, [], 'a font that is the check\'s own is not warned of');
+});
+
+test('setSoundVolume asserts a finite number, as an infinite one was taken and then ignored', () =>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true); console.assert = ()=> {}');
+    assert.match(run(`(()=> { try { setSoundVolume(Infinity); } catch (e) { return e.message; } })()`), /setSoundVolume/);
+});
+
+test('particleEffect takes null for no options, and keeps emitRect false with a vec2 emitSize', () =>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true)');
+    assert.equal(run(`particleEffect('sparks', vec2(), null) instanceof ParticleEmitter`), true);
+    const circle = JSON.parse(run(`(()=> { const e = particleEffect('sparks', vec2(), {emitSize: vec2(2, 1), emitRect: false});
+        return JSON.stringify({circle: e.emitCircle, x: e.emitSize.x}); })()`));
+    assert.deepEqual(circle, {circle: true, x: 2}, 'a circle as wide as the vec2\'s x');
+});
+
+test('a text field deletes a whole character with Backspace, an emoji family too, and counts maxLength in them', () =>
+{
+    const { run } = loadEngine({ Intl });
+    run('setHeadlessMode(true); new UISystemPlugin');
+    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
+    const key = (k)=> run(`field.onKeyDown({key: ${JSON.stringify(k)}, code: '', repeat: false})`);
+    run(`var field = new UITextInput(vec2(), vec2(200, 50), ${JSON.stringify('hi' + family)})`);
+    key('Backspace');
+    assert.equal(run('field.text'), 'hi', 'the family as one');
+    run(`field.text = ${JSON.stringify('a' + String.fromCodePoint(0x1f44d))}; field.maxLength = 3;`);
+    key('b');
+    assert.equal(run('field.text'), 'a' + String.fromCodePoint(0x1f44d) + 'b', 'two characters, room for a third');
+    key('c');
+    assert.equal(run('field.text.length'), 4, 'and no more');
+});
+
+test('an effect name cut at 60 characters is cut between characters, never inside an emoji', () =>
+{
+    const { run } = loadEngine({ Intl });
+    run('setHeadlessMode(true)');
+    const name = 'a'.repeat(59) + String.fromCodePoint(0x1f600) + 'b';
+    const kept = run(`particleEffectSanitize({name: ${JSON.stringify(name)}}).name`);
+    assert.equal(kept, 'a'.repeat(59) + String.fromCodePoint(0x1f600), 'the emoji whole, as the 60th character');
+});
+
+test('writeSaveData says when the data can not be written as JSON, not that storage is full', () =>
+{
+    const warnings = [];
+    const { run } = loadEngine({ console: { ...console, warn: (...a)=> warnings.push(a.join(' ')) } });
+    run('setHeadlessMode(true); var circular = {}; circular.self = circular;');
+    assert.equal(run(`writeSaveData('save', circular)`), false);
+    assert.match(warnings[0], /can not be written as JSON/);
+});
+
+test('a file that can not be reached is named with who asked, and the error keeps its cause', async () =>
+{
+    const failing = ()=> Promise.reject(new TypeError('network down'));
+    const { run } = loadEngine({ fetch: failing });
+    run('setHeadlessMode(true)');
+    const error = await run(`loadFetch('song.mp3', 'loadSound').catch((e)=> e)`);
+    assert.match(error.message, /^loadSound: could not load song\.mp3, network down/);
+    assert.equal(error.cause.message, 'network down');
+});
+
+test('an effect taken from an emitter keeps a negative speed, and one from a finished emitter is not made endless', () =>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true)');
+    const result = JSON.parse(run(`(()=> {
+        const e = new ParticleEmitter(vec2(), 0, 1, .5, 10); e.speed = -.1; e.angleSpeed = -.2;
+        const kept = particleEffectFromEmitter(e).settings;
+        e.emitElapsed = .5; e.destroy(); // finished, its last particles going
+        const ended = particleEffectFromEmitter(e).settings;
+        return JSON.stringify({speed: kept.speed, angleSpeed: kept.angleSpeed, emitTime: ended.emitTime}); })()`));
+    assert.equal(result.speed, -.1);
+    assert.equal(result.angleSpeed, -.2);
+    assert.equal(result.emitTime, .5, 'the time it emitted for, where 0 emits for ever');
+});
+
+test('the speed cap comes after gravity, so a falling object moves no more than objectMaxSpeed a frame, 2D and 3D', () =>
+{
+    const { run } = loadEngine();
+    const moved = JSON.parse(run(`setHeadlessMode(true); new Render3DPlugin;
+        setGravity(vec2(0, -.05)); render3D.gravity = vec3(0, -.05, 0);
+        const flat = new EngineObject(vec2(0, 100), vec2(1)); flat.setCollision(); flat.velocity = vec2(0, -1);
+        const deep = new EngineObject3D(vec3(0, 100, 0)); deep.setCollision(); deep.mass = 1; deep.velocity3D = vec3(0, -1, 0);
+        const y2 = flat.pos.y, y3 = deep.pos3D.y;
+        flat.updatePhysics(); deep.updatePhysics();
+        JSON.stringify([y2 - flat.pos.y, y3 - deep.pos3D.y])`));
+    assert.deepEqual(moved, [1, 1]);
+});
+
+test('damping out of 0 to 1 fails where it is set as a default, and on a 3D object as on a 2D one', () =>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true); console.assert = ()=> {}; new Render3DPlugin;');
+    const thrown = (code)=> run(`(()=> { try { ${code} } catch (e) { return e.message; } })()`);
+    assert.match(thrown('setObjectDefaultDamping(10)') ?? '', /damping/);
+    assert.match(thrown('setObjectDefaultAngleDamping(-1)') ?? '', /damping/i);
+    assert.equal(thrown('setObjectDefaultDamping(.9); setObjectDefaultDamping(1)'), undefined, 'in range is fine');
+    assert.match(thrown('const o = new EngineObject3D(vec3()); o.mass = 1; o.damping = 10; o.updatePhysics();') ?? '',
+        /damping/);
+    assert.match(thrown('const o = new EngineObject3D(vec3()); o.angleDamping = 2; o.updatePhysics();') ?? '', /damping/i);
+});
+
+test('pass 16 lows: a parallax layer casts no shadow, an assert value whose JSON is nothing still makes a message', () =>
+{
+    const { run } = loadEngine();
+    run('setHeadlessMode(true); console.assert = ()=> {}');
+    assert.equal(run('new ParallaxLayer().castShadow'), false, 'a backdrop, which would throw huge shadows from a sun');
+    assert.match(run(`(()=> { try { ASSERT(false, 'x', {toJSON() {}}); } catch (e) { return e.message; } })()`),
+        /^Assert failed: x /);
+});
+
+test('pass 16 lows: the quick text path joins what the segmenter joins, a zero width non-joiner, a Thai SARA AM', () =>
+{
+    const { run } = loadEngine({ Intl });
+    run('setHeadlessMode(true)');
+    for (const text of ['a' + String.fromCharCode(0x200c) + 'b', 'ก' + String.fromCharCode(0x0e33),
+        String.fromCharCode(0xff76, 0xff9e), String.fromCharCode(0x0600) + 'a'])
+    {
+        const quick = run(`textGraphemes(${JSON.stringify(text)}).length`);
+        const segmenter = [...new Intl.Segmenter().segment(text)].length;
+        assert.equal(quick, segmenter, JSON.stringify(text));
+    }
+});
+
+test('pass 16 lows: a sound callback that throws on a failed load is caught and said, not left as an uncaught rejection', async () =>
+{
+    const warnings = [];
+    const { run } = loadEngine({ console: { ...console, warn: (...a)=> warnings.push(a.join(' ')) },
+        fetch: async ()=> ({ ok: false, status: 404, statusText: 'Not Found' }), AudioContext: class
+        {
+            constructor() { this.currentTime = 0; this.destination = {}; this.state = 'running'; }
+            createGain() { return { connect(n) { return n; }, disconnect() {}, gain: { value: 0 } }; }
+            resume() { return Promise.resolve(); }
+        } });
+    run('setHeadlessMode(false); engineInitialized = true; audioContext ||= new AudioContext;');
+    const rejected = [];
+    const onRejection = (reason)=> rejected.push(String(reason));
+    process.on('unhandledRejection', onRejection);
+    run(`new Sound('missing.mp3', 0, 0, 1, ()=> { throw new Error('callback broke'); })`);
+    await new Promise((resolve)=> setTimeout(resolve, 50));
+    process.off('unhandledRejection', onRejection);
+    assert.deepEqual(rejected, []);
+    assert.ok(warnings.some((w)=> w.includes('callback broke')), warnings.join(' | '));
+});

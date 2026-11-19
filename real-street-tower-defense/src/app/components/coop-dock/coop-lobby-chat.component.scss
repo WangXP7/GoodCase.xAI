@@ -1,0 +1,66 @@
+// Layout of the lobby chat: the lines scroll, the composer at the foot.
+// Player colours are data.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px var(--td-dock-gutter);
+}
+
+.sec {
+  margin-bottom: 10px;
+}
+
+.chat {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 2px 2px 8px;
+  overflow: auto;
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &.is-cont {
+    margin-top: -8px;
+  }
+
+  p {
+    overflow-wrap: anywhere;
+  }
+}
+
+.msg-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+}
+
+/* A line of the room itself, a brass diamond before it */
+.sys {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .td-diamond {
+    --td-mark: var(--td-brass-dark);
+  }
+}
+
+.composer {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.send {
+  width: var(--td-h-field);
+  height: var(--td-h-field);
+}

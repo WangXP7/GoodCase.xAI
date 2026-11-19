@@ -1,0 +1,169 @@
+/* Launch kit: gamertag form, save status, Leaderboard screen, share bar, credit line.
+   Same tokens as ui.css (--u, --ink, --dim, --faint, --accent, --display, --label, safe-area --sl/--sr/--st/--sb).
+   Touch rules are scoped to .gs-touch like mobile.css: 44 px targets, nothing under the notch. */
+#gs-ui { --lk-err: #ffc24b; /* errors are sodium yellow: the accent red is not a warning colour */ --lk-panel: rgba(5, 7, 10, .62); }
+
+/* ---------- buttons, links, fields ---------- */
+.gs-lk-btn { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; flex: none; min-height: max(44px, calc(60 * var(--u))); padding: 0 max(14px, calc(22 * var(--u)));
+  font: 600 max(16px, calc(24 * var(--u)))/1 var(--display); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; color: var(--ink);
+  border: max(2px, calc(2 * var(--u))) solid var(--faint); cursor: pointer; pointer-events: auto; text-decoration: none; transition: border-color .12s, color .12s, background .12s; }
+.gs-lk-btn:hover, .gs-lk-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+.gs-lk-btn:focus-visible { outline: max(2px, calc(2 * var(--u))) solid var(--accent); outline-offset: 3px; }
+.gs-lk-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.gs-lk-btn.primary:hover, .gs-lk-btn.primary:focus-visible { background: var(--accent-hi); border-color: var(--accent-hi); color: var(--on-accent); }
+.gs-lk-btn.primary:active { background: var(--accent-lo); border-color: var(--accent-lo); }
+.gs-lk-btn:disabled { opacity: .45; cursor: default; }
+.gs-lk-btn[hidden] { display: none; }
+.gs-lk-btn.link { min-height: 44px; padding: 0; border: 0; font: 500 var(--t-sm)/1.2 var(--label); letter-spacing: .05em; color: var(--dim); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(var(--accent-rgb), .6); }
+.gs-lk-btn.link { white-space: normal; text-align: left; justify-content: flex-start; max-width: 100%; }
+.gs-lk-btn.link:hover, .gs-lk-btn.link:focus-visible { color: var(--ink); }
+
+.gs-lk-input, .gs-lk-code { all: unset; box-sizing: border-box; flex: 1 1 auto; min-width: 0; width: 100%; min-height: max(44px, calc(60 * var(--u))); padding: 0 calc(14 * var(--u));
+  font: 600 max(20px, calc(32 * var(--u)))/1 var(--display); letter-spacing: .05em; color: var(--ink); background: rgba(5, 7, 10, .55);
+  border-bottom: max(2px, calc(3 * var(--u))) solid var(--faint); caret-color: var(--accent); pointer-events: auto; cursor: text;
+  -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+.gs-lk-input::placeholder { color: rgba(236, 230, 214, .32); }
+.gs-lk-input:focus, .gs-lk-code:focus { border-bottom-color: var(--accent); }
+.gs-lk-input:disabled { opacity: .6; }
+.gs-lk-input.code, .gs-lk-code { font: 500 max(16px, calc(24 * var(--u)))/1 var(--label); letter-spacing: .05em; text-transform: uppercase; }
+.gs-lk-code { color: var(--accent); cursor: text; }
+
+/* ---------- the end screen's slot: eyebrow, main row, note (same three lines in every state) ---------- */
+.gs-lk-slot { display: flex; flex-direction: column; gap: calc(10 * var(--u)); margin-top: calc(16 * var(--u)); width: min(calc(640 * var(--u)), 100%); min-width: min(380px, 100%); pointer-events: auto; }
+.gs-lk-slot[hidden] { display: none; }
+.gs-lk-eyebrow { margin: 0; min-height: 1.3em; font: 500 var(--t-sm)/1.3 var(--label); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.gs-lk-eyebrow .st { letter-spacing: .12em; }
+.gs-lk-eyebrow .tag { color: var(--ink); font-weight: 500; text-transform: none; }
+.gs-lk-main { display: flex; align-items: center; gap: calc(10 * var(--u)); min-height: max(44px, calc(60 * var(--u))); }
+.gs-lk-form { display: flex; align-items: center; gap: calc(10 * var(--u)); flex: 1; min-width: 0; margin: 0; }
+.gs-lk-note { margin: 0; min-height: 1.35em; font: 400 var(--t-sm)/1.35 var(--label); letter-spacing: .03em; color: var(--dim); }
+.gs-lk-note.err { color: var(--lk-err); }
+.gs-lk-main .st { font: 600 max(20px, calc(34 * var(--u)))/1.1 var(--display); letter-spacing: .04em; color: var(--ink); }
+.gs-lk-main .st .tag, .gs-lk-me .tag { color: var(--accent); font-weight: 600; }
+.gs-lk-main .quiet { font: 400 var(--t-md)/1.3 var(--label); letter-spacing: .02em; color: var(--dim); }
+.gs-lk-copied { font: 500 var(--t-sm)/1 var(--label); letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+.gs-lk-copied:empty { display: none; }
+
+/* typing on a phone: the keyboard covers the lower half, so the form rides at the top */
+.gs-lk-slot.lifted, .gs-lk-recover.lifted { position: fixed; z-index: 6; left: calc(var(--sl) + 16px); right: calc(var(--sr) + 16px); top: calc(var(--st) + 8px); width: auto; min-width: 0;
+  padding: 12px 14px; background: #05070a; border-top: 3px solid var(--accent); box-shadow: 0 12px 40px rgba(0, 0, 0, .7); }
+
+/* ---------- the end screen: Leaderboard row after Retry, share and credit under the numeral ---------- */
+.gs-lk-endfoot { display: flex; flex-direction: column; align-items: flex-start; gap: calc(26 * var(--u)); margin-top: calc(44 * var(--u)); pointer-events: none; }
+.gs-endcol .gs-list .gs-row[hidden] { display: none; }
+
+/* ---------- share ---------- */
+.gs-lk-share { display: flex; flex-wrap: wrap; align-items: center; gap: calc(10 * var(--u)); pointer-events: auto; }
+.gs-lk-share[hidden] { display: none; }
+.gs-lk-sharenote { font: 500 var(--t-sm)/1 var(--label); letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+.gs-lk-sharenote:empty { display: none; }
+.gs-lk-copyfield { all: unset; box-sizing: border-box; flex: 1 0 100%; min-height: 40px; padding: 0 10px; font: 400 var(--t-sm)/1 var(--label); color: var(--ink); background: rgba(5, 7, 10, .7); border: 1px solid var(--faint); -webkit-user-select: text; user-select: text; pointer-events: auto; }
+.gs-lk-copyfield[hidden] { display: none; }
+
+/* ---------- credit ---------- */
+.gs-lk-credit { margin: 0; font: 400 var(--t-sm)/1.6 var(--label); letter-spacing: .03em; color: var(--dim); pointer-events: none; }
+.gs-lk-credit .dot { margin: 0 .9em; color: var(--faint); }
+.gs-lk-link { color: var(--ink); text-decoration: underline; text-decoration-color: rgba(var(--accent-rgb), .55); text-underline-offset: 3px; pointer-events: auto;
+  padding: 15px 4px; margin: -15px -4px; /* a 44 px target without growing the line */ }
+.gs-lk-link:hover, .gs-lk-link:focus-visible { color: var(--accent); }
+.gs-lk-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gs-title .gs-lk-credit { margin-top: calc(48 * var(--u)); }
+
+/* ---------- the Leaderboard screen ---------- */
+.gs-board::before { background: linear-gradient(90deg, rgba(3, 5, 8, .93) 0%, rgba(3, 5, 8, .8) 45%, rgba(3, 5, 8, .6) 100%); }
+.gs-board.on { pointer-events: auto; }
+.gs-board .gs-col.gs-lk-boardcol { width: min(calc(1560 * var(--u)), calc(100vw - 2 * max(28px, calc(120 * var(--u))) - var(--sl) - var(--sr)));
+  display: grid; grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr); column-gap: calc(100 * var(--u)); align-items: center; justify-content: stretch; }
+.gs-board .gs-h { font-size: calc(132 * var(--u)); }
+.gs-board .gs-head { margin-bottom: calc(10 * var(--u)); }
+.gs-lk-side { display: flex; flex-direction: column; align-items: flex-start; gap: calc(24 * var(--u)); min-width: 0; }
+.gs-lk-side .gs-back { align-self: stretch; }
+.gs-lk-side .gs-back .gs-row.small { margin-top: 0; }
+.gs-lk-me { margin: 0; font: 400 var(--t-md)/1.4 var(--label); color: var(--dim); overflow-wrap: anywhere; }
+.gs-lk-mainpane { height: min(calc(900 * var(--u)), calc(100vh - 2 * var(--m) - var(--st) - var(--sb))); display: flex; flex-direction: column; min-width: 0; pointer-events: auto; }
+.gs-lk-table, .gs-lk-recover { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--lk-panel); border: 1px solid rgba(236, 230, 214, .16);
+  border-top: max(2px, calc(3 * var(--u))) solid var(--accent); padding: calc(16 * var(--u)) calc(26 * var(--u)) calc(14 * var(--u)); }
+.gs-lk-table[hidden], .gs-lk-recover[hidden] { display: none; }
+.gs-lk-row { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 4.4em 4.6em; align-items: baseline; column-gap: calc(16 * var(--u)); padding: calc(9 * var(--u)) calc(10 * var(--u)); border-bottom: 1px solid rgba(236, 230, 214, .1); }
+.gs-lk-row .rk { font: 500 var(--t-md)/1 var(--label); color: var(--dim); font-variant-numeric: tabular-nums; }
+.gs-lk-row .tg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 max(17px, calc(28 * var(--u)))/1.1 var(--display); letter-spacing: .04em; color: var(--ink); }
+.gs-lk-row .rd { text-align: right; font: 700 max(18px, calc(30 * var(--u)))/1 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.gs-lk-row .kl { text-align: right; font: 500 var(--t-md)/1 var(--label); color: var(--dim); font-variant-numeric: tabular-nums; }
+.gs-lk-row .dev { margin-left: .7em; font: 500 max(10px, calc(12 * var(--u)))/1 var(--label); font-style: normal; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); vertical-align: middle; }
+.gs-lk-thead { border-bottom: 1px solid var(--faint); padding-top: 0; }
+.gs-lk-row.gs-lk-thead > span { font: 500 var(--t-sm)/1 var(--label); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.gs-lk-list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; scrollbar-color: rgba(236, 230, 214, .3) transparent; }
+.gs-lk-list:focus-visible { outline: max(2px, calc(2 * var(--u))) solid var(--accent); outline-offset: 2px; }
+.gs-lk-list:empty { flex: 0 0 auto; }
+.gs-lk-row.me { background: rgba(var(--accent-rgb), .13); box-shadow: inset max(3px, calc(4 * var(--u))) 0 var(--accent); border-bottom-color: transparent; }
+.gs-lk-row.me .rk, .gs-lk-row.me .tg { color: var(--accent); }
+.gs-lk-pinned { border-top: max(2px, calc(2 * var(--u))) solid var(--faint); margin-top: calc(4 * var(--u)); padding-top: calc(4 * var(--u)); }
+.gs-lk-pinned[hidden] { display: none; }
+.gs-lk-state { display: flex; align-items: center; gap: calc(16 * var(--u)); min-height: 44px; padding: calc(12 * var(--u)) calc(10 * var(--u)); font: 400 var(--t-md)/1.3 var(--label); color: var(--dim); }
+.gs-lk-state[data-kind='ok'] { display: none; }
+.gs-lk-state[data-kind='error'] .tx { color: var(--lk-err); }
+.gs-lk-recover { justify-content: center; gap: calc(18 * var(--u)); padding: calc(30 * var(--u)) calc(34 * var(--u)); }
+.gs-lk-recover .gs-lk-input { flex: none; }
+.gs-lk-btns { display: flex; gap: calc(10 * var(--u)); flex-wrap: wrap; }
+
+/* ---------- touch ---------- */
+.gs-touch .gs-lk-btn { min-height: 44px; padding: 0 14px; font-size: 16px; }
+.gs-touch .gs-lk-btn.link { font-size: 12px; padding: 0; }
+.gs-touch .gs-lk-input, .gs-touch .gs-lk-code { min-height: 44px; font-size: 20px; padding: 0 10px; }
+.gs-touch .gs-lk-input.code, .gs-touch .gs-lk-code { font-size: 15px; letter-spacing: .1em; }
+.gs-touch .gs-lk-slot { width: 100%; min-width: 0; gap: 4px; }
+.gs-touch .gs-lk-eyebrow { font-size: 12px; letter-spacing: .14em; }
+.gs-touch .gs-lk-note { font-size: 12px; }
+.gs-touch .gs-lk-main { gap: 8px; min-height: 44px; }
+.gs-touch .gs-lk-form { gap: 8px; }
+.gs-touch .gs-lk-main .st { font-size: 20px; }
+.gs-touch .gs-lk-credit { font-size: 12px; line-height: 1.5; }
+
+/* end screen on a phone: Retry and Leaderboard side by side; share and credit under the numeral */
+.gs-touch .gs-endcol nav.gs-list { flex-direction: row; gap: 22px; margin-top: 6px; }
+.gs-touch .gs-endcol nav.gs-list .gs-row { width: auto; }
+.gs-touch .gs-endcol .gs-endslot { margin-bottom: 6px; }
+.gs-touch .gs-lk-endfoot { gap: 10px; margin-top: 12px; }
+
+/* title on a phone: room for the credit (and the Leaderboard row) under the menu */
+.gs-touch .gs-title .gs-lk-credit { margin-top: 10px; }
+.gs-touch .gs-title .gs-lk-credit .dot { display: none; }
+.gs-touch .gs-title .gs-lk-credit .src { display: table; }
+.gs-touch .gs-title .gs-list:has(> :nth-child(4)) { gap: 2px; margin-top: 10px; }
+.gs-touch .gs-title .gs-list:has(> :nth-child(4)) .gs-row { min-height: 44px; }
+@media (max-height: 430px) {
+  .gs-touch .gs-title .gs-exit { margin-bottom: 6px; }
+  .gs-touch .gs-title .gs-lk-credit { margin-top: 6px; line-height: 1.4; }
+  .gs-touch .gs-title:has(.gs-list > :nth-child(4)) .gs-wm { --wm-size: 26px; }
+}
+
+/* the Leaderboard screen on a phone: a side pane on the left, the table on the right */
+.gs-touch .gs-board .gs-col.gs-lk-boardcol { left: calc(var(--sl) + 16px); right: calc(var(--sr) + 16px); width: auto; min-width: 0; grid-template-columns: 224px minmax(0, 1fr); column-gap: 18px;
+  align-items: stretch; padding: calc(var(--st) + 10px) 0 calc(var(--sb) + 10px); }
+.gs-touch .gs-board .gs-h { font-size: 50px; }
+.gs-touch .gs-board .gs-head { margin-bottom: 0; }
+.gs-touch .gs-lk-side { gap: 6px; justify-content: center; }
+.gs-touch .gs-lk-seg { flex-wrap: nowrap; gap: 2px; justify-content: flex-start; }
+.gs-touch .gs-lk-seg .opt { min-width: 44px; padding: 0 7px; letter-spacing: .06em; }
+.gs-touch .gs-lk-me { font-size: 13px; }
+.gs-touch .gs-lk-side .gs-back .gs-row.small { margin-top: 0; }
+.gs-touch .gs-lk-mainpane { height: auto; min-height: 0; }
+.gs-touch .gs-lk-table, .gs-touch .gs-lk-recover { padding: 8px 12px 6px; }
+.gs-touch .gs-lk-row { grid-template-columns: 3.6em minmax(0, 1fr) 3.4em 3.8em; column-gap: 10px; padding: 7px 6px; }
+.gs-touch .gs-lk-row .rk, .gs-touch .gs-lk-row .kl { font-size: 13px; }
+.gs-touch .gs-lk-row .tg { font-size: 18px; }
+.gs-touch .gs-lk-row .rd { font-size: 19px; }
+.gs-touch .gs-lk-row.gs-lk-thead > span { font-size: 11px; letter-spacing: .14em; }
+.gs-touch .gs-lk-state { font-size: 13px; padding: 8px 6px; }
+.gs-touch .gs-lk-recover { gap: 10px; }
+@media (max-width: 719px) {
+  .gs-touch .gs-title .gs-lk-credit { font-size: 11px; letter-spacing: 0; }
+  /* the end screen's stats need the wider half on a narrow phone */
+  .gs-touch .gs-dead .gs-col.gs-endcol { grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); column-gap: 18px; }
+  .gs-touch .gs-endcol .gs-endrows { column-gap: 14px; }
+  .gs-touch .gs-endcol .gs-stat .l { font-size: 15px; }
+  .gs-touch .gs-endcol .gs-stat .v { font-size: 18px; }
+  .gs-touch .gs-board .gs-col.gs-lk-boardcol { grid-template-columns: 208px minmax(0, 1fr); column-gap: 14px; }
+  .gs-touch .gs-lk-row .dev { display: none; }
+}

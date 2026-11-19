@@ -1,0 +1,19 @@
+// Layout of the DevWorld panel: terrain, seed, buildings, actions, the size
+// of the world.
+
+.devworld-panel {
+  min-width: 240px;
+}
+
+.badge {
+  align-self: flex-start;
+}
+
+.seed-row {
+  display: flex;
+  gap: 6px;
+}
+
+.seed-input {
+  flex: 1;
+}

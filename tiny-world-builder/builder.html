@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Builder profile — see a builder's published worlds and earned achievements in Tiny World Builder." />
+<title>Builder Profile - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<style>
+/* ---- builder profile page ---- */
+.builder-section {
+  width: min(1100px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 8px 0 80px;
+}
+
+/* ---- header band ---- */
+.builder-header-band {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 2px rgba(20, 30, 50, 0.05),
+    0 18px 44px -16px rgba(40, 50, 80, 0.20);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  padding: 28px 32px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.builder-avatar {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #2d7ef5, #7fd0ff);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 -6px 12px rgba(17, 51, 128, 0.14);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 850 28px/1 var(--body-font);
+  letter-spacing: 0.04em;
+}
+
+.builder-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-header-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.builder-display-name {
+  font-family: var(--display-font);
+  font-size: 28px;
+  font-weight: 700;
+  color: #111b45;
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.builder-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c9a227 0%, #f0c840 100%);
+  color: #5a3c00;
+  font: 700 13px/1 var(--body-font);
+  box-shadow: 0 2px 8px -2px rgba(180, 130, 20, 0.35);
+}
+
+.builder-rank-badge svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.builder-worlds-count {
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.builder-worlds-count strong {
+  font-family: var(--display-font);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+/* ---- badges section ---- */
+.builder-badges-section {
+  margin-bottom: 36px;
+}
+
+.builder-section-title {
+  font-family: var(--display-font);
+  font-size: 20px;
+  font-weight: 700;
+  color: #111b45;
+  margin: 0 0 16px;
+}
+
+.builder-badges-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.builder-badge-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  padding: 10px 16px 10px 10px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 8px 24px -10px rgba(40, 50, 80, 0.18);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+}
+
+.builder-badge-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.builder-badge-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.builder-badge-name {
+  font-family: var(--display-font);
+  font-size: 14px;
+  font-weight: 700;
+  color: #111b45;
+  white-space: nowrap;
+}
+
+.builder-no-badges {
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- worlds grid ---- */
+.builder-worlds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.builder-world-card {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 2px rgba(20, 30, 50, 0.05),
+    0 18px 44px -16px rgba(40, 50, 80, 0.24);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.builder-world-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 2px 4px rgba(20, 30, 50, 0.07),
+    0 28px 56px -16px rgba(40, 50, 80, 0.30);
+}
+
+.builder-world-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #070911;
+}
+
+.builder-world-card-body {
+  padding: 16px 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.builder-world-name {
+  font-family: var(--display-font);
+  font-size: 17px;
+  font-weight: 700;
+  color: #111b45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.builder-world-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 13px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 12px -6px rgba(22, 76, 170, 0.45);
+  transition: filter 0.12s;
+  white-space: nowrap;
+}
+
+.builder-world-link:hover { filter: brightness(1.12); }
+
+.builder-world-link svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- empty / not-found states ---- */
+.builder-not-found,
+.builder-worlds-empty {
+  padding: 56px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.60);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.86) inset,
+    0 16px 40px -18px rgba(40, 50, 80, 0.20);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+.builder-not-found-icon,
+.builder-worlds-empty-icon {
+  display: block;
+  margin: 0 auto 20px;
+  width: 48px;
+  height: 48px;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.builder-not-found h2,
+.builder-worlds-empty h2 {
+  margin: 0 0 10px;
+  font-family: var(--display-font);
+  font-size: 26px;
+  color: #111b45;
+}
+
+.builder-not-found p,
+.builder-worlds-empty p {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.55;
+}
+
+.builder-not-found-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 15px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+}
+
+.builder-not-found-action:hover { filter: brightness(1.1); }
+
+.builder-not-found-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 600px) {
+  .builder-header-band {
+    padding: 20px;
+    gap: 16px;
+  }
+  .builder-display-name {
+    font-size: 22px;
+  }
+  .builder-worlds-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/badges">Badges</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Builder Profile</h1>
+        <p>Published worlds and earned achievements for this builder.</p>
+      </div>
+    </section>
+
+    <section class="builder-section" aria-label="Builder profile" id="builder-root">
+      <!-- populated by script -->
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script src="scripts/achievements.js"></script>
+  <script src="scripts/world-preview.js" defer></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var root = document.getElementById('builder-root');
+    if (!root) return;
+
+    function initialLetter(name) {
+      var m = String(name || '').match(/[a-zA-Z0-9]/);
+      return m ? m[0].toUpperCase() : '?';
+    }
+
+    function worldHref(slug) {
+      var s = String(slug || '').trim();
+      if (!s) return '/tiny-world-builder';
+      return '/tiny-world-builder?world=' + encodeURIComponent(s);
+    }
+
+    function showNotFound(username) {
+      root.textContent = '';
+      var div = document.createElement('div');
+      div.className = 'builder-not-found';
+
+      // Static SVG icon — not user data
+      div.innerHTML =
+        '<svg class="builder-not-found-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>' +
+        '</svg>';
+
+      var h2 = document.createElement('h2');
+      h2.textContent = 'Builder not found';
+      div.appendChild(h2);
+
+      var p = document.createElement('p');
+      if (username) {
+        p.textContent = 'No builder with username "' + username + '" was found.';
+      } else {
+        p.textContent = 'No username provided. Try visiting via the leaderboard.';
+      }
+      div.appendChild(p);
+
+      var a = document.createElement('a');
+      a.className = 'builder-not-found-action';
+      a.href = '/leaderboard';
+      // Static markup only
+      a.innerHTML = '<span>View leaderboard</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+      div.appendChild(a);
+
+      root.appendChild(div);
+    }
+
+    function renderBadges(worldsPublished, rank, soldResources) {
+      var section = document.createElement('div');
+      section.className = 'builder-badges-section';
+
+      var title = document.createElement('h2');
+      title.className = 'builder-section-title';
+      title.textContent = 'Earned Achievements';
+      section.appendChild(title);
+
+      var achievements = window.TinyWorldAchievements;
+      if (!achievements) {
+        var note = document.createElement('p');
+        note.className = 'builder-no-badges';
+        note.textContent = 'Achievements unavailable.';
+        section.appendChild(note);
+        return section;
+      }
+
+      var earnedIds = achievements.earnedBadges(worldsPublished, rank, { soldResources: !!soldResources });
+      if (!earnedIds || !earnedIds.length) {
+        var noNote = document.createElement('p');
+        noNote.className = 'builder-no-badges';
+        noNote.textContent = 'No badges earned yet.';
+        section.appendChild(noNote);
+        return section;
+      }
+
+      // Build a lookup map from the catalog
+      var catalogMap = {};
+      var catalog = achievements.catalog;
+      for (var i = 0; i < catalog.length; i++) {
+        catalogMap[catalog[i].id] = catalog[i];
+      }
+
+      var grid = document.createElement('div');
+      grid.className = 'builder-badges-grid';
+
+      for (var j = 0; j < earnedIds.length; j++) {
+        var badge = catalogMap[earnedIds[j]];
+        if (!badge) continue;
+
+        var pill = document.createElement('div');
+        pill.className = 'builder-badge-pill';
+
+        // Badge icon container — SVG string is developer-authored static markup
+        var iconWrap = document.createElement('div');
+        iconWrap.className = 'builder-badge-icon';
+        iconWrap.innerHTML = badge.svg;
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'builder-badge-name';
+        nameEl.textContent = badge.name; // static catalog string, safe
+
+        pill.appendChild(iconWrap);
+        pill.appendChild(nameEl);
+        grid.appendChild(pill);
+      }
+
+      section.appendChild(grid);
+      return section;
+    }
+
+    function renderWorlds(worlds) {
+      var section = document.createElement('div');
+
+      var title = document.createElement('h2');
+      title.className = 'builder-section-title';
+      title.textContent = 'Published Worlds';
+      section.appendChild(title);
+
+      if (!worlds || !worlds.length) {
+        var empty = document.createElement('div');
+        empty.className = 'builder-worlds-empty';
+        empty.innerHTML =
+          '<svg class="builder-worlds-empty-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' +
+          '<polyline points="9 22 9 12 15 12 15 22"/>' +
+          '</svg>';
+
+        var emptyH2 = document.createElement('h2');
+        emptyH2.textContent = 'No published worlds yet';
+        empty.appendChild(emptyH2);
+
+        var emptyP = document.createElement('p');
+        emptyP.textContent = 'This builder has not published any worlds yet.';
+        empty.appendChild(emptyP);
+
+        section.appendChild(empty);
+        return section;
+      }
+
+      var grid = document.createElement('div');
+      grid.className = 'builder-worlds-grid';
+
+      for (var i = 0; i < worlds.length; i++) {
+        var w = worlds[i];
+        var card = document.createElement('article');
+        card.className = 'builder-world-card';
+
+        var cnv = document.createElement('canvas');
+        cnv.className = 'builder-world-canvas';
+        cnv.setAttribute('aria-hidden', 'true');
+        // Explicit dimensions so renderPreview works synchronously without layout
+        cnv.width = 560;
+        cnv.height = 350;
+
+        var cardBody = document.createElement('div');
+        cardBody.className = 'builder-world-card-body';
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'builder-world-name';
+        nameEl.textContent = String(w.name || w.slug || 'World'); // textContent — XSS-safe
+
+        var link = document.createElement('a');
+        link.className = 'builder-world-link';
+        link.href = worldHref(w.slug); // encodeURIComponent applied in worldHref
+        // Static markup — not user data
+        link.innerHTML = 'Open <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+        link.setAttribute('aria-label', 'Open world ' + nameEl.textContent);
+
+        cardBody.appendChild(nameEl);
+        cardBody.appendChild(link);
+        card.appendChild(cnv);
+        card.appendChild(cardBody);
+        grid.appendChild(card);
+
+        // Render synchronously — canvas has explicit fallback dimensions (560x350)
+        // so renderPreview does not need layout/clientWidth. Synchronous draw also
+        // works when the tab is in the background (rAF is throttled there).
+        try {
+          if (window.TinyWorldPreview && w.preview) {
+            window.TinyWorldPreview.renderPreview(cnv, w.preview);
+          }
+        } catch (_) {}
+      }
+
+      section.appendChild(grid);
+      return section;
+    }
+
+    function render(data) {
+      root.textContent = '';
+
+      // --- Header band ---
+      var band = document.createElement('div');
+      band.className = 'builder-header-band';
+
+      var avatarDiv = document.createElement('div');
+      avatarDiv.className = 'builder-avatar';
+      avatarDiv.setAttribute('aria-hidden', 'true');
+
+      if (data.image) {
+        var img = document.createElement('img');
+        img.src = data.image;              // URL — setAttribute path
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        img.onerror = function () { this.style.display = 'none'; };
+        avatarDiv.appendChild(img);
+      } else {
+        // textContent — XSS-safe initial letter
+        avatarDiv.textContent = initialLetter(data.displayName || data.username);
+      }
+
+      var headerInfo = document.createElement('div');
+      headerInfo.className = 'builder-header-info';
+
+      var nameH2 = document.createElement('h2');  // semantic heading for the profile name
+      nameH2.className = 'builder-display-name';
+      nameH2.textContent = String(data.displayName || data.username || 'Builder'); // textContent — XSS-safe
+
+      var meta = document.createElement('div');
+      meta.className = 'builder-meta';
+
+      if (data.rank != null) {
+        var rankBadge = document.createElement('span');
+        rankBadge.className = 'builder-rank-badge';
+        // Trophy icon — static SVG markup
+        rankBadge.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>' +
+          '<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>' +
+          '<path d="M4 22h16"/>' +
+          '<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>' +
+          '<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>' +
+          '<path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>';
+        var rankText = document.createTextNode('Rank #' + Number(data.rank) + ' builder');
+        rankBadge.appendChild(rankText);
+        meta.appendChild(rankBadge);
+      }
+
+      var worldsCount = document.createElement('span');
+      worldsCount.className = 'builder-worlds-count';
+      var countStrong = document.createElement('strong');
+      countStrong.textContent = String(Number(data.worldsPublished));
+      worldsCount.appendChild(countStrong);
+      worldsCount.appendChild(document.createTextNode(
+        Number(data.worldsPublished) === 1 ? 'world published' : 'worlds published'
+      ));
+      meta.appendChild(worldsCount);
+
+      headerInfo.appendChild(nameH2);
+      headerInfo.appendChild(meta);
+
+      band.appendChild(avatarDiv);
+      band.appendChild(headerInfo);
+      root.appendChild(band);
+
+      // --- Badges ---
+      root.appendChild(renderBadges(data.worldsPublished, data.rank, data.soldResources));
+
+      // --- Worlds ---
+      root.appendChild(renderWorlds(data.worlds));
+    }
+
+    function load() {
+      var params = new URLSearchParams(window.location.search);
+      var username = (params.get('u') || '').trim();
+
+      if (!username) {
+        showNotFound('');
+        return;
+      }
+
+      // Update page title to include the username while loading
+      document.title = username + ' - Builder Profile - Tiny World Builder';
+
+      fetch('/api/builder?username=' + encodeURIComponent(username), {
+        headers: { Accept: 'application/json' },
+      })
+        .then(function (res) {
+          if (!res) return null;
+          if (res.status === 404) return null;
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data || data.error) {
+            showNotFound(username);
+            return;
+          }
+          // Update the title with the real display name
+          var displayName = String(data.displayName || data.username || username);
+          document.title = displayName + ' - Builder Profile - Tiny World Builder';
+          render(data);
+        })
+        .catch(function () {
+          showNotFound(username);
+        });
+    }
+
+    // Expose as test seam (mirrors window._leaderboardLoad / window._featuredLoad pattern)
+    window._builderLoad = load;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  })();
+  </script>
+</body>
+</html>

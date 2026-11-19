@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/marcofugaro/three-advanced-techniques",
+  "commit": "c6e4175baeb5daa8c66d2991d9991a31574dc273",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 61,
+  "bytes": 15770923
+}

@@ -1,0 +1,425 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createPlayerBattleActions } from './playerBattleActions.ts';
+import { createBus } from './stateCore.ts';
+import { AIR_STRIKE_KINDS, couchRulesetFor, matchRulesetFor, rulesetUnlimitedFor } from '../sim/matchRuleset.ts';
+import { AIR_STRIKE_BITS } from '../sim/playerActions.ts';
+
+function createInput() {
+  const handlers = new Map();
+  return {
+    onAction(action, listener) {
+      let group = handlers.get(action);
+      if (!group) handlers.set(action, group = new Set());
+      group.add(listener);
+      return () => group.delete(listener);
+    },
+    // (the code that pressed it, as input.ts passes: a key's, or Pad<n> for a pad's button)
+    press(action, code = 'KeyX') {
+      for (const listener of handlers.get(action) || []) listener(code);
+    },
+  };
+}
+
+const events = [];
+const bus = createBus((event, payload) => events.push({ event, payload }));
+const input = createInput();
+const localCalls = [];
+const networkCalls = [];
+let settingsOpen = false;
+let networkActive = false;
+const spec = {
+  gun: {
+    shells: [
+      { name: 'Sabot', type: 'APFSDS', dmg: 500, pen100Mm: 640 },
+      { name: 'Burst', type: 'HE', dmg: 720, pen100Mm: 68, count: 3 },
+      { name: 'Novel', type: 'HESH', dmg: 610, pen100Mm: 145 },
+    ],
+  },
+};
+const player = {
+  id: 'player-1',
+  spec,
+  state: {
+    overturned: true,
+    grounded: true,
+    _body: { tumbling: true, autoRighting: false },
+  },
+  combat: {
+    destroyed: false,
+    shellSlot: 0,
+    ammo: [24, 3, 20],
+    ammoCapacity: [24, 3, 20],
+    magazine: null,
+    crew: { commander: true, driver: true },
+    fire: { burning: false, ticksLeft: 0, tickTimer: 0 },
+  },
+  input: { shellSlot: 0 },
+  specialAction: null,
+};
+const game = { phase: 'garage', timeS: 10, player };
+const rules = {
+  selectShell(combat, slot, selectedSpec) {
+    const clamped = Math.max(0, Math.min(selectedSpec.gun.shells.length - 1, slot | 0));
+    if ((combat.ammo[clamped] || 0) <= 0) return false;
+    localCalls.push(`shell:${clamped}`);
+    combat.shellSlot = clamped;
+    return true;
+  },
+  repairAllModules(combat) {
+    if (!combat.damagedModule) return [];
+    const repaired = combat.damagedModule;
+    combat.damagedModule = null;
+    return [repaired];
+  },
+  magazineReloadDenialReason(combat) { return combat.magazineReason || null; },
+  startMagazineReload() { localCalls.push('reload'); return true; },
+  activateSpecialAction(entity) {
+    localCalls.push('special');
+    if (entity.spec.guidedAction) {
+      const action = entity.specialAction;
+      if (entity.combat.shellSlot === action.missileSlot) {
+        entity.combat.shellSlot = action.previousShellSlot;
+        entity.input.shellSlot = action.previousShellSlot;
+        return {
+          ok: true, kind: 'guided_missile', active: false, slot: action.previousShellSlot,
+        };
+      }
+      if ((entity.combat.ammo[action.missileSlot] || 0) <= 0) {
+        return {
+          ok: false,
+          kind: 'guided_missile',
+          reason: 'AMMO_EMPTY',
+          slot: action.missileSlot,
+        };
+      }
+      action.previousShellSlot = entity.combat.shellSlot;
+      entity.combat.shellSlot = action.missileSlot;
+      entity.input.shellSlot = action.missileSlot;
+      return { ok: true, kind: 'guided_missile', active: true, slot: action.missileSlot };
+    }
+    return { ok: true, action: 'siege' };
+  },
+  guidedMissileSlot() { return 1; },
+  specialActionKind(actionSpec) {
+    return actionSpec.guidedAction ? 'guided_missile' : 'none';
+  },
+  hasAmmunition(combat, slot) { return (combat.ammo[slot] || 0) > 0; },
+  shellAmmunitionCapacity(shell) {
+    if (shell.count != null) return shell.count;
+    return ({ APFSDS: 24, HE: 12 }[shell.type] ?? 20);
+  },
+  rulesetUnlimitedFor,
+  hasConsumableRule(slot) { return slot >= 0 && slot < 3; },
+  // the page battle's item use (game/soloConsumables.ts, covered by sim/consumableRules.selftest): the default trio here
+  useSoloConsumable(entity, eventBus, slot, timeS) {
+    const item = ['repair', 'first_aid', 'extinguisher'][slot];
+    const readyAt = (entity.consumables ??= { readyAt: [0, 0, 0] }).readyAt;
+    if (readyAt[slot] > timeS) return { ok: false, item, reason: 'COOLDOWN', remainingS: readyAt[slot] - timeS };
+    let used = false;
+    if (slot === 0) {
+      for (const module of this.repairAllModules(entity.combat)) {
+        eventBus.emit('module:state', { id: entity.id, module, state: 'ok' });
+        used = true;
+      }
+    } else if (slot === 1) {
+      for (const name of Object.keys(entity.combat.crew)) {
+        if (entity.combat.crew[name] === false) { entity.combat.crew[name] = true; used = true; }
+      }
+    } else if (entity.combat.fire.burning) {
+      Object.assign(entity.combat.fire, { burning: false, ticksLeft: 0, tickTimer: 0 });
+      eventBus.emit('tank:fire', { id: entity.id, burning: false });
+      used = true;
+    }
+    if (!used) return { ok: false, item, reason: 'NOTHING' };
+    readyAt[slot] = timeS + 35;
+    return { ok: true, item, cooldownS: 35, readyAt: readyAt[slot], charges: null };
+  },
+  requestTankSelfRight(state) {
+    if (!state.overturned || state._body.autoRighting) return false;
+    state._body.autoRighting = true;
+    localCalls.push('selfRight');
+    return true;
+  },
+  requestTankJump(state, jumpMps) {
+    if (!(jumpMps > 0) || state.overturned) return false;
+    localCalls.push('jump');
+    return true;
+  },
+};
+
+const actions = createPlayerBattleActions({
+  game,
+  bus,
+  input,
+  rules,
+  strikes: { kinds: AIR_STRIKE_KINDS, bit: (kind) => AIR_STRIKE_BITS[kind], blocker: () => null },
+  isSettingsOpen: () => settingsOpen,
+  network: {
+    isActive: () => networkActive,
+    queueConsumable: (slot) => networkCalls.push(`consumable:${slot}`),
+    queueAction: (action) => networkCalls.push(action),
+  },
+});
+
+assert.deepEqual(actions.setTank(spec), [
+  { name: 'Sabot', type: 'APFSDS', dmg: 500, penLabel: '640 mm', count: 24 },
+  { name: 'Burst', type: 'HE', dmg: 720, penLabel: '68 mm', count: 3 },
+  { name: 'Novel', type: 'HESH', dmg: 610, penLabel: '145 mm', count: 20 },
+]);
+assert.equal(actions.hasAmmo(0), true);
+input.press('shell2');
+assert.deepEqual(localCalls, [], 'garage action edges are inert');
+
+game.phase = 'battle';
+input.press('shell2');
+assert.deepEqual(localCalls, ['shell:1']);
+assert.equal(player.input.shellSlot, 1);
+for (let shot = 0; shot < 4; shot++) {
+  player.combat.ammo[1] = Math.max(0, player.combat.ammo[1] - 1);
+  bus.emit('shell:fired', { isPlayer: true });
+}
+assert.equal(actions.shellCards[1].count, 0, 'ammo reaches zero but never becomes negative');
+assert.equal(actions.hasAmmo(1), false);
+
+player.combat.shellSlot = 0;
+player.input.shellSlot = 0;
+input.press('shell2');
+assert.equal(player.combat.shellSlot, 0, 'an empty numbered slot cannot become selected');
+assert.ok(events.some(({ event, payload }) =>
+  event === 'ui:ammoSelectionDenied' && payload.slot === 1 && payload.reason === 'AMMO_EMPTY'),
+'empty numbered ammunition publishes a stable UI denial');
+
+player.combat.magazine = { capacity: 3 };
+input.press('shell1');
+assert.equal(localCalls.at(-1), 'shell:0', 'reselecting ammo never requests a magazine reload');
+assert.ok(!events.some(({ event }) => event === 'ui:magazineReloadStarted'));
+input.press('reloadMagazine');
+assert.equal(localCalls.at(-1), 'reload', 'dedicated reload control still reloads');
+assert.ok(events.some(({ event }) => event === 'ui:magazineReloadStarted'));
+player.combat.magazineReason = 'MAGAZINE_RELOADING';
+input.press('reloadMagazine');
+assert.ok(events.some(({ event, payload }) =>
+  event === 'ui:magazineReloadDenied' && payload.reason === 'MAGAZINE_RELOADING'));
+player.combat.magazineReason = null;
+player.combat.magazine = null;
+
+input.press('shell1');
+assert.equal(player.combat.shellSlot, 0, 'numbered ammunition remains selectable after ATGM use');
+
+player.combat.ammo[1] = 3;
+const thirdShell = spec.gun.shells.pop();
+input.press('shell3');
+assert.equal(player.combat.shellSlot, 1, 'two-shell loadouts clamp an unavailable third slot');
+assert.equal(player.input.shellSlot, 1,
+  'input publishes the clamped slot instead of becoming stuck on empty slot three');
+spec.gun.shells.push(thirdShell);
+player.combat.shellSlot = 0;
+player.input.shellSlot = 0;
+
+player.combat.damagedModule = 'engine';
+input.press('consumable1');
+assert.equal(player.combat.damagedModule, null);
+assert(events.some(({ event, payload }) =>
+  event === 'module:state' && payload.module === 'engine' && payload.state === 'ok'));
+input.press('consumable1');
+assert(events.some(({ event, payload }) =>
+  event === 'ui:consumableDenied' && payload.reason === 'COOLDOWN'));
+
+player.combat.crew.driver = false;
+input.press('consumable2');
+assert.equal(player.combat.crew.driver, true);
+player.combat.fire = { burning: true, ticksLeft: 4, tickTimer: 0.2 };
+input.press('consumable3');
+assert.deepEqual(player.combat.fire, { burning: false, ticksLeft: 0, tickTimer: 0 });
+
+// (owner 2026-10-28: "why is atgm labeled Q? E does it for me": E is the suspension's alone; a hull without one answers
+// only the pad's LB, its one system button)
+const callsBeforeE = localCalls.length;
+input.press('specialAction', 'KeyE');
+assert.equal(localCalls.length, callsBeforeE, 'E runs nothing on a hull without suspension');
+input.press('specialAction', 'Pad4');
+assert.equal(localCalls.at(-1), 'special', 'the pad\'s LB runs the hull\'s own system');
+assert(events.some(({ event, payload }) =>
+  event === 'ui:specialActionResult' && payload.action === 'siege'));
+input.press('selfRight');
+assert.equal(localCalls.at(-1), 'selfRight');
+assert(events.some(({ event }) => event === 'tank:selfRight'));
+// owner 2026-09-16 (Turbo Ball): the same key jumps an upright hull when the ruleset stamps a jump launch
+const overturnedBefore = player.state.overturned;
+player.state.overturned = false;
+input.press('selfRight');
+assert(localCalls.at(-1) !== 'jump', 'no jump without a stamped launch');
+player.modeJumpMps = 9;
+input.press('selfRight');
+assert.equal(localCalls.at(-1), 'jump', 'an upright hull jumps in a jumping ruleset');
+assert(events.some(({ event }) => event === 'tank:jump'));
+player.modeJumpMps = null;
+player.state.overturned = overturnedBefore;
+
+networkActive = true;
+player.combat.damagedModule = 'trackL';
+bus.emit('ui:consumable', { slot: 0 });
+bus.emit('ui:magazineReload', {});
+bus.emit('ui:specialAction', { pad: true });
+bus.emit('ui:selfRight', {});
+assert.deepEqual(networkCalls, ['consumable:0', 'reloadMagazine', 'specialAction', 'selfRight']);
+assert.equal(player.combat.damagedModule, 'trackL', 'network authority owns state mutation');
+
+spec.guidedAction = true;
+spec.gun.shells[1].guided = true;
+player.combat.ammo[1] = 3;
+assert.equal(actions.setTank(spec)[1].type, 'ATGM',
+  'guided ammunition is presented as an ATGM instead of its HEAT warhead class');
+player.specialAction = {
+  kind: 'guided_missile', missileSlot: 1, previousShellSlot: 0, active: false,
+};
+// (E on a launcher without suspension: the ATGM is Q's, the tray's cap, never a hidden second key)
+input.press('specialAction', 'KeyE');
+assert.equal(player.input.shellSlot, 0, 'E never selects the ATGM on a launcher without suspension');
+bus.emit('ui:specialAction', {});
+assert.equal(player.input.shellSlot, 0, 'nor does the special action without the pad\'s press');
+bus.emit('ui:specialAction', { pad: true });
+assert.equal(player.input.shellSlot, 1,
+  'the pad\'s LB selects the guided ammunition through the ordinary shell-slot state');
+assert.deepEqual(networkCalls, ['consumable:0', 'reloadMagazine', 'specialAction', 'selfRight'],
+  'the guided LB does not enqueue a separate network action mode');
+assert(events.some(({ event, payload }) =>
+  event === 'ui:specialActionResult' && payload.kind === 'guided_missile' &&
+    payload.slot === 1 && payload.active === true));
+player.combat.shellSlot = 0;
+bus.emit('ui:specialAction', { pad: true });
+assert.equal(player.input.shellSlot, 0,
+  'repeating LB restores conventional ammo even while authority still reports the old slot');
+assert(events.some(({ event, payload }) =>
+  event === 'ui:specialActionResult' && payload.kind === 'guided_missile' &&
+    payload.slot === 0 && payload.active === false));
+
+input.press('shell3');
+assert.equal(player.input.shellSlot, 2);
+input.press('shell2');
+assert.equal(player.input.shellSlot, 1, 'key 2 directly selects the ATGM');
+assert.equal(player.specialAction.previousShellSlot, 2,
+  'direct ATGM selection remembers the conventional shell it replaced');
+input.press('specialAction', 'Pad4');
+assert.equal(player.input.shellSlot, 2,
+  'LB deselects a key-2-selected ATGM and restores that remembered shell');
+player.combat.ammo[1] = 0;
+player.combat.shellSlot = 0;
+player.input.shellSlot = 0;
+input.press('specialAction', 'Pad4');
+assert.equal(player.input.shellSlot, 0, 'an exhausted missile channel cannot become selected');
+assert.ok(events.some(({ event, payload }) =>
+  event === 'ui:specialActionDenied' && payload.reason === 'AMMO_EMPTY' && payload.slot === 1),
+'the ATGM shortcut publishes an empty-missile denial for HUD feedback');
+spec.guidedAction = false;
+spec.gun.shells[1].guided = false;
+
+settingsOpen = true;
+input.press('reloadMagazine');
+assert.deepEqual(networkCalls, ['consumable:0', 'reloadMagazine', 'specialAction', 'selfRight']);
+settingsOpen = false;
+actions.resetConsumables();
+networkActive = false;
+player.combat.damagedModule = 'trackL';
+input.press('consumable1');
+assert.equal(player.combat.damagedModule, null, 'round reset clears local cooldowns');
+
+input.press('lights');input.press('lights');
+assert.equal(player.input.auxiliaryBits,512,'two delayed lamp toggles restore off');
+input.press('lights');
+assert.equal(player.input.auxiliaryBits,128,'last requested lamp state wins before a tick');
+player.input.auxiliaryBits=0;
+input.press('smoke');input.press('roofGun');
+assert.equal(player.input.auxiliaryBits,64|256,'keyboard actions reach the same authoritative input lane');
+player.input.auxiliaryBits=0;
+settingsOpen=true;input.press('smoke');input.press('roofGun');
+assert.equal(player.input.auxiliaryBits,0,'rebinding in settings cannot launch a system');
+settingsOpen=false;
+networkActive=true;input.press('smoke');input.press('roofGun');
+assert.deepEqual(networkCalls.slice(-2),['smoke','roofGun'],'keyboard actions reach multiplayer authority');
+networkActive=false;
+const viewEvents=()=>events.filter(e=>e.event==='ui:aerialVision').length;
+const beforeViews=viewEvents(),beforeNetwork=networkCalls.length;
+input.press('aerialVision');assert.equal(viewEvents(),beforeViews+1,'sensor shortcut reaches presentation');
+assert.equal(networkCalls.length,beforeNetwork,'sensor choice is local presentation');
+settingsOpen=true;input.press('aerialVision');assert.equal(viewEvents(),beforeViews+1,'settings capture cannot cycle the sensor');
+settingsOpen=false;
+
+// couch mode (docs/COUCH-MODE.md): seat 1's phone drives the tank the battle names its player, through the input stage;
+// the shared screen's keys and HUD buttons act on no tank, so a press never lands twice or on the wrong seat. (round 8 Y1
+// s2-01) Only while that battle runs: a couch battle plays the couch rules (setupBattle couchRulesetFor), and a session
+// left under another ruleset (a network round's) blocks nothing (stateCore.ts couchSeatsActive)
+{
+  game.ruleset = couchRulesetFor(matchRulesetFor('standard'));
+  game.couch = { sides: 'together', seats: [{ seat: 1, entity: player }] };
+  player.input.auxiliaryBits = 0;
+  const routed = () => events.filter((e) => e.event.startsWith('ui:')).length;
+  const beforeRouted = routed(), beforeLocal = localCalls.length, beforeNetwork = networkCalls.length;
+  const slot = player.combat.shellSlot;
+  for (const action of ['shell2', 'consumable1', 'reloadMagazine', 'specialAction', 'smoke', 'roofGun', 'lights', 'selfRight', 'aerialVision']) input.press(action);
+  assert.equal(routed(), beforeRouted, 'no key routes an action in a couch battle');
+  bus.emit('ui:shellSelect', { slot: 1 });
+  bus.emit('ui:consumable', { slot: 0 });
+  bus.emit('ui:magazineReload', {});
+  assert.deepEqual([localCalls.length, networkCalls.length, player.combat.shellSlot, player.input.auxiliaryBits],
+    [beforeLocal, beforeNetwork, slot, 0], 'a HUD button acts on no seat\'s tank');
+  game.ruleset = matchRulesetFor('standard');
+  input.press('smoke');
+  assert.equal(player.input.auxiliaryBits, 64, 'a session left under another battle\'s ruleset blocks no key');
+  player.input.auxiliaryBits = 0;
+  game.ruleset = undefined;
+  game.couch = null;
+}
+actions.dispose();
+const eventCount = events.length;
+input.press('shell1');
+bus.emit('ui:specialAction', {});
+assert.equal(events.length, eventCount + 1, 'disposed owner contributes no new routed events');
+
+// round 32 (owner 2026-09-21, Turbo Ball "fix this completely"): unlimited rounds mark every shell card so the HUD
+// prints ∞; finite loadouts carry no mark at all (the deep-equal pins above stay exact)
+game.ruleset = { consumables: false, ammo: 'unlimited' };
+assert.ok(actions.setTank(spec).every((card) => card.unlimited === true), 'unlimited rounds mark every shell card');
+game.ruleset = null;
+assert.ok(actions.setTank(spec).every((card) => !('unlimited' in card)), 'finite loadouts carry no unlimited mark');
+
+// critic r3 (AC-130): the mark is per entity. Only the gunship refills (sim/matchRuleset rulesetUnlimitedFor, the read
+// both fire paths use), so an escort's cards carry no ∞ and show its real count; a seat that is no longer the gunship
+// loses the mark on the next sync, and every other unlimited mode marks every seat.
+game.ruleset = matchRulesetFor('ac130');
+assert.equal(game.ruleset.ammo, 'unlimited', 'the AC-130 table plays unlimited rounds');
+assert.ok(actions.setTank(spec).every((card) => !('unlimited' in card)), 'an AC-130 escort\'s cards carry no ∞');
+player.combat.ammo[0] = 0;
+actions.hasAmmo(0);
+assert.deepEqual([actions.shellCards[0].count, 'unlimited' in actions.shellCards[0]], [0, false],
+  'the escort reads its real empty count');
+player.aerial = { kind: 'gunship' };
+assert.ok(actions.setTank(spec).every((card) => card.unlimited === true), 'the gunship\'s cards carry ∞');
+player.aerial = null;
+actions.hasAmmo(0);
+assert.ok(actions.shellCards.every((card) => !('unlimited' in card)), 'a sync drops the mark the seat no longer has');
+for (const mode of ['juggernaut', 'infected', 'endless_horde']) {
+  game.ruleset = matchRulesetFor(mode);
+  assert.ok(actions.setTank(spec).every((card) => card.unlimited === true), `${mode}: every seat carries ∞`);
+}
+game.ruleset = null;
+
+// critic r4 (D2): the shipped composition hands these actions that same per-entity read. main.ts passes the battle
+// client access's function (battleClientAccess.selftest: the access hands out rulesetUnlimitedFor itself, and
+// app/combatAimComposition returns that access unwrapped); a mode-wide stand-in here would mark an escort's cards ∞.
+{
+  const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+  const composition = readFileSync(new URL('../app/combatAimComposition.ts', import.meta.url), 'utf8');
+  const start = main.indexOf('playerBattleActions = createPlayerBattleActions({');
+  assert.ok(start >= 0, 'main.ts composes the player battle actions');
+  const call = main.slice(start, main.indexOf('\n});', start));
+  assert.deepEqual(call.match(/\brulesetUnlimitedFor\b[^,\n]*/g), ['rulesetUnlimitedFor: battleClientAccess.rulesetUnlimitedFor'],
+    'main.ts passes battleClientAccess.rulesetUnlimitedFor, and nothing else, as the actions\' unlimited read');
+  assert.match(main, /const \{\s*battleClient: battleClientAccess,[^}]*\} = createCombatAimComposition\(/,
+    'main.ts takes its battle client access from the combat aim composition');
+  assert.match(composition, /const battleClient = createBattleClientAccess\(/);
+  assert.match(composition, /return \{ battleClient, rig, targetVisible \};/, 'the composition returns the access as built');
+}
+
+console.log('playerBattleActions.selftest: ammo, cooldowns, local rules, and network routing passed');

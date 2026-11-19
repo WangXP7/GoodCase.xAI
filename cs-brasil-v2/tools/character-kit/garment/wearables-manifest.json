@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "cs-wearables/1",
+  "status": "draft",
+  "runtimeEnabled": false,
+  "certificationPolicy": "deny-unlisted-body-profiles",
+  "clippingPolicy": {
+    "default": "human-certification-required",
+    "requiredMotionReview": [
+      "idle",
+      "walk",
+      "run",
+      "crouch",
+      "jump",
+      "aim",
+      "shoot",
+      "reload",
+      "death"
+    ],
+    "hideBodyRegions": "explicit-certified-mask-only",
+    "unknownResult": "not-compatible"
+  },
+  "slots": {
+    "back": {
+      "allowedModes": ["rigid"],
+      "layer": 30,
+      "regions": ["back"],
+      "conflicts": [],
+      "socketRole": "chest"
+    },
+    "head": {
+      "allowedModes": ["rigid"],
+      "layer": 30,
+      "regions": ["head"],
+      "conflicts": [],
+      "socketRole": "head",
+      "fitPolicy": "deferred-per-body",
+      "knownIncompatibleBodies": [
+        {
+          "bodyId": "character:lobisomem",
+          "bodySha256": "6b3839025c194b1418c71c7ddb68a9a9afe59794d50d49c4409197edf6f0093d",
+          "reason": "Rosto focinhudo e orientado para a lateral; o eixo Head não representa uma coroa vertical utilizável."
+        },
+        {
+          "bodyId": "character:julia-zanatta",
+          "bodySha256": "961ff061920733e7f9e6acad46fb96379529ee2078e93f3a9eb2b33aff8f7769",
+          "reason": "Tiara de flores faz parte da identidade e ocupa o mesmo volume do boné."
+        }
+      ]
+    },
+    "face": {
+      "allowedModes": ["rigid"],
+      "layer": 20,
+      "regions": ["face"],
+      "conflicts": [],
+      "socketRole": "head"
+    },
+    "piercing": {
+      "allowedModes": ["rigid"],
+      "layer": 10,
+      "regions": ["face"],
+      "conflicts": [],
+      "socketRole": "head"
+    },
+    "tattoo": {
+      "allowedModes": ["surface"],
+      "layer": 0,
+      "regions": ["skin"],
+      "conflicts": [],
+      "socketRole": null
+    },
+    "torso-inner": {
+      "allowedModes": ["skinned"],
+      "layer": 10,
+      "regions": ["torso", "arms"],
+      "conflicts": [],
+      "socketRole": null
+    },
+    "torso-outer": {
+      "allowedModes": ["skinned"],
+      "layer": 20,
+      "regions": ["torso", "arms"],
+      "conflicts": [],
+      "socketRole": null
+    },
+    "legs": {
+      "allowedModes": ["skinned"],
+      "layer": 10,
+      "regions": ["legs"],
+      "conflicts": [],
+      "socketRole": null
+    },
+    "feet": {
+      "allowedModes": ["skinned"],
+      "layer": 10,
+      "regions": ["feet"],
+      "conflicts": [],
+      "socketRole": null
+    }
+  },
+  "items": [
+    {
+      "id": "gap:backpack",
+      "category": "backpack",
+      "slot": "back",
+      "attachmentMode": "rigid",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 30,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed 3D backpack asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "treta-cap-procedural-v1",
+      "category": "cap",
+      "slot": "head",
+      "attachmentMode": "rigid",
+      "inventoryStatus": "deferred",
+      "asset": {
+        "path": "public/js/procedural-cap.js",
+        "sha256": "3d30bc6e84f88d400f85b4daec7e3ceede9ac2b82d347c5370171dd9dfa22aa7",
+        "bytes": 6888
+      },
+      "provenance": {
+        "author": "Coro Solto private fitting pilot",
+        "source": "private-assets/treta-store/items/fitting-room/cap.mjs@267d68c633743aeccb3bd2777c8cfef4c823c6d78f894c98577bda2f2ec6f321",
+        "license": "project-owned",
+        "evidence": "tools/eval/asset-evidence/items/fit-matrix/cap-provenance.json"
+      },
+      "layer": 30,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "Headwear fitting deferred after user review: every head shape needs an individual profile, and baked hair, tiaras or non-human skull axes may make a cap incompatible."
+    },
+    {
+      "id": "gap:piercing",
+      "category": "piercing",
+      "slot": "piercing",
+      "attachmentMode": "rigid",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 10,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed 3D piercing asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "gap:tattoo",
+      "category": "tattoo",
+      "slot": "tattoo",
+      "attachmentMode": "surface",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 0,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed tattoo texture or decal asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "gap:shirt",
+      "category": "shirt",
+      "slot": "torso-inner",
+      "attachmentMode": "skinned",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 10,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed skinned shirt asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "gap:jacket",
+      "category": "jacket",
+      "slot": "torso-outer",
+      "attachmentMode": "skinned",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 20,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed skinned jacket asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "gap:pants",
+      "category": "pants",
+      "slot": "legs",
+      "attachmentMode": "skinned",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 10,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed skinned pants asset with registered origin is versioned in the candidate."
+    },
+    {
+      "id": "gap:shoes",
+      "category": "shoes",
+      "slot": "feet",
+      "attachmentMode": "skinned",
+      "inventoryStatus": "missing",
+      "asset": null,
+      "provenance": null,
+      "layer": 10,
+      "conflicts": [],
+      "hideBodyRegions": [],
+      "certifiedFamilies": [],
+      "certifiedBodies": [],
+      "incompatibleBodies": [],
+      "fitProfiles": [],
+      "approvals": {"asset": false, "fit": false, "clipping": false, "human": false},
+      "runtimeEnabled": false,
+      "reason": "No licensed skinned shoe asset with registered origin is versioned in the candidate."
+    }
+  ]
+}

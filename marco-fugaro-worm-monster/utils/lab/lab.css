@@ -1,0 +1,121 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #e7eaed;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+
+/* Shows before the scripts arrive; Lab.ready() fades it out, Lab.fail() prints the error in it. */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: #e7eaed;
+  color: #59646e;
+  transition:
+    opacity 0.6s ease,
+    visibility 0s linear 0.6s;
+}
+#loading.done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.loading-title {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.loading-bar {
+  position: relative;
+  width: min(60vw, 240px);
+  height: 2px;
+  overflow: hidden;
+  background: rgba(89, 100, 110, 0.15);
+}
+.loading-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 30%;
+  background: #59646e;
+  animation: loading-slide 1.2s ease-in-out infinite;
+}
+@keyframes loading-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+.loading-stage {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.75rem;
+}
+#loading.failed .loading-bar::after {
+  animation: none;
+}
+#loading.failed .loading-stage {
+  max-width: min(80vw, 640px);
+  color: #b3261e;
+  font-family: ui-monospace, Menlo, monospace;
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+.lab-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 5;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #47515a;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+@media (max-width: 600px) {
+  .lab-hint {
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar::after {
+    animation: none;
+  }
+}

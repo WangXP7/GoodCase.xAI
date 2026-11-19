@@ -1,0 +1,4144 @@
+{
+  "registryVersion": 1,
+  "assetRoot": "public/models/characters",
+  "assets": {
+    "bozo": {
+      "files": [
+        "public/models/characters/bozo.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks75fkrm2j1yyyf6tka5zmb99d8b15y0",
+        "chatUrl": "https://mint.gg/chat/ph7ayd0zemw2qzgxdssjhq2nkh8b1k98",
+        "displayName": "Red Wing Clown (v1)",
+        "notes": "v1 shipped — rig Meshy compatível, anims OK. v2 semi-real (ks77tampj9a7ga8kwas1kfams58b0jnv) veio com rig quebrado (A-pose) e foi descartado; raws em /tmp/bozo-v2-raw.glb."
+      }
+    },
+    "canarinho": {
+      "files": [
+        "public/models/characters/canarinho.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks75jx39ypybs5hdvy34ej7fzh8b0cey",
+        "chatUrl": "https://mint.gg/chat/ph7amtaa6jc8bxf0wwsd70m9t58b0kcf",
+        "animationBatchId": "w577yjh3ypmh3v8m8kj6j94j018b04jw",
+        "displayName": "Crested Canary Striker (v2 semi-real)",
+        "notes": "v2 shipped. v1 (ks7acwqj31393mw93gxmszzfz18b1jmj) no histórico do chat; raw /tmp/canarinho-rigged-raw.glb."
+      },
+      "removed": "RESTAURADO 22/07 (o usuário quis remover Tia Zilá e Influencer, não estes — leitura corrigida)"
+    },
+    "proerd": {
+      "files": [
+        "public/models/characters/proerd.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks76jjngk5k8zpata2gaanbbns8b04wk",
+        "chatUrl": "https://mint.gg/chat/ph7ck93xmx6f615je4c95t95bd8b036w",
+        "animationBatchId": "w572044nc1wjf3whbhtpzshhcs8b1mbf",
+        "displayName": "Proerd Mane Lion (v2 camisa preta)",
+        "notes": "v2 shipped. v1 camisa branca (ks7c0tp5f9r4fnn3gz706jjwgx8b02mf) no histórico; raw /tmp/proerd-rigged-v2-raw.glb."
+      },
+      "removed": "RESTAURADO 22/07 (o usuário quis remover Tia Zilá e Influencer, não estes — leitura corrigida)"
+    },
+    "ferro_velho_pack": {
+      "files": [
+        "public/models/props/muro_carros.glb",
+        "public/models/props/fileira_carros.glb",
+        "public/models/props/monte_carros.glb",
+        "public/models/props/guindaste.glb",
+        "public/models/props/prensa_carros.glb",
+        "public/models/props/pilha_pneus.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th7cgpxf57s7twyjcj093qgryd8bad0k",
+        "chatUrl": "https://mint.gg/chat/ph71r1m6b16360w76zqqcrgv0x8bac0z",
+        "displayName": "Ferro Velho — pilhas e máquinas",
+        "notes": "6 itens estilizados (muro/fileira/monte de carros esmagados, guindaste, prensa, pneus). Substituem os photoscans Sketchfab (wall_of_cars 16MB, crushed_classic 13MB) — pack inteiro otimizado ≈ 1.7MB."
+      }
+    },
+    "havan_loja_pack": {
+      "files": [
+        "public/models/props/gondola_mercado.glb",
+        "public/models/props/gondola_eletro.glb",
+        "public/models/props/arara_roupas.glb",
+        "public/models/props/caixa_cobranca.glb",
+        "public/models/props/painel_tvs.glb",
+        "public/models/props/manequim.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th740djrzedmygcxze9g6gm77n8bakz8",
+        "chatUrl": "https://mint.gg/chat/ph77wh2w8c51eshb7qe6mragpx8ba18w",
+        "displayName": "Havan — loja de departamentos",
+        "notes": "6 itens (gôndolas cheias mercado/eletro, arara, caixa de cobrança, painel de TVs, manequim). Enchem a loja que era caixas cinzas."
+      }
+    },
+    "carros_br_pack": {
+      "files": [
+        "public/models/props/kombi.glb",
+        "public/models/props/opala.glb",
+        "public/models/props/chevette.glb",
+        "public/models/props/brasilia_vw.glb",
+        "public/models/props/saveiro.glb",
+        "public/models/props/fusca.glb",
+        "public/models/props/moto_cg.glb",
+        "public/models/props/onibus_urbano.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th79jvsrbgpr605gj2sf5p1f3x8bazc0",
+        "chatUrl": "https://mint.gg/chat/ph781r8fzxtc9stms7adfke76h8ba9ec",
+        "displayName": "Carros brasileiros clássicos",
+        "notes": "8 veículos BR estilizados a pedido do dono (look mais brasileiro). Sempre entram na seleção da Havan (MINT_BR em map_havan.js)."
+      }
+    },
+    "piscinao_pack": {
+      "files": [
+        "public/models/props/churrasqueira.glb",
+        "public/models/props/mesa_guardasol.glb",
+        "public/models/props/cooler.glb",
+        "public/models/props/boia.glb",
+        "public/models/props/placa_piscina.glb",
+        "public/models/props/caixa_som.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th7eg134zfrsmpzg4tb3rwr3b18ba3jb",
+        "chatUrl": "https://mint.gg/chat/ph73qfvhgzbtsvr2ezgrvzwswx8bbm9p",
+        "displayName": "Piscinão de Ramos — props",
+        "notes": "6 itens (churrasqueira, mesa c/ guarda-sol, cooler, boia, placa, caixa de som). Set dressing da festa de piscina BR."
+      }
+    },
+    "varal-roupas-01": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/varal_roupas_01.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7dtxhh7gbkyf8941pet5vav58crdye",
+        "chatUrl": "https://mint.gg/chat/ph7cqm9tnn58h1sxznpq26wgax8cr51p",
+        "displayName": "Colorful Laundry Varal (varal de corda)",
+        "frente": "v21-e-models",
+        "notes": "Lote 3 da frente E v2.1 (dono: \"as roupas penduradas no corrego, quebrada e campinho tao ruins, na laje tao bons, fazer variacoes\"). Corda com 6 peças coloridas em prendedores entre ganchos. GLB normalizado pela largura (1,0 m; 0,28 m de altura): integrar com scale ~3,0 => 3,0 m x 0,84 m. Calibrado pelo lajes_varal.glb (o varal bom do dono). Evidência: tools/eval/asset-evidence/props-v21/varal_roupas_01-corrigido.png."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "3ea3085f1c0f0729b0563b3a9c6e9330a39c4a7da720592d931ef1681edb1a52"
+      }
+    },
+    "varal-roupas-02": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/varal_roupas_02.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks75rz911e611m14c0pbah8c2h8crgr1",
+        "chatUrl": "https://mint.gg/chat/ph79avg70bbmppdah59xczz0m58cr0dg",
+        "displayName": "Colorful Laundry Varal (varal de chão)",
+        "frente": "v21-e-models",
+        "notes": "Lote 3 da frente E v2.1. Varal de chão em T de alumínio, 2 linhas com camisetas, jeans, meias e fronha. GLB normalizado pela largura (1,0 m; 0,81 m de altura): integrar com scale ~1,8 => 1,8 m x 1,46 m. Evidência: tools/eval/asset-evidence/props-v21/varal_roupas_02-corrigido.png."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "389993f574d3dcfabca27109268ce50a47438c72618f6b0c057a647ceaf89969"
+      }
+    },
+    "samambaia-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/samambaia.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7966nvp1k21fd5e12aqq5cxn8cvq8f",
+        "chatUrl": "https://mint.gg/chat/ph738vqqdc08zxxy7912d24w1n8cteh0",
+        "displayName": "Emerald Feather Clump (samambaia)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Samambaia espada em touceira densa (3.757 tris). Forração instanciada dos drifts de borda (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "d5fdc03244bbb0acf4599ea6358b8083a1b6a1f91ce7f9a531c9413ec6052e1c"
+      }
+    },
+    "casa-favela-azul": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/casa_favela_azul.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7fet6qkrzjrs9jk2zsqsh0rh8d78by",
+        "packAssetId": "th7395mdsfsgrt1dxb4zc3my2s8d6snr",
+        "chatUrl": "https://mint.gg/chat/ph75rmydefr3btvm85a61hra6h8d74qq",
+        "displayName": "Casa de favela azul",
+        "frente": "v21-e-models",
+        "notes": "Kit `favela_r3` (dono, 20/08: \"os mapas de favela so o lajes tem cordao de roupas do model, os outros nao e tudo generico low poly\"). Casario do escadao: molde de casa de alvenaria pintada de azul, 4.780 tris, 1 no. GLB normalizado em ~1 m no maior eixo — bbox 0,955 x 0,998 x 0,764 (larg x alt x prof). A razao entre eixos esta declarada em CASARIO_MOLDES (public/js/map_escadao.js) e a regua eval:escala-casario rele este arquivo para conferir: trocar o GLB sem reconferir a escala reprova."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (pack favela_r3, otimizado webp 1024)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "c311fd2a66e7aeeb8c218cfd74b4a8e0dcb79130f62766451eb4b2b5ffc4ae92"
+      }
+    },
+    "casa-favela-tijolo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/casa_favela_tijolo.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks77wm8m73833tvn9edhztpkx98d6dtx",
+        "packAssetId": "th7395mdsfsgrt1dxb4zc3my2s8d6snr",
+        "chatUrl": "https://mint.gg/chat/ph75rmydefr3btvm85a61hra6h8d74qq",
+        "displayName": "Casa de favela tijolo",
+        "frente": "v21-e-models",
+        "notes": "Kit `favela_r3`, par do casa_favela_azul: mesma familia em tijolo aparente, 4.181 tris, 1 no. bbox 0,943 x 0,936 x 0,998 — planta quase quadrada, entao ele mora nas plantas quadradas do mirante e nas casas de 1 pavimento (a regua eval:escala-casario reprovou o tijolo numa planta 3,0 x 4,4 m com 5,9 m de altura: ficava espremido a 0,50x o fator vertical)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (pack favela_r3, otimizado webp 1024)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "c6d26492a9d5a5b2a0676169de4f43ad5e67ac83bafda8ba6f7e0e9171e15016"
+      }
+    },
+    "varal-roupas-favela": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/varal_roupas.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks77x28h86c6wvx3xzr996npdh8d7bv8",
+        "packAssetId": "th7395mdsfsgrt1dxb4zc3my2s8d6snr",
+        "chatUrl": "https://mint.gg/chat/ph75rmydefr3btvm85a61hra6h8d74qq",
+        "displayName": "Varal de roupas",
+        "frente": "v21-e-models",
+        "notes": "Kit `favela_r3`. Varal com roupa pendurada, 4.677 tris, bbox 0,998 x 0,697 x 0,326. Espalhado pelos becos e lajes baixas do escadao (4 instancias) alem dos dois varal_roupas_0X do mirante. NUNCA ganha colisor: roupa e silhueta, nao cover — todas as malhas levam nonSolidSurface."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (pack favela_r3, otimizado webp 1024)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "0cd259177b239c7198b8158195c82a493480c69846f210981faeb87eac2c89bf"
+      }
+    },
+    "escadao_casa_r3": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/escadao_casa_r3.glb"
+      ],
+      "source": {
+        "kind": "mint-text-to-3d",
+        "frente": "v21-e-models",
+        "displayName": "01-escadao-casa-residencial-r3.glb",
+        "chatUrl": "https://mint.gg/chat/ph76fdb7fh3t30vzjz8ajv01xs8dx139",
+        "projectId": "zd72r64gkq3d9k3v8349cp6yt98dwvx4",
+        "assetPackId": "th7290wv39q83egs019b1g29vs8dwnr1",
+        "finalRunKey": "asset-pack-final:assetPackOutput:vd77drm22g8fn3p0t9hyn39w6h8dxed8",
+        "packFile": "01-escadao-casa-residencial-r3.glb",
+        "sha256": "49a2553f02a66d4e9377a66d4addf3b35cf5564c84dd49d2fe6e5df91ea89a89",
+        "license": "Mint Terms of Service section 4, updated 2026-05-07; rights assigned to user subject to terms and third-party rights",
+        "licenseUrl": "https://docs.mint.gg/terms-of-service",
+        "licenseCheckedAt": "2026-09-06"
+      },
+      "processing": {
+        "tools": [
+          "tools/optimize-escadao-r3.mjs"
+        ],
+        "model": "TRIPO_P1",
+        "triangles": 4146,
+        "finalSha256": "9bceba38acb38726b1df871b4a22697d5cb988f10e6cde13a972bdbf4eeb3a4b"
+      }
+    },
+    "escadao_cat_r4": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/escadao_cat_r4.glb"
+      ],
+      "source": {
+        "kind": "mint-text-to-3d",
+        "frente": "v21-e-models",
+        "displayName": "01-gato-rajado-tabby-cat.glb",
+        "chatUrl": "https://mint.gg/chat/ph71esgt6wvxqr9ywswh7nr8f58dxycs",
+        "projectId": "zd72r64gkq3d9k3v8349cp6yt98dwvx4",
+        "assetPackId": "th71b3y03ksncsfj8wzt08w5hh8dxjpk",
+        "finalRunKey": "asset-pack-final:assetPackOutput:vd7cw36hdpbv3zxwkt19km2d6h8dwz6j",
+        "packFile": "01-gato-rajado-tabby-cat.glb",
+        "sha256": "1946c37da48e57b2833049927991e2169de1248327a9a6708876678ee3688295",
+        "license": "Mint Terms of Service section 4, updated 2026-05-07; rights assigned to user subject to terms and third-party rights",
+        "licenseUrl": "https://docs.mint.gg/terms-of-service",
+        "licenseCheckedAt": "2026-09-06"
+      },
+      "processing": {
+        "tools": [
+          "tools/optimize-escadao-r4.mjs",
+          "tools/rig-escadao-cat-r4.py"
+        ],
+        "model": "TRIPO_P1",
+        "triangles": 4723,
+        "finalSha256": "065988ff0eeb6adf7af962c8bff8a188867af4dfd1c636272360191b8275a9ac"
+      }
+    },
+    "escadao_varanda_r4": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/escadao_varanda_r4.glb"
+      ],
+      "source": {
+        "kind": "mint-text-to-3d",
+        "frente": "v21-e-models",
+        "displayName": "02-varanda-vivida-balcony-cluster.glb",
+        "chatUrl": "https://mint.gg/chat/ph71esgt6wvxqr9ywswh7nr8f58dxycs",
+        "projectId": "zd72r64gkq3d9k3v8349cp6yt98dwvx4",
+        "assetPackId": "th71b3y03ksncsfj8wzt08w5hh8dxjpk",
+        "finalRunKey": "asset-pack-final:assetPackOutput:vd7cw36hdpbv3zxwkt19km2d6h8dwz6j",
+        "packFile": "02-varanda-vivida-balcony-cluster.glb",
+        "sha256": "ecf7633aa0f8474052db8f71051bb47618740e8efce620b0051fa3a56b97cf40",
+        "license": "Mint Terms of Service section 4, updated 2026-05-07; rights assigned to user subject to terms and third-party rights",
+        "licenseUrl": "https://docs.mint.gg/terms-of-service",
+        "licenseCheckedAt": "2026-09-06"
+      },
+      "processing": {
+        "tools": [
+          "tools/optimize-escadao-r4.mjs"
+        ],
+        "model": "TRIPO_P1",
+        "triangles": 4453,
+        "finalSha256": "808371e470de7073a590e9b5bb65c8c9f05a6d871c87b259bdcf7e9df19bccfc"
+      }
+    },
+    "escadao_eletrica_r4": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/escadao_eletrica_r4.glb"
+      ],
+      "source": {
+        "kind": "mint-text-to-3d",
+        "frente": "v21-e-models",
+        "displayName": "03-instalacao-eletrica-meter-box.glb",
+        "chatUrl": "https://mint.gg/chat/ph71esgt6wvxqr9ywswh7nr8f58dxycs",
+        "projectId": "zd72r64gkq3d9k3v8349cp6yt98dwvx4",
+        "assetPackId": "th71b3y03ksncsfj8wzt08w5hh8dxjpk",
+        "finalRunKey": "asset-pack-final:assetPackOutput:vd7cw36hdpbv3zxwkt19km2d6h8dwz6j",
+        "packFile": "03-instalacao-eletrica-meter-box.glb",
+        "sha256": "a7e0401c907c837c59b500438d5408211c14cd2de7852ac5a776dc1a6d5c9c20",
+        "license": "Mint Terms of Service section 4, updated 2026-05-07; rights assigned to user subject to terms and third-party rights",
+        "licenseUrl": "https://docs.mint.gg/terms-of-service",
+        "licenseCheckedAt": "2026-09-06"
+      },
+      "processing": {
+        "tools": [
+          "tools/optimize-escadao-r4.mjs"
+        ],
+        "model": "TRIPO_P1",
+        "triangles": 3470,
+        "finalSha256": "e971f91254a6170da06174c5420eb41b47d40fb927076bde9ca5b044faf5ac90"
+      }
+    },
+    "pipa-lajes": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/pipa.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks77pb3qdfmp4wezctvrpqsmkn8d62ta",
+        "chatUrl": "https://mint.gg/chat/ph724bnemdzzbkp3va6bxdf5v98d6rrb",
+        "displayName": "Red Yellow Diamond Kite (pipa do lajes)",
+        "sha256": "9ae646b40e18403bd861d35198b25be72d20c727de7a90ca7df1a389d6b2583e",
+        "notes": "Kit de revisao r2 do lajes (kits-mint.json, item lajes.pipa, 26/08/2026). Pipa de losango vermelha e amarela, 4532 triangulos, WebP 1024, sem esqueleto e SEM CLIPE DE ANIMACAO — e nao precisa: pipa nao tem parte movel, o que se move e a pipa inteira contra a linha esticada. O voo e PROCEDURAL (ambientlife.js, regiao 'PIPA NO CEU'): casca esferica em volta da ancora porque a linha tem comprimento fixo, abanar por soma de duas oscilacoes de periodos que nao fecham entre si (7,3 s e 1,73 s), yaw/pitch/roll tirados da velocidade do quadro e rabiola como RASTRO de posicoes passadas. Bbox nativo 0,553 x 0,998 x 0,361 m; integrada com envergadura 1,35 m e altura de voo de 26 a 38 m. Substituiu 12 losangos de BufferGeometry parados no ceu entre 14 e 22 m ('pipas nao voam', dono 26/08/2026). Nao e colisor, nao e occluder e nao projeta sombra."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "9ae646b40e18403bd861d35198b25be72d20c727de7a90ca7df1a389d6b2583e"
+      }
+    },
+    "boto-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/boto_amazonia.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks7feskg5kcssx8v92rb5h5hwd8d53k4",
+        "chatUrl": "https://mint.gg/chat/ph76cqeq91vd8ktpat7ents25s8d5zqw",
+        "displayName": "Pink River Dolphin (boto do igarapé)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): boto-cinza rosado low-poly nadando no igarapé. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio (text-to-3d, sem referência de terceiro). Otimizado no padrão gen-asset (dedup + textureCompress webp 1024 + prune). Estático; nado procedural (serpenteio submerso) no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "c84cc4ff23c4da8483030812b28127dc831c1992ea0fa61ffabd676f38fe23cb"
+      }
+    },
+    "onca-pintada-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/onca_pintada.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks7a7gfwpmeze4kypdk7p75grn8d5v1e",
+        "chatUrl": "https://mint.gg/chat/ph7fw0nnwd3r0t3sd3xjd5m0yn8d5y56",
+        "displayName": "Golden Rosetta Jaguar (onça-pintada deitada)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): onça-pintada deitada em tronco à margem, respiração por escala sutil. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizada no padrão gen-asset (dedup + webp 1024 + prune). Estática; procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "a210448f00b82f7e1e8f4a13d46b0fb2c17cfc4b0a30e0eff449b308b72c12fe"
+      }
+    },
+    "arara-vermelha-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/arara_vermelha.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks7dzf3k95me5hf288kdra4bhh8d5pe3",
+        "chatUrl": "https://mint.gg/chat/ph74hq1an9ymzcatgm90vb78zx8d4apw",
+        "displayName": "Scarlet Wing Macaw (arara-vermelha de poleiro)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): arara-vermelha empoleirada nos postes do market flutuante, balanço procedural. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizada no padrão gen-asset (dedup + webp 1024 + prune). Estática; procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "8fa0febb139a27f62ae0a3704cbf73a8f296ccbcc560c62b1ab4a166d126a20d"
+      }
+    },
+    "tucano-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/tucano.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks78kjkm9v47b1r31r4n7ybxkh8d4sky",
+        "chatUrl": "https://mint.gg/chat/ph7dqhakak88w9tnyc5z2r5r0x8d4mre",
+        "displayName": "Green Beak Toucan (tucano de poleiro)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): tucano-de-bico-verde empoleirado nas caixas d'água das palafitas, balanço procedural. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizado no padrão gen-asset (dedup + webp 1024 + prune). Estático; procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "4c5f0b78a48cd160ef9786d688d764543baa8d897ce59c0fcc360f08a7476d22"
+      }
+    },
+    "preguica-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/preguica.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks78j2sc4461g9nkfz43mmn1rd8d48wr",
+        "chatUrl": "https://mint.gg/chat/ph781sy8yevx09m0kxgcxefxvx8d5n9j",
+        "displayName": "Algae Sloth Pendant (preguiça pendurada)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): preguiça pendurada no beiral da palafita, quase parada. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizada no padrão gen-asset (dedup + webp 1024 + prune). Estática; procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "de88a5bfe1e48a132dca9d3f985b7ef0b55133c5e1253bf8f2020d1ceeb09c7d"
+      }
+    },
+    "macaco-prego-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/macaco_prego.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks793sf1tpkvt3pxq7jjhvpam98d5aa9",
+        "chatUrl": "https://mint.gg/chat/ph76c29s8yyr4sy8cqxe36t9v98d4zv5",
+        "displayName": "Golden Tuft Capuchin (macaco-prego saltador)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): macaco-prego pulando entre telhado da madeireira e bancadas. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizado no padrão gen-asset (dedup + webp 1024 + prune). Estático; salto procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "66d4e4423ddf62acc7e22c4c2c399c2f18e008d2bfb83369c1aeadc37f76fd9a"
+      }
+    },
+    "anta-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/anta.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks7ecr51smg0h2f8nsv1h1rdjh8d5frt",
+        "chatUrl": "https://mint.gg/chat/ph7a0wexywqytnxkrjy60bvqd98d47s5",
+        "displayName": "Lowland Tapir Standing (anta da borda da mata)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): anta pastejando na borda da mata, locomoção procedural do idioma quad. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizada no padrão gen-asset (dedup + webp 1024 + prune). Estática."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "5a56336945d1d7db691cd521e149e7c1ae4d6f38a36d5bbe404d62248e5d25c8"
+      }
+    },
+    "piranha-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/piranha.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks70d9arxnzj5y7yvtt8wmnw2d8d5nmv",
+        "chatUrl": "https://mint.gg/chat/ph78k1ydatb41te477m5yf3wq18d5jns",
+        "displayName": "Silver Fang Piranha (piranha do cardume)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): piranha prateada em cardume instanciado (rota circular) no igarapé. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizada no padrão gen-asset (dedup + webp 1024 + prune). Estática; cardume procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "32459720fe88a477eb1e26a67655b87534148867a67368816cf02a7d196d6581"
+      }
+    },
+    "carcara-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/carcara.glb"
+      ],
+      "source": {
+        "kind": "mint-chat",
+        "assetId": "ks70zqfdxbtnvqxpjr78s61wb58d45av",
+        "chatUrl": "https://mint.gg/chat/ph74edcs8540fz6m7dbn8v2bdd8d589h",
+        "displayName": "Striped Breast Caracara (carcará da serragem)",
+        "notes": "Fauna viva do mapa amazonia (PR #439): carcará no chão da madeireira com passo ocasional. Geração Mint 25/08, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizado no padrão gen-asset (dedup + webp 1024 + prune). Estático; procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "0b366c74f4a3df22bf063ae66ba965092bcf11235914daf19a67fdae0350c3af"
+      }
+    },
+    "heliconia-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/heliconia.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks79v1kkj8c32e71yyab27bqds8cvm8a",
+        "chatUrl": "https://mint.gg/chat/ph7cp8y6gyxt9gg461m4rcg8th8ctwfd",
+        "displayName": "Red Claw Heliconia (helicônia)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Heliconia com brácteas vermelho-amarelas pendentes (4.052 tris). Maciços florais e drifts do jardim (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "88cd13ab1bde0723e58df647b5f79e6da28f68007bc8c13496546de9afdd60f7"
+      }
+    },
+    "palafita-pro-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palafita_pro.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "ks78sxjjcd26vpnktrwcd2596h8d7few",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Palafita com passarela",
+        "notes": "Ronda 2 do mapa amazonia (PR #439, feedback do dono: 'casas suspensas sem ser palafita, precisava subir na madeira pra atravessar'): casa ribeirinha sobre estacas com passarela e escada, ~2,0k tris. O molde entra com pilares cravados (y=0,6) para o deck dele (40% da altura) casar com o patamar andável a 1,8 m do map_amazonia.js; colisor, escada e corrimões são dados do mapa. Geração Mint 26/08, kit de revisão r2, projeto CS BRASIL - Time Mítico; prompt próprio (text-to-3d, sem referência de terceiro). Otimizado no padrão gen-asset (dedup + textureCompress webp 1024 + prune)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "70ad2bff5431aa4b3ecc4024af05bf693d362949c53703a91dbec5acdc394c66"
+      }
+    },
+    "arvore-mata-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/arvore_mata.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "ks7am6p11456x6jmrbj8kg9b398d6e2h",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Árvore de mata densa",
+        "notes": "Ronda 2 do mapa amazonia (PR #439, feedback do dono: 'o horizonte não é cidade, se não floresta'): árvore de dossel ~2,6k tris, instanciada 25× no anel do perímetro via PropBatch (escala 7-11,4 m, escala variada cobrada no AMZ6). Geração Mint 26/08, kit de revisão r2, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizado no padrão gen-asset (dedup + webp 1024 + prune)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "ebf89e8e01e57a6f4b6fe8ebe5051898e607184f92035b729ac8ec0a7034a459"
+      }
+    },
+    "palmeira-babacu-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palmeira_babacu.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "ks79cjyt9ppqsw67c057cw733x8d6ja9",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Palmeira babaçu",
+        "notes": "Ronda 2 do mapa amazonia (PR #439): babaçu esbelto ~2,3k tris do sub-bosque do anel de mata (14 instâncias, decorativa sem colisor). Geração Mint 26/08, kit de revisão r2, projeto CS BRASIL - Time Mítico; prompt próprio. Otimizado no padrão gen-asset (dedup + webp 1024 + prune)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (original)",
+        "tools": [
+          "mint.gg",
+          "padrão ../studio/tools/gen-asset.mjs (dedup/textureCompress webp 1024/prune)"
+        ],
+        "finalSha256": "f6a1d16a43fbe2e6bc338066a43889817d48ebfeb4a6e8d22d0975d24aadb433"
+      }
+    },
+    "arvore-mata-amazonia-visual": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/arvore_mata_amazonia.glb"
+      ],
+      "source": {
+        "kind": "local-derivative",
+        "assetId": "ks7am6p11456x6jmrbj8kg9b398d6e2h",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Árvore de mata densa",
+        "notes": "Derivado exclusivo Amazônia; original preservado. Meshopt simplify ratio .5/error .015, UV/material preservados.",
+        "derivedFrom": "arvore-mata-amazonia",
+        "sourceSHA256": "ebf89e8e01e57a6f4b6fe8ebe5051898e607184f92035b729ac8ec0a7034a459"
+      },
+      "processing": {
+        "provider": "local",
+        "tools": [
+          "tools/amazonia-assets.mjs"
+        ],
+        "finalSha256": "9ef9e0574dd475a60281a8ee54c12d6c4efdacf95cb8b0e3729fae6ff3e1e381",
+        "triangles": 3324
+      }
+    },
+    "palmeira-babacu-amazonia-visual": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palmeira_babacu_amazonia.glb"
+      ],
+      "source": {
+        "kind": "local-derivative",
+        "assetId": "ks79cjyt9ppqsw67c057cw733x8d6ja9",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Palmeira babaçu",
+        "notes": "Derivado exclusivo Amazônia; original preservado. Meshopt simplify ratio .5/error .015, UV/material preservados.",
+        "derivedFrom": "palmeira-babacu-amazonia",
+        "sourceSHA256": "f6a1d16a43fbe2e6bc338066a43889817d48ebfeb4a6e8d22d0975d24aadb433"
+      },
+      "processing": {
+        "provider": "local",
+        "tools": [
+          "tools/amazonia-assets.mjs"
+        ],
+        "finalSha256": "08eedfb386dfa6fe69894f4be00fd431469030b511948de73c1f1126e0d41313",
+        "triangles": 2830
+      }
+    },
+    "palafita-pro-amazonia-visual": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palafita_pro_amazonia.glb"
+      ],
+      "source": {
+        "kind": "local-derivative",
+        "assetId": "ks78sxjjcd26vpnktrwcd2596h8d7few",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Palafita com passarela",
+        "notes": "Derivado exclusivo Amazônia; original preservado. Remove somente as faces da escada embutida, substituída por acesso físico no builder.",
+        "derivedFrom": "palafita-pro-amazonia",
+        "sourceSHA256": "70ad2bff5431aa4b3ecc4024af05bf693d362949c53703a91dbec5acdc394c66"
+      },
+      "processing": {
+        "provider": "local",
+        "tools": [
+          "tools/amazonia-assets.mjs"
+        ],
+        "finalSha256": "0acc6dd66fd3e4f25281c124f6b87a96fcd5a7e61c43d4bc21cf473e15b65594",
+        "triangles": 3048
+      }
+    },
+    "canoa-rabeta-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/canoa_rabeta_amazonia.glb"
+      ],
+      "source": {
+        "kind": "mint-text-to-3d",
+        "frente": "v21-e-models",
+        "chatUrl": "https://mint.gg/project/zd7cbsyxbzmf05b3w084t51ymd8c5hfr?chat=ph741qaase7ng7c5gbq3348t658dwt3n",
+        "url": "https://cdn.mint.gg/glb/teal-stripe-riverboat-normalized-47262040d7fd2207.glb",
+        "displayName": "Teal Stripe Riverboat",
+        "sourceSHA256": "47262040d7fd2207db662c8fb8a65c12d158b18e5b20a11d8878e3a28f2c7a20",
+        "notes": "Gerado 06/09/2026 por prompt próprio, modelo Tripo P1 no Mint, autorizado pelo usuário. Canoa aberta de madeira com faixa verde-azulada e rabeta; sem pessoas. Uso conforme licença da conta Mint; sem atribuição de Creative Commons."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "Tripo P1",
+        "tools": [
+          "tools/amazonia-boat-asset.mjs"
+        ],
+        "finalSha256": "60bfb8ed6387a00fb3b863a8b3e9de1343a704cfdf56555a74a1a948252c7fc7",
+        "triangles": 3758
+      }
+    },
+    "galinha-mint-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/galinha_mint_amazonia.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "frente": "v21-e-models",
+        "chatUrl": "https://mint.gg/project/zd7d9mfmgv0b80ezp3xbykp1ns8dw47r?chat=ph7b9m9y8gfz5j83vkxqsrbvzs8dxgba",
+        "url": "https://cdn.mint.gg/glb/adult-hen-normalized-590a6707883e2378.glb",
+        "displayName": "Adult Hen",
+        "sourceSHA256": "590a6707883e23784ee898dac1535e46ab40b6575e8db132bf13807217a11989",
+        "notes": "Asset gerado por prompt original na conta do usuário; inclusão no preview local explicitamente solicitada em 06/09/2026. Tripo P1, malha estática. Não atribuir Creative Commons nem licença comercial verificada: termos de publicação pendentes."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "Tripo P1",
+        "tools": [
+          "tools/amazonia-yard-assets.mjs"
+        ],
+        "finalSha256": "adce5304fc5adb1fe9fc0c1631b5e4445fd7d5cf5ea6a9c994288dc2ce55e581",
+        "triangles": 4062,
+        "bytes": 370588
+      }
+    },
+    "pintinho-mint-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/pintinho_mint_amazonia.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "frente": "v21-e-models",
+        "chatUrl": "https://mint.gg/project/zd7d9mfmgv0b80ezp3xbykp1ns8dw47r?chat=ph7b9m9y8gfz5j83vkxqsrbvzs8dxgba",
+        "url": "https://cdn.mint.gg/glb/baby-chick-normalized-fb54f1dd25d555e8.glb",
+        "displayName": "Baby Chick",
+        "sourceSHA256": "fb54f1dd25d555e855667ad7742c35d73eb542b6eecb5db8550cd7145dddd5c4",
+        "notes": "Asset gerado por prompt original na conta do usuário; inclusão no preview local explicitamente solicitada em 06/09/2026. Tripo P1, malha estática. Não atribuir Creative Commons nem licença comercial verificada: termos de publicação pendentes."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "Tripo P1",
+        "tools": [
+          "tools/amazonia-yard-assets.mjs"
+        ],
+        "finalSha256": "75e99bd5779c04372bade03745a2816dc83495aa2edae54fbb5acff970726e4d",
+        "triangles": 3616,
+        "bytes": 198532
+      }
+    },
+    "palafita-aberta-amazonia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palafita_aberta_amazonia.glb"
+      ],
+      "source": {
+        "kind": "local-derivative",
+        "assetId": "ks78sxjjcd26vpnktrwcd2596h8d7few",
+        "packAssetId": "th74btzfmyqgvrwzv97c3svtad8d7shz",
+        "chatUrl": "https://mint.gg/chat/ph7ajexkae9z6baym58jt1ekf18d73ye",
+        "displayName": "Palafita com passarela",
+        "notes": "Derivado local com paredes/porta removidas, beiral elevado e bounds preservados. Shell navegável com portas/janelas construído em amazonia_cabins.js. Original preservado.",
+        "derivedFrom": "palafita-pro-amazonia-visual",
+        "sourceSHA256": "0acc6dd66fd3e4f25281c124f6b87a96fcd5a7e61c43d4bc21cf473e15b65594"
+      },
+      "processing": {
+        "provider": "local",
+        "tools": [
+          "tools/amazonia-cabin-asset.mjs"
+        ],
+        "finalSha256": "2d5724305e9dd7e42689692f14cec6fff4a8f84ec8e5b8948825129d276dc954",
+        "triangles": 2167
+      }
+    },
+    "sertao-galinha-animada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/sertao_galinha.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th78004y9j8g2kd0mkd45xq65x8dw112",
+        "outputId": "vd7azjz400t2sy4g2h4z14ff318dx0mb",
+        "chatUrl": "https://mint.gg/chat/ph7b9m9y8gfz5j83vkxqsrbvzs8dxgba",
+        "projectUrl": "https://mint.gg/project/zd7d9mfmgv0b80ezp3xbykp1ns8dw47r",
+        "displayName": "Sertão — galinha de criação",
+        "promptFile": "docs/reports/SERTAO-FAUNA2-ASSETS.md",
+        "termsUrl": "https://docs.mint.gg/terms-of-service",
+        "termsUpdated": "2026-05-07",
+        "verifiedAt": "2026-09-06",
+        "termsSha256": "1b91654d70dbebe9b0c3766060c920a8078447208038521fe848419416171957",
+        "licenseBasis": "Mint Terms §4: cessão dos direitos que Mint tiver no output ao usuário, sujeita aos termos e direitos de terceiros; não CC0.",
+        "attribution": "Sem exigência específica nos termos consultados. Créditos de procedência preservados.",
+        "notes": "Modelo gerado por IA (TRIPO_P1 na UI Mint) em projeto próprio, apenas prompt original, sem imagem ou malha de terceiros. Animações são derivação local, não fornecidas pelo Mint."
+      },
+      "processing": {
+        "provider": "local",
+        "sourceFile": "01-adult-hen.glb",
+        "sourceSha256": "590a6707883e23784ee898dac1535e46ab40b6575e8db132bf13807217a11989",
+        "tools": [
+          "tools/animate-sertao-livestock.py"
+        ],
+        "finalSha256": "d07aa63bea9db19f4df54fe10495b08821f446706c3e253e8ceecc91f8e65b17",
+        "triangles": 5078,
+        "bytes": 498484,
+        "notes": "Blender: escala em metros, Y-up/frente+Z, rig animal e Walk/Idle locais; albedo JPEG1024. Geometria dos adultos preservada; pintinho simplificado, silhueta comparada em quatro vistas."
+      }
+    },
+    "sertao-pintinho-animada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/sertao_pintinho.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th78004y9j8g2kd0mkd45xq65x8dw112",
+        "outputId": "vd7azjz400t2sy4g2h4z14ff318dx0mb",
+        "chatUrl": "https://mint.gg/chat/ph7b9m9y8gfz5j83vkxqsrbvzs8dxgba",
+        "projectUrl": "https://mint.gg/project/zd7d9mfmgv0b80ezp3xbykp1ns8dw47r",
+        "displayName": "Sertão — pintinho de criação",
+        "promptFile": "docs/reports/SERTAO-FAUNA2-ASSETS.md",
+        "termsUrl": "https://docs.mint.gg/terms-of-service",
+        "termsUpdated": "2026-05-07",
+        "verifiedAt": "2026-09-06",
+        "termsSha256": "1b91654d70dbebe9b0c3766060c920a8078447208038521fe848419416171957",
+        "licenseBasis": "Mint Terms §4: cessão dos direitos que Mint tiver no output ao usuário, sujeita aos termos e direitos de terceiros; não CC0.",
+        "attribution": "Sem exigência específica nos termos consultados. Créditos de procedência preservados.",
+        "notes": "Modelo gerado por IA (TRIPO_P1 na UI Mint) em projeto próprio, apenas prompt original, sem imagem ou malha de terceiros. Animações são derivação local, não fornecidas pelo Mint."
+      },
+      "processing": {
+        "provider": "local",
+        "sourceFile": "02-baby-chick.glb",
+        "sourceSha256": "fb54f1dd25d555e855667ad7742c35d73eb542b6eecb5db8550cd7145dddd5c4",
+        "tools": [
+          "tools/animate-sertao-livestock.py"
+        ],
+        "finalSha256": "a2f144c8b9de0ff140a2cde29fccc619dd6a2620b7b62d1948b52d94e924bbc0",
+        "triangles": 3190,
+        "bytes": 288400,
+        "notes": "Blender: escala em metros, Y-up/frente+Z, rig animal e Walk/Idle locais; albedo JPEG1024. Geometria dos adultos preservada; pintinho simplificado, silhueta comparada em quatro vistas."
+      }
+    },
+    "sertao-cabra-animada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/sertao_cabra.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th78004y9j8g2kd0mkd45xq65x8dw112",
+        "outputId": "vd7azjz400t2sy4g2h4z14ff318dx0mb",
+        "chatUrl": "https://mint.gg/chat/ph7b9m9y8gfz5j83vkxqsrbvzs8dxgba",
+        "projectUrl": "https://mint.gg/project/zd7d9mfmgv0b80ezp3xbykp1ns8dw47r",
+        "displayName": "Sertão — cabra de criação",
+        "promptFile": "docs/reports/SERTAO-FAUNA2-ASSETS.md",
+        "termsUrl": "https://docs.mint.gg/terms-of-service",
+        "termsUpdated": "2026-05-07",
+        "verifiedAt": "2026-09-06",
+        "termsSha256": "1b91654d70dbebe9b0c3766060c920a8078447208038521fe848419416171957",
+        "licenseBasis": "Mint Terms §4: cessão dos direitos que Mint tiver no output ao usuário, sujeita aos termos e direitos de terceiros; não CC0.",
+        "attribution": "Sem exigência específica nos termos consultados. Créditos de procedência preservados.",
+        "notes": "Modelo gerado por IA (TRIPO_P1 na UI Mint) em projeto próprio, apenas prompt original, sem imagem ou malha de terceiros. Animações são derivação local, não fornecidas pelo Mint."
+      },
+      "processing": {
+        "provider": "local",
+        "sourceFile": "03-caatinga-goat.glb",
+        "sourceSha256": "0db087af909564787ccacd28f34cc9c5760b95d67ed33ebd2be74d14fd0521d9",
+        "tools": [
+          "tools/animate-sertao-livestock.py"
+        ],
+        "finalSha256": "a89410b7f899a14e19d8955cd5935e2222b3f764d36abc48f42f59e68eac0eea",
+        "triangles": 4790,
+        "bytes": 495836,
+        "notes": "Blender: escala em metros, Y-up/frente+Z, rig animal e Walk/Idle locais; albedo JPEG1024. Geometria dos adultos preservada; pintinho simplificado, silhueta comparada em quatro vistas."
+      }
+    },
+    "mansao_jardim_pack": {
+      "files": [
+        "public/models/props/banco_jardim.glb",
+        "public/models/props/poste_jardim.glb",
+        "public/models/props/escultura_jardim.glb",
+        "public/models/props/vaso_tropical.glb",
+        "public/models/props/lounge_externo.glb",
+        "public/models/props/lampiao_fachada.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetId": "th72555dzek1m12a075crrrsbx8cp6zg",
+        "chatUrl": "https://mint.gg/chat/ph7c8dwhs8tg2vc9yapr267gy18cqdyx",
+        "displayName": "Mansão do Joá — jardim e casa",
+        "notes": "6 props (banco modernista, poste de jardim, escultura abstrata, vaso tropical, lounge externo, lampião de fachada). BUG-56: dono pediu models Mint pro jardim/casa. Otimizados via tools/optimize-props.mjs (webp 1024, ~1.6MB total, 1 material cada). Previews em tools/eval/asset-evidence/bug56-mint/."
+      }
+    },
+    "palmeira-imperial-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palmeira_imperial.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7epscg489gta2x7zzm7he5398cvnfj",
+        "chatUrl": "https://mint.gg/chat/ph70gyyyc7qvvem3mm8t0a29y98cv0tw",
+        "displayName": "Imperial Grey Palm (palmeira-imperial)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Palmeira-imperial com tronco anelado cinza e crownshaft verde (3.637 tris). Substitui as árvores pirulito do jardim (BUG-64). GLB normalizado ~1 m, pivô central; escala no call-site. Tronco escurecido no pipeline (trunkShade 0,55/0,47/0,40 nos 42% inferiores — tronco branco-liso reprovado pelo crítico)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "d7d109d83dd0be4ab9e8a4df384cadac9d4e9099405fb8a899251e42ef42e625"
+      }
+    },
+    "palmeira-ravenala-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/palmeira_ravenala.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks72t6bgnx7ww5azs74rvbbpnh8cvv8a",
+        "chatUrl": "https://mint.gg/chat/ph7by8184sbqmx1ev8j068pvm58ctqm0",
+        "displayName": "Dramatic Fan Palm (ravenala, palmeira-leque)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Ravenala em leque vertical (4.428 tris). Par assimétrico enquadrando a fachada sul (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "c707dc3fbcec4d63ec2313f93eeecf29dcc1d5aaef5ba1de6fc889f336047d85"
+      }
+    },
+    "costela-adao-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/costela_adao.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7csdx865mvkee2aa3chszfns8ct9qv",
+        "chatUrl": "https://mint.gg/chat/ph7byt97jw52ykdjrzezvwhsvn8cvsje",
+        "displayName": "Perforated Monstera Bush (costela-de-adão)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Monstera deliciosa de folhas fenestradas (3.472 tris). Massa de dossel dos maciços (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "82c5f004f3e8497398c0ba7299ed6239ffe514c461b9886ad933e8526246a277"
+      }
+    },
+    "bananeira-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/bananeira.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7b9rr467gcfq4yrk6bv9ds0x8cva40",
+        "chatUrl": "https://mint.gg/chat/ph71fmfkb7fb4433vac33xghd58cttan",
+        "displayName": "Drooping Paddle Banana Plant (bananeira)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Bananeira de pseudocaule verde e folhas-pá (4.684 tris). Substitui as bananeiras de esferas achatadas (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "b4b5e40537b248a02a4442803baf34c648bfcd035179f7abac0edfb7bcce4d5d"
+      }
+    },
+    "ixora-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/ixora.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7f812b4388pzarx4wekxf8g98ct1en",
+        "chatUrl": "https://mint.gg/chat/ph7dcr7emj3jkafn0yq98gantx8cvtvs",
+        "displayName": "Crimson Ixora Bloom (ixora)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Ixora arbustiva com buquês vermelho-alaranjados (4.496 tris). Manchas floridas nos canteiros, no lugar das bromélias de cone (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "b2bcbf7458f5f3052b35805cf57c9955177f2f52adaa23112762e6a973eb0710"
+      }
+    },
+    "agave-jardim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/agave.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks79jrvhxqhgpb3nc92vtbz7v58cthdg",
+        "chatUrl": "https://mint.gg/chat/ph777k51x3zm7rh2p92m2yferh8cv41j",
+        "displayName": "Blue-Green Agave Rosette (agave)",
+        "frente": "v21-c-mansao-jardim",
+        "notes": "Agave azul-esverdeada em roseta (4.688 tris). Acentos esculturais dos maciços e encosta (BUG-64). GLB normalizado ~1 m, pivô central."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "2f0c046535ee11fda49d4f2d8c40300e7946c4454fa89675196d843cb7ad314d"
+      }
+    },
+    "mansao-sofa": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/mansao_sofa.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7e8mz9xaahxwezbp8fs6hq7h8d74jk",
+        "packAssetId": "th789df01rjqd0qzj2mfe8zjw18d7b1c",
+        "chatUrl": "https://mint.gg/chat/ph701643a4t37097hg56aw5rfx8d6ggk",
+        "displayName": "mansao_sofa",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `mansao_interior` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Sofá de couro de 3 lugares (sala). Serve `mobilia()` no map_mansao.js com alturaAlvo 0,95 -> malha de mundo 2,20x1,00, dentro do colisor 2,30x1,10 (tools/eval/mansao-glb-fit.mjs). Frente do molde para +Z, medida em tools/blender-prop-orient-render.py."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "926dea2a4e0ff695cf5e96ddd0ce79404fd3f9b4cf3854b8c3941b85d9673197"
+      }
+    },
+    "mansao-lustre": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/mansao_lustre.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7968911swqbrasqxt023eqqn8d7vzw",
+        "packAssetId": "th789df01rjqd0qzj2mfe8zjw18d7b1c",
+        "chatUrl": "https://mint.gg/chat/ph701643a4t37097hg56aw5rfx8d6ggk",
+        "displayName": "mansao_lustre",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `mansao_interior` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Lustre de latão com cristais e roseta de teto. Pendurado pelo TOPO: `placeProp` ancora pela base, então y = 4,05 - 1,10. Fora de occluders (cristal não para bala)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "7222d24fc10c2d7a1da69514f4c8aa2d30b4a1f2b44a689a31c884386f18d755"
+      }
+    },
+    "mansao-poltrona": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/mansao_poltrona.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks79p2vv2cf5d7fzab1t5vnhzx8d7a0e",
+        "packAssetId": "th789df01rjqd0qzj2mfe8zjw18d7b1c",
+        "chatUrl": "https://mint.gg/chat/ph701643a4t37097hg56aw5rfx8d6ggk",
+        "displayName": "mansao_poltrona",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `mansao_interior` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Poltrona de madeira e couro capitonê. Serve as 4 do home theater, as 2 de luxo da sala e as 2 novas do escritório do mezanino. alturaAlvo 0,98 -> 0,94x0,90 dentro do colisor 1,08x1,02."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "9630e545dd2e7a9765e9ba67472ca51507df8338cb79415e319a797c59ab30ad"
+      }
+    },
+    "mansao-mesa-centro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/mansao_mesa_centro.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7abc1zgnf3d45dcv1jqs95898d76as",
+        "packAssetId": "th789df01rjqd0qzj2mfe8zjw18d7b1c",
+        "chatUrl": "https://mint.gg/chat/ph701643a4t37097hg56aw5rfx8d6ggk",
+        "displayName": "mansao_mesa_centro",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `mansao_interior` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Mesa de centro de madeira torneada com gaveta. 4ª família de `luxo-prop` (o teto do mansao-water-check é 3-5). alturaAlvo 0,45 -> 0,99x0,59 dentro do colisor 1,00x0,60."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "2683b62c9a1ceb73642dcd07da1a6e733a3c6ffaf0390f9e6ec34fb00430a7ee"
+      }
+    },
+    "coqueiro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/coqueiro.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks70kgvnr356rb8v8hk06v3dys8d62jz",
+        "packAssetId": "th72ef577hwy32a3de33eyymrs8d7vgc",
+        "chatUrl": "https://mint.gg/chat/ph70czc6er55wjdad98yn53dx58d73qt",
+        "displayName": "coqueiro",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `mansao_exterior` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Coqueiro de tronco curvo com cocos, para a faixa de praia do Joá (dono r2: \"coqueiros low poly\"). Oito instâncias com altura, giro e escala variados sobre a palma procedural, que vira fallback de node/?glb=0. Inclinação da copa medida NO ARQUIVO em 14,0° com a vertical (mínimo 8°, mesmo limiar da cláusula B3 do mansao-beach-check)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "8a384ba903c55e228cfdeebc6b019a946061b809d6698cf833473664b96c4e2f"
+      }
+    },
+    "arara-voo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/mansao_arara_voo.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks771w92vb973f6pj7acx41y7x8d7088",
+        "packAssetId": "th73jczawhd93sgrq9p7e10h118d68nv",
+        "chatUrl": "https://mint.gg/chat/ph7ajvsqfqtnafkh23jjd5dpsh8d6709",
+        "displayName": "arara_voo",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `aves_voo` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Arara-vermelha em pose de voo, asas abertas. Fauna de céu do Joá; locomoção procedural com banking no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "3e386353f48fdee2b186194dd5839ab7a56ddc8b6932847cb66e155b8d9759ab"
+      }
+    },
+    "passaro-voo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/ambient/passaro_voo.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7dsk0738faf0ytv09jyt7amh8d62kx",
+        "packAssetId": "th73jczawhd93sgrq9p7e10h118d68nv",
+        "chatUrl": "https://mint.gg/chat/ph7ajvsqfqtnafkh23jjd5dpsh8d6709",
+        "displayName": "passaro_voo",
+        "frente": "r2-mapas",
+        "notes": "Kit Mint `aves_voo` do kits-mint.json (gerado 2026-08-26, projeto zd7cbsyxbzmf05b3w084t51ymd8c5hfr). Pássaro pequeno em pose de voo, asas abertas. Bando de 5-8 no céu do Joá; locomoção procedural no ambientlife.js."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (padrao gen-asset: webp 1024, ~4-5k tris)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "323fe81e0bca831611db2e4c5fded13a0211e19d876f37bcb4adf832fe54d197"
+      }
+    },
+    "faixa-aviao-propaganda": {
+      "artifactType": "image/webp",
+      "files": [
+        "public/img/textures/faixa_aviao.webp"
+      ],
+      "source": {
+        "kind": "openrouter-image-concept",
+        "assetId": null,
+        "chatUrl": null,
+        "displayName": "Faixa de aviao — propaganda \"RADIO TRETA FM 99\"",
+        "prompt": "A long horizontal aerial advertising banner as towed behind a small plane, photographed straight-on, flat and fully readable. (...) large bold clean sans-serif capital letters in bright red and blue reading exactly: RADIO TRETA FM 99. (...) no logos, no plane, no sky, no background scenery.",
+        "notes": "Emissora FICTICIA — veto editorial de marca real vale aqui como vale no grafite. Duas variacoes geradas e OLHADAS; a v1 foi recortada na faixa de letras e centralizada em tela branca no aspecto da MALHA da faixa (0,510 x 0,094 medidos no aviao_faixa.glb com gltf-transform), para a letra nao esticar. Aplicada em runtime pelo `pintaFaixa()` do ambientlife.js, que reescreve as UV por projecao planar XY em vez de reaproveitar a ilha do atlas do Mint. Recibo visual: render Blender do GLB com a textura, sem browser."
+      },
+      "processing": {
+        "provider": "openrouter",
+        "model": "google/gemini-3-pro-image",
+        "tools": [
+          "../studio/tools/gen-image.mjs",
+          "PIL"
+        ],
+        "finalSha256": "7063c08031efea12eef11bca050aea05d20dc97a11ee3684bbec188f875232f9"
+      }
+    },
+    "coreto-praca-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/parque_coreto.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks75c1dfd2g0hcxytvzkgeqghs8d4qja",
+        "chatUrl": "https://mint.gg/chat/ph74qprnsd4nzq113248a9sd6s8d4zhk",
+        "displayName": "Festive Green Coreto (coreto de praça)",
+        "frente": "map2-parque",
+        "notes": "Coreto octogonal com colunas de ferro e bandeirolas (4.742 tris). Prop herói do rebuild USANTOS do parque_treta. GLB normalizado ~1 m, pivô central; escala no call-site (targetH 4,4 / targetLen 7,2)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs"
+        ],
+        "finalSha256": "7278c6deb242234459b27c966af1d92afc0fcf425901075d99f237c29e194ae0"
+      }
+    },
+    "roda-gigante-roda-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/roda_gigante_roda.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks74m3x604r82xbtnxt126sqbx8d754g",
+        "chatUrl": "https://mint.gg/chat/ph71fzmc1gjm6tvbve4b59x4td8d6gvn",
+        "displayName": "Ferris Wheel — parte rotativa (aro+raios+gôndolas)",
+        "frente": "map2-parque",
+        "notes": "Split Blender (2.871 tris) do roda_gigante.glb por componentes conexos: aro duplo, raios e gôndolas. Gira como filha do grupo 'roda-gigante' (rotação procedural do update). Escala no call-site: targetH 24,1, cubo na origem via Box3 (hubFrac 0,537)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs",
+          "tools/blender-split-roda-gigante.py"
+        ],
+        "finalSha256": "b5ba3713bb23cdbb3b617d691532adf79b2e9b31683413d5d5f6df39a2fa205f"
+      }
+    },
+    "roda-gigante-base-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/roda_gigante_base.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks74m3x604r82xbtnxt126sqbx8d754g",
+        "chatUrl": "https://mint.gg/chat/ph71fzmc1gjm6tvbve4b59x4td8d6gvn",
+        "displayName": "Ferris Wheel — base estática (pernas A+plataforma)",
+        "frente": "map2-parque",
+        "notes": "Split Blender (1.042 tris) do roda_gigante.glb: pernas em A com pés, plataforma cercada e cabine do operador. Estática, pés em y=0; targetH 19,9 casa o cubo da base com o da parte rotativa (escala comum 25,7 m/un)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs",
+          "tools/blender-split-roda-gigante.py"
+        ],
+        "finalSha256": "cbe7321c54a64f87a5935ee4718f5c5e9de3ad595b652092dc3053015a947792"
+      }
+    },
+    "carrossel-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/carrossel.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7dba32rp93p94y1582xt4cqx8d7z0t",
+        "chatUrl": "https://mint.gg/chat/ph71fzmc1gjm6tvbve4b59x4td8d6gvn",
+        "displayName": "Carousel (carrossel de parque)",
+        "frente": "map2-parque",
+        "notes": "Carrossel completo com cavalos e cobertura (4.419 tris). Filho do grupo 'carrossel-giratorio' — gira junto com a rotação procedural; targetH 8,5 no call-site."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs"
+        ],
+        "finalSha256": "0a96f3a605ef36eefe8aa483c13c610391525144bdf96916da5f6f735843c340"
+      }
+    },
+    "barraca-quermesse-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/barraca_quermesse.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks77wmwqmw4ef5dm24h3mbhfas8d6xh0",
+        "chatUrl": "https://mint.gg/chat/ph71fzmc1gjm6tvbve4b59x4td8d6gvn",
+        "displayName": "Quermesse Tent (barraca de quermesse)",
+        "frente": "map2-parque",
+        "notes": "Barraca de quermesse (4.419 tris) substituindo os 4 quiosques-caixa do parque_treta (PIPOCA/ALGODÃO DOCE/PESCARIA/ARGOLA); placas signTexture e colisores procedurais mantidos. targetH 3,2."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs"
+        ],
+        "finalSha256": "bef57d0ea1310119356cb9104c0d916fdcf6f7b82b9981f18136e4405bc3f204"
+      }
+    },
+    "predio-artdeco-entorno-parque": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/predio_artdeco.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7a5tm3psp3hb90m50mq548m18d6bpa",
+        "chatUrl": "https://mint.gg/chat/ph71fzmc1gjm6tvbve4b59x4td8d6gvn",
+        "displayName": "Art Deco Building (prédio de entorno)",
+        "frente": "map2-parque",
+        "notes": "Prédio art-déco (4.297 tris) instanciado 8× fora dos bounds jogáveis do parque_treta, fechando o quarteirão; rotações e alturas variadas (15–19 m), sem colisor."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs"
+        ],
+        "finalSha256": "54772ff857273da0630f46d9fe7b0f67dfbc3dad71ed123eb1f085e7ca7717cc"
+      }
+    },
+    "bombas-combustivel-posto": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/bombas_combustivel.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7bh1nbqc6pas5384dpbw68k98d6ft7",
+        "packAssetId": "th74q1agb8zfn1hnfbqmmrhd998d6fj6",
+        "chatUrl": "https://mint.gg/chat/ph70t6mnh0164gg0ej3dg6te4s8d6w0t",
+        "displayName": "Bombas de combustível (bombas_combustivel)",
+        "frente": "v21-e-models",
+        "notes": "Ilha de duas bombas de posto com visor, mangueira e coluna (5.081 tris, WebP 1024). Molde das três ilhas do Posto da Treta — a do meio fica sob a bandeira MID. GLB normalizado ~1 m, pivô central: targetH 2,0 ⇒ 2,47 × 0,94 m."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (kit posto_obras_r3, normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "788bdaa8f22b37cbfad9e73561e1f248470430fc7adf25b360409ec5790a27e3"
+      }
+    },
+    "loja-conveniencia-posto": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/loja_conveniencia.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7cs6vm1q8shyaqwztk8qt3cn8d7hz9",
+        "packAssetId": "th74q1agb8zfn1hnfbqmmrhd998d6fj6",
+        "chatUrl": "https://mint.gg/chat/ph70t6mnh0164gg0ej3dg6te4s8d6w0t",
+        "displayName": "Loja de conveniência (loja_conveniencia)",
+        "frente": "v21-e-models",
+        "notes": "Corpo de loja de conveniência de posto, com vitrine e testeira (4.369 tris, WebP 1024). Fecha o lado oeste do Posto da Treta nas duas pontas da fachada; a sala andável do meio é procedural. GLB normalizado ~1 m, pivô central: targetH 5,0 ⇒ 4,9 × 5,4 m."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (kit posto_obras_r3, normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "2a471a5a5ceee2e27c117ecffe58b8c0a7bf5a0255db282001424353a6883826"
+      }
+    },
+    "torre-vigilancia-penitenciaria": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/torre_vigilancia.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks79j7c9xgqs48qz8r4cf6gf6d8d6398",
+        "chatUrl": "https://mint.gg/chat/ph73cszyryt8jreekq64vj4s1x8d66ef",
+        "displayName": "Prison Guard Tower (torre_vigilancia)",
+        "frente": "map2-penitenciaria",
+        "notes": "Torre de vigilância com pernas de concreto em treliça X, escada, varanda com guarda-corpo e cabine envidraçada (4.535 tris). Substitui o visual das 4 guaritas de canto do muro (USANTOS-R2); a guarita GLB anterior segue no acervo. GLB normalizado ~1 m, pivô central; escala no call-site (targetH 9,6 / targetLen 5,6)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg",
+          "tools/optimize-props.mjs"
+        ],
+        "finalSha256": "45943077f7b998cbc3daa5ab5ef6788a0e7483999b2ef161ec126c45128ac31d"
+      }
+    },
+    "bloco-celas-carandiru": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/bloco_celas.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7ad5wz2hcf78xfnwtxb1xfkd8d69pv",
+        "chatUrl": "https://mint.gg/chat/ph7en60deef2j48p2mwg3ztfdx8d68dt",
+        "displayName": "Bloco de celas (kit carandiru_r3b)",
+        "frente": "map2-penitenciaria",
+        "notes": "Pavilhão de celas de 2 pavimentos com galeria e grades (3.988 tris, texturas WebP 1024). Pavilhão central do mapa penitenciária (referência Carandiru, dono 27/08/2026): o jogador circula pela galeria externa gradeada ao redor do bloco. Item do pack carandiru_r3b (packAssetId th7fkxdza9fd93fxc84xrnemy18d6r1v). GLB normalizado ~1 m, pivô central; escala não-uniforme no call-site (9 × 15 m de planta, 6,6 m)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "1560055af1eb9268ad7257843890ab28974d64f94634b54cb0f09d58873b5a4d"
+      }
+    },
+    "portao-penitenciaria-carandiru": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/portao_penitenciaria.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks75stmhnwxtapdam0mz8mqmgn8d6013",
+        "chatUrl": "https://mint.gg/chat/ph7en60deef2j48p2mwg3ztfdx8d68dt",
+        "displayName": "Portão de penitenciária (kit carandiru_r3b)",
+        "frente": "map2-penitenciaria",
+        "notes": "Portão principal de penitenciária com pilastras e folha de grade fechada (4.491 tris, texturas WebP 1024). Embutido no muro norte do mapa penitenciária (referência Carandiru) — portão fechado, o colisor sela o vão. Item do pack carandiru_r3b (packAssetId th7fkxdza9fd93fxc84xrnemy18d6r1v). GLB normalizado ~1 m, pivô central; escala no call-site (targetH 5,6 / targetLen 11)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "df2052512e03649fbec7dd85ee12beaabe17ca2d2e422d67bd0a4b7bf078e669"
+      }
+    },
+    "guarita-muro-carandiru": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/guarita_muro.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7a33yhwearthy8y6gmh98f358d7jtv",
+        "chatUrl": "https://mint.gg/chat/ph77vksqsbvk24d8gv6zkytdtn8d7f7t",
+        "displayName": "Guarita de muro (carandiru_r3b, item solto)",
+        "frente": "map2-penitenciaria",
+        "notes": "Guarita de muro de presídio com cabine envidraçada sobre estrutura de concreto (4.827 tris, texturas WebP 1024). Duas instâncias flanqueando o portão norte do mapa penitenciária — a frente não tinha vigia entre as 4 guaritas de canto (torre_vigilancia). Modelo solto da onda carandiru_r3b (chat próprio). GLB normalizado ~1 m, pivô central; escala no call-site (targetH 8,2 / targetLen 5,6, ry=π)."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "26a8a5fcac3089a955f204e9e3b265dd1084cbba5ff4317a47f4ea9cacd5006d"
+      }
+    },
+    "balcao-acougue": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/balcao_acougue.glb"
+      ],
+      "source": {
+        "kind": "replicate-gen",
+        "displayName": "Balcão de açougue (atacadão)",
+        "frente": "atacadao-secoes",
+        "notes": "Lote \"seções do atacadão\" (27/08/2026). NÃO É ASSET MINT: gerado por ../studio/tools/gen-asset.mjs --provider replicate, na conta Replicate do dono — texto -> imagem com black-forest-labs/flux-schnell, imagem -> malha com ndreca/hunyuan3d-2. Pós-processado pelo mesmo otimizador do acervo (dedup/prune + WebP 1024). GLB normalizado ~1 m, pivô central: escalar no call-site com placeProp({targetH}). Reconstrução de imagem única, então a PROPORÇÃO do bbox é o que manda, não o nome — medir com tools/inspect-glb.mjs antes de posicionar. Usado em map_atacadao.js, seção AÇOUGUE (4 instâncias, targetH 1,15 m => 1,13 × 0,89 m cada). Proporção medida 0,908 × 0,925 × 0,715 e distribuição de geometria em linha com o acervo bom (31% de face horizontal, banda 10-90 de 76%). 12.000 tris."
+      },
+      "processing": {
+        "provider": "replicate",
+        "model": "black-forest-labs/flux-schnell -> ndreca/hunyuan3d-2",
+        "tools": [
+          "../studio/tools/gen-asset.mjs --provider replicate",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "54162fc6a9f5151f2264de2c4df63388508cee5b327b1efc3a91e8e45f3698e3"
+      }
+    },
+    "balcao-padaria": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/balcao_padaria.glb"
+      ],
+      "source": {
+        "kind": "replicate-gen",
+        "displayName": "Balcão/ilha de padaria (atacadão)",
+        "frente": "atacadao-secoes",
+        "notes": "Lote \"seções do atacadão\" (27/08/2026). NÃO É ASSET MINT: gerado por ../studio/tools/gen-asset.mjs --provider replicate, na conta Replicate do dono — texto -> imagem com black-forest-labs/flux-schnell, imagem -> malha com ndreca/hunyuan3d-2. Pós-processado pelo mesmo otimizador do acervo (dedup/prune + WebP 1024). GLB normalizado ~1 m, pivô central: escalar no call-site com placeProp({targetH}). Reconstrução de imagem única, então a PROPORÇÃO do bbox é o que manda, não o nome — medir com tools/inspect-glb.mjs antes de posicionar. Usado em map_atacadao.js, seção PADARIA (3 instâncias, targetH 1,10 m). Proporção medida 0,284 × 0,151 × 0,285: planta QUADRADA e meia-altura, então entra como ILHA de exposição, que é o que a malha é de fato — não como balcão linear. 12.000 tris."
+      },
+      "processing": {
+        "provider": "replicate",
+        "model": "black-forest-labs/flux-schnell -> ndreca/hunyuan3d-2",
+        "tools": [
+          "../studio/tools/gen-asset.mjs --provider replicate",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "8f2a25fa9c02b2d5958c48353a2a645a0c7931657098d32dc01c518ee0fc4242"
+      }
+    },
+    "estante-pallets": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/estante_pallets.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack-item",
+        "frente": "v21-e-models",
+        "assetId": "ks7d5h0jrqz526fsqjtmed8d8s8d6780",
+        "packAssetId": "th7dnpa6tmkqv43k7s3458exmx8d79aq",
+        "chatUrl": "https://mint.gg/chat/ph7emw51xss7hs3n3war213h618d7ayv",
+        "displayName": "Estante de pallets de atacadão",
+        "prompt": "Rack de pallet de clube de atacado: estrutura metálica laranja de três níveis com pallets de madeira carregados de fardos e caixas encolhidas em filme stretch, desgaste de empilhadeira nas colunas. Normalizado ~1 m de altura, pivô na base.",
+        "notes": "Molde das 6 fileiras do labirinto do Atacadão da Treta (48 instâncias). Colocado com targetH 3,0 e ry=PI/2 — o eixo longo do GLB é o X, então a fileira corre em Z. A carga paletizada atrás do rack é BoxGeometry do mapa, não GLB: o bloco de 2,3 m que fecha a linha de visão é rack + carga, medido pela ATA1 de tools/eval/atacadao-check.mjs."
+      },
+      "processing": {
+        "modelProvider": "mint.gg",
+        "pack": "atacadao_r3",
+        "tools": [
+          "mint.gg text-to-3D",
+          "otimização do pack r3-parte2 (WebP 1024, ~4-5k tris)"
+        ],
+        "finalSha256": "7c49c3a17a7118437fd4804397305c6a024e6c5d3da1ac7a99e2f11735c14368"
+      }
+    },
+    "freezer-atacadao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/freezer.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack-item",
+        "frente": "v21-e-models",
+        "assetId": "ks7fwtjj0r7fy6fqce79scb0y18d6yja",
+        "packAssetId": "th7dnpa6tmkqv43k7s3458exmx8d79aq",
+        "chatUrl": "https://mint.gg/chat/ph7emw51xss7hs3n3war213h618d7ayv",
+        "displayName": "Freezer horizontal de ilha fria",
+        "prompt": "Freezer horizontal de supermercado brasileiro: gabinete branco esmaltado com tampa de vidro corrediça, moldura de alumínio, adesivos de promoção descascando e grade de condensador na base. Normalizado ~1 m de altura, pivô na base.",
+        "notes": "Parede fria da lateral leste do Atacadão da Treta (6 instâncias em x=24,2, targetH 2,2, ry=-PI/2). Cobrado pela ATA3 de tools/eval/atacadao-check.mjs junto das 3 luzes frias."
+      },
+      "processing": {
+        "modelProvider": "mint.gg",
+        "pack": "atacadao_r3",
+        "tools": [
+          "mint.gg text-to-3D",
+          "otimização do pack r3-parte2 (WebP 1024, ~4-5k tris)"
+        ],
+        "finalSha256": "86d7cbd7f7b9441d26576cec93b8364b3239f41fd21649d93d166cf75d0d077e"
+      }
+    },
+    "geladeira-bebidas": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/geladeira_bebidas.glb"
+      ],
+      "source": {
+        "kind": "replicate-gen",
+        "displayName": "Geladeira vertical de bebidas (atacadão)",
+        "frente": "atacadao-secoes",
+        "notes": "Lote \"seções do atacadão\" (27/08/2026). NÃO É ASSET MINT: gerado por ../studio/tools/gen-asset.mjs --provider replicate, na conta Replicate do dono — texto -> imagem com black-forest-labs/flux-schnell, imagem -> malha com ndreca/hunyuan3d-2. Pós-processado pelo mesmo otimizador do acervo (dedup/prune + WebP 1024). GLB normalizado ~1 m, pivô central: escalar no call-site com placeProp({targetH}). Reconstrução de imagem única, então a PROPORÇÃO do bbox é o que manda, não o nome — medir com tools/inspect-glb.mjs antes de posicionar. Usado em map_atacadao.js, parede de BEBIDAS (4 instâncias, targetH 2,00 m => 1,56 × 0,67 m cada). Pedido explícito do dono (\"precisa de geladeiras de bebidas\"). Proporção medida 0,770 × 0,990 × 0,334: mais alta que larga e rasa, que é a proporção certa de expositor de porta de vidro — o `freezer` do acervo é ilha HORIZONTAL e não serve para isso. CUSTO: 22.158 tris, ~5× um prop do kit Mint; por isso 4 instâncias e não uma parede inteira (89 k tris no total)."
+      },
+      "processing": {
+        "provider": "replicate",
+        "model": "black-forest-labs/flux-schnell -> ndreca/hunyuan3d-2",
+        "tools": [
+          "../studio/tools/gen-asset.mjs --provider replicate",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "0521658c629dd048f0be681cbbf41505c016ec9f9d0a647192c9d21e018563bd"
+      }
+    },
+    "ilha-caixas": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/ilha_caixas.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack-item",
+        "frente": "v21-e-models",
+        "assetId": "ks77jm9rp5ek9an2s31q8608rx8d71a1",
+        "packAssetId": "th7dnpa6tmkqv43k7s3458exmx8d79aq",
+        "chatUrl": "https://mint.gg/chat/ph7emw51xss7hs3n3war213h618d7ayv",
+        "displayName": "Ilha de caixas de promoção",
+        "prompt": "Ilha de promoção de atacado: caixas de papelão abertas empilhadas sobre pallet baixo, produtos aparecendo na boca das caixas, cantoneira de papelão amassada. Normalizado ~1 m de altura, pivô na base.",
+        "notes": "Cover de meia-altura (targetH 1,15) na boca dos vãos alternados e nas pontas do galpão (12 instâncias). Cobrado pela ATA2 de tools/eval/atacadao-check.mjs, que exige altura de mundo entre 0,85 e 1,45 m e colisor que empurra o corpo de raio 0,38."
+      },
+      "processing": {
+        "modelProvider": "mint.gg",
+        "pack": "atacadao_r3",
+        "tools": [
+          "mint.gg text-to-3D",
+          "otimização do pack r3-parte2 (WebP 1024, ~4-5k tris)"
+        ],
+        "finalSha256": "d8332cc0d92c122abe01d9a840eac85e1e4fe7b4085dda3244f1e58d766e4c5b"
+      }
+    },
+    "ilha-hortifruti": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/ilha_hortifruti.glb"
+      ],
+      "source": {
+        "kind": "replicate-gen",
+        "displayName": "Ilha de hortifrúti (atacadão)",
+        "frente": "atacadao-secoes",
+        "notes": "Lote \"seções do atacadão\" (27/08/2026). NÃO É ASSET MINT: gerado por ../studio/tools/gen-asset.mjs --provider replicate, na conta Replicate do dono — texto -> imagem com black-forest-labs/flux-schnell, imagem -> malha com ndreca/hunyuan3d-2. Pós-processado pelo mesmo otimizador do acervo (dedup/prune + WebP 1024). GLB normalizado ~1 m, pivô central: escalar no call-site com placeProp({targetH}). Reconstrução de imagem única, então a PROPORÇÃO do bbox é o que manda, não o nome — medir com tools/inspect-glb.mjs antes de posicionar. Usado em map_atacadao.js, seção HORTIFRÚTI (4 instâncias, targetH 1,20 m). Bbox cúbico 0,989³, banda 10-90 de 96%: malha cheia e bem distribuída. 12.000 tris."
+      },
+      "processing": {
+        "provider": "replicate",
+        "model": "black-forest-labs/flux-schnell -> ndreca/hunyuan3d-2",
+        "tools": [
+          "../studio/tools/gen-asset.mjs --provider replicate",
+          "tools/optimize-props-v21.mjs"
+        ],
+        "finalSha256": "01d1c0736151491050b15dde70085133894d343850787e9d24ad42f0d51422ad"
+      }
+    },
+    "carandiru-viatura-1990": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/carandiru_viatura_1990.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "p97a1j1skm2w33wjyv8pkw92n18e0g2j",
+        "chatUrl": "https://mint.gg/project/zd7agpw4xxat6kytnxka8kj19h8e1969?chat=ph7ev8zdhy23p8v1ec4vtjyt058e1r4k",
+        "projectId": "zd7agpw4xxat6kytnxka8kj19h8e1969",
+        "chatId": "ph7ev8zdhy23p8v1ec4vtjyt058e1r4k",
+        "displayName": "Weathered Grey Patrol Wagon",
+        "prompt": "Crie UM asset 3D estático game-ready: uma perua policial brasileira genérica de fim dos anos 1980/início dos anos 1990 para um mapa histórico fictício inspirado na arquitetura do Carandiru. Carroceria quadrada cinza-clara, quatro portas, para-choques pretos simples, rodas fixas, vidro escurecido e giroflex baixo vermelho/azul no teto. Aparência de uso severo, pintura fosca envelhecida, pequenas marcas de sujeira e ferrugem, mas veículo inteiro e reconhecível. Sem SUV moderno, sem pessoas, sem armas, sem sangue, sem cena de violência, sem logotipo, sem brasão, sem placa legível e sem copiar um modelo ou fotografia específica. Um único veículo isolado, fundo neutro. Dimensões-alvo no jogo: 4,6 m de comprimento, 1,75 m de largura e 1,75 m de altura. Origem/pivô no centro do piso entre as rodas, frente claramente orientada no eixo longitudinal. Até 8.000 triângulos, PBR estilizado-realista, no máximo um atlas 1024, silhueta limpa para leitura a 20 m. Não inclua chão, cenário, colisor, rig ou animação.",
+        "licenseBasis": "Gerado na conta Mint do usuário para este projeto; uso local autorizado. Termos públicos e publicação comercial ainda exigem verificação; não declarar CC0.",
+        "notes": "Perua policial brasileira genérica 1980–1990, sem marca, pessoa ou violência. Asset original do Tripo P1; escala no call-site: 4,6 m de comprimento e 1,75 m de altura. Colisor e navegação permanecem procedurais."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "Tripo P1",
+        "tools": [
+          "mint.gg",
+          "@gltf-transform/functions dedup/prune/textureCompress"
+        ],
+        "originalSha256": "26c04d5b950633e7882e98826cc454a4bb4cab0e204dcad0a747815a0671d752",
+        "finalSha256": "5251a70e9e63a1652f129d945a79d901d0b0e2d7b7394414ca393fe64062f2bf",
+        "originalBytes": 1043988,
+        "finalBytes": 415268,
+        "triangles": 4840,
+        "textures": 3
+      }
+    },
+    "julia-zanatta": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/julia-zanatta.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks7b6pywbwj0yyqg61pfy0w8mh8fvtas",
+        "chatUrl": "https://mint.gg/chat/ph74rx7w581tvfqftjrnjxyp3d8fvp6r",
+        "animationBatchId": "w57fs68epdenvq23mj3tscakmn8ftar6",
+        "displayName": "Rosecrown Pink Blazer",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/julia-zanatta/concept.jpg",
+        "ficha": "tools/personagens/fichas/julia-zanatta.json",
+        "rawSha256": "5767454b9308c935710060a006be03400fffd59012778aa92e16e98959822814",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte.",
+        "previousAssetId": "ks79rnb2jen887aj5kpetenfsd8frx5x"
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "961ff061920733e7f9e6acad46fb96379529ee2078e93f3a9eb2b33aff8f7769"
+      }
+    },
+    "marina-silva": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/marina-silva.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks74nthd755qtfxhhf2f5mn2w58ft8ef",
+        "chatUrl": "https://mint.gg/chat/ph7bzyvqwc0sd0zmhfwrq23kzd8ftxgz",
+        "animationBatchId": "w576jhsawbprr8kb95kb48rww98fvg2p",
+        "displayName": "Teal Bun Scholar",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/marina-silva/concept.jpg",
+        "ficha": "tools/personagens/fichas/marina-silva.json",
+        "rawSha256": "c583b9b8dac1480848faea24029b5e681c1998a2a5f8d757b418d72a96cbdfd9",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte.",
+        "previousAssetId": "ks7fq3mpng2qyf5rv3grjm5pz58fsf69"
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "42dc11431db1633625d37f64fcff3ff53fb51deb6bf43eeec86c353026b15e56"
+      }
+    },
+    "andaime-obras": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/andaime.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks72da37yam3djef241kms73498d6rrk",
+        "packAssetId": "th74q1agb8zfn1hnfbqmmrhd998d6fj6",
+        "chatUrl": "https://mint.gg/chat/ph70t6mnh0164gg0ej3dg6te4s8d6w0t",
+        "displayName": "Andaime de obra (andaime)",
+        "frente": "v21-e-models",
+        "notes": "Torre de andaime tubular com plataformas e travessas (4.299 tris, WebP 1024). Molde das duas torres escaláveis das Obras da Prefeitura — o piso alto (5,6 m) e o baixo (2,8 m) são andáveis pelo groundHeightAt multinível. GLB normalizado ~1 m, pivô central: targetH 8,4 ⇒ 3,78 × 3,44 m."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (kit posto_obras_r3, normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "f118b319e4f0a4452b5ec7293470dc5e3d8a2675833b0599179fd66e8f5ce8f0"
+      }
+    },
+    "container-escritorio-obras": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/container_escritorio.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7dzxqex8hhmqpgj3tnrys3a58d7xzw",
+        "packAssetId": "th74q1agb8zfn1hnfbqmmrhd998d6fj6",
+        "chatUrl": "https://mint.gg/chat/ph70t6mnh0164gg0ej3dg6te4s8d6w0t",
+        "displayName": "Container escritório (container_escritorio)",
+        "frente": "v21-e-models",
+        "notes": "Container marítimo convertido em escritório de canteiro, com porta e janela (4.406 tris, WebP 1024). Bunker de spawn das Obras da Prefeitura: quatro unidades ladeando os dois spawns. GLB normalizado ~1 m, pivô central: targetH 3,0 ⇒ 5,08 × 3,66 m."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d (kit posto_obras_r3, normalized original_glb)",
+        "tools": [
+          "mint.gg"
+        ],
+        "finalSha256": "537ff936b913b1c2efdd9b6cb836949353408824574059f4c216331460b79fb5"
+      }
+    },
+    "dama": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/dama.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks7fyet9jwbbz8jn720f5n7t8x8fvqjg",
+        "chatUrl": "https://mint.gg/chat/ph7ecdqg84v3xzzsbp2nze0wyx8ft505",
+        "animationBatchId": "w578dhg0dtaqq8xnqge0162yjx8ft0r6",
+        "displayName": "Crimson Chain Executive",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/dama/concept.jpg",
+        "prompt": "tools/eval/asset-evidence/pr773/concepts/dama/concept-prompt.txt",
+        "rawSha256": "7f7fda62b9bf1cb5f311c74edb4a91d6b2f5caedda9906e60cdceda9c11e884a",
+        "costCredits": {
+          "previews": 300,
+          "final": 3398,
+          "rig": 247,
+          "retopologyPilotDiscarded": 1313
+        },
+        "notes": "Refeita em 07/10/2026 a partir de concept 2D (OpenRouter) com proporções pesquisadas: cabeça 0,295 → 0,233 da altura, sem o topete. Prévia revisada uma vez para baixar o cabelo. Rig Mint com um clipe (613), 11 estados retargetados de models/anims/mixamo. Crítico cego reprovou o decote preto (lia como rasgo) e a mancha no pescoço: corrigidos por tools/personagens/retoque-textura.mjs. Ombro largo do blazer segue como dívida. Retopologia high testada (+32% de densidade por 1.313 créditos) e descartada."
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/personagens/retoque-textura.mjs --faixa 0.52,0.77,0.16,1 --limiar 60 --cor #5a5560 --faixa 0.77,0.81,0.08,0 --limiar 60 --cor #c5927e"
+        ],
+        "finalSha256": "34a33e1f0f0a6c3d74721452efe88aeae7888813d61f0b0e737491e4553b47ec"
+      }
+    },
+    "capitao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/capitao.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks74pzkx6c3re3m5ahaj4k0rm18fv8hv",
+        "chatUrl": "https://mint.gg/chat/ph7egj4xh2fyqdskgg9qef1n418fvdzp",
+        "animationBatchId": "w5703metqzzws20nzgtct0vxzn8fvjb4",
+        "displayName": "Yellow Collar Gentleman",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/capitao/concept.jpg",
+        "ficha": "tools/personagens/fichas/capitao.json",
+        "rawSha256": "8f20587d0bf42e609e647da1c5a5e93c183a3d59d3287bbcfe03f611f0bd0a6a",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte."
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "433fc02554e818a7607caa3df8b1e859e086fe61965a1950b8a391cfdab8ba1d"
+      }
+    },
+    "senador": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/senador.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks76vg1tqxve3024bzka6cxtw98ftc8e",
+        "chatUrl": "https://mint.gg/chat/ph75gcwnk7ek5g5rct3b1y6h7n8ftc92",
+        "animationBatchId": "w573gkjf5qpt5v81vvy17pdh158ftyr9",
+        "displayName": "Blue Suit Executive",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/senador/concept.jpg",
+        "ficha": "tools/personagens/fichas/senador.json",
+        "rawSha256": "547b19bb6dc3c60844ea90c2dde93a7f891d5d50b98ed754e2fed5500cc8f063",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte."
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "73fdf646d7c1f3b4b2719dd96094761cb3e396fd3a638c26ee48a3043b8b6de8"
+      }
+    },
+    "deputado": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/deputado.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks7bn9tvkztrgw4ec6nnd1c0hd8ft082",
+        "chatUrl": "https://mint.gg/chat/ph75766v8r8wyar4jwn0j4wvfs8ftr7f",
+        "animationBatchId": "w572ey59pj3kgnae1kv44wat3s8ft1z0",
+        "displayName": "Blond Wig Blue Suitman",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/deputado/concept.jpg",
+        "ficha": "tools/personagens/fichas/deputado.json",
+        "rawSha256": "0fb45368e954ad3bbfab8fe15ac7165f839709340b28117f631e2aae046b6037",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte."
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "8b8915819fc086bcfc2c1e1a66d52a8d938594799707415fbf1516dfbf70d95a"
+      }
+    },
+    "juiz": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/juiz.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks76wer7n28jrqvw2jjwth7nsd8fvcv2",
+        "chatUrl": "https://mint.gg/chat/ph70tknetjrwmwjc9tzzsxk7th8fv7xe",
+        "animationBatchId": "w579f3wp1sb36sdtcqwqchfv5s8ftc4q",
+        "displayName": "Navy Broadshoulder Executive",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/juiz/concept.jpg",
+        "ficha": "tools/personagens/fichas/juiz.json",
+        "rawSha256": "34d2436f199e79af35a94bde8813ca497f98500bc0ee314661291dc5a96a60cd",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte. Primeira geração do dia reprovada pelo crítico cego por lascas claras no rosto (geometria do final, não textura); regerada com boca fechada e rosto liso.",
+        "rejectedAssetId": "ks7bzjpd53mt7mj0z90fhfcqds8ftj83"
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "e4ea8299c825b2feab78eb79bff5f721deec5367c5f56c12a94df578b02f1264"
+      }
+    },
+    "barbudo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/barbudo.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks75fm69c1rts2xjayv1vnp5m58ftjaa",
+        "chatUrl": "https://mint.gg/chat/ph7752nffs461pmz45b0nwbjxs8ftts1",
+        "animationBatchId": "w57czpe29xynz1ar0w5xmt32xd8fv3rg",
+        "displayName": "White Bearded Sash President",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/barbudo/concept.jpg",
+        "ficha": "tools/personagens/fichas/barbudo.json",
+        "rawSha256": "b33f83f34d5ac6b7cefe7ede50b5b5b43c918e5d5da7f4ba2ff72eefa259c06e",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte."
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte",
+          "tools/personagens/retoque-textura.mjs --faixa 0.86,0.91,0.045,1 --sel vermelho --limiar 80 --cor #cd967e"
+        ],
+        "finalSha256": "2aaace3d7d18147693da0002f2f1e3477263cfd4eb8b74d2056869c3ae0f45f2"
+      }
+    },
+    "professor": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/professor.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks738p98er09cw2avc0edypks98ft360",
+        "chatUrl": "https://mint.gg/chat/ph7ebyw5n5ggf4ak4pvzvszrks8fvzrn",
+        "animationBatchId": "w57c0q56cgn41g6ywyrxqddz4s8fvdtq",
+        "displayName": "Saltpepper Blue Suit Gentleman",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/professor/concept.jpg",
+        "ficha": "tools/personagens/fichas/professor.json",
+        "rawSha256": "656236aec90ed77f88d50259922cb642d37bf3345b593f5c1563e9cef1d379be",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte. Primeira geração do dia reprovada pelo crítico cego por lascas claras no rosto (geometria do final, não textura); regerada com boca fechada e rosto liso.",
+        "rejectedAssetId": "ks72bpxjetrp680y9r0p6nj89n8ftm0z"
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "ab008ee5a573f7279227cd71ccb36e6b5dd3a193246fbe4fa169ff42daf9a3fb"
+      }
+    },
+    "ministro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/characters/ministro.glb"
+      ],
+      "source": {
+        "kind": "mint-humanoid-model",
+        "assetId": "ks773p13cwsnzrtp1ng50byvzx8fv7ax",
+        "chatUrl": "https://mint.gg/chat/ph736amvxtfxknd91ztg2fveps8fv4zs",
+        "animationBatchId": "w571bst2qn3mf3zwtgzbc3xh5d8ftgx4",
+        "displayName": "Bald Blue Tie Magistrate",
+        "concept": "tools/eval/asset-evidence/pr773/concepts/ministro/concept.jpg",
+        "ficha": "tools/personagens/fichas/ministro.json",
+        "rawSha256": "17c1c335fe424cb48cd9c059fc33f46f0d4a94c967b5161e61f38d516bba0e73",
+        "costCredits": {
+          "preview": 150,
+          "final": 3400,
+          "rig": 250
+        },
+        "notes": "Refeito em 07/10/2026 pela fábrica de personagens: concept 2D (OpenRouter) com proporção pesquisada → Mint review → final → rig com um clipe (613) → 11 estados retargetados de models/anims/mixamo; morte assentada com ground-anims --morte. Primeira geração do dia reprovada pelo crítico cego por lascas claras no rosto (geometria do final, não textura); regerada com boca fechada e rosto liso.",
+        "rejectedAssetId": "ks72jzfyaamr3dqxpkcba5m43n8ft17b"
+      },
+      "processing": {
+        "provider": "mint",
+        "tools": [
+          "mint.gg (MCP)",
+          "tools/optimize-tribos.mjs",
+          "tools/personagens/desvira-triangulos.mjs",
+          "tools/retarget-glb.mjs",
+          "tools/ground-anims.mjs --morte"
+        ],
+        "finalSha256": "129121e14a0f78ed89dd677e881280462cc3de468ad7edfa17937350098b2759"
+      }
+    },
+    "piscina_espreguicadeira": {
+      "files": [
+        "public/models/props/piscina_espreguicadeira.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks79zz49an3fzy1d2d7ke6m6298ftsy7",
+        "chatUrl": "https://mint.gg/chat/ph7f5h69frj9w3bsytxer0arf58ft0pe",
+        "displayName": "Navy Slatted Sun Lounger",
+        "notes": "Espreguiçadeira do passeio (8×, sem colisão). Bruto em references/glb/piscina_espreguicadeira_mint.glb; derivado por tools/optimize-piscina-props.mjs."
+      }
+    },
+    "piscina_armarios": {
+      "files": [
+        "public/models/props/piscina_armarios.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks744rwsndt7hayn12ydx0rja98ft5r9",
+        "chatUrl": "https://mint.gg/chat/ph70saqc8tc23f03cad1tqdpex8ftmmz",
+        "displayName": "Six Door Steel Locker",
+        "notes": "Módulo de armários 2,7 m do contrato do plano 25; esticado em largura para os bancos de 4 e 5 vãos. Bruto em references/glb/piscina_armarios_mint.glb; derivado por tools/optimize-piscina-props.mjs."
+      }
+    },
+    "piscina_banco": {
+      "files": [
+        "public/models/props/piscina_banco.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks74e8bbyhsvf66vze1tnjdzhs8fvpv4",
+        "chatUrl": "https://mint.gg/chat/ph71f31nch3gyjqtj9d0vpjg3h8fts72",
+        "displayName": "Navy Mosaic Poolside Bench",
+        "notes": "Banco azulejado 2,4 m do contrato do plano 25; esticado no comprimento de cada caixa. Bruto em references/glb/piscina_banco_mint.glb; derivado por tools/optimize-piscina-props.mjs."
+      }
+    },
+    "piscina_escada": {
+      "files": [
+        "public/models/props/piscina_escada.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7d1x9ftgn1fgr84n6tfsp0tx8fv8x3",
+        "chatUrl": "https://mint.gg/chat/ph78byp06py2f4239bqvq8me118fv9e7",
+        "displayName": "Brushed Steel Pool Ladder",
+        "notes": "Escada de inox do contrato do plano 25. Bruto em references/glb/piscina_escada_mint.glb; derivado por tools/optimize-piscina-props.mjs."
+      }
+    },
+    "upa_maca": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_maca.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "01-upa-maca-transport-stretcher.glb",
+          "sha256": "e8d6b9373038626a38f1f066dfac508e38c56175ebe174d54b62a8716158fec0",
+          "bytes": 2281636,
+          "pack": "vd7282g59ghphv0qgcq4x5befn8g21wr"
+        }
+      },
+      "processing": {
+        "chain": "Mint original→uniform clinical lengthZ2m/yaw+90→piecewise chassisY repair-frame-r1→texture1024",
+        "finalSha256": "a862f06309d1bbbf1b94b3a7b6e17d96df30663eb8d34aa438e671027a0911b5",
+        "bytes": 1167392,
+        "dimensionsMeters": [
+          0.8258317025440315,
+          1.1516046990620412,
+          2
+        ],
+        "triangles": 4759,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_longarina": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_longarina.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "02-upa-longarina-clinic-waiting-bench.glb",
+          "sha256": "b698a6fe3a56d9a5dffe794495ec4fe9d53592e0bba9876344f3dcd7c7e40bc6",
+          "bytes": 1975404,
+          "pack": "vd7282g59ghphv0qgcq4x5befn8g21wr"
+        }
+      },
+      "processing": {
+        "chain": "Mint original→uniform heightY.85m yaw0→texture1024",
+        "finalSha256": "c4c90a6dd4028cdaf6787c883cb995545de83ded2255ba3f9fa48db8ce154544",
+        "bytes": 947948,
+        "dimensionsMeters": [
+          1.772857142857143,
+          0.85,
+          0.5655102040816327
+        ],
+        "triangles": 4507,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_oxigenio": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_oxigenio.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "03-upa-oxigenio-oxygen-cylinder-trolley.glb",
+          "sha256": "2cfac7181baa7f1a6784f432cc5ebee3a847c1edc40c1264041a1365a9a45cb4",
+          "bytes": 2149528,
+          "pack": "vd7btbbet2see334ne0555k8c18g31zh"
+        }
+      },
+      "processing": {
+        "chain": "MintVol2 original→uniformY1.25m yaw0→texture1024",
+        "finalSha256": "cdfdf1f07d0b513cd6f1021728522ee23dcc46192b06676fd4bfdaf1e46d41be",
+        "bytes": 1133376,
+        "dimensionsMeters": [
+          0.4721135029354207,
+          1.25,
+          0.39383561643835613
+        ],
+        "triangles": 4962,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_biombo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_biombo.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "04-upa-biombo-privacy-screen.glb",
+          "sha256": "3946875681d9b13b010195f76df28d41bae0b5eba3a7fee660c9158685559c49",
+          "bytes": 1661480,
+          "pack": "vd7btbbet2see334ne0555k8c18g31zh"
+        }
+      },
+      "processing": {
+        "chain": "MintVol2 original→uniformY1.8m yaw+90→texture1024",
+        "finalSha256": "99d7cf074f59dd07ca4a8855ab99a67643d6ff035d68cd79ccd5dbab3a8d117e",
+        "bytes": 926348,
+        "dimensionsMeters": [
+          0.8275324019369233,
+          1.8000000000000003,
+          2.389090791055988
+        ],
+        "triangles": 4491,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_armario": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_armario.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "06-upa-armario-medicine-cabinet.glb",
+          "sha256": "2660d5778729c3db00a6de40b9b07bab423058f063f6e1570d4b2195ae780064",
+          "bytes": 1627632,
+          "pack": "vd7btbbet2see334ne0555k8c18g31zh"
+        }
+      },
+      "processing": {
+        "chain": "MintVol2 original→uniformY2.4m yaw0→texture1024",
+        "finalSha256": "de5cc40a2fab19a342f13fbb664e6fd7230a564c73d0eb16042b3bed0a11c46f",
+        "bytes": 824476,
+        "dimensionsMeters": [
+          1.2634052313937132,
+          2.4,
+          0.6152641878669276
+        ],
+        "triangles": 4195,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_monitor": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_monitor.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "upa-monitor-r2.glb",
+          "sha256": "48b9131ea0af36a8e8c3097c056d47b6bc185f002a7bdc2575b867017e0ae5ce",
+          "bytes": 1941392,
+          "pack": null
+        }
+      },
+      "processing": {
+        "chain": "MintR2 original→uniformY1.5m yaw0/front+Z→texture1024",
+        "finalSha256": "80d881c99fdeba93d832969b9da4a0941cceec8896f1ab313b31615bca4d4475",
+        "bytes": 1018428,
+        "dimensionsMeters": [
+          0.8131115459882583,
+          1.5,
+          0.8131115459882583
+        ],
+        "triangles": 4817,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_cadeira_rodas": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_cadeira_rodas.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "05-upa-cadeira-rodas-manual-wheelchair.glb",
+          "sha256": "eefe9b8039fc205b3bf016fd450d54ecf9192557182936068e7556f6d89855a9",
+          "bytes": 2579096,
+          "pack": "vd7btbbet2see334ne0555k8c18g31zh"
+        }
+      },
+      "processing": {
+        "chain": "MintVol2 original→uniformY.95m yaw−90/front+Z→texture1024",
+        "finalSha256": "e2aa0532b8ad9aac69f37d5bb46f1fb069b471e8788bf40aaf8a36395a638c1d",
+        "bytes": 1323748,
+        "dimensionsMeters": [
+          0.6802231237322515,
+          0.95,
+          0.9846856277806282
+        ],
+        "triangles": 4824,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_soro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_soro.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "02-upa-soro-iv-pole.glb",
+          "sha256": "8d40b6cbc81c9dde814d851b5043e63877161004a6331e77d94a92b29d7bc3f1",
+          "bytes": 2049328,
+          "pack": "vd7btbbet2see334ne0555k8c18g31zh"
+        }
+      },
+      "processing": {
+        "chain": "MintVol2 original→uniformY1.9m yaw0→rigid bag/loop/tube contact repair-r1→texture1024",
+        "finalSha256": "08a775ec172a4807d5e52c2173176a65642369df75fdfe961bd85f940dcd7f87",
+        "bytes": 1109712,
+        "dimensionsMeters": [
+          0.7696673189823875,
+          1.9,
+          0.7399217221135029
+        ],
+        "triangles": 4688,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "upa_balcao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/upa_balcao.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "collection": "public/models/props/upa-mint-assets.json",
+        "original": {
+          "file": "upa-balcao-r2.glb",
+          "sha256": "81a8dadc59067803ceecc9ea3d4c71e1211abf12b11f226f68b6f6c563134b1b",
+          "bytes": 1830308,
+          "pack": null
+        }
+      },
+      "processing": {
+        "chain": "MintR2 original→uniformY1.2m yaw0/candidatefront+Z→texture1024",
+        "finalSha256": "3387a4e64e57d2608c5cd3b34c4cbbf59d023959d24cea4176d8f670b281f7d9",
+        "bytes": 834848,
+        "dimensionsMeters": [
+          2.6317596566523607,
+          1.2,
+          0.9012875536480687
+        ],
+        "triangles": 4834,
+        "status": "Integrado e validado localmente; revisão visual independente aprovada no escopo observado; revisão humana pendente"
+      }
+    },
+    "skins_miticos_loja_20261024": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/skins/canarinho-drip-0e3d6b1eb99c.glb",
+        "public/models/skins/canarinho-mandrake-a53a6eb79924.glb",
+        "public/models/skins/canarinho-cyborg-cba697e2f8d1.glb",
+        "public/models/skins/gotinha-drip-5bdbb59e1061.glb",
+        "public/models/skins/gotinha-mandrake-97634ca0e20e.glb",
+        "public/models/skins/gotinha-cyborg-d247e5db9c73.glb",
+        "public/models/skins/lampiao-cyborg-ed4f0edfc55e.glb",
+        "public/models/skins/lobisomem-cyborg-d2f5f8e28085.glb",
+        "public/models/skins/mariabonita-cyborg-006a34d55dc0.glb",
+        "public/models/skins/et-cyborg-aaaaafd03215.glb",
+        "public/models/skins/mandrake-cyborg-367eb7fe7789.glb",
+        "public/models/skins/emo-cyborg-5123caa94e5c.glb",
+        "public/models/skins/curupira-cyborg-c8a973c7c01d.glb"
+      ],
+      "source": {
+        "kind": "mint-model-batch",
+        "project": "CORO SOLTO Loja TRETA",
+        "assets": {
+          "canarinho-drip": {
+            "assetId": "ks7fxda72qc6dxkw0ymg086m5x8gxq9p",
+            "chatUrl": "https://mint.gg/chat/ph7cgfe80rk63yzsgy54a2z8pn8gxbfb",
+            "animationBatchId": "w57fd30s7k47236t6fwce90pds8gw7kb"
+          },
+          "canarinho-mandrake": {
+            "assetId": "ks79tnxsktd8kxk48zgf8b21hh8gw9yp",
+            "chatUrl": "https://mint.gg/chat/ph7bzgh73fm8tadfkxzgejakrh8gxxn5",
+            "animationBatchId": "w577kzxgtccbnwgv1gvsmhgdph8gwk1r"
+          },
+          "canarinho-cyborg": {
+            "assetId": "ks72b9amqc84pw2zrwjb599q918gw3r9",
+            "chatUrl": "https://mint.gg/chat/ph78b1wcypnzz2z1tfc7xv6tjn8gx22z",
+            "animationBatchId": "w579p9rgmrh7pq67qgwv6828sx8gx99x"
+          },
+          "gotinha-drip": {
+            "assetId": "ks7b6e3c6416tempnd3hk4n3ws8gwe0z",
+            "chatUrl": "https://mint.gg/chat/ph7b7asqs3cq8fszr7g21e3qtn8gwkmn",
+            "animationBatchId": "w57apv3n6xpj0w9s8r474p2twd8gxqd9"
+          },
+          "gotinha-mandrake": {
+            "assetId": "ks75qyp6vnbhkgkkf7vtr9yvjh8gx6mz",
+            "chatUrl": "https://mint.gg/chat/ph72q9aq72z180bev0ac7syyhd8gw051",
+            "animationBatchId": "w572xvaqcdfqqgdk8xzg5akhzs8gx4mv"
+          },
+          "gotinha-cyborg": {
+            "assetId": "ks7922dw2cb2dkqdbjw1sxwv498gx3rg",
+            "chatUrl": "https://mint.gg/chat/ph7eev61m3a9xms4dszq8n9zex8gxtpz",
+            "animationBatchId": "w57ekhkbbph07g5q89z5ae4pr58gxha8"
+          },
+          "lampiao-cyborg": {
+            "assetId": "ks7csy2f82cy9yx3tyy86f1g4x8gwrn4",
+            "chatUrl": "https://mint.gg/chat/ph724qfg06g7x9rk06t7cdcpb58gxy45",
+            "animationBatchId": "w574f5vwa250psnnjk06zhaqmn8gwv5s"
+          },
+          "lobisomem-cyborg": {
+            "assetId": "ks72teby5ypq17p1vncn9692ch8gx0t9",
+            "chatUrl": "https://mint.gg/chat/ph77xm6skbwyk30pfmc7a9qz4h8gxyd7",
+            "animationBatchId": "w571h8jdnqbhbj00jq5fs1cd7s8gx88n"
+          },
+          "mariabonita-cyborg": {
+            "assetId": "ks7d4b49hr89t8025yjm5crs158gw6nr",
+            "chatUrl": "https://mint.gg/chat/ph70ztprgpeb2bba86bcjkn4th8gw0ce",
+            "animationBatchId": "w574q8tp83sszq1kdd04e73cs58gxxpp"
+          },
+          "et-cyborg": {
+            "assetId": "ks7bwcmv36wv6gkvyqnqmqt49n8gwrme",
+            "chatUrl": "https://mint.gg/chat/ph75y6f8bd66bpbprt769mzyan8gxyj3",
+            "animationBatchId": "w57bjxjge0r4dywbn848nnmtxd8gw428"
+          },
+          "mandrake-cyborg": {
+            "assetId": "ks779kgppcvr1ftdjrq8z5sskx8gxpyp",
+            "chatUrl": "https://mint.gg/chat/ph7fvxfejdch0tp93hvyqzw6v58gwk3y",
+            "animationBatchId": "w57atyr2nge2rr84v0x7vgdnrs8gxq6y"
+          },
+          "emo-cyborg": {
+            "assetId": "ks7cskjhgya5n6t68mx5n502wx8gxrq2",
+            "chatUrl": "https://mint.gg/chat/ph714w6w7vfv36ds3v1g6183kx8gwtj7",
+            "animationBatchId": "w57c8jk3mt2w2y3df4k7zwjmp58gxs8k"
+          },
+          "curupira-cyborg": {
+            "assetId": "ks7dxdb9s2ph39mp3z0zk88c3d8gxanf",
+            "chatUrl": "https://mint.gg/chat/ph7fp8pgr0gx6mm1jkp483xpen8gxmyw",
+            "animationBatchId": "w572neanns353eqsf4v8jcy81n8gxzh9"
+          }
+        },
+        "rejected": [
+          "Referência inicial do Canarinho continha arma; o upload Mint rejeitou e ela foi substituída por render sem arma.",
+          "As primeiras prévias de Lobisomem e Maria Bonita não estavam horizontais; ambas foram revisadas antes do final.",
+          "A primeira prévia de Mandrake continha marcas legíveis; a revisão removeu texto e logotipo.",
+          "O primeiro Mandrake final tinha boné e roupas genéricos e pouco rosto cyborg; foi substituído por boné estruturado, streetwear técnico e meia face mecânica.",
+          "Três prévias de Curupira não materializaram os pés invertidos; a identidade foi corrigida no rig final, em bind e em todos os clipes."
+        ]
+      },
+      "processing": {
+        "provider": "mint",
+        "project": "CORO SOLTO Loja TRETA",
+        "rig": "riggable_character t_pose empty hands",
+        "animationActionId": 613,
+        "animation": "Casual Walk inplace",
+        "mintCredits": 11295,
+        "creditsAdditionalSkins": 3499,
+        "creditsMandrakeRevision": 745,
+        "creditsBefore": 120000,
+        "creditsAfter": 108705,
+        "status": "Treze modelos, rigs e vídeos integrados; Mandrake revisado; postura, movimento e revisão visual aprovados"
+      }
+    },
+    "armadura_colete": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/armadura/colete.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "displayName": "Dustworn Olive Plate Carrier",
+        "original": {
+          "file": "mint-colete-flash-20261028/colete.glb",
+          "sha256": "bef1667ebc167da8f37410207ecad26020a9e4adc8a15951e05c4d874d6e490b",
+          "bytes": 3513828,
+          "pack": null
+        },
+        "notes": "Gerado pelo dono na conta Mint dele (28/10/2026); uso livre no jogo. Normalizado num cubo de ~1 m, frente +Z."
+      },
+      "processing": {
+        "chain": "Mint original→tools/optimize-armadura.mjs (textura 1024/512 JPEG, dedup, prune, meshopt); escala e encaixe medidos por corpo em armadura-visual.js",
+        "finalSha256": "18e41d4ef589328604835104785a0d17a1f13e2fb4f5fb4340fa78cf6d2994c9",
+        "bytes": 345048,
+        "triangles": 4877,
+        "status": "Integrado; prancha em docs/evidencias/feat-colete-20261028; revisão humana pendente"
+      }
+    },
+    "armadura_capacete": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/armadura/capacete.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "displayName": "Olive Highcut NVG Helmet",
+        "original": {
+          "file": "mint-colete-flash-20261028/capacete.glb",
+          "sha256": "0ca32b1181a11e850f3740de166307b038ef6d60894f1ec92fe3669d452e07d9",
+          "bytes": 2969572,
+          "pack": null
+        },
+        "notes": "Gerado pelo dono na conta Mint dele (28/10/2026); uso livre no jogo. Normalizado num cubo de ~1 m, frente +Z."
+      },
+      "processing": {
+        "chain": "Mint original→tools/optimize-armadura.mjs (textura 1024/512 JPEG, dedup, prune, meshopt); escala e encaixe medidos por corpo em armadura-visual.js",
+        "finalSha256": "8c54aeff35294bb38460c457491dc4a24d10f81bd622612b7c8ebe175366b839",
+        "bytes": 263976,
+        "triangles": 4578,
+        "status": "Integrado; prancha em docs/evidencias/feat-colete-20261028; revisão humana pendente"
+      }
+    },
+    "flash-granada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/granadas/flash-world.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "displayName": "Yellowband Vent Canister (flashbang)",
+        "notes": "Gerado pelo dono na conta Mint dele (28/10/2026), uso livre no jogo; assetId/chat não vieram junto do download. Original: 1 m de altura, texturas 2048, 2,2 MB. Granada flash do mundo (PR #1163); a da mão segue o UTILITY_FLASH do pacote pago."
+      },
+      "processing": {
+        "provider": "mint",
+        "model": "mint text-to-3d",
+        "tools": [
+          "mint.gg",
+          "tools/prep-flash-world.mjs"
+        ],
+        "finalSha256": "57eddb91de4f8eaf45a68af26a50c57167f4ce6cfd8ea95275b432aca35527e9"
+      }
+    },
+    "jp-chevette-sl76": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/chevette_sl76.glb"
+      ],
+      "source": {
+        "kind": "sketchfab-model",
+        "url": "https://sketchfab.com/3d-models/chevrolet-chevette-sl-76-2322139894c545b6838000f08d853662",
+        "displayName": "Chevrolet Chevette sl 76",
+        "author": "Sketchfab: Laerte.Hubaleque",
+        "license": "CC-BY-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "frente": "javaporcos-realista",
+        "classe": "carro",
+        "notes": "Invasão dos Javaporcos (rua). 37983 tris (bruto 53839), 1.61 x 1.35 x 4.12 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "0ab8a6eb9005ad148bd1682296fa6add00a1f5b3a6e0d9ab58d25c380791c952"
+      }
+    },
+    "jp-carro-batido-scan-03": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/carro_batido_scan_03.glb"
+      ],
+      "source": {
+        "kind": "sketchfab-model",
+        "url": "https://sketchfab.com/3d-models/destroyed-car-03-raw-scan-483fe7f26336463fba66638ca4200c5a",
+        "displayName": "Destroyed Car 03 (Raw Scan)",
+        "author": "Sketchfab: Renafox",
+        "license": "CC-BY-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "frente": "javaporcos-realista",
+        "classe": "carro",
+        "notes": "Invasão dos Javaporcos (rua/beco). 39979 tris (bruto 2499993), 2.41 x 1.22 x 4.2 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "509d754ed00baa9ae0ddece2a9858d00c058a5274b5c723bb2b89d04d33b65ef"
+      }
+    },
+    "jp-carro-batido-scan-07": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/carro_batido_scan_07.glb"
+      ],
+      "source": {
+        "kind": "sketchfab-model",
+        "url": "https://sketchfab.com/3d-models/destroyed-car-07-raw-scan-916b51c7e5644eb2a6c9b3797ebb08cf",
+        "displayName": "Destroyed Car 07 (Raw Scan)",
+        "author": "Sketchfab: Renafox",
+        "license": "CC-BY-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "frente": "javaporcos-realista",
+        "classe": "carro",
+        "notes": "Invasão dos Javaporcos (rua/beco). 39995 tris (bruto 2500000), 2.97 x 1.8 x 4 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "33f11ea2dee1ffd282a3736c9c006188fb1c63bd4a203330172d7c8949f340ca"
+      }
+    },
+    "jp-perua-pichada-scan": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/perua_pichada_scan.glb"
+      ],
+      "source": {
+        "kind": "sketchfab-model",
+        "url": "https://sketchfab.com/3d-models/graffitid-toyota-wagon-raw-scan-cb1a538a5e84460e8dfeb4cfff109653",
+        "displayName": "Graffiti'd Toyota Wagon (Raw Scan)",
+        "author": "Sketchfab: Renafox",
+        "license": "CC-BY-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "frente": "javaporcos-realista",
+        "classe": "carro",
+        "notes": "Invasão dos Javaporcos (rua/pasto). 39986 tris (bruto 2499862), 1.81 x 1.47 x 4.34 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "17fc3f1d7768dc5c6e3e5805f2ef89c86a14022fb86a014747b8d59ee0cafa50"
+      }
+    },
+    "jp-saco-lixo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/saco_lixo.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/trashbag",
+        "displayName": "trashbag",
+        "author": "Poly Haven: Benny Weimer",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua/beco). 4482 tris (bruto 4482), 0.53 x 0.57 x 0.46 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "8f9ee399c25fed43f088b987b2ad1addb35b36551c68479524a544f029fabb8d"
+      }
+    },
+    "jp-caixa-papelao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/caixa_papelao.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/cardboard_box_01",
+        "displayName": "cardboard_box_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua/beco). 5000 tris (bruto 16952), 0.39 x 0.34 x 0.52 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "f2eaf727a82fefea489238bfd84cdd9a95770e073a3f46ba5031f027875f6a55"
+      }
+    },
+    "jp-engradado-plastico": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/engradado_plastico.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/plastic_crate_02",
+        "displayName": "plastic_crate_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (praça/rua). 5840 tris (bruto 5840), 0.51 x 0.25 x 0.41 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "c4290fe641b70e4b55f1f35d4968f36e9d419a8422b01b08556199c7096c5e52"
+      }
+    },
+    "jp-caixote-madeira": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/caixote_madeira.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/wooden_crate_01",
+        "displayName": "wooden_crate_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (praça (feira)). 6576 tris (bruto 6576), 0.83 x 0.35 x 0.41 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "3e652df1c0f8b4244b5fb4455095c32eab5b82a4d4b01952e72257a0c5fdf888"
+      }
+    },
+    "jp-pneu-velho": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/pneu_velho.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/old_tyre",
+        "displayName": "old_tyre",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (praça/rua). 2880 tris (bruto 2880), 0.6 x 0.6 x 0.16 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "0b433c6b3964ecc4372cca9ce2632f1059f0b1666b6e2a1a0ed7c6c454ef8ab7"
+      }
+    },
+    "jp-cadeira-plastico": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/cadeira_plastico.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/plastic_monobloc_chair_01",
+        "displayName": "plastic_monobloc_chair_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua (bar)). 3356 tris (bruto 3356), 0.64 x 0.88 x 0.63 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "dfc7f2432395d148864f807fe395c8b047e2e9e5828d3090b35ea2d3c7989340"
+      }
+    },
+    "jp-saco-cimento": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/saco_cimento.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/cement_bag",
+        "displayName": "cement_bag",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (beco/rua). 844 tris (bruto 844), 0.46 x 0.18 x 0.7 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "1676ab9b846d33bb661baae95d1f7c5298cd283e327a30bc9814e1d597dc6ee4"
+      }
+    },
+    "jp-tambor-metal": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/tambor_metal.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/barrel_03",
+        "displayName": "barrel_03",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (beco/pasto). 1473 tris (bruto 1473), 0.63 x 0.93 x 0.64 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "491b58bc9fa2e78e61062e76b0f98e912cba7161a053377188d142195c781138"
+      }
+    },
+    "jp-tampa-bueiro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/tampa_bueiro.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/water_manhole_cover",
+        "displayName": "water_manhole_cover",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua). 2999 tris (bruto 6301), 0.69 x 0.07 x 0.69 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "10f1315dc7e4649e01bce415a5cf54c32edfa21c14ae851dfad1576b0c5c24fd"
+      }
+    },
+    "jp-lixeira-metal": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/lixeira_metal.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/metal_trash_can",
+        "displayName": "metal_trash_can",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (beco). 7532 tris (bruto 7532), 0.77 x 0.91 x 0.55 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "febd7bcb53a4e82c667c686ff8eeb50b5bbd978707bb4b4a1bf93bc906c753fe"
+      }
+    },
+    "jp-lata-enferrujada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/lata_enferrujada.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/can_rusted",
+        "displayName": "can_rusted",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (beco/rua). 1500 tris (bruto 3520), 0.12 x 0.15 x 0.12 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "331c771f37ef9ef8b7a570bade008f4eb674df9047292ab6651894302d7a45f9"
+      }
+    },
+    "jp-caixa-energia": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/caixa_energia.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/utility_box_01",
+        "displayName": "utility_box_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (beco). 4404 tris (bruto 4404), 0.52 x 1.12 x 0.43 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "2b8c722c7d70b7acb277876a77991211ddb0d7d40810f62a6989b92ea4877404"
+      }
+    },
+    "jp-porta-aco": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/porta_aco.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/rollershutter_door",
+        "displayName": "rollershutter_door",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua (comércio fechado)). 552 tris (bruto 552), 1.08 x 2.4 x 0.3 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "78e9de97a4a92c1b79d82a202eb8a5939466312f98300e30ec3f15c9db2a3256"
+      }
+    },
+    "jp-porta-aco-pichada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/porta_aco_pichada.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/rollershutter_door",
+        "displayName": "rollershutter_door",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (rua/beco). 552 tris (bruto 552), 1.08 x 2.4 x 0.3 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "fac91f6d7dca4ef78fdcb867ce7d4f2167c5b357b406859576f085c412fe8f1d"
+      }
+    },
+    "jp-barreira-concreto": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/barreira_concreto.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/concrete_road_barrier",
+        "displayName": "concrete_road_barrier",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (praça (barricada)). 8000 tris (bruto 60928), 1.54 x 0.83 x 0.64 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "6f36677963004786b3a8a6a009cb2c44bfbf0e1c122c0ad4d9f8f5a72477eef9"
+      }
+    },
+    "jp-luminaria-parede": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/luminaria_parede.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/street_lamp_02",
+        "displayName": "street_lamp_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (praça (fachada da igreja)). 8096 tris (bruto 20338), 0.39 x 1.67 x 0.81 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "f60196c2ec628650483fbf85086cd43e36697e238102e3ceaead147849d73cca"
+      }
+    },
+    "jp-poste-transformador": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/poste_transformador.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/modular_electricity_poles",
+        "displayName": "modular_electricity_poles",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "estrutura",
+        "notes": "Invasão dos Javaporcos (rua/praça). 12665 tris (bruto 31932), 1.2 x 6.13 x 1.96 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "c686408577a737aa3a23ddd41ba5be30fd4ce3c4045797bae2a7136211069156"
+      }
+    },
+    "jp-poste-fiacao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/poste_fiacao.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/modular_electricity_poles",
+        "displayName": "modular_electricity_poles",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "estrutura",
+        "notes": "Invasão dos Javaporcos (rua/beco). 12499 tris (bruto 26466), 1.2 x 6.13 x 0.85 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "590675796500f0aeb99186adbf02835411357e72afedcb63c8ae87c21d1d361a"
+      }
+    },
+    "jp-poste-luz-praca": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/poste_luz_praca.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/street_lamp_01",
+        "displayName": "street_lamp_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "estrutura",
+        "notes": "Invasão dos Javaporcos (praça). 12095 tris (bruto 30610), 0.7 x 3.87 x 0.39 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "23a9860c2b24c4d832ed906eaeb146398fd464cddd4d20175e4208b18d419af8"
+      }
+    },
+    "jp-capim-touceira-a": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/capim_touceira_a.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/grass_medium_02",
+        "displayName": "grass_medium_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (pasto/mata). 2489 tris (bruto 2489), 0.32 x 0.26 x 0.36 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "225d8c0b43ff29b0851d9a061a2ea8f6b38e69136682f4565c612e752b6e5b48"
+      }
+    },
+    "jp-capim-touceira-b": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/capim_touceira_b.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/grass_medium_02",
+        "displayName": "grass_medium_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (pasto/calçada). 1760 tris (bruto 1760), 0.18 x 0.18 x 0.2 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "3f29d11c4652c36b18ec32e7b77bfe37402689cc6a7379813415c1426c9fd60e"
+      }
+    },
+    "jp-mato-erva": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/mato_erva.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/weed_plant_02",
+        "displayName": "weed_plant_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (calçada/beco). 2967 tris (bruto 2967), 0.22 x 0.07 x 0.29 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "20692276628cb206203ea2e9be6b9133a6216b40e6456cd894bad4e7a8708b2e"
+      }
+    },
+    "jp-arbusto-mata-a": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/arbusto_mata_a.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/shrub_02",
+        "displayName": "shrub_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata/pasto). 9234 tris (bruto 9234), 1.77 x 1.31 x 2.29 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "3867c84dceda0a2610c34851a10252964f39f6cd4adbe69848ce8f85a7d4f3ac"
+      }
+    },
+    "jp-arbusto-mata-b": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/arbusto_mata_b.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/shrub_02",
+        "displayName": "shrub_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata/praça). 7590 tris (bruto 7590), 1.31 x 1.69 x 1.64 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "7b245cc05147accba9a66277785d6536068819e75113344a45a4e050bca6f374"
+      }
+    },
+    "jp-samambaia-mata": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/samambaia_mata.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/fern_02",
+        "displayName": "fern_02",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata). 2384 tris (bruto 2384), 0.99 x 0.43 x 0.89 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "ebc414ceeedd13ee595c7898e1f66a6d9fa90051cd407fd9426e0691dfa32964"
+      }
+    },
+    "jp-calathea-mata": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/calathea_mata.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/calathea_orbifolia_01",
+        "displayName": "calathea_orbifolia_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata). 5904 tris (bruto 5904), 0.6 x 0.42 x 0.53 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "52233a7beec94a3a239aa3cb9b264e73dad0b1709e094f1de45d59402ea2760e"
+      }
+    },
+    "jp-galhos-secos": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/galhos_secos.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/dry_branches_medium_01",
+        "displayName": "dry_branches_medium_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata/pasto). 5933 tris (bruto 5933), 0.32 x 0.34 x 1.3 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "6c43a3c7957bdb6e4f5b5c784c2bbf90930711b0d5aed9df909cf6519adeecae"
+      }
+    },
+    "jp-toco-arvore": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/toco_arvore.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/tree_stump_01",
+        "displayName": "tree_stump_01",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (pasto/mata). 7994 tris (bruto 41046), 1.43 x 0.57 x 1.59 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "8c930b7d869edf6998a7013d90d79e182244673d47534be93688c1e3a41b12b4"
+      }
+    },
+    "jp-tronco-caido": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/tronco_caido.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/dead_tree_trunk",
+        "displayName": "dead_tree_trunk",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "vegetacao",
+        "notes": "Invasão dos Javaporcos (mata/pasto). 7994 tris (bruto 101802), 3.05 x 0.29 x 0.28 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "d9ed1c128c5a3184b32c0cbad649959d58d66ac0defdd062faa8c111e5de1bee"
+      }
+    },
+    "jp-pedra-mata": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/pedra_mata.glb"
+      ],
+      "source": {
+        "kind": "polyhaven-model",
+        "url": "https://polyhaven.com/a/rock_07",
+        "displayName": "rock_07",
+        "author": "Poly Haven: Poly Haven",
+        "license": "CC0 1.0",
+        "licenseUrl": "https://polyhaven.com/license",
+        "frente": "javaporcos-realista",
+        "classe": "pequeno",
+        "notes": "Invasão dos Javaporcos (pasto/mata). 3998 tris (bruto 14844), 0.17 x 0.14 x 0.32 m, pivô no chão."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-realista-assets.mjs"
+        ],
+        "finalSha256": "51d4e6fc34cf03619eed92d7350ca50661b877a871f1d0435838d19e0f8cdd81"
+      }
+    },
+    "leitao-listrado": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/enemies/javaporcos/leitao_listrado.glb",
+        "public/models/enemies/javaporcos/leitao_listrado_lod.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks72s7n7xpvss3hp3vncm5xd2h8h8w2w",
+        "assetPackId": "th7f82d138zgbc9bzs2c3032f58h9f8g",
+        "chatUrl": "https://mint.gg/chat/ph73ry10s4j7w9gtzw6k8vqqqx8h8jmk",
+        "displayName": "leitao_listrado",
+        "notes": "Original preservado em references/glb; WebP512/quality90 e LOD local. Procedência e hashes em public/models/enemies/javaporcos/asset-manifest.json."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-variantes.mjs",
+          "tools/javaporcos-lod.mjs"
+        ],
+        "finalSha256": "92a4c72916d40becb6a5e195b829c4e79c70032017fb9cadf6869579d6d7170c"
+      }
+    },
+    "javaporco-velho-cicatrizado": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/enemies/javaporcos/javaporco_velho_cicatrizado.glb",
+        "public/models/enemies/javaporcos/javaporco_velho_cicatrizado_lod.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks70t3c3mkxgtszkhd7wb1q54n8h88xn",
+        "assetPackId": "th7f82d138zgbc9bzs2c3032f58h9f8g",
+        "chatUrl": "https://mint.gg/chat/ph73ry10s4j7w9gtzw6k8vqqqx8h8jmk",
+        "displayName": "javaporco_velho_cicatrizado",
+        "notes": "Original preservado em references/glb; WebP512/quality90 e LOD local. Procedência e hashes em public/models/enemies/javaporcos/asset-manifest.json."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-variantes.mjs",
+          "tools/javaporcos-lod.mjs"
+        ],
+        "finalSha256": "e435fc12f991b84c9f0caf87c063c4a64c6a043605b519ddc6c8ef45d855e2a6"
+      }
+    },
+    "javaporco-ruivo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/enemies/javaporcos/javaporco_ruivo.glb",
+        "public/models/enemies/javaporcos/javaporco_ruivo_lod.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks7c1r9d83q0d6ekjd3m6747vx8h8qgm",
+        "assetPackId": "th7f82d138zgbc9bzs2c3032f58h9f8g",
+        "chatUrl": "https://mint.gg/chat/ph73ry10s4j7w9gtzw6k8vqqqx8h8jmk",
+        "displayName": "javaporco_ruivo",
+        "notes": "Original preservado em references/glb; WebP512/quality90 e LOD local. Procedência e hashes em public/models/enemies/javaporcos/asset-manifest.json."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-variantes.mjs",
+          "tools/javaporcos-lod.mjs"
+        ],
+        "finalSha256": "5927ff415158a0921daccf6198d69b7c94151e6faa326a6308af12c3c8dfa85f"
+      }
+    },
+    "javaporco-malhado": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/enemies/javaporcos/javaporco_malhado.glb",
+        "public/models/enemies/javaporcos/javaporco_malhado_lod.glb"
+      ],
+      "source": {
+        "kind": "mint-model",
+        "assetId": "ks77ht2fkgabbttc2mqq96p0x98h962g",
+        "assetPackId": "th7f82d138zgbc9bzs2c3032f58h9f8g",
+        "chatUrl": "https://mint.gg/chat/ph73ry10s4j7w9gtzw6k8vqqqx8h8jmk",
+        "displayName": "javaporco_malhado",
+        "notes": "Original preservado em references/glb; WebP512/quality90 e LOD local. Procedência e hashes em public/models/enemies/javaporcos/asset-manifest.json."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-variantes.mjs",
+          "tools/javaporcos-lod.mjs"
+        ],
+        "finalSha256": "4d20fcc22c6dc7542d3276e30ba1679d17b0ae7ea7e734e440da143e5c3a9e3c"
+      }
+    },
+    "jp-mint-fachada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_fachada.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Fachada de comércio do interior",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/fachada.glb",
+        "sourceSha256": "43b926a51ec32fca9b2f126d922b611041bcb637bd82433b8d3712e3604684a3",
+        "finalSha256": "a2d8e353a59693dc000597503ae60eac71d9e36f2b8b3896487bcaa9eeb454a5",
+        "tris": 4713,
+        "dimensions": [
+          5.228,
+          4,
+          4.552
+        ],
+        "bytes": 346236
+      }
+    },
+    "jp-mint-fundo-casa": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_fundo_casa.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Fundo de casa do beco",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/fundo-casa.glb",
+        "sourceSha256": "92fd61f16b018f73447b7e96aec5a33fdf213e4df15b1a05b96bf444166fca2d",
+        "finalSha256": "221e33363dc4d1158428a9ba1ac43b3c09849a6756d50e2eef3e559a90c178f3",
+        "tris": 4674,
+        "dimensions": [
+          4.249,
+          4,
+          2.287
+        ],
+        "bytes": 318100
+      }
+    },
+    "jp-mint-cacamba": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_cacamba.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Caçamba de entulho",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/cacamba.glb",
+        "sourceSha256": "d6bf1b3d649412ea4f1bb5ff1fb54b330666a6f43c9293da67c99d19bc6fc1c2",
+        "finalSha256": "5f9e8b3200d9e713732e77274f9de9f762d902fb379206a1eb3bbdd01e7477dc",
+        "tris": 4681,
+        "dimensions": [
+          2.281,
+          1.76,
+          3.5
+        ],
+        "bytes": 381884
+      }
+    },
+    "jp-mint-poste-trafo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_poste_trafo.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Poste de concreto com transformador",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/poste-trafo.glb",
+        "sourceSha256": "df20e81b9957eefd83d1920eb268343ae6b68b03c2334c250f1fbf30a6789463",
+        "finalSha256": "e1fe4326a05466679ae007afe928b376efd7c3ff6a03b830a40058119ac11fda",
+        "tris": 4863,
+        "dimensions": [
+          3.335,
+          8,
+          1.988
+        ],
+        "bytes": 447748
+      }
+    },
+    "jp-mint-padrao-luz": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_padrao_luz.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Padrão de entrada de luz",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/padrao-luz.glb",
+        "sourceSha256": "c68bee44dbaad0a6b5b8ba824f40a08e256e38d9bae1383fe2119c8adff26fa5",
+        "finalSha256": "a467c1ee6a1bfdaf5084ff9f4e2b6dbf18421047a5ba658d4daf140104bab690",
+        "tris": 4758,
+        "dimensions": [
+          0.511,
+          1,
+          0.284
+        ],
+        "bytes": 249132
+      }
+    },
+    "jp-mint-lixeira-tombada": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_lixeira_tombada.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Lixeira tombada",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/lixeira-tombada.glb",
+        "sourceSha256": "b34fc0c83bf3977fd65b09e84b3bf0f71c2ee2cd41e70caa828a1a0ed3963afb",
+        "finalSha256": "f121a45d591e4b0455136d823c8d07e37b69b8892cc225270ade02dd536c1fe4",
+        "tris": 4790,
+        "dimensions": [
+          1.3,
+          0.674,
+          0.791
+        ],
+        "bytes": 384344
+      }
+    },
+    "jp-mint-pilha-sacos": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_pilha_sacos.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Pilha de sacos de lixo",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/pilha-sacos.glb",
+        "sourceSha256": "26d012fce9c444455d39a25c7fffe17208edc339e437a96af818e949f63e8ddd",
+        "finalSha256": "d48d7d7f2ebb0e3a74206b9bd9edecf15e294e3558e71433bab22e14d88df468",
+        "tris": 4920,
+        "dimensions": [
+          1.491,
+          1.034,
+          1.5
+        ],
+        "bytes": 377392
+      }
+    },
+    "jp-mint-banca-feira": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_banca_feira.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Banca de feira",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/banca-feira.glb",
+        "sourceSha256": "722a6b115d87746715ff6a888277168538c4f885c316329c4aa1b17c151ca51f",
+        "finalSha256": "e9dd1ae6f18b1f24cfea956a890a8441c8fcdfc0c361e70e537fdb2eeaa0fa3e",
+        "tris": 4428,
+        "dimensions": [
+          2.4,
+          2.4,
+          2.052
+        ],
+        "bytes": 416696
+      }
+    },
+    "jp-mint-uno-batido": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_uno_batido.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Uno batido abandonado",
+        "frente": "javaporcos-mint-packs",
+        "classe": "carro",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/uno-batido.glb",
+        "sourceSha256": "fb01ee1e87f571840f4f77b88b38f627dd693a2b518855ab5ecce0e1f7254a86",
+        "finalSha256": "88f32ce49df6a00b6af7ee5357f211432db3d9d0d11520695b36eae4f98fa1b8",
+        "tris": 4859,
+        "dimensions": [
+          1.85,
+          1.479,
+          3.65
+        ],
+        "bytes": 327220
+      }
+    },
+    "jp-mint-varal": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_varal.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Varal com roupas",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/varal.glb",
+        "sourceSha256": "657f6475c51cb01ed66e4b19f5001d10c6bdd648c074d524f8b6d567cab161d9",
+        "finalSha256": "92d95ba610b644ea5abb29ff3b5fc0025e5bea2b60b95e0f2802e2bc0adcd864",
+        "tris": 4601,
+        "dimensions": [
+          4,
+          2.262,
+          1.01
+        ],
+        "bytes": 371756
+      }
+    },
+    "jp-mint-mesa-bar": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_mesa_bar.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Mesa e cadeiras de bar",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/mesa-bar.glb",
+        "sourceSha256": "f1a22394cfee20a4a451139cdb94132197f187e9b7a3943f262af574a87907c6",
+        "finalSha256": "dd362024935bec66f837cc1c2cf18ce4d675be0d541899a4eb35ed66e2e97d23",
+        "tris": 4826,
+        "dimensions": [
+          1.516,
+          1,
+          1.392
+        ],
+        "bytes": 331380
+      }
+    },
+    "jp-mint-orelhao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_orelhao.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th753rbz1fjyvfcsypbdcfcntn8h8wr4",
+        "chatUrl": "https://mint.gg/chat/ph71s3avnfz5xtf76nm4vg7dnn8h91hc",
+        "displayName": "Orelhão",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/orelhao.glb",
+        "sourceSha256": "4cf21c6848e7fc8a6a476f648518a818c2d59c784d597124f354c6e4cf36a116",
+        "finalSha256": "137166d970db947f942331c8481b95f6d0b1057080504c151604aa032f116ad0",
+        "tris": 4515,
+        "dimensions": [
+          0.908,
+          2.2,
+          1.003
+        ],
+        "bytes": 270884
+      }
+    },
+    "jp-mint-mangueira": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_mangueira.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Mangueira",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/mangueira.glb",
+        "sourceSha256": "beba132d4ff7a63ab68689908a87d3e5340236bbc599687d03d7e4aa3fab2f11",
+        "finalSha256": "638c94db856054686a07f87237e9372fb3f171457ec2f276591e5f1b7a8ee32a",
+        "tris": 4708,
+        "dimensions": [
+          6.767,
+          7,
+          6.726
+        ],
+        "bytes": 399000
+      }
+    },
+    "jp-mint-ipe-amarelo": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_ipe_amarelo.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Ipê-amarelo",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/ipe-amarelo.glb",
+        "sourceSha256": "ada9c3f764763db898d8651f55bdbea7c28f02aedb2715a2f5b4108206f764e0",
+        "finalSha256": "7799209b94423cd9f43985d491ea880a624e3a966f3ff2c2fb4c4df4da4bd1e7",
+        "tris": 4498,
+        "dimensions": [
+          7.17,
+          8,
+          7.342
+        ],
+        "bytes": 449380
+      }
+    },
+    "jp-mint-arvore-mata": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_arvore_mata.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Árvore da mata atlântica",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/arvore-mata.glb",
+        "sourceSha256": "ffde3616d2af0ba7717ae3d43d170d1e084f6088e78704c8cccf45bab8af8e17",
+        "finalSha256": "39464c9bb6392495cf3c8ce4df922613674d4c908f80a32a32c17bdf851d1368",
+        "tris": 4057,
+        "dimensions": [
+          8.434,
+          10,
+          7.691
+        ],
+        "bytes": 393716
+      }
+    },
+    "jp-mint-embauba": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_embauba.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Embaúba",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/embauba.glb",
+        "sourceSha256": "2a7a1e2e1727235dcd9d0fec5e144f40536a5b6fa3b86c81ee2b832284f48a9c",
+        "finalSha256": "83e91dcf8e238947ac5181589c63154dfb4c42ae03fbc7835b7f9350dc80a281",
+        "tris": 4912,
+        "dimensions": [
+          6.184,
+          8,
+          6.278
+        ],
+        "bytes": 403648
+      }
+    },
+    "jp-mint-bananeira": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_bananeira.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Bananeira",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/bananeira.glb",
+        "sourceSha256": "5e4fe5fb3159fd55fae8047d0b0dc387d2c5f084bea4eb789be1a62b5495f8a2",
+        "finalSha256": "0d933654e9431f5dc7d6518bf727219c7fe2689372b254233956c90c1c159e81",
+        "tris": 4897,
+        "dimensions": [
+          4.217,
+          5,
+          4.178
+        ],
+        "bytes": 346948
+      }
+    },
+    "jp-mint-jucara": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_jucara.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Palmeira juçara",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/jucara.glb",
+        "sourceSha256": "1cc7abb907c466497cedda94d915587069ca5a9d1f68095488a934286f366554",
+        "finalSha256": "ee3dafcebcae25db431998acb4d5b5af2e4bb7c06b654c71e4ef95dfeec3341e",
+        "tris": 5460,
+        "dimensions": [
+          4.174,
+          9,
+          4.033
+        ],
+        "bytes": 448540
+      }
+    },
+    "jp-mint-capim": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_capim.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Touceira de capim braquiária",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/capim.glb",
+        "sourceSha256": "f1d9108b809e728174ca9ce45d19264f0868de19865cbd2f5ec9b2c66f892e77",
+        "finalSha256": "a8ea707d73943ce674218d87dad152ab135820e1287893e5077c0a72ec356546",
+        "tris": 4249,
+        "dimensions": [
+          1.167,
+          1.2,
+          1.2
+        ],
+        "bytes": 438248
+      }
+    },
+    "jp-mint-cupinzeiro": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_cupinzeiro.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Cupinzeiro de pasto",
+        "frente": "javaporcos-mint-packs",
+        "classe": "pequeno",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/cupinzeiro.glb",
+        "sourceSha256": "ff06a554507976fc8b67eacacaaaca9c30348d7b51f86584feba2e3fc6cd54ed",
+        "finalSha256": "7aae88f56d21772a3d3955dcb39a75e798aeef1ce282dc7f3d1737143c644391",
+        "tris": 4349,
+        "dimensions": [
+          1.789,
+          1.6,
+          1.789
+        ],
+        "bytes": 389096
+      }
+    },
+    "jp-mint-mourao": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_mourao.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Mourão com arame farpado",
+        "frente": "javaporcos-mint-packs",
+        "classe": "estrutura",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/mourao.glb",
+        "sourceSha256": "2c4622e8e38c6a46183b9cf7783cae99c174a0e0e6d3ba73085dc495e5a917c9",
+        "finalSha256": "f59c4be2157e66df89a8e9fc5faff3c9a025f4ee9d720f7fce97fcc90e1d595e",
+        "tris": 4285,
+        "dimensions": [
+          0.186,
+          1.3,
+          2.433
+        ],
+        "bytes": 396548
+      }
+    },
+    "jp-mint-moita": {
+      "artifactType": "model/gltf-binary",
+      "files": [
+        "public/models/props/javaporcos_mint_moita.glb"
+      ],
+      "source": {
+        "kind": "mint-asset-pack",
+        "assetPackId": "th7a6e6j8ex8gx7jc3btycpjdn8h8xj5",
+        "chatUrl": "https://mint.gg/chat/ph78p4ab22f3c9cmqk4qy5hx9d8h9391",
+        "displayName": "Moita de samambaia e helicônia",
+        "frente": "javaporcos-mint-packs",
+        "classe": "vegetacao",
+        "notes": "Item baixado pelo seletor do pack. Catálogo; ainda não inserido no mapa."
+      },
+      "processing": {
+        "tools": [
+          "tools/javaporcos-mint-packs.mjs"
+        ],
+        "source": "references/glb/javaporcos-mint-packs/moita.glb",
+        "sourceSha256": "a47c1f5024c510038045c2c070021164883cf057802edf2df5e581bb5e264373",
+        "finalSha256": "20639f23313b0769bd561ece9a1d9ec02fbc0173fdaffcfdf5c6d06040792212",
+        "tris": 3555,
+        "dimensions": [
+          1.931,
+          1.5,
+          1.908
+        ],
+        "bytes": 308180
+      }
+    }
+  }
+}

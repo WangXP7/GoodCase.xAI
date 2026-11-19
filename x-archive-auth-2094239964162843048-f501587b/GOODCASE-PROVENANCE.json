@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/Vheissu/emerald-bayou",
+  "commit": "e87c03688263daadb1bfbf35efaddc5ab7d53912",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 244,
+  "bytes": 26241520
+}

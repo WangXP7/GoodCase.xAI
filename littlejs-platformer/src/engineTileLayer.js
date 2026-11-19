@@ -1,0 +1,1674 @@
+/**
+ * LittleJS Tile Layer System
+ * - Renders large tile-based levels efficiently using cached canvases
+ * - Unlimited tile layers with automatic canvas allocation
+ * - Layers support both rendering and collision detection
+ * - Direct canvas2d drawing access for custom tile rendering
+ * - TileLayer for rendering, TileCollisionLayer for physics
+ * - Collision callbacks for tile interactions with objects
+ * - Optimized raycast support for tile-based physics
+ * - Integration with Box2D physics via the Box2dTileLayer plugin
+ * @namespace TileLayers
+ */
+
+'use strict';
+
+///////////////////////////////////////////////////////////////////////////////
+// Tile Layer System
+
+/** A Tiled map as Tiled saves it as JSON, what tileLayersLoad and objectLayersLoad take and tileLayersFromLDtk
+ *  makes; the fields read are listed, and the rest of the file is kept as it is
+ *  @typedef {Object} TiledMap
+ *  @property {number} width - Cells across
+ *  @property {number} height - Cells up
+ *  @property {number} [tilewidth] - A tile's width in pixels
+ *  @property {number} [tileheight] - A tile's height in pixels
+ *  @property {Array<TiledLayer>} layers - Tile layers, object layers and groups of them, bottom first
+ *  @property {Array<TiledTileset>} [tilesets] - The first one's margin, spacing and columns are read
+ *  @property {number} [nextlayerid]
+ *  @property {number} [nextobjectid]
+ *  @property {string} [orientation]
+ *  @property {string} [renderorder]
+ *  @property {boolean} [infinite]
+ *  @property {string} [type]
+ *  @property {string|number} [version] - A number in files from Tiled before 1.6
+ *  @property {string} [tiledversion]
+ *  @property {number} [compressionlevel]
+ *  @property {string} [backgroundcolor]
+ *  @property {Array<TiledProperty>} [properties]
+ *  @memberof TileLayers */
+
+/** A layer of a Tiled map: a tile layer, an object layer or a group of layers, by its type
+ *  @typedef {Object} TiledLayer
+ *  @property {string} [type] - 'tilelayer', 'objectgroup', 'group' or 'imagelayer', a tile layer when left out
+ *  @property {string} [name]
+ *  @property {number} [id]
+ *  @property {ArrayLike<number>} [data] - A tile layer's tiles, a list or a typed array, row by row from the top,
+ *    each 0 for none or a tile number plus 1, with Tiled's flip flags in its top bits
+ *  @property {number} [width] - A tile layer's cells across
+ *  @property {number} [height] - A tile layer's cells up
+ *  @property {Array<TiledObject>} [objects] - An object layer's objects
+ *  @property {Array<TiledLayer>} [layers] - A group's layers
+ *  @property {boolean} [visible] - A hidden layer is loaded, its collision too, but not drawn
+ *  @property {number} [opacity]
+ *  @property {string} [tintcolor] - A hex color
+ *  @property {Color} [color] - A layer built in code, its tint when it has no tintcolor
+ *  @property {number} [x]
+ *  @property {number} [y]
+ *  @property {Array<TiledProperty>} [properties]
+ *  @memberof TileLayers */
+
+/** An object of a Tiled object layer, made by the type objectLayersAddType added for its type
+ *  @typedef {Object} TiledObject
+ *  @property {number} id
+ *  @property {string} [type] - Its type, class in files from Tiled 1.9 on
+ *  @property {string} [class]
+ *  @property {string} [name]
+ *  @property {number} x - In pixels from the map's top left
+ *  @property {number} y
+ *  @property {number} [width]
+ *  @property {number} [height]
+ *  @property {number} [rotation] - In degrees, clockwise
+ *  @property {number} [gid] - A tile object's tile
+ *  @property {boolean} [visible]
+ *  @property {boolean} [point]
+ *  @property {boolean} [ellipse]
+ *  @property {Array<{x: number, y: number}>} [polygon]
+ *  @property {Array<{x: number, y: number}>} [polyline]
+ *  @property {Array<TiledProperty>} [properties]
+ *  @memberof TileLayers */
+
+/** A custom property of a Tiled map, layer or object
+ *  @typedef {Object} TiledProperty
+ *  @property {string} name
+ *  @property {string} [type] - string, int, float, bool, color, file or object, string when left out
+ *  @property {string|number|boolean} value - a color is a string, an object an id
+ *  @memberof TileLayers */
+
+/** The properties of an object type, its defaults or the values an object was made with, by name
+ *  @typedef {Object<string, any>} ObjectProperties
+ *  @memberof TileLayers */
+
+/** A tileset of a Tiled map
+ *  @typedef {Object} TiledTileset
+ *  @property {number} [firstgid] - The tile number of its first tile, plus 1
+ *  @property {number} [columns]
+ *  @property {number} [margin] - Pixels around the edge of the image
+ *  @property {number} [spacing] - Pixels between tiles
+ *  @property {number} [tilewidth]
+ *  @property {number} [tileheight]
+ *  @property {number} [tilecount]
+ *  @property {string} [image]
+ *  @property {number} [imagewidth]
+ *  @property {number} [imageheight]
+ *  @property {string} [name]
+ *  @property {string} [source] - An external tileset file
+ *  @memberof TileLayers */
+
+/** Keep track of all tile layers with collision
+ *  @type {Array<TileCollisionLayer>}
+ *  @memberof TileLayers */
+const tileCollisionLayers = [];
+
+// a tile collision layer's position is whole numbers, so its cells are the world grid the physics lands objects on
+function tileCollisionAssertWhole(layer)
+{ ASSERT(layer.pos.x % 1 === 0 && layer.pos.y % 1 === 0, 'a tile collision layer must sit at a whole number position', layer.pos); }
+
+// the object the physics is moving and where it was before this frame's move, for one way tiles
+let tileCollisionFromObject, tileCollisionFromPos;
+
+// the object whose tiles are asked about where its move put it, for collideWithTile's isHit
+let tileCollisionHitObject;
+
+// a one way tile at a layer's cell lets a box at from pass, when the cell draws a tile set one way and the box was not
+// wholly on its solid side, the side it can be passed through toward; the way is turned and mirrored as the tile's
+// art is, mirror first, then its quarter turns clockwise; a point is a box of no size
+function tileCollisionOneWayPass(layer, x, y, fromX, fromY, sizeX=0, sizeY=0)
+{
+    const oneWayTiles = layer.oneWayTiles;
+    if (!oneWayTiles.size) return false;
+    const data = layer.data[y*layer.size.x + x], way = data && oneWayTiles.get(data.tile);
+    if (!way) return false;
+    let wayX = data.mirror ? -way.x : way.x, wayY = way.y;
+    for (let turn = data.direction & 3; turn--;)
+        [wayX, wayY] = [wayY, -wayX];
+    const epsilon = 1e-3, cellX = layer.pos.x + x, cellY = layer.pos.y + y;
+    return wayX > .5 ? fromX - sizeX/2 < cellX + 1 - epsilon :
+        wayX < -.5 ? fromX + sizeX/2 > cellX + epsilon :
+        wayY > .5 ? fromY - sizeY/2 < cellY + 1 - epsilon :
+        fromY + sizeY/2 > cellY + epsilon;
+}
+
+// the layer whose tile tileCollisionGetDataFrom last found solid, undefined for none, the one a particle bounces off
+let tileCollisionDataLayer;
+
+// tileCollisionGetData of the solid layers for particles, which pass a one way tile when they were not on its far
+// side at from: a solid tile's data, else a negative marker, else 0
+function tileCollisionGetDataFrom(pos, fromX, fromY)
+{
+    let found = 0;
+    tileCollisionDataLayer = undefined;
+    for (const layer of tileCollisionLayers)
+        if (layer.isSolid)
+        {
+            const x = pos.x - layer.pos.x, y = pos.y - layer.pos.y, size = layer.size;
+            if (x >= 0 && y >= 0 && x < size.x && y < size.y)
+            {
+                const data = layer.collisionData[(y|0)*size.x + (x|0)];
+                if (data > 0)
+                {
+                    if (!tileCollisionOneWayPass(layer, x|0, y|0, fromX, fromY))
+                        return tileCollisionDataLayer = layer, data;
+                }
+                else if (data && !found) found = data;
+            }
+        }
+    return found;
+}
+
+// the test a tile query applies to a cell's data: the callback, the object's collideWithTile, or solid data
+function tileCollisionTester(callbackObject)
+{
+    ASSERT(!callbackObject || typeof callbackObject === 'function' || callbackObject instanceof EngineObject, 'callbackObject must be a function or EngineObject');
+    return !callbackObject ? (tileData)=> tileData > 0 :
+        typeof callbackObject === 'function' ? (tileData, pos)=> callbackObject(tileData, pos) :
+        (tileData, pos)=> callbackObject.collideWithTile(tileData, pos, callbackObject === tileCollisionHitObject);
+}
+
+/** Get tile collision data for a given cell in the grid
+*  @param {Vector2} pos
+*  @param {boolean} [solidOnly] - Only check solid layers?
+*  @return {number}
+*  @memberof TileLayers */
+function tileCollisionGetData(pos, solidOnly=true)
+{
+    // check all tile collision layers, in scalars since particles ask this every frame
+    // solid (positive) data wins, a negative marker is returned only when no layer is solid there
+    let found = 0;
+    for (const layer of tileCollisionLayers)
+        if (!solidOnly || layer.isSolid)
+        {
+            // world pos to the layer's cell
+            const x = pos.x - layer.pos.x, y = pos.y - layer.pos.y, size = layer.size;
+            if (x >= 0 && y >= 0 && x < size.x && y < size.y)
+            {
+                const data = layer.collisionData[(y|0)*size.x + (x|0)];
+                if (data > 0) return data;
+                if (data && !found) found = data;
+            }
+        }
+    return found;
+}
+
+/** Check if a tile layer collides with another object
+ *  @param {Vector2} pos
+ *  @param {Vector2} [size=vec2()]
+ *  @param {EngineObject|TileCollisionCallback} [callbackObject] - Callback, engine object, or undefined
+ *  @param {boolean} [solidOnly] - Only check solid layers?
+ *  @return {TileCollisionLayer|undefined}
+ *  @memberof TileLayers */
+function tileCollisionTest(pos, size=vec2(), callbackObject, solidOnly=true)
+{
+    for (const layer of tileCollisionLayers)
+    {
+        if (!solidOnly || layer.isSolid)
+        if (layer.collisionTest(pos, size, callbackObject))
+            return layer;
+    }
+}
+
+/**
+ *  @callback TileCollisionCallback - Decides whether a tile counts as solid for a collision test or raycast
+ *  @param {number} tileData - the value of the tile at the position
+ *  @param {Vector2} pos - world space position of tile where the collision occurred
+ *  @return {boolean} - true for a hit; a callback that returns nothing lets everything through
+ *  @memberof TileLayers
+ */
+
+/** Return the exact position of the boundary of first tile hit, undefined if nothing was hit.
+ *  The point will be inside the colliding tile if it hits
+ *  @param {Vector2} posStart
+ *  @param {Vector2} posEnd
+ *  @param {EngineObject|TileCollisionCallback} [callbackObject] - Callback, engine object, or undefined
+ *  @param {Vector2} [normal] - Optional normal of the surface hit
+ *  @param {boolean} [solidOnly] - Only check solid layers?
+ *  @return {Vector2|undefined} - where the ray meets the first tile hit, nudged just inside it, or undefined if no hit
+ *  @memberof TileLayers */
+function tileCollisionRaycast(posStart, posEnd, callbackObject, normal, solidOnly=true)
+{
+    // check every layer and keep the closest hit so a far hit in an
+    // earlier-registered layer doesn't shadow a closer hit in a later one
+    let closestHit, closestDistSq, closestNormal;
+    const scratchNormal = normal && vec2();
+    for (const layer of tileCollisionLayers)
+    {
+        if (!solidOnly || layer.isSolid)
+        {
+            const hitPos = layer.collisionRaycast(posStart, posEnd, callbackObject, scratchNormal);
+            if (hitPos)
+            {
+                const d = posStart.distanceSquared(hitPos);
+                if (closestHit === undefined || d < closestDistSq)
+                {
+                    closestHit = hitPos;
+                    closestDistSq = d;
+                    if (normal) closestNormal = scratchNormal.copy();
+                }
+            }
+        }
+    }
+    if (closestHit && normal) normal.setFrom(closestNormal);
+    return closestHit;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tiled's flip flags, horizontal, vertical and diagonal as bits 2, 1 and 0, as [direction, mirror]
+const tileLayersTiledFlips = [[0,0], [3,1], [2,1], [3,0], [0,1], [1,0], [2,0], [1,1]];
+
+// the tile info a layer's tile info gives a tile: a tile set's tile, a frame of a sheet read by its columns, or a
+// tile of its grid; undefined past the end of a tile set, or of a sheet read by its columns, as values kept only for
+// collision can be, which the level editor reads the same way
+function tileLayerTileInfo(t, tile)
+{
+    if (!t) return;
+    if (t.tiles) return t.tiles[tile];
+    if (!t.columns) return t.index(tile);
+    if (t.textureInfo && t.pos.y + (tile / t.columns | 0) * (t.size.y + t.padding*2) + t.size.y > t.textureInfo.size.y)
+        return;
+    return t.frame(tile);
+}
+
+/**
+ * Load tile layers from exported data
+ * - Tiled maps come in as they are, flipped and turned tiles included, from one tileset image (a second tileset's
+ *   tiles continue its numbering), finite maps in the CSV or array layer format; layer offsets and parallax are not read
+ * - A tileset kept in the map with a margin or a spacing, a sheet with gaps between its tiles, is read where its
+ *   tiles are, whatever padding the tile info has; one in a file of its own (a tsx) is not read, pass a tile info
+ *   with its padding
+ * - An LDtk level loads through tileLayersFromLDtk, which makes it a map like these
+ * - Group layers are flattened in order, each replaced by the layers inside it, so the layer indices
+ *   (collisionLayer and the returned array) count that flattened list; a group's tint, opacity and
+ *   visibility carry to the layers inside it
+ * - An object or image layer keeps its index, with its slot in the returned array left empty
+ * - A hidden layer (visible false) is loaded, its collision included, but not drawn; its render
+ *   is a no-op, delete that to show it; it casts its solid cells as squares in the light system's shadows
+ *   (shadowSquares), it has no tiles drawn to cast them from, as an LDtk map's collision layer
+ *  @param {TiledMap} [tileMapData] - Level data from exported data, a 50 by 50 empty level when left out
+ *  @param {TileInfo} [tileInfo] - Default tile info (used for size and texture), tile() by default, none when no image is loaded
+ *  @param {number}   [renderOrder] - Render order of the top layer
+ *  @param {number|string} [collisionLayer] - Layer to use for collision if any, by its index or its name
+ *  @param {boolean}  [draw] - Draw the layers now, false leaves them for the game's own redraw or their first render
+ *  @return {Array<TileCollisionLayer>} - It throws for a map that is not whole cells, or a layer whose tiles do not
+ *    fill it, before it makes any layer
+ *  @memberof TileLayers */
+function tileLayersLoad(tileMapData, tileInfo=tileLayerDefaultTile(), renderOrder=0, collisionLayer, draw=true)
+{
+    if (!tileMapData)
+    {
+        // default level data if loading failed
+        const s = 50;
+        tileMapData = {width: s, height: s, layers: [{data: new Array(s*s).fill(0)}]};
+    }
+
+    // the editor, in debug builds, keeps the map as the source of its edits and brings back autosaved ones
+    tileMapData = editorMapRestore(tileMapData);
+
+    // validate the tile map data: a size that is not whole cells, or tiles that do not fill it, is said in any build,
+    // since the layers and their loops are made from that size
+    const {width: mapWidth, height: mapHeight} = tileMapData;
+    if (!(Number.isInteger(mapWidth) && Number.isInteger(mapHeight) && mapWidth > 0 && mapHeight > 0))
+        throw new Error(`tileLayersLoad: a map is a whole number of cells across and down, not ${mapWidth} by ${mapHeight}`);
+    if (!isArray(tileMapData.layers) || !tileMapData.layers.length)
+        throw new Error('tileLayersLoad: a map has a list of layers');
+
+    // a sheet with a margin around its tiles or a spacing between them: the first tile is at the margin and each
+    // cell is a tile and a spacing, which is a padding of half the spacing counted from there, by the tileset's
+    // own count of columns, since the image's width does not say with a spacing that is not all around
+    // a tile set from loadTiles has each tile where it was packed, whatever the map says of its own image
+    const tileset = tileMapData.tilesets?.[0];
+    if (tileInfo && !tileInfo.tiles && tileset && (tileset.margin > 0 || tileset.spacing > 0))
+    {
+        const margin = tileset.margin || 0, spacing = tileset.spacing || 0, size = tileInfo.size;
+        const width = tileInfo.textureInfo?.size.x || 0;
+        const columns = tileset.columns || max(1, floor((width - margin*2 + spacing) / (size.x + spacing)));
+        const origin = tileInfo.pos.subtract(vec2(tileInfo.padding)); // where the sheet starts, in an atlas too
+        tileInfo = new TileInfo(origin.add(vec2(margin)), size, tileInfo.textureInfo, spacing / 2, tileInfo.bleed, columns);
+    }
+
+    // flatten group layers in order, a group's color and visibility carry to the layers inside it
+    /** @type {Array<{dataLayer: TiledLayer, color?: Color, visible?: boolean}>} */
+    const layers = [];
+    const addLayers = (dataLayers, groupColor, groupVisible)=>
+    {
+        for (const dataLayer of dataLayers)
+        {
+            const type = dataLayer.type;
+            if (type && type !== 'tilelayer' && type !== 'group')
+            {
+                layers.push({dataLayer}); // an object or image layer has no tiles, its slot is left empty
+                continue;
+            }
+
+            // apply layer color, Tiled writes a tint with alpha as #AARRGGBB
+            const tint = dataLayer.tintcolor;
+            const color = tint ? tileLayersColor(tint) : (dataLayer.color || WHITE).copy();
+            ASSERT(isColor(color), 'layer color is not a color');
+            color.a *= dataLayer.opacity ?? 1;
+            const visible = groupVisible && dataLayer.visible !== false;
+            if (type === 'group')
+                addLayers(dataLayer.layers || [], groupColor.multiply(color), visible);
+            else
+                layers.push({dataLayer, color: groupColor.multiply(color), visible});
+        }
+    };
+    addLayers(tileMapData.layers, WHITE, true);
+
+    // a layer named for collision is the first tile layer of that name, which stays the same when layers are added
+    if (typeof collisionLayer === 'string')
+    {
+        const name = collisionLayer;
+        collisionLayer = layers.findIndex((l)=> l.color && l.dataLayer.name === name);
+        collisionLayer < 0 && console.error('tileLayersLoad: no tile layer is named ' + name + ', none is solid');
+    }
+
+    // create tile layers and fill with data, every layer's tiles checked first, so a bad one leaves none made
+    const tileLayers = [];
+    const levelSize = vec2(tileMapData.width, tileMapData.height);
+    const layerCount = layers.length;
+    for (const [layerIndex, {dataLayer, color}] of layers.entries())
+    {
+        const tiles = dataLayer.data; // a list of gids, or a typed array of them
+        if (color && (!(isArray(tiles) || ArrayBuffer.isView(tiles)) || dataLayer.data.length !== levelSize.area()))
+            throw new Error(`tileLayersLoad: layer ${dataLayer.name ?? layerIndex} has ${dataLayer.data?.length} tiles for a map of ` +
+                `${levelSize.area()}; infinite maps and compressed layers are not read`);
+    }
+    for (let layerIndex=layerCount; layerIndex--;)
+    {
+        const {dataLayer, color: layerColor, visible} = layers[layerIndex];
+        if (!layerColor)
+            continue;
+
+        const layerRenderOrder = renderOrder - (layerCount - 1 - layerIndex);
+        const tileLayer = new TileCollisionLayer(vec2(), levelSize, tileInfo, layerRenderOrder);
+        tileLayer.isSolid = layerIndex === collisionLayer; // the others are art, the solid tests skip them
+        tileLayers[layerIndex] = tileLayer;
+        if (!visible)
+        {
+            tileLayer.render = ()=> {}; // a hidden layer keeps its tiles and collision but is not drawn
+            tileLayer.shadowSquares = true; // and its texture is never drawn, its shadows are its cells
+        }
+
+        for (let x=0; x<levelSize.x; ++x)
+        for (let y=0; y<levelSize.y; ++y)
+        {
+            const pos = vec2(x, levelSize.y-1-y);
+            const data = dataLayer.data[x + y*levelSize.x];
+            if (data)
+            {
+                // Tiled keeps a tile's flips in its top bits, horizontal, vertical and diagonal, the diagonal
+                // applied first; each of the 8 is a quarter turn direction with or without a mirror
+                const [direction, mirror] = tileLayersTiledFlips[data >>> 29];
+                const tileIndex = (data & 0x0fffffff) - 1; // bit 28, a hexagonal turn, is not read
+                const layerData = new TileLayerData(tileIndex, direction, !!mirror, layerColor);
+                tileLayer.setData(pos, layerData, false); // the whole layer draws, now or on its first render
+
+                // set collision for top layer
+                if (layerIndex === collisionLayer)
+                    tileLayer.setCollisionData(pos, 1);
+            }
+        }
+        if (draw && visible)
+            tileLayer.redraw();
+    }
+    editorMapLoaded(tileMapData, tileLayers, layers);
+    return tileLayers;
+}
+
+// a color as Tiled writes it, #AARRGGBB, or #RRGGBB
+function tileLayersColor(hex)
+{ return new Color().setHex(hex.length === 9 ? '#' + hex.slice(3) + hex.slice(1, 3) : hex); }
+
+// the Tiled property type of an LDtk field type, for the ones Tiled has a property for
+const tileLayersLDtkTypes = {Int: 'int', Float: 'float', Bool: 'bool', String: 'string', Multilines: 'string',
+    Color: 'color', FilePath: 'file'};
+
+/**
+ * Make a Tiled map of a level of an LDtk project, to load with tileLayersLoad and objectLayersLoad
+ * - Each Tiles, AutoLayer and IntGrid layer is a tile layer, the bottom one first as in Tiled; where LDtk stacks
+ *   tiles in a cell, an edge over a fill, each tile over another goes in a layer of its own just above, named with
+ *   (2), (3) and so on, and a tile LDtk draws see-through goes in one of its own with that opacity, times the
+ *   layer's, named with it, like Ground .25
+ * - An IntGrid layer is a hidden layer of its values under its own name, for collision, whatever tiles its rules
+ *   make, which are layers over it named with tiles, like Collisions tiles; pass the name as collisionLayer, since
+ *   the stacked and see-through layers change the indices from level to level:
+ *   tileLayersLoad(map, tile(0, 16), 0, 'Collisions')
+ * - An Entities layer is an object layer: an entity's name is its type for objectLayersAddType, it is placed at
+ *   its middle, and its Int, Float, Bool, String, Color and FilePath fields are its properties (an enum is a string)
+ * - The tileset is the first tile layer's, with its padding and spacing; give tileLayersLoad a tile info of its image
+ * - The level is in the project file (not saved as separate level files), its layers of one grid size; a layer of
+ *   another grid size or another tileset is left out, with a warning in debug builds, and a project with no tileset
+ *   keeps its tiles for the tile info the game gives; a project of several worlds has its levels counted in order
+ * - Layer offsets are not read
+ * - The level editor edits the map this returns, and saves it as a Tiled map
+ * @param {Object} ldtk - The LDtk project, its JSON
+ * @param {number|string} [level] - Which level, by its index or its identifier
+ * @return {TiledMap} - A Tiled map: width, height, tilewidth, tileheight, tilesets and layers
+ * @example
+ * const map = tileLayersFromLDtk(await fetchJSON('world.ldtk'), 'Level_0');
+ * const layers = tileLayersLoad(map, tile(0, 16), 0, 'Collisions'); // its IntGrid layer is solid
+ * objectLayersLoad(map);
+ * @memberof TileLayers */
+function tileLayersFromLDtk(ldtk, level=0)
+{
+    const levels = ldtk?.levels?.length ? ldtk.levels : (ldtk?.worlds || []).flatMap((w)=> w.levels || []);
+    const data = typeof level === 'string' ? levels.find((l)=> l.identifier === level) : levels[level];
+    if (!data)
+        throw new Error('tileLayersFromLDtk: no level ' + level);
+    if (!isArray(data.layerInstances))
+        throw new Error('tileLayersFromLDtk: level ' + data.identifier + ' has no layers, levels saved as separate files are not read');
+    const instances = data.layerInstances;
+    const tiled = (l)=> l.__type !== 'Entities';
+    const first = instances.find((l)=> tiled(l) && l.__tilesetDefUid != undefined) || instances.find(tiled) || instances[0];
+    const grid = first?.__gridSize || 16;
+    const width = first?.__cWid || ceil(data.pxWid / grid), height = first?.__cHei || ceil(data.pxHei / grid);
+    if (!(width > 0 && height > 0 && width * height <= 1 << 22))
+        throw new Error('tileLayersFromLDtk: level ' + data.identifier + ' is ' + width + ' by ' + height + ' cells');
+    const map = {width, height, tilewidth: grid, tileheight: grid, orientation: 'orthogonal', renderorder: 'right-down',
+        infinite: false, layers: [], nextlayerid: 1, nextobjectid: 1};
+
+    // the tileset of the first layer that has one, where its tiles are in its image
+    const tileset = (ldtk?.defs?.tilesets || []).find((t)=> t.uid === first?.__tilesetDefUid);
+    if (tileset)
+        map.tilesets = [{firstgid: 1, name: String(tileset.relPath || '').replace(/^.*[\\/]/, '').replace(/\.\w+$/, ''),
+            image: tileset.relPath, imagewidth: tileset.pxWid, imageheight: tileset.pxHei,
+            tilewidth: tileset.tileGridSize, tileheight: tileset.tileGridSize, margin: tileset.padding || 0,
+            spacing: tileset.spacing || 0, columns: tileset.__cWid, tilecount: tileset.__cWid * tileset.__cHei}];
+
+    // LDtk lists the top layer first, Tiled the bottom one
+    for (let i = instances.length; i--;)
+    {
+        const instance = instances[i], name = instance.__identifier, id = map.nextlayerid++;
+        if (!tiled(instance))
+        {
+            const objects = (instance.entityInstances || []).filter((entity)=> isArray(entity.px)).map((entity)=>
+            {
+                // an entity is placed by its pivot, an object here by its middle
+                const [pivotX=0, pivotY=0] = entity.__pivot || [], w = entity.width || 0, h = entity.height || 0;
+                const properties = [];
+                for (const field of entity.fieldInstances || [])
+                {
+                    const type = tileLayersLDtkTypes[field.__type] || (/^(Local|Extern)Enum\./.test(field.__type) && 'string');
+                    type && field.__value != undefined && properties.push({name: field.__identifier, type, value: field.__value});
+                }
+                return {id: map.nextobjectid++, name: '', type: entity.__identifier, x: entity.px[0] + (.5 - pivotX) * w,
+                    y: entity.px[1] + (.5 - pivotY) * h, width: w, height: h, rotation: 0, visible: true, properties};
+            });
+            map.layers.push({id, name, type: 'objectgroup', objects, opacity: 1, visible: true, x: 0, y: 0});
+            continue;
+        }
+        if (instance.__gridSize !== grid || instance.__cWid !== width || instance.__cHei !== height)
+        {
+            console.warn(`tileLayersFromLDtk: layer ${name} has another grid, left out`);
+            continue;
+        }
+        // an IntGrid layer's values, hidden, under its own name, for collision whatever its tiles do
+        const empty = ()=> new Array(width * height).fill(0), opacity = instance.__opacity ?? 1;
+        const values = instance.__type === 'IntGrid';
+        if (values)
+        {
+            const data = empty();
+            (instance.intGridCsv || []).forEach((value, k)=> k < data.length && (data[k] = value));
+            map.layers.push({id, name, type: 'tilelayer', width, height, data, opacity, visible: false, x: 0, y: 0});
+        }
+        // its tiles, those with a place, from the first layer's tileset
+        const tiles = [...(instance.autoLayerTiles || []), ...(instance.gridTiles || [])].filter((t)=> isArray(t.px));
+        if (!tiles.length)
+        {
+            // a tile layer with none yet is an empty layer, to paint in the editor, and a level of one still loads
+            values || map.layers.push({id, name, type: 'tilelayer', width, height, data: empty(), opacity,
+                visible: instance.visible !== false, x: 0, y: 0});
+            continue;
+        }
+        if (tileset && (instance.__tilesetDefUid !== tileset.uid || tileset.tileGridSize !== grid))
+        {
+            console.warn(`tileLayersFromLDtk: the tiles of layer ${name} are on another tileset, left out`);
+            continue;
+        }
+
+        // a layer for each depth in a cell and each opacity, the first tiles drawn solid first; at most 32, each a
+        // whole layer, so a small file of many opacities can not make thousands
+        const tilesName = values ? name + ' tiles' : name;
+        let full = false;
+        const stacks = [{depth: 0, alpha: 1, data: empty()}], stack = (depth, alpha)=>
+        {
+            let s = stacks.find((s)=> s.depth === depth && s.alpha === alpha);
+            if (!s && stacks.length >= 32)
+                return void (full = true);
+            s || stacks.push(s = {depth, alpha, data: empty()});
+            return s.data;
+        };
+        {
+            // a tile's place in pixels, its tile in the sheet, its flips, bit 0 across and bit 1 down, which are
+            // Tiled's two top bits, and its opacity; LDtk lists them in the order it draws them, so the first in a
+            // cell is the bottom one and each after it goes a layer higher
+            const depth = new Uint16Array(width * height);
+            for (const t of tiles)
+            {
+                const x = floor(t.px[0] / grid), y = floor(t.px[1] / grid), cell = x + y * width;
+                const data = x >= 0 && x < width && y >= 0 && y < height &&
+                    stack(depth[cell]++, round(clamp(t.a ?? 1) * 1e3) / 1e3);
+                if (data)
+                    data[cell] = (t.t + 1 | (t.f & 1 ? 0x80000000 : 0) | (t.f & 2 ? 0x40000000 : 0)) >>> 0;
+            }
+        }
+        full && console.warn(`tileLayersFromLDtk: layer ${name} stacks tiles and opacities in more than 32 ways, the rest left out`);
+        const visible = instance.visible !== false;
+        stacks.sort((a, b)=> a.depth - b.depth || b.alpha - a.alpha);
+        for (const {depth, alpha, data} of stacks)
+        {
+            const layerName = tilesName + (depth ? ` (${depth + 1})` : '') + (alpha < 1 ? ' ' + String(alpha).replace(/^0/, '') : '');
+            map.layers.push({id: values || depth || alpha < 1 ? map.nextlayerid++ : id, name: layerName, type: 'tilelayer',
+                width, height, data, opacity: opacity * alpha, visible, x: 0, y: 0});
+        }
+    }
+    return map;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Object layers
+
+// the types a map's objects are made from, by the name they have in Tiled
+const objectLayersTypes = new Map;
+
+/** Add a type of object, so objectLayersLoad makes one wherever a map's object layer has an object of that type
+ *  - The name is the object's type in Tiled (its class in Tiled 1.9); it is a string because minified builds
+ *    rename classes
+ *  - A class, or any function with a prototype, is made with new make(pos); an arrow function is called as
+ *    make(pos), for what is not an object, like a player start
+ *  - The defaults, and then the properties the object has in Tiled, are set on what it made
+ *  - Adding a name again replaces it
+ *  @param {string} name - The type the objects have in Tiled
+ *  @param {(function(Vector2): unknown)|(function(new: unknown, Vector2))} make - A class made at each object's
+ *  position, or a function called with it
+ *  @param {ObjectProperties} [defaults] - Properties set on each one made, the level editor shows inputs for them
+ *  @param {TileInfo} [tileInfo] - An icon for the level editor
+ *  @memberof TileLayers
+ *  @example
+ *  objectLayersAddType('Coin', Coin, {value: 1}, tile(5, 16));
+ *  objectLayersAddType('PlayerStart', (pos)=> playerStartPos = pos); */
+function objectLayersAddType(name, make, defaults={}, tileInfo)
+{
+    ASSERT(isStringLike(name), 'object type name must be a string');
+    ASSERT(typeof make === 'function', 'make must be a class or function');
+    ASSERT(!!defaults && typeof defaults === 'object', 'defaults must be an object');
+    objectLayersTypes.set(String(name), {make, defaults, tileInfo});
+}
+
+/** Make the objects in a map's object layers, each from the type added for its name with objectLayersAddType
+ *  - An object is made at its position, the world y up as tileLayersLoad places the layers; layer offsets are
+ *    not read, and a shape or tile object is made at its position too
+ *  - Group layers are flattened in order, as tileLayersLoad does
+ *  - The object's properties in Tiled are set over the type's defaults: numbers, booleans, strings, and colors,
+ *    and for a Vector2 default the string x,y
+ *  - An object whose type was not added is skipped, with a warning in debug builds
+ *  @param {TiledMap} tileMapData - The same Tiled map given to tileLayersLoad
+ *  @return {Array<any>} - What each object's type made, a function that made nothing is left out
+ *  @memberof TileLayers */
+function objectLayersLoad(tileMapData)
+{
+    // the level editor, in debug builds, keeps the map and brings back its autosaved objects before they are made
+    tileMapData && editorMapRestore(tileMapData);
+    const made = [];
+    const addObjects = (dataLayers)=>
+    {
+        for (const dataLayer of dataLayers || [])
+        {
+            if (dataLayer.type === 'group')
+                addObjects(dataLayer.layers);
+            if (dataLayer.type !== 'objectgroup')
+                continue;
+            for (const object of dataLayer.objects || [])
+            {
+                const result = objectLayersMake(tileMapData, object);
+                editorObjectMade(tileMapData, dataLayer, object, result); // debug builds link it for the level editor
+                result && made.push(result);
+            }
+        }
+    };
+    addObjects(tileMapData?.layers);
+    return made;
+}
+
+// a property's value for one object of its own: a Color or Vector2 copied, and an array or plain object copied with
+// what is in it, so an object that changes its list does not change every other object's, or the map's
+function objectPropertyCopy(value)
+{
+    if (value?.copy) return value.copy();
+    if (isArray(value)) return value.map(objectPropertyCopy);
+    if (!value || typeof value != 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
+    const copy = {};
+    for (const key in value)
+        copy[key] = objectPropertyCopy(value[key]);
+    return copy;
+}
+
+// the defaults of an object's type, each copied for it, then its properties in Tiled over them
+function objectLayersProperties(type, object)
+{
+    const properties = {};
+    for (const [key, value] of Object.entries(type.defaults))
+        properties[key] = objectPropertyCopy(value);
+    for (const property of object.properties || [])
+    {
+        const {name, value} = property;
+        if (property.type === 'color')
+            value && (properties[name] = tileLayersColor(value)); // an empty color is unset
+        else if (isVector2(type.defaults[name]))
+        {
+            // Tiled has no Vector2, one is the string x,y, and one it can not read keeps the default
+            const parts = String(value).split(','), [x, y] = parts.map(Number);
+            parts.length === 2 && parts.every((part)=> part.trim()) && isNumber(x) && isNumber(y) &&
+                (properties[name] = vec2(x, y));
+        }
+        else
+            properties[name] = objectPropertyCopy(value); // a class property is the map's own object
+    }
+    return properties;
+}
+
+// make one Tiled object from the type added for its name, undefined when there is no such type or it made nothing
+function objectLayersMake(tileMapData, object)
+{
+    const name = object.type || object.class, type = objectLayersTypes.get(name);
+    if (!type)
+    {
+        // an object with no type, a shape or a text someone drew in Tiled, is not one a game makes
+        debug && name && console.warn(`objectLayersLoad: no type added for ${name}, skipped`);
+        return;
+    }
+    const {height=0, tilewidth=1, tileheight=1} = tileMapData;
+    const pos = vec2(object.x / tilewidth, height - object.y / tileheight);
+    const {make} = type, result = make.prototype ? new make(pos) : make(pos);
+    if (!result || typeof result !== 'object') return;
+    for (const [key, value] of Object.entries(objectLayersProperties(type, object)))
+    {
+        // a property named as a method of the object, like update, would take the method's place, so it is left out
+        if (typeof result[key] === 'function' && typeof value !== 'function')
+            debug && console.warn(`objectLayersLoad: ${name} property ${key} has a method's name, left out`);
+        else
+            result[key] = value;
+    }
+    return result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * Tile layer data object stores info about how to draw a tile
+ * @memberof TileLayers
+ * @example
+ * // create tile layer data with tile index 0 and random orientation and color
+ * const tileIndex = 0;
+ * const direction = randInt(4)
+ * const mirror = randBool();
+ * const color = randColor();
+ * const data = new TileLayerData(tileIndex, direction, mirror, color);
+ */
+class TileLayerData
+{
+    /** Create a tile layer data object, one for each tile in a TileLayer
+     *  @param {number}  [tile] - The tile to use, from 0 like tile(); undefined is an empty cell that draws nothing
+     *  @param {number}  [direction] - Integer direction of tile, in 90 degree increments
+     *  @param {boolean} [mirror] - If the tile is flipped left to right
+     *  @param {Color}   [color] - Color of the tile */
+    constructor(tile, direction=0, mirror=false, color)
+    {
+        /** @property {number|undefined} - The tile to use, from 0 like tile(); undefined is an empty cell that draws nothing
+         *  @type {number|undefined} */
+        this.tile = tile;
+        /** @property {number} - Integer direction of tile, in 90 degree increments */
+        this.direction = direction;
+        /** @property {boolean} - If the tile is flipped left to right */
+        this.mirror = mirror;
+        /** @property {Color} - Color of the tile, its own copy, white when none was given */
+        this.color = color ? color.copy() : new Color; // one Color, not a default copied again, for every empty cell
+    }
+
+    /** Set this tile to clear, it will not be rendered */
+    clear() { this.tile = undefined; this.direction = 0; this.mirror = false; this.color = new Color; }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+// the layers between redrawStart and redrawEnd, innermost last, so a frame that throws in the middle of one can close
+// it, or every frame after would draw into the layer with its camera
+const canvasLayerRedraws = [];
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * Canvas Layer - a picture placed in the world, drawn into once and shown as one image
+ * - drawRect and drawTile draw into it in world space, where they show in the world, on the GPU into its
+ *   WebGL texture, or onto its canvas when WebGL is off or useWebGL is false; drawLayerRect and drawLayerTile
+ *   draw in its pixels inside redrawStart/End
+ * - A world unit is as many pixels as its canvas has across its size, so a bigger canvas is a sharper picture
+ * - A draw turned in the world turns in those pixels, so it keeps its shape only when the canvas has the shape of
+ *   the size, as many pixels a unit up as across; on any other layer it comes out skewed, which a debug build warns of
+ * - Its pos is its middle, it turns by its angle and flips with mirror
+ * - Drawing into its WebGL texture leaves its canvas blank, so drawing on its context only shows on a layer made
+ *   with useWebGL=false (or with WebGL off), and updateWebGL copies the canvas into the texture
+ * - What it holds on the GPU is lost with the WebGL context, onContextRestored is the place to draw it again
+ * @extends EngineObject
+ * @memberof TileLayers
+ * @example
+ * const canvasLayer = new CanvasLayer(vec2(), vec2(200,100), 0, 0, vec2(400,200)); // 2 pixels a unit both ways
+ */
+class CanvasLayer extends EngineObject
+{
+    /** Create a canvas layer object
+     *  @param {Vector2}  [pos] - World space position of the layer
+     *  @param {Vector2}  [size] - World space size of the layer
+     *  @param {number}   [angle] - Angle the layer is rotated by
+     *  @param {number}   [renderOrder] - Objects sorted by renderOrder
+     *  @param {Vector2}  [canvasSize] - Default size of canvas, can be changed later
+     *  @param {boolean}  [useWebGL] - Should this layer use WebGL for rendering
+    */
+    constructor(pos, size, angle=0, renderOrder=0, canvasSize=vec2(512), useWebGL=true)
+    {
+        ASSERT(isVector2(canvasSize), 'canvasSize must be a Vector2');
+        super(pos, size, undefined, angle, WHITE, renderOrder);
+
+        /** @property {OffscreenCanvasRenderingContext2D} - The 2D canvas context used by this layer */
+        this.context = headlessMode ? undefined : createCanvasContext(canvasSize.x, canvasSize.y);
+        /** @property {OffscreenCanvas} - The canvas used by this layer */
+        this.canvas = this.context?.canvas;
+        /** @property {TextureInfo} - Texture info to use for this object rendering */
+        this.textureInfo = new TextureInfo(this.canvas, useWebGL);
+
+        // a texture past the device's limit fails with only a WebGL warning and draws black, and phones often
+        // allow 4096 where a desktop allows 16384, so say so in release builds too
+        const maxSize = useWebGL && glContext ? glContext.getParameter(glContext.MAX_TEXTURE_SIZE) : 0;
+        if (maxSize && max(canvasSize.x, canvasSize.y) > maxSize)
+            console.warn(`LittleJS: a ${canvasSize.x}x${canvasSize.y} layer is over this device's ${maxSize} pixel texture limit and draws black, split it into smaller layers`);
+
+        // disable physics by default
+        this.mass = 0;
+        /** @property {boolean} - Is this layer drawing into its WebGL texture, set by redrawStart */
+        this.isUsingWebGL = false;
+        // the second texture scroll draws into, made on the first scroll
+        /** @type {TextureInfo|undefined} */
+        this.scrollTextureInfo = undefined;
+
+        if (headlessMode)
+        {
+            // nothing to draw into in headless mode, but a game's own subclass keeps its methods
+            for (const name of ['redrawStart', 'redrawEnd', 'drawLayerTile', 'drawLayerRect', 'drawTile', 'drawRect',
+                'clearLayerRect'])
+                if (this[name] === CanvasLayer.prototype[name] || this[name] === TileLayer.prototype[name])
+                    this[name] = ()=> {};
+        }
+    }
+
+    /** Destroy this canvas layer
+     *  @param {boolean} [immediate] - Remove it now, as EngineObject.destroy does, children included */
+    destroy(immediate=false)
+    {
+        if (this.destroyed) return;
+
+        this.textureInfo.destroyWebGLTexture();
+        this.scrollTextureInfo?.destroyWebGLTexture();
+        super.destroy(immediate);
+    }
+
+    // Render the layer, called automatically by the engine
+    render()
+    {
+        this.draw(this.pos, this.size, this.color, this.angle, this.mirror, this.additiveColor, false);
+    }
+
+    /** Draw this canvas layer centered in world space
+    *  @param {Vector2} pos - Center in world space
+    *  @param {Vector2} [size] - Size in world space
+    *  @param {Color}   [color] - Color to modulate with
+    *  @param {number}  [angle] - Angle to rotate by
+    *  @param {boolean} [mirror] - If true the image is flipped left to right
+    *  @param {Color}   [additiveColor] - Additive color to be applied if any
+    *  @param {boolean} [screenSpace=drawScreenSpace] - If true the pos and size are in screen space
+    *  @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} [context] - Canvas 2D context to draw to */
+    draw(pos, size, color=WHITE, angle=0, mirror=false, additiveColor, screenSpace=drawScreenSpace, context)
+    {
+        // the canvas may have been resized since, updateWebGL only refreshes the size for WebGL
+        const t = this.textureInfo, c = this.canvas;
+        if (c && !this.hasWebGL() && (c.width !== t.size.x || c.height !== t.size.y))
+        {
+            t.size = vec2(c.width, c.height);
+            t.sizeInverse = vec2(1/c.width, 1/c.height);
+        }
+
+        // draw the canvas layer as a single tile that uses the whole texture
+        const tileInfo = new TileInfo().setFullImage(t);
+        const useWebGL = !context && this.hasWebGL(); // a context given is drawn to with Canvas2D
+        drawTile(pos, size, tileInfo, color, angle, mirror, additiveColor, useWebGL, screenSpace, context);
+    }
+
+    /** Create WebGL texture if necessary and copy layer canvas to it */
+    updateWebGL()
+    { this.textureInfo.createWebGLTexture(); }
+
+    /** Check if this layer is using WebGL
+     *  @return {boolean} */
+    hasWebGL()
+    { return glEnable && this.textureInfo.hasWebGL(); }
+
+    /** Called when the WebGL context comes back after it was lost, does nothing by default
+     *  - What was drawn into the layer's texture is gone with the context, draw it again here to keep it; a
+     *    TileLayer draws its tiles again on its own before this */
+    onContextRestored() {}
+
+    // the layer's bottom left corner in the world, before its turn: its pos is its middle
+    getLayerCorner() { return this.pos.subtract(this.size.scale(.5)); }
+
+    // the size the layer shows at in the world, which a world draw into it goes by
+    getLayerDrawSize() { return this.size; }
+
+    // a world position in the layer as it shows, world units from its bottom left corner, through its turn and mirror
+    /** @ignore
+     *  @param {Vector2} pos
+     *  @return {Vector2} */
+    worldToLayer(pos)
+    {
+        if (!this.angle && !this.mirror)
+            return pos.subtract(this.getLayerCorner());
+        const half = this.getLayerDrawSize().scale(.5);
+        const local = pos.subtract(this.getLayerCorner().add(half)).rotate(-this.angle);
+        if (this.mirror)
+            local.x = -local.x;
+        return local.add(half);
+    }
+
+    /** Call to start the redraw process, drawing into the layer until redrawEnd
+     *  @param {boolean} [clear] - Should it clear the canvas before drawing */
+    redrawStart(clear=false)
+    {
+        if (!this.context) return;
+        ASSERT(drawContext !== this.context, 'redrawStart: already started, call redrawEnd() first');
+
+        // save current render settings
+        /** @type {[CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D, Vector2, Vector2, number, number, Color, Shader|undefined]} */
+        this.savedRenderSettings = [drawContext, mainCanvasSize, cameraPos, cameraScale, cameraAngle, canvasClearColor, glCustomShader];
+        setShader(); // the tiles are drawn plain, a layer's own Shader applies when the layer is drawn
+        // a redraw from inside another target's pass, like the light system's shadow map, draws the tiles in color
+        // and hands that target back after
+        /** @type {[WebGLTexture|undefined, number, number, boolean, WebGLTexture|undefined, boolean]} */
+        this.savedRenderTarget = [glRenderTarget, glColorMask, glColorAdditive, glSkipScreenSpace, glTextureOverride,
+            glSkipAdditive];
+        glColorMask = -1;
+        glColorAdditive = 0;
+        glSkipScreenSpace = false; // screen space is the layer's own pixels here
+        glTextureOverride = undefined; // its own tiles, not the normal map of the light system's normal pass
+        glSkipAdditive = false;
+
+        // set the draw canvas and context to this layer
+        // use camera settings to match this layer's canvas, a pixel a unit
+        drawContext = this.context;
+        mainCanvasSize = vec2(this.canvas.width, this.canvas.height);
+        canvasClearColor = CLEAR_BLACK;
+        cameraPos = mainCanvasSize.scale(.5);
+        cameraScale = 1;
+        cameraAngle = 0; // drawn flat, the world camera turns the whole layer later
+
+        canvasLayerRedraws.push(this);
+
+        // set render target to this layer
+        this.isUsingWebGL = this.hasWebGL();
+        if (this.isUsingWebGL)
+            glSetRenderTarget(this.textureInfo.glTexture, clear);
+        else
+        {
+            if (clear)
+            {
+                // setting the size clears the canvas
+                this.canvas.width  = mainCanvasSize.x;
+                this.canvas.height = mainCanvasSize.y;
+            }
+            // disable smoothing for pixel art, after the resize which resets it
+            this.context.imageSmoothingEnabled = !tilesPixelated;
+        }
+    }
+
+    /** Call to end the redraw process */
+    redrawEnd()
+    {
+        if (!this.context) return;
+        ASSERT(drawContext === this.context, 'redrawEnd: call redrawStart() first');
+        const open = canvasLayerRedraws.lastIndexOf(this);
+        open < 0 || canvasLayerRedraws.splice(open, 1);
+
+        // set stuff back to normal, the camera first, so a target that was drawing before gets its own transform back
+        [drawContext, mainCanvasSize, cameraPos, cameraScale, cameraAngle, canvasClearColor, glCustomShader] = this.savedRenderSettings;
+        const [target, colorMask, colorAdditive, skipScreenSpace, textureOverride, skipAdditive] = this.savedRenderTarget;
+        if (this.isUsingWebGL)
+            glSetRenderTarget(target);
+        glColorMask = colorMask;
+        glColorAdditive = colorAdditive;
+        glSkipScreenSpace = skipScreenSpace;
+        glTextureOverride = textureOverride;
+        glSkipAdditive = skipAdditive;
+    }
+
+    /** Draw textured tile in layer space
+     *  @param {Vector2}  pos - Position in pixel coordinates
+     *  @param {Vector2}  [size=vec2(1)] - Size of the tile
+     *  @param {TileInfo} [tileInfo] - Tile info to use, untextured if undefined
+     *  @param {Color}    [color=WHITE] - Color to modulate with
+     *  @param {number}   [angle] - Angle to rotate by
+     *  @param {boolean}  [mirror] - Is the image flipped left to right?
+     *  @param {Color}    [additiveColor] - Additive color to be applied if any */
+    drawLayerTile(pos, size=vec2(1), tileInfo, color=WHITE,
+    angle=0, mirror, additiveColor)
+    {
+        const drawPos = pos.add(size.scale(.5));
+        drawTile(drawPos, size, tileInfo, color, angle, mirror, additiveColor, this.isUsingWebGL, false);
+    }
+
+    /** Draw a rectangle in layer space
+     *  @param {Vector2} pos
+     *  @param {Vector2} size
+     *  @param {Color} [color=WHITE] - Color to modulate with
+     *  @param {number} [angle] - Angle to rotate by
+     */
+    drawLayerRect(pos, size, color, angle=0)
+    { this.drawLayerTile(pos, size, undefined, color, angle); }
+
+    /** Draw a tile onto the layer in world space, where it shows in the world, whatever the layer's place, turn and
+     *  mirror
+     *  - Each call outside redrawStart and redrawEnd switches to the layer and back, a draw of its own; many in one
+     *    frame, like a splat for each particle, are drawn between one redrawStart() and redrawEnd()
+     *  @param {Vector2}  pos
+     *  @param {Vector2}  [size=vec2(1)]
+     *  @param {TileInfo} [tileInfo]
+     *  @param {Color}    [color=WHITE]
+     *  @param {number}   [angle]
+     *  @param {boolean}  [mirror] */
+    drawTile(pos, size=vec2(1), tileInfo, color=new Color, angle=0, mirror=false)
+    {
+        // into the layer's own space, then its pixels, as many a world unit as its canvas has across the size it
+        // shows at
+        pos = this.worldToLayer(pos);
+        angle -= this.angle;
+        if (this.mirror)
+            angle = -angle, mirror = !mirror;
+        const drawSize = this.getLayerDrawSize();
+        const pixels = vec2(this.canvas.width / drawSize.x, this.canvas.height / drawSize.y);
+        if (debug && !this.skewWarned && abs(sin(angle)) > 1e-6 && abs(pixels.x - pixels.y) > 1e-6 * pixels.x)
+        {
+            // a tile turns in the layer's pixels, which this layer stretches on one axis more than the other
+            console.warn('CanvasLayer: a turned draw comes out skewed, the layer has more pixels a unit on one axis ' +
+                'than the other; give its canvas the shape of its size');
+            this.skewWarned = true;
+        }
+        pos = pos.multiply(pixels);
+        size = size.multiply(pixels);
+        // a screen position is the center of a pixel, so the layer pixel coordinate moves back half a pixel
+        pos.x -= .5;
+        pos.y = this.canvas.height - pos.y - .5;
+
+        // draw the tile onto the layer canvas
+        // in color and handing back a target that was drawing before, like the light system's shadow map
+        const oldMainCanvasSize = mainCanvasSize, oldTarget = glRenderTarget, oldColorMask = glColorMask;
+        const oldSkip = glSkipScreenSpace, oldColorAdditive = glColorAdditive, oldShader = glCustomShader;
+        const oldOverride = glTextureOverride, oldSkipAdditive = glSkipAdditive;
+        const useWebGL = this.hasWebGL();
+        // all of it handed back even when the draw throws, as a failed assert does
+        try
+        {
+            mainCanvasSize = vec2(this.canvas.width, this.canvas.height);
+            glColorMask = -1;
+            glColorAdditive = 0;
+            glTextureOverride = undefined; // its own tile, as a redraw draws
+            glSkipAdditive = false;
+            setShader(); // plain, as a redraw draws, a layer's own Shader applies when the layer is drawn
+            glSkipScreenSpace = false; // its screen space is the layer's own canvas
+            useWebGL && glSetRenderTarget(this.textureInfo.glTexture);
+            const drawContext = useWebGL ? undefined : this.context;
+            drawTile(pos, size, tileInfo, color, angle, mirror, undefined, useWebGL, true, drawContext);
+        }
+        finally
+        {
+            mainCanvasSize = oldMainCanvasSize;
+            useWebGL && glSetRenderTarget(oldTarget);
+            glColorMask = oldColorMask;
+            glColorAdditive = oldColorAdditive;
+            glSkipScreenSpace = oldSkip;
+            glTextureOverride = oldOverride;
+            glSkipAdditive = oldSkipAdditive;
+            setShader(oldShader);
+        }
+    }
+
+    /** Draw a rectangle onto the layer in world space, where it shows in the world
+     *  - Like drawTile, many go between one redrawStart() and redrawEnd()
+     *  @param {Vector2} pos
+     *  @param {Vector2} [size=vec2(1)]
+     *  @param {Color}   [color=WHITE]
+     *  @param {number}  [angle] */
+    drawRect(pos, size, color, angle)
+    { this.drawTile(pos, size, undefined, color, angle); }
+
+    /** Clear a rectangle in layer space
+     *  @param {Vector2} pos - position in pixel coordinates
+     *  @param {Vector2} size
+     */
+    clearLayerRect(pos, size)
+    {
+        ASSERT(drawContext === this.context, 'must call redrawStart() before clearing tiles');
+
+        const x = pos.x, y = this.canvas.height - pos.y - size.y;
+        const useWebGL = this.hasWebGL();
+        if (useWebGL)
+            glClearRect(x, y, size.x, size.y);
+        else
+            this.context.clearRect(x, y, size.x, size.y);
+    }
+
+    /** Move the layer through the world by offset while what is drawn in it stays where it is in the world, for a
+     *  picture that follows something across a world bigger than it, like decals around a car
+     *  - The offset is snapped to whole pixels of the layer, so the picture never blurs, and the snapped one is
+     *    returned
+     *  - What scrolls off an edge is gone, and the strip that comes into view is empty for the game to draw
+     *  - With WebGL it is one draw on the GPU, into a second texture as big as the layer's, kept from its first
+     *    scroll; with WebGL off or useWebGL false the canvas is drawn onto itself, which is slower
+     *  - A picture kept on the canvas and copied up with updateWebGL is not moved on a WebGL layer, only its texture
+     *  - A TileLayer can not scroll, its grid would draw over the picture
+     *  @param {Vector2} offset - World units to move the layer by
+     *  @return {Vector2} - The offset it moved by, snapped to its pixels */
+    scroll(offset)
+    {
+        ASSERT(isVector2(offset), 'scroll: offset must be a Vector2', offset);
+        ASSERT(!(this instanceof TileLayer), 'scroll is for a CanvasLayer, a TileLayer would draw its grid over it');
+        if (this instanceof TileLayer)
+            return vec2(); // stays where it is in a release build too
+        if (!this.context)
+        {
+            // headless, there is no picture to move
+            this.pos = this.pos.add(offset);
+            return offset.copy();
+        }
+
+        // the offset in the layer's whole pixels, through its turn and mirror, up from its bottom left
+        const local = offset.rotate(-this.angle);
+        if (this.mirror)
+            local.x = -local.x;
+        const pixels = vec2(this.canvas.width / this.size.x, this.canvas.height / this.size.y);
+        const shift = vec2(round(local.x * pixels.x), round(local.y * pixels.y));
+        if (!shift.x && !shift.y)
+            return vec2();
+
+        if (this.hasWebGL())
+        {
+            // the spare takes the picture and the layer's own texture is drawn again from it moved over, so the old
+            // texture is the spare for the next scroll and nothing is copied back
+            const info = this.textureInfo;
+            this.scrollTextureInfo ||= new TextureInfo(this.canvas, true, info.wrap, info.pixelated);
+            const spare = this.scrollTextureInfo;
+            if (spare.size.x !== info.size.x || spare.size.y !== info.size.y)
+                spare.createWebGLTexture(); // the canvas was resized since, the spare is made again at its size
+            [info.glTexture, spare.glTexture] = [spare.glTexture, info.glTexture];
+            this.redrawStart(true);
+            try { this.drawLayerTile(shift.scale(-1), info.size, new TileInfo().setFullImage(spare)); }
+            finally { this.redrawEnd(); }
+        }
+        else
+        {
+            // the canvas onto itself, copy leaving what it does not cover empty; canvas rows go down
+            const context = this.context;
+            context.save();
+            context.globalCompositeOperation = 'copy';
+            context.drawImage(this.canvas, -shift.x, shift.y);
+            context.restore();
+        }
+
+        // the layer moves by the snapped offset, back into the world
+        const moved = vec2(shift.x / pixels.x, shift.y / pixels.y);
+        if (this.mirror)
+            moved.x = -moved.x;
+        const world = moved.rotate(this.angle);
+        this.pos = this.pos.add(world);
+        return world;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// a layer's default tile, none when no image is loaded, so a collision only layer works in a game with no images
+function tileLayerDefaultTile() { return textureInfos[0]?.size.x ? tile() : undefined; }
+
+/**
+ * Tile Layer - cached rendering system for tile layers
+ * - Tiles are drawn once into a texture, a WebGL render target, or the layer's canvas when WebGL is off
+ *   or useWebGL is false, and the layer draws that as one image
+ * - It draws itself: whole on its first render if nothing has drawn into it, and the cells setData changed
+ *   on the next render; redraw() draws the whole layer now
+ * - Some devices like mobile phones are limited to 4k textures, which with 16x16 tiles limits a layer to 256x256
+ * - Tile layers are centered on their corner, so normal levels are at (0,0)
+ * @extends CanvasLayer
+ * @memberof TileLayers
+ * @example
+ * const tileLayer = new TileLayer(vec2(), vec2(200,100));
+ */
+class TileLayer extends CanvasLayer
+{
+    /** Create a tile layer object
+    *  @param {Vector2}  pos - World space position
+    *  @param {Vector2}  size - World space size
+    *  @param {TileInfo} [tileInfo] - Default tile info for layer (used for size and texture), tile() by default, none when no image is loaded
+    *  @param {number}   [renderOrder] - Objects are sorted by renderOrder
+    *  @param {boolean}  [useWebGL] - Should this layer use WebGL for rendering
+    */
+    constructor(pos, size, tileInfo=tileLayerDefaultTile(), renderOrder=0, useWebGL=true)
+    {
+        ASSERT(!tileInfo || tileInfo.size.x > 0 && tileInfo.size.y > 0,
+            'the tile has no size yet, a loadSprite tile is filled in once spritesReady resolves');
+        size = size.floor(); // whole cells, a fractional size would never finish filling the data
+        const canvasSize = tileInfo ? size.multiply(tileInfo.size) : size;
+        super(pos, size, 0, renderOrder, canvasSize, useWebGL);
+        
+        /** @property {TileInfo|undefined} - Default tile info for layer
+         *  @type {TileInfo|undefined} */
+        this.tileInfo = undefined;
+        /** @property {Array<TileLayerData>} - Array of tile data for the layer */
+        this.data = [];
+        // which side holds the whole layer, set by a full redraw, undefined before the first one; a partial redraw
+        // or a render that finds WebGL turned on or off since then draws it all again on the side now in use
+        this.tilesInWebGL = undefined;
+        // set once anything draws into the layer, until then its first render draws it whole
+        this.drawn = false;
+        // the cells setData changed with no redraw argument, as indices into data, drawn on the next render
+        /** @type {Set<number>} */
+        this.dirtyCells = new Set;
+        /** @property {boolean} - Show this layer's bounds and values when the debug overlay's Debug Tiles is on,
+         *  turn it off for layers that only add noise */
+        this.debugShow = true;
+
+        if (tileInfo)
+        {
+            // set tile info
+            this.tileInfo = tileInfo.frame(0);
+            this.tileInfo.bleed = 0; // disable bleed for tile layers
+            this.tileInfo.tiles = tileInfo.tiles; // a tile set's list, filled in as its images load
+        }
+
+        // init tile data
+        for (let j = this.size.area(); j--;)
+            this.data.push(new TileLayerData);
+
+        if (headlessMode)
+        {
+            // disable rendering in headless mode
+            this.render         = ()=> {};
+            this.redraw         = ()=> {};
+            this.drawTileData   = ()=> {};
+            this.redrawTileData = ()=> {};
+        }
+    }
+
+    /** Set data at a given position in the array
+     *  @param {Vector2}       layerPos - Local position in array
+     *  @param {TileLayerData} data - Data to set
+     *  @param {boolean}       [redraw] - True draws the cell now, false leaves it as drawn, left out draws it
+     *                                     on the next render, or now inside the layer's own redraw; when more than
+     *                                     half the cells wait the whole layer is drawn again, clearing paint too */
+    setData(layerPos, data, redraw)
+    {
+        ASSERT(isVector2(layerPos), 'layerPos must be a Vector2');
+        ASSERT(data instanceof TileLayerData, 'data must be a TileLayerData');
+        layerPos = layerPos.floor();
+
+        if (!layerPos.arrayCheck(this.size)) return;
+        const i = (layerPos.y|0)*this.size.x + (layerPos.x|0);
+        this.data[i] = data;
+
+        // left out inside this layer's own redraw it draws now, under what the game paints after it
+        const isRedraw = drawContext === this.context;
+        if (redraw === undefined && isRedraw) redraw = true;
+        redraw === undefined ? this.context && this.dirtyCells.add(i) : this.dirtyCells.delete(i);
+        if (!redraw) return;
+        isRedraw ? this.drawTileData(layerPos) : this.redrawTileData(layerPos);
+    }
+
+    /** Clear data at a given position in the array
+     *  @param {Vector2} layerPos - Local position in array
+     *  @param {boolean} [redraw] - True draws the cell now, false leaves it as drawn, left out draws it on the
+     *                               next render */
+    clearData(layerPos, redraw)
+    { this.setData(layerPos, new TileLayerData, redraw) }
+
+    /** Get data at a given position in the array
+     *  @param {Vector2} layerPos - Local position in array
+     *  @return {TileLayerData|undefined} */
+    getData(layerPos)
+    {
+        ASSERT(isVector2(layerPos), 'layerPos must be a Vector2');
+        return layerPos.arrayCheck(this.size) ? this.data[(layerPos.y|0)*this.size.x + (layerPos.x|0)] : undefined;
+    }
+
+    // Update the tile layer, a layer has no physics
+    update() {}
+
+    // Render the tile layer, called automatically by the engine
+    render()
+    {
+        ASSERT(drawContext !== this.context, 'must call redrawEnd() after drawing tiles!');
+
+        // redraw here, not in update, which does not run while paused, if WebGL was turned off or lost, or came
+        // back, then what is waiting to be drawn
+        this.redrawIfSwitched();
+        this.drawPending();
+
+        const size = this.drawSize || this.size;
+        const pos = this.pos.add(size.scale(.5));
+        this.draw(pos, size, this.color, this.angle, this.mirror, this.additiveColor, false);
+    }
+
+    /** Called after this layer is redrawn, does nothing by default */
+    onRedraw() {}
+
+    /** Draw all the tile data to an offscreen canvas
+     *  - This may be slow if not using webgl but only needs to be done once */
+    redraw()
+    {
+        // the camera, canvas and target are the game's again even when a tile draw or onRedraw throws
+        this.redrawStart(true);
+        this.dirtyCells.clear(); // all drawn below, a cell onRedraw changes waits for the next render
+        try
+        {
+            for (let x = this.size.x; x--;)
+            for (let y = this.size.y; y--;)
+                this.drawTileData(vec2(x,y), false);
+            this.isUsingWebGL && glFlush();
+            this.onRedraw();
+        }
+        finally { this.redrawEnd(); }
+        this.tilesInWebGL = this.isUsingWebGL;
+    }
+
+    // draw what is waiting before anything goes on top: the whole layer if nothing has drawn into it yet, or the
+    // cells setData changed since, all in one pass
+    drawPending()
+    {
+        if (!this.context || drawContext === this.context) return; // inside this layer's own redraw it waits
+        if (!this.drawn)
+        {
+            // marked first, so a redraw of a game's own that calls redrawStart does not come back here
+            this.drawn = true;
+            return this.redraw();
+        }
+        if (!this.dirtyCells.size) return;
+
+        // most of the layer changed, as a new level set with setData, is drawn again whole, in one draw
+        const width = this.size.x;
+        if (this.dirtyCells.size > width * this.size.y / 2)
+            return this.redraw();
+
+        // taken first, so the redrawStart below finds nothing waiting and a tile that throws is not tried again
+        const cells = [...this.dirtyCells].map((i)=> vec2(i % width, i / width | 0));
+        this.dirtyCells.clear();
+        this.redrawStart();
+        try
+        {
+            // every cell cleared first, then the tiles drawn, so they go in one batch, where a clear between each
+            // tile flushed it, a draw a cell
+            const cellPixels = this.tileInfo?.size ?? vec2(1);
+            for (const cell of cells)
+                this.clearLayerRect(cell.multiply(cellPixels), cellPixels);
+            for (const cell of cells)
+                this.drawTileData(cell, false);
+        }
+        finally { this.redrawEnd(); }
+    }
+
+    // draw the whole layer again if the side that holds it is not the one in use now
+    redrawIfSwitched()
+    {
+        if (this.tilesInWebGL !== undefined && this.hasWebGL() !== this.tilesInWebGL)
+            this.redraw();
+    }
+
+    // a tile layer is placed by its bottom left corner
+    getLayerCorner() { return this.pos; }
+
+    // and drawn at drawSize when it is set, stretched from its size
+    getLayerDrawSize() { return this.drawSize || this.size; }
+
+    /** Create WebGL texture if necessary and copy layer canvas to it, which counts as drawn, so a picture the game
+     *  drew onto the canvas is not drawn over with the tiles on the first render */
+    updateWebGL()
+    {
+        this.drawn = true;
+        this.dirtyCells.clear();
+        super.updateWebGL();
+    }
+
+    /** Call to start the redraw process, after what is waiting is drawn
+     *  - This can be used to manually update parts of the level
+     *  @param {boolean} [clear] - Should it clear the canvas before drawing */
+    redrawStart(clear=false)
+    {
+        if (!this.context) return;
+        ASSERT(drawContext !== this.context, 'redrawStart: already started, call redrawEnd() first');
+        if (!clear)
+        {
+            // a partial redraw goes on top of the whole layer on the side in use, and of what was waiting
+            this.drawPending();
+            this.redrawIfSwitched();
+        }
+        else
+            this.dirtyCells.clear(); // a cleared layer is the game's own picture, nothing waiting goes over it
+        this.drawn = true;
+        super.redrawStart(clear);
+    }
+
+    /** Draw a tile onto the layer in world space, over the cells waiting to be drawn
+     *  @param {Vector2}  pos
+     *  @param {Vector2}  [size=vec2(1)]
+     *  @param {TileInfo} [tileInfo]
+     *  @param {Color}    [color=WHITE]
+     *  @param {number}   [angle]
+     *  @param {boolean}  [mirror] */
+    drawTile(pos, size, tileInfo, color, angle, mirror)
+    {
+        this.drawPending(); // what was set before goes under what is drawn now
+        this.drawn = true;
+        super.drawTile(pos, size, tileInfo, color, angle, mirror);
+    }
+
+    /** Draw the tile at a given position in the tile layer
+     *  This can be used to clear out tiles when they are destroyed
+     *  Tiles can also be redrawn if inside a redrawStart/End block
+     *  @param {Vector2} layerPos
+     *  @param {boolean} [clear] - should the old tile be cleared out
+     */
+    drawTileData(layerPos, clear=true)
+    {
+        if (!this.context) return;
+        ASSERT(drawContext === this.context, 'must call redrawStart() before drawing tiles');
+        
+        // clear out where the tile was, can be skipped for fully opaque tiles
+        const cellPixels = this.tileInfo?.size ?? vec2(1);
+        const drawPos = layerPos.multiply(cellPixels);
+        clear && this.clearLayerRect(drawPos, cellPixels);
+
+        // draw the tile if it has layer data, an empty cell has no tile and tile 0 is a tile like any other
+        const d = this.getData(layerPos);
+        if (!d || d.tile === undefined) return;
+
+        // a tile set from loadTiles has each tile where it was packed, a tileset packed by loadSprite keeps its own
+        // columns, counted from its first tile, not the sheet's grid
+        const t = this.tileInfo, tileInfo = tileLayerTileInfo(t, d.tile);
+        if (t && !tileInfo) return; // past the end of the sheet or the tile set, or loading
+        this.drawLayerTile(drawPos, cellPixels, tileInfo, d.color, d.direction*PI/2, d.mirror);
+    }
+
+    /** Draw the tile at a given position in the tile layer
+     *  This can be used to clear tiles when they are destroyed
+     *  For better performance use drawTileData inside a redrawStart/End block
+     *  @param {Vector2} layerPos
+     *  @param {boolean} [clear] - should the old tile be cleared
+     */
+    redrawTileData(layerPos, clear=true)
+    {
+        if (!this.context) return;
+        ASSERT(drawContext !== this.context, 'redrawStart() should not be active when calling redrawTileData(), instead use drawTileData()');
+
+        this.redrawStart();
+        try { this.drawTileData(layerPos, clear); }
+        finally { this.redrawEnd(); }
+    }
+
+}
+
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * Tile Collision Layer - a tile layer with collision
+ * - adds collision data and functions to TileLayer
+ * - there can be multiple tile collision layers
+ * - its pos must be whole numbers, so its cells line up with the world grid objects land on
+ * @extends TileLayer
+ * @memberof TileLayers
+ */
+class TileCollisionLayer extends TileLayer
+{
+    /** Create a tile layer object
+    *  @param {Vector2}  pos - World space position
+    *  @param {Vector2}  size - World space size
+    *  @param {TileInfo} [tileInfo] - Tile info for layer, tile() by default, none when no image is loaded
+    *  @param {number}   [renderOrder] - Objects are sorted by renderOrder
+    *  @param {boolean}  [useWebGL] - Should this layer use WebGL for rendering
+    */
+    constructor(pos, size, tileInfo=tileLayerDefaultTile(), renderOrder=0, useWebGL=true)
+    {
+        super(pos, size.floor(), tileInfo, renderOrder, useWebGL);
+
+        /** @property {Array<number>} - The tile collision grid
+         *  @type {Array<number>} */
+        this.collisionData = [];
+        this.initCollision(this.size);
+
+        // keep track of all collision layers
+        tileCollisionLayers.push(this);
+
+        /** @property {boolean} - Solid layers block objects and particles, the solidOnly tests skip the others */
+        this.isSolid = true;
+        /** @property {boolean} - In the light system's shadow pass, cast only from the cells with collision, drawn
+         *  as the layer shows them, so a floor in the same layer stays lit; false casts every tile */
+        this.shadowSolidOnly = true;
+        /** @property {boolean} - In the shadow pass, cast each cell with collision as a full square, not the shape
+         *  its tile draws; tileLayersLoad sets it on a hidden layer, which draws no tiles to cast from */
+        this.shadowSquares = false;
+        /** @property {Map<number, Vector2>} - The tiles set one way, by tile index, and the way each can be passed
+         *  through, see setOneWay
+         *  @type {Map<number, Vector2>} */
+        this.oneWayTiles = new Map;
+    }
+
+    /** Make the cells that draw a tile one way, like a platform jumped up through and landed on: an object, a
+     *  particle or a ray passes through moving that way, and the tile blocks only what was wholly on its far side
+     *  before it moved, the side it is passed toward; turned and mirrored as each cell's tile is, so a platform turned
+     *  a quarter is one way to the side
+     *  - A moving object is not stopped or asked through collideWithTile until the tile would block it, so a
+     *    collideWithTile that returns false lets it drop through
+     *  - tileCollisionTest with an object goes by the object's pos, a raycast by its start, and a test with no object
+     *    or with a callback finds every one way tile solid
+     *  @param {number} tile - The tile index, as tile() and TileLayerData take it
+     *  @param {Vector2} [direction] - Up, down, left or right, the way it can be passed through: vec2(0, 1), the
+     *    default, is a platform landed on from above; layer.oneWayTiles.delete(tile) makes the tile solid again
+     *  @example
+     *  layer.setOneWay(5); // tile 5 is a platform, jumped up through and stood on */
+    setOneWay(tile, direction=vec2(0, 1))
+    {
+        ASSERT(isNumber(tile), 'setOneWay: tile is a tile index, a number', tile);
+        ASSERT(isVector2(direction) && abs(direction.x) + abs(direction.y) === 1 && !(direction.x && direction.y),
+            'setOneWay: direction is up, down, left or right, like vec2(0, 1)', direction);
+        this.oneWayTiles.set(tile, direction.copy());
+    }
+
+    /** Draw this layer's shadow shape: the cells with collision in the part the shadow map covers, each row of
+     *  them in one draw from that part of the layer's texture, so see through pixels in a tile cast nothing, or as
+     *  squares with shadowSquares; every tile when shadowSolidOnly is off, or when the layer is turned or mirrored */
+    renderShadow()
+    {
+        if (!this.shadowSquares && (!this.shadowSolidOnly || this.angle || this.mirror))
+            return super.renderShadow();
+
+        // the cells in view, which in the shadow pass is the shadow map
+        const size = this.size, drawSize = this.drawSize || size;
+        const cellWorld = drawSize.divide(size), cellPixels = this.tileInfo ? this.tileInfo.size : vec2(1);
+        const view = getCameraSize().scale(.5), low = cameraPos.subtract(view), high = cameraPos.add(view);
+        const x0 = max(0, floor((low.x - this.pos.x) / cellWorld.x)), x1 = min(size.x, ceil((high.x - this.pos.x) / cellWorld.x));
+        const y0 = max(0, floor((low.y - this.pos.y) / cellWorld.y)), y1 = min(size.y, ceil((high.y - this.pos.y) / cellWorld.y));
+        const textureHeight = size.y * cellPixels.y, useWebGL = this.hasWebGL();
+        for (let y = y0; y < y1; ++y)
+        for (let x = x0; x < x1; ++x)
+        {
+            if (!(this.collisionData[y*size.x + x] > 0)) continue; // solid is positive, a negative is a marker
+            let end = x + 1; // a run of solid cells along the row
+            while (end < x1 && this.collisionData[y*size.x + end] > 0) ++end;
+            const count = end - x;
+            const pos = vec2(this.pos.x + (x + count/2)*cellWorld.x, this.pos.y + (y + .5)*cellWorld.y);
+            if (this.shadowSquares)
+                drawRect(pos, vec2(count*cellWorld.x, cellWorld.y), WHITE, 0, useWebGL, false);
+            else
+            {
+                const tileInfo = new TileInfo(vec2(x*cellPixels.x, textureHeight - (y+1)*cellPixels.y),
+                    vec2(count*cellPixels.x, cellPixels.y), this.textureInfo, 0, 0);
+                drawTile(pos, vec2(count*cellWorld.x, cellWorld.y), tileInfo, this.color, 0, false, undefined,
+                    useWebGL, false);
+            }
+            x = end;
+        }
+    }
+
+    /** Destroy this tile layer
+     *  @param {boolean} [immediate] - Remove it now, as EngineObject.destroy does, children included */
+    destroy(immediate=false)
+    {
+        if (this.destroyed) return;
+
+        // remove from collision layers array and destroy
+        const index = tileCollisionLayers.indexOf(this);
+        ASSERT(index >= 0, 'tile collision layer not found in array');
+        index >= 0 && tileCollisionLayers.splice(index, 1);
+        super.destroy(immediate);
+    }
+
+    /** Clear and initialize tile collision, the size is the layer's own, the tile data and canvas keep it
+    *  @param {Vector2} size - width and height of tile collision 2d grid */
+    initCollision(size)
+    {
+        ASSERT(isVector2(size), 'size must be a Vector2');
+        ASSERT(!this.collisionData.length || (size.x|0) === this.size.x && (size.y|0) === this.size.y, 'initCollision cannot resize a layer');
+        this.size = size.floor();
+        this.collisionData = new Array(this.size.area()).fill(0);
+    }
+
+    /** Set tile collision data for a given cell in the layer
+    *  @param {Vector2} layerPos
+    *  @param {number}  [data] */
+    setCollisionData(layerPos, data=1)
+    {
+        ASSERT(isVector2(layerPos), 'layerPos must be a Vector2');
+        const i = (layerPos.y|0)*this.size.x + (layerPos.x|0);
+        layerPos.arrayCheck(this.size) && (this.collisionData[i] = data);
+    }
+
+    /** Clear tile collision data for a given cell in the layer
+    *  @param {Vector2} layerPos */
+    clearCollisionData(layerPos)
+    { this.setCollisionData(layerPos, 0); }
+
+    /** Get tile collision data for a given cell in the layer
+    *  @param {Vector2} layerPos
+    *  @return {number} */
+    getCollisionData(layerPos)
+    {
+        ASSERT(isVector2(layerPos), 'layerPos must be a Vector2');
+        const i = (layerPos.y|0)*this.size.x + (layerPos.x|0);
+        return layerPos.arrayCheck(this.size) ? this.collisionData[i] : 0;
+    }
+
+    /** Check if collision with another object should occur
+    *  @param {Vector2}      pos
+    *  @param {Vector2}      [size=vec2()]
+    *  @param {EngineObject|TileCollisionCallback} [callbackObject] - Callback, engine object, or undefined
+    *  @return {boolean} */
+    collisionTest(pos, size=new Vector2, callbackObject)
+    {
+        ASSERT(isVector2(pos) && isVector2(size), 'pos and size must be Vector2s');
+        tileCollisionAssertWhole(this);
+        const collisionTest = tileCollisionTester(callbackObject);
+
+        // a one way tile goes by where an object was before the physics moved it, or where it is now
+        const object = callbackObject instanceof EngineObject && this.oneWayTiles.size ? callbackObject : undefined;
+        const from = object && (object === tileCollisionFromObject ? tileCollisionFromPos : object.pos);
+
+        // check any tiles in the area for collision
+        const posX = pos.x - this.pos.x;
+        const posY = pos.y - this.pos.y;
+        // reject AABBs entirely past either edge; without this, the negative
+        // side leaks into row/col 0 because minX/minY clamp to 0 and the
+        // point-test floor below forces maxX/maxY up to 1
+        if (posX + size.x/2 < 0 || posX - size.x/2 > this.size.x) return false;
+        if (posY + size.y/2 < 0 || posY - size.y/2 > this.size.y) return false;
+        const minX = max(posX - size.x/2|0, 0);
+        const minY = max(posY - size.y/2|0, 0);
+        // a zero size is a point test, one cell even when pos lands exactly on an integer boundary
+        const maxX = min(size.x ? posX + size.x/2 : minX + 1, this.size.x);
+        const maxY = min(size.y ? posY + size.y/2 : minY + 1, this.size.y);
+        for (let y = minY; y < maxY; ++y)
+        for (let x = minX; x < maxX; ++x)
+        {
+            // check if the object should collide with this tile, the callback gets its own vector, one it can keep
+            const tileData = this.collisionData[y*this.size.x+x];
+            if (tileData && !(from && tileCollisionOneWayPass(this, x, y, from.x, from.y, size.x, size.y)) &&
+                collisionTest(tileData, vec2(x+this.pos.x, y+this.pos.y)))
+                return true;
+        }
+        return false;
+    }
+
+    /** Return the exact position of the boundary of first tile hit, undefined if nothing was hit.
+    *  The point will be inside the colliding tile if it hits (may have a tiny shift)
+    *  @param {Vector2} posStart
+    *  @param {Vector2} posEnd
+    *  @param {EngineObject|TileCollisionCallback} [callbackObject] - Callback, engine object, or undefined
+    *  @param {Vector2} [normal] - Optional normal of the surface hit
+    *  @return {Vector2|undefined} */
+    collisionRaycast(posStart, posEnd, callbackObject, normal)
+    {
+        ASSERT(isVector2(posStart) && isVector2(posEnd), 'positions must be Vector2s');
+        tileCollisionAssertWhole(this);
+        const collisionTest = tileCollisionTester(callbackObject);
+        // the line is walked in the layer's own space, so its cells are the tiles wherever the layer sits
+        const offset = this.pos;
+        // a one way tile blocks a ray that starts on its far side
+        const testFunction = (pos)=>
+        {
+            const tileData = this.getCollisionData(pos);
+            return tileData && !tileCollisionOneWayPass(this, pos.x|0, pos.y|0, posStart.x, posStart.y) &&
+                collisionTest(tileData, vec2(pos.x + offset.x, pos.y + offset.y));
+        }
+        // only the part of the line over the layer, and a cell around it, can meet a tile, so a ray toward a point
+        // far beyond is walked across the layer and no farther; the cell around keeps the step into the layer as it was
+        const a = posStart.subtract(offset), d = posEnd.subtract(posStart);
+        let t0 = 0, t1 = 1;
+        for (const [p, q, high] of [[a.x, d.x, this.size.x + 1], [a.y, d.y, this.size.y + 1]])
+        {
+            if (!q)
+            {
+                if (p < -1 || p > high) return;
+                continue;
+            }
+            const u = (-1 - p) / q, v = (high - p) / q;
+            t0 = max(t0, min(u, v)), t1 = min(t1, max(u, v));
+        }
+        if (t0 > t1) return;
+        const hitPos = lineTest(t0 ? a.add(d.scale(t0)) : a, t1 < 1 ? a.add(d.scale(t1)) : posEnd.subtract(offset),
+            testFunction, normal);
+        if (hitPos)
+        {
+            // into the world, kept inside its tile there too, as adding the layer's place can round it onto the edge
+            const cell = hitPos.floor();
+            hitPos.x += offset.x, hitPos.y += offset.y;
+            const inside = (v, low)=> v < low ? low : v < low + 1 ? v : low + 1 - max(1e-9, abs(low) * 1e-15);
+            hitPos.x = inside(hitPos.x, cell.x + offset.x);
+            hitPos.y = inside(hitPos.y, cell.y + offset.y);
+        }
+        if (debugRaycast && hitPos)
+        {
+            const tilePos = hitPos.floor().add(vec2(.5));
+            debugRect(tilePos, vec2(1), '#f008', 0, 0, false, false);
+            debugLine(posStart, posEnd, '#00f', .02, 0, false);
+            debugLine(posStart, hitPos, '#f00', .02, 0, false);
+            debugPoint(hitPos, '#0f0', undefined, undefined, false);
+            normal && debugLine(hitPos, hitPos.add(normal), '#ff0', .02, 0, false);
+        }
+        return hitPos;
+    }
+}

@@ -1,0 +1,1058 @@
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+
+vi.mock('three', async () => {
+  const mod = await import('@/test/mocks/three.mock');
+  return {
+    ...mod,
+  };
+});
+
+import { EnemyManager } from './enemy.manager';
+import { GameEventBus } from '../game-engine/game-event-bus';
+import type { GeoPosition, RouteWaypoint } from '../models/game.types';
+import type { GlobalRouteGridService } from '../services/world/global-route-grid.service';
+import { SpatialGridService } from '../services/world/spatial-grid.service';
+import type { Enemy } from '../entities/enemy.entity';
+import type { OozeBody } from '../entities/ooze-body';
+import { waveMutator, waveRules } from '../director/wave-rules';
+import { WAVE_MUTATORS } from '../configs/wave-mutators.config';
+import { PORTAL_OPENING_HEIGHT } from '../configs/marker-geometry.config';
+import { TIMING } from '../configs/timing.config';
+import { ENEMY_TYPES, REGEN_INTERVAL_MS, enemyDeathDuration, enemyRewardWeight, leakDamageOf, type EnemyTypeId } from '../configs/enemy-types.config';
+import { createSinkSpy, createTestCoords, type SinkSpy } from '../integration/test-helpers';
+import type { SimSink } from '../sim/core/sim-sink';
+import { GameClock } from './game-state/game-clock';
+
+/** Reward weight of `n` bodies of `type`: what the wave manager reports for them. */
+const bodies = (n: number, type: EnemyTypeId = 'zombie') => n * enemyRewardWeight(ENEMY_TYPES[type].baseHp);
+
+/** A frame that puts everything at the origin: the grid is off in these tests */
+const createMockSync = () => ({
+  getOrigin: vi.fn(() => ({ lat: 0, lon: 0, height: 0 })),
+  geoToLocalSimple: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
+  geoToLocalSimpleInto: vi.fn((_lat: number, _lon: number, _h: number, target: unknown) => target),
+});
+
+/** An enemy manager on the origin frame, its renderer calls into `sink` */
+const createManager = (bus: GameEventBus, grid: unknown, sink: SinkSpy) =>
+  new EnemyManager(
+    bus,
+    grid as GlobalRouteGridService,
+    new SpatialGridService(),
+    createTestCoords(createMockSync() as never),
+    sink as unknown as SimSink,
+  );
+
+const createGlobalRouteGrid = () => ({
+  isInitialized: vi.fn(() => false),
+  updateEnemyPosition: vi.fn(),
+  removeEnemy: vi.fn(),
+  addBodyEnemy: vi.fn(),
+  removeBodyEnemy: vi.fn(),
+  getGroundLocalYAt: vi.fn((): number | null => null),
+  getStats: vi.fn(() => ({ trackedEnemies: 0, occupiedCells: 0 })),
+});
+
+describe('EnemyManager', () => {
+  let eventBus: GameEventBus;
+  let sink: SinkSpy;
+  let globalRouteGrid: ReturnType<typeof createGlobalRouteGrid>;
+  let manager: EnemyManager;
+
+  beforeEach(() => {
+    eventBus = new GameEventBus();
+    sink = createSinkSpy();
+    globalRouteGrid = createGlobalRouteGrid();
+    manager = createManager(eventBus, globalRouteGrid, sink);
+  });
+
+  it('spawns enemies with correct type and stats', () => {
+    const spawnedSpy = vi.fn();
+    eventBus.on('enemy:spawned', spawnedSpy);
+
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 2 },
+      { lat: 0.001, lon: 0, height: 2 },
+    ];
+
+    const enemy = manager.spawn(path, 'zombie');
+    expect(enemy.typeConfig.id).toBe('zombie');
+    expect(enemy.health.maxHp).toBe(enemy.typeConfig.baseHp);
+    expect(manager.getAll()).toHaveLength(1);
+    expect(manager.getAliveCount()).toBe(1);
+    expect(spawnedSpy).toHaveBeenCalledWith(expect.objectContaining({ enemy }));
+  });
+
+  it('marks a wave spawn out of the portal in enemy:spawned, a placed one not', () => {
+    const viaPortal: (boolean | undefined)[] = [];
+    eventBus.on('enemy:spawned', (event) => viaPortal.push(event.viaPortal));
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 2 },
+      { lat: 0.001, lon: 0, height: 2 },
+    ];
+
+    manager.spawn(path, 'zombie', undefined, false, undefined, 'portal');
+    manager.spawn(path, 'zombie');
+
+    expect(viaPortal).toEqual([true, false]);
+  });
+
+  it('marks a wave worm on worm:spawned, not its head segment, and a placed worm not', () => {
+    const segments: (boolean | undefined)[] = [];
+    const worms: (boolean | undefined)[] = [];
+    eventBus.on('enemy:spawned', (event) => segments.push(event.viaPortal));
+    eventBus.on('worm:spawned', (event) => worms.push(event.viaPortal));
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 2 },
+      { lat: 0.001, lon: 0, height: 2 },
+    ];
+
+    manager.spawn(path, 'worm', undefined, false, undefined, 'portal');
+    manager.spawn(path, 'worm', undefined, false, undefined, {
+      segmentIndex: 0,
+      segmentProgress: 0.5,
+      lateralFactor: 0,
+      heightVariation: 0,
+      groundHeight: 2,
+    });
+
+    expect(worms).toEqual([true, false]);
+    expect(segments).toEqual([false, false]);
+  });
+
+  it('applies health override on spawn', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 2 },
+      { lat: 0.001, lon: 0, height: 2 },
+    ];
+
+    const enemy = manager.spawn(path, 'zombie', undefined, false, 200);
+    expect(enemy.health.maxHp).toBe(200);
+    expect(enemy.health.hp).toBe(200);
+  });
+
+  it('kills enemy, emits event and removes immediately without death animation', () => {
+    const diedSpy = vi.fn();
+    eventBus.on('enemy:died', diedSpy);
+
+    // Wire wave-context so the kill-budget accumulator pays out a real reward
+    // (default providers return 0 → goldBudget 0 → credits 0).
+    manager.setWaveNumberProvider(() => 1);
+    manager.setWaveWeightProvider(() => bodies(1, 'tank'));
+
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const enemy = manager.spawn(path, 'tank');
+    manager.kill(enemy);
+
+    expect(diedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enemy,
+      })
+    );
+    // Single-slot wave on W1 → the one paid kill picks up the full budget.
+    const call = diedSpy.mock.calls[0][0];
+    expect(call.credits).toBe(waveRules().gold(1).kill);
+    expect(manager.getById(enemy.id)).toBeNull();
+    expect(sink.enemies.remove).toHaveBeenCalledWith(enemy.id);
+    expect(manager.getAliveCount()).toBe(0);
+  });
+
+  it('kill() returns false for an enemy that is already dying', () => {
+    const diedSpy = vi.fn();
+    eventBus.on('enemy:died', diedSpy);
+
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+    // zombie has a death animation, so it stays in the dying set until the
+    // animation delay has run down
+    const enemy = manager.spawn(path, 'zombie');
+
+    expect(manager.kill(enemy)).toBe(true);
+    expect(manager.kill(enemy)).toBe(false);
+    expect(diedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a killed enemy once its type's death duration has run down", () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+    const zombie = manager.spawn(path, 'zombie');
+    const soldier = manager.spawn(path, 'zombie-soldier');
+    manager.kill(zombie);
+    manager.kill(soldier);
+    let now = 0;
+    const run = (ms: number): void => {
+      for (let t = 0; t < ms; t += 10) manager.update(10, (now += 10));
+    };
+
+    expect(enemyDeathDuration(zombie.typeConfig)).toBe(TIMING.deathAnimationDuration);
+    run(TIMING.deathAnimationDuration);
+    expect(manager.getById(zombie.id)).toBeNull();
+    expect(manager.getById(soldier.id)).not.toBeNull();
+    expect(manager.getKillingCount()).toBe(1);
+
+    run(enemyDeathDuration(soldier.typeConfig) - TIMING.deathAnimationDuration);
+    expect(manager.getById(soldier.id)).toBeNull();
+    expect(manager.getKillingCount()).toBe(0);
+  });
+
+  describe('regeneration (the Regen trait and the Regeneration mutator)', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 2 },
+      { lat: 0.01, lon: 0, height: 2 },
+    ];
+    const regen = WAVE_MUTATORS.regen;
+
+    it('heals every living enemy by its share once per interval of game time, up to its max', () => {
+      manager.setWaveNumberProvider(() => 28); // blood moon, Regeneration
+      expect(waveMutator(28)).toBe(regen);
+      const enemy = manager.spawn(path, 'zombie');
+      vi.spyOn(enemy.movement, 'move').mockReturnValue('moving' as never);
+      const max = enemy.health.maxHp;
+      enemy.health.takeDamage(max / 2);
+
+      const step = GameClock.FIXED_STEP_MS;
+      const steps = Math.round((2 * REGEN_INTERVAL_MS) / step);
+      for (let s = 1; s <= steps; s++) manager.update(step, s * step);
+      expect(enemy.health.hp).toBeCloseTo(max / 2 + 2 * max * regen.regenPerSecond! * (REGEN_INTERVAL_MS / 1000), 6);
+
+      // Half the max back takes 50 intervals; a minute of game time is more than enough
+      for (let s = steps + 1; s <= steps + Math.round(60_000 / step); s++) manager.update(step, s * step);
+      expect(enemy.health.hp).toBe(max);
+    });
+
+    it('heals a type with Regen on any wave, but not while it burns', () => {
+      manager.setWaveNumberProvider(() => 27);
+      const perSecond = ENEMY_TYPES['mammoth'].regenPerSecond!;
+      expect(perSecond).toBeGreaterThan(0);
+      const mammoth = manager.spawn(path, 'mammoth');
+      vi.spyOn(mammoth.movement, 'move').mockReturnValue('moving' as never);
+      const max = mammoth.health.maxHp;
+      mammoth.health.takeDamage(max / 2);
+      const step = GameClock.FIXED_STEP_MS;
+      let s = 0;
+      const run = (ms: number) => {
+        const end = s + Math.round(ms / step);
+        for (s += 1; s <= end; s++) manager.update(step, s * step);
+        s = end;
+      };
+      run(1000);
+      expect(mammoth.health.hp).toBeCloseTo(max / 2 + max * perSecond, 6);
+
+      const burning = vi.spyOn(mammoth.movement, 'isBurning').mockReturnValue(true);
+      const before = mammoth.health.hp;
+      run(2000);
+      expect(mammoth.health.hp).toBe(before);
+      burning.mockRestore();
+    });
+
+    it('heals nobody without the trait on a wave without the mutator', () => {
+      manager.setWaveNumberProvider(() => 27);
+      const enemy = manager.spawn(path, 'zombie');
+      vi.spyOn(enemy.movement, 'move').mockReturnValue('moving' as never);
+      enemy.health.takeDamage(10);
+      const step = GameClock.FIXED_STEP_MS;
+      for (let s = 1; s <= 100; s++) manager.update(step, s * step);
+      expect(enemy.health.hp).toBe(enemy.health.maxHp - 10);
+    });
+  });
+
+  describe('kill-budget accumulator', () => {
+    const straightPath: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const collectCredits = (): number[] => {
+      const credits: number[] = [];
+      eventBus.on('enemy:died', (ev) => credits.push(ev.credits ?? 0));
+      return credits;
+    };
+
+    it('pays a heavy body more than a light one of the same wave, by base HP', () => {
+      manager.setWaveNumberProvider(() => 10);
+      manager.setWaveWeightProvider(() => bodies(1, 'herbert') + bodies(1, 'zombie'));
+      const credits = collectCredits();
+
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      manager.kill(manager.spawn(straightPath, 'herbert'));
+
+      expect(credits[1]).toBeGreaterThan(credits[0] * 3);
+      expect(credits[0] + credits[1]).toBe(waveRules().gold(10).kill);
+    });
+
+    it('per-kill rewards sum exactly to the wave budget when every enemy dies', () => {
+      manager.setWaveNumberProvider(() => 1);
+      manager.setWaveWeightProvider(() => bodies(10));
+      const credits = collectCredits();
+
+      for (let i = 0; i < 10; i++) {
+        manager.kill(manager.spawn(straightPath, 'zombie'));
+      }
+
+      const sum = credits.reduce((a, b) => a + b, 0);
+      expect(sum).toBe(waveRules().gold(1).kill);
+    });
+
+    it('handles mega-swarm without overshooting (W19 rat_tide regression)', () => {
+      // The bug: Math.max(1, round(8000/5000)) × 5000 = 5000 (or 8000 with round=2)
+      // capped at floor → still ≥ budget. Accumulator must clamp at exactly budget.
+      manager.setWaveNumberProvider(() => 19);
+      manager.setWaveWeightProvider(() => bodies(5000, 'rat'));
+      const credits = collectCredits();
+
+      // Use a fraction of the wave (300 kills) — sum must stay ≤ proportional share
+      for (let i = 0; i < 300; i++) {
+        manager.kill(manager.spawn(straightPath, 'rat'));
+      }
+
+      const sum = credits.reduce((a, b) => a + b, 0);
+      const budget = waveRules().gold(19).kill;
+      const fairShare = Math.ceil((budget * 300) / 5000);
+      expect(sum).toBeLessThanOrEqual(fairShare);
+    });
+
+    it('extra kills past expected wave size pay 0 gold', () => {
+      manager.setWaveNumberProvider(() => 1);
+      manager.setWaveWeightProvider(() => bodies(3));
+      const credits = collectCredits();
+
+      for (let i = 0; i < 5; i++) {
+        manager.kill(manager.spawn(straightPath, 'zombie'));
+      }
+
+      expect(credits[3]).toBe(0);
+      expect(credits[4]).toBe(0);
+      const sum = credits.reduce((a, b) => a + b, 0);
+      expect(sum).toBe(waveRules().gold(1).kill);
+    });
+
+    it('wave change resets the accumulator', () => {
+      let waveNum = 1;
+      manager.setWaveNumberProvider(() => waveNum);
+      manager.setWaveWeightProvider(() => bodies(2));
+      const credits = collectCredits();
+
+      // Drain wave 1 completely
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      const wave1Sum = credits.reduce((a, b) => a + b, 0);
+      expect(wave1Sum).toBe(waveRules().gold(1).kill);
+
+      // Switch to wave 2 — fresh budget regardless of wave-1 state
+      waveNum = 2;
+      credits.length = 0;
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      const wave2Sum = credits.reduce((a, b) => a + b, 0);
+      expect(wave2Sum).toBe(waveRules().gold(2).kill);
+    });
+
+    it('a debug kill does not consume slots from the budget', () => {
+      manager.setWaveNumberProvider(() => 1);
+      manager.setWaveWeightProvider(() => bodies(3));
+      const credits = collectCredits();
+
+      // Debug-kill first — must not eat into the budget
+      manager.kill(manager.spawn(straightPath, 'zombie'), 'debug');
+
+      // Three paid kills then drain the full wave-1 budget
+      for (let i = 0; i < 3; i++) {
+        manager.kill(manager.spawn(straightPath, 'zombie'));
+      }
+
+      expect(credits[0]).toBe(0);
+      const paidSum = credits.slice(1).reduce((a, b) => a + b, 0);
+      expect(paidSum).toBe(waveRules().gold(1).kill);
+    });
+
+    it('zero gold budget pays zero per kill', () => {
+      // waveNum=0 returns { kill: 0, complete: 0 } from waveGold
+      manager.setWaveNumberProvider(() => 0);
+      manager.setWaveWeightProvider(() => bodies(5));
+      const credits = collectCredits();
+
+      for (let i = 0; i < 5; i++) {
+        manager.kill(manager.spawn(straightPath, 'zombie'));
+      }
+
+      expect(credits.every((c) => c === 0)).toBe(true);
+    });
+
+    it('leaks reduce earned gold (uncollected kills = lost budget)', () => {
+      manager.setWaveNumberProvider(() => 1);
+      manager.setWaveWeightProvider(() => bodies(4));
+      const credits = collectCredits();
+
+      // Only 2 of 4 enemies die — accumulator should pay out partial budget
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+      manager.kill(manager.spawn(straightPath, 'zombie'));
+
+      const earned = credits.reduce((a, b) => a + b, 0);
+      const fullBudget = waveRules().gold(1).kill;
+      expect(earned).toBeLessThan(fullBudget);
+      expect(earned).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('emits reached-base event and removes enemy when path ends', () => {
+    const reachedSpy = vi.fn();
+    eventBus.on('enemy:reached-base', reachedSpy);
+
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const enemy = manager.spawn(path, 'zombie');
+    vi.spyOn(enemy.movement, 'move').mockReturnValue('reached_end');
+
+    manager.update(16, 0); // gameTimeMs=0
+
+    expect(reachedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enemy,
+        damage: expect.any(Number),
+      })
+    );
+    expect(manager.getById(enemy.id)).toBeNull();
+    expect(sink.enemies.remove).toHaveBeenCalledWith(enemy.id);
+  });
+
+  it('getAlive returns only living enemies', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const enemy1 = manager.spawn(path, 'zombie');
+    const enemy2 = manager.spawn(path, 'zombie');
+
+    enemy1.health.takeDamage(enemy1.health.hp);
+
+    const alive = manager.getAlive();
+    expect(alive).toEqual([enemy2]);
+  });
+
+  it('removes expired status effects during update', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const enemy = manager.spawn(path, 'zombie');
+    enemy.movement.applyStatusEffect({ type: 'slow', value: 0.5, duration: 1000, startTime: 0 });
+    const statusSpy = vi.spyOn(enemy.movement, 'updateStatusEffects');
+
+    manager.update(16, 1234); // gameTimeMs=1234, past the slow's end
+    expect(statusSpy).toHaveBeenCalledWith(1234);
+    expect(enemy.movement.statusEffects).toHaveLength(0);
+    expect(enemy.movement.hasStatusEffects).toBe(false);
+  });
+
+  it('does not look at the status effects of an enemy without any', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    const enemy = manager.spawn(path, 'zombie');
+    const statusSpy = vi.spyOn(enemy.movement, 'updateStatusEffects');
+
+    manager.update(16, 1234);
+    expect(statusSpy).not.toHaveBeenCalled();
+  });
+
+  describe('hot-path shortcuts', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+
+    it('alive follows health through the mirror', () => {
+      const enemy = manager.spawn(path, 'zombie');
+      enemy.health.takeDamage(enemy.health.hp);
+      expect(enemy.alive).toBe(false);
+      enemy.health.heal(1);
+      expect(enemy.alive).toBe(true);
+    });
+
+    it('gives the rush state only to types with animationVariation', () => {
+      expect(manager.spawn(path, 'wallsmasher').rush).not.toBeNull();
+      const zombie = manager.spawn(path, 'zombie');
+      expect(zombie.rush).toBeNull();
+
+      manager.update(16, 16);
+      expect(zombie.movement.speedMultiplier).toBe(1);
+    });
+
+    it('applies the run multiplier in the sub-step that switches to running', () => {
+      const enemy = manager.spawn(path, 'wallsmasher');
+      const seen: number[] = [];
+      const running: boolean[] = [];
+      vi.spyOn(enemy.movement, 'move').mockImplementation(() => {
+        seen.push(enemy.movement.speedMultiplier);
+        running.push(enemy.rush!.running);
+        return 'moving';
+      });
+
+      for (let s = 1; s <= 600; s++) manager.update(16, s * 16); // 9.6 s > any first phase
+      const first = running.indexOf(true);
+      expect(first).toBeGreaterThan(0);
+      expect(seen[first - 1]).toBe(1);
+      expect(seen[first]).toBe(enemy.typeConfig.runSpeedMultiplier);
+    });
+
+    it('does not advance the rush while the enemy is paused', () => {
+      const enemy = manager.spawn(path, 'wallsmasher', undefined, true);
+      for (let s = 1; s <= 600; s++) manager.update(16, s * 16);
+      expect(enemy.rush!.running).toBe(false);
+      expect(enemy.movement.speedMultiplier).toBe(1);
+    });
+
+    it('halts a frozen enemy and its walk/run switch until the freeze runs out', () => {
+      const zombie = manager.spawn(path, 'zombie');
+      const smasher = manager.spawn(path, 'wallsmasher');
+      for (const enemy of [zombie, smasher]) {
+        enemy.movement.applyStatusEffect({ type: 'freeze', value: 1, duration: 9600, startTime: 0, sourceId: 'frost' });
+      }
+      for (let s = 1; s < 600; s++) manager.update(16, s * 16); // 9.6 s > any first rush phase
+      expect(zombie.movement.progress).toBe(0);
+      expect(smasher.movement.progress).toBe(0);
+      expect(smasher.rush!.running).toBe(false);
+
+      manager.update(16, 9600);
+      expect(zombie.movement.progress).toBeGreaterThan(0);
+    });
+
+    it('ticks the transform only while it turns', () => {
+      const enemy = manager.spawn(path, 'zombie');
+      const transformUpdate = vi.spyOn(enemy.transform, 'update');
+      manager.update(16, 16);
+      expect(enemy.isTurning).toBe(false); // the first lookAt initializes the rotation
+      expect(transformUpdate).not.toHaveBeenCalled();
+
+      enemy.isTurning = true; // what TransformComponent sets once lookAt moves the target
+      manager.update(16, 32);
+      expect(transformUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('turns after a corner and stops ticking the transform once it faces the new segment', () => {
+      const corner: GeoPosition[] = [
+        { lat: 0, lon: 0, height: 0 },
+        { lat: 0.0002, lon: 0, height: 0 }, // ~22 m north
+        { lat: 0.0002, lon: 0.002, height: 0 }, // ~220 m east
+      ];
+      const enemy = manager.spawn(corner, 'zombie', 40);
+      const transformUpdate = vi.spyOn(enemy.transform, 'update');
+
+      let turningSteps = 0;
+      for (let s = 1; s <= 150; s++) {
+        const wasTurning = enemy.isTurning;
+        const before = transformUpdate.mock.calls.length;
+        manager.update(GameClock.FIXED_STEP_MS, s * GameClock.FIXED_STEP_MS);
+        // Called exactly when the flag was set as the loop reached the enemy.
+        expect(transformUpdate.mock.calls.length - before).toBe(wasTurning ? 1 : 0);
+        if (wasTurning) turningSteps++;
+      }
+
+      expect(enemy.movement.currentIndex).toBe(1);
+      expect(turningSteps).toBeGreaterThan(10); // the quarter turn eases over many steps
+      expect(enemy.isTurning).toBe(false); // settled on the held heading
+      expect(enemy.transform.rotation).toBeCloseTo(-Math.PI / 2, 6); // east
+    });
+
+    it('reports sampled phase timings scaled to the whole loop', () => {
+      const reports: number[][] = [];
+      manager.onProfileTiming = (...args) => reports.push(args);
+      for (let i = 0; i < 40; i++) manager.spawn(path, 'zombie');
+
+      let t = 0;
+      const now = vi.spyOn(performance, 'now').mockImplementation(() => ++t);
+      manager.update(16, 16);
+      now.mockRestore();
+
+      // Stride 32 over 40 enemies samples two of them (offset 0 on the first
+      // sub-step): 6 timer reads each plus 2 for the total. Every timed phase
+      // reads 1 ms here, so each sums to 2 ms and is scaled by 40 / 2.
+      expect(t).toBe(2 * 6 + 2);
+      const [move, grid, height, total] = reports[0];
+      expect([move, grid, height]).toEqual([40, 40, 40]);
+      expect(total).toBe(13);
+    });
+  });
+
+  describe('damage over time', () => {
+    const path: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+    // 25 ms sub-steps: 20 of them are exactly one 500 ms tick interval.
+    const STEP = 25;
+
+    interface DotEvent { effectType: string; damageType: string; damage: number; sourceId: string }
+    const collectDots = (): DotEvent[] => {
+      const dots: DotEvent[] = [];
+      eventBus.on('dot:damage', (e) => dots.push(e));
+      return dots;
+    };
+    let now = 0;
+    const steps = (n: number, perStep?: () => void) => {
+      for (let i = 0; i < n; i++) {
+        perStep?.();
+        now += STEP;
+        manager.update(STEP, now);
+      }
+    };
+
+    beforeEach(() => {
+      now = 0;
+    });
+
+    it('ticks a burn and a poison as often at 30 sub-steps a second as at 60: once per 500 ms, the last moment left out (TODO E86)', () => {
+      /** Ticks of one effect of `duration` ms applied at `startStep`, stepped at `stepMs` until long after it ran out */
+      const ticks = (type: 'burn' | 'poison', duration: number, stepMs: number, startStep: number): number => {
+        const dots = collectDots();
+        const enemy = manager.spawn(path, 'zombie');
+        let clock = 0;
+        for (let step = 0; step < startStep + (duration + 1000) / stepMs; step++) {
+          if (step === startStep) enemy.movement.refreshStatusEffect(type, 1, duration, clock, 'source');
+          clock += stepMs;
+          manager.update(stepMs, clock);
+        }
+        return dots.filter((d) => d.sourceId === 'source').length;
+      };
+      for (const type of ['burn', 'poison'] as const) {
+        for (const duration of [1000, 3000, 4000]) {
+          // Applied at different moments of the clock, which drifts in floating point
+          for (const startStep of [0, 7, 100, 301]) {
+            // The sub-step's length at 30 and at 60 a second, as GameClock derives it from the rate
+            const at30 = ticks(type, duration, Math.ceil(1_000_000 / 30) / 1000, startStep);
+            const at60 = ticks(type, duration, Math.ceil(1_000_000 / 60) / 1000, 2 * startStep);
+            expect(at30, `${type} ${duration} ms from step ${startStep}`).toBe(at60);
+            // The tick that falls on the effect's last moment does not come: the effect is gone by then
+            expect(at30, `${type} ${duration} ms from step ${startStep}`).toBe(duration / 500 - 1);
+          }
+        }
+      }
+    });
+
+    it('ticks each burn source on its own, as fire damage', () => {
+      const dots = collectDots();
+      const enemy = manager.spawn(path, 'zombie');
+      enemy.movement.refreshStatusEffect('burn', 10, 3000, 0, 'fire-1');
+      enemy.movement.refreshStatusEffect('burn', 4, 3000, 0, 'fire-2');
+
+      steps(19);
+      expect(dots).toHaveLength(0);
+      steps(1);
+      expect(dots).toEqual([
+        expect.objectContaining({ effectType: 'burn', damageType: 'fire', damage: 5, sourceId: 'fire-1' }),
+        expect.objectContaining({ effectType: 'burn', damageType: 'fire', damage: 2, sourceId: 'fire-2' }),
+      ]);
+    });
+
+    it('keeps the tick phase while a beam refreshes the burn every sub-step', () => {
+      const dots = collectDots();
+      const enemy = manager.spawn(path, 'zombie');
+      steps(40, () => enemy.movement.refreshStatusEffect('burn', 10, 3000, now, 'fire-1'));
+      expect(dots).toHaveLength(2);
+    });
+
+    it('starts a fresh tick phase for a burn applied after the last one expired', () => {
+      const dots = collectDots();
+      const enemy = manager.spawn(path, 'zombie');
+      enemy.movement.refreshStatusEffect('burn', 10, 300, 0, 'fire-1');
+      steps(16); // expired at 300 ms with 275 ms accumulated, no tick
+      enemy.movement.refreshStatusEffect('burn', 10, 3000, now, 'fire-1');
+      steps(19);
+      expect(dots).toHaveLength(0);
+      steps(1);
+      expect(dots).toHaveLength(1);
+    });
+
+    it('keeps ticking poison through a refresh by another tower', () => {
+      const dots = collectDots();
+      const enemy = manager.spawn(path, 'zombie');
+      enemy.movement.applyStatusEffect({ type: 'poison', value: 8, duration: 4000, startTime: 0, sourceId: 'p-1' });
+      steps(10);
+      enemy.movement.applyStatusEffect({ type: 'poison', value: 12, duration: 4000, startTime: now, sourceId: 'p-2' });
+      steps(10);
+      expect(dots).toEqual([
+        expect.objectContaining({ effectType: 'poison', damageType: 'poison', damage: 6, sourceId: 'p-2' }),
+      ]);
+    });
+  });
+
+  describe('air units out of the spawn portal', () => {
+    // 111 m north; an 8 m corridor at the start stands a portal of scale 1
+    const route: RouteWaypoint[] = [
+      { lat: 0, lon: 0, height: 0, corridorLeft: 4, corridorRight: 4 },
+      { lat: 0.0004, lon: 0, height: 0 },
+      { lat: 0.001, lon: 0, height: 0 },
+    ];
+    /** Model origin above the ground: the grid is off here, the ground stays at 0. */
+    const altitude = (e: Enemy) => e.transform.terrainHeight + e.heightOffset;
+    /** Middle of the model above the ground: its range from the config, scaled */
+    const middle = (e: Enemy) => {
+      const range = e.typeConfig.modelRangeY!;
+      return altitude(e) + ((range.min + range.max) / 2) * e.typeConfig.scale;
+    };
+    const fromPortal = (typeId: string) =>
+      manager.spawn(route, typeId as never, undefined, false, undefined, 'portal');
+    let random: MockInstance;
+
+    beforeEach(() => {
+      // Centre lane, no altitude spread, unless a test says otherwise
+      random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    });
+    afterEach(() => random.mockRestore());
+
+    it('comes out of a wave spawn through the middle of the opening, created there', () => {
+      const bat = fromPortal('bat');
+      expect(bat.portalExit).not.toBeNull();
+      expect(middle(bat)).toBeCloseTo(PORTAL_OPENING_HEIGHT / 2, 12);
+      // Not at cruise altitude for the frames before the first present pass
+      expect(sink.enemies.create).toHaveBeenCalledWith(bat.id, 'bat', 0, 0, altitude(bat), true);
+    });
+
+    it('comes through the same height whatever its altitude spread', () => {
+      random.mockReturnValue(0.9); // +2.4 m of the bat's ±3
+      const bat = fromPortal('bat');
+      expect(bat.movement.getHeightVariation()).toBeCloseTo(2.4, 12);
+      expect(middle(bat)).toBeCloseTo(PORTAL_OPENING_HEIGHT / 2, 12);
+    });
+
+    it('stands a dragon taller than the opening on the ground, from its model range', () => {
+      const dragon = fromPortal('dragon');
+      const range = dragon.typeConfig.modelRangeY!;
+      expect(range.max - range.min).toBeGreaterThan(PORTAL_OPENING_HEIGHT / dragon.typeConfig.scale);
+      expect(altitude(dragon) + range.min * dragon.typeConfig.scale).toBeCloseTo(0, 12);
+    });
+
+    it('holds the opening height out of the gate, then climbs to exactly its cruise height', () => {
+      const bat = fromPortal('bat');
+      const exit = bat.portalExit!;
+      let previous = bat.heightOffset;
+      for (let s = 1; bat.portalExit !== null; s++) {
+        expect(s).toBeLessThan(1000);
+        manager.update(GameClock.FIXED_STEP_MS, s * GameClock.FIXED_STEP_MS);
+        if (bat.movement.getDistanceAlongPath() <= exit.climbStart) expect(bat.heightOffset).toBe(exit.from);
+        expect(bat.heightOffset).toBeGreaterThanOrEqual(previous);
+        previous = bat.heightOffset;
+      }
+      expect(bat.movement.getDistanceAlongPath()).toBeGreaterThanOrEqual(exit.climbEnd);
+      expect(bat.heightOffset).toBe(bat.typeConfig.heightOffset);
+    });
+
+    it('climbs the same at every sub-step size', () => {
+      // 4.8 s of game time: the bat is 38 m along, in the middle of its climb
+      const heightAfter = (step: number) => {
+        const m = createManager(eventBus, globalRouteGrid, createSinkSpy());
+        const bat = m.spawn(route, 'bat', undefined, false, undefined, 'portal');
+        for (let i = 1; i * step <= 4800; i++) m.update(step, i * step);
+        expect(bat.portalExit).not.toBeNull();
+        return bat.heightOffset;
+      };
+      const reference = heightAfter(16);
+      expect(reference).toBeGreaterThan(PORTAL_OPENING_HEIGHT / 2);
+      expect(reference).toBeLessThan(15);
+      expect(heightAfter(8)).toBeCloseTo(reference, 9);
+      expect(heightAfter(32)).toBeCloseTo(reference, 9);
+    });
+
+    it('gives the way out of the portal to wave spawns of air units only', () => {
+      // Debug spawn, and spawn() without an entry
+      manager.debugSpawn({ type: 'debug:spawn-enemy', enemyType: 'bat', path: route });
+      const debugBat = manager.getAll()[0];
+      const plainBat = manager.spawn(route, 'bat');
+      // Split child: joins part-way along the path, where its parent was
+      const child = manager.spawn(route, 'bat', undefined, false, undefined, {
+        segmentIndex: 0,
+        segmentProgress: 0.5,
+        lateralFactor: 0,
+        heightVariation: 0,
+        groundHeight: 0,
+      });
+      const zombie = fromPortal('zombie');
+
+      for (const e of [debugBat, plainBat, child, zombie]) {
+        expect(e.portalExit).toBeNull();
+        expect(e.heightOffset).toBe(e.typeConfig.heightOffset);
+      }
+      expect(debugBat.typeConfig.id).toBe('bat');
+    });
+  });
+
+  describe('split on death', () => {
+    // Three ~22 m segments going north
+    const route: GeoPosition[] = [0, 1, 2, 3].map((i) => ({ lat: i * 0.0002, lon: 0, height: 0 }));
+
+    /** A skeleton on segment 1 at 40 %, on the given lane. */
+    const skeletonAt = (lateral = 0, hp?: number, speed?: number) => {
+      const skeleton = manager.spawn(route, 'skeleton', speed, false, hp);
+      skeleton.movement.setPath(route, 1, 0.4);
+      skeleton.movement.setLateralFactor(lateral);
+      return skeleton;
+    };
+    const minions = () => manager.getAll().filter((e) => e.typeConfig.id === 'skeleton-minion');
+
+    it('spawns two minions on its path where a killed skeleton died', () => {
+      const parent = skeletonAt();
+      const progress = parent.movement.getPathProgress();
+      manager.kill(parent);
+
+      const children = minions();
+      expect(children).toHaveLength(2);
+      for (const child of children) {
+        expect(child.movement.path).toBe(route);
+        expect(child.movement.currentIndex).toBe(1);
+        expect(child.movement.progress).toBe(0.4);
+        expect(child.movement.getPathProgress()).toBe(progress);
+        expect(child.movement.paused).toBe(false);
+      }
+      expect(manager.getAliveCount()).toBe(2);
+    });
+
+    it("spreads the minions across the corridor around the parent's lane", () => {
+      manager.kill(skeletonAt(0.2));
+      const lanes = minions().map((c) => c.movement.getLateralFactor());
+      expect(lanes[0]).toBeCloseTo(-0.1, 12); // 0.2 ∓ spread 0.3
+      expect(lanes[1]).toBeCloseTo(0.5, 12);
+    });
+
+    it('keeps the minions inside the corridor next to its edge', () => {
+      manager.kill(skeletonAt(0.95));
+      const lanes = minions().map((c) => c.movement.getLateralFactor());
+      expect(lanes[0]).toBeCloseTo(0.4, 12); // lane centred on 1 - 0.3
+      expect(lanes[1]).toBeCloseTo(1, 12);
+    });
+
+    it("scales the minions by the parent's HP and speed multipliers", () => {
+      manager.kill(skeletonAt(0, 10, 9)); // hpMult 0.5, speed ×1.5
+      for (const child of minions()) {
+        expect(child.health.maxHp).toBeCloseTo(3, 12); // 6 × 10/20
+        expect(child.movement.speedMps).toBeCloseTo(10.5, 12); // 7 × 9/6
+      }
+    });
+
+    it('rolls nothing', () => {
+      const parent = skeletonAt(0.3);
+      const random = vi.spyOn(Math, 'random');
+      manager.kill(parent);
+      expect(random).not.toHaveBeenCalled();
+      random.mockRestore();
+    });
+
+    it('emits enemy:split after enemy:died, with the children', () => {
+      const parent = skeletonAt();
+      const order: string[] = [];
+      const splits: { enemy: unknown; children: readonly unknown[] }[] = [];
+      eventBus.on('enemy:died', () => order.push('died'));
+      eventBus.on('enemy:spawned', () => order.push('spawned'));
+      eventBus.on('enemy:split', (e) => {
+        order.push('split');
+        splits.push(e);
+      });
+
+      manager.kill(parent);
+
+      expect(order).toEqual(['died', 'spawned', 'spawned', 'split']);
+      const children = minions();
+      expect(splits).toHaveLength(1);
+      expect(splits[0].enemy).toBe(parent);
+      expect(splits[0].children).toHaveLength(2);
+      expect(splits[0].children[0]).toBe(children[0]);
+      expect(splits[0].children[1]).toBe(children[1]);
+    });
+
+    it('does not split on a leak', () => {
+      const parent = skeletonAt();
+      vi.spyOn(parent.movement, 'move').mockReturnValue('reached_end');
+      manager.update(16, 16);
+      expect(manager.getById(parent.id)).toBeNull();
+      expect(minions()).toHaveLength(0);
+    });
+
+    it('does not split on a debug kill', () => {
+      manager.kill(skeletonAt(), 'debug');
+      expect(minions()).toHaveLength(0);
+    });
+
+    it('does not split a minion again', () => {
+      manager.kill(skeletonAt());
+      for (const child of minions()) manager.kill(child);
+      expect(manager.getAliveCount()).toBe(0);
+      expect(minions()).toHaveLength(2); // the two, dying
+    });
+
+    it('keeps the minions of an idle parent idle', () => {
+      manager.kill(manager.spawn(route, 'skeleton', undefined, true));
+      expect(minions()).toHaveLength(2);
+      expect(minions().every((c) => c.movement.paused)).toBe(true);
+    });
+
+    it('moves the minions from the next sub-step when damage over time kills in the movement pass', () => {
+      const parent = skeletonAt();
+      let diedAt = -1;
+      eventBus.on('dot:damage', (e) => manager.kill(e.enemy));
+      eventBus.on('enemy:died', (e) => {
+        if (e.enemy === parent) diedAt = parent.movement.getPathProgress();
+      });
+      parent.movement.applyStatusEffect({ type: 'poison', value: 1, duration: 5000, startTime: 0, sourceId: 'p-1' });
+
+      manager.update(1000, 1000); // past one poison tick
+      expect(diedAt).toBeGreaterThan(0);
+      expect(minions().map((c) => c.movement.getPathProgress())).toEqual([diedAt, diedAt]);
+
+      manager.update(16, 1016);
+      expect(minions().every((c) => c.movement.getPathProgress() > diedAt)).toBe(true);
+    });
+  });
+
+  describe('ooze', () => {
+    // About 334 m due north
+    const route: GeoPosition[] = [
+      { lat: 0, lon: 0, height: 0 },
+      { lat: 0.003, lon: 0, height: 0 },
+    ];
+    const walk = (enemy: Enemy, seconds: number): void => {
+      for (let t = 0; t < seconds * 1000; t += 100) manager.update(100, t);
+      expect(enemy.alive).toBe(true);
+    };
+
+    it('spawns without a model instance, with its body where it joins the path', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      expect(sink.enemies.create).not.toHaveBeenCalled();
+      expect(ooze.body).not.toBeNull();
+      expect(ooze.body!.tailM).toBe(0);
+      expect(ooze.body!.tipM).toBe(0);
+      expect(ooze.body!.stations.path).toBe(ooze.movement.path);
+    });
+
+    it('grows behind its tip, the tail at the portal until the body is 80 m long', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      walk(ooze, 20); // 3 m/s
+      expect(ooze.body!.tipM).toBeCloseTo(60, 6);
+      expect(ooze.body!.tailM).toBe(0);
+      walk(ooze, 10);
+      expect(ooze.body!.tipM).toBeCloseTo(90, 6);
+      expect(ooze.body!.tailM).toBeCloseTo(10, 6);
+    });
+
+    it('flows into the base metre by metre, its HP with it, and leaks once when all is in', () => {
+      manager.setWaveNumberProvider(() => 1); // one point per leak
+      const leaking: number[] = [];
+      const reached: number[] = [];
+      eventBus.on('enemy:leaking', (e) => leaking.push(e.damage));
+      eventBus.on('enemy:reached-base', (e) => reached.push(e.damage));
+
+      const ooze = manager.spawn(route, 'ooze');
+      const body = ooze.body as OozeBody;
+      let t = 0;
+      const step = () => manager.update(100, (t += 100));
+      while (!body.arrived) step();
+      // The sub-step of the arrival already flows 0.3 m in
+      expect(body.tipM).toBe(body.stations.length);
+      expect(body.lengthM).toBeCloseTo(79.7, 6);
+      expect(leaking).toEqual([]);
+      expect(manager.getById(ooze.id)).toBe(ooze);
+
+      // Another 40 m in at 3 m/s: half the body and half the HP gone,
+      // 49 / 80 points a metre (leakDamageOf, TODO E49) charged in whole points
+      for (let i = 0; i < 133; i++) step();
+      expect(body.lengthM).toBeCloseTo(79.7 - 39.9, 6);
+      expect(ooze.health.hp / ooze.health.maxHp).toBeCloseTo(body.lengthM / 80, 6);
+      expect(leaking.every((d) => d === 1)).toBe(true);
+      expect(leaking).toHaveLength(Math.floor((80 - body.lengthM) * (leakDamageOf('ooze') / 80)));
+
+      while (manager.getById(ooze.id)) step();
+      expect(leaking.reduce((a, b) => a + b, 0) + reached[0]).toBe(leakDamageOf('ooze'));
+      expect(reached).toHaveLength(1);
+      expect(manager.getAliveCount()).toBe(0);
+      expect(sink.oozes.remove).toHaveBeenCalledWith(ooze.id);
+    });
+
+    it('flows in slower when slowed and not at all when idle', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      let t = 0;
+      while (!(ooze.body as OozeBody).arrived) manager.update(100, (t += 100));
+      const length = ooze.body!.lengthM;
+
+      ooze.movement.applyStatusEffect({ type: 'slow', value: 0.5, duration: 60_000, startTime: t, sourceId: 'ice' });
+      manager.update(100, (t += 100));
+      expect(length - ooze.body!.lengthM).toBeCloseTo(0.15, 6);
+
+      ooze.stopMoving();
+      manager.update(100, t + 100);
+      expect(length - ooze.body!.lengthM).toBeCloseTo(0.15, 6);
+    });
+
+    it('breaks into slime clumps along its body when killed, one per 4 m of it', () => {
+      const splits: number[] = [];
+      eventBus.on('enemy:split', (e) => splits.push(e.children.length));
+      const ooze = manager.spawn(route, 'ooze', undefined, false, 6000); // HP multiplier 2
+      walk(ooze, 40); // tip at 120 m, tail at 40 m
+      manager.kill(ooze);
+
+      const clumps = manager.getAlive().filter((e) => e.typeConfig.id === 'slime-clump');
+      expect(splits).toEqual([20]);
+      expect(clumps).toHaveLength(20);
+      const along = clumps.map((c) => c.movement.getDistanceAlongPath()).sort((a, b) => a - b);
+      expect(along[0]).toBeCloseTo(42, 6);
+      expect(along[19]).toBeCloseTo(118, 6);
+      expect(clumps.every((c) => c.health.maxHp === 90)).toBe(true);
+      // Three tenths of the ooze's 6000 HP (one tenth before 2026-10-02)
+      expect(clumps.reduce((sum, c) => sum + c.health.maxHp, 0)).toBe(1800);
+      // Lanes scattered across the corridor, not one line
+      expect(new Set(clumps.map((c) => c.movement.getLateralFactor().toFixed(3))).size).toBe(20);
+      // The band collapses from the body's stretch of the kill's sub-step; the removal after it keeps that
+      expect(sink.oozes.collapse).toHaveBeenCalledWith(ooze.id, expect.closeTo(40, 6), expect.closeTo(120, 6));
+      expect(sink.oozes.remove).toHaveBeenCalledWith(ooze.id);
+    });
+
+    it('breaks a short body into fewer clumps', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      walk(ooze, 8); // 24 m
+      manager.kill(ooze);
+      expect(manager.getAlive().filter((e) => e.typeConfig.id === 'slime-clump')).toHaveLength(6);
+    });
+
+    it('leaves nothing behind on a debug kill', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      walk(ooze, 20);
+      manager.kill(ooze, 'debug');
+      expect(manager.getAll()).toHaveLength(0);
+    });
+
+    it('lets go of the body when it is removed', () => {
+      const ooze = manager.spawn(route, 'ooze');
+      manager.kill(ooze, 'debug');
+      expect(manager.getById(ooze.id)).toBeNull();
+      manager.update(100, 100); // nothing left to grow
+    });
+  });
+
+  it('ignores debug spawn with invalid path', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    manager.debugSpawn({
+      type: 'debug:spawn-enemy',
+      enemyType: 'zombie',
+      path: [{ lat: 0, lon: 0, height: 0 }],
+      count: 1,
+    });
+
+    expect(manager.getAll()).toHaveLength(0);
+    expect(sink.enemies.create).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+});

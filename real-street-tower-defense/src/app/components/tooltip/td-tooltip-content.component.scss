@@ -1,0 +1,165 @@
+// Layout of the rich tooltip: a td-popup plaster plate, its parts parted by
+// hairlines: head (title in the accent colour, category, key), figures,
+// targeting, banners, armor, sections, flavour. Colours of rows, dots and
+// chips are data.
+@use '../../styles/game-ui' as ui;
+
+:host {
+  display: block;
+}
+
+.td-tooltip {
+  width: 270px;
+  font-size: var(--td-fs-body);
+  color: var(--td-text-primary);
+  pointer-events: none;
+  @include ui.divided;
+}
+
+.td-tooltip__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.td-tooltip__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.td-tooltip__stats {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.td-tooltip__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  dd {
+    margin: 0;
+  }
+}
+
+/* What the tower can target, the icon teal for anti-air */
+.td-tooltip__targeting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.td-tooltip__targeting-icon {
+  flex-shrink: 0;
+  color: var(--td-text-muted);
+}
+
+.td-tooltip__targeting--air-ground .td-tooltip__targeting-icon,
+.td-tooltip__targeting--air-only .td-tooltip__targeting-icon {
+  color: var(--td-teal-light);
+}
+
+.td-tooltip__targeting-label {
+  flex: 1;
+}
+
+/* A rule-changing line (a wave's mutator, the blood moon), red for danger */
+.td-tooltip__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+}
+
+.td-tooltip__banner-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.td-tooltip__banner--danger {
+  .td-tooltip__banner-icon {
+    color: var(--td-health-red);
+  }
+}
+
+.td-tooltip__armor,
+.td-tooltip__section {
+  padding: 8px 10px;
+
+  h4 {
+    display: flex;
+    justify-content: space-between;
+    margin: 0 0 6px;
+  }
+}
+
+.td-tooltip__armor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+
+  &.dim {
+    opacity: 0.55;
+  }
+
+  .armor-label {
+    flex: 1;
+  }
+
+  .armor-mul {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: var(--td-text-primary);
+  }
+}
+
+.td-tooltip__row {
+  padding: 2px 0;
+
+  .row-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+    .row-detail {
+    flex-shrink: 0;
+  }
+
+  .row-value {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-weight: 700;
+    color: var(--td-text-secondary);
+  }
+
+  .row-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px 8px;
+    margin-left: auto;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+
+  .row-note {
+    margin: 1px 0 0 14px;
+  }
+}
+
+.td-tooltip__flavor {
+  padding: 6px 10px 8px;
+  font-style: italic;
+}

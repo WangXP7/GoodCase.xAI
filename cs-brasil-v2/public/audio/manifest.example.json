@@ -1,0 +1,109 @@
+{
+  "voice": {
+    "P": [
+      "audio/petista/ingame/lula-e-neymar-47.mp3",
+      "audio/petista/ingame/lula-esquece-o-pai-ta-estourado.mp3",
+      "audio/petista/ingame/lula-ze-gotinha.mp3",
+      "audio/petista/ingame/pense-no-lula.mp3",
+      "audio/petista/ingame/setembro-vai-entrar-o-grosso-lula.mp3"
+    ],
+    "B": [
+      "audio/bolsonaro/ingame/bolsonaro-acabou-porra.mp3",
+      "audio/bolsonaro/ingame/bolsonaro-jacare.mp3",
+      "audio/bolsonaro/ingame/bolsonaro-popcorn-and-ice-cream.mp3",
+      "audio/bolsonaro/ingame/cana_doce.mp3",
+      "audio/bolsonaro/ingame/chega-de-frescura-e-mimimi.mp3",
+      "audio/bolsonaro/ingame/como-e-bom-o-socialismo-bolsonaro-alto.mp3"
+    ]
+  },
+  "round": {
+    "P": [
+      "audio/petista/round/ta-na-hora-do-jair-ja-ir-embora.mp3"
+    ],
+    "B": [
+      "audio/bolsonaro/round/nos-vai-descer-vai-descer-hd-completo.mp3"
+    ]
+  },
+  "general": {
+    "doublekill": [
+      "audio/game/locucao-dupla-01.mp3"
+    ],
+    "triplekill": [
+      "audio/game/locucao-tripla-01.mp3"
+    ],
+    "multikill": [
+      "audio/game/locucao-multipla-01.mp3"
+    ],
+    "megakill": [
+      "audio/game/locucao-sequencia-01.mp3"
+    ],
+    "killingspree": [
+      "audio/game/locucao-embalo-01.mp3"
+    ],
+    "godlike": [
+      "audio/game/locucao-lendario-01.mp3"
+    ],
+    "headshot": [
+      "audio/game/headshot-02.mp3"
+    ]
+  },
+  "jogo": {
+    "awp": [
+      "audio/game/sniper-tiro-01.mp3"
+    ],
+    "pistol": [
+      "audio/game/pistola-tiro-01.wav"
+    ],
+    "reload": [
+      "audio/game/recarga-pente-saida-01.wav"
+    ],
+    "reloadend": [
+      "audio/game/recarga-pente-entrada-01.wav"
+    ],
+    "scope": [
+      "audio/game/luneta-zoom-01.mp3"
+    ],
+    "roundstart": [
+      "audio/game/saque-arma-01.mp3"
+    ],
+    "knife": [
+      "audio/game/faca-golpe-01.wav",
+      "audio/game/faca-golpe-02.wav"
+    ],
+    "knifehit": [
+      "audio/game/faca-acerto-01.wav",
+      "audio/game/faca-acerto-02.wav",
+      "audio/game/faca-acerto-03.wav",
+      "audio/game/faca-acerto-04.wav",
+      "audio/game/faca-estocada-01.wav"
+    ],
+    "knifedeploy": [
+      "audio/game/faca-saque-01.wav"
+    ]
+  },
+  "weapons": {
+    "awp": [ "audio/weapons/sniper-ferrolho-01.wav" ],
+    "ak": [ "audio/weapons/fuzil-assalto-01.wav" ],
+    "akm": [ "audio/weapons/fuzil-assalto-01.wav" ],
+    "m92": [ "audio/weapons/fuzil-assalto-01.wav" ],
+    "g3": [ "audio/weapons/fuzil-batalha-01.wav" ],
+    "m4": [ "audio/weapons/carabina-01.wav", "audio/weapons/carabina-02.wav" ],
+    "carbine": [ "audio/weapons/fuzil-curto-01.wav" ],
+    "scar": [ "audio/weapons/fuzil-tatico-01.wav", "audio/weapons/fuzil-tatico-02.wav" ],
+    "tavor": [ "audio/weapons/bullpup-01.wav" ],
+    "famas": [ "audio/weapons/fuzil-leve-01.wav" ],
+    "md97": [ "audio/weapons/fuzil-batalha-01.wav" ],
+    "m400": [ "audio/weapons/sniper-semiauto-01.wav" ],
+    "mp5": [ "audio/weapons/submetralhadora-01.wav" ],
+    "uzi": [ "audio/weapons/submetralhadora-compacta-01.wav" ],
+    "p90": [ "audio/weapons/submetralhadora-cadencia-01.wav" ],
+    "shotgun": [ "audio/weapons/escopeta-bomba-01.wav", "audio/weapons/escopeta-semiauto-01.wav" ],
+    "deagle": [ "audio/weapons/pistola-magnum-01.wav", "audio/weapons/pistola-magnum-02.wav" ],
+    "pistol": [ "audio/weapons/pistola-servico-01.wav", "audio/weapons/pistola-servico-02.wav" ],
+    "revolver38": [ "audio/weapons/pistola-magnum-01.wav" ],
+    "mosin": [ "audio/weapons/sniper-ferrolho-01.wav" ],
+    "rem700": [ "audio/weapons/sniper-leve-01.wav" ],
+    "lmg": [ "audio/weapons/metralhadora-01.wav" ],
+    "reload": [ "audio/weapons/recarga-generica-01.wav" ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "starfall",
+  "description": "A Homeworld-style, universe-scale space RTS in the browser. Procedural everything; no image assets.",
+  "homepage": "https://e01.ai/starfall/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/e01-ai/starfall.git"
+  },
+  "author": "Mike Luan <mike.luan@e01.ai>",
+  "license": "MIT",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4173 --strictPort",
+    "test": "vitest run",
+    "shot": "node scripts/capture.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.1",
+    "playwright": "^1.61.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.9",
+    "vitest": "^3.2.4"
+  }
+}

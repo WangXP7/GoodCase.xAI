@@ -1,0 +1,96 @@
+import type { LosResolveReason } from '../game-engine/events/event-types';
+import type { GameClockState } from '../managers/game-state/game-clock';
+import type { GameRngState } from '../utils/game-rng';
+import type { ResearchSaveState } from '../configs/research/research.types';
+import type { AbilitySaveState } from '../managers/ability.manager';
+import type { HeroSaveState } from '../managers/hero.manager';
+import type { TowerSimState } from '../entities/tower.entity';
+import type { TowerTypeId, UpgradeId } from '../configs/tower-types.config';
+import type { LosMaskJson } from '../utils/los-mask';
+import type { GamePhase } from '../models/game.types';
+
+/** Bumped whenever the shape changes; an export with another version is refused. */
+export const SIM_SNAPSHOT_VERSION = 2;
+
+/**
+ * The simulation between two waves, as plain data: the state a wave is
+ * re-simulated from (docs/SIMULATOR_PLAN.md, section 3 and P4).
+ *
+ * Between waves the simulation is nearly empty: no enemy, no spawner, no
+ * pending strike. What is left fits in a few KB and is taken when a wave
+ * starts (GameStateManager.captureSnapshot). The world (cells, heights,
+ * routes) is not in it: a snapshot is only valid on the world it was taken
+ * on; an export carries a key of the world with it.
+ */
+export interface SimSnapshot {
+  version: number;
+  clock: GameClockState;
+  rng: GameRngState;
+  /** GameObject id counter */
+  idCounter: number;
+  /** The credits of the player at the client that took it */
+  credits: number;
+  /** Every player's credits in roster order; absent in a snapshot from before coop, then `credits` is the one player's */
+  accounts?: [string, number][];
+  baseHealth: number;
+  /** The HP of a destructible world's structures, in the run rules' order (StructureLedger); absent before them */
+  structures?: number[];
+  waveNumber: number;
+  phase: GamePhase;
+  /** A wave has started in this run (game:started went out) */
+  runStarted: boolean;
+  economyPerfectStreak: number;
+  /** The first player's research (the single player's) */
+  research: ResearchSaveState;
+  /** Every player's research in roster order; absent in a snapshot from before coop */
+  researchByPlayer?: [string, ResearchSaveState][];
+  /** The first player's abilities (the single player's) */
+  abilities: AbilitySaveState;
+  /** Every player's abilities in roster order; absent in a snapshot from before coop */
+  abilitiesByPlayer?: [string, AbilitySaveState][];
+  /** The first player's hero (the single player's) */
+  hero: HeroSaveState;
+  /** Every player's hero in roster order; absent in a snapshot from before coop */
+  heroesByPlayer?: [string, HeroSaveState][];
+  /** In the order the tower manager holds them, which is the order combat walks them */
+  towers: SavedTower[];
+  /** Id of the tower the first player (the single player) sits in */
+  mannedTowerId: string | null;
+  /** Every manned tower as [player, tower id]; absent in a snapshot from before coop */
+  mannedByPlayer?: [string, string][];
+  /** Towers waiting for their line of sight retrofit, oldest first; empty since the worker split (awaitingLos) */
+  losQueue: string[];
+  /**
+   * [tower id, reason, generation] of the towers waiting for their line of
+   * sight, oldest first (TowerLos); absent before the worker split, without
+   * the generation before generations
+   */
+  awaitingLos?: [string, LosResolveReason, number?][];
+  /** TowerLos: generation of the next request; absent before generations */
+  losGeneration?: number;
+}
+
+export interface SavedTower {
+  id: string;
+  /** Tower.ownerId; absent in a snapshot from before coop, then the first player's */
+  ownerId?: string;
+  typeId: TowerTypeId;
+  lat: number;
+  lon: number;
+  height: number;
+  customRotation: number;
+  plinthHeight: number;
+  plinthOverhang: number[];
+  upgrades: [UpgradeId, number][];
+  /** Its line of sight; null for a passive building or a tower that never got one */
+  losMask: LosMaskJson | null;
+  state: TowerSimState;
+}
+
+/**
+ * Why the state at a wave start cannot be re-simulated, or null when it can.
+ * A snapshot is taken between waves, where nothing is in flight; a manned
+ * tower's shot still flying, a debug enemy or an event still waiting for the
+ * next sub-step (a wave:completed right before the start) would be lost.
+ */
+export type SnapshotRefusal = 'enemies' | 'projectiles' | 'pending-strike' | 'pending-events' | 'not-setup';

@@ -1,0 +1,64 @@
+<div class="mm-root td-backdrop" [class.mm-start]="layer() === 'start'" [class.mm-pause]="layer() === 'pause'"
+     role="dialog" aria-modal="true" aria-labelledby="td-menu-title" tabindex="-1"
+     cdkTrapFocus
+     (keydown.escape)="onEscape($event)">
+  <div class="mm-column">
+    <img class="mm-logo" src="assets/images/logo/logo.svg" alt="3DTD" width="480" height="272">
+    @if (layer() === 'start') {
+      <p class="mm-tagline td-caps">Tower defense on real streets</p>
+    }
+    @if (page() === 'home') {
+      <h2 class="td-sr-only" id="td-menu-title">{{ title() }}</h2>
+    }
+    <app-menu-home [layer]="layer()" />
+  </div>
+
+  @if (page() !== 'home') {
+    <section class="mm-page td-dlg" aria-labelledby="td-menu-title">
+      <header class="td-dlg-head">
+        <h2 class="td-dlg-title" id="td-menu-title">{{ title() }}</h2>
+        <button type="button" class="mm-back td-close" (click)="menu.back()" aria-label="Back (Esc)">
+          <td-icon name="close" [size]="12" />
+        </button>
+      </header>
+      <!-- A menu opened on a page (header, quick bar) starts there: the trap's first focus -->
+      <div class="mm-page-body td-dlg-body" cdkFocusInitial>
+        @switch (page()) {
+          @case ('new-game') { <app-menu-new-game [layer]="layer()" /> }
+          @case ('coop') { <app-menu-coop [layer]="layer()" /> }
+          @case ('save') { <app-menu-save [layer]="layer()" /> }
+          @case ('load') { <app-menu-load [layer]="layer()" /> }
+          @case ('settings') { <app-menu-settings [layer]="layer()" /> }
+          @case ('extras') { <app-menu-extras [layer]="layer()" /> }
+        }
+      </div>
+    </section>
+  }
+
+  @if (layer() === 'start') {
+    <div class="mm-foot">
+      <div class="mm-tip td-well td-text" [class.is-hidden]="!tipFits()" [attr.aria-hidden]="tipFits() ? null : 'true'">
+        <div class="mm-tip-head td-caps">
+          <span class="mm-tip-label">Tip</span>
+          <span class="mm-tip-dots">
+            @for (t of tips; track $index) {
+              <button type="button" class="mm-tip-dot" [class.is-on]="$index === tipIndex()"
+                      [attr.aria-label]="'Tip ' + ($index + 1) + ' of ' + tips.length"
+                      [attr.aria-current]="$index === tipIndex() ? 'true' : null"
+                      (click)="showTip($index)"></button>
+            }
+          </span>
+        </div>
+        <p class="mm-tip-text">@for (part of tips[tipIndex()].parts; track $index) {@if (part.accent) {<b [class]="'mm-tip-' + part.accent">{{ part.text }}</b>} @else {<span>{{ part.text }}</span>}}</p>
+      </div>
+      <p class="mm-version td-caps">
+        <span><a [href]="legalUrl" target="_blank" rel="noopener">Legal</a> | <a [href]="privacyUrl" target="_blank" rel="noopener">Privacy</a></span>
+        <span class="mm-version-build">{{ version() }}</span>
+      </p>
+    </div>
+  }
+
+  @if (plateShown()) {
+    <app-menu-loading class="mm-loading" />
+  }
+</div>

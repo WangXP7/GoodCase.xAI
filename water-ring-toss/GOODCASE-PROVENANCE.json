@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/franky-adl/water-ring-toss-game",
+  "commit": "5a274a8e4cd2f2ed3a0aa58e73bc65c084aa430f",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 22,
+  "bytes": 4640776
+}

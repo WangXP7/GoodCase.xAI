@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/satorunet/seisi",
+  "commit": "e36c43a2c289591478d243e55b88fcbe684cba30",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 13,
+  "bytes": 479476
+}

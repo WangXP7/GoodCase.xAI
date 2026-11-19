@@ -1,0 +1,199 @@
+import type { Object3D } from 'three';
+import { clearJuggernautVisual, hasGarageTankEnergyVisual } from './juggernautVisual.ts';
+import { transitionBattleCountdown } from './preBattleCountdown.ts';
+import type { RuntimeValue } from '../runtimeTypes.ts';
+/**
+ * End every battle-owned presentation lifetime before a resident player tank
+ * is reused by the garage. Combat FX owns meshes parented to the tank (impact
+ * decals) as well as world-space particles, lights, tracers, prints and
+ * timers, while the tank visual owns articulation, damage and LOD state.
+ * Reset both owners at the same phase boundary so neither can leak into the
+ * showroom.
+ *
+ */
+interface LifecycleVisual {
+  root?: Object3D;
+  resetForGaragePresentation?(): void;
+  resetDestroyed?(): void;
+  setVisible?(visible: boolean): void;
+  dispose?(): void;
+}
+
+interface LifecycleInput {
+  throttle: number;
+  steer: number;
+  brake: boolean;
+  fire: boolean;
+  aimLocked: boolean;
+  shellSlot: number;
+  aimPoint?: { set?(x: number, y: number, z: number): RuntimeValue };
+}
+
+interface LifecycleEntity<Visual extends LifecycleVisual = LifecycleVisual> {
+  visual: Visual | null;
+  state?: RuntimeValue;
+  combat?: RuntimeValue;
+  specialAction?: RuntimeValue;
+  equip?: RuntimeValue;
+  ai?: RuntimeValue;
+  aiCtl?: RuntimeValue;
+  team: string;
+  isPlayer: boolean;
+  rigidGear?: boolean;
+  contactGeom?: RuntimeValue;
+  _destroyedAnnounced?: boolean;
+  _glbContactStampedVisual?: RuntimeValue;
+  _openingRoute?: RuntimeValue;
+  _lastImpactT?: number;
+  _reloadEvent?: RuntimeValue;
+  _soloRenderPose?: RuntimeValue;
+  _spotFade?: number;
+  _fxAcc?: number;
+  _dustTravelAcc?: number;
+  input?: LifecycleInput | null;
+}
+
+interface BattleExitState<Visual extends LifecycleVisual = LifecycleVisual> {
+  allTanks?: LifecycleEntity<Visual>[];
+  tanks: RuntimeValue[];
+  shells: RuntimeValue[];
+  player: RuntimeValue | null;
+  spotting: RuntimeValue | null;
+  result: RuntimeValue | null;
+  resultReason: RuntimeValue | null;
+  resultTimeS?: number | null;
+  preBattleS: number;
+  timeS: number;
+  fireTickAcc: number;
+  nextShellId: number;
+  openingRouteJobs?: RuntimeValue[];
+  /** The battle's Jev commander (game/jevCommander.ts), when the battle had one. */
+  jev?: { dispose(): void } | null;
+  _jevView?: RuntimeValue | null;
+  /** The battle's crush press ledger (sim/crushPress.ts) and ram pair cooldowns (state.ts), keyed by its world records and hulls. */
+  _crushPress?: RuntimeValue | null;
+  _ramPairT?: Map<string, number>;
+}
+
+export function resetBattleTankForGarage({
+  fx,
+  visual = null,
+}: {
+  fx: { resetAll(): void };
+  visual?: LifecycleVisual | null;
+}): void {
+  if (!fx || typeof fx.resetAll !== 'function') {
+    throw new TypeError('garage lifecycle requires an FX reset owner');
+  }
+
+  // Run this first: impact decals are children of the battle visual. They
+  // must detach before that visual is parked, disposed or adopted as hero.
+  fx.resetAll();
+
+  if (!visual) return;
+  if (visual.root) clearJuggernautVisual(visual.root);
+  if (typeof visual.resetForGaragePresentation === 'function') {
+    visual.resetForGaragePresentation();
+  } else if (typeof visual.resetDestroyed === 'function') {
+    // Compatibility for non-procedural/diagnostic visuals that predate the
+    // complete showroom lifecycle API.
+    visual.resetDestroyed();
+  }
+  // Repair can restore materials captured while the boss effect was active,
+  // even if death already disposed that effect. Details are reattached now.
+  if (visual.root) clearJuggernautVisual(visual.root, true);
+}
+
+/**
+ * Tear down a completed battle after its clean player visual has optionally
+ * transferred into the garage pedestal cache. The roster records themselves
+ * remain reusable, but no simulation, damage, AI, shell or presentation state
+ * survives the phase boundary.
+ *
+ */
+export function clearBattleAfterExit<Visual extends LifecycleVisual>({
+  game,
+  preservedVisual = null,
+  visualPool = null,
+}: {
+  game: BattleExitState<Visual>;
+  preservedVisual?: Visual | null;
+  visualPool?: { release(visual: Visual): boolean } | null;
+}): void {
+  if (!game) throw new TypeError('garage lifecycle requires battle state');
+
+  for (const entity of game.allTanks || []) {
+    const visual = entity.visual;
+    // (transitions-249) the hero the Garage just adopted keeps the dormant Garage skin its adoption installed: clearing it
+    // here left the Garage's first frames drawing the battle paint, every program linked again under the Garage lights
+    if (visual?.root && !(visual === preservedVisual && hasGarageTankEnergyVisual(visual.root))) {
+      clearJuggernautVisual(visual.root);
+    }
+    // A successfully adopted player visual is now garage-owned. Sever its
+    // entity reference without disposing the scene graph the pedestal cache
+    // just acquired. Every other actor releases its visual to the detached
+    // clean pool or disposes it; no actor ownership survives.
+    if (visual && visual !== preservedVisual) {
+      if (visualPool?.release) {
+        visualPool.release(visual);
+        // (mode-sheen-perf-243) the pool's repair puts back the materials a wreck captured: in a mode that lights
+        // tanks those are the energy skins every tank wore (a skin outlives a kill), unwrapped here as the Garage does
+        if (visual.root) clearJuggernautVisual(visual.root, true);
+      } else {
+        visual.setVisible?.(false);
+        visual.dispose?.();
+      }
+    }
+    entity.visual = null;
+    entity.state = null;
+    entity.combat = null;
+    entity.specialAction = null;
+    entity.equip = null;
+    entity.ai = null;
+    entity.aiCtl = null;
+    entity.team = 'enemy';
+    entity.isPlayer = false;
+    entity.rigidGear = false;
+    entity.contactGeom = null;
+    entity._destroyedAnnounced = false;
+    entity._glbContactStampedVisual = null;
+    entity._openingRoute = null;
+    entity._lastImpactT = -1;
+    entity._reloadEvent = null;
+    entity._soloRenderPose = null;
+    entity._spotFade = undefined;
+    entity._fxAcc = 0;
+    entity._dustTravelAcc = 0;
+    if (entity.input) {
+      entity.input.throttle = 0;
+      entity.input.steer = 0;
+      entity.input.brake = false;
+      entity.input.fire = false;
+      entity.input.aimLocked = false;
+      entity.input.shellSlot = 0;
+      entity.input.aimPoint?.set?.(0, 0, 0);
+    }
+  }
+
+  game.tanks.length = 0;
+  game.shells.length = 0;
+  game.player = null;
+  game.spotting = null;
+  game.result = null;
+  game.resultReason = null;
+  game.resultTimeS = null; // (2026-11-02 audit F1 review) the verdict's time leaves with its battle
+  transitionBattleCountdown(game, 'clear'); // (2026-11-02 audit F1) the countdown's one writer
+  game.timeS = 0;
+  game.fireTickAcc = 0;
+  game.nextShellId = 1;
+  game.openingRouteJobs?.splice(0);
+  // a quit or a finished battle leaves no Jev commander behind: its in-flight requests abort and late answers land
+  // nowhere (2026-11-02 audit M6; the next battle's setup disposed it before, long after the Garage return)
+  game.jev?.dispose();
+  game.jev = null;
+  game._jevView = null;
+  // the battle's own ledgers leave with it (round 2 U13): the press held the last battle's obstacle records and hulls
+  // through the Garage until the next battle's reset
+  game._crushPress = null;
+  game._ramPairT?.clear();
+}

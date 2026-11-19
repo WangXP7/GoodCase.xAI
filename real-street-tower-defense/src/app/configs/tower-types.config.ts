@@ -1,0 +1,751 @@
+import { DamageType } from './combat/combat.types';
+import { DetMath } from '../utils/det-math';
+
+export type TowerTypeId =
+  | 'archer' | 'cannon' | 'magic' | 'dual-gatling' | 'rocket' | 'ice' | 'fire' | 'tentacle' | 'poison' | 'lightning' | 'chaos'
+  | 'research-center' | 'missile-silo';
+export type ProjectileTypeId =
+  | 'arrow' | 'cannonball' | 'arcane-orb' | 'ice-shard' | 'bullet' | 'rocket' | 'poison-glob' | 'chaos-orb'
+  // The hero's ammo (hero.config.ts), fired by no tower
+  | 'hero-round' | 'hero-shell' | 'hero-rune';
+export type UpgradeId = 'speed' | 'damage' | 'range' | 'beam-width' | 'research-slots';
+export type AttackType = 'projectile' | 'beam' | 'melee' | 'passive' | 'chain';
+export type TargetingStrategy = 'closest' | 'lowest-hp' | 'highest-hp' | 'first' | 'last' | 'air-priority';
+export type AirSubStrategy = 'closest' | 'lowest-hp' | 'highest-hp';
+
+export interface TowerUpgrade {
+  id: UpgradeId;
+  name: string;
+  description: string;
+  cost: number; // Base cost for level 1
+  costScaling?: number; // Cost multiplier per level (default: 1.0 = flat cost)
+  maxLevel: number;
+  effect: {
+    stat: 'fireRate' | 'damage' | 'range' | 'beamWidth' | 'research-slots';
+    multiplier: number; // e.g., 2.0 = double
+  };
+  /** Last level that gets the full `effect.multiplier` (default: all levels). */
+  lateFromLevel?: number;
+  /** Multiplier for every level past `lateFromLevel` (default: `effect.multiplier`). */
+  lateMultiplier?: number;
+}
+
+/**
+ * Calculate the cost of an upgrade at a given level.
+ * Formula: baseCost * costScaling^currentLevel
+ * Level 0 → baseCost, Level 1 → baseCost * scaling, etc.
+ */
+export function getUpgradeCost(upgrade: TowerUpgrade, currentLevel: number): number {
+  const scaling = upgrade.costScaling ?? 1.0;
+  return Math.round(upgrade.cost * DetMath.pow(scaling, currentLevel));
+}
+
+/**
+ * Gesamtfaktor eines Upgrade-Tracks auf Stufe `level`, begrenzt auf maxLevel.
+ *
+ * Stufen bis `lateFromLevel` multiplizieren mit `effect.multiplier`, jede
+ * weitere mit `lateMultiplier`. Die einzige Stelle, an der ein Upgrade-Effekt
+ * gerechnet wird: Tower-Entity, Beam-Werte, DPS-Modell und die Balance-Charts
+ * lesen sie.
+ */
+export function upgradeFactor(upgrade: TowerUpgrade, level: number): number {
+  const lvl = Math.max(0, Math.min(level, upgrade.maxLevel));
+  const early = Math.min(lvl, upgrade.lateFromLevel ?? lvl);
+  const late = lvl - early;
+  const lateMultiplier = upgrade.lateMultiplier ?? upgrade.effect.multiplier;
+  return DetMath.pow(upgrade.effect.multiplier, early) * DetMath.pow(lateMultiplier, late);
+}
+
+/**
+ * Sell-back ratio applied to (baseCost + totalUpgradeCost).
+ * Players recover 75% of total credits invested into a tower when selling it.
+ */
+const SELL_RATIO = 0.75;
+
+/**
+ * Compute the sell value for a tower given its base cost and total credits
+ * invested in upgrades. Rounded to integer credits.
+ */
+export function calculateSellValue(baseCost: number, totalUpgradeCost: number): number {
+  return Math.round((baseCost + totalUpgradeCost) * SELL_RATIO);
+}
+
+// =====================================================================
+// Upgrade-Tracks (Balance 2026-09, docs/archive/BALANCE_PROPOSAL_2026-09.md §2)
+//
+// Damage und Fire Rate: 25 Stufen mit tower-eigenem Multiplikator m. Stufe
+// 1-15 wirkt m, Stufe 16-25 nur noch 1 + 0,4 × (m − 1). Bis L15 bleibt das
+// Tempo nah am alten (×1,05/×1,06 für alle), der Einschnitt liegt in Tier 4
+// und 5: L25 bringt das 5,3- bis 6,4-Fache der Basis-DPS statt des 14,5-Fachen.
+// Range und Beam Width: 10 Stufen × 1,03 (max. ×1,344), für alle Tower gleich.
+// Die Reichweite wuchs vorher mit ×1,04 über 25 Stufen auf das 2,67-Fache.
+//
+// Tier-Gating: T1 = L1-5, T2 = L6-10, T3 = L11-15, T4 = L16-20, T5 = L21-25
+// (requiredUpgradeTier). Der Range-Track endet in Tier 2.
+// Kosten 50 × 1,25^Stufe pro Track, für alle Tower gleich.
+// =====================================================================
+// Exported so offline balance tools (wave-planner, tower-stats-chart) can
+// read the live values instead of duplicating them.
+export const UPGRADE_BASE_COST = 50;
+export const UPGRADE_COST_SCALING = 1.25;
+const UPGRADE_MAX_LEVEL = 25;
+
+/** Letzte Stufe, auf der Damage und Fire Rate den vollen Multiplikator bekommen. */
+export const UPGRADE_LATE_FROM_LEVEL = 15;
+/** Anteil des Zuwachses, den jede Damage-/Rate-Stufe danach noch bringt. */
+export const UPGRADE_LATE_GAIN_SHARE = 0.4;
+
+export const UPGRADE_RANGE_MULTIPLIER = 1.03;
+export const UPGRADE_RANGE_MAX_LEVEL = 10;
+const UPGRADE_BEAM_WIDTH_MULTIPLIER = 1.03; // Fire only
+
+/**
+ * Research tier required to push an upgrade past its current level.
+ *
+ * The 25-level tracks are split into 5-level bands, each gated behind a
+ * research: L0-4 free, L5-9 Advanced Weaponry, L10-14 Master Engineering,
+ * L15-19 Advanced Engineering, L20+ Transcendent Tech.
+ *
+ * Single source of truth for the game's command handler, the sidebar UI and
+ * the training bot. They each used to carry their own copy, and the bot's was
+ * far stricter (tier 2 already at level 1), so it quietly declined upgrades
+ * the engine would have accepted.
+ *
+ * `research-slots` (Research Center) is exempt — callers skip this check for it.
+ */
+export function requiredUpgradeTier(currentLevel: number): number {
+  if (currentLevel >= 20) return 5;
+  if (currentLevel >= 15) return 4;
+  if (currentLevel >= 10) return 3;
+  if (currentLevel >= 5) return 2;
+  return 1;
+}
+
+/** Prozent pro Stufe für die Upgrade-Beschreibung, z. B. 1.028 → 2.8. */
+const percentPerLevel = (multiplier: number): number => +((multiplier - 1) * 100).toFixed(1);
+
+/** Damage- oder Fire-Rate-Track: 25 Stufen, ab L16 degressiv. */
+function degressiveUpgrade(
+  id: 'damage' | 'speed',
+  name: string,
+  stat: 'damage' | 'fireRate',
+  multiplier: number,
+): TowerUpgrade {
+  const lateMultiplier = 1 + UPGRADE_LATE_GAIN_SHARE * (multiplier - 1);
+  return {
+    id,
+    name,
+    description:
+      `Increases ${name.toLowerCase()} (+${percentPerLevel(multiplier)}% per level up to ` +
+      `L${UPGRADE_LATE_FROM_LEVEL}, +${percentPerLevel(lateMultiplier)}% after, compounding).`,
+    cost: UPGRADE_BASE_COST,
+    costScaling: UPGRADE_COST_SCALING,
+    maxLevel: UPGRADE_MAX_LEVEL,
+    effect: { stat, multiplier },
+    lateFromLevel: UPGRADE_LATE_FROM_LEVEL,
+    lateMultiplier,
+  };
+}
+
+const RANGE_UPGRADE: TowerUpgrade = {
+  id: 'range',
+  name: 'Range',
+  description: `Increases range (+${percentPerLevel(UPGRADE_RANGE_MULTIPLIER)}% per level, compounding, ` +
+    `max L${UPGRADE_RANGE_MAX_LEVEL}).`,
+  cost: UPGRADE_BASE_COST,
+  costScaling: UPGRADE_COST_SCALING,
+  maxLevel: UPGRADE_RANGE_MAX_LEVEL,
+  effect: { stat: 'range', multiplier: UPGRADE_RANGE_MULTIPLIER },
+};
+
+const BEAM_WIDTH_UPGRADE: TowerUpgrade = {
+  id: 'beam-width',
+  name: 'Beam Width',
+  description: `Increases flame cone width (+${percentPerLevel(UPGRADE_BEAM_WIDTH_MULTIPLIER)}% per level, ` +
+    `compounding, max L${UPGRADE_RANGE_MAX_LEVEL}).`,
+  cost: UPGRADE_BASE_COST,
+  costScaling: UPGRADE_COST_SCALING,
+  maxLevel: UPGRADE_RANGE_MAX_LEVEL,
+  effect: { stat: 'beamWidth', multiplier: UPGRADE_BEAM_WIDTH_MULTIPLIER },
+};
+
+/**
+ * Damage-, Fire-Rate- und Range-Track eines Combat-Towers. Das Verhältnis
+ * damage/rate ist die Identität des Towers: wächst er über Schaden oder über
+ * Tempo.
+ */
+function combatUpgrades(profile: { damage: number; rate: number; costFactor?: number }): TowerUpgrade[] {
+  const factor = profile.costFactor ?? 1;
+  // A tower whose upgrades cost more pays the factor on every track (TODO E13)
+  const priced = (upgrade: TowerUpgrade): TowerUpgrade => (factor === 1 ? upgrade : { ...upgrade, cost: upgrade.cost * factor });
+  return [
+    priced(degressiveUpgrade('damage', 'Damage', 'damage', profile.damage)),
+    priced(degressiveUpgrade('speed', 'Fire Rate', 'fireRate', profile.rate)),
+    priced(RANGE_UPGRADE),
+  ];
+}
+
+export interface TowerTypeConfig {
+  id: TowerTypeId;
+  name: string;
+  modelUrl: string;
+  scale: number;
+  previewScale?: number; // Optional separate scale for UI preview (defaults to scale * 0.4)
+  heightOffset: number; // Vertical offset to place model above ground
+  shootHeight: number; // Height above base where projectiles originate (for LoS calculations)
+  /**
+   * Radius (m) of the circle around the base of the placed model: its widest
+   * vertex from the model origin at `scale`. The ground under this circle
+   * decides how high the tower stands and whether it gets a plinth
+   * (resolveTowerFootprint), and the plinth is this wide.
+   */
+  footprintRadius: number;
+  rotationY?: number; // Initial Y rotation in radians for visual alignment (default: 0)
+  turretBarrelOffset?: number; // Turret barrel orientation in model space (default: 0 = barrels point +Z)
+  turretNode?: string; // Node that turns to the target. Replaces turret_top/tower_top/top, no fallback to them
+  /**
+   * The model turns a turret part to the target: `turretNode`, without it a
+   * node named turret_top, tower_top or top. The simulation knows it before
+   * the model loads: only then does firing wait for the turn (isAimAligned)
+   * and does the tower sweep after placement. tower-model.spec.ts checks it
+   * against the model.
+   */
+  turnsTurret: boolean;
+  /**
+   * The turret part's rotation about y in the model file, rad (default 0):
+   * where the turret points when the tower is placed (createTowerAim).
+   * tower-model.spec.ts checks it against the model.
+   */
+  turretRestY?: number;
+  /**
+   * Top of the placed model above the tower's foot, m: its bounding box at
+   * `scale` and `rotationY`, `heightOffset` included, rest pose. The eye of
+   * a manned tower sits above it (TowerCombatService.mannedEyeInto).
+   * tower-model.spec.ts measures it from the model.
+   */
+  modelTop: number;
+  /**
+   * Nodes under the turret that tilt towards the target's height, about the
+   * axis across the barrels (turretBarrelOffset), with their origin on the
+   * trunnion. Only the model shows it: firing waits for the turn, never for
+   * the tilt. Muzzle up is positive; `pitchRange` in radians keeps the
+   * barrels out of the turret plate.
+   */
+  pitchNodes?: string[];
+  pitchRange?: { min: number; max: number };
+
+  damageType: DamageType; // Damage type for the damage matrix
+  damage: number;
+  range: number;
+  fireRate: number; // Shots per second
+  projectileType: ProjectileTypeId;
+
+  cost: number;
+  upgrades: TowerUpgrade[]; // Available upgrades for this tower type
+  /**
+   * Game ms from placing to the first shot: it grows in its scaffold meanwhile (buildTimeOf, TODO E104).
+   * Default DEFAULT_BUILD_TIME_MS, 0 for a passive building.
+   */
+  buildTimeMs?: number;
+
+  /**
+   * One per map: while one stands, another cannot be placed. Checked by
+   * TowerLifecycle.place and, for the build card (and its number key, for
+   * one of the first nine cards), by canPickTowerCard.
+   */
+  unique?: boolean;
+  /**
+   * The wave it opens with: buildable from the build phase before wave N
+   * (researchWave), like a research's minWave. The Research Center waits for
+   * wave 2, so the start gold buys towers for wave 1 (TODO E123). Checked by
+   * TowerLifecycle.place and canPickTowerCard.
+   */
+  minWave?: number;
+  /** What a passive building does, the flavor of its build card's tooltip */
+  description?: string;
+
+  // Targeting capabilities
+  canTargetAir?: boolean; // Can target air units (default: false)
+  canTargetGround?: boolean; // Can target ground units (default: true)
+
+  // Animation settings
+  hasAnimations?: boolean; // Whether this tower has GLTF animations (default: false)
+  animationPingPong?: boolean; // Play animation forward then backward (smooth loop, default: false)
+
+  // Beam attack settings (for flamethrower-type towers). The cone is as long
+  // as the tower's range, so a beam tower only acquires what it can burn.
+  attackType?: AttackType; // 'projectile' (default) or 'beam' for continuous damage
+  damagePerSecond?: number; // DPS for beam towers (used instead of damage + fireRate)
+  beamWidth?: number; // Width of the cone at the end in meters
+
+  defaultTargeting?: TargetingStrategy; // Default targeting for this tower type (default: 'closest')
+  defaultAirSubStrategy?: AirSubStrategy; // Sub-strategy for air-priority pool selection (default: 'closest')
+
+  /** Fire point offsets in turret-local space (x=lateral meters, z=forward meters). Alternates per shot. */
+  firePoints?: { x: number; z: number }[];
+
+  /**
+   * Melee only: each strike also hits up to `maxTargets` more ground enemies
+   * within `radius` m of its target, nearest first, for `share` of the strike.
+   */
+  meleeSlam?: { radius: number; maxTargets: number; share: number };
+
+  // Chain attack settings (for lightning-type towers — hitscan chain)
+  maxJumps?: number;      // Number of additional targets after the primary (e.g. 2 = 3 total hits)
+  chainFalloff?: number;  // Damage multiplier applied per jump (e.g. 0.7 = -30% per hop)
+  jumpRange?: number;     // Max meters between successive chain links
+}
+
+// Tower model URLs
+const ARCHER_MODEL_URL = 'assets/models/towers/archer.glb';
+const TURRET_MODEL_URL = 'assets/models/towers/gatling_tilt.glb';
+const ROCKET_MODEL_URL = 'assets/models/towers/rocket.glb';
+const CANNON_MODEL_URL = 'assets/models/towers/cannon.glb';
+const ICE_MODEL_URL = 'assets/models/towers/ice.glb';
+const MAGIC_MODEL_URL = 'assets/models/towers/magic.glb';
+const FIRE_MODEL_URL = 'assets/models/towers/fire.glb';
+const POISON_MODEL_URL = 'assets/models/towers/poison_tower.glb';
+const LIGHTNING_MODEL_URL = 'assets/models/towers/lightning.glb';
+const CHAOS_MODEL_URL = 'assets/models/towers/chaos.glb';
+
+export const TOWER_TYPES: Record<TowerTypeId, TowerTypeConfig> = {
+  archer: {
+    id: 'archer',
+    name: 'Archer Tower',
+    defaultTargeting: 'first',
+    modelUrl: ARCHER_MODEL_URL,
+    scale: 10.1,
+    previewScale: 12,
+    heightOffset: 4.5,
+    shootHeight: 1.05,
+    footprintRadius: 3.6,
+    rotationY: 0,
+    turnsTurret: false,
+    modelTop: 9.22,
+    damageType: 'physical',
+    damage: 30, // 25 until 2026-10-02 (E52)
+    range: 30,
+    fireRate: 1, // 1 shot/sec
+    canTargetAir: true,
+    projectileType: 'arrow',
+    cost: 45, // Rebalanced: was 20 (Cost/DPS 0.80 -> 1.80)
+    hasAnimations: true, // archer_tower.glb has base animation
+    animationPingPong: true, // Smooth loop: forward then backward
+    // Starttower, trifft Luft und Boden. Das Tempo machte ihn im Endausbau
+    // zum Dauerfeuer (4,29 Schuss/s), deshalb wächst er eher über Schaden.
+    // Upgrades at 0.6 (2026-10-02, E52): with the same prices as every tower
+    // its lowest base damage made each level the worst buy in the shop (human
+    // run to W60: 3.6 damage per gold against 8 to 17 for magic, cannon,
+    // lightning and fire).
+    upgrades: combatUpgrades({ damage: 1.05, rate: 1.04, costFactor: 0.6 }),
+  },
+  'dual-gatling': {
+    id: 'dual-gatling',
+    name: 'Dual-Gatling Tower',
+    defaultTargeting: 'first',
+    modelUrl: TURRET_MODEL_URL,
+    scale: 2.5,
+    previewScale: 5.5,
+    heightOffset: 2.4,
+    shootHeight: 2.1,
+    footprintRadius: 3.1,
+    rotationY: -1.5708, // -90° visual alignment (barrels face North in idle)
+    turnsTurret: true,
+    modelTop: 4.72,
+    turretBarrelOffset: -1.5708, // Barrels point -X in model space (-90° from +Z)
+    firePoints: [
+      { x: -0.9, z: 0 }, // Left barrel cluster
+      { x: 0.9, z: 0 },  // Right barrel cluster
+    ],
+    // gatling_tilt.glb (tools/blender/gatling_tilt.py): the guns tilt on
+    // their saddles. Past +40° the ammo box cuts into the saddle, past -25°
+    // the barrels touch the plate.
+    pitchNodes: ['gun_left', 'gun_right'],
+    pitchRange: { min: -0.436, max: 0.698 },
+    damageType: 'pierce',
+    damage: 10,
+    range: 50,
+    fireRate: 5.0, // 5 shots/sec - rapid fire
+    projectileType: 'bullet',
+    cost: 90,
+    // Identität ist die Feuerrate, sie bestimmt den Kill-Durchsatz gegen Schwärme.
+    upgrades: combatUpgrades({ damage: 1.04, rate: 1.06 }),
+  },
+  cannon: {
+    id: 'cannon',
+    name: 'Cannon Tower',
+    defaultTargeting: 'first',
+    modelUrl: CANNON_MODEL_URL,
+    scale: 3,
+    previewScale: 5.5,
+    heightOffset: 2.3,
+    shootHeight: 1.95,
+    footprintRadius: 3.4,
+    rotationY: 3.1416, // 180°
+    turnsTurret: true,
+    modelTop: 4.67,
+    damageType: 'siege',
+    damage: 55,
+    range: 70, // Balance 2026-09: war 80, zweithöchste Basisreichweite
+    fireRate: 0.5, // 0.5 shots/sec (slower)
+    projectileType: 'cannonball',
+    cost: 150, // Phase 5.16: heavy specialist (cannon vs fortified) — small premium
+    // Schwere Einzelschüsse. Die niedrige Rate hält den Splash-Durchsatz klein.
+    // Upgrades 15 % teurer (TODO E13, 2026-09-26): 52,8 % des Schadens für 25,3 % des Golds.
+    upgrades: combatUpgrades({ damage: 1.07, rate: 1.02, costFactor: 1.15 }),
+  },
+  magic: {
+    id: 'magic',
+    name: 'Magic Tower',
+    defaultTargeting: 'first',
+    modelUrl: MAGIC_MODEL_URL,
+    scale: 11,
+    previewScale: 14,
+    heightOffset: 0,
+    shootHeight: 8.85,
+    footprintRadius: 3.5,
+    rotationY: 3.1416, // 180°
+    turnsTurret: true,
+    modelTop: 9.91,
+    damageType: 'magic',
+    damage: 40,
+    range: 70,
+    fireRate: 1.5, // 1.5 shots/sec
+    projectileType: 'arcane-orb',
+    cost: 140, // Phase 5.16: ethereal specialist — strong vs ghost/wraith, small premium
+    upgrades: combatUpgrades({ damage: 1.05, rate: 1.05 }), // ausgewogen
+  },
+  rocket: {
+    id: 'rocket',
+    name: 'Rocket Tower',
+    defaultTargeting: 'first',
+    modelUrl: ROCKET_MODEL_URL,
+    scale: 3.4,
+    previewScale: 5.5,
+    heightOffset: 2.6,
+    shootHeight: 1.7,
+    footprintRadius: 3.6,
+    rotationY: 3.1416, // 180°
+    turnsTurret: true,
+    modelTop: 5.17,
+    damageType: 'siege',
+    damage: 60, // 40 until 2026-10-02 (E15)
+    range: 100,
+    fireRate: 0.5,
+    projectileType: 'rocket',
+    cost: 120, // Phase 5.16: air specialist — large range premium
+    canTargetAir: true, // Can only target air units
+    canTargetGround: false, // Cannot target ground units
+    // Anti-Drachen-Rolle: wenige schwere Treffer. Sie steht in jeder Bodenwelle
+    // still, deshalb Upgrades zu 0,75 und 60 statt 40 Schaden (2026-10-02, E15:
+    // 2,8 Schaden je Gold im menschlichen Lauf bis W60, Archer 3,6, Fire 17).
+    upgrades: combatUpgrades({ damage: 1.07, rate: 1.03, costFactor: 0.75 }),
+  },
+  ice: {
+    id: 'ice',
+    name: 'Ice Tower',
+    defaultTargeting: 'first',
+    modelUrl: ICE_MODEL_URL,
+    scale: 11.4,
+    previewScale: 32,
+    heightOffset: 0.1,
+    shootHeight: 3.4,
+    footprintRadius: 2.4,
+    rotationY: 3.1416, // 180°
+    turnsTurret: true,
+    turretRestY: -1.1244, // The turret part as the model file turns it
+    modelTop: 4.98,
+    turretBarrelOffset: 1.047, // Barrels point ~60° from +Z in model space
+    damageType: 'ice',
+    damage: 5, // Phase 5.16: small damage so Ice isn't pure utility
+    range: 60,
+    fireRate: 0.33, // 1 shot every 3s (matches slow duration, no stacking)
+    projectileType: 'ice-shard',
+    cost: 90, // Rebalanced: was 120 (utility cheaper)
+    canTargetAir: true,
+    canTargetGround: true,
+    // Nutzen ist die Verlangsamung, die Rate bestimmt die Abdeckung.
+    upgrades: combatUpgrades({ damage: 1.04, rate: 1.05 }),
+  },
+  fire: {
+    id: 'fire',
+    name: 'Fire Tower',
+    defaultTargeting: 'first',
+    modelUrl: FIRE_MODEL_URL,
+    scale: 8,
+    previewScale: 9.8,
+    heightOffset: 3.8,
+    shootHeight: 1.25,
+    footprintRadius: 5.3,
+    rotationY: 3.0892, // ~177°
+    turnsTurret: true,
+    turretRestY: -0.4897, // The turret part as the model file turns it
+    modelTop: 7.55,
+    turretBarrelOffset: 0.436, // ~25° correction for barrel orientation in model space
+
+    // Beam attack - continuous flame damage
+    attackType: 'beam',
+    damageType: 'fire',
+    damage: 0, // Not used for beam towers
+    damagePerSecond: 30, // to all enemies in cone; 35 until 2026-10-02, the most damage per gold in the W60 run
+    // Erfassung = Flammenlänge. Früher 25 m Erfassung bei 20 m Flamme: der
+    // Tower zielte (mit 'first' bevorzugt) auf Gegner, die er nicht traf.
+    range: 20,
+    beamWidth: 5, // Stream width
+    fireRate: 0, // Not used for beam towers
+    projectileType: 'arrow', // Fallback, not used (beam)
+
+    cost: 110,
+    canTargetAir: false, // Ground only - flames don't reach flyers
+    canTargetGround: true,
+    // Fire uses damage + range (flame length) + beam-width — no fireRate (beam-based).
+    // Der Kegel trifft viele Ziele, die Breite war der versteckte Multiplikator
+    // (vorher ×1,05 über 25 Stufen: 5 m auf 16,9 m).
+    upgrades: [
+      degressiveUpgrade('damage', 'Damage', 'damage', 1.06),
+      RANGE_UPGRADE,
+      BEAM_WIDTH_UPGRADE,
+    ],
+  },
+  tentacle: {
+    id: 'tentacle',
+    name: 'Tentacle Tower',
+    defaultTargeting: 'closest',
+    modelUrl: 'assets/models/towers/tentacle.glb',
+    scale: 9.8,
+    previewScale: 12,
+    heightOffset: 2,
+    shootHeight: -2,
+    footprintRadius: 4.0,
+    rotationY: 0,
+    turnsTurret: false,
+    modelTop: 4.53,
+
+    // Melee attack — direct hit, no projectile
+    attackType: 'melee',
+    damageType: 'physical',
+    damage: 45, // 30 until 2026-10-02, plus the slam (meleeSlam)
+    range: 25, // Short range like Fire Tower
+    fireRate: 1.5, // 1.5 hits/sec
+    projectileType: 'arrow', // Fallback, not used
+
+    cost: 80,
+    // A strike hits what stands around its target too, the tower's role at a
+    // choke point (2026-10-02): single strikes at 25 m dealt 0.2 % of the
+    // damage of a human run to W60 for 0.9 damage per gold.
+    meleeSlam: { radius: 5, maxTargets: 4, share: 0.5 },
+    upgrades: combatUpgrades({ damage: 1.07, rate: 1.03 }), // Nahkampf, wenige harte Schläge
+  },
+  poison: {
+    id: 'poison',
+    name: 'Poison Tower',
+    defaultTargeting: 'first',
+    modelUrl: POISON_MODEL_URL,
+    scale: 7.6,
+    previewScale: 12,
+    heightOffset: 2.8,
+    shootHeight: 1.4,
+    footprintRadius: 4.0,
+    rotationY: 3.1416, // 180°
+    turnsTurret: true,
+    modelTop: 6.05,
+    damageType: 'poison',
+    damage: 5,
+    range: 55,
+    fireRate: 1, // 1 shot/sec
+    projectileType: 'poison-glob',
+    cost: 100,
+    canTargetAir: false,
+    // Der DoT skaliert mit dem Damage-Track und stapelt nicht.
+    upgrades: combatUpgrades({ damage: 1.05, rate: 1.04 }),
+  },
+  lightning: {
+    id: 'lightning',
+    name: 'Lightning Tower',
+    defaultTargeting: 'first',
+    modelUrl: LIGHTNING_MODEL_URL,
+    scale: 11,
+    previewScale: 14,
+    heightOffset: 0,
+    shootHeight: 9.65,
+    footprintRadius: 3.7,
+    rotationY: 0,
+    turnsTurret: false,
+    modelTop: 10.96,
+
+    // Chain hitscan — primary + N jumps, damage falloff per hop
+    attackType: 'chain',
+    damageType: 'lightning',
+    damage: 32,        // Primary-hit damage (jumps scaled by chainFalloff)
+    range: 65,         // Primary target acquisition range
+    fireRate: 0.8,     // 0.8 shots/sec
+    projectileType: 'arrow', // Fallback, unused for chain attackType
+
+    maxJumps: 2,       // Primary + 2 = 3 total hits
+    chainFalloff: 0.7, // 100% → 70% → 49%
+    jumpRange: 15,     // Max meters between chain links
+
+    cost: 130,
+    canTargetAir: true,
+    canTargetGround: true,
+    // Die Kette vervielfacht ohnehin (×2,19), daher kein Schwerpunkt.
+    upgrades: combatUpgrades({ damage: 1.05, rate: 1.04 }),
+  },
+  chaos: {
+    id: 'chaos',
+    name: 'Chaos Tower',
+    defaultTargeting: 'first',
+    // Kenney "tower-round-crystals" (CC0): runder Sockel, fünf Kristalle als
+    // eigene Nodes, 1 Einheit breit, Spitze des mittleren Kristalls bei 0,82.
+    // Ein turret_top gibt es nicht, der mittlere Kristall dreht sich zum Ziel.
+    modelUrl: CHAOS_MODEL_URL,
+    turretNode: 'crystal',
+    scale: 7.5, // 7,5 m breit, 6,1 m hoch: im Rahmen der mittelgroßen Tower
+    previewScale: 11,
+    heightOffset: 0, // Der Sockel sitzt bei y = 0
+    shootHeight: 5.8, // Knapp unter der Kristallspitze (6,1 m), dort startet der Orb
+    footprintRadius: 4.4, // Ecken des quadratischen Sockels
+    rotationY: 0,
+    turnsTurret: true,
+    modelTop: 6.13,
+    damageType: 'chaos',
+    damage: 50,
+    range: 60,
+    fireRate: 1.2,
+    projectileType: 'chaos-orb',
+    // Teurer Generalist: 60 DPS wie Magic, aber 1,0 gegen jede Rüstung und
+    // Luft wie Boden. 0,30 DPS pro Gold, der beste Tower je Rüstung liegt bei
+    // 0,56 bis 0,89: in keiner Spalte die effizienteste Wahl, in keiner eine Lücke.
+    cost: 200,
+    canTargetAir: true,
+    canTargetGround: true,
+    // Wächst eher über Schaden, L25 ×5,35 wie Archer und Lightning: der
+    // Generalist soll die Spezialisten auch im Endausbau nicht überholen.
+    upgrades: combatUpgrades({ damage: 1.05, rate: 1.04 }),
+  },
+  'research-center': {
+    id: 'research-center',
+    name: 'Research Center',
+    modelUrl: 'assets/models/buildings/research_building.glb',
+    scale: 17.9,
+    previewScale: 10,
+    heightOffset: 5.1,
+    shootHeight: 4.65,
+    footprintRadius: 10.0,
+    rotationY: -3.1416,
+    turnsTurret: false,
+    modelTop: 10.29,
+
+    attackType: 'passive',
+    damageType: 'physical', // Unused — passive building
+    damage: 0,
+    range: 0,
+    fireRate: 0,
+    projectileType: 'arrow', // Fallback, unused
+
+    cost: 75,
+    unique: true,
+    minWave: 2,
+    description: 'Unlocks new towers and upgrade tiers.',
+    upgrades: [
+      {
+        id: 'research-slots' as UpgradeId,
+        name: 'Research Wing',
+        description: 'Adds an additional research slot',
+        cost: 120,
+        costScaling: 1.8,
+        maxLevel: 2, // Level 1→2 slots, Level 2→3 slots
+        effect: {
+          stat: 'research-slots',
+          multiplier: 1,
+        },
+      },
+    ],
+  },
+  'missile-silo': {
+    id: 'missile-silo',
+    name: 'Missile Silo',
+    // Nodes `silo` and `missile`; the missile of the nuclear strike leaves
+    // from the middle of the building (ABILITIES.md), its nozzle 2.30 m and
+    // its tip 8.89 m above the base. The model is 1.903 units wide and 1.411
+    // high with y = 0 its lowest point, its widest vertex 1.311 from the
+    // origin: at scale 7.36 a building 14 m wide and 10.4 m high, its
+    // footprint 9.65 m. The entrance faces glTF +Z, the doors fold to ±X.
+    modelUrl: 'assets/models/buildings/missile_silo.glb',
+    scale: 7.36,
+    previewScale: 5, // The preview fits the bounding box
+    heightOffset: 0,
+    shootHeight: 8, // Unused by a passive building but for the text over it (U)
+    footprintRadius: 9.7,
+    rotationY: 0,
+    turnsTurret: false,
+    modelTop: 10.38,
+
+    attackType: 'passive',
+    damageType: 'physical', // Unused, passive building
+    damage: 0,
+    range: 0,
+    fireRate: 0,
+    projectileType: 'arrow', // Fallback, unused
+
+    // Unlocked by the research `nuclear-strike`; the strike fires only while
+    // it stands (AbilityConfig.launchFrom)
+    cost: 400,
+    unique: true,
+    description: 'Launches the Nuclear Strike. Without a silo the strike cannot fire.',
+    upgrades: [],
+  },
+};
+
+export interface TargetingStrategyConfig {
+  id: TargetingStrategy;
+  label: string;
+  icon: string;
+  tooltip: string;
+}
+
+export interface AirSubStrategyConfig {
+  id: AirSubStrategy;
+  label: string;
+  icon: string;
+  tooltip: string;
+}
+
+export const TARGETING_STRATEGIES: TargetingStrategyConfig[] = [
+  { id: 'closest', label: 'Closest', icon: 'target', tooltip: 'Attacks the nearest enemy' },
+  { id: 'lowest-hp', label: 'Weakest', icon: 'heart', tooltip: 'Attacks the weakest enemy' },
+  { id: 'highest-hp', label: 'Strongest', icon: 'shield', tooltip: 'Attacks the strongest enemy' },
+  { id: 'first', label: 'First', icon: 'flag', tooltip: 'Attacks the enemy closest to the base' },
+  { id: 'last', label: 'Last', icon: 'walk', tooltip: 'Attacks the enemy furthest from the base' },
+  { id: 'air-priority', label: 'Air', icon: 'arrowUp', tooltip: 'Prioritizes flying enemies' },
+];
+
+export const AIR_SUB_STRATEGIES: AirSubStrategyConfig[] = [
+  { id: 'closest', label: 'Closest', icon: 'target', tooltip: 'Targets the nearest air enemy' },
+  { id: 'lowest-hp', label: 'Weakest', icon: 'heart', tooltip: 'Targets the weakest air enemy' },
+  { id: 'highest-hp', label: 'Strongest', icon: 'shield', tooltip: 'Targets the strongest air enemy' },
+];
+
+/** Game ms a tower stands in its scaffold before it fires, unless its type says otherwise (TowerTypeConfig.buildTimeMs) */
+export const DEFAULT_BUILD_TIME_MS = 5000;
+
+/**
+ * Game ms `config` takes to build. A passive building stands at once: what it does (research slots, the
+ * silo's strike) does not wait for a build.
+ */
+export function buildTimeOf(config: TowerTypeConfig): number {
+  return config.buildTimeMs ?? (config.attackType === 'passive' ? 0 : DEFAULT_BUILD_TIME_MS);
+}
+
+/** The wave `config` waits for at `wave` (researchWave), null when it may be built */
+export function towerWaitsForWave(config: Pick<TowerTypeConfig, 'minWave'>, wave: number): number | null {
+  return config.minWave !== undefined && wave < config.minWave ? config.minWave : null;
+}
+
+export function getTowerType(id: TowerTypeId): TowerTypeConfig {
+  return TOWER_TYPES[id];
+}
+
+export function getAllTowerTypes(): TowerTypeConfig[] {
+  return Object.values(TOWER_TYPES);
+}

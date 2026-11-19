@@ -1,0 +1,212 @@
+// Impact physics (owner 2026-09-25) — parity and determinism: the solo step (game/state.ts) and the network
+// authority (sim/authoritativeMatch.ts) price crashes, falls and rams through the same sim/impact.ts functions
+// with the same attribution, the mode controller stamps the ruleset block on every entity, and the authority
+// replays a crash-heavy battle bit-for-bit from the same seed. Then the authority actually crashes: a hull driven
+// into a wall loses hit points with a `tank_impact` event, a hull dropped from height takes a `fall`, and a wreck
+// takes nothing. Run: node src/sim/impactParity.selftest.mjs
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Group, Vector3 } from 'three';
+import { createAuthoritativeMatch } from './authoritativeMatch.ts';
+import { createTankState, resetTankVerticalState } from './movement.ts';
+import { matchRulesetFor } from './matchRuleset.ts';
+import { hardImpactDamage, fallDamage } from './impact.ts';
+import { createCombatState } from './damage.ts';
+import { getSpec } from '../vehicles/specs.ts';
+import { createBus, createGameState, simStep } from '../game/state.ts';
+
+const solo = readFileSync(new URL('../game/state.ts', import.meta.url), 'utf8');
+const authority = readFileSync(new URL('./authoritativeMatch.ts', import.meta.url), 'utf8');
+const modes = readFileSync(new URL('./matchModes.ts', import.meta.url), 'utf8');
+const pairContact = readFileSync(new URL('./tankPairContact.ts', import.meta.url), 'utf8');
+
+// ---- structural parity ------------------------------------------------------------------------------------------
+// (2026-11-02 audit M6: the ram's pricing — the split, the struck faces, the teammate gate, the lethal ram's modules — is
+// one sim/impact.ts function both drivers call, resolveRamPairDamage, no longer a copy in each; 268: the closing speed's
+// hullVelocityAlong is read in the one hull-pair contact, sim/tankPairContact.ts, below)
+for (const name of ['exchangeRamMomentum', 'fallAttitudeFactor', 'resolveHullImpact', 'resolveRamPairDamage']) {
+  assert.match(solo, new RegExp(`import \\{[^}]*\\b${name}\\b[^}]*\\} from '../sim/impact.ts'`), `the solo step imports ${name} from sim/impact.ts`);
+  assert.match(authority, new RegExp(`import \\{[^}]*\\b${name}\\b[^}]*\\} from './impact.ts'`), `the authority imports ${name} from sim/impact.ts`);
+}
+for (const text of [solo, authority]) {
+  assert.match(text, /IMPACT_CRASH_WINDOW_S = 0\.3;/, 'the crash window is 0.3 s in both sims');
+  assert.match(text, /IMPACT_TICK_MIN_MPS = 0\.5;/, 'a contact tick under 0.5 m/s is a press, not a blow, in both sims');
+  assert.match(text, /LANDING_EVENT_MIN_MPS = 3;/, 'landings over 3 m/s are events in both sims');
+  assert.match(text, /const faceForward = -\(state\.impactNx \* fx \+ state\.impactNz \* fz\);/, 'the struck face is opposite the push in both sims');
+  assert.match(text, /const sideSign = Math\.sign\(-\(state\.impactNx \* fz - state\.impactNz \* fx\)\);/, 'the struck side reads the same in both sims');
+  assert.match(text, /state\.impactSource === IMPACT_SOURCE_CLIFF \|\|\s*\(state\.impactSource === IMPACT_SOURCE_COLLIDER && (collider\.)?hardContact\)/, 'a crash needs a hard surface in both sims');
+  assert.match(text, /const closing = prior \+ impact;/, 'the crash accumulates its closing speed in both sims');
+  assert.match(text, /priorClosingMps: prior/, 'and prices only the new energy in both sims');
+  assert.match(text, /kind: 'fall',\s*closingMps: landing, priorClosingMps: 0, faceForward: 0, sideSign: 0, attitudeFactor, rng/, 'a landing is priced on the vertical closing speed and the attitude in both sims');
+  assert.match(text, /resolveRamPairDamage\((game\.)?ruleset\.physics, contact\)/, 'a ram is priced by the one shared rule');
+  assert.match(text, /if \(!contact\.vertical\) \{/, 'roof landings skip the horizontal exchange in both sims');
+  assert.match(text, /vAn: -closing, vBn: 0, vertical: true/, 'a roof landing queues the upper hull as the aggressor in both sims');
+}
+// (268) the hull-pair contact and the ram each push records are one function for both sims (sim/tankPairContact.ts)
+assert.match(solo, /import \{ pushFromHulls \} from '\.\.\/sim\/tankPairContact\.ts'/, 'the solo step pushes hulls apart through sim/tankPairContact.ts');
+assert.match(authority, /import \{ pushFromHulls \} from '\.\/tankPairContact\.ts'/, 'the authority pushes hulls apart through sim/tankPairContact.ts');
+assert.match(pairContact, /import \{ hullVelocityAlong \} from '\.\/impact\.ts'/, 'the hull-pair contact reads hullVelocityAlong from sim/impact.ts');
+assert.match(pairContact, /const vAn = hullVelocityAlong\(entity\.state, nx, nz\);\s*const vBn = hullVelocityAlong\(other\.state, nx, nz\);\s*const closing = vBn - vAn;/,
+  'the closing speed is the difference of the normal velocities');
+assert.match(solo, /exchangeRamMomentum\(contact\.a\.state, contact\.b\.state, contact\.nx, contact\.nz,\s*contact\.a\.spec\.weightTons, contact\.b\.spec\.weightTons, contact\.vAn, contact\.vBn, game\.ruleset\.physics\.ramRestitution\)/,
+  'the solo step exchanges momentum with the ruleset restitution');
+assert.match(authority, /exchangeRamMomentum\(contact\.a\.state, contact\.b\.state, contact\.nx, contact\.nz,\s*contact\.a\.spec\.weightTons, contact\.b\.spec\.weightTons, contact\.vAn, contact\.vBn, ruleset\.physics\.ramRestitution\)/,
+  'the authority exchanges momentum with the ruleset restitution');
+{
+  const impact = readFileSync(new URL('./impact.ts', import.meta.url), 'utf8');
+  assert.match(impact, /ramAggression\(contact\.closing, -contact\.vAn\), ramAggression\(contact\.closing, contact\.vBn\)/, 'the ram aggression split is shared');
+  assert.match(impact, /contact\.vertical \? 0 : -\(contact\.nx \* afx \+ contact\.nz \* afz\)/, 'the rammer\'s struck face is shared');
+}
+assert.match(modes, /entity\.modePhysics = ruleset\.physics;/, 'the mode controller stamps the physics block on every entity');
+assert.match(authority, /emit\('tank_destroyed', \{ id: entity\.id, killerId: entity\.id, cause: kind \}\)/, 'a self-inflicted destruction names its cause and its own hull as the killer on the wire');
+
+// ---- the solo step, run for real: a fatal crash or fall is self-inflicted, as a burn-out is ------------------------
+// A one-hull solo roster at 1 hp (a stub collider, a flat field or a terrain wall): driven into the wall it dies of an
+// `impact`, dropped 12 m it dies of a `fall`, and either way the bus names its own hull as the killer exactly once.
+function soloSelfDestruction(heightAt, throttle, prepare) {
+  const up = new Vector3(0, 1, 0);
+  const world = { heightField: { getHeightAt: heightAt, getGroundType: () => 'hard', getNormalAt: () => up }, raycast: () => null };
+  const spec = getSpec('m1a1_abrams_hc'), combat = createCombatState(spec), game = createGameState();
+  const entity = { id: 'solo-hull', specId: spec.id, spec, isPlayer: false, team: 'player', combat,
+    state: createTankState(spec, new Vector3(0, 0, -90), 0),
+    input: { throttle, steer: 0, brake: throttle === 0, fire: false, shellSlot: 0, aimYaw: 0, aimPitch: 0, aimDistance: 300, actionBits: 0 },
+    visual: { root: new Group(), gunMuzzleWorld: (out) => out.set(0, 5, 10), gunDirWorld: (out) => out.set(0, 0, 1),
+      recoilKick() {}, setDestroyed() {} } };
+  combat.equipMults = {};
+  game.tanks = [entity]; game.allTanks = [entity]; game.tankById.set(entity.id, entity);
+  const destroyed = [];
+  const bus = createBus((name, payload) => { if (name === 'tank:destroyed') destroyed.push(payload); });
+  const collider = { setSelf() {}, collide: () => false, pendingCrush: [], pendingRams: [], queueRam() {} };
+  simStep(game, bus, world, null, collider);
+  prepare(entity);
+  for (let i = 0; i < 900 && !destroyed.length; i++) simStep(game, bus, world, null, collider);
+  for (let i = 0; i < 30; i++) simStep(game, bus, world, null, collider);
+  return destroyed.map(({ id, killerId, cause }) => ({ id, killerId, cause }));
+}
+for (const [cause, heightAt, throttle, prepare] of [
+  ['impact', (_x, z) => (z > 30 ? 40 : 0), 1, (entity) => { entity.combat.hp = 1; }],
+  ['fall', () => 0, 0, (entity) => { entity.combat.hp = 1; resetTankVerticalState(entity.state, entity.state.pos.y + 12, 0, false); }],
+]) {
+  assert.deepEqual(soloSelfDestruction(heightAt, throttle, prepare), [{ id: 'solo-hull', killerId: 'solo-hull', cause }],
+    'a self-inflicted destruction names its cause (impact / fall) and its own hull as the killer in solo, as a burn-out does');
+}
+
+// ---- the authority crashes into a wall: hit points, event, modules ---------------------------------------------
+const wall = { min: [-12, 0, -36], max: [12, 6, -34], shape2: { kind: 'obb', cx: 0, cz: -35, hw: 12, hl: 1, yaw: 0 } };
+const wallWorld = {
+  mapId: 'verdant',
+  getObstacles: () => [wall],
+  queryObstacles: (_minX, _minZ, _maxX, _maxZ, out) => { out.length = 0; out.push(wall); return out; },
+};
+function wallMatch(seed = 7) {
+  const match = createAuthoritativeMatch({
+    mapId: 'verdant', seed, countdownS: 0, worldCollision: wallWorld,
+    players: [
+      { id: 'wall-a', specId: 'm1a1_abrams_hc', team: 'alpha', spawn: { x: 0, z: -140, yaw: 0 } },
+      { id: 'wall-b', specId: 'm1a1_abrams_hc', team: 'bravo', spawn: { x: 60, z: 120, yaw: Math.PI } },
+    ],
+  });
+  match.onMatchReady();
+  return match;
+}
+const drive = new Map([['wall-a', { throttle: 1, steer: 0, brake: false, fire: false, aimYaw: 0, aimPitch: 0, shellSlot: 0 }]]);
+/** The authority's event buffer outlives one snapshot: collect each impact event once, by identity. */
+function impactEvents(match, tick, viewerId, seen, out, id = null) {
+  for (const event of match.snapshot({ tick, serverTimeMs: tick * 16, viewerId, ackInputSeq: 1 }).events) {
+    if (event.type !== 'tank_impact' || seen.has(event) || (id && event.id !== id)) continue;
+    seen.add(event);
+    out.push(event);
+  }
+}
+{
+  const match = wallMatch();
+  const hull = match.entityById.get('wall-a');
+  const hpBefore = hull.combat.hp;
+  const events = [];
+  const seen = new Set();
+  for (let i = 0; i < 900; i++) {
+    match.step({ dt: 1 / 60, inputs: drive });
+    impactEvents(match, i, 'wall-a', seen, events, 'wall-a');
+  }
+  assert.ok(hull.state.pos.z < -35 - 3, 'the wall stops the hull on the near side');
+  const crash = events.find((event) => event.cause === 'impact' && event.damage > 0);
+  assert.ok(crash, `a 100 m run into a wall is an impact event (${events.length} impact events seen)`);
+  assert.equal(crash.id, 'wall-a');
+  // 2026-10-06: the speed is the completed crash's (the contact accumulates its closing speed across the split ticks,
+  // as the pricing below reads it). The first tick's share depends on how far the hull enters the wall in one step:
+  // 11.0 of 19.1 m/s on the PR head, 9.0 of 18.7 on main, 6.9 of 19.1 in this integration.
+  const completed = events.filter((event) => event.cause === 'impact' && event.damage > 0).at(-1);
+  assert.ok(completed.closingMps > 8 && crash.closingMps > 0,
+    `at speed (${completed.closingMps.toFixed(1)} m/s, the first tick ${crash.closingMps.toFixed(1)} m/s)`);
+  const expected = hardImpactDamage(matchRulesetFor('standard').physics, hull.spec.weightTons, crash.closingMps, 1);
+  assert.ok(Math.abs(crash.damage - expected) < 1, `priced by the frontal law (${crash.damage.toFixed(1)} vs ${expected.toFixed(1)} hp)`);
+  assert.ok(hpBefore - hull.combat.hp >= crash.damage - 1e-6, 'and the hull lost it');
+  assert.ok(crash.modulesHit.some((hit) => hit.module === 'trackL') && crash.modulesHit.some((hit) => hit.module === 'trackR'),
+    'a head-on crash loads both tracks');
+  assert.ok(crash.modulesHit.some((hit) => hit.module === 'engine'), 'and the engine');
+  const totalDamage = events.reduce((sum, event) => sum + event.damage, 0);
+  // A fractional first penetration can absorb only part of the approach speed.
+  // Price the completed crash, not its first tick; both simulations deliberately
+  // accumulate the remaining closing speed and charge only the new energy.
+  const damaging = events.filter((event) => event.damage > 0);
+  const last = damaging.at(-1);
+  const completedCost = hardImpactDamage(matchRulesetFor('standard').physics,
+    hull.spec.weightTons, last.closingMps, 1);
+  assert.ok(Math.abs(totalDamage - completedCost) < 1,
+    `split contact charges the completed crash once (${totalDamage.toFixed(1)} vs ${completedCost.toFixed(1)} hp)`);
+  assert.ok(damaging.every((event) => event.cause === 'impact'
+    && event.timeS - crash.timeS < 0.3), 'no additional damage while holding the wall after the crash window');
+  assert.ok(Math.abs(hull.state.speed) < 0.01, 'sustained throttle cannot drive through the wall');
+}
+
+// ---- the authority replays the crash bit-for-bit from the same seed ------------------------------------------------
+{
+  const digest = (match) => match.entities.map((entity) => [
+    entity.id, entity.state.pos.x.toFixed(9), entity.state.pos.y.toFixed(9), entity.state.pos.z.toFixed(9),
+    entity.state.speed.toFixed(9), entity.state.yaw.toFixed(9), entity.combat.hp,
+    Object.entries(entity.combat.modules).map(([name, module]) => `${name}:${module.hp}`).join(','),
+  ].join('|')).join('\n');
+  const a = wallMatch(11), b = wallMatch(11);
+  for (let i = 0; i < 600; i++) {
+    a.step({ dt: 1 / 60, inputs: drive });
+    b.step({ dt: 1 / 60, inputs: drive });
+  }
+  assert.equal(digest(a), digest(b), 'the same seed and inputs replay 600 crash-heavy steps to identical states');
+  assert.ok(a.entityById.get('wall-a').combat.hp < a.entityById.get('wall-a').combat.maxHp, 'and the crash happened in both');
+}
+
+// ---- a fall: a hull lifted 12 m lands with a `fall` event; a wreck lands free ------------------------------------
+{
+  const match = wallMatch(5);
+  const hull = match.entityById.get('wall-b');
+  match.step({ dt: 1 / 60, inputs: new Map() });
+  const hpBefore = hull.combat.hp;
+  resetTankVerticalState(hull.state, hull.state.pos.y + 12, 0, false);
+  const falls = [];
+  const seen = new Set();
+  for (let i = 0; i < 240; i++) {
+    match.step({ dt: 1 / 60, inputs: new Map() });
+    impactEvents(match, i, 'wall-b', seen, falls, 'wall-b');
+  }
+  const fall = falls.find((event) => event.cause === 'fall' && event.damage > 0);
+  assert.ok(fall, 'a 12 m drop lands with a fall event');
+  assert.ok(fall.closingMps > 13 && fall.closingMps < 16, `at the drop's closing speed (${fall.closingMps.toFixed(1)} m/s)`);
+  const floor = fallDamage(matchRulesetFor('standard').physics, hull.spec.weightTons, fall.closingMps, 1);
+  assert.ok(fall.damage >= floor - 1e-6, `priced at least by the flat-landing law (${fall.damage.toFixed(1)} vs ${floor.toFixed(1)} hp)`);
+  assert.ok(hull.combat.hp <= hpBefore - fall.damage + 1e-6, 'the hull lost it');
+  assert.ok(hull.state.grounded, 'and is on the ground again');
+
+  const wreck = match.entityById.get('wall-a');
+  wreck.combat.hp = 0;
+  wreck.combat.destroyed = true;
+  resetTankVerticalState(wreck.state, wreck.state.pos.y + 12, 0, false);
+  const wreckEvents = [];
+  for (let i = 0; i < 240; i++) {
+    match.step({ dt: 1 / 60, inputs: new Map() });
+    impactEvents(match, 300 + i, 'wall-b', seen, wreckEvents, 'wall-a');
+  }
+  assert.ok(wreckEvents.every((event) => event.damage === 0), 'a wreck lands without damage (it only keeps its momentum)');
+  assert.ok(wreck.state.grounded, 'and lands');
+}
+
+console.log('impactParity.selftest: shared impact functions and attribution in both sims (solo self-destruction run for real), the mode stamp, an authoritative wall crash and a fall priced by the law, a wreck landing free, and a bit-for-bit 600-step replay pass');

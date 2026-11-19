@@ -1,0 +1,933 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Injector, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
+import {
+  Box3,
+  BoxGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhongMaterial,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+  Quaternion,
+  ShaderMaterial,
+  Texture,
+  Vector3,
+} from 'three';
+import { MarkerVisualizationService } from './marker-visualization.service';
+import { MainWorldService } from './main-world.service';
+import { AssetManagerService } from '../infrastructure/asset-manager.service';
+import { UIStore } from '../../store/ui.store';
+import { createMainEventBus } from '../../sim/client/view-events';
+import { SPAWN_PORTAL_LOOK } from '../../configs/visual-effects.config';
+import type { ThreeTilesEngine } from '../../three-engine';
+import {
+  MARKER_FLOAT_HEIGHT,
+  MARKER_LABEL_OFFSET,
+  PORTAL_OPENING_HEIGHT,
+  PORTAL_OPENING_WIDTH,
+  PORTAL_DEPTH,
+  portalDepthScale,
+  portalLabelHeight,
+} from '../../configs/marker-geometry.config';
+import { HQ_GROUND_LIFT } from '../../three-engine/renderers/marker/hq-marker-geometry';
+import { portalLaneOffset, portalTurnRange } from '../../three-engine/renderers/marker/spawn-portal-pose';
+import { MovementComponent } from '../../game-components/movement.component';
+import { TransformComponent } from '../../game-components/transform.component';
+import { GameObject } from '../../core/game-object';
+import { ComponentType } from '../../core/component';
+import type { RouteWaypoint } from '../../models/game.types';
+import { DEG_TO_RAD, METERS_PER_DEGREE_LAT } from '../../utils/geo-utils';
+
+/** An enemy's body for the movement component: a game object with a transform. */
+class TestBody extends GameObject {
+  constructor() {
+    super('enemy');
+    this.addComponent(new TransformComponent(this), ComponentType.TRANSFORM);
+  }
+}
+
+// MarkerLabelManager renders text into a 2D canvas, which jsdom does not have.
+// The fake keeps what the service tells it so the tests can read the labels.
+const labelFake = vi.hoisted(() => {
+  interface Label {
+    text: string;
+    color: string;
+    phase: number;
+    position: { x: number; y: number; z: number };
+  }
+  const instances: FakeLabelManager[] = [];
+  class FakeLabelManager {
+    readonly labels = new Map<string, Label>();
+    frames = 0;
+    disposed = false;
+    constructor(readonly overlay: unknown) {
+      instances.push(this);
+    }
+    addLabel(id: string, text: string, p: { x: number; y: number; z: number }, color: string, phase: number): void {
+      this.labels.set(id, { text, color, phase, position: { x: p.x, y: p.y, z: p.z } });
+    }
+    removeLabel(id: string): void {
+      this.labels.delete(id);
+    }
+    updatePosition(id: string, p: { x: number; y: number; z: number }): void {
+      const label = this.labels.get(id);
+      if (label) label.position = { x: p.x, y: p.y, z: p.z };
+    }
+    update(): void {
+      this.frames++;
+    }
+    clear(): void {
+      this.labels.clear();
+    }
+    dispose(): void {
+      this.clear();
+      this.disposed = true;
+    }
+  }
+  return { instances, FakeLabelManager };
+});
+
+vi.mock('../../three-engine/renderers/marker/marker-label.manager', () => ({
+  MarkerLabelManager: labelFake.FakeLabelManager,
+}));
+
+const BASE = { lat: 48.9, lon: 9.2 };
+
+/** 0.001 degree = 100 m, +X west, +Z north. */
+function geoToLocal(lat: number, lon: number, height: number) {
+  return { x: (BASE.lon - lon) * 1e5, y: height, z: (lat - BASE.lat) * 1e5 };
+}
+
+/** Inverse of geoToLocal. */
+function localToGeo(v: { x: number; y: number; z: number }) {
+  return { lat: BASE.lat + v.z / 1e5, lon: BASE.lon - v.x / 1e5, height: v.y };
+}
+
+function fakeEngine() {
+  const overlay = new Group();
+  /** Terrain height per "lat,lon"; `fallback` for every other column. */
+  const terrain = { fallback: 100 as number | null, at: new Map<string, number | null>() };
+  const engine = {
+    getOverlayGroup: vi.fn(() => overlay),
+    getTerrainHeightAtGeo: vi.fn((lat: number, lon: number) => {
+      const key = `${lat},${lon}`;
+      return terrain.at.has(key) ? terrain.at.get(key)! : terrain.fallback;
+    }),
+    getCamera: vi.fn(() => new PerspectiveCamera()),
+    sync: {
+      geoToLocalSimple: vi.fn(geoToLocal),
+      geoToLocalSimpleInto: vi.fn((lat: number, lon: number, height: number, out: Vector3) => {
+        const p = geoToLocal(lat, lon, height);
+        return out.set(p.x, p.y, p.z);
+      }),
+      localToGeo: vi.fn(localToGeo),
+    },
+    effects: { setDebugSpheresVisible: vi.fn(), spawnDebugSphere: vi.fn(), impactEffectsEnabled: true, spawnPortalSparks: vi.fn() },
+  };
+  return { engine, overlay, terrain, asEngine: engine as unknown as ThreeTilesEngine };
+}
+
+/** Vertices of the stand-in frame (a box). */
+const FRAME_VERTICES = 24;
+
+/** A stand-in for the portal frame's GLB: a box with tangents and the four textures. */
+function fakeFrameScene(): Group {
+  const geometry = new BoxGeometry(2, 2, 2);
+  geometry.setAttribute('tangent', new Float32BufferAttribute(new Float32Array(FRAME_VERTICES * 4), 4));
+  const material = new MeshStandardMaterial({
+    map: new Texture(), normalMap: new Texture(), aoMap: new Texture(), emissiveMap: new Texture(),
+  });
+  const scene = new Group();
+  scene.add(new Mesh(geometry, material));
+  return scene;
+}
+
+function createService() {
+  const uiStore = {
+    specialPointsDebugVisible: signal(false),
+    toggleSpecialPointsDebug(): void {
+      this.specialPointsDebugVisible.update((v) => !v);
+    },
+  };
+  const world = { basePosition: { lat: 48.1, lon: 11.5, height: 520 } as { lat: number; lon: number; height: number } | null };
+  const frameScene = fakeFrameScene();
+  const assets = {
+    loadModel: vi.fn(async (url: string) => ({ scene: frameScene, animations: [], refCount: 1, url })),
+  };
+  const injector = Injector.create({
+    providers: [
+      { provide: UIStore, useValue: uiStore },
+      { provide: MainWorldService, useValue: world },
+      { provide: AssetManagerService, useValue: assets },
+    ],
+  });
+  const service = runInInjectionContext(injector, () => new MarkerVisualizationService());
+  return { service, uiStore, world, assets, frameScene };
+}
+
+/** Let pending promises (the frame's load) settle. */
+const settle = () => new Promise<void>((done) => setTimeout(done, 0));
+
+function labels() {
+  return labelFake.instances[labelFake.instances.length - 1].labels;
+}
+
+/** Centre of the HQ label for a diamond over terrain at `ground`. */
+const hqLabelY = (ground: number) => ground + MARKER_FLOAT_HEIGHT + MARKER_LABEL_OFFSET;
+
+describe('MarkerVisualizationService', () => {
+  let service: MarkerVisualizationService;
+  let uiStore: ReturnType<typeof createService>['uiStore'];
+  let world: ReturnType<typeof createService>['world'];
+  let assets: ReturnType<typeof createService>['assets'];
+  let frameScene: Group;
+  let fake: ReturnType<typeof fakeEngine>;
+  let heightDebugVisible: WritableSignal<boolean>;
+
+  beforeEach(() => {
+    labelFake.instances.length = 0;
+    ({ service, uiStore, world, assets, frameScene } = createService());
+    fake = fakeEngine();
+    heightDebugVisible = signal(false);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  const init = () => service.initialize(fake.asEngine, { ...BASE }, heightDebugVisible);
+
+  const instanced = () =>
+    fake.overlay.children.filter((o): o is InstancedMesh => (o as InstancedMesh).isInstancedMesh === true);
+  const portalFrames = () => instanced().find((m) => m.name === 'spawnPortalGates')!;
+  /** Instances the HQ diamond draws: body, two rings and the ground glow per HQ. */
+  const hqInstances = () =>
+    instanced().filter((m) => !m.name.startsWith('spawnPortal')).reduce((n, m) => n + m.count, 0);
+
+  /** Position, facing (the portal's +z) and scale of portal instance `index`. */
+  function portal(index = 0) {
+    const matrix = new Matrix4();
+    portalFrames().getMatrixAt(index, matrix);
+    const position = new Vector3();
+    const rotation = new Quaternion();
+    const scale = new Vector3();
+    matrix.decompose(position, rotation, scale);
+    return { position, forward: new Vector3(0, 0, 1).applyQuaternion(rotation), scale: scale.x };
+  }
+
+  describe('before initialize', () => {
+    it('has no markers and ignores every marker call', () => {
+      expect(() => {
+        service.addBaseMarker();
+        service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+        service.placeSpawnPortal('s1', [{ ...BASE }, { lat: BASE.lat + 0.001, lon: BASE.lon }], 0);
+        service.removeBaseMarker();
+        service.removeSpawnMarker('s1');
+        service.clearSpawnMarkers();
+        service.updateMarkerHeights();
+        service.animateMarkers(16, false);
+        service.addHeightDebugMarker(new Vector3(), 1, true);
+        service.clearHeightDebugMarkers();
+        service.toggleHeightDebug(true);
+        service.clearAllMarkers();
+        service.updateDebugSpheresVisibility();
+        service.dispose();
+      }).not.toThrow();
+      expect(labelFake.instances).toHaveLength(0);
+      expect(fake.engine.effects.setDebugSpheresVisible).not.toHaveBeenCalled();
+    });
+  });
+
+  it('attaches its marker meshes to the engine overlay group', () => {
+    init();
+    expect(fake.engine.getOverlayGroup).toHaveBeenCalled();
+    expect(fake.overlay.children.length).toBeGreaterThan(0);
+    expect(labelFake.instances[0].overlay).toBe(fake.overlay);
+  });
+
+  it('drops the previous meshes when initialized again', () => {
+    init();
+    const meshes = fake.overlay.children.length;
+
+    init();
+
+    expect(fake.overlay.children).toHaveLength(meshes);
+    expect(labelFake.instances[0].disposed).toBe(true);
+  });
+
+  describe('HQ marker', () => {
+    it('floats above the terrain under the HQ, labelled "HQ" in green', () => {
+      init();
+      service.addBaseMarker();
+
+      expect(hqInstances()).toBe(4);
+      expect(labels().get('hq')).toMatchObject({ text: 'HQ', color: '#22c55e', position: { y: hqLabelY(100) } });
+      expect(portalFrames().count).toBe(0);
+    });
+
+    it('replaces the previous HQ marker when added again', () => {
+      init();
+      service.addBaseMarker();
+      fake.terrain.fallback = 50;
+
+      service.addBaseMarker();
+
+      expect(hqInstances()).toBe(4);
+      expect(labels().get('hq')!.position.y).toBe(hqLabelY(50));
+      expect(labels().size).toBe(1);
+    });
+
+    it('keeps its height when added again without a terrain sample', () => {
+      init();
+      service.addBaseMarker();
+      fake.terrain.fallback = null;
+
+      // Until 2026-09-13 addBaseMarker removed the old marker before reading
+      // its height, so the marker dropped to MARKER_FLOAT_HEIGHT (absolute).
+      service.addBaseMarker();
+
+      expect(labels().get('hq')!.position.y).toBe(hqLabelY(100));
+    });
+
+    it('sits at the bare float height when first added without a terrain sample', () => {
+      init();
+      fake.terrain.fallback = null;
+
+      // Nothing to keep yet; updateMarkerHeights corrects it once tiles load
+      service.addBaseMarker();
+
+      expect(labels().get('hq')!.position.y).toBe(MARKER_FLOAT_HEIGHT + MARKER_LABEL_OFFSET);
+    });
+
+    it('removes marker and label', () => {
+      init();
+      service.addBaseMarker();
+
+      service.removeBaseMarker();
+
+      expect(hqInstances()).toBe(0);
+      expect(labels().has('hq')).toBe(false);
+    });
+  });
+
+  describe('spawn portals', () => {
+    it('stands a portal on its own terrain column, facing the HQ, with its name and colour', () => {
+      init();
+      const lat = BASE.lat + 0.002;
+      const lon = BASE.lon - 0.001;
+      fake.terrain.at.set(`${lat},${lon}`, 40);
+
+      service.addSpawnMarker('s1', 'North Gate', lat, lon, 0x3366ff);
+
+      const { position, forward, scale } = portal();
+      expect(position.x).toBeCloseTo(100, 3);
+      expect(position.y).toBe(40);
+      expect(position.z).toBeCloseTo(200, 3);
+      // Until its route is built it faces the HQ at the origin
+      expect(forward.x).toBeCloseTo(-100 / Math.hypot(100, 200), 4);
+      expect(forward.z).toBeCloseTo(-200 / Math.hypot(100, 200), 4);
+      expect(scale).toBeCloseTo(1, 4);
+      expect(labels().get('s1')).toMatchObject({ text: 'North Gate', color: '#3366ff' });
+      expect(labels().get('s1')!.position.y).toBeCloseTo(40 + portalLabelHeight(1), 6);
+    });
+
+    it('does not depend on the HQ column resolving', () => {
+      init();
+      fake.terrain.at.set(`${BASE.lat},${BASE.lon}`, null);
+
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.001, BASE.lon, 0xff0000);
+
+      expect(portal().position.y).toBe(100);
+    });
+
+    it('stands at 0 when its own column has no sample', () => {
+      init();
+      fake.terrain.fallback = null;
+
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.001, BASE.lon, 0xff0000);
+
+      expect(portal().position.y).toBe(0);
+    });
+
+    it('replaces a spawn added again under the same id', () => {
+      init();
+      service.addSpawnMarker('s1', 'Old', BASE.lat + 0.001, BASE.lon, 0xff0000);
+
+      service.addSpawnMarker('s1', 'New', BASE.lat + 0.002, BASE.lon, 0xff0000);
+
+      expect(portalFrames().count).toBe(1);
+      expect(portal().position.z).toBeCloseTo(200, 3);
+      expect(labels().get('s1')!.text).toBe('New');
+    });
+
+    it('gives a marker the same animation phase every time it is added', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+      const phase = labels().get('s1')!.phase;
+      service.removeSpawnMarker('s1');
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+
+      expect(labels().get('s1')!.phase).toBe(phase);
+      expect(phase).toBeGreaterThanOrEqual(0);
+      expect(phase).toBeLessThan(Math.PI * 2);
+    });
+
+    it('removes one spawn by id and ignores unknown ids', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+      service.addSpawnMarker('s2', 'S2', BASE.lat + 0.001, BASE.lon, 0xff0000);
+
+      service.removeSpawnMarker('s1');
+      service.removeSpawnMarker('nope');
+
+      // s1's instance is moved out of sight, s2 stays
+      expect(portal(0).position.y).toBe(-99999);
+      expect(portal(1).position.z).toBeCloseTo(100, 3);
+      expect([...labels().keys()]).toEqual(['s2']);
+    });
+
+    it('clears all spawns but keeps the HQ', () => {
+      init();
+      service.addBaseMarker();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+      service.addSpawnMarker('s2', 'S2', BASE.lat + 0.001, BASE.lon, 0xff0000);
+
+      service.clearSpawnMarkers();
+
+      expect(portalFrames().count).toBe(0);
+      expect(hqInstances()).toBe(4);
+      expect([...labels().keys()]).toEqual(['hq']);
+    });
+  });
+
+  describe('placeSpawnPortal', () => {
+    const lat = BASE.lat + 0.002;
+    // Route south toward the HQ, (0, 200) to (0, 100) in local metres
+    const route = [
+      { lat, lon: BASE.lon, corridorLeft: 6, corridorRight: 3 },
+      { lat: BASE.lat + 0.001, lon: BASE.lon },
+    ];
+
+    it('centres on the cell at the route start, faces along the route, as wide as the corridor', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat + 0.0003, BASE.lon + 0.0002, 0xff0000);
+
+      service.placeSpawnPortal('s1', route, 12);
+
+      const { position, forward, scale } = portal();
+      expect(position.x).toBeCloseTo(0, 3);
+      expect(position.y).toBe(12);
+      expect(position.z).toBeCloseTo(200, 3);
+      expect(forward.z).toBeCloseTo(-1, 4);
+      // The wider side sets the opening: 2 x 6 m
+      expect(scale).toBeCloseTo(12 / PORTAL_OPENING_WIDTH, 4);
+      expect(labels().get('s1')!.position.y).toBeCloseTo(12 + portalLabelHeight(12 / PORTAL_OPENING_WIDTH), 3);
+    });
+
+    it('has the enemies start in the middle of its volume, spread across the opening', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      service.placeSpawnPortal('s1', route, 12);
+      const { position, forward, scale } = portal();
+      const across = new Vector3(forward.z, 0, -forward.x);
+      // The portal's centre is the route start
+      const start = geoToLocal(route[0].lat, route[0].lon, 0);
+      expect(position.x).toBeCloseTo(start.x, 3);
+      expect(position.z).toBeCloseTo(start.z, 3);
+
+      // Where EnemyManager.spawn puts an enemy: path[0] of the same route,
+      // on its lane, after its first step. Its offset from the start in
+      // metres as MovementComponent counts them, on the fake's axes (+x
+      // west, +z north)
+      const cosLat = Math.cos(route[0].lat * DEG_TO_RAD);
+      for (const lane of [-1, 0, 1]) {
+        const body = new TestBody();
+        const movement = new MovementComponent(body);
+        movement.setPath(route as RouteWaypoint[]);
+        movement.setLateralFactor(lane);
+        movement.speedMps = 0.01;
+        movement.move(10, 0);
+        const at = body.getComponent<TransformComponent>(ComponentType.TRANSFORM)!.position;
+        const offset = new Vector3(
+          -(at.lon - route[0].lon) * METERS_PER_DEGREE_LAT * cosLat,
+          0,
+          (at.lat - route[0].lat) * METERS_PER_DEGREE_LAT,
+        );
+        expect(Math.abs(offset.dot(forward)), `lane ${lane}`).toBeLessThan(0.05);
+        expect(Math.abs(offset.dot(across))).toBeLessThan((PORTAL_OPENING_WIDTH / 2) * scale);
+      }
+    });
+
+    it('takes the terrain at the route start while the cells are not built', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      fake.terrain.at.set(`${lat},${BASE.lon}`, 55);
+
+      service.placeSpawnPortal('s1', route, null);
+
+      expect(portal().position.y).toBe(55);
+    });
+
+    it('ignores unknown spawns and routes without a direction', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      const before = portal();
+
+      service.placeSpawnPortal('ghost', route, 12);
+      service.placeSpawnPortal('s1', [route[0]], 12);
+      service.placeSpawnPortal('s1', [route[0], route[0]], 12);
+
+      expect(portal().position).toEqual(before.position);
+      expect(labels().has('ghost')).toBe(false);
+    });
+
+    it('keeps the heading the player turned it to through rebuilds of its route, until the spawn is added again', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      service.placeSpawnPortal('s1', route, 12);
+      // A small turn off the route running south holds
+      service.setPortalHeading('s1', Math.PI + 0.05);
+      expect(portal().forward.x).toBeCloseTo(Math.sin(Math.PI + 0.05), 4);
+
+      service.placeSpawnPortal('s1', route, 14);
+      expect(portal().forward.x).toBeCloseTo(Math.sin(Math.PI + 0.05), 4);
+      expect(portal().position.y).toBe(14);
+
+      // Turned to face east (-x), across the route: it stops where the
+      // outermost enemies still get out between the pillars, turned east
+      service.setPortalHeading('s1', -Math.PI / 2);
+      const range = portalTurnRange(
+        [{ x: 0, z: 200 }, { x: 0, z: 100 }], { x: 0, y: 0, z: 200, heading: Math.PI, scale: 12 / PORTAL_OPENING_WIDTH },
+        portalLaneOffset(route[0]),
+      );
+      expect(range.max).toBeGreaterThan(0.05);
+      expect(portal().forward.x).toBeCloseTo(Math.sin(Math.PI + range.max), 3);
+      expect(portal().forward.z).toBeLessThan(-0.95);
+      service.placeSpawnPortal('s1', route, 14);
+      expect(portal().forward.x).toBeCloseTo(Math.sin(Math.PI + range.max), 3);
+
+      // Placed again: the portal follows its route
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      service.placeSpawnPortal('s1', route, 12);
+      expect(portal().forward.z).toBeCloseTo(-1, 4);
+    });
+
+    it('holds a heading a spawn brought along (URL, favorite) in the range of the route it stands on now', () => {
+      init();
+      // Saved on a route running south, a little off it; the spawn comes
+      // back on a route running east (-x), across the saved heading
+      const east = [
+        { lat, lon: BASE.lon, corridorLeft: 6, corridorRight: 3 },
+        { lat, lon: BASE.lon + 0.001 },
+      ];
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      // Before its route is built, as a restore may come
+      service.setPortalHeading('s1', Math.PI - 0.05);
+      service.placeSpawnPortal('s1', east, 12);
+
+      const range = portalTurnRange(
+        [{ x: 0, z: 200 }, { x: -100, z: 200 }], { x: 0, y: 0, z: 200, heading: -Math.PI / 2, scale: 12 / PORTAL_OPENING_WIDTH },
+        portalLaneOffset(east[0]),
+      );
+      expect(range.min).toBeLessThan(-0.05);
+      // PI - 0.05 lies 3PI/2 - 0.05, i.e. -PI/2 - 0.05, from the route's -PI/2: the limit on that side
+      const held = -Math.PI / 2 + range.min;
+      expect(portal().forward.x).toBeCloseTo(Math.sin(held), 3);
+      expect(portal().forward.z).toBeCloseTo(Math.cos(held), 3);
+
+      // A heading inside the range stands as it is
+      service.setPortalHeading('s1', -Math.PI / 2 - 0.03);
+      expect(portal().forward.z).toBeCloseTo(Math.cos(-Math.PI / 2 - 0.03), 4);
+    });
+
+    it('turns no portal that is not there', () => {
+      init();
+      service.setPortalHeading('ghost', 1);
+      expect(portalFrames().count).toBe(0);
+    });
+  });
+
+  describe('updateMarkerHeights', () => {
+    it('moves the HQ and the portals off the cells to the current terrain, labels follow', () => {
+      init();
+      service.addBaseMarker();
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.001, BASE.lon, 0xff0000);
+      fake.terrain.fallback = 250;
+
+      service.updateMarkerHeights();
+
+      expect(labels().get('hq')!.position.y).toBe(hqLabelY(250));
+      expect(portal().position.y).toBe(250);
+      expect(labels().get('s1')!.position.y).toBeCloseTo(250 + portalLabelHeight(1), 6);
+    });
+
+    it('keeps markers whose column has no sample where they are', () => {
+      init();
+      service.addBaseMarker();
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.001, BASE.lon, 0xff0000);
+      fake.terrain.fallback = null;
+
+      service.updateMarkerHeights();
+
+      expect(labels().get('hq')!.position.y).toBe(hqLabelY(100));
+      expect(portal().position.y).toBe(100);
+    });
+
+    it('leaves a portal standing on a route cell to its route', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.002, BASE.lon, 0xff0000);
+      service.placeSpawnPortal('s1', [{ lat: BASE.lat + 0.002, lon: BASE.lon }, { lat: BASE.lat + 0.001, lon: BASE.lon }], 12);
+      fake.terrain.fallback = 250;
+
+      service.updateMarkerHeights();
+
+      expect(portal().position.y).toBe(12);
+    });
+  });
+
+  describe('animateMarkers', () => {
+    it('ticks the labels once per frame', () => {
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+
+      service.animateMarkers(16, false);
+      service.animateMarkers(16, false);
+
+      expect(labelFake.instances[0].frames).toBe(2);
+    });
+
+    it('stops the portals\' sigils while the game is paused, the rest runs on wall time', () => {
+      const now = vi.spyOn(performance, 'now').mockReturnValue(4000);
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+      const uniforms = () => (portalFrames().material as ShaderMaterial).uniforms;
+
+      service.animateMarkers(16, false);
+      now.mockReturnValue(4200);
+      service.animateMarkers(16, false);
+      expect(uniforms()['uGlyphTime'].value).toBeCloseTo(0.2, 6);
+      expect(uniforms()['uTime'].value).toBe(4.2);
+
+      // Paused: the wall clock runs on, the sigils stand
+      now.mockReturnValue(4400);
+      service.animateMarkers(16, true);
+      expect(uniforms()['uGlyphTime'].value).toBeCloseTo(0.2, 6);
+      expect(uniforms()['uTime'].value).toBe(4.4);
+      now.mockRestore();
+    });
+  });
+
+  describe('wave events', () => {
+    it('surges the portals at wave start and calms them after the wave', () => {
+      const L = SPAWN_PORTAL_LOOK;
+      const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      init();
+      service.addSpawnMarker('s1', 'S1', BASE.lat + 0.001, BASE.lon, 0xff0000);
+      const bus = createMainEventBus();
+      service.subscribeToEventBus(bus);
+      const energy = () => (portalFrames().material as ShaderMaterial).uniforms['uEnergy'].value as number;
+
+      service.animateMarkers(16, false);
+      expect(energy()).toBeCloseTo(L.idleEnergy);
+
+      bus.emit({ type: 'wave:started', wave: 1, enemyCount: 10 });
+      service.animateMarkers(16, false);
+      expect(energy()).toBeGreaterThan(L.idleEnergy + 0.9 * L.surge);
+
+      bus.emit({ type: 'wave:completed', wave: 1, credits: 0, perfect: true, closeCall: false, hpLost: 0 });
+      for (let t = 1000; t <= 20_000; t += 16) {
+        now.mockReturnValue(t);
+        service.animateMarkers(16, false);
+      }
+      expect(energy()).toBeCloseTo(L.idleEnergy, 2);
+    });
+  });
+
+  describe('spawn burst', () => {
+    const lat = BASE.lat + 0.002;
+    // Route south toward the HQ, (0, 200) to (0, 100) in local metres
+    const route = [{ lat, lon: BASE.lon }, { lat: BASE.lat + 0.001, lon: BASE.lon }];
+
+    /** A portal on the route start, listening to a fresh event bus; returns an enemy spawner. */
+    function portalOnRoute() {
+      init();
+      service.addSpawnMarker('s1', 'S1', lat, BASE.lon, 0xff0000);
+      service.placeSpawnPortal('s1', route, 12);
+      const bus = createMainEventBus();
+      service.subscribeToEventBus(bus);
+      return (at: { lat: number; lon: number }) =>
+        bus.emit({ type: 'enemy:spawned', enemy: { position: at } } as never);
+    }
+
+    it('throws sparks out of the portal along the route, at most once per interval', () => {
+      const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      const enemyAt = portalOnRoute();
+      const sparks = fake.engine.effects.spawnPortalSparks;
+
+      // A thousand enemies at the same moment
+      for (let i = 0; i < 1000; i++) enemyAt(route[0]);
+      expect(sparks).toHaveBeenCalledTimes(1);
+
+      // Out of the portal's plane: the portal's centre on the route start, on
+      // the cell, facing south, the plane half the portal's depth ahead
+      const [x, y, z, forwardX, forwardZ] = sparks.mock.calls[0] as number[];
+      expect(x).toBeCloseTo(0);
+      expect(y).toBe(12);
+      expect(z).toBeCloseTo(200 - (PORTAL_DEPTH / 2) * portalDepthScale(portal().scale));
+      expect(forwardX).toBeCloseTo(0);
+      expect(forwardZ).toBeCloseTo(-1);
+
+      now.mockReturnValue(1000 + SPAWN_PORTAL_LOOK.burstIntervalMs);
+      enemyAt(route[0]);
+      expect(sparks).toHaveBeenCalledTimes(2);
+    });
+
+    it('stays off with the impact effects off, and for enemies that start at no portal', () => {
+      vi.spyOn(performance, 'now').mockReturnValue(1000);
+      const enemyAt = portalOnRoute();
+      const sparks = fake.engine.effects.spawnPortalSparks;
+
+      fake.engine.effects.impactEffectsEnabled = false;
+      enemyAt(route[0]);
+      expect(sparks).not.toHaveBeenCalled();
+
+      fake.engine.effects.impactEffectsEnabled = true;
+      enemyAt({ lat: BASE.lat + 0.0015, lon: BASE.lon + 0.001 }); // a debug spawn elsewhere
+      expect(sparks).not.toHaveBeenCalled();
+
+      // The switched-off enemy did not use up the portal's burst
+      enemyAt(route[0]);
+      expect(sparks).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('height debug markers', () => {
+    const debugGroup = () => fake.overlay.children.find((o) => o.name === 'heightDebugGroup') as Group | undefined;
+
+    it('collects spheres in one overlay group, green for hits and red for misses, 2 m above the sample', () => {
+      init();
+      service.addHeightDebugMarker(new Vector3(1, 10, 2), 10, true);
+      service.addHeightDebugMarker(new Vector3(3, 20, 4), null, false);
+
+      const group = debugGroup()!;
+      expect(group.children).toHaveLength(2);
+      const [hit, miss] = group.children as Mesh[];
+      expect(hit.position.toArray()).toEqual([1, 12, 2]);
+      expect((hit.material as MeshBasicMaterial).color.getHex()).toBe(0x00ff00);
+      expect((miss.material as MeshBasicMaterial).color.getHex()).toBe(0xff0000);
+    });
+
+    it('takes the initial visibility from the signal and toggles it afterwards', () => {
+      heightDebugVisible.set(true);
+      init();
+      service.addHeightDebugMarker(new Vector3(), 0, true);
+      expect(debugGroup()!.visible).toBe(true);
+
+      service.toggleHeightDebug(false);
+      expect(debugGroup()!.visible).toBe(false);
+    });
+
+    it('removes and disposes them on clear, and starts a new group afterwards', () => {
+      init();
+      service.addHeightDebugMarker(new Vector3(), 0, true);
+      const group = debugGroup()!;
+      const geometry = (group.children[0] as Mesh).geometry as BufferGeometry;
+      const onDispose = vi.fn();
+      geometry.addEventListener('dispose', onDispose);
+
+      service.clearHeightDebugMarkers();
+
+      expect(debugGroup()).toBeUndefined();
+      expect(onDispose).toHaveBeenCalled();
+
+      service.addHeightDebugMarker(new Vector3(), 0, true);
+      expect(debugGroup()).not.toBe(group);
+      expect(debugGroup()!.children).toHaveLength(1);
+    });
+  });
+
+  it('clearAllMarkers removes HQ, portals, labels and height debug markers', () => {
+    init();
+    service.addBaseMarker();
+    service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+    service.addHeightDebugMarker(new Vector3(), 0, true);
+
+    service.clearAllMarkers();
+
+    expect(hqInstances()).toBe(0);
+    expect(portalFrames().count).toBe(0);
+    expect(labels().size).toBe(0);
+    expect(fake.overlay.children.some((o) => o.name === 'heightDebugGroup')).toBe(false);
+  });
+
+  describe('special points debug', () => {
+    it('flips the UI flag, shows the debug spheres and spawns the HQ point when switched on', () => {
+      init();
+
+      service.toggleSpecialPointsDebug();
+
+      expect(uiStore.specialPointsDebugVisible()).toBe(true);
+      expect(fake.engine.effects.setDebugSpheresVisible).toHaveBeenLastCalledWith(true);
+      expect(fake.engine.effects.spawnDebugSphere).toHaveBeenCalledTimes(1);
+      expect(fake.engine.effects.spawnDebugSphere.mock.calls[0].slice(0, 2)).toEqual([48.1, 11.5]);
+    });
+
+    it('hides the spheres without a new HQ point when switched off', () => {
+      init();
+      service.toggleSpecialPointsDebug();
+
+      service.toggleSpecialPointsDebug();
+
+      expect(uiStore.specialPointsDebugVisible()).toBe(false);
+      expect(fake.engine.effects.setDebugSpheresVisible).toHaveBeenLastCalledWith(false);
+      expect(fake.engine.effects.spawnDebugSphere).toHaveBeenCalledTimes(1);
+    });
+
+    it('still flips the UI flag before initialize', () => {
+      service.toggleSpecialPointsDebug();
+
+      expect(uiStore.specialPointsDebugVisible()).toBe(true);
+      world.basePosition = null;
+    });
+
+    it('updateDebugSpheresVisibility applies the UI flag to the engine', () => {
+      init();
+      uiStore.specialPointsDebugVisible.set(true);
+
+      service.updateDebugSpheresVisibility();
+
+      expect(fake.engine.effects.setDebugSpheresVisible).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('placement previews', () => {
+    it('builds the HQ preview from core, crystal, two rings and the light pillar', () => {
+      const marker = service.createDiamondMarker({ color: 0xff0000 });
+      expect(marker.children).toHaveLength(5);
+      expect(marker.children.every((c) => c instanceof Mesh)).toBe(true);
+    });
+
+    it('scales the crystal with size and lets the pillar reach the ground at every size', () => {
+      for (const size of [0.8, 2]) {
+        const marker = service.createDiamondMarker({ color: 0xff0000, size });
+        const [core, shell, , , pillar] = marker.children as Mesh[];
+        expect(core.scale.x).toBe(size);
+        expect(shell.scale.y).toBe(size);
+
+        marker.updateMatrixWorld(true);
+        const pillarBox = new Box3().setFromObject(pillar);
+        const shellBox = new Box3().setFromObject(shell);
+        expect(pillarBox.min.y).toBeCloseTo(-(MARKER_FLOAT_HEIGHT - HQ_GROUND_LIFT));
+        if (size < 1.5) expect(pillarBox.max.y).toBeCloseTo(shellBox.min.y);
+      }
+    });
+
+    it('builds the spawn preview as a portal standing on its origin, in tintable materials', async () => {
+      init();
+      await settle();
+      const preview = service.createPortalPreview(0xef4444);
+
+      expect(preview.children).toHaveLength(2);
+      const [frame, surface] = preview.children as Mesh[];
+      expect(frame.material).toBeInstanceOf(MeshPhongMaterial);
+      // A copy of the asset's geometry: disposing the preview leaves the asset alone
+      const asset = (frameScene.children[0] as Mesh).geometry;
+      expect(frame.geometry).not.toBe(asset);
+      expect(frame.geometry.getAttribute('position').count).toBe(FRAME_VERTICES);
+      expect(surface.material).toBeInstanceOf(MeshBasicMaterial);
+      surface.geometry.computeBoundingBox();
+      const box = surface.geometry.boundingBox!;
+      expect(box.min.y).toBeCloseTo(0);
+      expect(box.max.y).toBeCloseTo(PORTAL_OPENING_HEIGHT);
+      expect(box.max.x).toBeCloseTo(PORTAL_OPENING_WIDTH / 2);
+      // In the arch, in the portal's plane
+      expect(box.max.z).toBeCloseTo(PORTAL_DEPTH / 2);
+    });
+
+    it('works without initialize and disposes every geometry and material', async () => {
+      const previews = [service.createDiamondMarker({ color: 0x00ff00 }), service.createPortalPreview(0x00ff00)];
+      // The portal's frame joins its preview once the asset has loaded
+      await settle();
+      const disposed = vi.fn();
+      for (const preview of previews) {
+        for (const child of preview.children as Mesh[]) {
+          child.geometry.addEventListener('dispose', disposed);
+          (child.material as MeshBasicMaterial).addEventListener('dispose', disposed);
+        }
+        service.disposePreviewMarker(preview);
+      }
+
+      // HQ 5 meshes, portal 2, a geometry and a material each
+      expect(disposed).toHaveBeenCalledTimes(14);
+    });
+
+    it('keeps a frame that loads after the preview is gone out of it', async () => {
+      const preview = service.createPortalPreview(0x00ff00);
+      service.disposePreviewMarker(preview);
+      await settle();
+      expect(preview.children).toHaveLength(1);
+    });
+  });
+
+  describe('spawn portal frame', () => {
+    const gateVertices = () => portalFrames().geometry.getAttribute('position').count;
+
+    it('gives the portals the stone frame from its asset, loaded once across location changes', async () => {
+      init();
+      // The two void surfaces until the asset is there
+      expect(gateVertices()).toBe(12);
+      await settle();
+      expect(gateVertices()).toBe(FRAME_VERTICES + 12);
+      const material = portalFrames().material as ShaderMaterial;
+      expect(material.uniforms['uBaseMap'].value).toBe(((frameScene.children[0] as Mesh).material as MeshStandardMaterial).map);
+
+      // A location change builds new managers, which take the frame at once
+      init();
+      expect(gateVertices()).toBe(FRAME_VERTICES + 12);
+      expect(assets.loadModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the two void surfaces, which still hide the enemies, when the asset does not load', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      assets.loadModel.mockRejectedValueOnce(new Error('404'));
+      init();
+      await settle();
+      expect(gateVertices()).toBe(12);
+      expect(error).toHaveBeenCalled();
+    });
+  });
+
+  describe('dispose', () => {
+    it('removes the meshes from the overlay, drops all markers and ignores later adds', () => {
+      init();
+      service.addBaseMarker();
+      service.addSpawnMarker('s1', 'S1', BASE.lat, BASE.lon, 0xff0000);
+      service.addHeightDebugMarker(new Vector3(), 0, true);
+
+      service.dispose();
+
+      expect(fake.overlay.children).toHaveLength(0);
+      expect(labelFake.instances[0].disposed).toBe(true);
+      expect(labelFake.instances[0].labels.size).toBe(0);
+
+      service.addSpawnMarker('s2', 'S2', BASE.lat, BASE.lon, 0xff0000);
+      expect(fake.overlay.children).toHaveLength(0);
+      expect(labelFake.instances[0].labels.size).toBe(0);
+    });
+
+    it('can be initialized again with a new engine', () => {
+      init();
+      service.dispose();
+
+      const second = fakeEngine();
+      service.initialize(second.asEngine, { ...BASE }, heightDebugVisible);
+      service.addBaseMarker();
+
+      expect(labels().has('hq')).toBe(true);
+      expect(second.overlay.children.length).toBeGreaterThan(0);
+    });
+  });
+});

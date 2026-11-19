@@ -1,0 +1,28 @@
+<div
+  class="debug-panel td-dlg td-dense"
+  [style.left.px]="position().x"
+  [style.top.px]="position().y"
+  [style.z-index]="zIndex()"
+  [style.width.px]="size().width"
+  [style.height.px]="size().height"
+  (mousedown)="onPanelClick()"
+>
+  <div
+    class="debug-panel-header td-dlg-head"
+    (mousedown)="onHeaderMouseDown($event)"
+  >
+    <span class="td-inline debug-panel-name">
+      <td-icon class="debug-panel-icon" [name]="$any(icon())" [size]="14"></td-icon>
+      <span class="td-dlg-title">{{ title() }}</span>
+    </span>
+    <button class="td-close" (click)="onClose($event)" [attr.aria-label]="'Close ' + title()">
+      <td-icon name="close" [size]="12"></td-icon>
+    </button>
+  </div>
+  <div class="debug-panel-content td-dlg-body">
+    <ng-content></ng-content>
+  </div>
+  <div class="resize-handle" (mousedown)="onResizeMouseDown($event)">
+    <td-icon name="dragHandle" [size]="14"></td-icon>
+  </div>
+</div>

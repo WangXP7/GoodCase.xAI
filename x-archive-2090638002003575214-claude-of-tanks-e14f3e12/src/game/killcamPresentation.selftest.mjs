@@ -1,0 +1,174 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(new URL('./killcam.ts', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+const state = readFileSync(new URL('./state.ts', import.meta.url), 'utf8');
+const effects = readFileSync(new URL('../fx/effects.ts', import.meta.url), 'utf8');
+const responsive = readFileSync(new URL('../ui/responsiveSurfaces.css', import.meta.url), 'utf8');
+const cameraRig = readFileSync(new URL('../engine/cameraRig.ts', import.meta.url), 'utf8');
+
+assert.match(source, /import \{ uiIconSVG \} from '\.\.\/ui\/uiIcons\.ts';/,
+  'killcam presentation uses the shared SVG icon registry');
+
+for (const icon of ['autoAim', 'battleRecord', 'shell', 'skull', 'ammoRack',
+  'scope', 'turretRing', 'shield', 'damage', 'penetration']) {
+  assert.ok(source.includes(`'${icon}'`), `killcam presentation includes the ${icon} icon`);
+}
+
+for (const moduleIcon of ['track', 'engine', 'transmission', 'fuelTank', 'ammoRack',
+  'gun', 'radio', 'optics', 'turretRing']) {
+  assert.ok(source.includes(`'${moduleIcon}'`), `module callouts map ${moduleIcon}`);
+}
+
+for (const crewIcon of ['crewCommander', 'crewGunner', 'crewDriver', 'crewLoader']) {
+  assert.ok(source.includes(`'${crewIcon}'`), `crew callouts map ${crewIcon}`);
+}
+
+assert.match(source, /--kc-panel:/, 'killcam owns the tactical panel token set');
+assert.match(source, /setReplaySuppressed\(true\)/,
+  'intact/x-ray killcam phases suppress the prior live destruction presentation');
+assert.match(source, /setReplaySuppressed\(false\)/,
+  'impact and teardown restore live destruction presentation');
+assert.match(source, /\.cot-kc-labelhost\{position:absolute;z-index:8;inset:0;overflow:hidden;/,
+  'projected callouts remain clipped to the replay frame');
+assert.match(source, /pass 2c: keep projected callouts out of the fixed analysis\/killer/,
+  'projected labels reserve space for fixed replay cards');
+assert.doesNotMatch(source, /@media \([^)]*(?:width|height|orientation)/,
+  'killcam presentation must not retain independent device breakpoint logic');
+assert.match(responsive, /body\[data-cot-width='phone'\]\[data-cot-orientation='portrait'\] \.cot-kc-killer/,
+  'portrait killcam has a dedicated safe-area layout');
+assert.match(responsive, /body\[data-cot-height='short'\] \.cot-kc-(?:annot|killer)/,
+  'short landscape killcam has a dedicated compact layout');
+assert.match(responsive,
+  /body\[data-cot-width='phone'\]\[data-cot-orientation='portrait'\] \.cot-kc-killer\{[\s\S]*?bottom:auto;/,
+  'portrait killer card clears the desktop bottom constraint instead of stretching vertically');
+assert.match(responsive,
+  /body\[data-cot-height='short'\] \.cot-kc-micro,[\s\S]*?\.cot-kc-label\.nm\{display:none!important\}/,
+  'short landscape hides secondary micro and near-miss tags');
+assert.match(responsive,
+  /body\[data-cot-width='phone'\] \.cot-spec\{[\s\S]*?transform:translateY\(12px\)[\s\S]*?\.cot-spec\.in\{transform:translateY\(0\)\}/,
+  'phone spectator bar cancels the desktop horizontal centering transform');
+assert.match(source, /const panelEls(?:: HTMLElement\[\])? = \[dom\.title, dom\.skip, dom\.annot,/,
+  'projected callouts reserve the fixed title, skip control, and analysis cards');
+assert.match(source, /width - label\.lw - 8/,
+  'projected callouts clamp within the horizontal viewport');
+assert.match(source, /function mergeXrayModuleHits[\s\S]*const merged = new Map(?:<[^;]+>)?\(\)/,
+  'multiple physical hits on one module collapse into one final-state callout');
+assert.match(source, /function separateFinalXrayLabels[\s\S]*const placed(?:: KillcamLabel\[\])? = \[\][\s\S]*settleXrayLabel/,
+  'label separation is repeated after geometry and fixed-panel repulsion');
+// battle endings (2026-09-25): the final-kill capture — every tank's last hit, the last lethal chain whoever
+// fired, the last destruction from the bus — and the neutral 'final' playback kind with its own title line
+assert.match(source, /import \{ selectResultReplay, type DestroyedRecord, type ReplayResult \} from '\.\/killcamSelection\.ts';/,
+  'the replay selection policy is the pure killcamSelection module');
+assert.match(source, /let lastLethal(?:: ReplaySnapshot \| null)? = null;/, 'the last lethal chain on any tank is captured');
+assert.match(source, /const lastHitByTarget = new Map(?:<[^;]+>)?\(\);/, 'the last hit each tank took is captured for burn-outs');
+assert.match(source, /bus\.on\('tank:destroyed', \(payload\) => \{[\s\S]*?lastDestroyed = \{/, 'every destruction is remembered from the bus');
+assert.match(source, /if \(target\.visual\) \{\n\s*lastHitByTarget\.set\(target\.id, snap\);\n\s*if \(ev\.destroyed\) lastLethal = snap;/,
+  'onShellHit records the chain whoever fired');
+assert.match(source, /selectAnyRamReplay\(ev, a, b\)/, 'a lethal ram between any pair is captured');
+assert.match(source, /type PlaybackKind = 'death' \| 'victory' \| 'final';/, 'the final-kill playback kind exists');
+assert.match(source, /const finalBlow = pb\.kind === 'final' && !playerKill && !pb\.isDeathView;/,
+  'a final blow between two other tanks reads as a neutral line');
+assert.match(source, /'killcam\.finalRamLine' : 'killcam\.finalBlowLine'/, 'the neutral line has ram and shell variants');
+assert.match(source, /\|\| pb\.kind === 'final';/, 'the final-kill x-ray draws the victim as a corpse');
+// (2026-11-02 audit 02-game-2 #5) one reset holds the list; both battle-entry paths run it, and (round 3 merge review r1)
+// a network battle's restart under this seat
+assert.equal((source.match(/lastLethal = lastDestroyed = null;\n\s*lastHitByTarget\.clear\(\);/g) || []).length, 1,
+  'one capture reset clears the final-kill capture');
+assert.equal((source.match(/resetCaptureMemory\(\);/g) || []).length, 3, 'both battle-entry paths and the restart run it');
+
+assert.match(source, /const poseHistory = new Map(?:<[^;]+>)?\(\)/,
+  'killcam retains the preceding simulation frame instead of reconstructing it after death');
+assert.match(source, /replayKind: 'collision'[\s\S]*trajPts: null/,
+  'collision deaths use an explicit replay type with no projectile trajectory');
+assert.match(source, /function startReplayPhase[\s\S]*if \(pb\.replayKind === 'collision'\)[\s\S]*beginCollision\(\);[\s\S]*return;[\s\S]*const trajectory = pb\.snap\.trajPts/,
+  'collision playback exits before any tracer geometry can be allocated');
+assert.match(source, /function beginFiring\(stagedHold = false\)(?:: void)?[\s\S]*restageAttacker\(\)[\s\S]*triggerReplayShot\(attacker, shotDir\)/,
+  'projectile playback hands the restored attacker to the canonical shot presentation');
+assert.match(source, /function triggerReplayShot[\s\S]*recoilKick\([\s\S]*muzzleFlash\?/,
+  'the canonical shot presentation visibly recoils and fires from the rendered muzzle');
+assert.match(source, /function beginApproach\(\)(?:: void)?[\s\S]*restageIntact\(\);[\s\S]*restageAttacker\(\);[\s\S]*flightStartPose/,
+  'the attacker is restored before the establishing camera lands on the projectile chase pose');
+assert.match(source, /function updateApproach\(dt(?:: number)?\)(?:: void)?[\s\S]*pinAttackerAtFiringPose\(0\)/,
+  'every approach frame pins the attacker to its recorded firing pose');
+assert.match(source, /function pinAttackerAtFiringPose[\s\S]*setVisible\(true\)[\s\S]*syncFromState\(pb\.attackerPoseState/,
+  'the approach pose lock keeps the restored attacker visible without allocating per frame');
+assert.match(source, /function updateCollision\(dt(?:: number)?\)(?:: void)?[\s\S]*playCollisionContact\(c, tvis, avis\)/,
+  'collision playback routes the contact frame through one presentation owner');
+assert.match(source, /function playCollisionContact[\s\S]*applyReplaySurfaceState\(targetVisual, pb\.snap\.moduleStates[\s\S]*vehicleCollision\?/,
+  'collision contact applies resolved module failures and dedicated impact effects');
+assert.match(main, /createKillCam\([\s\S]*getGame: \(\) => game/,
+  'production composition injects canonical game state into the killcam');
+// transitions-249: the replay light pool leaves the light count while the Garage's own set is up, so a return keys
+// every lit Garage program as its boot did (the first Return relinked 48 programs when the pool stayed in the count)
+assert.match(source, /const showLightPool = \(shown(?:: boolean)?\)(?:: void)? => \{\s*for \(const light of kcLights\) light\.visible = shown;/,
+  'the replay light pool shows and hides as one set');
+assert.match(source, /showLightPool\(deps\.battleLightsActive\?\.\(\) \?\? true\);\s*let warmRig/,
+  'a kill-cam created in the Garage starts with its lights out of the count');
+assert.match(source, /setBattleLights\(shown(?:: boolean)?\) \{\s*if \(!active\) showLightPool\(shown\);/,
+  'the Garage light switch never pulls the lights from a running replay');
+assert.match(source, /function begin\([\s\S]*?\{[\s\S]*?showLightPool\(true\);[\s\S]*?active = true;/,
+  'a replay always has its lights');
+// (round 3 A9, review r1) the read runs as one of teardown's release steps, so a host callback that throws cannot drop the
+// replay's done edge
+assert.match(source, /active = false;\s*staged = false;\s*\/\/[^\n]*\n\s*step\(\(\) => showLightPool\(deps\.battleLightsActive\?\.\(\) \?\? true\)\);/,
+  'a finished replay gives its lights back to the current light set');
+assert.match(main, /const setGarageSpots = [\s\S]*?garagePhasePresentation\.setActive\(active\);\s*garageLightsUp = active;\s*killcamAccess\.current\?\.setBattleLights\(!active\);/,
+  'the Garage light switch drives the kill-cam light pool');
+assert.match(main, /createKillCam\([\s\S]*battleLightsActive: \(\) => !garageLightsUp/,
+  'a kill-cam created later reads the current light set');
+assert.match(source, /const gameRef = \(\)(?:: KillcamGame \| null)? => \{[\s\S]*getGame \? getGame\(\) : null/,
+  'spectator target selection uses the injected game-state getter');
+assert.match(source, /function beginCameraHandoff[\s\S]*function setReplayCamera/,
+  'killcam owns a continuous phase-to-phase camera handoff');
+assert.match(source, /function beginFiring\(stagedHold = false\)(?:: void)?[\s\S]*if \(stagedHold\) updateFiring\(0\);[\s\S]*else beginShotFlight\(\);/,
+  'live playback starts projectile motion on the same frame as the gun event');
+assert.match(source, /function beginShotFlight\(\)(?:: void)?[\s\S]*beginCameraHandoff\(SHOT_ACQUIRE_S\);[\s\S]*pb\.phase = 'flight';[\s\S]*updateFlight\(0\);/,
+  'the projectile chase accelerates continuously from the painted launch frame');
+assert.match(source, /function flightStartPose\(outPos(?:: THREE\.Vector3)?, outLook(?:: THREE\.Vector3)?\)(?:: void)?[\s\S]*firingCameraPose\(outPos, outLook\)/,
+  'the approach and first flight frame retain a readable rear-quarter shooter composition');
+assert.match(source, /function updateFlight\(dt(?:: number)?\)(?:: void)?[\s\S]*pb\.t <= SHOT_ACQUIRE_S[\s\S]*pinAttackerAtFiringPose\(dt\)/,
+  'the restored shooter remains visible and animates recoil through chase acquisition');
+assert.match(source, /function beginApproach\(\)(?:: void)?[\s\S]*flightStartPose\(toPos, toLook\)[\s\S]*SHOT_TRACK_FOV/,
+  'approach position, target, and lens exactly match the launch frame');
+assert.match(source, /function prepareXrayPlaybackState\(\)(?:: void)? \{[\s\S]*beginCameraHandoff\(\)/,
+  'x-ray preparation starts the continuous camera handoff');
+assert.match(source, /function beginXray\(\)(?:: void)? \{[\s\S]*prepareXrayPlaybackState\(\)[\s\S]*setReplayCamera\(pb\.xcam\.pos, pb\.xcam\.look, 42, 0\)/,
+  'collision, direct-analysis, and skipped paths blend into the x-ray camera');
+assert.match(source, /function teardown\(runCallback(?:: boolean)?\)(?:: void)? \{[\s\S]*publishReplayCompletion\(runCallback, done, wasDeathView\);/,
+  'teardown delegates replay completion to one transition owner');
+assert.doesNotMatch(source, /function teardown\(runCallback(?:: boolean)?\)(?:: void)? \{[\s\S]*spectate\.maybeStart\(\)[\s\S]*publishReplayCompletion/,
+  'teardown cannot start spectating twice');
+assert.doesNotMatch(source, /body\.cot-kc-live \.cot-hud\{display:none/,
+  'replay HUD suppression keeps layout geometry mounted');
+assert.doesNotMatch(source, /\.cot-kc\.out \.cot-kc-bart,[\s\S]{0,120}height:51vh/,
+  'exit no longer fakes a viewport resize with expanding letterbox bars');
+assert.doesNotMatch(source, /Math\.exp\(-pb\.itWall \/ 0\.16\)/,
+  'impact no longer jumps to a peak lens punch on its first frame');
+assert.match(cameraRig, /nextFov = activeSpectate\.fromFov \+ \(55 - activeSpectate\.fromFov\) \* k/,
+  'spectator entry blends its lens instead of snapping out of the killcam FOV');
+assert.match(cameraRig, /function spectateBlendDuration\(ent: CameraEntity \| null\): number[\s\S]*Math\.hypot\(dx, dy, dz\)/,
+  'long-distance spectator target changes receive a distance-aware blend');
+assert.match(state,
+  // (2026-11-02 audit M6: the lethal ram's module damage is sim/impact.ts resolveRamPairDamage's, the authority's rule too)
+  /function resolveRamDamage[\s\S]*resolveRamPairDamage[\s\S]*aModulesHit,[\s\S]*bModulesHit,[\s\S]*function publishRamDamage[\s\S]*game\.killcam\.onRam\(event, a, b\)/,
+  'authoritative ram resolution records module failures before live wreck presentation');
+assert.match(effects, /vehicleCollision\([\s\S]{0,180}closingMps(?:\s*:\s*number)?\s*=\s*0[\s\S]*sparkFan[\s\S]*debris/,
+  'vehicle collision effects use metal contact sparks and debris rather than shell penetration FX');
+
+// owner 2026-09-21 ("your first death si always categorized as that death"): the local player's revive drops the
+// previous life's lethal chain, so an end-of-battle death replay can only be the last death
+{
+  const respawnAt = source.indexOf("bus.on('mode:respawn'");
+  assert.ok(respawnAt > 0, 'the killcam listens for the player revive');
+  const respawnHandler = source.slice(respawnAt, source.indexOf('});', respawnAt));
+  assert.ok(respawnHandler.includes('pendingDeath = lastHitOnPlayer = null;'),
+    'the revive clears pendingDeath and lastHitOnPlayer inside the mode:respawn handler');
+  // battle endings (2026-09-25): the defeat replay reads the (now last-life-only) death chain and the burn-out
+  // fallback through the pure selection policy — the same two fields the revive clears
+  assert.match(source, /selectResultReplay<ReplaySnapshot>\(\{[\s\S]*?pendingDeath,\n\s*pendingVictory,\n\s*lastHitOnPlayer,/,
+    'the defeat replay still reads the (now last-life-only) death chain with the burn-out fallback');
+}
+
+console.log('killcam presentation selftest passed (revive clears the death chain)');

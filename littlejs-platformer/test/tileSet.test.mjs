@@ -1,0 +1,84 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadEngine } from './vmEngine.mjs';
+
+// A tile set, what loadTiles makes: a TileInfo whose tiles list holds each tile wherever it was packed, so a tile
+// layer and the level editor draw tile n from tiles[n] and not from a grid on one sheet.
+
+function load()
+{
+    const { run } = loadEngine();
+    run(`setHeadlessMode(true);
+        var sheet = new TextureInfo({width: 64, height: 64}, false), other = new TextureInfo({width: 32, height: 32}, false);
+        // three tiles from two sheets, at places no grid would give them
+        var set = new TileInfo(vec2(), vec2(16), sheet, 0, 0);
+        set.tiles = [new TileInfo(vec2(40, 8), vec2(16), sheet, 0, 0), new TileInfo(vec2(2, 30), vec2(16), sheet, 0, 0),
+            new TileInfo(vec2(16, 0), vec2(16), other, 0, 0)];`);
+    return run;
+}
+const json = (run, code)=> JSON.parse(run(`JSON.stringify(${code}) ?? 'null'`));
+
+test('a tile layer of a tile set draws each tile from the set, and a tile past its end draws nothing', ()=>
+{
+    const run = load();
+    run(`var layer = new TileLayer(vec2(), vec2(4, 1), set), drawn = [];
+        layer.drawLayerTile = (pos, size, tileInfo)=> drawn.push(tileInfo && [tileInfo.pos.x, tileInfo.pos.y, tileInfo.textureInfo === other]);
+        [0, 1, 2, 5].forEach((t, x)=> layer.setData(vec2(x, 0), new TileLayerData(t)));
+        // headless a layer has no canvas and draws nothing: the class's own draw, into a canvas that takes nothing
+        layer.context = {}; drawContext = layer.context; layer.clearLayerRect = ()=> {};
+        for (let x = 0; x < 4; ++x) TileLayer.prototype.drawTileData.call(layer, vec2(x, 0));`);
+    assert.deepEqual(json(run, 'drawn'), [[40, 8, false], [2, 30, false], [16, 0, true]]);
+    assert.equal(run('layer.tileInfo.tiles === set.tiles'), true, 'the layer keeps the set, filled in as it loads');
+});
+
+test('tileLayersLoad takes a tile set as its tile info', ()=>
+{
+    const run = load();
+    run(`var layers = tileLayersLoad({width: 2, height: 1, layers: [{type: 'tilelayer', data: [3, 1]}]}, set, 0, undefined, false);`);
+    assert.equal(run('layers[0].tileInfo.tiles === set.tiles'), true);
+});
+
+test('the level editor\'s palette of a tile set lists each of its tiles', ()=>
+{
+    const run = load();
+    run(`var layer = new TileLayer(vec2(), vec2(2), set);`);
+    assert.deepEqual(json(run, 'editorPaletteTiles({live: layer}).map((t)=> [t.tile, t.tileInfo.pos.x])'), [[0, 40], [1, 2], [2, 16]]);
+    assert.equal(run('editorTileInfo(layer, 2) === set.tiles[2]'), true);
+});
+
+test('loadTiles hands back a tile set at once, its tiles filled in as the images load', ()=>
+{
+    const run = load();
+    assert.deepEqual(json(run, '(()=> { const s = loadTiles(["a.png", "b.png"], 8); return [s.size.x, s.tiles.length]; })()'),
+        [8, 0], 'headless loads no image, so the set stays empty');
+});
+
+test('loading the same image again with the same settings gives back the first load, packed once', ()=>
+{
+    // not headless, with a canvas that takes any call and images that never finish, so nothing is packed yet
+    const canvas = class { constructor(width, height) { this.width = width; this.height = height; }
+        getContext() { return new Proxy({ canvas: this }, { get: (t, k)=> k in t ? t[k] : ()=> {} }); } };
+    const { run } = loadEngine({ OffscreenCanvas: canvas, Image: class { set src(v) {} }, fetch: ()=> new Promise(()=> {}) });
+    run(`glEnable = false; engineInitialized = true; var jobs = 0; const queue = textureSheetQueueJob;
+        textureSheetQueueJob = (...a)=> (++jobs, queue(...a));
+        var a = loadSprite('hero.png', 16), b = loadSprite('hero.png', vec2(16)), c = loadSprite('hero.png', 16, 2);
+        var d = loadTiles(['grass.png', 'dirt.png'], 16), e = loadTiles(['grass.png', 'dirt.png'], 16);
+        var f = loadAtlas('art.png', 'art.json'), g = loadAtlas('art.png', 'art.json');`);
+    assert.deepEqual([run('a === b'), run('a === c'), run('d === e'), run('f === g')], [true, false, true, true]);
+    assert.equal(run('jobs'), 2 + 2 + 1, 'hero twice, two tile images, one atlas');
+});
+
+test('a load that failed is not kept, so loading it again tries again', async ()=>
+{
+    const canvas = class { constructor(width, height) { this.width = width; this.height = height; }
+        getContext() { return new Proxy({ canvas: this }, { get: (t, k)=> k in t ? t[k] : ()=> {} }); } };
+    // every image fails, as one does when the server is down, and so does the atlas json
+    const Image = class { set src(v) { Promise.resolve().then(()=> this.onerror()); } };
+    const { run } = loadEngine({ OffscreenCanvas: canvas, Image, fetch: ()=> Promise.reject(new Error('offline')) });
+    run(`glEnable = false; engineInitialized = true; var jobs = 0; const queue = textureSheetQueueJob;
+        textureSheetQueueJob = (...a)=> (++jobs, queue(...a));
+        var a = loadSprite('hero.png'), d = loadTiles(['grass.png'], 16), f = loadAtlas('art.png', 'art.json');`);
+    await run('spritesReady()');
+    run(`var b = loadSprite('hero.png'), e = loadTiles(['grass.png'], 16), g = loadAtlas('art.png', 'art.json');`);
+    assert.deepEqual([run('a === b'), run('d === e'), run('f === g'), run('jobs')], [false, false, false, 6]);
+});

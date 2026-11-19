@@ -1,0 +1,58 @@
+import type { MatchModeEntity, MatchModeResult } from './matchModes.ts';
+import { setModeMultiplier } from './consumableRules.ts';
+
+import * as detMath from './detMath.ts';
+export const ESCORT_RULES = Object.freeze({ hpScale:.9, reloadScale:2, speedScale:.65, radiusM:26 });
+export interface EscortState {
+  total:number; alive:number; rescued:number; required:number; progress:number;
+  x:number; y:number; z:number;
+}
+/** Ground troops use the normal navigation, combat and destruction simulation.
+ * Arrival is spatial, never a timer pretending that the convoy moved. `rescue` takes an extracted hull off the field:
+ * the mode controller's life transition (matchModes.ts setLife 'rescued', audit M4), the hull's one life writer. */
+export function createGunshipEscort<Entity extends MatchModeEntity>(entities:Entity[], destination:{x:number;y:number;z:number}, rescue:(entity:Entity)=>void) {
+  const friends=entities.filter(e=>e.bot && e.team!=='bravo' && e.team!=='enemy');
+  const rescued=new Set<string>();
+  const starting=new Map(friends.map(e=>[e.id,Math.max(1,detMath.hypot(e.state.pos.x-destination.x,e.state.pos.z-destination.z))]));
+  const state:EscortState={...destination,total:friends.length,alive:friends.length,rescued:0,required:Math.max(1,Math.ceil(friends.length/2)),progress:0};
+  for(const friend of friends){
+    friend.combat.maxHp=Math.max(1,Math.round(friend.combat.maxHp*ESCORT_RULES.hpScale));friend.combat.hp=friend.combat.maxHp;
+    setModeMultiplier(friend.combat,'escort','reload',ESCORT_RULES.reloadScale); // a mode layer (audit M5): items keep it
+  }
+  function update():void {
+    let alive=0,progress=0;
+    for(const friend of friends){
+      if(rescued.has(friend.id)){progress++;continue;}
+      if(friend.combat.destroyed)continue;
+      alive++;
+      const distance=detMath.hypot(friend.state.pos.x-state.x,friend.state.pos.z-state.z);
+      progress+=Math.max(0,Math.min(1,1-distance/(starting.get(friend.id)??1)));
+    }
+    state.alive=alive;state.rescued=rescued.size;state.progress=friends.length?progress/friends.length:0;
+  }
+  function hideRescued(friend:Entity):void { rescue(friend); }
+  return {
+    state,
+    step(timeS:number,limitS:number):MatchModeResult|null {
+      for(const friend of friends)if(!rescued.has(friend.id)&&!friend.combat.destroyed&&detMath.hypot(friend.state.pos.x-state.x,friend.state.pos.z-state.z)<=ESCORT_RULES.radiusM){rescued.add(friend.id);hideRescued(friend);}
+      update();
+      if(state.rescued>=state.required)return {result:'alpha',reason:'escort_extracted'};
+      if(state.total>0 && state.alive+state.rescued<state.required)return {result:'bravo',reason:'escort_lost'};
+      if(timeS>=limitS)return {result:'bravo',reason:'escort_time_expired'};
+      return null;
+    },
+    target(entity:Entity):{x:number;z:number;mission:'carrier'|'raid'}|null {
+      if(friends.includes(entity))return {x:state.x,z:state.z,mission:'carrier'};
+      if(entity.team!=='bravo'&&entity.team!=='enemy')return null;
+      let nearest:Entity|null=null,best=Infinity;
+      for(const friend of friends){
+        if(friend.combat.destroyed||rescued.has(friend.id))continue;
+        const distance=detMath.hypot(friend.state.pos.x-entity.state.pos.x,friend.state.pos.z-entity.state.pos.z);
+        if(distance<best){nearest=friend;best=distance;}
+      }
+      return nearest?{x:nearest.state.pos.x,z:nearest.state.pos.z,mission:'raid'}:null;
+    },
+    capture(){return [...rescued];},
+    restore(ids:readonly string[]){rescued.clear();for(const friend of friends)if(ids.includes(friend.id)){rescued.add(friend.id);hideRescued(friend);}update();},
+  };
+}

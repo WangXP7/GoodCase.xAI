@@ -1,0 +1,695 @@
+/* The Deploy screen (brand-ui S3, SPEC 12.1.4). Copyright © 2026 Kevin B. Liu.
+   The Premiere direction's own Deploy page, streams/brand-ui/phase2/bui01/src/pages/04-deploy.html (and the phone page
+   91-phone-deploy.html for folded layouts), on the design tokens and the live markup (garage.ts):
+   - the bar: back to the Garage, the title, the four ways to play;
+   - the main column: the four core modes as picture cards, the rest as rows, then the campaign's next operation and the
+     player's recent battles;
+   - the side plate: the selected mode and its six rules, the battlefield beside its tactical map, the time, the sides
+     and the bot tier in one row (the mode's own settings open under it), the tank and its loadout, and one Deploy bar
+     with the load estimate;
+   - the foot: the keys the screen answers. */
+/* the tokens only this screen reads (the plate's picture grade), apart from tokens.css so no other page loads them */
+@import url('./tokens/surface-deploy.css');
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+@layer surfaces{
+/* the Garage sheet's reset (.cot-garage *{margin:0;padding:0}, surfaces) strips the kit's own spacing from key caps, tags,
+   stat chips and buttons; on this screen the kit's elements take the components layer's back (the rules below still set
+   their own) */
+.cot-garage .cot-battle-menu :where([class*="cot-c-"]){margin:revert-layer;padding:revert-layer;}
+.cot-garage .cot-battle-menu.open{position:fixed;inset:0;z-index:var(--z-modal);width:auto;max-width:none;max-height:none;
+  transform:none;margin:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;border:0;border-radius:0;
+  box-shadow:none;clip-path:none;background:var(--surface-scene);color:var(--ink-1);font-family:var(--font-body);overflow:hidden;}
+body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open{top:0;right:0;bottom:0;left:0;max-height:none;}
+/* The Garage shell passes the pointer through (.cot-garage is pointer-events:none, its controls opt in). The open
+   screen takes every press itself: without this, Back hit the Garage's wordmark under it and left for /home, and every
+   card and tab hit the Garage beneath (nav-perf-242 recording, 2026-10-23). */
+.cot-garage .cot-battle-menu.open{pointer-events:auto;}
+
+/* ---- the bar (.bar) ---- */
+.cot-garage .cot-deploy-head{grid-column:1/-1;display:flex;align-items:center;gap:var(--s6);height:60px;padding:0 var(--s5);
+  border-bottom:1px solid var(--line-1);}
+.cot-garage .cot-deploy-back{display:flex;align-items:center;gap:var(--s2);height:44px;padding:0;border:0;background:transparent;
+  color:var(--ink-2);cursor:pointer;font:500 var(--fs-14)/1 var(--font-body);}
+.cot-garage .cot-deploy-back svg{width:18px;height:18px;}
+@media (hover:hover){.cot-garage .cot-deploy-back:hover{color:var(--ink-1);}}
+.cot-garage .cot-deploy-title{margin:0 var(--s2) 0 0;font:700 var(--fs-28)/1 var(--font-display);text-transform:uppercase;color:var(--ink-1);}
+.cot-garage .cot-deploy-tablist{display:contents;}
+.cot-garage .cot-deploy-tabs{display:flex;align-items:stretch;gap:var(--s6);height:60px;min-width:0;overflow-x:auto;scrollbar-width:none;}
+.cot-garage .cot-deploy-tab{position:relative;display:inline-flex;align-items:center;gap:var(--s2);height:60px;padding:0;border:0;
+  background:transparent;color:var(--ink-3);cursor:pointer;white-space:nowrap;font:600 var(--fs-15)/1 var(--font-display);}
+.cot-garage .cot-deploy-tab svg{width:16px;height:16px;}
+@media (hover:hover){.cot-garage .cot-deploy-tab:hover{color:var(--ink-1);}}
+.cot-garage .cot-deploy-tab[aria-selected='true']{color:var(--ink-1);}
+.cot-garage .cot-deploy-tab[aria-selected='true']::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent);}
+/* the last battle again (.bar .right .chip) */
+.cot-garage .cot-deploy-again{flex:none;margin-left:auto;}
+.cot-garage .cot-deploy-again[hidden]{display:none;}
+.cot-garage .cot-deploy-again>span{max-width:36ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cot-garage .cot-deploy-tab .cot-deploy-count{margin-left:2px;display:inline-flex;align-items:center;font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-data);color:var(--ink-3);}
+
+/* ---- the columns: the main column (61 %) and the side plate (39 %), each scrolling on its own ---- */
+.cot-garage .cot-battle-menu.open .cot-battle-menu-scroll{grid-row:2;display:grid;min-height:0;overflow:hidden;
+  grid-template-columns:minmax(0,61fr) minmax(0,39fr);gap:var(--s3);padding:var(--s4) var(--s5) var(--s3);background:none;}
+.cot-garage .cot-battle-menu.open .cot-battle-mode-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:var(--s3);
+  padding:0;scrollbar-width:thin;}
+.cot-garage .cot-battle-menu.open .cot-deploy-panel[hidden]{display:none;}
+.cot-garage .cot-battle-menu.open .cot-deploy-campaign{min-height:0;overflow:auto;padding:0;}
+/* the campaign tab: each operation launches from its own row; the plate keeps the tank you deploy with */
+.cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] :is(.cot-battle-details,[data-battle-launch],.cot-deploy-acts){display:none;}
+.cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-battle-menu-foot{grid-row:2;}
+
+
+
+
+/* ---- the lower band: the campaign's next operation and the recent battles (.lower, .camp-card, .rec) ---- */
+.cot-garage .cot-deploy-lower{display:grid;grid-template-columns:1.05fr 1fr 1fr 1fr;gap:var(--s3);flex:1 0 auto;min-height:clamp(220px,30vh,320px);}
+/* a compact height gives the mode picker the lower band's room */
+/* a short screen sets the lower band aside: the mode picker, the column's last row, ends on the plate's foot */
+@media (max-height:760px){body[data-cot-panels='persistent'] .cot-garage .cot-deploy-lower{display:none;}}
+/* the battle modes: the one mode picker (modePicker.ts, the Rooms host's too) takes the list's room and scrolls its cards in
+   place; the plate beside it is the rules card of the mode under the pointer or the focus, so the picker keeps none */
+/* (as tall as its cards, then scrolling them in place where the list is shorter; its grid's fade lives in the grid's own
+   padding, so the column's gap is the only one under it: the 24 px margin left a strip under the last row, r40) */
+.cot-garage .cot-deploy-modes{flex:0 1 auto;min-height:0;}
+.cot-garage .cot-deploy-modes .cot-mp__in{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);}
+.cot-garage .cot-deploy-modes .cot-mp__cards{height:100%;}
+.cot-garage .cot-deploy-modes .cot-c-picker__grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+/* a mode's picture is a 2:1 band (its battle frame cropped): the cards stay low, so a scrolling grid shows part of its
+   next row */
+.cot-garage .cot-deploy-modes .cot-c-picker__media{aspect-ratio:2/1;}
+/* a mode's glyph stands beside its name, which wraps under itself, never under the glyph */
+.cot-garage .cot-deploy-modes .cot-c-picker__words{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;}
+.cot-garage .cot-deploy-lower:empty{display:none;}
+/* before the first battle the campaign card takes the band's first half */
+.cot-garage .cot-deploy-camp:only-child{grid-column:1/-1;}
+.cot-garage .cot-deploy-camp{position:relative;overflow:hidden;border-radius:var(--control-radius);background:var(--surface-raised);box-shadow:var(--e1);}
+.cot-garage .cot-deploy-camp>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.cot-garage .cot-deploy-camp::after{content:'';position:absolute;inset:0;background:var(--media-fade-full);}
+.cot-garage .cot-deploy-camp .t{position:absolute;z-index:var(--z-lift);left:14px;right:14px;bottom:12px;display:flex;flex-direction:column;gap:var(--s2);}
+.cot-garage .cot-deploy-camp .t b{font:700 var(--fs-20)/1.05 var(--font-display);text-transform:uppercase;color:var(--ink-1);text-shadow:var(--hollow-shadow);}
+.cot-garage .cot-deploy-camp .cot-c-btn{align-self:flex-start;}
+.cot-garage .cot-deploy-rec{position:relative;display:flex;flex-direction:column;overflow:hidden;border-radius:var(--control-radius);
+  background:var(--row-plate);box-shadow:var(--e1);}
+.cot-garage .cot-deploy-rec .cot-card{position:relative;flex:0 0 58%;width:100%;height:auto;min-height:0;margin:0;border-radius:0;
+  box-shadow:none;pointer-events:none;}
+.cot-garage .cot-deploy-rec .res{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3) var(--s3);}
+.cot-garage .cot-deploy-rec .w{display:flex;align-items:center;gap:var(--s2);font:700 var(--fs-15)/1 var(--font-display);text-transform:uppercase;}
+.cot-garage .cot-deploy-rec .w svg{width:15px;height:15px;}
+.cot-garage .cot-deploy-rec .w.v{color:var(--ok);}
+.cot-garage .cot-deploy-rec .w.d{color:var(--danger);}
+.cot-garage .cot-deploy-rec .w.n{color:var(--ink-2);}
+.cot-garage .cot-deploy-rec .cot-c-rules{gap:var(--s1) var(--s3);color:var(--ink-3);}
+
+/* ---- the campaign tab: six operations, the hollow index as their mark ---- */
+.cot-garage .cot-deploy-ops{display:grid;gap:var(--s3);}
+.cot-garage .cot-deploy-op{display:grid;grid-template-columns:72px 176px minmax(0,1fr) auto;align-items:center;gap:var(--s4);
+  min-height:88px;padding:var(--s3) var(--s5);border-radius:var(--control-radius);background:var(--row-plate);box-shadow:var(--e1);}
+.cot-garage .cot-deploy-op-index{font:700 var(--fs-44)/1 var(--font-display);color:var(--ink-3);}
+.cot-garage .cot-deploy-op.cleared .cot-deploy-op-index{color:var(--ink-1);}
+.cot-garage .cot-deploy-op-name{display:block;font:600 var(--fs-18)/1.15 var(--font-display);text-transform:uppercase;color:var(--ink-1);}
+/* the operation's fixed-width facts (clock, stars, meter) lead, so they line up row to row; the place follows and wraps */
+.cot-garage .cot-deploy-op-meta{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s4);margin-top:var(--s2);font:500 max(var(--fs-floor-12),var(--fs-12))/1.2 var(--font-body);color:var(--ink-2);}
+.cot-garage .cot-deploy-op-meta span{display:inline-flex;align-items:center;gap:var(--s2);}
+/* the map's name takes a line of its own under the operation's figures in every row, so the rows' lines align */
+.cot-garage .cot-deploy-op-meta>span:first-child{order:4;flex-basis:100%;}
+.cot-garage .cot-deploy-op-meta svg{color:var(--ink-3);}
+.cot-garage .cot-deploy-op-stars{display:inline-flex;gap:var(--s1);color:var(--ink-3);}
+/* one rendering of an operation's stars and difficulty in its row and its brief */
+.cot-garage .cot-deploy-op-meta .cot-deploy-op-stars svg{color:inherit;}
+/* the stars sit on the meta line at its glyphs' size */
+.cot-garage .cot-deploy-op-stars{align-items:center;}
+.cot-garage .cot-deploy-op-stars i{display:inline-flex;}
+.cot-garage .cot-deploy-op-stars svg{display:block;width:14px;height:14px;}
+.cot-garage .cot-deploy-op-meta .cot-deploy-op-diff{gap:2px;}
+.cot-garage .cot-deploy-op.is-briefed{box-shadow:var(--ring-accent);}
+.cot-garage .cot-deploy-op-stars .on{color:var(--accent);}
+.cot-garage .cot-deploy-op.locked .cot-deploy-op-map{filter:grayscale(1);}
+/* a locked operation's numeral steps down from the open ones' ink but keeps 4.5:1 on its row (ink-4 measured 3.06:1) */
+.cot-garage .cot-deploy-op.locked .cot-deploy-op-index{color:var(--ink-3);}
+.cot-garage .cot-deploy-op-map{display:block;height:66px;border-radius:var(--control-radius);background:var(--surface-raised) center/cover no-repeat;}
+/* beside the screen the six operations share their column's height (a tall window's list ended half way down it, r41-r44);
+   a short column keeps each row's own height and scrolls. A taller row's map grows with it, a wider strip on a wider
+   column, and its number, words and lock stand together in the row's middle (the words pinned to the top of a tall row
+   while the lock stood centred read as two alignments, r45) */
+body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open .cot-deploy-campaign:not([hidden]){display:flex;flex-direction:column;}
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-ops{flex:1 0 auto;grid-auto-rows:minmax(min-content,1fr);}
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op{grid-template-columns:72px clamp(176px,22%,320px) minmax(0,1fr) auto;}
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op-map{height:100%;min-height:66px;max-height:200px;}
+/* a tall window (rows about 200 px) sets the rows' number, name and figures a step larger, with the brief after it (below):
+   small type at the top of a tall row read as a line, not the picture's caption (r44 at 2560) */
+@media (min-height:1200px){
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op{grid-template-columns:96px clamp(176px,22%,320px) minmax(0,1fr) auto;}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op-index{font-size:var(--fs-60);}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op-name{font-size:var(--fs-24);}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op-meta{font-size:var(--fs-14);}
+}
+/* a locked operation keeps readable ink (no dimmed plate); its lock glyph says it is locked */
+.cot-garage .cot-deploy-op.locked .cot-deploy-op-name{color:var(--ink-2);}
+.cot-garage .cot-deploy-op-diff{display:inline-flex;flex:none;width:max-content;gap:2px;}
+.cot-garage .cot-deploy-op-diff i{width:4px;height:12px;border-radius:1px;background:var(--ink-4);}
+.cot-garage .cot-deploy-op-diff i.on{background:var(--ink-1);}
+.cot-garage .cot-deploy-op-launch{display:inline-flex;align-items:center;gap:var(--s2);height:var(--btn-h-m);padding:0 var(--s5);border:0;border-radius:var(--control-radius);background:var(--btn-media-fill);
+  box-shadow:var(--ring-3);color:var(--ink-1);cursor:pointer;font:600 var(--fs-15)/1 var(--font-display);letter-spacing:var(--track-label-s);
+  text-transform:uppercase;}
+.cot-garage .cot-deploy-op.ready .cot-deploy-op-launch{background:var(--btn-primary-fill);color:var(--btn-primary-ink);box-shadow:var(--btn-primary-shadow);}
+@media (hover:hover){.cot-garage .cot-deploy-op-launch:hover{background:var(--surface-hover);}
+  .cot-garage .cot-deploy-op.ready .cot-deploy-op-launch:hover{background:var(--btn-primary-hover);}}
+.cot-garage .cot-deploy-op-lock{color:var(--ink-2);}
+
+/* ---- the campaign tab's plate: the operation in focus over its battlefield (deployScreen.ts brief); a folded layout keeps
+   the operations alone ---- */
+.cot-garage .cot-deploy-brief{display:none;}
+body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-deploy-brief{display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(150px,32%,248px);grid-template-rows:minmax(auto,min(75cqi,62vh)) auto auto auto auto minmax(0,1fr);
+  gap:var(--s4) var(--s5);min-height:0;align-content:start;}
+/* the operation's picture is 16:9 (at most 42vh) and takes a tall plate's room up to 4:3 before the empty last row does (at
+   1920 a 170 px band stood between Launch and the tank, at 2560 390 px, r41-r44); Launch keeps a row of its own, so its
+   height is room the picture never takes */
+.cot-garage .cot-deploy-brief-art{grid-column:1/-1;position:relative;align-self:stretch;min-height:min(56.25cqi,42vh);overflow:hidden;
+  border-radius:var(--control-radius);background:var(--surface-raised);box-shadow:var(--e1);}
+.cot-garage .cot-deploy-brief-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+/* the operation's number and its title stand on one baseline, the title's last line where it wraps (centred, they sat 6-9 px
+   apart, r41) */
+.cot-garage .cot-deploy-brief-head{grid-column:1;display:flex;align-items:last baseline;gap:var(--s4);min-width:0;}
+.cot-garage .cot-deploy-brief-ix{flex:none;font:700 var(--fs-52)/.9 var(--font-display);color:var(--ink-3);}
+.cot-garage .cot-deploy-brief[data-status='cleared'] .cot-deploy-brief-ix{color:var(--ink-1);}
+.cot-garage .cot-deploy-brief-name{margin:0;min-width:0;font:700 var(--fs-28)/1.05 var(--font-display);text-transform:uppercase;
+  color:var(--ink-1);text-wrap:balance;}
+.cot-garage .cot-deploy-brief-text{grid-column:1;margin:0;max-width:56ch;font:400 var(--fs-15)/1.5 var(--font-body);color:var(--ink-2);}
+.cot-garage .cot-deploy-brief-facts{grid-column:1;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3) var(--s4);}
+.cot-garage :is(.cot-deploy-brief-facts,.cot-deploy-camp) .cot-c-rules{font-family:var(--font-body);}
+.cot-garage .cot-deploy-brief-facts .cot-flag{border-radius:1px;box-shadow:var(--ring-2);}
+/* the operation's map and its enemy's flag keep a line of their own under the clock, the stars and the difficulty, at every width */
+.cot-garage .cot-deploy-brief-where{display:flex;align-items:center;gap:var(--s3);flex-basis:100%;}
+/* the tactical map spans the text's rows and the empty last one, so a map taller than the text grows into that row instead
+   of spreading the title, text, facts and Launch apart (58 px over the facts at 2560, r51) */
+.cot-garage .cot-deploy-brief-mm{grid-column:2;grid-row:2/-1;position:relative;align-self:start;aspect-ratio:1;overflow:hidden;
+  border-radius:var(--control-radius);background:var(--surface-page);box-shadow:var(--ring-2);}
+.cot-garage .cot-deploy-brief-mm :is(img,canvas){position:absolute;inset:0;width:100%;height:100%;}
+/* Launch follows its operation's facts (no band between the brief and its action) */
+.cot-garage .cot-deploy-brief-go{grid-column:1;align-self:start;}
+.cot-garage .cot-deploy-brief-lock{display:inline-flex;align-items:center;gap:var(--s2);font:500 var(--fs-14)/1.2 var(--font-body);color:var(--ink-3);}
+/* a tall window's brief: its title, text and facts a step larger, its tactical map up to 420 px and its picture up to 5:4
+   (after the brief's own rules; at 2560 a 160 px band stood under Launch, r48-r49) */
+@media (min-height:1200px){
+  body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-deploy-brief{
+    grid-template-columns:minmax(0,1fr) clamp(150px,40%,420px);grid-template-rows:minmax(auto,min(80cqi,62vh)) auto auto auto auto minmax(0,1fr);}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-brief-name{font-size:var(--fs-36);}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-brief-text{font-size:var(--fs-18);}
+  body[data-cot-panels='persistent'] .cot-garage .cot-deploy-brief-facts :is(.cot-c-rules,.cot-deploy-brief-where){font-size:var(--fs-14);}
+}
+
+/* ---- the side plate (.side) ---- */
+/* the plate's 18 px snaps down to 16, not up to 24: at 24 its time and team-size row wraps and clips at 1280 */
+.cot-garage .cot-deploy-plate{container:deploy-plate/inline-size;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;padding:var(--s4);gap:var(--s3);
+  border-radius:var(--control-radius);background:var(--side-plate);box-shadow:var(--e2-flush);}
+/* the mode's picture behind the plate (owner 2026-10-26; deployScreen.ts showMode), or behind a folded layout's block of
+   rules under the mode picker: cover from each picture's subject, edge to edge, under the grade that keeps the words at
+   4.5:1 and the glyphs at 3:1 over every mode's picture, with the plate's frame on top; the tiles and controls stay plates
+   over it. The incoming layer fades in over the outgoing on the motion tokens; the campaign tab's plate is its operation */
+/* (a folded plate keeps no stacking context: its docked foot stands over the column it scrolls) */
+body:not([data-cot-panels='overlay']) .cot-garage .cot-deploy-plate,body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-details.is-inline{position:relative;isolation:isolate;}
+.cot-garage .cot-deploy-art{position:absolute;inset:0;z-index:var(--z-under);overflow:hidden;border-radius:inherit;pointer-events:none;}
+.cot-garage .cot-deploy-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;opacity:0;
+  transition:opacity var(--dur-screen) var(--ease-move);}
+.cot-garage .cot-deploy-art img.is-front{z-index:var(--z-lift);}
+.cot-garage .cot-deploy-art img.is-on{opacity:1;}
+.cot-garage .cot-deploy-art img.is-snap{transition:none;}
+.cot-garage .cot-deploy-art::after{content:'';position:absolute;inset:0;z-index:var(--z-lift);background:var(--plate-art-grade);box-shadow:var(--e2-flush);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-art::after{box-shadow:none;}
+/* the further options open a form on the picture: the grade deepens under its captions while it is open */
+body:not([data-cot-panels='overlay']) .cot-garage .cot-deploy-plate:has(.cot-battle-solo-options[data-more]) .cot-deploy-art::after,
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-details.is-inline:has(.cot-battle-solo-options[data-more]) .cot-deploy-art::after{background:var(--plate-art-grade-open);}
+.cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-deploy-art{display:none;}
+/* over the picture the rule tiles, the pickers' tracks, the chips, the tank card and Watch are opaque plates: their fills
+   take the raised surface (a chip keeps its wash over it; the translucent plate let the picture through, glass, not a
+   plate), and the words on the picture itself, the further options' captions, take the second ink (the third fell under
+   4.5:1 over a bright sky). A glyph in the options is the kit's ink, not the mode's hue (the Auto globe) */
+body:not([data-cot-panels='overlay']) .cot-garage .cot-battle-menu.open:not([data-deploy-tab='campaign']) .cot-deploy-plate,
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-details.is-inline{--fill-quiet:var(--surface-raised);--fill-faint:var(--surface-raised);
+  --btn-secondary-fill:var(--surface-raised);--chip-fill:var(--plate-chip-fill);--chip-fill-on:var(--plate-chip-fill-on);}
+.cot-garage .cot-battle-menu.open .cot-mode-settings{--mode-ink:initial;}
+body:not([data-cot-panels='overlay']) .cot-garage .cot-battle-menu.open:not([data-deploy-tab='campaign']) .cot-deploy-plate :is(.cot-teams>b,.cot-arrange-field>span,.cot-battle-mars-field,.cot-battle-menu-label),
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-details.is-inline :is(.cot-teams>b,.cot-arrange-field>span,.cot-battle-mars-field,.cot-battle-menu-label){color:var(--ink-2);}
+/* a phone's battlefield picker opens in the block's place, on the block's own fill: the picture steps aside while it is open */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-details.is-inline:has(.cot-deploy-field-pop:not([hidden])) .cot-deploy-art{display:none;}
+.cot-garage .cot-deploy-art img[data-mode='standard']{object-position:72% 45%;}
+.cot-garage .cot-deploy-art img[data-mode='drone']{object-position:82% 70%;}
+.cot-garage .cot-deploy-art img[data-mode='zone_control']{object-position:55% 55%;}
+.cot-garage .cot-deploy-art img[data-mode='capture_the_flag']{object-position:36% 60%;}
+.cot-garage .cot-deploy-art img[data-mode='frontline_assault']{object-position:72% 50%;}
+.cot-garage .cot-deploy-art img[data-mode='turbo_ball']{object-position:38% 40%;}
+.cot-garage .cot-deploy-art img[data-mode='mars']{object-position:55% 45%;}
+.cot-garage .cot-deploy-art img[data-mode='endless_horde']{object-position:60% 55%;}
+.cot-garage .cot-deploy-art img[data-mode='gun_game']{object-position:56% 55%;}
+.cot-garage .cot-deploy-art img[data-mode='juggernaut']{object-position:52% 45%;}
+.cot-garage .cot-deploy-art img[data-mode='infected']{object-position:45% 55%;}
+.cot-garage .cot-deploy-art img[data-mode='realistic']{object-position:55% 50%;}
+.cot-garage .cot-deploy-art img[data-mode='ac130']{object-position:42% 60%;}
+.cot-garage .cot-deploy-art img[data-mode='proving_ground']{object-position:50% 55%;}
+.cot-garage .cot-battle-menu.open .cot-battle-details{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:var(--s3);
+  padding:0;border:0;background:none;scrollbar-width:thin;}
+/* the selected mode (.sel-h) */
+.cot-garage .cot-battle-menu.open .cot-battle-preview{display:flex;align-items:center;gap:var(--s4);margin:0;}
+/* the heading's mode glyph is filled on a slate plate (the accent is the primary's and the selection's) */
+.cot-garage .cot-battle-menu.open .cot-battle-preview-icon{display:grid;place-items:center;width:46px;height:46px;flex:none;border:0;
+  border-radius:var(--control-radius);background:var(--surface-hover);color:var(--ink-1);box-shadow:var(--ring-2);}
+.cot-garage .cot-battle-menu.open .cot-battle-preview-icon svg{width:26px;height:26px;}
+.cot-garage .cot-battle-menu.open .cot-battle-preview-icon svg{color:var(--mode-ink,var(--ink-2));}
+.cot-garage .cot-battle-menu.open .cot-battle-preview h3{margin:0;font:700 var(--fs-28)/1 var(--font-display);text-transform:uppercase;color:var(--ink-1);}
+/* its six rules (.rc): the glyph, the value, the name */
+.cot-garage .cot-deploy-rules{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--s2);margin:0;}
+.cot-garage .cot-deploy-rule{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s3) var(--s2) var(--s2);border-radius:var(--control-radius);
+  background:var(--fill-quiet);box-shadow:var(--ring-1);text-align:center;}
+.cot-garage .cot-deploy-rule>svg{width:19px;height:19px;color:var(--ink-2);}
+.cot-garage .cot-deploy-rule dd{order:1;margin:0;font:700 max(var(--fs-floor-12),var(--fs-15))/1 var(--font-display);white-space:nowrap;color:var(--ink-1);}
+.cot-garage .cot-deploy-rule dt{order:2;min-width:0;font:600 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--ink-3);}
+/* a plate narrower than the six values' widest ("Elimination") sets them three across */
+@container deploy-plate (max-width:640px){.cot-garage .cot-deploy-rules{grid-template-columns:repeat(3,minmax(0,1fr));}}
+/* five rules: one row of five on a wide plate; on a narrow one three over two, the two sharing the row (no hole) */
+.cot-garage .cot-deploy-rules[data-count='5']{grid-template-columns:repeat(5,minmax(0,1fr));}
+@container deploy-plate (max-width:640px){
+  .cot-garage .cot-deploy-rules[data-count='5']{grid-template-columns:repeat(6,minmax(0,1fr));}
+  .cot-garage .cot-deploy-rules[data-count='5']>.cot-deploy-rule{grid-column:span 2;}
+  .cot-garage .cot-deploy-rules[data-count='5']>.cot-deploy-rule:nth-child(5){grid-column:span 4;}
+}
+/* a tablet's campaign list gives the operation's name the width its picture took */
+body[data-cot-width='tablet'] .cot-garage .cot-deploy-op{grid-template-columns:56px 120px minmax(0,1fr) auto;}
+/* the battlefield (.bfield): its art, name and region over a fade, the count to pick from, the tactical map beside it */
+/* the field grows into the plate's free height; its floor is low enough that a 768 px screen keeps the options in view */
+/* the field clips nothing (its picker opens past its box): its art and its map clip themselves to its corners */
+.cot-garage .cot-deploy-field{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;flex:1 0 auto;
+  min-height:clamp(112px,15vh,240px);border-radius:var(--control-radius);background:var(--surface-page);box-shadow:var(--e1);}
+/* past half the plate's width the card's square map would starve its picture and name (the range at 2560): it stops
+   there, and the room it leaves opens the mode's picture under the rules */
+body:not([data-cot-panels='overlay']) .cot-garage .cot-battle-details:not(.is-picking) .cot-deploy-field:not(:has(.cot-deploy-field-pop:not([hidden]))){
+  max-height:50cqi;margin-top:auto;}
+.cot-garage .cot-deploy-field-card{position:relative;display:block;min-width:0;height:100%;padding:0;border:0;border-radius:var(--control-radius) 0 0 var(--control-radius);
+  background:none;color:var(--ink-1);cursor:pointer;text-align:left;overflow:hidden;}
+.cot-garage .cot-deploy-field:has(.cot-deploy-field-mm img[hidden]) .cot-deploy-field-card{border-radius:var(--control-radius);}
+/* the open picker's field keeps the accent ring over its art and its tactical map, one ring round the whole card (on the
+   picture button alone it left the map outside, r40); where the picker opens in the card's place the card has no ring */
+.cot-garage .cot-deploy-field:has(>.cot-deploy-field-card[aria-expanded='true']):not(:has(.cot-deploy-field-pop:not([hidden])))::after{
+  content:'';position:absolute;inset:0;z-index:var(--z-lift);border-radius:inherit;box-shadow:var(--ring-accent);pointer-events:none;}
+.cot-garage .cot-deploy-field-thumb{position:absolute;inset:0;display:block;background:var(--surface-hover) center/cover no-repeat;}
+.cot-garage .cot-deploy-field-thumb::after{content:'';position:absolute;inset:0;background:var(--media-fade-soft);}
+.cot-garage .cot-deploy-field-thumb .random-map-mosaic{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;width:100%;height:100%;}
+.cot-garage .cot-deploy-field-thumb .random-map-tile{display:block;background:center/cover no-repeat;}
+/* the name and its tags sit on the scrim band the mode tiles use (it fades only in its top padding), so the name holds
+   4.5:1 over snow and sand */
+.cot-garage .cot-deploy-field-nm{position:absolute;z-index:var(--z-lift);left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:var(--s2);
+  padding:var(--s5) 12px 12px 14px;background:linear-gradient(0deg,var(--scrim) calc(100% - var(--s5)),transparent);}
+.cot-garage .cot-deploy-field-name{font:700 var(--fs-24)/1 var(--font-display);text-transform:uppercase;text-shadow:var(--hollow-shadow);}
+.cot-garage .cot-deploy-field-tags .cot-c-rules{gap:var(--s3);font-family:var(--font-body);color:var(--ink-2);}
+.cot-garage .cot-deploy-field-all{position:absolute;z-index:var(--z-lift);left:12px;top:12px;background:var(--glyph-plate);}
+.cot-garage .cot-deploy-field-mm{position:relative;height:100%;aspect-ratio:1;overflow:hidden;border-radius:0 var(--control-radius) var(--control-radius) 0;
+  background:var(--surface-page);border-left:1px solid var(--line-2);}
+.cot-garage .cot-deploy-field-mm img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.cot-garage .cot-deploy-field-mm img[hidden]{display:none;}
+/* the opening objectives over it (deployObjectives.ts) */
+.cot-garage .cot-deploy-field-obj{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+/* the random battlefield has no one map to show: its mosaic takes the whole card */
+.cot-garage .cot-deploy-field-mm:has(img[hidden]){display:none;}
+/* the battlefield picker opens in the field's place (no transient layer over the pickers under it), scrolling within
+   its own height under a foot fade; the field's art and map step aside while it is open */
+.cot-garage .cot-deploy-field-pop{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;}
+.cot-garage .cot-deploy-field:has(.cot-deploy-field-pop:not([hidden])) :is(.cot-deploy-field-card,.cot-deploy-field-mm){display:none;}
+/* the open picker is the field: one plate (the picker's own), on the column's edge, as tall as its list */
+body[data-cot-panels] .cot-garage .cot-deploy-field:has(.cot-deploy-field-pop:not([hidden])){display:flex;flex-direction:column;flex:1 1 0;
+  min-height:min(240px,30vh);background:none;box-shadow:none;}
+/* while a battlefield is picked the rules step aside, so the picker has their height and the column holds still */
+.cot-garage .cot-battle-details.is-picking .cot-deploy-rules{display:none;}
+/* in a phone's column the open picker stands in the field's and the rules' place at a definite height (the Rooms host's),
+   so its cards scroll in place under its head; the further options open under the pickers with the field held at its
+   resting height (deployScreen.ts measures it) */
+/* (its plate fits whole from its head to the picker's foot between the column's top fade and the dock's, so the plate's
+   frame reads closed when the picker scrolls into view: 100dvh less the header and tabs, the plate's head and the dock, r51) */
+body[data-cot-panels] .cot-garage .cot-battle-details.is-picking .cot-deploy-field{flex:none;min-height:0;height:clamp(180px,min(62dvh,100dvh - 342px),560px);}
+@media (max-height:500px) and (orientation:landscape){
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-bf .cot-bf__preview{display:none;}
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-bf .cot-bf__in{grid-template-columns:minmax(0,1fr);}
+  /* a whole row of cards shows under the search: six narrow cards, each its picture and its name */
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-bf .cot-c-picker__grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-bf .cot-c-picker__facts{display:none;}
+  /* the head's close steps into the search row's end (its label goes: the picker names itself), so that row of cards
+     clears the dock */
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field-pop{position:relative;}
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field-head{position:absolute;top:0;right:0;z-index:var(--z-lift);margin:0;}
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field-head>:not(.cot-deploy-field-close){display:none;}
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-bf .cot-c-picker__bar{padding-right:calc(var(--cot-control-floor,44px) + var(--s2));}
+}
+.cot-garage .cot-battle-menu.open .cot-battle-solo-options[data-more] :is([data-mars-label],.cot-battle-mars,.cot-mode-settings){order:0;}
+/* the options take their room from the battlefield card, which may yield all of it: the pickers under them hold still */
+/* a tall screen's card yields the options their room and keeps its name and count over its art (its tags and map step
+   aside; the count stays, the card barely shrinks, r48) */
+@media (min-height:1000px){
+  body[data-cot-panels='persistent'] .cot-garage .cot-battle-details.is-more .cot-deploy-field{flex:1 1 0;min-height:0;}
+  .cot-garage .cot-battle-details.is-more .cot-deploy-field :is(.cot-deploy-field-mm,.cot-deploy-field-tags){display:none;}
+}
+/* below 1000 px tall (and on a phone) the card steps aside and the options keep its height */
+@media (max-height:999px){
+  body[data-cot-panels='persistent'] .cot-garage .cot-battle-details.is-more .cot-deploy-field{display:none;}
+  body[data-cot-panels='persistent'] .cot-garage .cot-battle-details.is-more .cot-mode-settings{min-height:var(--field-rest,auto);align-content:start;}
+}
+/* a phone's options take the rules' and the card's room (as the picker does), so the pickers under them hold still */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-details.is-more :is(.cot-deploy-field,.cot-deploy-rules){display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-details.is-more .cot-mode-settings{min-height:calc(var(--field-rest,0px) + var(--rules-rest,0px) + var(--s3));align-content:start;}
+/* beside the screen, an operation launches from its brief's one primary; a phone's rows keep their own */
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op-launch{display:none;}
+/* a phone's column has no height to share: the open picker takes a fixed one and scrolls its list */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field:has(.cot-deploy-field-pop:not([hidden])){flex:none;}
+/* a docked Deploy opens the picker in the mode list's place: the list's width and height give its cards and the preview
+   beside them their room, and the plate beside it (the field, the rules, the pickers, Deploy) holds still; the field
+   that opened it keeps the accent ring while it is open. The list lets the cards' rings past its edge */
+body[data-cot-panels='persistent'] .cot-garage #cot-deploy-quick.is-picking{overflow:visible;}
+body[data-cot-panels='persistent'] .cot-garage #cot-deploy-quick.is-picking>:not(.cot-deploy-field-pop){display:none;}
+/* a docked list from 560 px wide sets the preview beside the cards (the kit's picker does from 720): stacked, at a compact
+   height the preview took the list's room and left the cards a row. The cards keep two of the kit's 150 px columns */
+/* the tactical map inset keeps its square inside a short preview (phone landscape): the picture box is a size container */
+.cot-deploy-bf .cot-bf__hero{container-type:size;}
+.cot-deploy-bf .cot-bf__map{width:min(34cqw,100cqh - var(--s3) * 2);}
+/* Random's mosaic covers the preview's picture box, whatever its height (the kit's media layer sets its children relative) */
+.cot-deploy-bf .cot-bf__hero>.cot-c-picker__mosaic{position:absolute;inset:0;grid-template-rows:1fr 1fr;}
+/* beside the cards the preview's picture takes its column's height (a docked list is far taller than one 16:9 frame) */
+@container (width >= 560px){
+  .cot-deploy-bf .cot-bf__preview{height:100%;}
+  .cot-deploy-bf .cot-bf__hero{flex:1 1 auto;aspect-ratio:auto;}
+}
+@container (560px <= width < 720px){
+  .cot-deploy-bf .cot-bf__in{grid-template-columns:minmax(0,1fr) minmax(calc(300px + var(--s3)),1.15fr);grid-template-rows:minmax(0,1fr);align-items:start;}
+  .cot-deploy-bf .cot-bf__cards{height:100%;}
+}
+/* the open picker: its head (the battlefield label in the panel's label style, its close) over the kit's battlefield
+   picker (battlefieldPicker.ts), which takes the rest of its room */
+.cot-garage .cot-deploy-field-head{display:flex;align-items:center;gap:var(--s2);min-height:24px;margin-bottom:var(--s3);
+  font:600 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label);text-transform:uppercase;color:var(--ink-3);}
+.cot-garage .cot-deploy-field-head>svg{flex:none;width:16px;height:16px;}
+body[data-cot-input='coarse'] .cot-garage .cot-deploy-field-head{min-height:var(--cot-control-floor);}
+.cot-garage .cot-deploy-field-head .cot-deploy-field-close{--h:24px;flex:none;margin-left:auto;box-shadow:var(--ring-2);color:var(--ink-3);}
+.cot-garage .cot-deploy-field-head .cot-deploy-field-close:hover{background:var(--surface-hover);box-shadow:var(--ring-3);color:var(--ink-1);}
+body[data-cot-input='coarse'] .cot-garage .cot-deploy-field-head .cot-deploy-field-close{--h:var(--cot-control-floor);}
+.cot-garage .cot-deploy-bf{flex:1 1 auto;min-height:0;}
+.cot-garage .cot-deploy-field-pop[hidden]{display:none;}
+/* the time, the sides and the bot tier in one row (.ctl, .seg); the mode's own settings open under it on the toggle */
+.cot-garage .cot-battle-menu.open .cot-battle-solo-options{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);}
+.cot-garage .cot-battle-menu.open [data-team-options]{display:contents;}
+.cot-garage .cot-battle-menu.open [data-team-options][hidden]>*{display:none;}
+.cot-garage .cot-battle-menu.open :is(.cot-battle-times,.cot-battle-galaxy){order:1;}
+.cot-garage .cot-battle-menu.open .cot-battle-sides{order:2;}
+.cot-garage .cot-deploy-diff{order:3;}
+.cot-garage .cot-deploy-more{order:4;}
+.cot-garage .cot-battle-menu.open :is([data-mars-label],.cot-battle-mars,.cot-mode-settings){order:5;flex:1 1 100%;}
+.cot-garage .cot-battle-menu.open .cot-battle-solo-options:not([data-more]) :is([data-mars-label],.cot-battle-mars,.cot-mode-settings){display:none;}
+/* the range's one setting, its targets, stands in the row with nothing to open: no gear alone in an empty row (r41-r44), and
+   its rules card leaves the targets to the switch (garage.ts renderDeployRules) */
+.cot-garage .cot-battle-menu.open .cot-battle-solo-options[data-range]:not([data-more]) .cot-mode-settings{display:grid;}
+.cot-garage .cot-battle-menu.open .cot-battle-solo-options[data-range] .cot-deploy-more{display:none;}
+/* a time shows its name while it is in the draw; the rest show their glyph */
+.cot-garage .cot-battle-menu.open .cot-time-choice input:not(:checked)+.cot-time-content{padding:0 var(--s3);}
+.cot-garage .cot-battle-menu.open .cot-time-choice input:not(:checked)+.cot-time-content .cot-time-name{position:absolute;width:1px;height:1px;
+  overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.cot-garage .cot-deploy-diff{display:inline-flex;align-items:center;gap:0;padding:3px 3px 3px var(--s3);border-radius:var(--control-radius);
+  background:var(--fill-quiet);box-shadow:var(--ring-1);color:var(--ink-3);}
+.cot-garage .cot-deploy-diff[hidden]{display:none;}
+.cot-garage .cot-deploy-diff>svg{width:16px;height:16px;margin-right:var(--s1);}
+/* the tiers are the kit's segmented control on the bots' plate (one plate: the control's own steps aside) */
+.cot-garage .cot-deploy-diff .cot-c-seg{padding:0;background:none;box-shadow:none;}
+.cot-garage .cot-deploy-more{display:grid;place-items:center;width:40px;height:40px;margin-left:auto;padding:0;border:0;border-radius:var(--control-radius);
+  background:var(--fill-quiet);box-shadow:var(--ring-1);color:var(--ink-2);cursor:pointer;}
+.cot-garage .cot-deploy-more svg{width:18px;height:18px;}
+/* open, the gear takes the kit's one selected state, so it reads as the open disclosure rather than a hover (r41) */
+.cot-garage .cot-deploy-more[aria-expanded='true']{color:var(--ink-1);background:var(--accent-wash);box-shadow:var(--ring-accent);}
+@media (hover:hover){.cot-garage .cot-deploy-more:hover{color:var(--ink-1);}}
+.cot-garage .cot-battle-menu.open [data-team-options]>.cot-battle-menu-label,
+.cot-garage .cot-battle-menu.open .cot-battle-times legend,
+.cot-garage .cot-battle-menu.open .cot-mode-features{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.cot-garage .cot-battle-menu.open .cot-battle-times{display:inline-flex;gap:var(--s1);margin:0;padding:0;border:0;}
+/* a mode in its own light keeps no time choice: Mars's galaxy, the range's day (the inline-flex above outranked [hidden]) */
+.cot-garage .cot-battle-menu.open .cot-battle-times[hidden]{display:none;}
+/* the 34 px pills snap their 13 px sides down to 12, not up to 16: at 16 the time and team-size rows wrap at 1440 */
+.cot-garage .cot-battle-menu.open .cot-time-content{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);
+  min-height:34px;height:34px;padding:0 var(--s3);border:0;border-radius:var(--control-radius);background:transparent;color:var(--ink-3);
+  font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);letter-spacing:normal;cursor:pointer;}
+.cot-garage .cot-battle-menu.open .cot-time-content{height:40px;min-height:40px;border-radius:var(--chip-radius);background:var(--chip-fill);box-shadow:var(--ring-2);color:var(--ink-2);}
+.cot-garage .cot-battle-menu.open .cot-time-choice{flex:none;min-width:0;}
+.cot-garage .cot-battle-menu.open .cot-time-content{flex-direction:row;}
+.cot-garage .cot-battle-menu.open .cot-time-content svg{width:16px;height:16px;flex:none;}
+/* a time in the draw is a pressed chip (the kit's); the sides are the kit's segmented control */
+.cot-garage .cot-battle-menu.open .cot-time-choice input:checked+.cot-time-content{background:var(--chip-fill-on);color:var(--ink-1);box-shadow:var(--ring-accent);}
+.cot-garage .cot-battle-menu.open .cot-time-choice input:focus-visible+.cot-time-content{outline:2px solid var(--focus-bracket-color);outline-offset:1px;}
+.cot-garage .cot-battle-menu.open .cot-battle-times small,.cot-garage .cot-battle-menu.open .cot-time-check{display:none;}
+.cot-garage .cot-battle-menu.open .cot-battle-menu-label{padding:0 0 var(--s2);color:var(--ink-3);font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-body);}
+.cot-garage .cot-battle-menu.open .cot-battle-mars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);flex:1 1 100%;}
+.cot-garage .cot-battle-menu.open .cot-battle-mars[hidden],.cot-garage .cot-battle-menu.open [data-mars-label][hidden]{display:none;}
+.cot-garage .cot-battle-menu.open .cot-battle-mars-field{display:grid;gap:var(--s2);font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-body);color:var(--ink-3);}
+/* Mars's sky stands in the times' place as their lit chip (the kit's), as tall as the sides beside it */
+.cot-garage .cot-battle-menu.open .cot-battle-galaxy{display:inline-flex;align-items:center;justify-content:center;align-self:stretch;gap:var(--s2);
+  min-height:34px;padding:0 var(--s3);border:0;border-radius:var(--chip-radius);background:var(--chip-fill-on);box-shadow:var(--ring-accent);
+  color:var(--ink-1);font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);}
+.cot-garage .cot-battle-menu.open .cot-battle-galaxy>svg{flex:none;width:16px;height:16px;}
+.cot-garage .cot-battle-menu.open .cot-battle-galaxy strong{font:inherit;color:inherit;}
+/* a phone's row holds the times or the sky alone, as the three times fill theirs */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-galaxy{flex:1 1 100%;}
+.cot-garage .cot-battle-menu.open .cot-battle-galaxy[hidden]{display:none;}
+.cot-garage .cot-battle-menu.open .cot-mode-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:var(--s3);margin:0;flex:1 1 100%;}
+.cot-garage .cot-battle-menu.open .cot-mode-settings>.cot-arrange-field[hidden]{display:none;}
+.cot-garage .cot-battle-menu.open :is(.cot-teams>b,.cot-arrange-field>span){display:block;padding:0 0 var(--s2);color:var(--ink-3);
+  font:600 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-display);letter-spacing:var(--track-label);text-transform:uppercase;}
+.cot-garage .cot-battle-menu.open .cot-teams{flex-direction:column;align-items:flex-start;gap:0;}
+/* every segmented control on the plate stands one height (the range's Targets stood 2 px shorter than the sides, r49) */
+.cot-garage .cot-battle-menu.open :is(.cot-teams button,.cot-battle-sides .cot-c-seg__opt,.cot-arrange-seg .cot-c-seg__opt){height:34px;}
+.cot-garage .cot-battle-menu.open .cot-arrange-field .cot-c-menu__trigger{min-height:40px;}
+body[data-cot-input='coarse'] .cot-garage .cot-battle-menu.open .cot-arrange-field .cot-c-menu__trigger{min-height:var(--cot-control-floor);}
+/* a segmented setting is as wide as its values beside the screen, as the sides and the team size are (filling its cell
+   stretched the range's Still and Moving to half the plate, r41), and fills its row on a phone as theirs do */
+.cot-garage .cot-battle-menu.open .cot-arrange-seg{justify-self:start;max-width:100%;}
+.cot-garage .cot-battle-menu.open .cot-arrange-seg .cot-c-seg__opt{flex:1 1 auto;min-width:0;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-arrange-seg{display:flex;justify-self:stretch;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-arrange-seg .cot-c-seg__opt{flex:1 1 0;}
+.cot-garage .cot-battle-menu.open .cot-arrange-field[data-mode-field='juggernautRole']{grid-column:1/-1;}
+
+/* ---- the foot: the tank (.tank) and one Deploy bar (.deploy) ---- */
+.cot-garage .cot-battle-menu.open .cot-battle-menu-foot{display:flex;flex-direction:column;gap:var(--s3);padding:0;border:0;background:none;}
+.cot-garage .cot-battle-menu.open .cot-battle-menu-foot::before,.cot-garage .cot-battle-menu.open .cot-battle-menu-foot::after{display:none;}
+.cot-garage .cot-battle-menu.open .cot-battle-menu-foot>span{display:none;}
+.cot-garage .cot-deploy-tank{display:flex;align-items:center;gap:var(--s3);padding:var(--s2);border-radius:var(--control-radius);background:var(--fill-quiet);box-shadow:var(--ring-1);}
+.cot-garage .cot-deploy-tank:empty{display:none;}
+.cot-garage .cot-deploy-tank .cot-card{position:relative;width:132px;height:80px;min-height:0;flex:none;margin:0;pointer-events:none;}
+.cot-garage .cot-deploy-tank .cot-card :is(.nm,.hc-tier,.hc-class){display:none;}
+.cot-garage .cot-deploy-tank .info{display:flex;flex-direction:column;justify-content:center;gap:var(--s2);flex:1;min-width:0;}
+/* the name over its flag, and its readiness (the kit's tag) at the row's end */
+.cot-garage .cot-deploy-tank .head{display:flex;align-items:center;gap:var(--s2);min-width:0;}
+.cot-garage .cot-deploy-tank .head b{display:flex;flex:1;align-items:center;gap:var(--s2);min-width:0;font:700 var(--fs-20)/1 var(--font-display);text-transform:uppercase;color:var(--ink-1);}
+.cot-garage .cot-deploy-tank .head b>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cot-garage .cot-deploy-tank .head b img{display:none;flex:none;box-shadow:var(--flag-ring);border-radius:1px;}
+.cot-garage .cot-deploy-tank .head .cot-c-tag{flex:none;}
+/* the rounds and fittings: the kit's stat chips, wrapping under the name */
+.cot-garage .cot-deploy-tank .load{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1);}
+.cot-garage .cot-deploy-tank .chg{--h:40px;align-self:center;flex:none;background:var(--fill-quiet);box-shadow:var(--ring-1);color:var(--ink-2);}
+/* a round reads by its glyph and figure where its name would wrap the row (its name is its tip): the rounds keep one row
+   in every locale */
+@container deploy-plate (max-width:560px){
+  .cot-garage .cot-deploy-tank .load .cot-c-statchip__label{display:none;}
+}
+/* a narrow plate's chips close up (their inner gap and padding) and drop the unit (millimetres: the tip names it) so the
+   three rounds keep one row in every locale */
+@container deploy-plate (max-width:360px){
+  .cot-garage .cot-deploy-tank .load .cot-c-statchip{gap:3px;padding-inline:var(--s1);}
+  .cot-garage .cot-deploy-tank .load .cot-c-statchip small{display:none;}
+}
+@container deploy-plate (max-width:480px){
+  .cot-garage .cot-deploy-tank .cot-card{display:none;}
+  .cot-garage .cot-deploy-tank .head b img{display:block;}
+}
+/* the estimate beside its key (.deploy span) */
+.cot-garage .cot-deploy-end{display:flex;align-items:center;gap:var(--s3);font:500 var(--fs-13)/1 var(--font-body);}
+/* the keys the screen answers (.hints), for a keyboard */
+.cot-garage .cot-deploy-keys{grid-row:3;display:flex;align-items:center;gap:var(--s5);height:40px;padding:0 var(--s5);border-top:1px solid var(--line-1);
+  font:500 max(var(--fs-floor-12),var(--fs-12))/1 var(--font-body);color:var(--ink-3);}
+.cot-garage .cot-deploy-keys>span{display:inline-flex;align-items:center;gap:var(--s2);}
+@media (pointer:coarse){.cot-garage .cot-deploy-keys{display:none;}}
+/* the action row (.deploy): Couch and Watch are the kit's secondary and Deploy its primary (components.css .cot-c-btn), so
+   the three share one height, radius, glyph size, label face and the kit's hover, press, focus and unavailable states;
+   the row sets only their size and Deploy's weight (owner 2026-11-11: Couch read as a placeholder from another kit) */
+.cot-garage .cot-deploy-acts{--deploy-act-h:66px;display:flex;align-items:stretch;gap:var(--s3);min-width:0;}
+.cot-garage .cot-deploy-acts>.cot-c-btn{--h:var(--deploy-act-h);flex:none;gap:var(--s3);padding:0 var(--s5);
+  font:700 var(--fs-18)/1 var(--font-display);letter-spacing:var(--track-label-s);}
+.cot-garage .cot-deploy-acts>.cot-c-btn svg{width:20px;height:20px;flex:none;}
+@media (hover:hover){.cot-garage .cot-deploy-acts>.cot-c-btn--secondary:hover:not(:disabled){box-shadow:var(--btn-secondary-ring-hover);}}
+/* Deploy, the one primary, fills the row: its edge is the kit's bevel (a lit top, a shaded foot) under the lift, and a
+   press sinks it (the lift goes, the kit's drop and darker fill) */
+.cot-garage .cot-deploy-acts>.cot-c-btn--primary{flex:1;min-width:0;justify-content:space-between;
+  box-shadow:var(--btn-primary-lift);}
+.cot-garage .cot-deploy-acts>.cot-c-btn--primary:active{box-shadow:var(--btn-primary-bevel);}
+.cot-garage .cot-deploy-go{display:flex;align-items:center;gap:var(--s3);min-width:0;font:700 var(--fs-28)/1 var(--font-display);
+  letter-spacing:var(--track-label);}
+.cot-garage .cot-deploy-acts>.cot-c-btn--primary .cot-c-kbd{color:var(--kbd-on-accent-ink);box-shadow:var(--kbd-on-accent-ring);}
+/* focus: the kit's ring outside the button, on any fill (the menu's inset outline was lost in Deploy's accent) */
+.cot-garage .cot-deploy-acts>.cot-c-btn:focus-visible{outline:none;box-shadow:var(--focus-ring);}
+.cot-garage .cot-deploy-acts>.cot-c-btn--primary:focus-visible{box-shadow:var(--btn-primary-focus);}
+/* unavailable (Couch outside its modes, Watch where nothing can be watched): the kit's own, its ring kept on this row;
+   Couch names why on hover (garage.ts couchOff, the kit's hover tip) */
+.cot-garage .cot-deploy-acts>.cot-c-btn:disabled{box-shadow:var(--ring-2);}
+/* a solo practice mode (the range) has nothing to watch or share: Deploy takes the row */
+.cot-garage .cot-deploy-acts>.cot-c-btn[hidden]{display:none;}
+
+/* ---- folded layouts: the direction's phone Deploy (91-phone-deploy.html): the bar, the ways to play as pills, the
+   modes as rows with the chosen one opened over its picture, the plate under them, Deploy docked at the bottom ---- */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-head{flex-wrap:wrap;gap:var(--s2) var(--s3);height:auto;padding:max(6px,env(safe-area-inset-top)) var(--s3) 0 var(--s1);
+  background:var(--surface-page);border-bottom:1px solid var(--line-1);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-back{width:44px;justify-content:center;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-back>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-back svg{width:22px;height:22px;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-title{font-size:var(--fs-20);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tabs{flex:1 0 100%;height:auto;gap:var(--s2);padding:0 var(--s6) 0 var(--s2);overflow-x:auto;
+  mask-image:linear-gradient(90deg,var(--ink-1) calc(100% - var(--s6)),transparent);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tab{flex:none;height:40px;gap:var(--s2);padding:0 var(--s2);border-radius:0;
+  box-shadow:none;font-size:max(var(--fs-floor-12),var(--fs-13));}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tab svg{width:15px;height:15px;}
+/* the phone's tabs are the desktop's: text over the selected one's underline, the others in the desktop's ink (ink-2 was
+   the phone's chip tabs' own, r46) */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tab[aria-selected='true']{color:var(--ink-1);}
+/* a phone held upright sets its four tabs across the width as words alone (with their glyphs a 390 px phone showed two and
+   a half, Local network off the screen, r41-r44); a narrower phone scrolls them under the fade, which shows only where
+   they overflow (deployScreen.ts marks .is-scrollable) */
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-deploy-tabs{justify-content:space-between;gap:var(--s2);
+  padding:0 0 0 var(--s2);mask-image:none;}
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-deploy-tabs.is-scrollable{padding-right:var(--s6);
+  mask-image:linear-gradient(90deg,var(--ink-1) calc(100% - var(--s6)),transparent);}
+/* (on the column's 12 px gutter, the room between them shared out, each underline its words' as on the desktop, r49) */
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-deploy-tab{flex:none;padding:0;
+  font-size:max(var(--fs-floor-12),var(--fs-12));}
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-deploy-tab svg{display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-menu-scroll{grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;
+  overflow:auto;gap:var(--s3);padding:var(--s3) var(--s3) calc(96px + env(safe-area-inset-bottom));}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-mode-list{overflow:visible;gap:var(--s2);}
+body[data-cot-panels='overlay'] .cot-garage :is(.cot-deploy-lower,.cot-deploy-keys){display:none;}
+/* a phone's column gives the mode picker a definite height (as the battlefield picker's), its cards scrolling in place */
+/* (its foot stands clear of the dock's fade too: a 390 px tall phone's floor of 200 px set the chosen last card's ring and
+   name under it, r45) */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-modes{flex:none;height:clamp(160px,min(52dvh,100dvh - 190px - var(--s5)),520px);min-height:0;margin-bottom:var(--s3);}
+/* a phone held upright gives the plate's head and its first row of rules the room above the dock's fade (at 390x844 the
+   rules' labels sat under it at rest, r272); the picker still shows its third row's edge, so it reads as scrolling */
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-deploy-modes{height:clamp(160px,min(49dvh,100dvh - 190px - var(--s5)),520px);}
+/* the head's last battle again, as "Again" (91's .bar .again), and the Deploy bar's estimate */
+.cot-garage .cot-deploy-again .short{display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-again{order:1;margin:0 0 0 auto;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tabs{order:2;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-again .full{display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-again .short{display:inline;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-end{font-size:var(--fs-13);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-plate{display:block;padding:var(--s3);box-shadow:var(--e1);}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-details{overflow:visible;gap:var(--s3);}
+/* the details under a phone's mode picker lead with the chosen mode's name (its card scrolls with the picker) */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-preview{gap:var(--s3);}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-preview-icon{width:36px;height:36px;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-preview-icon svg{width:21px;height:21px;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-preview h3{font-size:var(--fs-20);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-rules{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s2);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-rules[data-count='5']{grid-template-columns:repeat(6,minmax(0,1fr));}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-rules[data-count='5']>.cot-deploy-rule{grid-column:span 2;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-rules[data-count='5']>.cot-deploy-rule:nth-child(5){grid-column:span 4;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field{min-height:120px;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-field-name{font-size:var(--fs-18);}
+/* the dock (.dock .dep): the tank and Deploy, over the safe area */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-menu-foot{position:fixed;z-index:var(--z-lift);left:0;right:0;bottom:0;
+  flex-direction:row;align-items:center;gap:var(--s3);padding:var(--s3) var(--s3) max(10px,env(safe-area-inset-bottom));background:var(--surface-page);
+  border-top:1px solid var(--line-1);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tank{flex:none;padding:0;background:none;box-shadow:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tank .cot-card{width:96px;height:58px;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tank :is(.info,.chg){display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-acts{--deploy-act-h:58px;flex:1;min-width:0;gap:var(--s2);}
+/* a phone's dock holds the tank, Couch, Watch and Deploy: Couch and Watch are their glyphs on square keys (their names
+   stay their accessible names) */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-acts>.cot-c-btn--secondary{width:var(--h);padding:0;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-acts>.cot-c-btn--secondary>span{position:absolute;width:1px;height:1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-go{font-size:var(--fs-24);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-op{grid-template-columns:48px minmax(0,1fr) auto;gap:var(--s3);padding:var(--s3);}
+/* a phone's Launch takes its own line under the operation, so every row's text keeps the row's width */
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-op-launch{grid-column:1/-1;justify-self:stretch;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-op-map{display:none;}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-op-index{font-size:var(--fs-32);}
+@media (prefers-reduced-motion:reduce){.cot-garage .cot-battle-menu.open *{transition:none;}}
+/* a phone held upright keeps the tab bar under the Deploy screen (showroom.css): the dock and the scroll stand over it */
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-battle-menu.open{bottom:calc(var(--cot-tabbar-h) + env(safe-area-inset-bottom,0px));}
+body[data-cot-panels='overlay'][data-cot-orientation='portrait'] .cot-garage .cot-battle-menu.open .cot-battle-menu-foot{
+  bottom:calc(var(--cot-tabbar-h) + env(safe-area-inset-bottom,0px));padding-bottom:var(--s3);}
+/* a folded layout opens the chosen mode in place (91's .sel, deployScreen.ts): the plate's rules, battlefield and pickers
+   under its card or row, the two framed as one block in the accent; the plate keeps only the docked foot */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-details.is-inline{display:flex;flex-direction:column;gap:var(--s3);
+  margin-top:-6px;padding:var(--s3) var(--s3) var(--s3);border:1px solid var(--line-3);border-top:0;border-radius:0 0 var(--control-radius) var(--control-radius);
+  background:var(--side-plate);}
+body[data-cot-panels='overlay'] .cot-garage .cot-deploy-plate:not(:has(.cot-battle-details)){padding:0;background:none;box-shadow:none;}
+/* a narrow plate (900-1024 px windows): the tank card drops its render so the name and rounds keep their width, Deploy
+   keeps its word and drops its key and estimate, and the campaign brief sets its minimap under the text (last in the
+   sheet, so it wins over the rules above at equal weight) */
+@container deploy-plate (max-width:420px){
+  .cot-garage .cot-deploy-tank .cot-card{display:none;}
+  /* a phone's dock shows the tank as its card alone: with the card gone the slot goes too, so its gap does not push Watch
+     12 px off the gutter (r52) */
+  body[data-cot-panels='overlay'] .cot-garage .cot-deploy-tank{display:none;}
+  .cot-garage .cot-deploy-tank .head b img{display:block;}
+  .cot-garage .cot-deploy-tank .head b>span{white-space:normal;overflow-wrap:anywhere;}
+  .cot-garage .cot-deploy-acts>.cot-c-btn--primary{padding:0 var(--s4);}
+  .cot-garage .cot-deploy-go{font-size:var(--fs-20);}
+  .cot-garage .cot-deploy-end{display:none;}
+  /* Couch and Watch keep their glyphs on square keys, so Deploy keeps its word clear of its edge (900x700, r272) */
+  .cot-garage .cot-deploy-acts>.cot-c-btn--secondary{width:var(--h);padding:0;}
+  .cot-garage .cot-deploy-acts>.cot-c-btn--secondary>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+  body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-deploy-brief{grid-template-columns:minmax(0,1fr);}
+  .cot-garage .cot-deploy-brief-mm{display:none;}
+  .cot-garage .cot-deploy-brief-name{font-size:var(--fs-20);}
+}
+/* touch: the screen's tabs and option pickers meet the control floor (44 px) */
+body[data-cot-input='coarse'] .cot-garage .cot-battle-menu :is(.cot-deploy-tab,.cot-c-seg__opt,.cot-time-content,.cot-battle-galaxy,.cot-teams button){min-height:var(--cot-control-floor);}
+body[data-cot-input='coarse'] .cot-garage .cot-deploy-more{width:var(--cot-control-floor);height:var(--cot-control-floor);}
+/* a phone's dock is fixed over the screen's foot: the battlefield picker keeps its height free, so it scrolls clear */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open{--deploy-dock-h:calc(58px + var(--s3) + max(10px,env(safe-area-inset-bottom)) + 1px);}
+/* a compact height (600-720 px): the brief keeps its text and Launch (no picture or minimap), the details scroll rather
+   than squash the battlefield preview, and a tablet's selected card loses the badge its ring already says */
+body:is([data-cot-height='compact'],[data-cot-height='short']) .cot-garage :is(.cot-deploy-brief-art,.cot-deploy-brief-mm){display:none;}
+/* there the brief's rows are its head, text, facts and Launch, then the room left; a narrow plate sets the operation's
+   tactical map in that room under Launch, a square as tall as it (the plate stood empty there, 150-250 px, r42-r44) */
+body:is([data-cot-height='compact'],[data-cot-height='short'])[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open[data-deploy-tab='campaign'] .cot-deploy-brief{
+  grid-template-rows:auto auto auto auto minmax(0,1fr);}
+@container deploy-plate (max-width:420px){
+  body:is([data-cot-height='compact'],[data-cot-height='short'])[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open .cot-deploy-brief-mm{
+    display:block;grid-column:1;grid-row:5;align-self:stretch;justify-self:start;height:100%;max-width:100%;}}
+body:is([data-cot-height='compact'],[data-cot-height='short'])[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open .cot-battle-details{min-height:0;overflow-y:auto;}
+body:is([data-cot-height='compact'],[data-cot-height='short'])[data-cot-panels='persistent'] .cot-garage .cot-deploy-field{flex:none;min-height:clamp(120px,24vh,200px);}
+/* a compact height: the battlefield and the pickers come first and the rules after them, set as rows; the details fade
+   at their foot where they scroll on */
+body:is([data-cot-height='compact'],[data-cot-height='short'])[data-cot-panels='persistent'] .cot-garage .cot-deploy-rules{order:1;}
+body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open .cot-battle-details.is-scrollable{
+  padding-block:var(--s3);mask-image:linear-gradient(180deg,transparent,var(--ink-1) var(--s3),var(--ink-1) calc(100% - var(--s3)),transparent);}
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-plate:has(.cot-battle-details.is-scrollable){padding-top:var(--s1);row-gap:0;}
+/* the columns fade at their foot where they scroll on, and keep room to scroll clear of it */
+body[data-cot-panels='persistent'] .cot-garage .cot-battle-menu.open :is(.cot-battle-mode-list,.cot-deploy-campaign).is-scrollable{padding-bottom:var(--s5);
+  mask-image:linear-gradient(180deg,var(--ink-1) calc(100% - var(--s5)),transparent);}
+/* a phone's column fades under the tab row as it scrolls */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-menu-scroll{mask-image:linear-gradient(180deg,transparent,var(--ink-1) var(--s3));}
+/* time of day takes its own row, its chips named; the sides and the options share the next */
+.cot-garage .cot-battle-menu.open .cot-battle-times{flex:1 1 100%;}
+/* a narrow plate tightens every segmented control on it alike, the sides, the nations and the mode's settings (the kit's
+   13 px kept the sides from sharing their row and Respawn delay's five from their cell; tightened one by one, they stood
+   at 13, 9 and 4 px on one plate, r42) */
+@container deploy-plate (max-width:420px){
+  .cot-garage .cot-battle-menu.open :is(.cot-battle-sides,.cot-teams,.cot-arrange-seg) .cot-c-seg__opt{padding-inline:var(--s2);}}
+/* a phone's pickers fill their rows: the three times, then the sides beside the options */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-times{flex:1 1 100%;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-time-choice{flex:1 1 0;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-time-content{width:100%;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-sides{flex:1 1 auto;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-sides .cot-c-seg__opt{flex:1 1 0;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-teams{align-self:stretch;align-items:stretch;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-teams [role=radiogroup]{display:flex;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-teams button{flex:1 1 auto;white-space:nowrap;}
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-mode-settings{grid-template-columns:minmax(0,1fr);}
+/* the phone's dock: the content scrolls under a fade into its plate, never a hard cut */
+body[data-cot-panels='overlay'] .cot-garage .cot-battle-menu.open .cot-battle-menu-foot::before{display:block;content:'';position:absolute;left:0;right:0;
+  bottom:100%;height:var(--s5);background:linear-gradient(0deg,var(--surface-page),transparent);pointer-events:none;}
+/* beside the brief, an operation's row launch is the secondary; the brief's Launch is the one primary */
+body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op.ready .cot-deploy-op-launch{background:var(--btn-secondary-fill);color:var(--ink-1);box-shadow:var(--btn-secondary-ring);}
+@media (hover:hover){body[data-cot-panels='persistent'] .cot-garage .cot-deploy-op.ready .cot-deploy-op-launch:hover{background:var(--surface-hover);}}
+}

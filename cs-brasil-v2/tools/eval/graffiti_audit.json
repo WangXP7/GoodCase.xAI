@@ -1,0 +1,274 @@
+{
+ "praca_poderes": {
+  "total": 352,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ },
+ "piscina_treta": {
+  "total": 355,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 2,
+  "piores": [],
+  "piorSobrepor": [
+   {
+    "x": -16.9,
+    "y": 3.4,
+    "z": 6,
+    "frac": 0.14,
+    "a": "mural:eternamente",
+    "b": "decal:tag-money.png"
+   },
+   {
+    "x": -16.9,
+    "y": 3.4,
+    "z": 6,
+    "frac": 0.12,
+    "a": "mural:eternamente",
+    "b": "decal:or-stencil-capivara.png"
+   }
+  ]
+ },
+ "loja_h": {
+  "total": 290,
+  "noAr": 1,
+  "tapadas": 0,
+  "sobrepostas": 3,
+  "piores": [
+   {
+    "x": -12.78,
+    "y": 3.85,
+    "z": -4.07,
+    "ry": 0,
+    "w": 1.5,
+    "h": 1.12,
+    "vao": 0.2,
+    "tapada": 0,
+    "quem": "tag-money.png"
+   }
+  ],
+  "piorSobrepor": [
+   {
+    "x": 37.9,
+    "y": 1.3,
+    "z": 26,
+    "frac": 0.93,
+    "a": "decal:tag-larga.png",
+    "b": "decal:tag-fina.png"
+   },
+   {
+    "x": 37.9,
+    "y": 1.3,
+    "z": 42,
+    "frac": 0.73,
+    "a": "decal:tag-money.png",
+    "b": "decal:tags-treino-02.png"
+   },
+   {
+    "x": 37.9,
+    "y": 1.3,
+    "z": 10,
+    "frac": 0.53,
+    "a": "decal:tags-treino-02.png",
+    "b": "decal:tag-larga.png"
+   }
+  ]
+ },
+ "ferro_velho": {
+  "total": 513,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ },
+ "quebrada": {
+  "total": 976,
+  "noAr": 3,
+  "tapadas": 1,
+  "sobrepostas": 10,
+  "piores": [
+   {
+    "x": -12.46,
+    "y": 0.9,
+    "z": -5.92,
+    "ry": 1.57,
+    "w": 1.4,
+    "h": 0.8,
+    "vao": 0,
+    "tapada": 1,
+    "quem": "decal:folha-lambes.png"
+   },
+   {
+    "x": 15,
+    "y": 1.05,
+    "z": 27.62,
+    "ry": 3.14,
+    "w": 1.74,
+    "h": 1.5,
+    "vao": 0.6,
+    "tapada": 0,
+    "quem": "decal:folha-pixaca-01.png"
+   },
+   {
+    "x": -9,
+    "y": 1.03,
+    "z": 28.3,
+    "ry": 0,
+    "w": 2,
+    "h": 1.07,
+    "vao": 0.4,
+    "tapada": 0,
+    "quem": "decal:folha-stenci.png"
+   },
+   {
+    "x": -20.5,
+    "y": 1.09,
+    "z": -39.6,
+    "ry": 0,
+    "w": 2.2,
+    "h": 1.17,
+    "vao": 0.4,
+    "tapada": 0,
+    "quem": "decal:folha-stenci.png"
+   }
+  ],
+  "piorSobrepor": [
+   {
+    "x": -12.4,
+    "y": 1,
+    "z": -5.5,
+    "frac": 1.02,
+    "a": "decal:personagens-graffiti-04.png",
+    "b": "decal:folha-lambes.png"
+   },
+   {
+    "x": 12.4,
+    "y": 1,
+    "z": 0.3,
+    "frac": 0.98,
+    "a": "decal:tags-treino-06.png",
+    "b": "decal:tag-money.png"
+   },
+   {
+    "x": 12.4,
+    "y": 1,
+    "z": 5.8,
+    "frac": 0.74,
+    "a": "decal:personagens-graffiti-04.png",
+    "b": "decal:folha-throwu-06.png"
+   },
+   {
+    "x": -12.4,
+    "y": 1,
+    "z": 7.5,
+    "frac": 0.68,
+    "a": "decal:personagens-graffiti-02.png",
+    "b": "decal:folha-pixaca-07.png"
+   },
+   {
+    "x": 12.4,
+    "y": 1,
+    "z": -27.8,
+    "frac": 0.65,
+    "a": "decal:personagens-graffiti-04.png",
+    "b": "decal:or-graf-coro.png"
+   },
+   {
+    "x": -12.4,
+    "y": 1,
+    "z": -22.5,
+    "frac": 0.49,
+    "a": "decal:personagens-graffiti-04.png",
+    "b": "decal:folha-throwu-04.png"
+   },
+   {
+    "x": -18.5,
+    "y": 1.1,
+    "z": 27.7,
+    "frac": 0.48,
+    "a": "decal:tags-treino-02.png",
+    "b": "decal:folha-pixaca-06.png"
+   },
+   {
+    "x": 12.4,
+    "y": 1,
+    "z": 5.8,
+    "frac": 0.31,
+    "a": "decal:personagens-graffiti-04.png",
+    "b": "decal:folha-lambes.png"
+   },
+   {
+    "x": 18.5,
+    "y": 1.1,
+    "z": 27.7,
+    "frac": 0.31,
+    "a": "decal:tag-larga.png",
+    "b": "decal:folha-pixaca-06.png"
+   },
+   {
+    "x": 12.3,
+    "y": 1,
+    "z": 7,
+    "frac": 0.28,
+    "a": "decal:folha-lambes.png",
+    "b": "decal:folha-throwu-06.png"
+   }
+  ]
+ },
+ "fy_escadao": {
+  "total": 419,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ },
+ "fy_campomorro": {
+  "total": 55,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ },
+ "fy_lajes": {
+  "total": 50,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ },
+ "fy_corrego": {
+  "total": 336,
+  "noAr": 1,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [
+   {
+    "x": 6.68,
+    "y": 1.25,
+    "z": 10.44,
+    "ry": 1.57,
+    "w": 0.69,
+    "h": 0.6,
+    "vao": 0.2,
+    "tapada": 0,
+    "quem": "folha-pixaca-01.png"
+   }
+  ],
+  "piorSobrepor": []
+ },
+ "fy_mansao": {
+  "total": 15,
+  "noAr": 0,
+  "tapadas": 0,
+  "sobrepostas": 0,
+  "piores": [],
+  "piorSobrepor": []
+ }
+}

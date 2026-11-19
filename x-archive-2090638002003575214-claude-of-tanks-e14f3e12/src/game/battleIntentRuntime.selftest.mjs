@@ -1,0 +1,208 @@
+import assert from 'node:assert/strict';
+import { createBattleIntentRuntime } from './battleIntentRuntime.ts';
+import { resolveMapId } from '../world/maps/mapIds.ts';
+import { GAME_MODE_IDS } from '../sim/gameModeCatalog.ts';
+import { terrainVariantFor } from '../sim/matchRuleset.ts';
+
+const flushTasks = () => new Promise((resolve) => setImmediate(resolve));
+
+function createHarness(overrides = {}) {
+  const log = [];
+  const state = {
+    battleCount: 3,
+    randomMaps: ['alpine', 'desert', 'coast'],
+  };
+  const options = {
+    getBattleCount: () => state.battleCount,
+    resolveMapId: (mapId) => {
+      const resolved = mapId === 'random' ? state.randomMaps.shift() : mapId;
+      log.push(`resolve:${mapId}:${resolved}`);
+      return resolved;
+    },
+    loadWorldModule: async () => { log.push('world:module'); },
+    prefetchWorld: async (mapId, settings) => {
+      log.push(`world:${mapId}:${settings?.intent === true ? 'intent' : 'idle'}`);
+    },
+    ensureTankBuilders: async (ids) => { log.push(`builders:${ids.join(',')}`); },
+    planRoster: (specId) => [specId, 'wing', 'wing'],
+    getSpec: (specId) => ({ id: specId }),
+    prebakeSharedTextures: async (spec, _anisotropy, quality) => {
+      log.push(`texture:${spec.id}:${quality}`);
+    },
+    createBudgetYield: () => async () => undefined,
+    anisotropy: 8,
+    setCamoBiome: (mapId) => { log.push(`camo:biome:${mapId}`); },
+    clearCamoOverrides: () => { log.push('camo:clear'); },
+    setCamoOverride: (specId) => { log.push(`camo:auto:${specId}`); },
+    applyCamoPatterns: async ({ priorityIds, onlySpecIds }) => {
+      log.push(`camo:apply:${priorityIds.join(',')}:${onlySpecIds.join(',')}`);
+    },
+    preloadBattleVisuals: async () => { log.push('preload:visuals'); },
+    preloadAudio: async () => { log.push('preload:audio'); },
+    preloadSettings: async () => { log.push('preload:settings'); },
+    preloadArmorOverlay: async () => { log.push('preload:armor'); },
+    preloadBattleHud: async () => { log.push('preload:hud'); },
+    preloadTouchControls: async () => { log.push('preload:touch'); },
+    preloadSoloBattle: async () => { log.push('preload:solo'); },
+    preloadBattleClient: async () => { log.push('preload:client'); },
+    preloadKillcam: async () => { log.push('preload:killcam'); },
+    ensureFxRuntime: async () => ({
+      preloadTextures: async () => { log.push('preload:fx-textures'); },
+    }),
+    preloadMinimap: async (mapId) => { log.push(`preload:minimap:${mapId}`); },
+    warn: (message, error) => { log.push(`warn:${message}:${error}`); },
+    ...overrides,
+  };
+  return {
+    log,
+    state,
+    runtime: createBattleIntentRuntime(options),
+  };
+}
+
+{
+  const { runtime, log, state } = createHarness();
+  runtime.preload({ specId: 'hero', mapId: 'random' });
+  runtime.preload({ specId: 'hero', mapId: 'random' });
+  await flushTasks();
+
+  assert.equal(log.filter((entry) => entry.startsWith('resolve:random')).length, 1,
+    'repeat intent reuses one concrete Random-map reservation');
+  for (const owner of ['visuals', 'audio', 'settings', 'armor', 'hud', 'touch',
+    'solo', 'client', 'killcam', 'fx-textures']) {
+    assert.ok(log.includes(`preload:${owner}`), `${owner} starts from explicit intent`);
+  }
+  assert.ok(log.includes('builders:hero,wing,wing'),
+    'intent transfers only the exact planned roster');
+  assert.equal(log.filter((entry) => entry === 'texture:hero:preview').length, 1,
+    'same-key intent coalesces the selected preview texture work');
+  assert.equal(log.filter((entry) => entry === 'texture:wing:ai').length, 1,
+    'duplicate roster ids produce one AI texture bake');
+  assert.ok(log.includes('world:alpine:intent') && log.includes('preload:minimap:alpine'),
+    'intent starts the concrete world and minimap without constructing either here');
+
+  assert.equal(runtime.consumeMap('hero', 'random'), 'alpine',
+    'the click consumes the exact world reserved by hover intent');
+  assert.equal(runtime.consumeMap('hero', 'random'), 'desert',
+    'a consumed reservation cannot leak into the next battle');
+  state.battleCount++;
+  runtime.preload({ specId: 'hero', mapId: 'random' });
+  await flushTasks();
+  assert.equal(runtime.consumeMap('hero', 'random'), 'coast',
+    'a new battle count receives a new deterministic reservation');
+}
+
+{
+  const draws = [];
+  const { runtime } = createHarness({
+    resolveMapId: (mapId, previous) => {
+      draws.push({ mapId, previous });
+      // Constant entropy makes back-to-back repeat prevention observable.
+      return resolveMapId(mapId, () => 0, previous);
+    },
+  });
+  assert.equal(runtime.consumeMap('hero', 'verdant'), 'verdant');
+  runtime.preload({ specId: 'hero', mapId: 'random' });
+  runtime.preload({ specId: 'hero', mapId: 'random' });
+  await flushTasks();
+  assert.equal(draws.length, 2, 'repeat hover reuses its reservation');
+  assert.equal(draws.at(-1).previous, 'verdant');
+  runtime.invalidateMapPlan();
+  runtime.preload({ specId: 'other-tank', mapId: 'random' });
+  await flushTasks();
+  assert.equal(draws.at(-1).previous, 'verdant', 'discarded hover does not advance map history');
+  assert.equal(runtime.consumeMap('other-tank', 'random'), 'desert', 'launch uses the warmed alternative');
+  assert.equal(draws.length, 3, 'launch never rerolls a valid reservation');
+  assert.equal(runtime.consumeMap('hero', 'random'), 'verdant', 'direct launch also excludes previous map');
+  assert.equal(draws.at(-1).previous, 'desert');
+  assert.equal(runtime.consumeMap('hero', 'verdant'), 'verdant', 'explicit repeat remains allowed');
+  runtime.dispose();
+}
+
+{
+  let releaseOldTexture;
+  let oldTextureStartedResolve;
+  const oldTextureStarted = new Promise((resolve) => { oldTextureStartedResolve = resolve; });
+  const oldTextureGate = new Promise((resolve) => { releaseOldTexture = resolve; });
+  let firstTexture = true;
+  const harness = createHarness({
+    prebakeSharedTextures: async (spec, _anisotropy, quality) => {
+      harness.log.push(`texture:${spec.id}:${quality}`);
+      if (firstTexture) {
+        firstTexture = false;
+        oldTextureStartedResolve();
+        await oldTextureGate;
+      }
+    },
+  });
+  harness.runtime.preload({ specId: 'hero' });
+  await oldTextureStarted;
+  const prepare = harness.runtime.prepareRoster({
+    specId: 'hero',
+    mapId: 'verdant',
+    rosterIds: ['hero', 'wing'],
+    autoCamoIds: ['wing'],
+    yieldForBudget: async () => undefined,
+  });
+  await flushTasks();
+  assert.equal(harness.log.some((entry) => entry.startsWith('camo:')), false,
+    'covered preparation waits for an in-flight hover bake before repainting shared canvases');
+  releaseOldTexture();
+  await prepare;
+
+  const expectedOrder = [
+    'camo:biome:verdant',
+    'camo:clear',
+    'camo:auto:wing',
+    'camo:apply:hero:hero,wing',
+    'builders:hero,wing',
+    'texture:hero:preview',
+    'texture:wing:ai',
+  ];
+  let cursor = -1;
+  for (const entry of expectedOrder) {
+    cursor = harness.log.indexOf(entry, cursor + 1);
+    assert.notEqual(cursor, -1, `${entry} retains covered roster preparation order`);
+  }
+  assert.equal(harness.log.filter((entry) => entry === 'texture:wing:ai').length, 1,
+    'cancelling hover intent prevents its stale second roster texture bake');
+}
+
+{
+  const { runtime, log } = createHarness();
+  runtime.dispose();
+  runtime.preload({ specId: 'hero', mapId: 'verdant' });
+  assert.equal(log.filter((entry) => entry === 'world:verdant:intent').length, 0,
+    'disposed intent cannot start new speculative work');
+}
+
+// 2026-10-13: the entry's pending cover asks which map it will load before the loading owner consumes it: a Random
+// request is planned once and that plan is what consumeMap returns; a named map is itself; nothing is consumed
+{
+  const { runtime, log } = createHarness();
+  assert.equal(runtime.peekMap('hero', 'random'), 'alpine');
+  assert.equal(runtime.peekMap('hero', 'random'), 'alpine', 'a repeated peek keeps the one plan');
+  assert.equal(log.filter((entry) => entry.startsWith('resolve:random')).length, 1);
+  assert.equal(runtime.consumeMap('hero', 'random'), 'alpine', 'the consumed map is the one the cover named');
+  assert.equal(runtime.peekMap('hero', 'winter'), 'winter');
+  assert.equal(runtime.consumeMap('hero', 'winter'), 'winter');
+  assert.equal(runtime.peekMap('hero', 'random'), 'desert', 'the next entry plans afresh');
+}
+
+// (improve-271 plan 036) a Garage intent in a mode that plays a terrain variant prefetches that variant's world; the
+// minimap keeps the bare map; a Standard intent and one with no mode keep the bare id
+{
+  const variantMode = GAME_MODE_IDS.find((mode) => terrainVariantFor(mode));
+  const key = `verdant#${terrainVariantFor(variantMode)}`;
+  const { runtime, log } = createHarness();
+  runtime.preload({ specId: 'hero', mapId: 'verdant', gameMode: variantMode });
+  assert.ok(log.includes(`world:${key}:intent`), `the ${variantMode} intent prefetches ${key} (${log.filter((entry) => entry.startsWith('world:'))})`);
+  assert.ok(!log.includes('world:verdant:intent'), 'and never the standard battlefield');
+  assert.ok(log.includes('preload:minimap:verdant'), 'the minimap is the bare map\'s');
+  const standard = createHarness();
+  standard.runtime.preload({ specId: 'hero', mapId: 'verdant', gameMode: 'standard' });
+  standard.runtime.preload({ specId: 'other', mapId: 'desert' });
+  assert.ok(standard.log.includes('world:verdant:intent') && standard.log.includes('world:desert:intent'), 'Standard and unnamed modes prefetch the bare id');
+}
+
+console.log('battleIntentRuntime.selftest: explicit map intent, coalescing, handoff and the pending cover\'s peek passed; a variant mode prefetches its variant world');

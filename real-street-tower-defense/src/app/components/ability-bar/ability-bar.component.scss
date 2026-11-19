@@ -1,0 +1,123 @@
+/* Layout of the ability bar at the left edge of the canvas. Above the leak
+ * vignette (4) and the off-screen arrows (5), below the game-over overlay
+ * (20). `left`, the border, the padding, the button size and `clear` come
+ * from ABILITY_BAR_PX in ability-button.ts (host bindings of the
+ * component), the numbers ABILITY_BAR_EDGE_PX is summed from; the
+ * off-screen arrows keep clear of that edge.
+ *
+ * The host spans the height of the canvas area; the bar stands right below
+ * the info overlay (--td-bar-top: its measured bottom plus `clear`), the
+ * room below it (the pseudo-element) keeps clear of the logo row
+ * (--td-logo-bottom and --td-logo-height of the game component). On a
+ * canvas too low for all of it, the bar shrinks and scrolls. No strip behind
+ * it: td-icon-btn stones stand alone on the map, each with its shadow (the
+ * padding keeps room for it inside the scrolling column). */
+:host {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--td-z-hud);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+:host::before {
+  content: '';
+  flex: 0 0 var(--td-bar-top);
+}
+
+:host::after {
+  content: '';
+  flex: 1 1 0;
+  min-height: calc(var(--td-logo-bottom, 0px) + var(--td-logo-height, 0px) + var(--td-bar-clear));
+}
+
+/* Scrolls only when squeezed, by wheel or keyboard focus, without a
+ * scrollbar: one would widen the bar past ABILITY_BAR_EDGE_PX */
+.td-ability-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  pointer-events: auto;
+  padding: var(--td-bar-pad);
+  border: var(--td-bar-border) solid transparent;
+}
+
+
+/* A stone per ability. Key top right, a stroke per wave to the next charge
+ * at the bottom. Brass while it is ready, pressed while it aims. Without
+ * effect a button stays clickable (aria-disabled), so its tooltip shows.
+ *   ready       icon brass
+ *   armed       pressed (aria-pressed), brass
+ *   waiting     charged, no wave: icon muted
+ *   pending     strike on its way: icon orange
+ *   recharging  icon disabled */
+.td-bar-btn {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--td-bar-btn);
+  height: var(--td-bar-btn);
+  padding-bottom: 4px;
+  color: var(--td-text-disabled);
+}
+
+.td-bar-key {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+}
+
+.td-ability-btn[data-state='ready'] {
+  color: var(--td-brass-light);
+}
+
+.td-ability-btn[data-state='waiting'] {
+  color: var(--td-text-muted);
+}
+
+.td-ability-btn[data-state='pending'] {
+  color: var(--td-warn-text);
+}
+
+/* Charges on hand, only for an ability that holds more than one */
+.td-ability-charges {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: var(--td-fs-small);
+}
+
+.td-ability-pips {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  display: flex;
+  gap: 3px;
+}
+
+.td-ability-pip {
+  flex: 1;
+  height: 2px;
+  background: var(--td-line-dark);
+
+  &.is-on {
+    background: var(--td-brass);
+  }
+}
+
+/* The hero: a plain switch, pressed while he is selected; set a little apart
+ * from the abilities after him */
+.td-bar-hero {
+  padding: 0;
+  color: var(--td-text-secondary);
+
+  &.is-apart {
+    margin-bottom: 6px;
+  }
+}

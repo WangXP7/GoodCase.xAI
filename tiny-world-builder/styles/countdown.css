@@ -1,0 +1,179 @@
+.tw-countdown {
+  --countdown-bg: rgba(255, 255, 255, 0.64);
+  --countdown-border: rgba(255, 255, 255, 0.66);
+  --countdown-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 1px 2px rgba(20, 30, 50, 0.06),
+    0 16px 34px -18px rgba(40, 50, 80, 0.34);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(100%, 320px);
+  min-height: 32px;
+  padding: 7px 13px 7px 11px;
+  border: 1px solid var(--countdown-border);
+  border-radius: 999px;
+  background: var(--countdown-bg);
+  box-shadow: var(--countdown-shadow);
+  color: var(--ink, #2a2722);
+  font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+}
+
+.tw-countdown-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent, #3a72c8);
+  box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+}
+
+.tw-countdown[data-countdown-live="true"] .tw-countdown-dot {
+  background: #23b26d;
+  box-shadow: 0 0 0 3px rgba(35, 178, 109, 0.16);
+}
+
+.tw-countdown-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.brand-countdown {
+  position: static;
+  z-index: auto;
+  pointer-events: none;
+}
+
+.brand-countdown.tw-countdown {
+  --countdown-bg: rgba(255, 255, 255, 0.62);
+  color: var(--ink, #2a2722);
+  gap: 11px;
+  min-height: 47px;
+  padding: 11px 20px 11px 17px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.brand-countdown .tw-countdown-dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 4px rgba(58, 114, 200, 0.14);
+}
+
+.brand-countdown.tw-countdown[data-countdown-live="true"] .tw-countdown-dot {
+  box-shadow: 0 0 0 4px rgba(35, 178, 109, 0.16);
+}
+
+body.xr-active .brand-countdown {
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+body.welcome-launch-open .brand-countdown,
+body.showcase .brand-countdown {
+  display: none;
+}
+
+.hero-countdown {
+  margin-top: 22px;
+}
+
+.hero-countdown.tw-countdown {
+  --countdown-bg: rgba(255, 255, 255, 0.7);
+  --countdown-border: rgba(255, 255, 255, 0.72);
+  gap: 11px;
+  min-height: 58px;
+  padding: 15px 24px 15px 20px;
+  color: #111b45;
+  font-size: 21px;
+  font-weight: 800;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 16px 40px -22px rgba(10, 35, 90, 0.42);
+}
+
+.hero-countdown .tw-countdown-dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 4px rgba(58, 114, 200, 0.14);
+}
+
+.hero-countdown.tw-countdown[data-countdown-live="true"] .tw-countdown-dot {
+  box-shadow: 0 0 0 4px rgba(35, 178, 109, 0.16);
+}
+
+body.ui-theme-dark .tw-countdown {
+  --countdown-bg: rgba(31, 38, 53, 0.96);
+  --countdown-border: rgba(220, 232, 255, 0.24);
+  --countdown-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.40) inset,
+    0 18px 44px -18px rgba(0, 0, 0, 0.76);
+  color: #f4f7ff;
+}
+
+body.ui-theme-dark .brand-countdown.tw-countdown,
+body.ui-theme-dark .hero-countdown.tw-countdown {
+  --countdown-bg: rgba(31, 38, 53, 0.96);
+  --countdown-border: rgba(220, 232, 255, 0.24);
+  color: #f4f7ff;
+}
+
+body.ui-theme-dark .tw-countdown-dot {
+  background: #7fb2ff;
+  box-shadow: 0 0 0 4px rgba(127, 178, 255, 0.18);
+}
+
+body.ui-theme-dark .tw-countdown[data-countdown-live="true"] .tw-countdown-dot {
+  background: #79ffb0;
+  box-shadow: 0 0 0 4px rgba(121, 255, 176, 0.16);
+}
+
+@media (max-width: 620px) {
+  .brand-countdown {
+    max-width: calc(100vw - 32px);
+  }
+
+  .brand-countdown.tw-countdown {
+    gap: 9px;
+    min-height: 42px;
+    padding: 9px 16px 9px 13px;
+    font-size: 16px;
+  }
+
+  .brand-countdown .tw-countdown-dot {
+    width: 10px;
+    height: 10px;
+    box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+  }
+
+  .hero-countdown.tw-countdown {
+    max-width: 100%;
+    gap: 9px;
+    min-height: 50px;
+    padding: 12px 18px 12px 15px;
+    font-size: 18px;
+  }
+
+  .hero-countdown .tw-countdown-dot {
+    width: 10px;
+    height: 10px;
+    box-shadow: 0 0 0 3px rgba(58, 114, 200, 0.14);
+  }
+}

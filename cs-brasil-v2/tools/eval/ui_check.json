@@ -1,0 +1,2083 @@
+{
+ "gerado": "2026-08-29T20:55:47.543Z",
+ "zonaMira": {
+  "x0": 0.47023809523809523,
+  "y0": 0.44868633948874237,
+  "x1": 0.5297619047619048,
+  "y1": 0.5513136605112576
+ },
+ "zonaArma": {
+  "x0": 0.525,
+  "y0": 0.455,
+  "x1": 1,
+  "y1": 1
+ },
+ "cenaPior": [
+  214,
+  196,
+  164
+ ],
+ "res": [
+  {
+   "nome": "UI1",
+   "titulo": "CONTRASTE — texto do HUD >= 4,5:1 (3:1 se grande) e objeto gráfico essencial >= 3:1",
+   "ok": false,
+   "achados": [
+    {
+     "tipo": "texto",
+     "alvo": "#hud-speech",
+     "fonte": "src/pages/index.astro:1136",
+     "amostra": "🔊",
+     "razao": 6.17,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".svg",
+     "fonte": "src/pages/index.astro:1138",
+     "amostra": "▪",
+     "razao": 6.17,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#prot-badge",
+     "fonte": "src/pages/index.astro:1154",
+     "amostra": "PROTEGIDO s",
+     "razao": 11.22,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".svg",
+     "fonte": "src/pages/index.astro:1154",
+     "amostra": "▪",
+     "razao": 11.22,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#prot-count",
+     "fonte": "src/pages/index.astro:1154",
+     "amostra": "3",
+     "razao": 11.22,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#round-time",
+     "fonte": "src/pages/index.astro:1165",
+     "amostra": "1:39",
+     "razao": 12.18,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#rounds-row",
+     "fonte": "src/pages/index.astro:1168",
+     "amostra": "RODADA 1 · PET 0 × 0 BOL",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#hp-num",
+     "fonte": "src/pages/index.astro:1177",
+     "amostra": "100",
+     "razao": 17.35,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ammo-mag",
+     "fonte": "src/pages/index.astro:1183",
+     "amostra": "5",
+     "razao": 17.35,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".ammo-sep",
+     "fonte": "src/pages/index.astro:1183",
+     "amostra": "/",
+     "razao": 5.91,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ammo-reserve",
+     "fonte": "src/pages/index.astro:1183",
+     "amostra": "25",
+     "razao": 5.91,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#weapon-name",
+     "fonte": "src/pages/index.astro:1185",
+     "amostra": "AWP \"DELIBERADOR\"",
+     "razao": 7.15,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#reload-note",
+     "fonte": "src/pages/index.astro:1187",
+     "amostra": "RECARREGANDO…",
+     "razao": 11.22,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "Z/X/V RÁDIO",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "TAB PLACAR",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "M TROCAR DE TIME",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".lh-title",
+     "fonte": "src/pages/index.astro:1192",
+     "amostra": "CLIQUE PARA ATIVAR A MIRA",
+     "razao": 11.2,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".svg",
+     "fonte": "src/pages/index.astro:1192",
+     "amostra": "▪",
+     "razao": 11.2,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".lh-sub",
+     "fonte": "src/pages/index.astro:1193",
+     "amostra": "Se o navegador bloquear, clique de",
+     "razao": 13.22,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".rip",
+     "fonte": "src/pages/index.astro:1197",
+     "amostra": "ELIMINADO",
+     "razao": 11.12,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".svg",
+     "fonte": "src/pages/index.astro:1197",
+     "amostra": "▪",
+     "razao": 11.12,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".div",
+     "fonte": "src/pages/index.astro:1198",
+     "amostra": "Respawn em s…",
+     "razao": 11.12,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#respawn-count",
+     "fonte": "src/pages/index.astro:1198",
+     "amostra": "3",
+     "razao": 11.12,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".rip-sub",
+     "fonte": "src/pages/index.astro:1199",
+     "amostra": "A treta continua sem você. Por enq",
+     "razao": 6.65,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".h3",
+     "fonte": "src/pages/index.astro:1205",
+     "amostra": "CORO SOLTO - PLACAR",
+     "razao": 1.5,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "SEGURAR PARA VER",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".b",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "TAB",
+     "razao": 1.62,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "ATIVAR CURSOR",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".b",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "MOUSE 2",
+     "razao": 1.62,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"● PÁTIO O\" #f0f0ed",
+     "razao": 17.35,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"·\" #a5a5a3",
+     "razao": 8.03,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"● PÁTIO L\" #ff5555",
+     "razao": 6.3,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"·\" #a5a5a3",
+     "razao": 8.03,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"● LOJA O\" #55dd66",
+     "razao": 11.25,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"·\" #a5a5a3",
+     "razao": 8.03,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"● LOJA L\" #f0f0ed",
+     "razao": 17.35,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"—\" #a5a5a3",
+     "razao": 8.03,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"0\" #ff5555",
+     "razao": 6.3,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > svg",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"▪\" #ff5555",
+     "razao": 6.3,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"·\" #a5a5a3",
+     "razao": 8.03,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > span",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"1\" #55dd66",
+     "razao": 11.25,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#ctf-hud > svg",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "\"▪\" #55dd66",
+     "razao": 11.25,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: #55dd66 × rgba(0,0,0,.80)",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "preenchimento × trilho",
+     "razao": 8.42,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: limite (trilho 8.68 / fio 1.25) × painel",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "trilho rgba(0,0,0,.80) + borda 1px solid rgba(233,241,243,.55)",
+     "razao": 8.68,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: #ff5555 × rgba(0,0,0,.80)",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "preenchimento × trilho",
+     "razao": 4.72,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: limite (trilho 8.68 / fio 1.25) × painel",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "trilho rgba(0,0,0,.80) + borda 1px solid rgba(233,241,243,.55)",
+     "razao": 8.68,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: #55dd66 × rgba(0,0,0,.80)",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "preenchimento × trilho",
+     "razao": 8.42,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: limite (trilho 8.68 / fio 1.25) × painel",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "trilho rgba(0,0,0,.80) + borda 1px solid rgba(233,241,243,.55)",
+     "razao": 8.68,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: #ff5555 × rgba(0,0,0,.80)",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "preenchimento × trilho",
+     "razao": 4.72,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "#ctf-hud > barra: limite (trilho 8.68 / fio 1.25) × painel",
+     "fonte": "public/js/game.js:_updateCtfHud (innerHTML medido)",
+     "amostra": "trilho rgba(0,0,0,.80) + borda 1px solid rgba(233,241,243,.55)",
+     "razao": 8.68,
+     "min": 3,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"Ancap Medieval\" #a9f0b6",
+     "razao": 8.39,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-ic",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"▪\" #f0f0ed",
+     "razao": 13.86,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"VOCÊ\" #ff9a9a",
+     "razao": 5.95,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"VOCÊ\" #ff9a9a",
+     "razao": 5.5,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-ic.kf-skull",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"▪\" #f3b958",
+     "razao": 7.63,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-ic",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"▪\" #f0f0ed",
+     "razao": 11.8,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"Ancap Medieval\" #a9f0b6",
+     "razao": 6.79,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"Ancap Medieval\" #a9f0b6",
+     "razao": 5.61,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-ic.kf-skull",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"▪\" #f3b958",
+     "razao": 5.99,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-ic",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"▪\" #f0f0ed",
+     "razao": 9.27,
+     "min": 4.5,
+     "ok": true
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"Líder do Sindicato\" #ff9a9a",
+     "razao": 4.3,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "grafico",
+     "alvo": "barra de vida: preenchimento × trilho",
+     "fonte": "public/style.css (#hp-fill × #hp-bar)",
+     "amostra": "#46c268 sobre rgba(10,10,12,.7)",
+     "razao": 4.36,
+     "min": 3,
+     "ok": true
+    }
+   ],
+   "falhas": [
+    {
+     "tipo": "texto",
+     "alvo": "#rounds-row",
+     "fonte": "src/pages/index.astro:1168",
+     "amostra": "RODADA 1 · PET 0 × 0 BOL",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "Z/X/V RÁDIO",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "TAB PLACAR",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1189",
+     "amostra": "M TROCAR DE TIME",
+     "razao": 1.96,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".h3",
+     "fonte": "src/pages/index.astro:1205",
+     "amostra": "CORO SOLTO - PLACAR",
+     "razao": 1.5,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "SEGURAR PARA VER",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".b",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "TAB",
+     "razao": 1.62,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".span",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "ATIVAR CURSOR",
+     "razao": 3.84,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": ".b",
+     "fonte": "src/pages/index.astro:1210",
+     "amostra": "MOUSE 2",
+     "razao": 1.62,
+     "min": 4.5,
+     "ok": false
+    },
+    {
+     "tipo": "texto",
+     "alvo": "#killfeed > .kf-n",
+     "fonte": "public/js/game.js:_feed (innerHTML medido)",
+     "amostra": "\"Líder do Sindicato\" #ff9a9a",
+     "razao": 4.3,
+     "min": 4.5,
+     "ok": false
+    }
+   ]
+  },
+  {
+   "nome": "UI3",
+   "titulo": "ÁREA MORTA — nada do HUD sobre a mira (x 0.470-0.530 / y 0.449-0.551) nem, se for flutuante, sobre o viewmodel (x>=0.525 / y>=0.455)",
+   "ok": true,
+   "achados": [
+    {
+     "alvo": "probe clamp(13px,2vh,21px)",
+     "probe": true,
+     "esperado": 13.1,
+     "medido": 13.1,
+     "ok": true
+    },
+    {
+     "alvo": "probe clamp(40px,1vh,76px)",
+     "probe": true,
+     "esperado": 40,
+     "medido": 40,
+     "ok": true
+    },
+    {
+     "alvo": "probe clamp(40px,20vh,76px)",
+     "probe": true,
+     "esperado": 76,
+     "medido": 76,
+     "ok": true
+    },
+    {
+     "alvo": "probe min(38vw,380px)",
+     "probe": true,
+     "esperado": 380,
+     "medido": 380,
+     "ok": true
+    },
+    {
+     "alvo": "probe max(10px,2vw)",
+     "probe": true,
+     "esperado": 20.16,
+     "medido": 20.16,
+     "ok": true
+    },
+    {
+     "alvo": "probe 2rem",
+     "probe": true,
+     "esperado": 32,
+     "medido": 32,
+     "ok": true
+    },
+    {
+     "alvo": "probe calc(100% - 28px)",
+     "probe": true,
+     "esperado": 980,
+     "medido": 980,
+     "ok": true
+    },
+    {
+     "alvo": "#hud",
+     "isento": "sem âncora vertical resolvível (container)",
+     "ok": true
+    },
+    {
+     "alvo": "#hud-actions",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.952,
+      0.055,
+      0.952,
+      0.084
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#radar",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.016,
+      0.024,
+      0.147,
+      0.226
+     ],
+     "largPx": 132,
+     "largMinPx": 2,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#radio-log",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.02,
+      0.266,
+      0.02,
+      0.289
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#radio-menu",
+     "isento": "invocado pelo jogador (Z/X/V).",
+     "ok": true
+    },
+    {
+     "alvo": "#crosshair",
+     "isento": "É A MIRA.",
+     "ok": true
+    },
+    {
+     "alvo": "#hitmarker",
+     "isento": "marca de acerto: pertence à camada de mira.",
+     "ok": true
+    },
+    {
+     "alvo": "#dmg-numbers",
+     "isento": "números de dano: camada de mira (posição vem do mundo, não do CSS).",
+     "ok": true
+    },
+    {
+     "alvo": "#scope-overlay",
+     "isento": "luneta: SUBSTITUI a cena, não é overlay de HUD.",
+     "ok": true
+    },
+    {
+     "alvo": "#damage-vignette",
+     "isento": "vinheta de dano: tela inteira, sem opacidade em repouso.",
+     "ok": true
+    },
+    {
+     "alvo": "#dmg-dir",
+     "isento": "indicador direcional de dano: camada de mira.",
+     "ok": true
+    },
+    {
+     "alvo": "#mk-banner",
+     "isento": "anúncio de multi-kill: é a recompensa, dura 0,16 s de transição.",
+     "ok": true
+    },
+    {
+     "alvo": "#prot-badge",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.067,
+      0.811,
+      0.155,
+      0.835
+     ],
+     "largPx": 88,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#hud-top",
+     "fonte": "public/style.css",
+     "ancorado": false,
+     "centrado": true,
+     "caixa": [
+      0.5,
+      0.024,
+      0.5,
+      0.054
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#sigla-e",
+     "isento": "sem âncora vertical resolvível (container)",
+     "ok": true
+    },
+    {
+     "alvo": "#sigla-b",
+     "isento": "sem âncora vertical resolvível (container)",
+     "ok": true
+    },
+    {
+     "alvo": "#ctf-hud",
+     "fonte": "public/style.css",
+     "ancorado": false,
+     "centrado": true,
+     "caixa": [
+      0.19,
+      0.15,
+      0.81,
+      0.184
+     ],
+     "largPx": 625,
+     "largMinPx": 24,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#killfeed",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.564,
+      0.107,
+      0.984,
+      0.133
+     ],
+     "largPx": 423,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#hud-bottom-left",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.02,
+      0.943,
+      0.02,
+      0.973
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#weapon-hud",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.831,
+      0.784,
+      0.98,
+      0.814
+     ],
+     "largPx": 150,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#hud-bottom-right",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.98,
+      0.943,
+      0.98,
+      0.973
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#hud-shortcuts",
+     "fonte": "public/style.css",
+     "ancorado": false,
+     "centrado": true,
+     "caixa": [
+      0.5,
+      0.946,
+      0.5,
+      0.976
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#round-banner",
+     "isento": "anúncio de round: some sozinho e o round nem começou (state=countdown).",
+     "ok": true
+    },
+    {
+     "alvo": "#lock-hint",
+     "isento": "só aparece com o ponteiro DESTRAVADO (game.js:5618) — nesse estado não há mira nem tiro.",
+     "ok": true
+    },
+    {
+     "alvo": "#pickup-hint",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.067,
+      0.74,
+      0.444,
+      0.795
+     ],
+     "largPx": 380,
+     "largMinPx": 30,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    },
+    {
+     "alvo": "#respawn-overlay",
+     "isento": "só aparece MORTO: não há viewmodel nem mira pra tapar.",
+     "ok": true
+    },
+    {
+     "alvo": "#scoreboard",
+     "isento": "invocado pelo jogador (TAB) ou no fim de round — tapar a cena é a função dele.",
+     "ok": true
+    },
+    {
+     "alvo": "#sb-cols",
+     "fonte": "public/style.css",
+     "ancorado": true,
+     "centrado": false,
+     "caixa": [
+      0.063,
+      0.29,
+      0.063,
+      0.319
+     ],
+     "largPx": 0,
+     "largMinPx": 0,
+     "limiarArmaPx": 50,
+     "limiarMiraPx": 60,
+     "invade": null,
+     "ok": true
+    }
+   ],
+   "falhas": []
+  },
+  {
+   "nome": "UI5",
+   "titulo": "PALETA — cada papel do jogo dentro de ΔC* <= 4, Δh <= 25° e b* >= 0 (nada de azulado) do MESMO papel medido nas 9 telas (tools/eval/ref_ui.json)",
+   "ok": true,
+   "achados": [
+    {
+     "token": "--ink-100",
+     "papel": "tinta_alta",
+     "uso": "números de HUD e títulos",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 1.45,
+     "bRef": 1.44,
+     "meuHex": "#f0f0ed",
+     "refHex": "#f6f6f3",
+     "meu": {
+      "L": 94.7,
+      "C": 1.5,
+      "h": 110.1
+     },
+     "ref": {
+      "L": 96.8,
+      "C": 1.5,
+      "h": 110.1
+     },
+     "dC": 0,
+     "dh": null
+    },
+    {
+     "token": "--ink-200",
+     "papel": "tinta_alta",
+     "uso": "corpo de texto",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 0.99,
+     "bRef": 1.44,
+     "meuHex": "#d3d3d1",
+     "refHex": "#f6f6f3",
+     "meu": {
+      "L": 84.5,
+      "C": 1.1,
+      "h": 110.1
+     },
+     "ref": {
+      "L": 96.8,
+      "C": 1.5,
+      "h": 110.1
+     },
+     "dC": 0.5,
+     "dh": null
+    },
+    {
+     "token": "--ink-300",
+     "papel": "tinta_media",
+     "uso": "rótulos/meta",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 1.03,
+     "bRef": 1.05,
+     "meuHex": "#a5a5a3",
+     "refHex": "#9a9a98",
+     "meu": {
+      "L": 67.7,
+      "C": 1.1,
+      "h": 110.1
+     },
+     "ref": {
+      "L": 63.5,
+      "C": 1.1,
+      "h": 110.1
+     },
+     "dC": 0,
+     "dh": null
+    },
+    {
+     "token": "--ink-400",
+     "papel": "tinta_media",
+     "uso": "régua/ícone decorativo",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 1.1,
+     "bRef": 1.05,
+     "meuHex": "#757573",
+     "refHex": "#9a9a98",
+     "meu": {
+      "L": 49.2,
+      "C": 1.2,
+      "h": 110
+     },
+     "ref": {
+      "L": 63.5,
+      "C": 1.1,
+      "h": 110.1
+     },
+     "dC": 0.1,
+     "dh": null
+    },
+    {
+     "token": "--am",
+     "papel": "acento",
+     "uso": "objetivo e conquista",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 56.08,
+     "bRef": 53.7,
+     "meuHex": "#f3b958",
+     "refHex": "#be9033",
+     "meu": {
+      "L": 78.7,
+      "C": 57.2,
+      "h": 78.9
+     },
+     "ref": {
+      "L": 62.6,
+      "C": 54.3,
+      "h": 81.3
+     },
+     "dC": 2.8,
+     "dh": 2.4
+    },
+    {
+     "token": "--bg-900",
+     "papel": "fundo",
+     "uso": "fundo de tela",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 1.32,
+     "bRef": 1.08,
+     "meuHex": "#090704",
+     "refHex": "#141513",
+     "meu": {
+      "L": 2,
+      "C": 1.3,
+      "h": 85.4
+     },
+     "ref": {
+      "L": 6.6,
+      "C": 1.4,
+      "h": 129.4
+     },
+     "dC": 0.1,
+     "dh": null
+    },
+    {
+     "token": "--bg-800",
+     "papel": "painel",
+     "uso": "painel",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 3.98,
+     "bRef": 4.43,
+     "meuHex": "#141008",
+     "refHex": "#38342e",
+     "meu": {
+      "L": 4.8,
+      "C": 4,
+      "h": 85.7
+     },
+     "ref": {
+      "L": 21.9,
+      "C": 4.5,
+      "h": 83.5
+     },
+     "dC": 0.5,
+     "dh": null
+    },
+    {
+     "token": "--bg-700",
+     "papel": "painel",
+     "uso": "painel 2",
+     "cobrado": true,
+     "ok": true,
+     "bOk": true,
+     "b": 4.58,
+     "bRef": 4.43,
+     "meuHex": "#1c1812",
+     "refHex": "#38342e",
+     "meu": {
+      "L": 8.5,
+      "C": 4.6,
+      "h": 81.5
+     },
+     "ref": {
+      "L": 21.9,
+      "C": 4.5,
+      "h": 83.5
+     },
+     "dC": 0.2,
+     "dh": null
+    }
+   ],
+   "falhas": []
+  },
+  {
+   "nome": "UI2",
+   "titulo": "POLUIÇÃO — elemento não-permanente <= 25% do tempo (pior de 5 mapas × 2 modos × 2 cenários, 90 s cada)",
+   "ok": true,
+   "porElemento": {
+    "#pickup-hint": {
+     "pior": 0.045,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#prot-badge": {
+     "pior": 0,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#reload-note": {
+     "pior": 0,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#respawn-overlay": {
+     "pior": 0,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#scoreboard": {
+     "pior": 0.045,
+     "onde": "praca_poderes/ctf/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#radio-menu": {
+     "pior": 0,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#round-banner": {
+     "pior": 0.173,
+     "onde": "praca_poderes/ctf/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#mk-banner": {
+     "pior": 0,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": true,
+     "ok": true
+    },
+    "#killfeed": {
+     "pior": 1,
+     "onde": "praca_poderes/dm/spawn",
+     "cobrado": false,
+     "ok": true
+    }
+   },
+   "falhas": [],
+   "linhas": [
+    {
+     "mapId": "praca_poderes",
+     "ctf": false,
+     "cenario": "spawn",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      52.04113998290529,
+      73.78622658672069
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "praca_poderes",
+     "ctf": false,
+     "cenario": "patrulha",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.026111111111111113,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      48.90124444763081,
+      18.210300016076477,
+      16.725587235937265,
+      40.81736853194864,
+      10.42051692021698
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "praca_poderes",
+     "ctf": true,
+     "cenario": "spawn",
+     "alvo": 3,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0.04462962962962963,
+      "radioMenu": 0,
+      "banner": 0.17333333333333334,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 3,
+     "rounds": 1,
+     "dists": [
+      79.71585490305746,
+      56.00341184272299
+     ],
+     "nLive": 4798
+    },
+    {
+     "mapId": "praca_poderes",
+     "ctf": true,
+     "cenario": "patrulha",
+     "alvo": 3,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.02722222222222222,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.08666666666666667,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 2,
+     "rounds": 0,
+     "dists": [
+      49.95013725464261,
+      16.164259801505008,
+      11.304647546982833,
+      9.530224977947098,
+      9.526763287843815,
+      6.962802487704655
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "piscina_treta",
+     "ctf": false,
+     "cenario": "spawn",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [],
+     "nLive": 5220
+    },
+    {
+     "mapId": "piscina_treta",
+     "ctf": false,
+     "cenario": "patrulha",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.0012962962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      6.647322761814386,
+      18.481284253685672,
+      8.698452153199199,
+      8.394701872755338,
+      17.03103542956919,
+      18.50523209058974
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "piscina_treta",
+     "ctf": true,
+     "cenario": "spawn",
+     "alvo": 3,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.08666666666666667,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 1,
+     "rounds": 0,
+     "dists": [
+      14.545267371643641,
+      14.64803373313507
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "piscina_treta",
+     "ctf": true,
+     "cenario": "patrulha",
+     "alvo": 3,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.024074074074074074,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.08666666666666667,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 2,
+     "rounds": 0,
+     "dists": [
+      26.53180733727801,
+      17.702910849775307,
+      20.343177375145117,
+      18.87502919224997,
+      18.168530259214748,
+      27.101125536571946,
+      26.965826869575668,
+      22.603024420863687,
+      22.40144090735532,
+      22.346415925631447,
+      21.395317261982527,
+      21.770884677644247,
+      19.673428088516438,
+      17.43946167260593,
+      17.022834120981752,
+      16.142045909323826,
+      15.979084142550237
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "loja_h",
+     "ctf": false,
+     "cenario": "spawn",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [],
+     "nLive": 5220
+    },
+    {
+     "mapId": "loja_h",
+     "ctf": false,
+     "cenario": "patrulha",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.02574074074074074,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      13.348036417937914,
+      17.398508093040252,
+      12.94505907410034,
+      14.91399743758625,
+      11.315353949049467,
+      10.1578597964427,
+      10.426562361176847,
+      9.437873234914651,
+      11.278342767948159,
+      10.452329813336851,
+      10.906137120231257,
+      15.99893790964506,
+      17.244922763435014,
+      17.008281158183074,
+      14.726595914884813,
+      14.599060954879954,
+      21.566374919625364,
+      16.23752062123469,
+      10.334908113523099,
+      11.940151213440323,
+      16.205572907917425,
+      13.196962628274324,
+      14.997309630702379,
+      18.293276368418052,
+      18.417298717911116,
+      18.888298774750215
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "loja_h",
+     "ctf": true,
+     "cenario": "spawn",
+     "alvo": 4,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.08666666666666667,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 3,
+     "rounds": 0,
+     "dists": [
+      30.768495999421205
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "loja_h",
+     "ctf": true,
+     "cenario": "patrulha",
+     "alvo": 4,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.030185185185185186,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 2,
+     "rounds": 0,
+     "dists": [
+      25.94211507066116,
+      16.44645854195508,
+      16.44644547878915,
+      36.59165200884188,
+      17.234684968562654,
+      25.384626702225173,
+      25.20963342092364,
+      21.831151376160477,
+      14.87214718004748,
+      22.84936494273453,
+      20.951386345259614,
+      21.69933164332742,
+      21.26084389222301,
+      16.201472018128207,
+      16.304823367681518,
+      22.936290688607258,
+      21.674683599975904,
+      50.74078988975552
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "ferro_velho",
+     "ctf": false,
+     "cenario": "spawn",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      31.487191104544483,
+      3.1703634339045808,
+      5.7622765054540865,
+      9.354714841129033,
+      9.369795316017163,
+      9.302670706550048,
+      8.052576817473257,
+      11.835101899984487,
+      12.283110448627678,
+      8.837989013281366,
+      12.968701871288568,
+      13.09986519826887,
+      11.022256673684609,
+      12.207109978546589,
+      14.857329385473408,
+      11.435649724612608,
+      15.93218002356654,
+      9.065347745412575,
+      15.93218002356654,
+      10.675235781061168,
+      12.186440145699853,
+      13.947844319954894,
+      12.080773971256082,
+      12.397604899555041,
+      12.397604899555041,
+      12.186440145699853,
+      12.337760280227425,
+      12.397604899555041,
+      12.186440145699853,
+      12.337760280227425,
+      8.945799845138902,
+      8.945799845138902,
+      12.337760280227425,
+      9.214497205828932,
+      9.29933847296696,
+      11.281437363216124,
+      9.607211094904649,
+      9.29933847296696,
+      6.610280097578346,
+      8.809806499200823,
+      9.29933847296696,
+      7.6060957966934915,
+      8.045063365436535,
+      9.522655250271555,
+      9.522655250271555,
+      9.878076439185676,
+      7.001085949378323,
+      12.265382822045973,
+      6.567066433439799,
+      7.404344989427504,
+      6.567066433439799,
+      8.875590374128354,
+      9.894701817523785,
+      7.372422467279163,
+      8.571880792124174,
+      9.533223640248353,
+      9.677908181235244,
+      6.505064386063932,
+      8.605015885385017,
+      7.7545318401955985,
+      11.868879167523106,
+      8.590670621339509,
+      8.605015885385017,
+      11.868879167523106,
+      7.564759303601768,
+      9.518897215476674,
+      8.605015885385017,
+      8.954489125625802
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "ferro_velho",
+     "ctf": false,
+     "cenario": "patrulha",
+     "alvo": null,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.002962962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 0,
+     "rounds": 0,
+     "dists": [
+      16.646559898658918,
+      16.646559898658918
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "ferro_velho",
+     "ctf": true,
+     "cenario": "spawn",
+     "alvo": 4,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.04462962962962963,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 2,
+     "rounds": 0,
+     "dists": [
+      26.23642174779211,
+      25.934794890381767,
+      16.253030260415887,
+      12.511741899405797,
+      11.395573268537904,
+      16.356381627812567,
+      16.480403315033595,
+      17.596600601427273,
+      20.531800438588682
+     ],
+     "nLive": 5220
+    },
+    {
+     "mapId": "ferro_velho",
+     "ctf": true,
+     "cenario": "patrulha",
+     "alvo": 4,
+     "n": 5400,
+     "fracao": {
+      "pickupHint": 0.002777777777777778,
+      "prot": 0,
+      "reloadNote": 0,
+      "respawn": 0,
+      "scoreboard": 0,
+      "radioMenu": 0,
+      "banner": 0.057777777777777775,
+      "mkBanner": 0,
+      "killfeed": 1
+     },
+     "fim": null,
+     "maxPlacar": null,
+     "maxCaps": 2,
+     "rounds": 0,
+     "dists": [],
+     "nLive": 5220
+    }
+   ]
+  },
+  {
+   "nome": "UI4",
+   "titulo": "RITMO POR MODO — ABATE fecha <= 540s COM cronômetro de round; CAPTURA fecha <= 500s SEM cronômetro de round (relógio de partida <= 20% dos quadros e sempre descendo)",
+   "ok": false,
+   "casos": [
+    {
+     "mapId": "praca_poderes",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "praca_poderes",
+     "modo": "ctf",
+     "seed": 4242,
+     "teto": 500,
+     "fim": 494.5833333332122,
+     "rounds": 1,
+     "placarDoModo": 3,
+     "alvo": 3,
+     "relogio": "partida",
+     "relogioFrac": 0.125,
+     "reinicios": 0,
+     "fecha": true,
+     "dentroDoAlvo": true,
+     "relogioOk": true,
+     "ok": true
+    },
+    {
+     "mapId": "piscina_treta",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "piscina_treta",
+     "modo": "ctf",
+     "seed": 4242,
+     "teto": 500,
+     "fim": 487.54999999988524,
+     "rounds": 0,
+     "placarDoModo": 2,
+     "alvo": 3,
+     "relogio": "partida",
+     "relogioFrac": 0.125,
+     "reinicios": 0,
+     "fecha": true,
+     "dentroDoAlvo": true,
+     "relogioOk": true,
+     "ok": true
+    },
+    {
+     "mapId": "loja_h",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "loja_h",
+     "modo": "ctf",
+     "seed": 4242,
+     "teto": 500,
+     "fim": 487.54999999988524,
+     "rounds": 0,
+     "placarDoModo": 2,
+     "alvo": 4,
+     "relogio": "partida",
+     "relogioFrac": 0.125,
+     "reinicios": 0,
+     "fecha": true,
+     "dentroDoAlvo": true,
+     "relogioOk": true,
+     "ok": true
+    },
+    {
+     "mapId": "ferro_velho",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "ferro_velho",
+     "modo": "ctf",
+     "seed": 4242,
+     "teto": 500,
+     "fim": 487.54999999988524,
+     "rounds": 0,
+     "placarDoModo": 2,
+     "alvo": 4,
+     "relogio": "partida",
+     "relogioFrac": 0.125,
+     "reinicios": 0,
+     "fecha": true,
+     "dentroDoAlvo": true,
+     "relogioOk": true,
+     "ok": true
+    }
+   ],
+   "falhas": [
+    {
+     "mapId": "praca_poderes",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "piscina_treta",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "loja_h",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    },
+    {
+     "mapId": "ferro_velho",
+     "modo": "dm",
+     "seed": 4242,
+     "teto": 540,
+     "fim": 530.7166666665127,
+     "rounds": 4,
+     "placarDoModo": null,
+     "alvo": null,
+     "relogio": "round",
+     "relogioFrac": 1,
+     "reinicios": 4,
+     "fecha": true,
+     "dentroDoAlvo": false,
+     "relogioOk": true,
+     "ok": false
+    }
+   ]
+  }
+ ]
+}

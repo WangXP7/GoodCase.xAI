@@ -1,0 +1,1744 @@
+import { DestroyRef, Injectable, Injector, NgZone, computed, effect, inject, isDevMode, signal, untracked } from '@angular/core';
+import type { VacantLanes } from '../world/custom-map/lane-choice';
+import { SimClient } from '../sim/client/sim-client.service';
+import type { WaveSnapshot } from '../simulator/wave-snapshot';
+import type { HashBreakdown } from '../simulator/state-hash';
+import { SimMirror } from '../sim/client/mirror/sim-mirror';
+import { MainWorldService } from './world/main-world.service';
+import { TowerLosRegistry } from './tower-los-registry';
+import { PresentationService } from '../presentation/presentation.service';
+import { ConfigService } from '../core/services/config.service';
+import { GameStore } from '../store/game.store';
+import { UIStore } from '../store/ui.store';
+import { EngineInitializationService } from './infrastructure/engine-initialization.service';
+import { LocationManagementService } from './location/location-management.service';
+import { UrlLocationService } from './location/url-location.service';
+import { PathAndRouteService } from './world/path-route.service';
+import { LocationFacadeService } from './facade/location-facade.service';
+import { BUILD_VERSION } from '../configs/build-info.config';
+import { balanceConfigHash } from '../run-log/config-hash';
+import { WaveDirector } from '../director/wave-director';
+import { initialWaveSourceId, isWaveSourceId } from '../director/wave-source.registry';
+import { ResyncDriver, resyncPartParam } from '../coop/resync';
+import type { WaveSourceId } from '../director/wave-source';
+import { newRunSeed } from '../utils/game-rng';
+import { coordKey } from '../utils/geo-utils';
+import { CoopRefusedError, CoopSession, SILENCE_MS, type CoopCloseReason, type CoopStart } from '../coop/coop-session';
+import { HASH_PARTS, hashEveryParam, type HashedEntities, type HashPart } from '../coop/hash-check';
+import {
+  buildWorldPackage,
+  packagePaths,
+  readWorldPackage,
+  worldPackageRefusalText,
+  type WorldPackage,
+} from '../coop/world-package';
+import type { CoopRoomInfo, PlayerStatus, PublicRoom, RefusalReason, RoomListing } from '../coop/protocol';
+import { clientInfoFrom, mixedEngines } from '../coop/client-info';
+import { laneStats, type LaneStat } from '../coop/lane-stats';
+import { InputHandlerService } from './input-handler.service';
+import { SubscriptionBag, EventSubscription } from '../game-engine/game-event-bus';
+import { RunLogFacade } from '../run-log/run-log.facade';
+import { SPAWN_COLORS } from '../configs/map-constants.config';
+import { laneCss } from '../coop/lane-color';
+import { UI_SOUNDS } from '../configs/audio.config';
+import { toneWavDataUrl } from '../utils/alert-tone';
+import { ENEMY_TYPES } from '../configs/enemy-types.config';
+import { relayCandidates, relayForLink, relayLabel, type RelaySource } from '../coop/relay-address';
+import { readCoopLan, readDesktopBridge, type LanGame } from '../core/desktop-bridge';
+import { coopAccess } from '../coop/coop-access';
+import { CoopLobbyList } from './coop-lobby-list';
+import { WorldPackageLoader } from './world/world-package-loader.service';
+import { WorldContext } from '../world/world-context.service';
+import { WORLD_URL_PARAM, worldUrlValue, worldsMatch, type WorldRef } from '../world/world-ref';
+import { packageWorldRef } from '../coop/world-package';
+import { MapAssembler, PacedMapSend, splitMapFile, type MapPart } from '../coop/map-transfer';
+import { packOpenedMap, storeSharedMap } from '../world/custom-map/map-share';
+
+/** Pause between two pieces of a map the host sends: the relay takes some 4 MB a second from one connection */
+/** How long a guest on the host's map waits for its own start to stand or fail before it reloads into the map */
+const MAP_START_WAIT_MS = 30_000;
+import {
+  DEFAULT_ROOM_OPTIONS,
+  changedOptions,
+  mayCheat,
+  mayPause,
+  optionLabel,
+  ROOM_OPTION_CHOICES,
+  startsWhenAllReady,
+  type CoopRoomOptions,
+  type RoomOptionKey,
+} from '../coop/room-options';
+import { readText, writeText } from '../utils/storage';
+import { MatDialog } from '@angular/material/dialog';
+import { askRunUpload, RUN_UPLOAD_AFTER_GAME_OVER_MS } from '../components/run-upload-dialog/run-upload-dialog.component';
+import { packRunLog, readRunUploadConsent, writeRunUploadConsent } from '../run-log/run-upload';
+import { toJsonl } from '../run-log/run-log.export';
+import type { RunLog } from '../run-log/run-log.types';
+import { CoopRunCounts } from './coop-run-counts';
+import { ResettableSignals } from '../utils/resettable-signals';
+
+/** A mark on the map one player set for all (review R13) */
+export interface CoopPing {
+  id: number;
+  name: string;
+  /** Lane colour, CSS */
+  color: string;
+  lat: number;
+  lon: number;
+  height: number;
+}
+
+export type CoopStatus = 'off' | 'connecting' | 'lobby' | 'loading-world' | 'in-game' | 'closed';
+
+/** A player's part of a coop run, shown at game over (review R16) */
+export interface CoopSummaryRow {
+  id: string;
+  name: string;
+  me: boolean;
+  left: boolean;
+  /** Lane colour, CSS */
+  color: string;
+  kills: number;
+  towers: number;
+  goldGiven: number;
+  /** Enemies that got through their lane */
+  leaks: number;
+  /** Gold at the end */
+  gold: number;
+}
+
+/**
+ * A line of the coop chat (D43): what a player wrote, or a system line
+ * (`from` null) for what happened in the room: joined, left, host, gold,
+ * connection, options.
+ */
+export interface CoopChatLine {
+  id: number;
+  /** The player who wrote it; null for a system line */
+  from: string | null;
+  text: string;
+  /** A system line that warns (left, connection, divergence) */
+  warn: boolean;
+  /** Date.now() when it came here */
+  at: number;
+}
+
+/** Largest run log to send, base64 characters: under the relay's 1 MB message limit (TODO E38) */
+const MAX_RUN_LOG_CHARS = 1000 * 1024;
+
+/** A player's status as the chat tells the room */
+const STATUS_LINE: Record<PlayerStatus, (name: string) => string> = {
+  key: (name) => `${name} enters their map key`,
+  loading: (name) => `${name} is loading the map`,
+  reloading: (name) => `${name} reloads for the new place, back in a moment`,
+  ready: (name) => `${name}'s map stands`,
+};
+
+/** What the coop panel says when the connection to the relay closed, by why */
+const CLOSED_TEXT: Record<NonNullable<CoopCloseReason> | 'lost', string> = {
+  restart: 'The coop server restarts. Try again in a moment.',
+  'too-fast': 'The coop server closed the connection: this game sent too many messages. Reload to join again.',
+  silent: `No word from the coop server for ${SILENCE_MS / 1000} s: the connection is gone (a network switch or standby?).`,
+  lost: 'The connection to the coop server closed.',
+};
+/** The same as the head of the in-game notice */
+const CLOSED_HEAD: Record<NonNullable<CoopCloseReason> | 'lost', string> = {
+  restart: 'The coop server restarts',
+  'too-fast': 'The coop server closed the connection, this game sent too many messages',
+  silent: `No word from the coop server for ${SILENCE_MS / 1000} s`,
+  lost: 'Connection to the coop server lost',
+};
+
+/** Chat lines kept at most */
+const MAX_CHAT_LINES = 100;
+/** A round trip above this reads as a slow connection (the squad's lag state, D45), ms */
+export const LAG_MS = 160;
+
+/** The name the player gave last time, kept in this browser */
+const NAME_KEY = '3dtd-coop-name';
+/** How long a ping mark stays on the map, ms */
+const PING_MS = 4000;
+/** The lobby's walking time of a lane: a zombie's pace, the standard enemy */
+const LANE_WALK_SPEED_MPS = ENEMY_TYPES['zombie'].baseSpeed;
+/** Host: how long a changed map waits before it checks that the rebuild is done, ms */
+const SHARE_SETTLE_MS = 400;
+
+const REFUSAL_TEXT: Record<RefusalReason, string> = {
+  protocol: 'The relay speaks another version of the coop protocol.',
+  version: 'The host runs another version of the game. Both need the same one.',
+  balance: 'The host plays with other tower or enemy values.',
+  'no-room': 'There is no room with that code.',
+  full: 'The room is full (four players).',
+  started: 'The game in that room has started already.',
+  'not-host': 'Only the host can do that.',
+  'lane-taken': 'Someone else has that lane.',
+  'not-ready': 'Not everyone has a lane and is ready yet.',
+  alone: 'A coop game needs a second player.',
+  busy: 'The coop server is full right now. Try again in a while.',
+  kicked: 'The host took you out of the room.',
+  locked: 'The host closed the room to new players.',
+};
+
+/**
+ * Coop in the game (docs/COOP_PLAN.md, C4): the session to the relay and
+ * what the game does with it.
+ *
+ * Host: opens a room and sends the world of the place loaded now. Joiner:
+ * joins, gets the host's world; where that is another place than the one
+ * loaded here, the page loads that place with the room in the URL and joins
+ * again once it stands (join per link). Then the world package replaces
+ * routes, cells and heights (C1b), and the world key must match the host's.
+ * At the start every client resets the run with the room's seed, sets
+ * players, lanes and line of sight role, and hands the simulation the tick
+ * stream (lockstep).
+ *
+ * In the game the wave button means "ready"; the host starts the wave once
+ * everyone is (D15), or as the room's options say (D38). The speed belongs
+ * to the host, the pause to whom the options let. The squad box
+ * (CoopSquadComponent) reads the roster, readiness, gold and who left from
+ * here; gold goes to a partner as command:give-credits. What happens in the
+ * room goes into the chat as system lines (D43).
+ */
+@Injectable()
+export class CoopService {
+  private readonly sim = inject(SimClient);
+  private readonly mirror = inject(SimMirror);
+  private readonly world = inject(MainWorldService);
+  private readonly los = inject(TowerLosRegistry);
+  private readonly presentation = inject(PresentationService);
+  /** Optional: specs of the room flow run without a director and play the address's source */
+  private readonly waveDirector = inject(WaveDirector, { optional: true });
+  /** Resync after a desync (C5b): holds, sends or loads the state at the room's boundary */
+  private readonly resync = new ResyncDriver(
+    () => this.isHost(),
+    {
+      // The simulation stands at the room's boundary while it holds: the
+      // mirror's numbers are the worker's there
+      subStep: () => this.mirror.scalars.subStep,
+      refusal: () => this.mirror.scalars.waveSnapshotRefusal,
+      capture: () => this.sim.rpc('captureWaveSnapshot') as Promise<WaveSnapshot>,
+      // As a replay's seek: the simulation says `sim:restored`, on which the
+      // presentation clears the old state's show and sets up the loaded one
+      restore: (snapshot) => this.sim.rpc('restoreWaveSnapshot', snapshot, 'live'),
+    },
+    {
+      state: (tick, gz, part, parts) => this.session?.resyncState(tick, gz, part, parts),
+      loaded: (tick, ok) => this.session?.resynced(tick, ok),
+    },
+    (text) => console.warn(text),
+  );
+  private resyncTimer: ReturnType<typeof setInterval> | null = null;
+
+  private startResyncPolling(): void {
+    this.stopResyncPolling();
+    this.resyncTimer = setInterval(() => void this.resync.poll(), 50);
+  }
+
+  private stopResyncPolling(): void {
+    if (this.resyncTimer !== null) clearInterval(this.resyncTimer);
+    this.resyncTimer = null;
+  }
+
+  /** Guest: the source this seat played before a host's replaced it, back on leave() */
+  private ownWaveSource: WaveSourceId | null = null;
+  /** Host: the source the last world package carried */
+  private sharedWaveSource: WaveSourceId | null = null;
+  private readonly config = inject(ConfigService);
+  private readonly gameStore = inject(GameStore);
+  private readonly uiStore = inject(UIStore);
+  private readonly engineInit = inject(EngineInitializationService);
+  private readonly inputHandler = inject(InputHandlerService);
+  private readonly runLog = inject(RunLogFacade);
+  private readonly dialog = inject(MatDialog);
+  private readonly locationMgmt = inject(LocationManagementService);
+  private readonly urlLocation = inject(UrlLocationService);
+  private readonly pathRoute = inject(PathAndRouteService);
+  private readonly locationFacade = inject(LocationFacadeService);
+  /** Standing on the host's world package (C1) */
+  private readonly loader = inject(WorldPackageLoader);
+  private readonly worldContext = inject(WorldContext);
+  /** Guest: the pieces of the host's custom map as they come */
+  private readonly mapAssembler = new MapAssembler();
+  /** Host: the map (id and hash) this room has from us already, sent once per room */
+  private sentMapKey: string | null = null;
+  /** Host: the map's pieces paced through the relay, the world after them */
+  private readonly mapSend = new PacedMapSend();
+  /** The signals of a room, back to their start in leave() */
+  private readonly perRoom = new ResettableSignals();
+  /** What this client told the room it is doing, see tellStatus */
+  private toldStatus: PlayerStatus | null = null;
+  /** Host: the guests heard the map is changing (PLAYTEST T25); again once it was sent */
+  private movingSaid = false;
+  /** Guest, lobby: the host said the map is changing, until the new world is here */
+  readonly hostChangingMap = this.perRoom.signal(false);
+  /** Host: the map last sent to the room (mapSignature), see shareChangedMap */
+  private sharedMap = '';
+  /** sharedMap as a signal, for the effect that tells the guests the map changes */
+  private readonly sharedMapNow = signal('');
+  /** Host: the latest shareChangedMap, an older one gives way */
+  private shareRun = 0;
+  /** Host: adding a spawn for a lane the room lacks, see fillLanes */
+  private filling = false;
+  private readonly ngZone = inject(NgZone);
+
+  private readonly injector = inject(Injector);
+  private session: CoopSession | null = null;
+  /** Lobby: the player chose a lane by hand, autoPick leaves it */
+  private pickedByHand = false;
+  /** Lobby: the lane autoPick asked for, so it asks once */
+  private autoPicking: string | null = null;
+  private chatId = 1;
+  /** The name set in this session; holds where storage is blocked */
+  private sessionName: string | null = null;
+  private waveStarter: (() => void) | null = null;
+  private readyNow = false;
+  /** The speed the room runs at; what the store shows is set from it (applySpeed) */
+  private roomSpeed = 1;
+  private roomPaused = false;
+
+  readonly status = this.perRoom.signal<CoopStatus>('off');
+  readonly room = this.perRoom.signal<CoopRoomInfo | null>(null);
+  readonly error = signal<string | null>(null);
+  readonly playerId = signal<string | null>(null);
+  /** The chat with the system lines, oldest first (D43) */
+  readonly chat = this.perRoom.signal<readonly CoopChatLine[]>([]);
+  /** The options the running game started with (D38); the lobby reads the room's */
+  private readonly startOptions = signal<CoopRoomOptions>(DEFAULT_ROOM_OPTIONS);
+  /** The room's options: in the lobby as the host sets them, in the game as it started */
+  readonly options = computed(() => (this.inGame() ? this.startOptions() : this.room()?.options ?? DEFAULT_ROOM_OPTIONS));
+  /** This player may pause and resume (D38) */
+  readonly mayPause = computed(() => mayPause(this.options(), this.isHost()));
+  /** Cheats act in this room (relay and room allow them for someone) */
+  readonly cheatsOn = computed(() => (this.room()?.cheats ?? false) && this.options().cheats !== 'off');
+  /** The relay found the simulations apart (C5): the first tick, and each player's hash there */
+  readonly desync = this.perRoom.signal<{ tick: number; hashes: [string, number][]; outOfStep: string[] } | null>(null);
+  /** The host's world stands here too and matches it (joiner), or was sent (host) */
+  readonly worldReady = this.perRoom.signal(false);
+  readonly isHost = computed(() => {
+    const room = this.room();
+    return room !== null && room.hostId === this.playerId();
+  });
+  readonly inGame = computed(() => this.status() === 'in-game');
+  /** The connection broke in a running game: it stands until the player goes on alone (review R10) */
+  readonly lostInGame = computed(() => this.status() === 'closed' && this.roster().length > 0);
+  /** The players of the running game in roster order, with name and lane as the room had them at the start */
+  /** The players of the game with their lanes, from the start (a player has one or more) */
+  readonly roster = this.perRoom.signal<{ id: string; name: string; spawnIds: string[] }[]>([]);
+  /** Players ready for the next wave (in the game) */
+  readonly readyIds = signal<ReadonlySet<string>>(new Set());
+  /** Players who left the running game */
+  readonly leftIds = signal<ReadonlySet<string>>(new Set());
+  /** Every player's gold in the running game */
+  readonly gold = signal<ReadonlyMap<string, number>>(new Map());
+  /** Kills, towers built, gold given and leaks per player in this run (CoopRunCounts) */
+  private readonly runCounts = new CoopRunCounts({
+    mirror: this.mirror,
+    inGame: () => this.inGame(),
+    roster: () => this.roster(),
+    playerId: () => this.playerId(),
+    leftIds: () => this.leftIds(),
+    laneColorOf: (playerId) => this.laneColorOf(playerId),
+  });
+  /** Each player's part of the run, set at game over (review R16); null before */
+  readonly summary = this.runCounts.summary;
+  /** Enemies that got through each player's lane in the wave running or last run (review R15) */
+  readonly waveLeaks = this.runCounts.waveLeaks;
+  /** G was pressed: the next click on the map is a ping (review R13) */
+  readonly pingArmed = signal(false);
+  /** The map marks showing now, for the arrows at the view edge (CoopPingArrowsComponent) */
+  readonly pings = this.perRoom.signal<readonly CoopPing[]>([]);
+  private pingSeq = 0;
+  /** Each lane's length and walking time, spawn id to its stats (lobby) */
+  readonly lanes = signal<ReadonlyMap<string, LaneStat>>(new Map());
+  /**
+   * This browser has no map key yet: the token screen asks for it first
+   * (review R8). Only a world that needs one (the Google tiles; not a custom
+   * map or an own tileset)
+   */
+  readonly needsKey = computed(() => this.worldContext.capabilities().credentials && this.config.needsCredentials());
+  /** The player the room waits for to catch up (the relay's cap, review R2), null while none */
+  readonly waitingFor = this.perRoom.signal<string | null>(null);
+  /** Each player's round trip to the relay, ms, as the relay last measured it */
+  readonly rtt = this.perRoom.signal<ReadonlyMap<string, number | null>>(new Map());
+  /** The players in the room play on engines that compute differently (Chrome and Firefox) */
+  readonly mixedEngines = computed(() => mixedEngines(this.room()?.players.map((p) => p.client) ?? []));
+  /** The room code from the URL this page was opened with (?room=), to join once the place stands */
+  readonly roomFromUrl: string | null;
+  /** The relay the invite link named (&relay=), as it came */
+  private readonly relayFromUrl: string | null;
+  /** The lane this player had before the host moved the room to another place (&lane=), taken again */
+  private readonly laneFromUrl: string | null;
+  /** `?hashEvery=`: hash reports every so many ticks, for a local hunt of a desync (hashEveryParam) */
+  private readonly hashEveryFromUrl: number | undefined;
+  /** The relay this session talks to, and where the address came from */
+  readonly relay = signal<{ url: string; source: RelaySource } | null>(null);
+
+  /** The online lobbies and the active one (D58), see CoopLobbyList */
+  private readonly lobbyList = new CoopLobbyList(this.config);
+  /** Every online lobby: the site's, then the player's */
+  readonly lobbies = this.lobbyList.lobbies;
+  /** The lobby "Online" plays over; null without any (then online is off) */
+  readonly lobby = this.lobbyList.lobby;
+  /** How this room is reached, for the room header: "LAN" or the lobby's name, never an address */
+  readonly reachedVia = computed(() => {
+    const relay = this.relay();
+    if (!relay) return null;
+    if (relay.source === 'lan') return 'LAN';
+    return this.lobbies().find((l) => l.url === relay.url)?.name ?? relayLabel(relay.url);
+  });
+  /**
+   * A guest's host place once the world package came, while the map still
+   * loads: a start without a place takes it (followStartPlaces, E30).
+   */
+  readonly hostPlace = this.perRoom.signal<{ hq: { lat: number; lon: number }; spawns: { lat: number; lon: number }[] } | null>(null);
+
+  /** The active lobby's public rooms (D62), null before the first look or when it did not answer */
+  readonly publicRooms = signal<readonly PublicRoom[] | null>(null);
+  /** Round trip of the last look at the list, ms (D63) */
+  readonly lobbyPing = signal<number | null>(null);
+  /**
+   * The lobby the last host or join found down, by name; null after a
+   * connect that got through it or a list it answered. The entry says it
+   * on either way, also on Same network after an invite link failed.
+   */
+  readonly lobbyDown = signal<string | null>(null);
+
+  /**
+   * Look at the active lobby's public rooms: over the room's session where
+   * there is one, else a short one of its own.
+   */
+  async refreshPublicRooms(): Promise<void> {
+    const lobby = this.lobby();
+    if (!lobby) {
+      this.publicRooms.set(null);
+      return;
+    }
+    // A join or a host in flight owns the session and waits for its answer: no list meanwhile
+    if (this.session && !this.room()) return;
+    const started = performance.now();
+    let own: CoopSession | null = null;
+    try {
+      let session = this.session;
+      if (!session || this.relay()?.url !== lobby.url) {
+        own = new CoopSession(lobby.url, { name: this.name, ...this.head(), client: clientInfoFrom(navigator.userAgent) });
+        await own.connect();
+        session = own;
+      }
+      const rooms = await session.listRooms();
+      this.ngZone.run(() => {
+        this.publicRooms.set(rooms);
+        this.lobbyDown.set(null);
+        this.lobbyPing.set(Math.round(performance.now() - started));
+      });
+    } catch {
+      this.ngZone.run(() => {
+        this.publicRooms.set(null);
+        this.lobbyPing.set(null);
+      });
+    } finally {
+      if (own) {
+        own.onClosed = null;
+        own.close();
+      }
+    }
+  }
+
+  /** Host: the room in the public list or not, and its title (D62, D63); the city comes by itself */
+  setListing(change: Partial<Pick<RoomListing, 'public' | 'title'>>): void {
+    const room = this.room();
+    if (!room || !this.isHost() || !this.session) return;
+    this.session.setListing({ ...room.listing, ...change, city: this.hostCity() });
+  }
+
+  /** The host's city and country for the public list, never the street (D63) */
+  private hostCity(): string {
+    const info = this.locationMgmt.missionInfo();
+    return [info?.city, info?.country].filter(Boolean).join(', ');
+  }
+
+  /** A downloaded app update is waiting: a version refusal can offer "Update now" (D60) */
+  readonly updateReady = signal(false);
+  /** What the player asked for last: the dock shows the joining steps for a guest */
+  readonly intent = signal<'host' | 'join' | null>(null);
+
+  /** Quit and install the waiting app update */
+  installUpdate(): void {
+    readDesktopBridge()?.installUpdateNow();
+  }
+
+  /** The desktop app's LAN side (C4d); null in a browser */
+  private readonly lanBridge = readCoopLan();
+  /** Coop on the local network is offered here: the desktop app */
+  readonly lanAvailable = this.lanBridge !== null;
+  /** Where coop may be played: the app, the dev game, or a browser that only points to the app (E114) */
+  readonly access = coopAccess(readDesktopBridge() !== null, window.location.hostname, isDevMode());
+  /** This machine hosts a LAN game: its relay runs and ends with the room */
+  private lanHosting = false;
+  /** While hosting on the LAN, this machine's addresses for the guests (D54) */
+  readonly lanAddresses = signal<readonly { name: string; address: string }[]>([]);
+  /** LAN games found while scanning */
+  readonly lanGames = signal<readonly LanGame[]>([]);
+  private stopLanScan: (() => void) | null = null;
+
+  /** The bus listeners, gone with the service */
+  private readonly subs = new SubscriptionBag();
+  /** Timers that clear the pings off the map */
+  private readonly pingTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** Counts up on every leave(), so a wait begun before it gives up */
+  private generation = 0;
+  /** startGame reset the simulation; its game:reset has not come back yet */
+  private startResetPending = false;
+
+  constructor() {
+    readDesktopBridge()?.onUpdateReady(() => this.ngZone.run(() => this.updateReady.set(true)));
+    // A coop run that ended goes to a relay that collects, with the player's consent (TODO E38)
+    effect(() => {
+      const run = this.runLog.closedRun();
+      if (run) untracked(() => void this.offerRunLog(run));
+    });
+    this.runLog.setCoopHead(() => this.coopRunHead());
+    // The simulation failed: out of the room, so the partners' lockstep does not wait for this seat
+    const offFailure = this.sim.onFailure(() => {
+      if (this.session) this.ngZone.run(() => this.leave());
+    });
+    // The game component goes (another route): out of the room, the LAN relay and scan with it
+    inject(DestroyRef).onDestroy(() => {
+      offFailure();
+      this.runLog.setCoopHead(() => null);
+      this.scanLan(false);
+      this.leave();
+      this.subs.disposeAll();
+    });
+    const params = new URLSearchParams(window.location.search);
+    this.roomFromUrl = params.get('room');
+    // An invite link opens the start menu on its Coop page (TowerDefenseComponent.startGameSequence);
+    // in a browser the page says the room is played in the app (E114)
+    if (this.roomFromUrl && this.access !== 'hint') {
+      // Opened with an invite link (?room=): the dock opens at once and says what
+      // happens, the host's map loads, the player joins as soon as it stands
+      this.intent.set('join');
+      this.uiStore.coopDockOpen.set(true);
+      queueMicrotask(() => void this.joinFromUrl());
+    }
+    this.relayFromUrl = params.get('relay');
+    this.laneFromUrl = params.get('lane');
+    this.hashEveryFromUrl = hashEveryParam(params.get('hashEvery'));
+    this.resync.partChars = resyncPartParam(params.get('resyncPart')) ?? this.resync.partChars;
+
+    const bus = this.sim.bus;
+    // A partner's tower wears its owner's lane colour (review R14)
+    this.subs.add(bus.onLive('tower:placed', ({ tower }) => {
+      if (!this.inGame() || tower.ownerId === this.playerId()) return;
+      const color = this.laneColorNumberOf(tower.ownerId);
+      if (color !== null) this.engineInit.getEngine()?.towers.setOwnerRing(tower.id, color);
+    }));
+    this.subs.add(bus.on('coop:ready-changed', (event) => {
+      if (event.local) this.readyNow = event.ready;
+      // "Host starts" waits for the host's button alone (D38)
+      if (event.allReady && this.isHost() && this.inGame() && startsWhenAllReady(this.options())) {
+        this.ngZone.run(() => this.waveStarter?.());
+      }
+    }));
+    this.subs.add(bus.onLive('game:reset', () => {
+      if (!this.inGame()) return;
+      this.runCounts.newRun();
+      this.readyNow = false;
+      this.readyIds.set(new Set());
+      // The reset of the room's start (startGame) comes with a later packet: the game begins, no new run to tell of
+      if (this.startResetPending) {
+        this.startResetPending = false;
+        return;
+      }
+      this.notify(this.isHost() ? 'New run started' : 'The host started a new run');
+    }));
+    this.subs.add(bus.on('wave:started', () => {
+      this.readyNow = false;
+      if (this.readyIds().size > 0) this.readyIds.set(new Set());
+    }));
+    // What the players bar shows, from the simulation every client runs alike
+    this.subs.add(bus.onLive('coop:ready-changed', (event) => {
+      if (!this.inGame()) return;
+      const next = new Set(this.readyIds());
+      if (event.ready) next.add(event.playerId);
+      else next.delete(event.playerId);
+      this.readyIds.set(next);
+      if (event.ready) this.notify(`${this.nameOf(event.playerId)} is ready for the next wave`);
+    }));
+    this.subs.add(bus.onLive('coop:player-left', (event) => {
+      if (this.inGame()) this.leftIds.set(new Set(this.leftIds()).add(event.playerId));
+    }));
+    this.subs.add(bus.onLive('credits:changed', (event) => {
+      if (this.inGame()) this.gold.set(new Map(this.gold()).set(event.playerId, event.credits));
+    }));
+    // Every player's gold as the simulation's packets carry it: the start
+    // credits of a new run come with its first packet, not as credits:changed
+    const offFrame = this.sim.onFrame((packet) => {
+      if (!this.inGame() || packet.scalars.replay) return;
+      const { players, credits } = packet.scalars;
+      const gold = this.gold();
+      if (players.every((id, i) => gold.get(id) === credits[i])) return;
+      this.gold.set(new Map(players.map((id, i) => [id, credits[i]])));
+    });
+    this.subs.add(new EventSubscription(offFrame));
+    this.subs.add(bus.onLive('coop:credits-given', (event) => {
+      if (event.toLocal) this.notify(`${this.nameOf(event.from)} sent you ${event.amount} gold`);
+      this.runCounts.giftGiven(event.from, event.amount);
+    }));
+
+    // Each player's part of the run, for the game-over screen (review R16)
+    this.runCounts.wire(bus, this.subs);
+
+    // Host, lobby: the public list names the city of the place played now (D63)
+    effect(() => {
+      const room = this.room();
+      const city = this.hostCity();
+      if (!room || room.started || !this.isHost() || room.listing.city === city) return;
+      untracked(() => this.setListing({}));
+    }, { injector: this.injector });
+
+    // The dock by itself, in one place (docs/archive/COOP_UI_REWORK_PLAN.md, T5): it opens on
+    // entering a room, also after joining from the menu before the first place (E30), and steps aside
+    // for the squad box when the game starts; Tab, the header chip and Esc do the rest
+    let wasInRoom = false;
+    let wasInGame = false;
+    effect(() => {
+      const inRoom = this.room() !== null;
+      const inGame = this.inGame();
+      untracked(() => {
+        if (inGame && !wasInGame) this.uiStore.coopDockOpen.set(false);
+        else if (inRoom && !wasInRoom) this.uiStore.coopDockOpen.set(true);
+      });
+      wasInRoom = inRoom;
+      wasInGame = inGame;
+    }, { injector: this.injector });
+    // A coop game keeps stepping in a hidden or minimised window: the relay
+    // drops a player whose lockstep stands for 30 s (E136). Read again once a
+    // load ends, so that an engine made after the start gets it too
+    effect(() => {
+      const on = this.inGame();
+      this.engineInit.loading();
+      untracked(() => this.engineInit.getEngine()?.renderLoop.setBackgroundLoopEnabled(on, 'coop'));
+    }, { injector: this.injector });
+    // Host, lobby: a changed map goes to the room by itself
+    effect(() => {
+      const signature = this.mapSignature();
+      const room = this.room();
+      if (!room || room.started || !this.isHost() || !this.worldReady()) return;
+      untracked(() => {
+        if (signature !== this.sharedMap) void this.shareChangedMap();
+      });
+    }, { injector: this.injector });
+    // Host, lobby: the guests hear at once that the map changes (a dice, a
+    // search, a spawn set), not only once the new world comes (PLAYTEST T25)
+    effect(() => {
+      const changing = this.engineInit.loading() || this.mapSignature() !== this.sharedMapNow();
+      const room = this.room();
+      if (!changing || !room || room.started || !this.isHost() || room.players.length < 2) return;
+      untracked(() => {
+        if (this.movingSaid || !this.session) return;
+        this.movingSaid = true;
+        this.session.moving();
+      });
+    }, { injector: this.injector });
+
+    // Guest, lobby: the room hears what this client is doing until its map
+    // stands: entering a map key, loading (User, 2026-09-25)
+    effect(() => {
+      const room = this.room();
+      if (!room || room.started || this.isHost()) return;
+      const status: PlayerStatus = this.worldReady() ? 'ready' : this.needsKey() ? 'key' : 'loading';
+      untracked(() => this.tellStatus(status));
+    }, { injector: this.injector });
+
+    // The map belongs to the room (R4): locked in the game, and for a guest in the lobby
+    effect(() => {
+      const locked = this.inGame() || (this.room() !== null && !this.isHost());
+      untracked(() => this.uiStore.coopMapLocked.set(locked));
+    }, { injector: this.injector });
+
+    // The speed belongs to the host (D15), the pause to everyone: a change in
+    // the store, from the buttons or the keys, goes to the relay; a guest's
+    // speed is taken back. The room's answer sets the store (applySpeed).
+    effect(() => {
+      const speed = this.gameStore.gameSpeed();
+      const paused = this.gameStore.paused();
+      untracked(() => this.followLocalSpeed(speed, paused));
+    }, { injector: this.injector });
+
+  }
+
+  /** Add an online lobby and make it the active one; false when the address is no ws:// or wss:// one */
+  addLobby(name: string, url: string): boolean {
+    return this.lobbyList.add(name, url);
+  }
+
+  removeLobby(url: string): void {
+    this.lobbyList.remove(url);
+  }
+
+  selectLobby(url: string): void {
+    this.lobbyList.select(url);
+  }
+
+  get name(): string {
+    return this.sessionName ?? readText(NAME_KEY) ?? 'Player';
+  }
+
+  set name(value: string) {
+    // Storage blocked: the name holds for this session all the same
+    this.sessionName = value;
+    writeText(NAME_KEY, value);
+  }
+
+  /** The facade's wave start, run by the host once everyone is ready. */
+  setWaveStarter(start: () => void): void {
+    this.waveStarter = start;
+  }
+
+  /** Open a room with the place loaded now and be its host. */
+  async host(name: string): Promise<void> {
+    this.intent.set('host');
+    const session = await this.connect(name);
+    if (!session) return;
+    await this.openRoom(session);
+  }
+
+  /** Create the room on `session` with the place loaded now and share its world. */
+  private async openRoom(session: CoopSession): Promise<void> {
+    await this.guard(async () => {
+      // A new room has a lane free for the second player (User, 2026-09-24)
+      if (this.world.spawnPoints.length < 2) await this.locationFacade.addRandomSpawn();
+      this.room.set(await session.create());
+      this.shareWorld();
+    });
+  }
+
+  /**
+   * Host a game on the local network (C4d, D51): start this machine's relay,
+   * then open the room on it as `host` does.
+   */
+  async hostLan(name: string): Promise<void> {
+    if (!this.lanBridge) return;
+    this.intent.set('host');
+    this.leave();
+    this.error.set(null);
+    this.status.set('connecting');
+    const started = await this.lanBridge.host();
+    if ('error' in started) {
+      this.error.set(started.error);
+      this.status.set('closed');
+      return;
+    }
+    const session = await this.connect(name, [`ws://127.0.0.1:${started.port}`]);
+    if (!session) {
+      this.lanBridge.stop();
+      return;
+    }
+    this.lanHosting = true;
+    this.lanAddresses.set(started.addresses);
+    await this.openRoom(session);
+  }
+
+  /** Join a game found on the local network, trying the host's addresses best first */
+  async joinLan(name: string, game: LanGame): Promise<void> {
+    this.intent.set('join');
+    const urls = game.endpoints.map(({ address, port }) => `ws://${address}:${port}`);
+    const session = await this.connect(name, urls.length ? urls : [`ws://${game.address}:${game.port}`]);
+    if (!session) return;
+    await this.guard(async () => {
+      this.room.set(await session.join(game.code));
+    });
+  }
+
+  /** Look for LAN games while the dock offers them; `false` stops */
+  scanLan(on: boolean): void {
+    this.stopLanScan?.();
+    this.stopLanScan = null;
+    if (!on || !this.lanBridge) {
+      this.lanGames.set([]);
+      return;
+    }
+    this.stopLanScan = this.lanBridge.scan((games) => this.ngZone.run(() => this.lanGames.set(games)));
+  }
+
+  /** Ask one address for LAN games (the host IP field, D54); true when a relay answered there */
+  probeLan(ip: string): Promise<boolean> {
+    return this.lanBridge?.probe(ip.trim()) ?? Promise.resolve(false);
+  }
+
+  /** Join the room `code`. */
+  async join(name: string, code: string): Promise<void> {
+    this.intent.set('join');
+    const session = await this.connect(name);
+    if (!session) return;
+    await this.guard(async () => {
+      this.room.set(await session.join(code));
+    });
+  }
+
+  /** Host: send the world of the place loaded now (again, after a change of place). */
+  shareWorld(): void {
+    const source = this.world.source();
+    if (!this.session || !source) {
+      this.error.set('The place is not loaded yet.');
+      return;
+    }
+    const world = buildWorldPackage(source, this.head());
+    this.sharedWaveSource = world.waveSource ?? null;
+    // A custom map goes ahead of the world that names it, so a guest without it gets it from the room;
+    // the world after the pieces is the one of the moment they are out (PacedMapSend)
+    const session = this.session;
+    this.mapSend.share(
+      this.mapPartsToSend(),
+      (part) => session.sendMapPart(part),
+      () => {
+        const now = this.world.source();
+        const latest = now ? buildWorldPackage(now, this.head()) : world;
+        session.sendWorld(latest, latest.spawns.map((spawn) => spawn.id));
+      },
+      () => this.session === session,
+    );
+    this.lanes.set(laneStats(this.pathRoute.getCachedPaths(), LANE_WALK_SPEED_MPS));
+    this.sharedMap = this.mapSignature();
+    this.sharedMapNow.set(this.sharedMap);
+    this.movingSaid = false;
+    this.worldReady.set(true);
+  }
+
+  /** HQ and spawns of the place loaded here, to tell a changed map */
+  private mapSignature(): string {
+    const hq = this.locationMgmt.hq();
+    const spawns = this.locationMgmt.spawns();
+    return hq ? [coordKey(hq), ...spawns.map(coordKey)].join(';') : '';
+  }
+
+  /**
+   * Host, lobby: the map changed here (a spawn set, moved or added, the HQ
+   * moved, another place): once it stands, send it to the room (User,
+   * 2026-09-24). A guest takes the spawns in place or moves along.
+   */
+  private async shareChangedMap(): Promise<void> {
+    const run = ++this.shareRun;
+    // The rebuild starts after the location's signals change
+    await new Promise((resolve) => setTimeout(resolve, SHARE_SETTLE_MS));
+    if (!(await this.placeLoaded()) || run !== this.shareRun) return;
+    const room = this.room();
+    if (!this.session || !room || room.started || !this.isHost() || this.mapSignature() === this.sharedMap) return;
+    this.shareWorld();
+  }
+
+  /**
+   * Host: every player needs a lane of their own (D26). While the room has
+   * more players than the map has spawns, add one on a street round from
+   * the others and send the map again; up to four.
+   */
+  private async fillLanes(): Promise<void> {
+    const room = this.room();
+    if (this.filling || !room || room.started || !this.isHost() || !this.worldReady()) return;
+    if (room.spawnIds.length >= room.players.length || this.world.spawnPoints.length >= 4) return;
+    this.filling = true;
+    try {
+      const added = await this.locationFacade.addRandomSpawn();
+      if (added && this.session) this.shareWorld();
+      else if (!added) this.error.set('Found no street for another spawn: add one with the + button.');
+    } finally {
+      this.filling = false;
+    }
+  }
+
+  /** Host, lobby: set spawn `index` anew with a click on the map; the room gets the map by itself */
+  moveSpawn(index: number): void {
+    if (!this.isHost() || this.inGame()) return;
+    this.locationFacade.startMapPlacement('spawn', false, index);
+  }
+
+  /** Host, lobby: take spawn `index` away (never the last); its player gets a free lane */
+  removeSpawn(index: number): void {
+    if (!this.isHost() || this.inGame()) return;
+    void this.locationFacade.removeSpawn(index);
+  }
+
+  /**
+   * Lobby: take a free lane as one more, or give one of one's own back
+   * (`take` false); null gives every lane back. A player takes as many as
+   * they like (docs/WAVE_SYSTEM.md (Spuren)). A choice by hand stops autoPick.
+   */
+  pick(spawnId: string | null, take = true): void {
+    this.pickedByHand = true;
+    this.session?.pick(spawnId, take);
+  }
+
+  /**
+   * Lobby: a player without a lane gets the first free one as soon as the
+   * map stands here, so nobody has to pick one to get going. Once they chose
+   * by hand (also giving one back), it stays their choice.
+   */
+  private autoPick(): void {
+    const room = this.room();
+    const me = room?.players.find((p) => p.id === this.playerId());
+    if (!room || !me || room.started || me.spawnIds.length > 0 || this.pickedByHand || !this.worldReady()) return;
+    const taken = (id: string) => room.players.some((p) => p.spawnIds.includes(id));
+    // The lane held before a move to another place, else the first free one
+    const wanted = this.laneFromUrl !== null && room.spawnIds.includes(this.laneFromUrl) && !taken(this.laneFromUrl)
+      ? this.laneFromUrl : null;
+    const free = wanted ?? room.spawnIds.find((id) => !taken(id));
+    if (free !== undefined && free !== this.autoPicking) {
+      this.autoPicking = free;
+      this.session?.pick(free);
+    }
+  }
+
+  /**
+   * Latency in ms as the lobby and the players bar show it: to the relay for
+   * this player, to another player the way a command goes (half of each
+   * round trip, all goes over the relay). Null while not measured.
+   */
+  latencyTo(playerId: string): number | null {
+    const rtt = this.rtt();
+    const mine = rtt.get(this.playerId() ?? '') ?? null;
+    if (playerId === this.playerId()) return mine;
+    const theirs = rtt.get(playerId) ?? null;
+    return mine === null || theirs === null ? null : Math.round((mine + theirs) / 2);
+  }
+
+  /** The name of a player in the room or the running game */
+  nameOf(playerId: string): string {
+    return this.room()?.players.find((p) => p.id === playerId)?.name
+      ?? this.roster().find((p) => p.id === playerId)?.name
+      ?? playerId;
+  }
+
+  /** Tell the room what this client is doing, once per change */
+  private tellStatus(status: PlayerStatus): void {
+    if (!this.session || this.toldStatus === status) return;
+    this.toldStatus = status;
+    this.session.tellStatus(status);
+  }
+
+  /** A system line in the chat (D43): what happened in the room */
+  notify(text: string, kind: 'info' | 'warn' = 'info'): void {
+    this.addChatLine(null, text, kind === 'warn');
+  }
+
+  private addChatLine(from: string | null, text: string, warn = false): void {
+    const line: CoopChatLine = { id: this.chatId++, from, text, warn, at: Date.now() };
+    this.chat.update((lines) => [...lines.slice(-(MAX_CHAT_LINES - 1)), line]);
+  }
+
+  /** The player's connection is slow: a round trip over LAG_MS (D45) */
+  lagging(playerId: string): boolean {
+    const rtt = this.rtt().get(playerId) ?? null;
+    return rtt !== null && rtt > LAG_MS;
+  }
+
+  /** Host, lobby: set one option of the room; the relay asks the guests for ready again (D38) */
+  setOption(key: RoomOptionKey, value: string): void {
+    if (!this.isHost() || this.inGame() || !this.session) return;
+    const known = ROOM_OPTION_CHOICES.find((o) => o.key === key)?.choices.some((c) => c.value === value);
+    if (!known || this.options()[key] === value) return;
+    this.session.setOptions({ ...this.options(), [key]: value });
+  }
+
+  /** Lobby: another name for this player. */
+  rename(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed || !this.session) return;
+    this.name = trimmed;
+    this.session.rename(trimmed);
+  }
+
+  /** In the game: send `amount` of this player's gold to `playerId`; it moves at the tick. */
+  giveGold(playerId: string, amount: number): void {
+    if (!this.inGame() || playerId === this.playerId()) return;
+    this.sim.bus.emit({ type: 'command:give-credits', to: playerId, amount: Math.floor(amount) });
+  }
+
+  /**
+   * The connection broke in the game (review R10): go on as a single player
+   * game, until a rejoin exists (C5b). The barrier goes, commands act at
+   * once, the line of sight is this client's again, and the others count as
+   * gone as when a player leaves: their lanes close.
+   */
+  continueAlone(): void {
+    if (!this.lostInGame()) return;
+    const me = this.playerId();
+    this.sim.setLockstep(null);
+    this.los.setRole('render');
+    this.sim.configure({ playersLeft: this.mirror.scalars.players.filter((id) => id !== me) });
+    this.leave();
+    this.uiStore.notice.set({ text: 'The coop game goes on as a single player game.', tone: 'warn' });
+  }
+
+  /**
+   * In the game (review R13): the next click on the map marks that place for
+   * everyone, this player included, in their lane colour. X arms it
+   * (CoopChatComponent); Esc or a click beside the map drops it.
+   */
+  armPing(): void {
+    if (!this.inGame() || !this.session) return;
+    this.pingArmed.set(true);
+    this.inputHandler.armPick((hit) => {
+      this.pingArmed.set(false);
+      const engine = this.engineInit.getEngine();
+      if (!engine || !this.session) return;
+      const at = engine.sync.localToGeo(hit);
+      this.session.ping(at.lat, at.lon, at.height ?? 0);
+    });
+  }
+
+  /**
+   * Send a coop run log to the relay (TODO E38): only a coop run, only to a
+   * relay that said it collects, and only once the player agreed; asked once,
+   * the Runs dialog changes the answer.
+   */
+  private async offerRunLog(run: RunLog): Promise<void> {
+    const session = this.session;
+    if (!run.head.coop || !session?.collectRuns) return;
+    let consent = readRunUploadConsent();
+    if (consent === null) {
+      // Not before the Game Over screen stands: the question came a moment before it (TODO E144)
+      if (this.gameStore.showGameOverScreen()) {
+        await new Promise((resolve) => setTimeout(resolve, RUN_UPLOAD_AFTER_GAME_OVER_MS));
+        if (this.session !== session) return;
+      }
+      consent = (await askRunUpload(this.dialog)) ? 'yes' : 'no';
+      writeRunUploadConsent(consent);
+    }
+    if (consent !== 'yes' || this.session !== session) return;
+    const gz = await packRunLog(toJsonl(run.records));
+    if (gz.length > MAX_RUN_LOG_CHARS) {
+      this.notify('The run log is too large to send', 'warn');
+      return;
+    }
+    session.sendRunLog(gz);
+  }
+
+  /** The run log marks a run as a coop one: it sets no record of the place (review R16) */
+  private coopRunHead(): { players: string[]; you: string } | null {
+    if (!this.inGame()) return null;
+    const me = this.roster().find((p) => p.id === this.playerId())?.name ?? this.name;
+    return { players: this.roster().map((p) => p.name), you: me };
+  }
+
+  /** Drop an armed ping (Esc) */
+  cancelPing(): void {
+    if (!this.pingArmed()) return;
+    this.pingArmed.set(false);
+    this.inputHandler.disarmPick();
+  }
+
+  /** A player's mark on the map: their name over the place in their lane colour, a tone */
+  private showPing(from: string, lat: number, lon: number, height: number): void {
+    const engine = this.engineInit.getEngine();
+    if (!engine) return;
+    const name = this.nameOf(from);
+    const color = this.laneColorOf(from);
+    engine.effects.spawnFloatingText(`↓ ${name}`, lat, lon, height + 8, {
+      color,
+      duration: PING_MS,
+      floatSpeed: 0.4,
+      scale: 2.2,
+    });
+    // Rings growing out of the place, seen from afar (PLAYTEST T40)
+    engine.abilityMarkers.showPing(engine.sync.geoToLocalSimple(lat, lon, height), this.laneColorNumberOf(from) ?? 0xffffff);
+    // An arrow at the view edge while the camera looks elsewhere
+    const ping: CoopPing = { id: ++this.pingSeq, name, color, lat, lon, height };
+    this.pings.update((all) => [...all, ping]);
+    const timer = setTimeout(() => {
+      this.pingTimers.delete(timer);
+      this.pings.update((all) => all.filter((p) => p !== ping));
+    }, PING_MS);
+    this.pingTimers.add(timer);
+    const tone = UI_SOUNDS.coopPing;
+    const audio = engine.spatialAudio;
+    if (!audio.getSoundConfig(tone.id)) audio.registerSound(tone.id, toneWavDataUrl(tone.notes), { volume: tone.volume });
+    audio.playGlobal(tone.id).catch(() => undefined);
+    if (from !== this.playerId()) this.notify(`${this.nameOf(from)} marked a place on the map`);
+  }
+
+  /** A player's lane colour as CSS, the secondary text colour without a lane */
+  laneColorOf(playerId: string): string {
+    return laneCss(this.laneIndexOf(playerId), 'var(--td-text-secondary)');
+  }
+
+  /** A player's lane colour (SPAWN_COLORS), null without a lane */
+  private laneColorNumberOf(playerId: string): number | null {
+    const index = this.laneIndexOf(playerId);
+    return index < 0 ? null : SPAWN_COLORS[index % SPAWN_COLORS.length];
+  }
+
+  /** Index of a player's first lane among the room's spawns, -1 without one: the player's colour */
+  private laneIndexOf(playerId: string): number {
+    const spawnId = this.roster().find((p) => p.id === playerId)?.spawnIds[0]
+      ?? this.room()?.players.find((p) => p.id === playerId)?.spawnIds[0] ?? null;
+    return spawnId === null ? -1 : (this.room()?.spawnIds ?? []).indexOf(spawnId);
+  }
+
+  /** A click on a partner's tower: whose it is, rather than nothing (review R14) */
+  private sayWhoseTower(towerId: string): void {
+    const owner = this.mirror.tower(towerId)?.ownerId;
+    if (!owner || owner === this.playerId()) return;
+    this.ngZone.run(() => this.notify(`That is ${this.nameOf(owner)}'s tower`));
+  }
+
+  /** Host, lobby: take a player out of the room (review R9) */
+  kick(playerId: string): void {
+    // In the game as well: a player who holds everyone up; the relay closes their lane (relay review M4)
+    if (this.isHost() && playerId !== this.playerId()) this.session?.kick(playerId);
+  }
+
+  /** Host: close the room to further players, or open it again (review R9) */
+  setLocked(locked: boolean): void {
+    if (this.isHost()) this.session?.lock(locked);
+  }
+
+  setLobbyReady(ready: boolean): void {
+    this.session?.ready(ready);
+  }
+
+  /**
+   * Lanes a player took that have no route to the base: a game with one
+   * would send that lane's enemies nowhere and end its waves early, so it
+   * does not start (User, 2026-09-26). Read with the room and the world.
+   */
+  lanesWithoutRoute(): string[] {
+    const room = this.room();
+    if (!room || !this.worldReady()) return [];
+    const paths = this.pathRoute.getCachedPaths();
+    const taken = new Set(room.players.flatMap((p) => p.spawnIds));
+    return [...taken].filter((id) => (paths.get(id)?.length ?? 0) < 2);
+  }
+
+  /** Host: start the game. The host is always ready (D40); the relay wants every guest ready. */
+  start(): void {
+    // The source changed since the world went out (debug window): send it again, or the guests plan another run
+    if (this.sharedWaveSource !== null && this.sharedWaveSource !== this.head().waveSource) this.shareWorld();
+    // Lanes nobody holds, by the map's rule (TODO E130): to the host, shared out by the relay, or closed
+    const room = this.room();
+    const free = room ? room.spawnIds.filter((id) => !room.players.some((p) => p.spawnIds.includes(id))) : [];
+    const rule = free.length > 0 ? this.vacantRule() : null;
+    if (rule === 'close') {
+      void this.closeFreeLanes(free);
+      return;
+    }
+    if (rule === 'host') for (const id of free) this.session?.pick(id);
+    this.session?.start(newRunSeed(), rule === 'split' ? 'split' : undefined);
+  }
+
+  /**
+   * What the map does with lanes nobody holds at the start (MapLanes.vacant),
+   * null on a world that brings no lanes of its own: there every lane needs
+   * a player (startBlocked)
+   */
+  vacantRule(): VacantLanes | null {
+    return this.worldContext.provider()?.lanes()?.choice.vacant ?? null;
+  }
+
+  /** Host, start: the lanes nobody holds close; the guests take the new map and say ready again */
+  private async closeFreeLanes(free: readonly string[]): Promise<void> {
+    const open = this.world.spawnPoints.map((s) => s.id).filter((id) => !free.includes(id));
+    const closed = await this.locationFacade.setOpenLanes(open, true);
+    this.notify(closed
+      ? `${free.length === 1 ? 'The free lane is' : `${free.length} free lanes are`} closed. Start once everyone is ready again.`
+      : 'The free lanes could not be closed.', closed ? 'info' : 'warn');
+  }
+
+  /** Host: game speed, 0 pauses. */
+  setSpeed(speed: number): void {
+    if (this.isHost()) this.session?.setSpeed(speed);
+  }
+
+  /** In the game: the wave button. Ready for the next wave, or no longer. */
+  toggleReady(): void {
+    this.readyNow = !this.readyNow;
+    this.sim.bus.emit({ type: 'command:set-ready', ready: this.readyNow });
+  }
+
+  /**
+   * In the game: ready for the next wave, never taken back. For a caller
+   * that decides again before its ready came back from the relay (the coop
+   * bot): a second toggle there would send "not ready".
+   */
+  sayReady(): void {
+    this.readyNow = true;
+    this.sim.bus.emit({ type: 'command:set-ready', ready: true });
+  }
+
+  sendChat(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed) this.session?.chat(trimmed);
+  }
+
+  /** Leave the room; in the game the lane closes for the others. */
+  leave(): void {
+    this.session?.close();
+    this.session = null;
+    this.resync.done();
+    this.stopResyncPolling();
+    if (this.ownWaveSource) {
+      this.waveDirector?.useSourceNextRun(this.ownWaveSource);
+      this.ownWaveSource = null;
+    }
+    if (this.lanHosting) {
+      this.lanHosting = false;
+      this.lanBridge?.stop();
+      this.lanAddresses.set([]);
+    }
+    if (this.sim.started) {
+      this.sim.setLockstep(null);
+      this.sim.configure({ cheatsFor: null });
+    }
+    this.los.setRole('render');
+    // Status, room, world, desync, roster, chat, latencies, waits, the host's place, pings
+    this.perRoom.reset();
+    this.inputHandler.setForeignTowerClick(null);
+    this.runCounts.clear();
+    this.movingSaid = false;
+    for (const timer of this.pingTimers) clearTimeout(timer);
+    this.pingTimers.clear();
+    this.generation++;
+    this.mapAssembler.reset();
+    this.sentMapKey = null;
+    this.pickedByHand = false;
+    this.autoPicking = null;
+    this.toldStatus = null;
+  }
+
+  /**
+   * Opened with an invite link: it carries the host's place, so this page
+   * loaded that map; once it stands, join the room right away.
+   */
+  async joinFromUrl(): Promise<boolean> {
+    const code = this.roomFromUrl;
+    if (!code || this.session) return false;
+    // At once, while the map still loads here: the host hears someone comes
+    // and what they are doing (User, 2026-09-25); the world waits for the map
+    await this.join(this.name, code);
+    return this.room() !== null;
+  }
+
+  /**
+   * The invite link: this page at the host's place with the room, so a
+   * joiner loads the right map at once (and joins from the dialog).
+   */
+  inviteLink(): string {
+    const room = this.room();
+    const hq = this.locationMgmt.hq();
+    if (!room || !hq) return '';
+    const ref = this.worldContext.ref();
+    const mapLink = worldUrlValue(ref);
+    // A map's link opens the map; a guest without it gets it from the room and reloads into it
+    if (mapLink) return `${window.location.origin}${window.location.pathname}?${WORLD_URL_PARAM}=${encodeURIComponent(mapLink)}${this.roomParams(room.code)}`;
+    const spawns = this.world.spawnPoints.map(({ lat, lon }) => ({ lat, lon }));
+    return `${window.location.origin}${this.urlLocation.urlFor(hq, spawns)}${this.roomParams(room.code)}`;
+  }
+
+  /**
+   * Host: the pieces of the custom map this page plays, null when it plays
+   * none or the room has them already. A map too big for the relay is said
+   * in the dock; the world still goes out (guests who have the map join).
+   */
+  private mapPartsToSend(): MapPart[] | null {
+    const ref = this.worldContext.ref();
+    if (ref.kind !== 'custom-map') return null;
+    const packed = packOpenedMap(ref);
+    if (!packed) return null;
+    const key = `${ref.mapId}\n${packed.hash}`;
+    if (key === this.sentMapKey) return null;
+    const parts = splitMapFile(packed.bytes, ref.mapId, packed.hash);
+    if (!parts) {
+      this.notify(`This map is too big to send over the relay (${Math.round(packed.bytes.length / 2 ** 20)} MB): only players who have it can join`, 'warn');
+      return null;
+    }
+    this.sentMapKey = key;
+    return parts;
+  }
+
+  /**
+   * Guest: a piece of the host's map. Once all of it is here it goes into
+   * the map store (map-share.ts checks it is the map the host has); then the
+   * page opens that map with the room in its link, unless it plays it already.
+   */
+  private takeMapPart(piece: MapPart): void {
+    if (this.isHost()) return;
+    const bytes = this.mapAssembler.add(piece);
+    if (!bytes) {
+      if (piece.part === 0) this.tellStatus('loading');
+      return;
+    }
+    void this.keepHostMap(bytes, piece);
+  }
+
+  /** Guest: the host's map into the store, then this page on it (takeMapPart) */
+  private async keepHostMap(bytes: Uint8Array, piece: MapPart): Promise<void> {
+    const generation = this.generation;
+    // Whatever goes wrong is said: the guest would wait on 'loading-world' for good
+    const problem = await storeSharedMap(bytes, { mapId: piece.mapId, hash: piece.hash })
+      .catch((error: unknown) => `The host's map could not be kept here (${error instanceof Error ? error.message : String(error)}).`);
+    if (generation !== this.generation) return;
+    if (problem) {
+      this.ngZone.run(() => this.error.set(problem));
+      return;
+    }
+    const ref: WorldRef = { kind: 'custom-map', mapId: piece.mapId, contentHash: piece.hash };
+    if (!worldsMatch(ref, this.worldContext.ref())) {
+      this.ngZone.run(() => this.reloadAtMap(piece.mapId));
+      return;
+    }
+    // This page is on the map already: it stands, or its start failed for want of it (an
+    // invite link opened before the map came); the start says which within MAP_START_WAIT_MS
+    const end = performance.now() + MAP_START_WAIT_MS;
+    while (this.worldContext.provider() === null && this.engineInit.error() === null && performance.now() < end) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (generation === this.generation && this.worldContext.provider() === null) this.ngZone.run(() => this.reloadAtMap(piece.mapId));
+  }
+
+  /** This page on the host's custom map, back into the room (as reloadAt for a place) */
+  private reloadAtMap(mapId: string): void {
+    const room = this.room()?.code ?? this.roomFromUrl ?? '';
+    const lane = this.room()?.players.find((p) => p.id === this.playerId())?.spawnIds[0] ?? null;
+    let params = `${this.roomParams(room)}${lane ? `&lane=${encodeURIComponent(lane)}` : ''}`;
+    // The relay this page was sent to stays, also one on this machine (roomParams leaves that out)
+    if (!params.includes('&relay=') && this.relayFromUrl) params += `&relay=${encodeURIComponent(this.relayFromUrl)}`;
+    this.tellStatus('reloading');
+    this.leave();
+    window.location.assign(`${window.location.pathname}?${WORLD_URL_PARAM}=${encodeURIComponent(`map:${mapId}`)}${params}`);
+  }
+
+  /** `&room=` and, where the guest could not find it alone, `&relay=` (R7) */
+  private roomParams(code: string): string {
+    const relay = this.relay();
+    const named = relay ? relayForLink(relay.url) : null;
+    return `&room=${encodeURIComponent(code)}${named ? `&relay=${encodeURIComponent(named)}` : ''}`;
+  }
+
+  private head(): { gameVersion: string; configHash: string; waveSource: WaveSourceId; world: WorldRef } {
+    // The balance without the wave source: the host decides the source, a joiner takes it over
+    // with the world (takeWorld), so a different one here is no reason to refuse the room
+    const waveSource = this.waveDirector?.sourceNextRun ?? initialWaveSourceId();
+    return { gameVersion: BUILD_VERSION, configHash: balanceConfigHash(), waveSource, world: this.worldContext.ref() };
+  }
+
+  /** Reach a relay and say hello; `lanUrls` are a LAN game's addresses instead of the usual sources. */
+  private async connect(name: string, lanUrls?: string[]): Promise<CoopSession | null> {
+    this.leave();
+    this.name = name;
+    this.error.set(null);
+    this.lobbyDown.set(null);
+    this.status.set('connecting');
+    const reached = await this.reachRelay(name, (attempt) => this.wire(attempt), lanUrls ? { source: 'lan', urls: lanUrls } : undefined);
+    if ('error' in reached) {
+      // The lobby is down: the entry's "does not answer" line says it once, no second message (E114)
+      if (reached.lobbyDown) {
+        this.publicRooms.set(null);
+        this.lobbyPing.set(null);
+        this.lobbyDown.set(reached.lobbyDown);
+      } else {
+        this.error.set(reached.error);
+      }
+      this.status.set('closed');
+      return null;
+    }
+    this.playerId.set(reached.playerId);
+    this.relay.set({ url: reached.url, source: reached.source });
+    this.session = reached.session;
+    this.status.set('lobby');
+    return reached.session;
+  }
+
+  /** Whether the lobby at `url` answers and takes this game version, for the lobby menu's check. */
+  async probeLobby(url: string): Promise<{ ok: boolean; text: string; down?: true }> {
+    const reached = await this.reachRelay(this.name, undefined, { source: 'lobby', urls: [url] });
+    if ('error' in reached) return reached.lobbyDown ? { ok: false, text: reached.error, down: true } : { ok: false, text: reached.error };
+    reached.session.close();
+    return { ok: true, text: 'This lobby answers.' };
+  }
+
+  /**
+   * The relays to try: a LAN game's addresses, else the invite link's, else
+   * the active lobby (D58), else, with no lobby at all, the automatic ones
+   * (coop/relay-address.ts: the site behind https, this machine for
+   * `npm run coop-server`).
+   */
+  private relaysToTry(): { source: RelaySource; urls: string[] } {
+    const lobby = this.lobby();
+    const candidates = relayCandidates({
+      fromLink: this.relayFromUrl,
+      fromSetting: null,
+      fromConfig: null,
+      page: { protocol: window.location.protocol, hostname: window.location.hostname },
+    });
+    if (candidates.source === 'link' || !lobby) return candidates;
+    return { source: 'lobby', urls: [lobby.url] };
+  }
+
+  /**
+   * The first relay that answers and takes this game version, from
+   * `candidates` or relaysToTry(). `wire` hooks each attempt up before it
+   * connects.
+   */
+  private async reachRelay(
+    name: string,
+    wire?: (attempt: CoopSession) => void,
+    given?: { source: RelaySource; urls: string[] },
+  ): Promise<{ session: CoopSession; playerId: string; url: string; source: RelaySource } | { error: string; lobbyDown?: string }> {
+    const client = clientInfoFrom(navigator.userAgent);
+    const candidates = given ?? this.relaysToTry();
+    for (const url of candidates.urls) {
+      const attempt = new CoopSession(url, { name, ...this.head(), client });
+      wire?.(attempt);
+      try {
+        const playerId = await attempt.connect();
+        return { session: attempt, playerId, url, source: candidates.source };
+      } catch (err) {
+        attempt.onClosed = null;
+        attempt.close();
+        if (err instanceof CoopRefusedError) return { error: refusalText(err) };
+        console.warn(`[Coop] no relay at ${url}`, err);
+      }
+    }
+    const tried = candidates.urls.join(', ');
+    switch (candidates.source) {
+      case 'lan':
+        return { error: `Can't reach that LAN game (tried ${tried}). The host's firewall may block it, or the room just closed.` };
+      case 'lobby': {
+        const name = this.lobbies().find((l) => l.url === candidates.urls[0])?.name ?? 'The lobby';
+        return { error: `${name} is offline right now.`, lobbyDown: name };
+      }
+      case 'auto':
+        return { error: 'No online lobby is set up. Add one under Online.' };
+      default:
+        return { error: "Can't reach the host's lobby from the invite link. It may be down." };
+    }
+  }
+
+  private async guard(run: () => Promise<void>): Promise<void> {
+    try {
+      await run();
+    } catch (err) {
+      this.error.set(err instanceof CoopRefusedError ? refusalText(err) : String(err));
+      this.leave();
+    }
+  }
+
+  /** The session's messages into signals and the game, in the Angular zone. */
+  private wire(session: CoopSession): void {
+    const inZone = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => this.ngZone.run(() => fn(...args));
+    session.onRoom = inZone((room) => {
+      const before = this.room();
+      this.room.set(room);
+      if (!before) this.notify(`Room ${room.code} ${room.hostId === this.playerId() ? 'opened' : 'joined'}`);
+      if (before && !room.started) {
+        for (const p of room.players) {
+          if (p.id !== this.playerId() && !before.players.some((b) => b.id === p.id)) this.notify(`${p.name} joined`);
+        }
+        // What the others' clients do (User, 2026-09-25)
+        for (const p of room.players) {
+          const was = before.players.find((b) => b.id === p.id)?.status ?? null;
+          if (p.id !== this.playerId() && p.status !== null && p.status !== was) this.notify(STATUS_LINE[p.status](p.name));
+        }
+        // The host changed an option: everyone reads it in the chat (D38)
+        const host = this.nameOf(room.hostId);
+        for (const key of changedOptions(before.options, room.options)) {
+          const label = ROOM_OPTION_CHOICES.find((o) => o.key === key)!.label;
+          this.notify(`${host} set ${label}: ${optionLabel(key, room.options[key])}`);
+        }
+      }
+      if (this.autoPicking !== null && room.players.some((p) => p.id === this.playerId() && p.spawnIds.length > 0)) {
+        this.autoPicking = null;
+      }
+      this.autoPick();
+      void this.fillLanes();
+    });
+    session.onLeft = inZone((playerId) => {
+      // Reloading for a new place: said already, and back in a moment
+      if (this.room()?.players.find((p) => p.id === playerId)?.status === 'reloading' && !this.inGame()) return;
+      const name = this.nameOf(playerId);
+      this.notify(this.inGame() ? `${name} left the game, their lane closes` : `${name} left`, 'warn');
+    });
+    session.onWorld = inZone((world) => void this.takeWorld(world));
+    session.onMap = inZone((piece) => this.takeMapPart(piece));
+    session.onStarted = inZone((start) => this.startGame(start));
+    session.onSpeed = inZone((speed) => this.applySpeed(speed));
+    session.onRtt = inZone((rtt) => this.rtt.set(new Map(rtt)));
+    session.onPing = inZone((from, lat, lon, height) => this.showPing(from, lat, lon, height));
+    session.onMoving = inZone(() => {
+      this.hostChangingMap.set(true);
+      this.notify(`${this.nameOf(this.room()?.hostId ?? '')} is changing the map, it comes here next`);
+    });
+    session.onWaiting = inZone((playerId) => {
+      this.waitingFor.set(playerId);
+      if (playerId) {
+        this.notify(playerId === this.playerId()
+          ? 'The others wait for your game to catch up'
+          : `Waiting for ${this.nameOf(playerId)} to catch up`);
+      }
+    });
+    session.onHost = inZone((hostId) => {
+      if (this.room()) this.room.set({ ...this.room()!, hostId });
+      if (hostId === this.playerId() && this.inGame()) this.los.setRole('render');
+      this.notify(hostId === this.playerId() ? 'You are the host now' : `${this.nameOf(hostId)} is the host now`);
+    });
+    session.onChat = inZone((from, text) => this.addChatLine(from, text));
+    session.onRunLog = inZone((ok, reason) => {
+      if (ok) this.notify('Run log sent. Thanks!');
+      else this.notify(`The run log was not kept: ${reason ?? 'no reason given'}`, 'warn');
+    });
+    session.onRefused = inZone((reason) => {
+      // Taken out of the room: this player is out of it here too
+      if (reason === 'kicked') this.leave();
+      this.error.set(REFUSAL_TEXT[reason]);
+    });
+    session.onDesync = inZone((tick, hashes, outOfStep, parts) => {
+      this.desync.set({ tick, hashes, outOfStep });
+      void this.sim.rpc('stateHash').then((own) => {
+        console.warn(`[Coop] out of step at tick ${tick}: ${hashes.map(([id, h]) => `${id} ${(h >>> 0).toString(16)}`).join(', ')}; here now ${own.toString(16)}`);
+      });
+      void this.reportDesyncDetail(session, tick, parts);
+      this.notify(desyncText(outOfStep, this.playerId(), (id) => this.nameOf(id)), 'warn');
+    });
+    // Resync (C5b): the room holds, the host's state replaces the guests'
+    session.onResync = inZone((tick) => {
+      this.resync.hold(tick);
+      this.startResyncPolling();
+      this.notify(this.isHost() ? 'Sending your game state to the others to bring them back in step' : "Loading the host's game state to get back in step", 'info');
+    });
+    session.onResyncState = inZone((tick, gz, part, parts) => this.resync.state(tick, gz, part, parts));
+    session.onResyncDone = inZone((_tick, ok) => {
+      this.resync.done();
+      this.stopResyncPolling();
+      if (ok) this.desync.set(null);
+      this.notify(ok ? 'Back in step with the host' : 'The games could not be brought back in step: what you see may differ', ok ? 'info' : 'warn');
+    });
+    session.onClosed = inZone((reason) => {
+      if (this.session !== session) return;
+      this.error.set(CLOSED_TEXT[reason ?? 'lost']);
+      if (this.inGame()) {
+        this.notify(`${CLOSED_HEAD[reason ?? 'lost']}: the game stands still. Go on alone, or reload to leave`, 'warn');
+      }
+      this.status.set('closed');
+    });
+  }
+
+  /**
+   * A desync's detail (TODO E32): what each entity put into the hash at its
+   * tick goes to the relay, which names the first that differ; the part
+   * hashes and, with a relay that names no parts, every entity part go into
+   * the log here as well, so two players' logs tell it apart without the relay.
+   */
+  private async reportDesyncDetail(session: CoopSession, tick: number, parts: HashPart[] | null): Promise<void> {
+    const breakdown = await this.sim.rpc('hashBreakdownAt', tick) as HashBreakdown | null;
+    if (!breakdown) {
+      console.warn(`[Coop] no hash breakdown kept for tick ${tick}`);
+      return;
+    }
+    const partHashes = HASH_PARTS.map((part, i) => `${part} ${(breakdown.parts[i] >>> 0).toString(16)}`).join(', ');
+    console.warn(`[Coop] hash parts at tick ${tick}: ${partHashes}${parts ? `; differing: ${parts.join(', ') || 'none named'}` : ''}`);
+    // A relay that names the parts gets theirs; without names, every entity part
+    const named = parts !== null && parts.length > 0;
+    const wanted = named ? parts : HASH_PARTS;
+    const entities: HashedEntities = {};
+    for (const part of wanted) {
+      const rows = breakdown.entities[part];
+      if (rows) entities[part] = rows;
+    }
+    session.hashDetail(tick, entities);
+    if (!named) console.warn(`[Coop] hash detail at tick ${tick}: ${JSON.stringify(entities)}`);
+  }
+
+  /**
+   * Joiner: the host's world came. Here the same place must stand: if not,
+   * load it with the room in the URL; once it stands, take routes, cells and
+   * heights over and check the world key.
+   */
+  private async takeWorld(data: unknown): Promise<void> {
+    if (this.isHost()) return;
+    this.hostChangingMap.set(false);
+    const read = readWorldPackage(JSON.stringify(data), this.head());
+    if (!read.world) {
+      this.error.set(worldPackageRefusalText(read.refusal));
+      return;
+    }
+    // The host's world must be this page's: DevWorld with the same settings, the same map
+    const otherWorld = this.loader.worldHere(read.world);
+    const hostRef = packageWorldRef(read.world, this.config.tileProvider());
+    if (otherWorld && hostRef.kind === 'custom-map' && this.mapAssembler.current?.mapId === hostRef.mapId) {
+      // The host's map came ahead of the world: once it is stored the page opens it (takeMapPart)
+      this.status.set('loading-world');
+      return;
+    }
+    if (otherWorld) {
+      this.error.set(`The host's game: ${otherWorld}`);
+      return;
+    }
+    // The host decides the wave source: play it from the next run on; leave() gives this seat its own back
+    if (isWaveSourceId(read.world.waveSource) && this.waveDirector) {
+      this.ownWaveSource ??= this.waveDirector.sourceNextRun;
+      this.waveDirector.useSourceNextRun(read.world.waveSource);
+    }
+    const world = read.world;
+    // A start without a place waits for one: the menu hands it this place (E30)
+    this.hostPlace.set({ hq: world.hq, spawns: world.spawns.map(({ lat, lon }) => ({ lat, lon })) });
+    // The place loaded here first (an invite link joins while it loads)
+    this.status.set('loading-world');
+    if (!(await this.placeLoaded())) {
+      this.error.set("The host's map did not finish loading. Reload the page to try again.");
+      return;
+    }
+    // Same HQ, other spawns (the host added, moved or took one away): set
+    // them here too, no reload; the street network is the same
+    if (this.loader.sameHq(world) && !this.loader.standsOn(world)) {
+      // The routes of the new spawns rebuild here
+      if (!(await this.loader.takeSpawns(world, this.stillInRoom()))) return;
+    }
+    // Another place: go there in this page, as the host did (D35); every
+    // reload is a new map session with the tile provider (User, 2026-09-25)
+    if (!this.loader.standsOn(world) && !(await this.moveToWorld(world))) {
+      this.reloadAt(world);
+      return;
+    }
+    this.adoptWorld(world);
+  }
+
+  /**
+   * Go to the world's place without a reload (WorldPackageLoader.moveTo);
+   * false when it did not come out as the world's, the caller reloads then.
+   */
+  private async moveToWorld(world: WorldPackage): Promise<boolean> {
+    // The room hears "loading the map" and, once adoptWorld is done, "ready"
+    this.worldReady.set(false);
+    return this.loader.moveTo(world, 'Loading...', this.stillInRoom());
+  }
+
+  /** The fallback of moveToWorld: this page at the world's place, back into the room */
+  private reloadAt(world: WorldPackage): void {
+    const room = this.room()?.code ?? this.roomFromUrl ?? '';
+    const url = this.urlLocation.urlFor(world.hq, world.spawns.map(({ lat, lon }) => ({ lat, lon })));
+    // The lane goes along: autoPick takes it again after the reload
+    const lane = this.room()?.players.find((p) => p.id === this.playerId())?.spawnIds[0] ?? null;
+    const params = `${this.roomParams(room)}${lane ? `&lane=${encodeURIComponent(lane)}` : ''}`;
+    // The room hears why this player goes, then out of it: the browser
+    // closes the socket of a page it leaves late, and the relay kept this
+    // player in the list till then
+    this.tellStatus('reloading');
+    this.leave();
+    window.location.assign(`${url}${params}`);
+  }
+
+  /**
+   * Wait until the place stands here (WorldPackageLoader.placeLoaded), as
+   * long as this client has not left the room meanwhile.
+   */
+  private placeLoaded(): Promise<boolean> {
+    return this.loader.placeLoaded(this.stillInRoom());
+  }
+
+  /** True until the next leave(): a wait begun before it gives up */
+  private stillInRoom(): () => boolean {
+    const generation = this.generation;
+    return () => generation === this.generation;
+  }
+
+  /** Routes, cells and heights of the host's world, then its key must be this world's (C1b). */
+  private adoptWorld(world: WorldPackage): void {
+    this.lanes.set(laneStats(packagePaths(world), LANE_WALK_SPEED_MPS));
+    const key = this.loader.adopt(world);
+    if (key !== world.worldKey) {
+      this.error.set(worldPackageRefusalText('other-world'));
+      console.warn(`[Coop] world key ${key}, host ${world.worldKey}`);
+      this.status.set('lobby');
+      return;
+    }
+    // The simulation stands on the host's world from here (adopt sent it)
+    this.worldReady.set(true);
+    this.hostPlace.set(null);
+    this.status.set('lobby');
+    // The host took this player's lane away: a free one comes by itself again
+    const mine = this.room()?.players.find((p) => p.id === this.playerId())?.spawnIds ?? [];
+    if (!mine.some((id) => world.spawns.some((spawn) => spawn.id === id))) this.pickedByHand = false;
+    this.autoPick();
+  }
+
+  /** The room started: a fresh run with its seed, players, lanes, the tick stream. */
+  private startGame(start: CoopStart): void {
+    // Its game:reset arrives with a later packet; the run log opens the coop run there (coopRunHead)
+    this.startResetPending = true;
+    void this.sim.rpc('reset', start.seed);
+    // The relay and the room's rule decide (D38): a cheat acts on every client alike or on none
+    const relayAllows = this.room()?.cheats ?? false;
+    this.sim.configure({
+      players: { players: [...start.players], local: start.localId },
+      lanes: [...start.lanes],
+      cheatsFor: start.players.filter((playerId) => mayCheat(start.options, relayAllows, playerId, start.hostId)),
+    });
+    // A partner's hero wears his lane colour (review R15)
+    for (const id of start.players) {
+      if (id !== start.localId) this.presentation.host?.setPartnerHeroColor(id, this.laneColorNumberOf(id));
+    }
+    this.los.setRole(this.isHost() ? 'render' : 'wait');
+    this.sim.setLockstep(start.link, this.hashEveryFromUrl);
+    this.startOptions.set(start.options);
+    this.inputHandler.setForeignTowerClick((towerId) => this.sayWhoseTower(towerId));
+    this.readyNow = false;
+    this.desync.set(null);
+    const players = this.room()?.players ?? [];
+    this.roster.set(start.players.map((id) => ({
+      id,
+      name: players.find((p) => p.id === id)?.name ?? id,
+      spawnIds: start.lanes.filter(([player]) => player === id).map(([, spawn]) => spawn),
+    })));
+    this.readyIds.set(new Set());
+    this.leftIds.set(new Set());
+    this.gold.set(new Map(start.players.map((id) => [id, this.mirror.creditsOf(id)])));
+    this.applySpeed(start.speed);
+    this.runCounts.clear();
+    this.status.set('in-game');
+  }
+
+  private applySpeed(speed: number): void {
+    this.roomPaused = speed === 0;
+    if (speed !== 0) this.roomSpeed = speed;
+    this.gameStore.paused.set(this.roomPaused);
+    this.gameStore.gameSpeed.set(this.roomSpeed);
+  }
+
+  /**
+   * The store changed here: in the game the host asks the room for the
+   * speed. Pause and resume go to the room where the room lets this player
+   * (D38); anything else goes back to what the room has.
+   */
+  private followLocalSpeed(speed: number, paused: boolean): void {
+    if (!this.inGame() || (speed === this.roomSpeed && paused === this.roomPaused)) return;
+    const pausing = paused !== this.roomPaused;
+    if (pausing && this.mayPause()) {
+      this.session?.setSpeed(paused ? 0 : this.roomSpeed);
+      return;
+    }
+    if (!pausing && this.isHost()) {
+      this.session?.setSpeed(speed);
+      return;
+    }
+    this.gameStore.paused.set(this.roomPaused);
+    this.gameStore.gameSpeed.set(this.roomSpeed);
+  }
+}
+
+/** Why the relay refused, for the player; another version names both and says what to do (D60) */
+export function refusalText(err: CoopRefusedError): string {
+  if (err.reason === 'version' && err.hostVersion) {
+    const update = readDesktopBridge() ? ' Update the app: it updates by itself on the next start.' : ' Reload the page.';
+    return `The host plays ${err.hostVersion}, you play ${BUILD_VERSION}. Both need the same version.${update}`;
+  }
+  return REFUSAL_TEXT[err.reason];
+}
+
+/**
+ * What a player hears when the games ran apart: with a majority (three
+ * players or more, S3) whose game it is, else that they did.
+ */
+export function desyncText(outOfStep: readonly string[], me: string | null, nameOf: (id: string) => string): string {
+  if (me !== null && outOfStep.includes(me)) return 'Your game ran apart from the others: what you see may differ from theirs';
+  if (outOfStep.length) return `${outOfStep.map(nameOf).join(' and ')}'s game ran apart from the others`;
+  return 'The games ran apart: what you see may differ from the others';
+}

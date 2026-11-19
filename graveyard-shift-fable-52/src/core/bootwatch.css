@@ -1,0 +1,56 @@
+/* Boot watch (core/bootwatch.js): the progress line and note under the loading bar, the small
+   "Still loading" / failure box, and the full-screen failure message (the look of main.js's gfx-failed). */
+#boot .gs-bw-status {
+  min-height: 1.4em; margin-top: -2px;
+  font: 600 max(11px, calc(15 * var(--u))) / 1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink); opacity: .78; text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+  font-variant-numeric: tabular-nums;
+}
+#boot .gs-bw-note {
+  margin: 0; max-width: 46em;
+  font: 400 max(12px, calc(17 * var(--u))) / 1.45 var(--mono); color: var(--dim);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9); text-wrap: pretty;
+}
+
+#boot .gs-bw-soft {
+  max-width: 46em; padding: 8px 12px; border-left: 3px solid var(--accent); background: rgba(5, 7, 10, .72);
+  font: 400 max(12px, calc(16 * var(--u))) / 1.45 var(--mono); color: var(--ink);
+}
+#boot .gs-bw-soft p { margin: 0; }
+#boot .gs-bw-soft .gs-bw-soft-main { font-weight: 600; margin-bottom: 4px; }
+#boot .gs-bw-soft .gs-bw-soft-how { color: var(--dim); }
+
+.gs-bw-box {
+  position: fixed; z-index: 20; top: max(16px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box; width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  padding: 14px 16px; display: grid; gap: 8px;
+  background: rgba(5, 7, 10, .92); border-left: 3px solid #ff4a3d; border-radius: 4px;
+  color: #ece6d6; font: 14px/1.45 Overpass, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+}
+.gs-bw-title { font-size: 16px; font-weight: 600; color: #ff4a3d; }
+.gs-bw-text { color: #a3a49b; }
+
+.gs-bw-fail {
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; overflow: auto;
+  background: #05070a; color: #ece6d6; font: 16px/1.5 Overpass, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+}
+.gs-bw-fail-title { font-size: 22px; font-weight: 600; color: #ff4a3d; }
+.gs-bw-fail-text { max-width: 520px; color: #a3a49b; }
+
+.gs-bw-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.gs-bw-fail .gs-bw-actions, #gfx-lost .gs-bw-actions, #gfx-failed .gs-bw-actions, #gfx-unsupported .gs-bw-actions { justify-content: center; }
+.gs-bw-btn {
+  padding: 8px 16px; font: inherit; font-size: 14px; color: #ece6d6; background: transparent;
+  border: 1px solid rgba(236, 230, 214, .4); border-radius: 4px; cursor: pointer;
+}
+.gs-bw-btn:hover { border-color: #ece6d6; }
+.gs-bw-btn:focus-visible { outline: 2px solid #ff4a3d; outline-offset: 2px; }
+.gs-bw-primary { color: #1d0503; background: #ff4a3d; border-color: #ff4a3d; }
+.gs-bw-quiet { border-color: transparent; color: #a3a49b; }
+.gs-bw-details {
+  box-sizing: border-box; width: min(640px, 100%); max-height: 40vh; overflow: auto; margin: 0; padding: 10px 12px;
+  text-align: left; white-space: pre-wrap; word-break: break-word; user-select: text; -webkit-user-select: text;
+  font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #ece6d6; background: rgba(236, 230, 214, .06); border-radius: 4px;
+}

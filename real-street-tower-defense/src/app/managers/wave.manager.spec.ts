@@ -1,0 +1,767 @@
+import { beforeEach, describe, it, expect, vi, afterEach } from 'vitest';
+
+vi.mock('three', async () => await import('@/test/mocks/three.mock'));
+
+import { GameEventBus } from '../game-engine';
+import { EnemyManager } from './enemy.manager';
+import { GameClock } from './game-state/game-clock';
+import { WaveManager, WaveConfig, SpawnPoint, SpawnEntry } from './wave.manager';
+import { GeoPosition } from '../models/game.types';
+
+// Create a minimal mock for EnemyManager
+function createMockEnemyManager(): EnemyManager {
+  return {
+    spawn: vi.fn(() => ({ worm: null })),
+    getAll: vi.fn().mockReturnValue([]),
+    getAlive: vi.fn().mockReturnValue([]),
+    getAliveCount: vi.fn().mockReturnValue(0),
+    getKillingCount: vi.fn().mockReturnValue(0),
+    getPendingSpawnCount: vi.fn().mockReturnValue(0),
+    getPendingDeathsSnapshot: vi.fn().mockReturnValue([]),
+    clear: vi.fn(),
+    kill: vi.fn(),
+  } as unknown as EnemyManager;
+}
+
+const SPAWN_POINTS: SpawnPoint[] = [
+  { id: 'sp-1', name: 'North', lat: 48.78, lon: 9.18, height: 0 },
+  { id: 'sp-2', name: 'South', lat: 48.77, lon: 9.19, height: 0 },
+];
+
+const CACHED_PATHS = new Map<string, GeoPosition[]>([
+  ['sp-1', [
+    { lat: 48.78, lon: 9.18 },
+    { lat: 48.775, lon: 9.185 },
+    { lat: 48.77, lon: 9.19 },
+  ]],
+  ['sp-2', [
+    { lat: 48.77, lon: 9.19 },
+    { lat: 48.775, lon: 9.185 },
+    { lat: 48.78, lon: 9.18 },
+  ]],
+]);
+
+/**
+ * Helper to build a WaveConfig (schedule-only — no legacy single-type path).
+ * Accepts familiar single-type knobs (count/type/speed/spawnDelay/spawnMode)
+ * and synthesises a SpawnSchedule with one entry per enemy.
+ */
+function makeWaveConfig(opts?: {
+  count?: number;
+  type?: string;
+  speed?: number;
+  health?: number;
+  spawnDelay?: number;
+  spawnMode?: 'each' | 'random';
+}): WaveConfig {
+  const count = opts?.count ?? 3;
+  const type = opts?.type ?? 'basic';
+  const speed = opts?.speed ?? 5;
+  const health = opts?.health;
+  const entries: SpawnEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    entries.push({ enemyType: type as never, speed, health });
+  }
+  return {
+    schedule: {
+      entries,
+      baseDelay: opts?.spawnDelay ?? 100,
+      spawnMode: opts?.spawnMode ?? 'each',
+    },
+  };
+}
+
+describe('WaveManager', () => {
+  let bus: GameEventBus;
+  let enemyManager: EnemyManager;
+  let wm: WaveManager;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    bus = new GameEventBus();
+    enemyManager = createMockEnemyManager();
+    wm = new WaveManager(bus, enemyManager);
+    // Clone the shared maps so no test can mutate state for the next one
+    wm.initialize([...SPAWN_POINTS], new Map(CACHED_PATHS));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('initial state', () => {
+    it('starts in setup phase', () => {
+      expect(wm.phase()).toBe('setup');
+    });
+
+    it('starts at wave 0', () => {
+      expect(wm.waveNumber()).toBe(0);
+    });
+  });
+
+  describe('beginWave() (manual mode)', () => {
+    it('sets phase to wave', () => {
+      wm.beginWave();
+      expect(wm.phase()).toBe('wave');
+    });
+
+    it('increments wave number', () => {
+      wm.beginWave();
+      expect(wm.waveNumber()).toBe(1);
+      wm.endWave();
+      wm.beginWave();
+      expect(wm.waveNumber()).toBe(2);
+    });
+
+    it('emits wave:started event', () => {
+      const handler = vi.fn();
+      bus.on('wave:started', handler);
+      wm.beginWave();
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'wave:started',
+          wave: 1,
+          enemyCount: 0, // manual mode
+        })
+      );
+    });
+  });
+
+  describe('startWave() (auto-spawn mode)', () => {
+    it('sets phase to wave', () => {
+      wm.startWave(makeWaveConfig());
+      expect(wm.phase()).toBe('wave');
+    });
+
+    it('increments wave number', () => {
+      wm.startWave(makeWaveConfig());
+      expect(wm.waveNumber()).toBe(1);
+    });
+
+    it('emits wave:started with correct enemy count', () => {
+      const handler = vi.fn();
+      bus.on('wave:started', handler);
+      wm.startWave(makeWaveConfig({ count: 5 }));
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'wave:started',
+          wave: 1,
+          enemyCount: 5,
+        })
+      );
+    });
+
+    it('spawns first enemy on first tickSpawn', () => {
+      wm.startWave(makeWaveConfig({ count: 2 }));
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks the enemy of an elite entry', () => {
+      const elite: boolean[] = [];
+      (enemyManager.spawn as unknown as ReturnType<typeof vi.fn>).mockImplementation((...args: unknown[]) => {
+        elite.push(args[6] === true);
+        return { worm: null };
+      });
+      const config = makeWaveConfig({ count: 2, spawnDelay: 100 });
+      config.schedule!.entries[1].elite = true;
+      wm.startWave(config);
+      wm.tickSpawn(0);
+      wm.tickSpawn(1000);
+      // Spawned as an elite, so the portal exit already sizes it as drawn
+      expect(elite).toEqual([false, true]);
+    });
+
+    it('spawns enemies with game-time delay between them', () => {
+      wm.startWave(makeWaveConfig({ count: 3, spawnDelay: 400 }));
+
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+
+      wm.tickSpawn(400);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+
+      wm.tickSpawn(400);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(3);
+
+      // No more spawning after all enemies
+      wm.tickSpawn(400);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(3);
+    });
+
+    it('spawns as many in the same time at 30 sub-steps a second as at 60 (TODO E86)', () => {
+      /** Spawns of a long wave in 10 s of game time, stepped at `rate` sub-steps a second */
+      const spawned = (rate: number, spawnDelay: number): number => {
+        const spawn = vi.mocked(enemyManager.spawn);
+        spawn.mockClear();
+        wm.reset();
+        wm.startWave(makeWaveConfig({ count: 1000, spawnDelay }));
+        const stepMs = Math.ceil(1_000_000 / rate) / 1000;
+        for (let step = 0; step < 10 * rate; step++) wm.tickSpawn(stepMs);
+        return spawn.mock.calls.length;
+      };
+      for (const delay of [50, 130, 400, 999]) {
+        const at30 = spawned(30, delay);
+        expect(at30, `${delay} ms`).toBe(spawned(60, delay));
+        // The gap carries what was over in its sub-step: one per delay and the first at once, where the
+        // spawn floor of the lane allows that many
+        expect(at30, `${delay} ms`).toBeGreaterThan(10);
+        if (delay >= 400) expect(at30, `${delay} ms`).toBe(Math.floor(10_000 / delay) + 1);
+      }
+    });
+
+    it('uses "each" spawn mode (round-robin)', () => {
+      wm.startWave(makeWaveConfig({ count: 3, spawnMode: 'each', spawnDelay: 50 }));
+
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledWith(
+        CACHED_PATHS.get('sp-1'),
+        expect.anything(),
+        expect.anything(),
+        false,
+        undefined,
+        'portal',
+        false,
+        false,
+      );
+
+      wm.tickSpawn(300); // the spawn floor, not the 50 ms asked
+      expect(enemyManager.spawn).toHaveBeenCalledWith(
+        CACHED_PATHS.get('sp-2'),
+        expect.anything(),
+        expect.anything(),
+        false,
+        undefined,
+        'portal',
+        false,
+        false,
+      );
+    });
+
+    it('does nothing for an empty schedule (no event, stays in setup)', () => {
+      const handler = vi.fn();
+      bus.on('wave:started', handler);
+      wm.startWave({ schedule: { entries: [], baseDelay: 100 } });
+      expect(handler).not.toHaveBeenCalled();
+      expect(wm.phase()).toBe('setup');
+      expect(wm.waveNumber()).toBe(0);
+    });
+
+    it('spawning is timescale-agnostic — advanced via game-time tickSpawn', () => {
+      // Sub-stepping: the engine ticks game-time in fixed 16ms steps. Two
+      // 200ms-each ticks together cover one 400ms spawn delay regardless
+      // of training timescale.
+      wm.startWave(makeWaveConfig({ count: 2, spawnDelay: 400 }));
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(200);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(200);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('spawn points without a route (TODO E232)', () => {
+    /** Three spawn points, the middle one without a route (an unconnected street, a torn network) */
+    const MIXED: SpawnPoint[] = [SPAWN_POINTS[0], { id: 'sp-lost', name: 'Lost', lat: 48.79, lon: 9.2, height: 0 }, SPAWN_POINTS[1]];
+    /** The route each spawn went out on, by the path handed to spawn() */
+    const spawnedFrom = (): string[] => vi.mocked(enemyManager.spawn).mock.calls.map(([path]) =>
+      [...CACHED_PATHS].find(([, route]) => route === path)?.[0] ?? 'none');
+    /** Routes of the shared map, the lost one with a single point (no route either) */
+    const mixedPaths = () => new Map([...CACHED_PATHS, ['sp-lost', [{ lat: 48.79, lon: 9.2 }]]]);
+
+    beforeEach(() => {
+      wm.initialize([...MIXED], mixedPaths());
+    });
+
+    it('takes only the spawn points with a route as lanes, in their order', () => {
+      expect(wm.spawnPoints.map((point) => point.id)).toEqual(['sp-1', 'sp-2']);
+      expect(wm.hasLanes()).toBe(true);
+    });
+
+    it("'each' goes round the spawns with a route and skips the one without", () => {
+      wm.startWave(makeWaveConfig({ count: 4, spawnDelay: 100, spawnMode: 'each' }));
+      for (let i = 0; i < 4; i++) wm.tickSpawn(1000);
+      expect(spawnedFrom()).toEqual(['sp-1', 'sp-2', 'sp-1', 'sp-2']);
+      expect(wm.checkWaveComplete()).toBe(true);
+    });
+
+    it("'random' draws among the spawns with a route only", () => {
+      wm.setRandom(() => 0.5);
+      wm.startWave(makeWaveConfig({ count: 3, spawnDelay: 100, spawnMode: 'random' }));
+      for (let i = 0; i < 3; i++) wm.tickSpawn(1000);
+      // Two lanes: 0.5 is the second; with the lost one counted it was the lost one
+      expect(spawnedFrom()).toEqual(['sp-2', 'sp-2', 'sp-2']);
+    });
+
+    it('spawns an entry named for the lost spawn on a lane by spawnMode, and counts no lane for it', () => {
+      const config = makeWaveConfig({ count: 2, spawnDelay: 100, spawnMode: 'each' });
+      config.schedule.entries[0].spawnPointId = 'sp-lost';
+      config.schedule.entries[1].spawnPointId = 'sp-2';
+      wm.startWave(config);
+      wm.tickSpawn(1000);
+      wm.tickSpawn(1000);
+      expect(spawnedFrom()).toEqual(['sp-1', 'sp-2']);
+      expect(wm.getWaveLaneCount()).toBe(1);
+    });
+
+    it('starts no wave without any route: the counter stays, nothing is emitted', () => {
+      wm.initialize([MIXED[1]], mixedPaths());
+      const started = vi.fn();
+      const completed = vi.fn();
+      bus.on('wave:started', started);
+      bus.on('wave:completed', completed);
+      expect(wm.hasLanes()).toBe(false);
+      wm.startWave(makeWaveConfig({ count: 3 }));
+      wm.tickSpawn(1000);
+      expect(wm.phase()).toBe('setup');
+      expect(wm.waveNumber()).toBe(0);
+      expect(started).not.toHaveBeenCalled();
+      expect(completed).not.toHaveBeenCalled();
+      expect(enemyManager.spawn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checkWaveComplete()', () => {
+    it('returns false when not in wave phase', () => {
+      expect(wm.checkWaveComplete()).toBe(false);
+    });
+
+    it('returns false during spawning (not all enemies spawned)', () => {
+      wm.startWave(makeWaveConfig({ count: 3, spawnDelay: 1000 }));
+      // Only 1 spawned so far, 2 pending
+      expect(wm.checkWaveComplete()).toBe(false);
+    });
+
+    it('returns true when all enemies spawned AND all dead', () => {
+      wm.startWave(makeWaveConfig({ count: 1, spawnDelay: 50 }));
+      wm.tickSpawn(0); // spawn the 1 enemy
+      expect(wm.checkWaveComplete()).toBe(true);
+    });
+
+    it('returns false when all spawned but some alive', () => {
+      (enemyManager.getAliveCount as ReturnType<typeof vi.fn>).mockReturnValue(2);
+      wm.startWave(makeWaveConfig({ count: 1, spawnDelay: 50 }));
+      wm.tickSpawn(0);
+      expect(wm.checkWaveComplete()).toBe(false);
+    });
+  });
+
+  /**
+   * The STUCK warning of checkWaveComplete, called once per sub-step as
+   * GameStateManager does. A wave of one enemy, all spawned, still alive:
+   * its counters stand as long as it lives.
+   */
+  describe('stuck diagnosis', () => {
+    let walked: number;
+    let body: { tailM: number } | null;
+    let hp: number;
+    let warn: ReturnType<typeof vi.spyOn>;
+    const stuckWarnings = () => warn.mock.calls.filter((call: unknown[]) => String(call[0]).includes('STUCK')).length;
+    const steps = (n: number, each?: () => void) => {
+      for (let i = 0; i < n; i++) {
+        each?.();
+        wm.checkWaveComplete();
+      }
+    };
+
+    beforeEach(() => {
+      walked = 0;
+      body = null;
+      hp = 3000;
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const lone = {
+        movement: { getDistanceAlongPath: () => walked },
+        get body() {
+          return body;
+        },
+        health: {
+          get hp() {
+            return hp;
+          },
+        },
+      };
+      (enemyManager.getAlive as ReturnType<typeof vi.fn>).mockReturnValue([lone]);
+      (enemyManager.getAliveCount as ReturnType<typeof vi.fn>).mockReturnValue(1);
+      wm.startWave(makeWaveConfig({ count: 1, spawnDelay: 50 }));
+      wm.tickSpawn(0);
+    });
+
+    afterEach(() => warn.mockRestore());
+
+    it('playtest 2026-09-15: a lone boss walking its route for a minute is not stuck', () => {
+      // 3 m/s, the ooze's speed, in 16.7 ms sub-steps
+      steps(3600, () => (walked += 0.05));
+      expect(stuckWarnings()).toBe(0);
+    });
+
+    it('an ooze flowing into the HQ is not stuck: its tip stands, its tail moves up', () => {
+      walked = 500;
+      body = { tailM: 420 };
+      steps(1600, () => (body!.tailM += 0.05));
+      expect(stuckWarnings()).toBe(0);
+    });
+
+    it('a machine stunned for 6 s between two stretches of walking is not stuck', () => {
+      steps(500, () => (walked += 0.05));
+      steps(360);
+      steps(1500, () => (walked += 0.05));
+      expect(stuckWarnings()).toBe(0);
+    });
+
+    it('an enemy held at a standstill and fought is not stuck', () => {
+      steps(2400, () => (hp -= 0.5));
+      expect(stuckWarnings()).toBe(0);
+    });
+
+    it('an enemy that neither moves nor loses HP is logged once, after the window that takes the sample and one more', () => {
+      // The window of 10 s of game time, in sub-steps
+      const window = Math.round(10_000 / GameClock.FIXED_STEP_MS);
+      // The first call sees the counters change; the window after it only samples
+      steps(window + 1);
+      expect(stuckWarnings()).toBe(0);
+      steps(window - 1);
+      expect(stuckWarnings()).toBe(0);
+      steps(1);
+      expect(stuckWarnings()).toBe(1);
+      steps(3000);
+      expect(stuckWarnings()).toBe(1);
+    });
+  });
+
+  describe('endWave()', () => {
+    it("calls a close call against the run's HQ maximum", () => {
+      const endAt = (health: number, max?: number) => {
+        wm.setCurrentHealthProvider(() => health, max === undefined ? undefined : () => max);
+        wm.startWave(makeWaveConfig());
+        bus.emit({ type: 'enemy:reached-base', enemy: {} as never, damage: 10 });
+        bus.processQueue();
+        return wm.endWave().closeCall;
+      };
+      // 30 HP left: a close call of the game's 500, not of a map's 80 (below 20 is)
+      expect(endAt(30)).toBe(true);
+      expect(endAt(30, 80)).toBe(false);
+      expect(endAt(20, 80)).toBe(true);
+    });
+
+    it('sets phase back to setup', () => {
+      wm.startWave(makeWaveConfig());
+      wm.endWave();
+      expect(wm.phase()).toBe('setup');
+    });
+
+    it('clears enemies', () => {
+      wm.startWave(makeWaveConfig());
+      wm.endWave();
+      expect(enemyManager.clear).toHaveBeenCalled();
+    });
+
+    it('emits wave:completed (deferred)', () => {
+      const handler = vi.fn();
+      bus.on('wave:completed', handler);
+
+      wm.startWave(makeWaveConfig());
+      wm.endWave();
+
+      // Deferred - not called yet
+      expect(handler).not.toHaveBeenCalled();
+
+      // Process queue
+      bus.processQueue();
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'wave:completed',
+          wave: 1,
+        })
+      );
+    });
+  });
+
+  describe('jumpTo() (dev wave jump)', () => {
+    it('sets the counter between waves, the next start is the wave after it', () => {
+      wm.jumpTo(34);
+      expect(wm.waveNumber()).toBe(34);
+      expect(wm.phase()).toBe('setup');
+      wm.startWave(makeWaveConfig());
+      expect(wm.waveNumber()).toBe(35);
+    });
+
+    it('spawns nothing and sends no wave event', () => {
+      const events = vi.fn();
+      bus.on('wave:started', events);
+      bus.on('wave:completed', events);
+      wm.jumpTo(10);
+      wm.tickSpawn(1000);
+      bus.processQueue();
+      expect(events).not.toHaveBeenCalled();
+      expect(enemyManager.spawn).not.toHaveBeenCalled();
+    });
+
+    it('leaves a running wave alone', () => {
+      wm.startWave(makeWaveConfig());
+      wm.jumpTo(20);
+      expect(wm.waveNumber()).toBe(1);
+    });
+  });
+
+  describe('reset()', () => {
+    it('resets phase to setup', () => {
+      wm.startWave(makeWaveConfig());
+      wm.reset();
+      expect(wm.phase()).toBe('setup');
+    });
+
+    it('resets wave number to 0', () => {
+      wm.startWave(makeWaveConfig());
+      wm.reset();
+      expect(wm.waveNumber()).toBe(0);
+    });
+
+    it('clears enemies on reset', () => {
+      wm.startWave(makeWaveConfig());
+      wm.reset();
+      expect(enemyManager.clear).toHaveBeenCalled();
+    });
+
+    it('stops pending spawns on reset', () => {
+      wm.startWave(makeWaveConfig({ count: 10, spawnDelay: 100 }));
+      wm.tickSpawn(0);
+      const spawnCountBefore = (enemyManager.spawn as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      wm.reset();
+      // Subsequent tickSpawn() calls should be no-ops after reset
+      wm.tickSpawn(2000);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(spawnCountBefore);
+    });
+  });
+
+  describe('stopSpawning()', () => {
+    it('prevents further spawns', () => {
+      wm.startWave(makeWaveConfig({ count: 5, spawnDelay: 100 }));
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+
+      wm.stopSpawning();
+      wm.tickSpawn(1000);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    it('adjusts expected count so wave can complete', () => {
+      wm.startWave(makeWaveConfig({ count: 5, spawnDelay: 100 }));
+      wm.stopSpawning();
+
+      // Now checkWaveComplete should reflect adjusted counts
+      // All spawned enemies are "dead" (mock returns 0)
+      expect(wm.checkWaveComplete()).toBe(true);
+    });
+  });
+
+  describe('destroy()', () => {
+    it('clears spawn points and cached paths', () => {
+      wm.startWave(makeWaveConfig());
+      wm.destroy();
+
+      expect(wm.spawnPoints).toEqual([]);
+      expect(wm.phase()).toBe('setup');
+    });
+
+    it('leaves the route cache it was handed alone', () => {
+      // The map is PathAndRouteService's; its hasRoutes signal says it is filled
+      const shared = new Map(CACHED_PATHS);
+      wm.initialize([...SPAWN_POINTS], shared);
+      wm.destroy();
+      expect(shared.size).toBe(CACHED_PATHS.size);
+    });
+  });
+
+  describe('killAll() (the debug:kill-all command)', () => {
+    it('kills all alive enemies', () => {
+      const mockEnemy = { alive: true } as never;
+      (enemyManager.getAlive as ReturnType<typeof vi.fn>).mockReturnValue([mockEnemy]);
+
+      wm.beginWave();
+
+      wm.killAll();
+
+      // Phase 5.16: a 'debug' kill pays no gold, so the player can't farm
+      // gold via the dev shortcut, and splits nothing.
+      expect(enemyManager.kill).toHaveBeenCalledWith(mockEnemy, 'debug', { kind: 'debug' });
+    });
+
+    it('stops further spawning after kill-all', () => {
+      (enemyManager.getAlive as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+      wm.startWave(makeWaveConfig({ count: 5, spawnDelay: 100 }));
+      wm.tickSpawn(0);
+      const callsBefore = (enemyManager.spawn as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      wm.killAll();
+
+      wm.tickSpawn(1000);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(callsBefore);
+    });
+  });
+
+  describe('startWave() (mixed-schedule features)', () => {
+    function scheduledConfig(
+      entries: { enemyType: string; speed: number; health?: number; delay?: number; pauseAfter?: number }[],
+      baseDelay = 100,
+    ): WaveConfig {
+      return {
+        schedule: {
+          entries: entries as never,
+          baseDelay,
+        },
+      };
+    }
+
+    it('emits wave:started with the schedule entry count', () => {
+      const handler = vi.fn();
+      bus.on('wave:started', handler);
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5 },
+        { enemyType: 'b', speed: 6 },
+        { enemyType: 'c', speed: 7 },
+      ]));
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'wave:started', enemyCount: 3 }),
+      );
+    });
+
+    it('does nothing for an empty schedule', () => {
+      // wave-phase still flips? No — entries.length === 0 short-circuits.
+      wm.startWave(scheduledConfig([], 100));
+      expect(enemyManager.spawn).not.toHaveBeenCalled();
+      // phase stays at setup since the early return is before phase.set
+      expect(wm.phase()).toBe('setup');
+    });
+
+    it('spawns each entry with the configured enemy type, speed and health', () => {
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5,  health: 100 },
+        { enemyType: 'b', speed: 6,  health: 200 },
+      ], 50));
+      wm.tickSpawn(0);
+      wm.tickSpawn(300); // the spawn floor
+      const calls = (enemyManager.spawn as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.length).toBe(2);
+      // spawn signature: (path, enemyType, speed, false, health, 'portal')
+      expect(calls[0][1]).toBe('a');
+      expect(calls[0][2]).toBe(5);
+      expect(calls[0][4]).toBe(100);
+      // Wave spawns come out of the spawn portal (air units climb out of it)
+      expect(calls[0][5]).toBe('portal');
+      expect(calls[1][1]).toBe('b');
+      expect(calls[1][2]).toBe(6);
+      expect(calls[1][4]).toBe(200);
+    });
+
+    it('uses per-entry delay override as the gap before the NEXT spawn', () => {
+      // First entry has delay=500 → 500ms gap before entry[1] spawns.
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5, delay: 500 },
+        { enemyType: 'b', speed: 6 },
+      ], 100));
+      wm.tickSpawn(0);            // entry[0] fires immediately
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(100);          // baseDelay alone is not enough
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(400);          // total 500 → entry[1] fires
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the spawn floor of both neighbours after the spread (TODO E50)', () => {
+      // A golem (1200 ms) and a rat (150 ms), 10 ms asked: 1200 ms either way round
+      wm.startWave(scheduledConfig([
+        { enemyType: 'rat', speed: 5 },
+        { enemyType: 'stone-golem', speed: 5 },
+        { enemyType: 'rat', speed: 5 },
+        { enemyType: 'rat', speed: 5 },
+      ], 10));
+      wm.tickSpawn(0);
+      wm.tickSpawn(1199);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(1);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+      wm.tickSpawn(1199);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+      wm.tickSpawn(1);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(3);
+      // Two rats: their own floor, 150 ms
+      wm.tickSpawn(150);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(4);
+    });
+
+    it('spawns at the asked gap without the floor where the schedule waives it (the debug panel custom wave)', () => {
+      const config = scheduledConfig([
+        { enemyType: 'rat', speed: 5 },
+        { enemyType: 'stone-golem', speed: 5 },
+        { enemyType: 'zombie', speed: 5 },
+      ], 10);
+      config.schedule.spawnFloor = false;
+      wm.startWave(config);
+      wm.tickSpawn(0);
+      wm.tickSpawn(10);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+      wm.tickSpawn(10);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(3);
+    });
+
+    it('spawns a coop lane copy together with the entry before it', () => {
+      wm.startWave(scheduledConfig([
+        { enemyType: 'stone-golem', speed: 5, delay: 0 },
+        { enemyType: 'stone-golem', speed: 5 },
+      ], 10));
+      wm.tickSpawn(0);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    it('pauseAfter on an entry extends the gap to the next spawn', () => {
+      // entry[0] pauseAfter=500 → next spawn fires at the gap (100 asked,
+      // the 300 ms spawn floor) + 500 = 800ms
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5, pauseAfter: 500 },
+        { enemyType: 'b', speed: 6 },
+      ], 100));
+      wm.tickSpawn(0);            // entry[0]
+      wm.tickSpawn(300);          // would normally fire entry[1] — but pauseAfter delays it
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(1);
+      wm.tickSpawn(500);          // total 800 → entry[1] fires
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(2);
+    });
+
+    it('completes after spawning all schedule entries', () => {
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5 },
+        { enemyType: 'b', speed: 6 },
+      ], 50));
+      wm.tickSpawn(0);
+      wm.tickSpawn(300); // the spawn floor
+      // Further ticks should be no-ops since the spawner is exhausted.
+      const callsBefore = (enemyManager.spawn as ReturnType<typeof vi.fn>).mock.calls.length;
+      wm.tickSpawn(1000);
+      expect(enemyManager.spawn).toHaveBeenCalledTimes(callsBefore);
+      // checkWaveComplete returns true once all spawned and getAliveCount === 0
+      expect(wm.checkWaveComplete()).toBe(true);
+    });
+
+    it('routes schedule spawns through "random" spawn-point selection', () => {
+      // We don't assert the specific point chosen — Math.random — only that
+      // a valid SpawnPoint path was used. Cover both calls.
+      wm.startWave(scheduledConfig([
+        { enemyType: 'a', speed: 5 },
+        { enemyType: 'b', speed: 6 },
+      ], 50));
+      wm.tickSpawn(0);
+      wm.tickSpawn(300); // the spawn floor
+      const calls = (enemyManager.spawn as ReturnType<typeof vi.fn>).mock.calls;
+      for (const call of calls) {
+        const path = call[0];
+        const isKnownPath = path === CACHED_PATHS.get('sp-1') || path === CACHED_PATHS.get('sp-2');
+        expect(isKnownPath).toBe(true);
+      }
+    });
+  });
+});

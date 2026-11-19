@@ -1,0 +1,44 @@
+// Fixed-step determinism (lane mp/world-state-audit, 2026-10-01): the shared authority run twice from one seed with the
+// same scripted inputs on verdant's collision shard — two humans and four bots driving, firing, crushing trees — hashes to
+// the same poses, combat state, shells, destroyed list and events at every 60th tick. A wall-clock read or an unseeded
+// draw in the authoritative step is the first differing tick.
+import assert from 'node:assert/strict';
+import { runDeterminismAudit } from './sim-determinism-audit.mjs';
+import { serverWorldKernels } from '../server/match/simKernels.ts';
+
+const report = runDeterminismAudit({ mapId: 'verdant', ticks: 1800, seed: 7 });
+assert.ok(report.countsA.events > 0, 'the run produced events to compare');
+assert.ok(report.countsA.crushes > 0, 'the run crushed props to compare');
+assert.equal(report.identical, true, `two runs diverged at tick ${report.firstDiffTick} (${report.finalA} vs ${report.finalB})`);
+// the dug ground (destruction core lane, 2026-10-08; crater-render-spec §F): craters on whatever the switch says, h2's HE
+// rounds dug into the ground near it, the craters in the log the hash reads
+const dug = runDeterminismAudit({ mapId: 'verdant', ticks: 1800, seed: 7, craters: true });
+assert.ok(dug.countsA.craters > 0, 'the crater run dug craters to compare');
+assert.equal(dug.identical, true, `two crater runs diverged at tick ${dug.firstDiffTick} (${dug.finalA} vs ${dug.finalB})`);
+// the wrecks' turret bodies (physics lane, 2026-10-10): two hulls burn out, their turrets come off their rings as bodies the
+// authority steps; their poses are in the hash
+const burned = runDeterminismAudit({ mapId: 'verdant', ticks: 900, seed: 7, kills: true });
+assert.equal(burned.countsA.kills, 2, 'both scripted hulls burned out');
+assert.equal(burned.countsA.turretBodies, 2, 'and their turrets are bodies');
+assert.equal(burned.identical, true, `two turret runs diverged at tick ${burned.firstDiffTick} (${burned.finalA} vs ${burned.finalB})`);
+// drone mode (drones lane, 2026-10-11): both humans launch, fly and recall FPV drones and the bots launch theirs; the
+// launch climbs (round 4's thrust profile), flights and recalls hash identically
+const flown = runDeterminismAudit({ mapId: 'verdant', ticks: 1800, seed: 7, drone: true });
+assert.ok(flown.countsA.drones >= 2, `the drone run flew drones to compare (${flown.countsA.drones})`);
+assert.equal(flown.identical, true, `two drone runs diverged at tick ${flown.firstDiffTick} (${flown.finalA} vs ${flown.finalB})`);
+console.log(`sim determinism: drone mode identical (${flown.countsA.drones} drones flown; ${flown.wallMs} ms)`);
+// Air Support (air-support-270): both humans call the call-ins on a schedule and the bots call theirs; the ledger, the
+// strikes and every strike round are in the hash
+const struck = runDeterminismAudit({ mapId: 'verdant', ticks: 1500, seed: 7, air: true });
+assert.ok(struck.countsA.strikes >= 3 && struck.countsA.strikeRounds > 0, `the air run called strikes and fired their rounds (${struck.countsA.strikes}, ${struck.countsA.strikeRounds})`);
+assert.equal(struck.identical, true, `two Air Support runs diverged at tick ${struck.firstDiffTick} (${struck.finalA} vs ${struck.finalB})`);
+console.log(`sim determinism: Air Support identical (${struck.countsA.strikes} strikes, ${struck.countsA.strikeRounds} rounds; ${struck.wallMs} ms)`);
+// the WebAssembly kernels (docs/RUST-KERNELS.md, 2026-10-25): run B on them plays run A's match — the contact surface, the
+// grids, the dug ground mirrored onto the kernel and the support solve's samples — through h2's craters, bit for bit
+const onKernels = runDeterminismAudit({ mapId: 'verdant', ticks: 1800, seed: 7, craters: true, kernels: await serverWorldKernels('wasm') });
+assert.ok(onKernels.countsB.craters > 0, 'the kernel run dug craters too');
+assert.equal(onKernels.identical, true, `the kernels diverged from the TypeScript at tick ${onKernels.firstDiffTick} (${onKernels.finalA} vs ${onKernels.finalB})`);
+console.log(`sim determinism: the kernels play the TypeScript's crater match (${onKernels.countsB.craters} craters; ${onKernels.wallMs} ms)`);
+console.log(`sim determinism: two ${report.ticks}-tick runs identical (${report.countsA.crushes} crushes, ${report.countsA.hits} hits, `
+  + `${report.countsA.events} events; ${report.wallMs} ms), with craters on (${dug.countsA.craters} craters; ${dug.wallMs} ms) and with `
+  + `two turret bodies (${burned.wallMs} ms)`);

@@ -1,0 +1,99 @@
+// Generator freshness at resolver cost (test-speed R8d): every fleet generator's committed outputs are current for the
+// committed fingerprint manifest (release/fingerprints.tsv), so a lane that edits a builder, a kit, a spec, a generator
+// or its flags without running `npm run tank:regen:changed` turns this red, naming the ids and why. No tank is built
+// (one fingerprint state: about 55-75 s warm, more cold or loaded). A toolchain difference (Node, the lockfile) is reported, not failed: the nightly
+// `tank:regen:changed -- --check --all` re-runs every generator's own --check and covers it, and any resolver miss.
+// A missing or unreadable manifest fails (Main 2026-10-29, 265: a guard that passes vacuously is no guard); the
+// negative controls below prove, on the same state, that a generator edited after the bootstrap, an input row moved
+// for one id and an output row edited by hand are each caught. (268) An id a step could not run here (the gate's absent
+// or unpinned oracles, its page errors) reads current through the chain's stamp, keyed on what would make it runnable;
+// a stamp without a reason, or over an output edited since, is caught.
+// First-party tooling: Kevin B. Liu.
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { MANIFEST_PATH, SCHEMA, computeState, readManifest, resolveChanged, toolchainChange } from './fingerprint.mjs';
+import { STEPS } from './steps.mjs';
+
+// A tree may be named (a parity tree); the receipt itself checks its own repository.
+const root = resolve(process.argv[2] ?? resolve(import.meta.dirname, '../..'));
+const manifest = readManifest(root);
+assert.ok(manifest, `${MANIFEST_PATH} is missing or unreadable (schema ${SCHEMA}): without it every generator passes unchecked. `
+  + 'Restore it from origin/main, or re-run npm run tank:regen:changed and commit the manifest with its outputs (docs/DEVELOPMENT.md "Changed-only regeneration")');
+// One state when the toolchain matches the manifest's (the usual case); a second, judged on the manifest's
+// toolchain, only when it differs (229: computeState is 55-75 s warm).
+const actual = computeState({ root, steps: STEPS });
+const state = actual.toolchain === manifest.toolchain ? actual
+  : computeState({ root, steps: STEPS, toolchainOverride: manifest.toolchain });
+if (actual.toolchain !== manifest.toolchain) {
+  console.log(`changed-only fresh.selftest: note: this toolchain differs from the manifest's (${toolchainChange(manifest, actual.toolchainParts)}); judged on the manifest's`);
+}
+assert.deepEqual(state.errors, [], 'every per-id table reads');
+const result = resolveChanged(state, manifest);
+const stale = Object.entries(result).filter(([, entry]) => entry.mode !== 'none');
+const lines = stale.map(([name, entry]) => {
+  const why = entry.reasons['*'] ?? [...new Set(entry.ids.flatMap((id) => entry.reasons[id] ?? []))];
+  return `${name}: ${entry.mode} ${entry.ids.length} (${entry.ids.slice(0, 10).join(',')}${entry.ids.length > 10 ? ',...' : ''}) — ${why.slice(0, 4).join('; ')}`;
+});
+assert.equal(stale.length, 0, `generated fleet outputs are stale for their inputs; run npm run tank:regen:changed\n  ${lines.join('\n  ')}`);
+
+// Negative controls on the fresh state (no second state, no tree edit): each stands in for a lane that landed a change
+// without its regeneration, and the resolver that judged the tree fresh above must name it.
+const step = STEPS[0].name, id = state.ids[0], other = state.ids[1];
+const view = (patch) => ({ ...state, ...patch });
+const moved = (name, key) => (stepName, tankId) => (stepName === name && (key === null || tankId === key)
+  ? `${state.inKey(stepName, tankId)}~moved` : state.inKey(stepName, tankId));
+// (1) the generator (or its flags) edited after the bootstrap: its tool key, so every id's input key, moves.
+const generator = resolveChanged(view({ steps: { ...state.steps, [step]: { ...state.steps[step], tool: `${state.steps[step].tool}~edited` } },
+  inKey: moved(step, null) }), manifest)[step];
+assert.equal(generator.mode, 'all', `${step}: an edited generator re-runs on every id`);
+assert.ok(generator.reasons[id].some((why) => why.startsWith('tool ')), `${step}: named as its tool (${generator.reasons[id]})`);
+// (2) one id's input moved (its builder or a row it reads): that id alone.
+const input = resolveChanged(view({ inKey: moved(step, id) }), manifest)[step];
+assert.deepEqual([input.mode, input.ids], ['ids', [id]], `${step}: one moved input key marks its id alone`);
+// (3) an output row edited by hand: that id, named as an outside edit.
+const output = resolveChanged(view({ outKey: (name, tankId) => (name === step && tankId === other ? `${state.outKey(name, tankId)}~hand`
+  : state.outKey(name, tankId)) }), manifest)[step];
+assert.deepEqual([output.mode, output.ids, output.reasons[other]], ['ids', [other], ['output edited outside chain']],
+  `${step}: a hand-edited output row is caught`);
+// (4) no manifest at all: every step whole-fleet (the state the assertion at the top refuses).
+assert.ok(Object.values(resolveChanged(state, null)).every((entry) => entry.mode === 'full'), 'no manifest marks every step full');
+// (5) the tank asset manifest is a file per tank (266): the manifest records each row file and the index, a stale row
+// file marks its own id alone (named as an outside edit), and the same file's bytes moved without its row (a format
+// edit) is named by its path and runs the step whole-fleet.
+const assets = STEPS.find((entry) => entry.outputs.includes('tankAssets')).name;
+const rowFile = `public/icons/tank-assets/tanks/${other}.json`;
+const recordedFiles = Object.keys(manifest.files[assets] ?? {});
+assert.ok(recordedFiles.includes(rowFile) && recordedFiles.includes('public/icons/tank-assets/index.json')
+  && !recordedFiles.includes('public/icons/tank-assets.json'), `${assets}: the manifest records the per-tank row files and the index`);
+assert.deepEqual(state.fileIds[rowFile], [other], `${rowFile} holds ${other}'s row alone`);
+const staleFile = (file) => (name) => (name === file ? `${state.fileHash(name)}~stale` : state.fileHash(name));
+const staleRow = resolveChanged(view({ fileHash: staleFile(rowFile),
+  outKey: (name, tankId) => (name === assets && tankId === other ? `${state.outKey(name, tankId)}~stale` : state.outKey(name, tankId)) }),
+manifest)[assets];
+assert.deepEqual([staleRow.mode, staleRow.ids, staleRow.reasons[other]], ['ids', [other], ['output edited outside chain']],
+  `${assets}: a stale ${rowFile} marks ${other} alone`);
+const reformatted = resolveChanged(view({ fileHash: staleFile(rowFile) }), manifest)[assets];
+assert.deepEqual([reformatted.mode, reformatted.reasons['*']], ['full', [`output file edited: ${rowFile}`]],
+  `${assets}: ${rowFile} edited without its row is named`);
+// (6) 268: an id a step could not run here reads current through its stamp (fingerprint.mjs stampProblem), never by a
+// missing row: one gate id unrecorded is due, stamped with a reason it is current, and the same stamp without its reason,
+// or over an output edited since, is due.
+const gateStep = STEPS.find((entry) => entry.stamp).name, probe = state.ids.find((each) => manifest.keys[gateStep]?.[each]);
+const unrecorded = structuredClone(manifest);
+delete unrecorded.keys[gateStep][probe];
+delete unrecorded.stamps[gateStep]?.[probe];
+const gateOf = (m, at = state) => resolveChanged(at, m, { steps: [gateStep] })[gateStep];
+assert.deepEqual([gateOf(unrecorded).ids, gateOf(unrecorded).reasons[probe]], [[probe], ['no row']], `${gateStep}: an unrecorded ${probe} is due`);
+const stamped = (reason) => { const m = structuredClone(unrecorded);
+  (m.stamps[gateStep] ??= {})[probe] = { key: state.stampKey(gateStep, probe, []), out: state.outKey(gateStep, probe), code: 'page-error', files: [], reason };
+  return m; };
+assert.deepEqual([gateOf(stamped('page error, previous row kept: probe')).mode, gateOf(stamped('page error, previous row kept: probe')).stamped?.[probe]],
+  ['none', 'page-error: page error, previous row kept: probe'], `${gateStep}: stamped with its reason, ${probe} reads current`);
+assert.ok(gateOf(stamped('')).reasons[probe]?.includes('stamp without a reason'), `${gateStep}: a stamp without a reason stays red`);
+assert.ok(gateOf(stamped('page error, previous row kept: probe'), view({ outKey: (name, tankId) => `${state.outKey(name, tankId)}${tankId === probe ? '~hand' : ''}` }))
+  .reasons[probe]?.includes('output edited outside chain since the stamp'), `${gateStep}: a stamp never hides a hand edit`);
+const notRunHere = Object.values(result).flatMap((entry) => Object.values(entry.stamped ?? {}));
+const byCode = Object.entries(Object.groupBy(notRunHere, (why) => why.split(':')[0])).map(([code, list]) => `${code} ${list.length}`).join(', ');
+console.log(`changed-only fresh.selftest: PASS (${STEPS.length} steps x ${state.ids.length} ids current for ${MANIFEST_PATH}`
+  + `${notRunHere.length ? `, ${notRunHere.length} stamped not runnable here (${byCode})` : ''}; negative controls: an edited ${step} `
+  + `generator, a moved input, a hand-edited output, a stale ${rowFile} and an unreasoned or hand-edited stamp caught)`);

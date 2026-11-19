@@ -1,0 +1,676 @@
+import { applyJuggernautScale } from '../sim/juggernautScale.ts';
+import { lodDistanceScale } from '../engine/lodDistanceScale.ts';
+import { syncTankEnergyVisual, clearJuggernautVisual, TANK_ENERGY, type TankEnergyStyle } from './juggernautVisual.ts';
+import { modeLightsTanks } from '../sim/matchRuleset.ts';
+import type { MatchModePresentationState } from '../sim/matchModes.ts';
+import type { ArmorEnvelope } from '../vehicles/specHelpers.ts';
+import type { syncMissionAttachment as SyncMissionAttachment } from './missionAttachmentVisual.ts';
+import { syncGunshipVisual, hideGunshipVisual } from './gunshipVisual.ts';
+import type { AerialView } from '../sim/aerialCombat.ts';
+import {
+  MathUtils,
+  Vector3,
+  type Object3D,
+  type PerspectiveCamera,
+  type Scene,
+} from 'three';
+
+import type { BattleClientAccess } from './battleClientAccess.ts';
+import { tankContactRect } from '../sim/tankContactShape.ts';
+import type { TankPresentationTracker } from './presentationPose.ts';
+import { watchRevealsAll, type GameState } from './stateCore.ts';
+import { createLazyChunk } from '../app/lazyChunk.ts';
+
+// The mission-attachment visual is battle-only (2026-10-07): its seats read the vehicle auxiliary inventory and weapons
+// (sim/missionAttachment.ts, main c6b60311c), about 400 kB that a static import here put in the garage boot
+// (boot-static-closure, the bundle budget). It loads with the battle's FX graph — the FX gate in main.ts awaits
+// loadMissionAttachmentVisual before any battle, Studio or shot frame — and a tank can carry no mount before it lands.
+// (2026-11-02 audit R6/F2) one lazyChunk (app/lazyChunk.ts): `??=` kept a rejected import, and the FX gate awaits it, so
+// one failed chunk stopped every later battle, Studio and shot frame. The visual is presentation: a failure resolves
+// (no tank carries a mount yet), and the next ask (the next FX gate, an aerial tank's frame) loads it.
+let syncMissionAttachment: typeof SyncMissionAttachment | null = null;
+const missionAttachmentVisual = createLazyChunk(() => import('./missionAttachmentVisual.ts').then((module) => {
+  syncMissionAttachment = module.syncMissionAttachment;
+}, (error: unknown) => {
+  console.warn('[mission attachment] the visual did not load (no mount drawn until it does):', error);
+  throw error;
+}));
+let missionAttachmentAsk: Promise<void> | null = null;
+let missionAttachmentAsked: Promise<void> | null = null;
+export function loadMissionAttachmentVisual(): Promise<void> {
+  const request = missionAttachmentVisual.load();
+  // the same settled promise until the load's state moves: an aerial tank asks every frame and allocates nothing
+  if (request !== missionAttachmentAsked) {
+    missionAttachmentAsked = request;
+    missionAttachmentAsk = request.then(() => undefined, () => undefined);
+  }
+  return missionAttachmentAsk!;
+}
+
+interface TankState {
+  pos: Vector3;
+  yaw: number;
+  speed: number;
+  grounded?: boolean;
+  modeScale?: number;
+}
+
+type PresentedTankState = TankState;
+
+interface TankVisual {
+  root: Object3D;
+  setVisible(visible: boolean): void;
+  /** Physics lane: the wreck's turret body pose for this frame (world turret frame), or null. */
+  setWreckTurretPose?(pose: ArrayLike<number> | null): void;
+  setTrackState?(module: 'trackL' | 'trackR', broken: boolean): void;
+  setWeaponModuleState?(module: string, state: 'ok' | 'yellow' | 'red'): void;
+  syncFromState(
+    state: TankState,
+    dtFrame?: number,
+    viewDistanceM?: number,
+    presentationState?: PresentedTankState,
+    detailVisible?: boolean,
+  ): void;
+}
+
+interface TankEntity {
+  aerial?: AerialView;
+  id: string;
+  team: string;
+  isPlayer?: boolean;
+  state: TankState | null;
+  combat: { hp?:number;maxHp?:number;destroyed?: boolean; modules?: Partial<Record<string, {state: 'ok' | 'yellow' | 'red'}>> } | null;
+  visual: TankVisual | null;
+  spec: {
+    armor: ArmorEnvelope;
+    era: string;
+    topSpeedKmh: number;
+    dims: { heightM: number; widthM: number; hullLengthM: number };
+    weightTons?: number;
+    visual?: { trackWidthM?: number };
+  };
+  input: { throttle?: number };
+  _soloRenderPose?: TankPresentationTracker;
+  _spotFade?: number;
+  _fxAcc?: number;
+  _dustTravelAcc?: number;
+  _offscreenPresentationS?: number;
+  _wasDetailVisible?: boolean;
+  /** A network peer's wreck turret pose, interpolated from its host's rows (mp/presentation/battlePresentation.ts). */
+  _wreckTurretPose?: Float64Array | null;
+}
+
+/** The solo step's turret bodies, as the presentation reads them (sim/wreckTurrets.ts). */
+interface WreckTurretPoses {
+  framePoseAt(id: string, alpha: number, out: Float64Array): boolean;
+}
+
+interface SpottingState {
+  isSpotted(id: string, team: string, receiver: TankEntity | null): boolean;
+}
+
+interface VehicleFx {
+  dust(position: Vector3, forward: Vector3, intensity: number): void;
+  exhaust(position: Vector3, load: number, diesel: boolean, velocity?: Vector3 | null, forward?: Vector3 | null): void;
+  loosePropHit?(position: Vector3, direction: Vector3, height: number): void;
+  propCrush(position: Vector3, direction: Vector3, height: number): void;
+}
+
+interface CrushableProp {
+  x: number;
+  y: number;
+  z: number;
+  h: number;
+  toppled?: boolean;
+  dynamic?: boolean;
+}
+
+interface PresentationWorld {
+  heightField?: {
+    warmFastTilesAround?(points: Array<{ x: number; z: number; radiusM: number }>): Iterable<number>;
+  };
+  crushables?: CrushableProp[];
+  crushProp(index: number, dirX: number, dirZ: number, speed: number): boolean;
+  /** The props a hull's box meets give under it (map.ts pressHull: presentation only, never a sim input). */
+  pressHull?(x: number, z: number, yaw: number, halfLength: number, halfWidth: number): void;
+  /** Item 45: the ruts behind the tanks (map.ts / world/trackMarks.ts: presentation only, never a sim input). */
+  advanceTrackMarks?(dt: number): void;
+  stampTrackMarks?(key: object, x: number, z: number, yaw: number, halfGaugeM: number, trackWidthM: number, depth: number): void;
+}
+
+type PosePorts = Pick<BattleClientAccess,
+  | 'advanceTankPresentationPose'
+  | 'createTankPresentationPose'
+  | 'resetTankPresentationPose'
+  | 'sampleTankPresentationPose'
+  | 'isPostwarVehicleEra'
+>;
+
+interface BattlePresentationRuntime {
+  /** Every tank's mode equipment and energy skin; returns the roots given new skin materials (programs to compile). */
+  prepareModeVisuals(): Object3D[];
+  /** A staged tank's energy skin, before its first program compile (the visual streamers' onVisualReady). */
+  prepareModeEnergy(entity: object): void;
+  resetSoloPoses(): void;
+  primeDeploymentTerrainTiles(): void;
+  captureSoloPoses(): void;
+  update(dtFrame?: number, presentationAlpha?: number): void;
+}
+
+interface BattlePresentationRuntimeOptions {
+  game: Pick<GameState, 'phase' | 'tanks' | 'player' | 'spotting' | 'matchModeState' | 'ruleset' | 'watch'> & { _wreckTurrets?: WreckTurretPoses | null };
+  camera: PerspectiveCamera;
+  scene: Scene;
+  battleClient: PosePorts;
+  getFx(): VehicleFx | null;
+  getWorld(): PresentationWorld | null;
+  isNetworkMatchActive(): boolean;
+  getPedestalVisual(): object | null;
+  isCinematicActive(): boolean;
+  /**
+   * The other views' cameras this frame (couch mode's split screen: every pane but seat 1's, whose camera is `camera`),
+   * or none: a hull's detail is every view's (the nearest view's distance, visible in any view).
+   */
+  getExtraViews?(): readonly PerspectiveCamera[] | null;
+  /** How much sooner a hull takes its far meshes (couch mode's small panes, game/couchPanes.ts couchPaneDetail); 1 else. */
+  getLodBias?(): number;
+}
+
+/**
+ * Owns allocation-free rendered tank presentation for solo and network play.
+ * Authority state remains outside this module; this owner only selects the
+ * legal presented pose, visual residency/detail cadence, and vehicle media.
+ */
+export function createBattlePresentationRuntime({
+  game,
+  camera,
+  scene,
+  battleClient,
+  getFx,
+  getWorld,
+  isNetworkMatchActive,
+  getPedestalVisual,
+  isCinematicActive,
+  getExtraViews,
+  getLodBias,
+}: BattlePresentationRuntimeOptions): BattlePresentationRuntime {
+  // A tank outside a generous camera guard band cannot contribute a visible
+  // articulated pose. Keep authoritative state and FX at their existing
+  // cadence, but collapse its expensive hierarchy/running-gear presentation
+  // to 30 Hz. Re-entry is edge-triggered and therefore exact on the first
+  // frame that can reach the viewport; the player and every visible actor
+  // remain full-rate at any display refresh.
+  const OFFSCREEN_PRESENTATION_INTERVAL_S = 1 / 30;
+  // item 45: the ruts' clock steps with the simulation (sim/movement.ts SIM_DT; battleFrameRuntime's fixed step)
+  const TRACK_MARK_STEP_S = 1 / 60;
+  const detailScreenPosition = new Vector3();
+  const forward = new Vector3();
+  const exhaustVelocity = new Vector3();
+  const right = new Vector3();
+  const effectPosition = new Vector3();
+  const travelDirection = new Vector3();
+
+  const tanks = (): TankEntity[] => game.tanks as TankEntity[];
+  const player = (): TankEntity | null => game.player as TankEntity | null;
+  const spotting = (): SpottingState | null => game.spotting as SpottingState | null;
+
+  const setVisualResident = (visual: TankVisual, resident: boolean): void => {
+    const root = visual.root;
+    if (resident) {
+      if (root.userData.battleVisibilityDetached && !root.parent) scene.add(root);
+      root.userData.battleVisibilityDetached = false;
+      return;
+    }
+    // Only roots detached by this owner may be restored. A spotting edge must
+    // never resurrect a visual parked or disposed by another lifecycle owner.
+    if (root.parent === scene) {
+      root.removeFromParent();
+      root.userData.battleVisibilityDetached = true;
+    }
+  };
+
+  const presentationStateFor = (
+    entity: TankEntity,
+    alpha: number,
+    networkActive: boolean,
+  ): PresentedTankState => {
+    const state = entity.state as PresentedTankState;
+    // BrowserBattleBridge already supplies Hermite-interpolated remote poses
+    // and corrected local prediction. A second interpolation adds latency and
+    // smears corrections, so the fixed-step pose buffer is solo-only.
+    if (networkActive || game.phase !== 'battle') return state;
+    if (!entity._soloRenderPose) {
+      entity._soloRenderPose = battleClient.createTankPresentationPose();
+      battleClient.resetTankPresentationPose(entity._soloRenderPose, state);
+    }
+    return battleClient.sampleTankPresentationPose(
+      entity._soloRenderPose,
+      state,
+      alpha,
+    ) as PresentedTankState;
+  };
+
+  const updateActorVisibility = (
+    entity: TankEntity,
+    dtFrame: number | undefined,
+    spotState: SpottingState | null,
+    currentPlayer: TankEntity | null,
+  ): boolean => {
+    const visual = entity.visual as TankVisual;
+    const combat = entity.combat as NonNullable<TankEntity['combat']>;
+    if (game.phase !== 'battle') return true;
+    // a watched battle with no driver shows every hull (stateCore.ts watchRevealsAll)
+    if (spotState && !watchRevealsAll(game) && entity.team !== (currentPlayer?.team ?? 'player')) {
+      const spotted = combat.destroyed
+        || spotState.isSpotted(entity.id, currentPlayer?.team ?? 'player', currentPlayer);
+      const target = spotted ? 1 : 0;
+      if (entity._spotFade === undefined) entity._spotFade = target;
+      entity._spotFade += (target - entity._spotFade)
+        * (dtFrame === undefined ? 1 : Math.min(1, dtFrame / 0.35));
+      const actorVisible = entity._spotFade > 0.02;
+      setVisualResident(visual, actorVisible);
+      visual.setVisible(actorVisible);
+      return actorVisible;
+    }
+    // a hull this owner detached while unspotted (the reveal's countdown) is attached again once the watcher sees all
+    if (watchRevealsAll(game)) setVisualResident(visual, true);
+    if (!entity.isPlayer) visual.setVisible(true);
+    return true;
+  };
+
+  const isDetailVisible = (
+    entity: TankEntity,
+    presented: PresentedTankState,
+  ): boolean => {
+    if (entity.isPlayer || game.phase !== 'battle') return true;
+    if (inView(entity, presented, camera)) return true;
+    const extra = getExtraViews?.();
+    if (extra) for (let i = 0; i < extra.length; i++) if (inView(entity, presented, extra[i])) return true;
+    return false;
+  };
+  const inView = (entity: TankEntity, presented: PresentedTankState, view: PerspectiveCamera): boolean => {
+    detailScreenPosition.copy(presented.pos);
+    detailScreenPosition.y += entity.spec.dims.heightM * 0.5;
+    detailScreenPosition.project(view);
+    return detailScreenPosition.z >= -1.2 && detailScreenPosition.z <= 1.2
+      && Math.abs(detailScreenPosition.x) <= 1.35
+      && Math.abs(detailScreenPosition.y) <= 1.45;
+  };
+  /** The nearest view's distance to a hull (the camera's, or a split-screen pane's nearer one). */
+  const nearestViewDistance = (pos: PresentedTankState['pos']): number => {
+    let d = camera.position.distanceTo(pos);
+    const extra = getExtraViews?.();
+    if (extra) for (let i = 0; i < extra.length; i++) d = Math.min(d, extra[i].position.distanceTo(pos));
+    return d;
+  };
+
+  const syncModeEnergy = (entity: TankEntity, dtFrame: number | undefined, active: boolean): boolean => {
+    const state = entity.state as TankState;
+    const visual = entity.visual as TankVisual;
+    const mode = game.matchModeState as MatchModePresentationState | null;
+    // (mode-sheen-perf-243) a mode that lights tanks keeps every tank's skin on from its staging (a network entry's
+    // covered compile runs before its phase turns) to the battle's exit, dormant while no role lights it (the ending
+    // included): a pickup, a conversion, a kill or a spotting edge writes uniforms, never a material or a program
+    const dormant = game.phase !== 'studio' && game.phase !== 'shot' && modeLightsTanks(mode?.id);
+    if(active){
+      if((game.matchModeState as {boss?:{id:string}}|null)?.boss?.id===entity.id)applyJuggernautScale(entity as TankEntity & {state:TankState});
+      let style: TankEnergyStyle = TANK_ENERGY.juggernaut;
+      let modeAura = false;
+      if (mode?.id === 'capture_the_flag') {
+        for (const flag of mode.flags) if (flag.status === 'carried' && flag.carrierId === entity.id) {
+          style = flag.team === mode.perspectiveTeam ? TANK_ENERGY.flagOwn : TANK_ENERGY.flagEnemy;
+          modeAura = true; break;
+        }
+      } else if (mode?.id === 'infected') {
+        for (const faction of mode.factions ?? []) if (faction.id === entity.id && faction.team === 'bravo') {
+          style = TANK_ENERGY.infected; modeAura = true; break;
+        }
+      }
+      return syncTankEnergyVisual(visual.root,entity.spec.dims,modeAura?1.12:state.modeScale??1,
+        entity.combat?.destroyed?0:entity.combat?.hp??1,entity.combat?.maxHp??1,dtFrame??0,!modeAura,style,false,dormant);
+    }
+    // the ending: every glow and the boss's size end as a clear ends them, the skins stay (no paint compiles on the ending)
+    if (dormant) return syncTankEnergyVisual(visual.root,entity.spec.dims,1,0,1,dtFrame??0,true,TANK_ENERGY.juggernaut,false,true);
+    clearJuggernautVisual(visual.root);
+    return false;
+  };
+
+  const syncModeVisual = (entity: TankEntity, dtFrame: number | undefined, active: boolean): boolean => {
+    const state = entity.state as TankState;
+    const visual = entity.visual as TankVisual;
+    const energized = syncModeEnergy(entity, dtFrame, active);
+    if (syncMissionAttachment) syncMissionAttachment(visual.root,entity.spec,entity.aerial,!!entity.combat?.destroyed,dtFrame ?? 0);
+    else if (entity.aerial) void loadMissionAttachmentVisual();
+    // (ac130-fx-228) the pilot's own airframe draws whenever the camera is not its gimbal lens (the killcam, the ending's
+    // replay and orbit, an external camera): before, it was never drawn for the player, so a replay of a gunship kill
+    // showed an empty sky. (r2) The rig's own-vehicle visibility says which: its aerial branch hides the gunship pilot's
+    // vehicle every lens frame, an external pose shows it (engine/cameraRig.ts applyPlayerVisibility)
+    // (r3) and never while the camera is inside its hull (the ending's first beat leaves from the lens)
+    if (entity.aerial?.kind === 'gunship') syncGunshipVisual(visual.root, state.pos, state.yaw, dtFrame ?? 0, visual.root.visible, camera.position);
+    else hideGunshipVisual(visual.root);
+    return energized;
+  };
+
+  const syncTankVisual = (
+    entity: TankEntity,
+    presented: PresentedTankState,
+    dtFrame: number | undefined,
+    pedestalVisual: object | null,
+  ): number => {
+    const state = entity.state as TankState;
+    const visual = entity.visual as TankVisual;
+    const viewDistanceM = nearestViewDistance(presented.pos);
+    const detailVisible = isDetailVisible(entity, presented);
+    const wasDetailVisible = entity._wasDetailVisible;
+    entity._wasDetailVisible = detailVisible;
+    let presentationDt = dtFrame;
+    let shouldSync = true;
+    if (game.phase === 'battle' && !detailVisible && !entity.isPlayer
+        && dtFrame !== undefined) {
+      entity._offscreenPresentationS = Math.min(
+        0.12,
+        (entity._offscreenPresentationS || 0) + Math.max(0, dtFrame),
+      );
+      shouldSync = wasDetailVisible !== false
+        || entity._offscreenPresentationS >= OFFSCREEN_PRESENTATION_INTERVAL_S;
+      if (shouldSync) {
+        presentationDt = entity._offscreenPresentationS;
+        entity._offscreenPresentationS = 0;
+      }
+    } else {
+      entity._offscreenPresentationS = 0;
+    }
+    if (shouldSync && (game.phase !== 'garage' || visual !== pedestalVisual)) {
+      // Snapshots and newly streamed visuals also receive damage state;
+      // reliable hit events alone miss late joins or pooled actor creation.
+      const modules = entity.combat?.modules;
+      if (modules) for (const module in modules) {
+        const damage = modules[module]; if (!damage) continue;
+        if (module === 'trackL' || module === 'trackR') visual.setTrackState?.(module, damage.state === 'red');
+        else visual.setWeaponModuleState?.(module, damage.state);
+      }
+      // The detail hand-offs (battle detail groups, mobile detail, gear cadence) of an on-screen tank read the
+      // screen-equivalent distance (lodDistanceScale: the sniper sight's narrower view magnifies), so a scoped enemy
+      // keeps its near detail; an off-screen tank keeps the true distance and its detail stays parked.
+      visual.syncFromState(
+        state,
+        presentationDt,
+        detailVisible ? viewDistanceM * lodDistanceScale(camera) * (getLodBias?.() ?? 1) : viewDistanceM,
+        presented,
+        detailVisible,
+      );
+    }
+    // A retained player can be the Garage hero; its preview owner already
+    // updated this frame. Battle cleanup must not dispose that live effect.
+    if (game.phase !== 'garage' || visual !== pedestalVisual) {
+      syncModeVisual(entity, dtFrame, game.phase === 'battle');
+    }
+    return viewDistanceM;
+  };
+
+  const emitDust = (
+    entity: TankEntity,
+    fx: VehicleFx,
+    presented: PresentedTankState,
+    speed: number,
+    topSpeedMps: number,
+    fxTicks: number,
+  ): void => {
+    if (speed <= 0.8 || entity.state?.grounded === false) {
+      entity._dustTravelAcc = 0;
+      return;
+    }
+    const dimensions = entity.spec.dims;
+    const intensity = Math.min(1, speed / topSpeedMps);
+    const spacingM = MathUtils.lerp(0.70, 0.45, intensity);
+    entity._dustTravelAcc = Math.min(
+      spacingM * 2,
+      (entity._dustTravelAcc || 0) + speed * (fxTicks / 60),
+    );
+    if (entity._dustTravelAcc < spacingM) return;
+    entity._dustTravelAcc -= spacingM;
+    right.set(forward.z, 0, -forward.x);
+    for (let side = -1; side <= 1; side += 2) {
+      effectPosition.copy(presented.pos)
+        .addScaledVector(forward, -dimensions.hullLengthM * 0.45)
+        .addScaledVector(right, side * dimensions.widthM * 0.45);
+      fx.dust(effectPosition, forward, intensity);
+    }
+  };
+
+  const emitExhaust = (
+    entity: TankEntity,
+    fx: VehicleFx,
+    presented: PresentedTankState,
+    speed: number,
+    topSpeedMps: number,
+  ): void => {
+    const dimensions = entity.spec.dims;
+    const throttle = Math.abs(entity.input.throttle || 0);
+    const load = Math.max(
+      0.10,
+      isCinematicActive() && entity.isPlayer ? 0.3 : 0,
+      Math.min(1, throttle * 0.7 + speed / topSpeedMps * 0.5),
+    );
+    effectPosition.copy(presented.pos)
+      .addScaledVector(forward, -dimensions.hullLengthM * 0.42);
+    effectPosition.y += dimensions.heightM * 0.72;
+    // the hull's own motion (the plume streams off the deck under way and bends with the wind: fx round 7b)
+    exhaustVelocity.copy(forward).multiplyScalar(presented.speed || 0);
+    fx.exhaust(
+      effectPosition,
+      load,
+      !battleClient.isPostwarVehicleEra(entity.spec.era),
+      exhaustVelocity,
+      forward,
+    );
+  };
+
+  const crushNearbyProps = (
+    entity: TankEntity,
+    fx: VehicleFx,
+    world: PresentationWorld | null,
+    speed: number,
+  ): void => {
+    const crushables = world?.crushables;
+    const state = entity.state as TankState;
+    if (speed <= 1.2 || !crushables?.length || !world) return;
+    const hullReach = entity.spec.dims.hullLengthM * 0.5 + 0.5;
+    travelDirection.copy(forward).multiplyScalar(Math.sign(state.speed));
+    for (let index = 0; index < crushables.length; index += 1) {
+      const prop = crushables[index];
+      if (prop.toppled) continue;
+      const dx = prop.x - state.pos.x;
+      const dz = prop.z - state.pos.z;
+      if (dx * dx + dz * dz > hullReach * hullReach) continue;
+      if (!world.crushProp(index, travelDirection.x, travelDirection.z, speed)) continue;
+      effectPosition.set(prop.x, prop.y, prop.z);
+      if (prop.dynamic && fx.loosePropHit) {
+        fx.loosePropHit(effectPosition, travelDirection, prop.h);
+      } else {
+        fx.propCrush(effectPosition, travelDirection, prop.h);
+      }
+    }
+  };
+
+  const updateVehicleFx = (
+    entity: TankEntity,
+    fx: VehicleFx | null,
+    world: PresentationWorld | null,
+    presented: PresentedTankState,
+    viewDistanceM: number,
+    dtFrame: number | undefined,
+  ): void => {
+    const visual = entity.visual as TankVisual;
+    const vehicleFxVisible = visual.root.visible && viewDistanceM < 360;
+    if (!vehicleFxVisible) entity._dustTravelAcc = 0;
+    if (!fx || game.phase !== 'battle' || entity.combat?.destroyed || !vehicleFxVisible) return;
+    // Fixed 60 Hz emission keeps the authored density identical at
+    // 60/120/240 Hz and limits catch-up to two ticks after a stall.
+    entity._fxAcc = (entity._fxAcc || 0) + (dtFrame === undefined ? 1 / 60 : dtFrame);
+    if (entity._fxAcc < 1 / 60) return;
+    const fxTicks = Math.min(2, Math.floor(entity._fxAcc * 60));
+    entity._fxAcc -= fxTicks / 60;
+    const speed = Math.abs(presented.speed);
+    const topSpeedMps = entity.spec.topSpeedKmh / 3.6;
+    forward.set(Math.sin(presented.yaw), 0, Math.cos(presented.yaw));
+    emitDust(entity, fx, presented, speed, topSpeedMps, fxTicks);
+    emitExhaust(entity, fx, presented, speed, topSpeedMps);
+    crushNearbyProps(entity, fx, world, speed);
+    // (dcore 2026-10-10; the owner: "just let physics work") a map vehicle, a hut, a stall or a tent its box meets gives
+    // under it from that moment (props.ts pressHull: presentation only, the simulation's crush ghosts the obstacle)
+    if (world?.pressHull) {
+      const rect = tankContactRect(entity.spec);
+      const c = Math.cos(presented.yaw), sn = Math.sin(presented.yaw);
+      world.pressHull(presented.pos.x + rect.centerX * c + rect.centerZ * sn, presented.pos.z + rect.centerZ * c - rect.centerX * sn,
+        presented.yaw, rect.halfLength, rect.halfWidth);
+    }
+  };
+
+  // physics lane (2026-10-10): a wreck's turret follows its body — the solo step's, interpolated between two steps like
+  // the hulls, or the pose a network peer's host sent
+  const wreckTurretPose = new Float64Array(7);
+  const feedWreckTurret = (entity: TankEntity, alpha: number, networkActive: boolean): void => {
+    const visual = entity.visual;
+    if (!visual?.setWreckTurretPose) return;
+    if (networkActive) { visual.setWreckTurretPose(entity._wreckTurretPose ?? null); return; }
+    const turrets = game._wreckTurrets;
+    visual.setWreckTurretPose(turrets && turrets.framePoseAt(entity.id, alpha, wreckTurretPose) ? wreckTurretPose : null);
+  };
+
+  /**
+   * Item 45 (2026-10-22): one hull's ruts from the simulation's pose (`entity.state`, never the interpolated one), so
+   * the same battle lays the same ruts at any display rate and from any camera. A wreck, an airframe, a hull in the air
+   * and an enemy the player's side has not spotted lay none (spotting is the simulation's: a solo battle's hidden enemy
+   * leaves no trail to read, as a network round never receives one).
+   */
+  const stampTrackMarks = (
+    entity: TankEntity,
+    world: PresentationWorld,
+    spotState: SpottingState | null,
+    currentPlayer: TankEntity | null,
+  ): void => {
+    const state = entity.state;
+    if (!state || !entity.combat || entity.combat.destroyed || entity.aerial || state.grounded === false) return;
+    if (spotState && !watchRevealsAll(game) && entity.team !== (currentPlayer?.team ?? 'player')
+      && !spotState.isSpotted(entity.id, currentPlayer?.team ?? 'player', currentPlayer)) return;
+    const spec = entity.spec;
+    const trackWidthM = spec.visual?.trackWidthM ?? spec.dims.widthM * 0.16;
+    const halfGaugeM = Math.max(0.5, tankContactRect(spec).halfWidth - trackWidthM * 0.5);
+    // the hull's weight on the ground: 1 for a 45 t MBT, lighter hulls press shallower
+    const depth = Math.min(1.35, Math.max(0.45, 0.35 + (spec.weightTons ?? 40) / 70));
+    world.stampTrackMarks!(entity, state.pos.x, state.pos.z, state.yaw, halfGaugeM, trackWidthM, depth);
+  };
+
+  const updateTank = (
+    entity: TankEntity,
+    dtFrame: number | undefined,
+    presentationAlpha: number,
+    networkActive: boolean,
+    fx: VehicleFx | null,
+    world: PresentationWorld | null,
+    spotState: SpottingState | null,
+    currentPlayer: TankEntity | null,
+    pedestalVisual: object | null,
+  ): void => {
+    if (!entity.state || !entity.combat || !entity.visual) return;
+    if (!updateActorVisibility(entity, dtFrame, spotState, currentPlayer)) {
+      entity._offscreenPresentationS = OFFSCREEN_PRESENTATION_INTERVAL_S;
+      entity._wasDetailVisible = false;
+      return;
+    }
+    const presented = presentationStateFor(entity, presentationAlpha, networkActive);
+    if (entity.combat.destroyed) feedWreckTurret(entity, presentationAlpha, networkActive);
+    const viewDistanceM = syncTankVisual(entity, presented, dtFrame, pedestalVisual);
+    updateVehicleFx(entity, fx, world, presented, viewDistanceM, dtFrame);
+  };
+
+  return {
+    resetSoloPoses() {
+      for (const entity of tanks()) {
+        if (!entity.state) continue;
+        if (!entity._soloRenderPose) {
+          entity._soloRenderPose = battleClient.createTankPresentationPose();
+        }
+        battleClient.resetTankPresentationPose(entity._soloRenderPose, entity.state);
+      }
+    },
+
+    primeDeploymentTerrainTiles() {
+      const world = getWorld();
+      const heightField = world?.heightField;
+      const warmer = heightField?.warmFastTilesAround;
+      if (typeof warmer !== 'function') return;
+      const points: Array<{ x: number; z: number; radiusM: number }> = [];
+      for (const entity of tanks()) {
+        const position = entity.state?.pos;
+        if (position) points.push({ x: position.x, z: position.z, radiusM: 0 });
+      }
+      for (const _tile of warmer.call(heightField, points)) { /* drain */ }
+    },
+
+    // Covered entry can prepare equipment before phase activation. It does not
+    // advance simulation, interpolation, visibility, dust or camera state.
+    prepareModeVisuals() {
+      const energized: Object3D[] = [];
+      for (const entity of tanks()) {
+        if (entity.state && entity.visual && syncModeVisual(entity, 0, true)) energized.push((entity.visual as TankVisual).root);
+      }
+      return energized;
+    },
+
+    prepareModeEnergy(entity) {
+      const tank = entity as TankEntity;
+      if (tank.state && tank.visual) syncModeEnergy(tank, 0, true);
+    },
+
+    captureSoloPoses() {
+      // item 45: the ruts follow the simulation's step
+      const world = getWorld();
+      if (world?.stampTrackMarks && game.phase === 'battle') {
+        world.advanceTrackMarks?.(TRACK_MARK_STEP_S);
+        const spotState = spotting(), currentPlayer = player();
+        for (const entity of tanks()) stampTrackMarks(entity, world, spotState, currentPlayer);
+      }
+      for (const entity of tanks()) {
+        if (!entity.state) continue;
+        if (!entity._soloRenderPose) {
+          entity._soloRenderPose = battleClient.createTankPresentationPose();
+          battleClient.resetTankPresentationPose(entity._soloRenderPose, entity.state);
+        } else {
+          battleClient.advanceTankPresentationPose(entity._soloRenderPose, entity.state);
+        }
+      }
+    },
+
+    update(dtFrame, presentationAlpha = 1) {
+      const fx = getFx();
+      const world = getWorld();
+      const spotState = spotting();
+      const currentPlayer = player();
+      const networkActive = isNetworkMatchActive();
+      const pedestalVisual = getPedestalVisual();
+      camera.updateMatrixWorld();
+      // item 45: a network round's ruts follow the bridge's poses each frame (a solo battle's follow its fixed step,
+      // captureSoloPoses)
+      if (networkActive && world?.stampTrackMarks && game.phase === 'battle') {
+        world.advanceTrackMarks?.(Math.max(0, dtFrame ?? 0));
+        for (const entity of tanks()) stampTrackMarks(entity, world, spotState, currentPlayer);
+      }
+
+      for (const entity of tanks()) {
+        updateTank(
+          entity,
+          dtFrame,
+          presentationAlpha,
+          networkActive,
+          fx,
+          world,
+          spotState,
+          currentPlayer,
+          pedestalVisual,
+        );
+      }
+    },
+  };
+}

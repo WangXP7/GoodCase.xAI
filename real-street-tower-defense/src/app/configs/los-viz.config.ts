@@ -1,0 +1,228 @@
+/**
+ * Konfiguration für die GPU-Cubemap-basierte LOS-Visualisierung.
+ *
+ * Single source of truth für alle Magic-Numbers der LOS-Pipeline
+ * (siehe docs/LOS_PIPELINE.md). Werte hier ändern statt im Code patchen.
+ */
+
+import { Color } from 'three';
+import { DetMath } from '../utils/det-math';
+import { TD_THEME } from '../styles/td-theme';
+
+/**
+ * Visual appearance pro Cell-State — Farbe + Alpha. Wird sowohl im
+ * Cell-Shader (uColor* + uAlpha* Uniforms) als auch in der UI-Legend
+ * gerendert.
+ */
+export interface StateAppearance {
+  color: Color;
+  alpha: number;
+}
+
+export const LOS_VIZ_CONFIG = {
+  /**
+   * Cubemap-Auflösung (pro Face). 512² → ~6 MB VRAM pro Mapper,
+   * 5.7 px/° Sample-Dichte. Reicht für photorealistische 3DTiles-Meshes.
+   */
+  cubeSize: 512,
+
+  /**
+   * Mindestbewegung des Tower-Tips bevor die Cubemap neu gerendert wird.
+   * Verhindert Verschwendung bei Sub-Pixel-Cursor-Wiggle im Build-Preview.
+   */
+  cubeUpdateMoveThreshold: 0.5,
+
+  /**
+   * Y-Offset für Air-Sample-Punkt über `cell.terrainHeight`. Festes
+   * Modell statt skyline-adaptiv (v2-Decision 2026-05-13).
+   */
+  airSampleYOffset: 15,
+
+  /**
+   * Y-Offset für Ground-Sample-Punkt über `cell.terrainHeight`. Etwas über
+   * 0 damit der Strahl nicht im Boden-Mesh startet (Self-Hit). Siehe
+   * `getGroundTargetY` (route-cell.ts).
+   */
+  groundSampleYOffset: 1.5,
+
+  /**
+   * Visibility-Bias: Cell gilt als sichtbar wenn ihre Distanz zum Tower
+   * kleiner ist als die Cubemap-Distanz minus Bias. Deckt Sub-Pixel-
+   * Mismatch am Range-Rand ab.
+   */
+  visibilityBiasMeters: 0.5,
+
+  /**
+   * Cubemap-Distance unter diesem Wert wird als "leerer Texel" (kein
+   * Geometrie-Treffer) interpretiert und auf 1.0 (= farDistance) gesetzt.
+   * Schutz gegen Clear-Color-Leaks und Pack-Edge-Cases.
+   */
+  emptyDepthEpsilon: 0.001,
+
+  /**
+   * Wie weit der Mittelpunkt einer Zelle über die Reichweite hinaus liegen
+   * kann, deren Fläche die Reichweite noch anschneidet: die halbe Diagonale
+   * der 2-m-Zellen (`GlobalRouteGrid.CELL_SIZE`). Die Kampf-LOS nimmt diese
+   * Randzellen mit (`forEachSlotInReach`), der Cube muss bis zu ihrer Probe
+   * reichen (`losCubeFarDistance`).
+   */
+  reachBeyondRangeMeters: Math.SQRT2,
+
+  /**
+   * Cell-Palette, single source of truth für per-Tower-Viz, globalen
+   * Aggregate-Viz und Legende. Jeder Layer zeigt NUR seine eigene
+   * Coverage, die Layer-Identität steckt in der Farbe:
+   *  - ground:  Ground-Layer (Plate am Boden), Ground-Sample sichtbar (grün)
+   *  - air:     Air-Layer (Plate auf +airSampleYOffset), Air-Sample sichtbar (blau)
+   *  - blocked: (per-Tower only) in Range, aber verdeckt; auf beiden Layern (rot)
+   *
+   * "Ground + Air" hat keine eigene Farbe: ein Mixed-Tower zeigt dieselbe
+   * Zelle grün am Boden UND blau in der Luft. Eine aggregierte Both-Farbe
+   * auf beiden Plates hatte beide Layer identisch aussehen lassen.
+   *
+   * Farben sind sRGB-Hex, so wie sie auf dem Bildschirm erscheinen (die
+   * Cell-Shader wandeln per `colorspace_fragment` zurück). Grün/Blau/
+   * Vermillon ist nach dem Okabe-Ito-Schema gewählt: Ground und Blocked
+   * bleiben auch bei Deuteranopie/Protanopie über Helligkeit und Blau-
+   * Gelb-Achse trennbar. Blocked hat bewusst weniger Alpha.
+   */
+  states: {
+    ground:  { color: new Color(0x5ce6a8), alpha: 0.45 } as StateAppearance,
+    air:     { color: new Color(0x3aa0ff), alpha: 0.45 } as StateAppearance,
+    blocked: { color: new Color(0xd55e00), alpha: 0.30 } as StateAppearance,
+  },
+
+  /**
+   * Zusätzliche States für das globale Debug-Route-Grid. Werden NICHT
+   * vom per-Tower-Viz genutzt:
+   *  - `uncovered` für Cells die von KEINEM Tower erreicht werden
+   *    (≠ `blocked` aus dem per-Tower-Viz, wo rot "in Reichweite aber
+   *    blockiert" bedeutet — im Aggregat heißt "kein Tower in Range",
+   *    also neutral grau).
+   *  - `enemyInCell` / `enemyVisible` für Aggregat-Information über
+   *    Enemy-Belegung.
+   */
+  globalStates: {
+    /** Cell von keinem Tower in Range / aktiv abgedeckt. */
+    uncovered:     { color: new Color(0x9999a1), alpha: 0.35 } as StateAppearance,
+    /** Enemy in Cell, aber kein Tower sieht ihn. */
+    enemyInCell:   { color: new Color(0x8c59bf), alpha: 0.55 } as StateAppearance,
+    /** Enemy in Cell + mindestens ein Tower sieht die Cell. */
+    enemyVisible:  { color: new Color(0xd9b840), alpha: 0.65 } as StateAppearance,
+  },
+
+  /**
+   * Route Grid Overlay (Layer "Route Grid Overlay" und "Air Route Grid
+   * Overlay", `route-grid-aggregate-viz.ts`): die Fläche jeder Zelle nach
+   * Coverage (grau `globalStates.uncovered`, sonst Layer-Farbe), dazu eine
+   * Kontur, deren Farbe den Zustand der Zelle zeigt. Gezeichnet wird jede
+   * Zelle des Grids, auch ohne Höhenprobe. Legende im Tooltip der
+   * Layer-Buttons (`quick-actions.component.ts`).
+   */
+  gridOverlay: {
+    /** Plattenbreite als Anteil der Zellgröße, der Rest bleibt als Fuge. */
+    plateScale: 0.9,
+    /** Deckkraft der Fläche einer Zelle, die ein Tower abdeckt (Layer-Farbe). */
+    coveredAlpha: 0.6,
+    /** Zusätzliche Deckkraft der Fläche für Zellen, durch die die Mittellinie läuft. */
+    centreAlphaBoost: 0.12,
+    /** Konturbreite in Metern; nie schmaler als 1,5 Pixel. */
+    borderWidthMeters: 0.1,
+    /** Deckkraft der Kontur. */
+    borderAlpha: 0.85,
+    /** Konturfarbe je Zustand der Zelle (Okabe-Ito, sRGB-Hex). */
+    borders: {
+      /** Zelle mit Höhenprobe am Boden. */
+      normal: new Color(0xf0f0f0),
+      /** Auf einem Brückendeck. */
+      deck: new Color(0x56b4e9),
+      /** Ohne Höhenprobe, nur Ersatzhöhe. Die LOS-Anzeige eines Towers zeichnet sie nicht. */
+      unsampled: new Color(0xcc79a7),
+      /** In einem Tunnel oder überdachten Durchgang, Höhe zwischen den Portalen. */
+      tunnel: new Color(0xf0e442),
+    },
+    /**
+     * Rahmen um die Zellen, die der Zellbericht ausgewählt hat
+     * (`route-grid-selection-viz.ts`, CellReportService): über die ganze
+     * Zelle, breiter als die Kontur, in einer Farbe, die das Overlay nicht
+     * nutzt (Okabe-Ito Orange), dazu eine schwache Fläche. Auch ohne Overlay
+     * zu sehen.
+     */
+    selection: {
+      color: new Color(TD_THEME.cellSelection),
+      /** Rahmenbreite in Metern; nie schmaler als 3 Pixel. */
+      borderWidthMeters: 0.3,
+      borderAlpha: 1,
+      fillAlpha: 0.2,
+    },
+  },
+
+  /** Plattendicke der Cell-Mesh (m). 0.02 = kaum sichtbare Höhe. */
+  cellHeightMeters: 0.02,
+
+  /** Y-Offset über Boden (m), gegen Z-Fighting. depthTest ist off. */
+  cellYOffset: 0.05,
+
+  /** Pulse-Frequenz und -Tiefe des Alphas. */
+  pulseSpeed: 2.0,
+  pulseDepth: 0.05,
+
+  /**
+   * Air-Cells overlay — zweite Plate pro Cell auf
+   * `terrainHeight + airSampleYOffset`. Zeigt nur die Air-Coverage
+   * (`states.air` / `states.blocked`), die Ground-Plate nur die Ground-
+   * Coverage.
+   */
+  airCells: {
+    /** Alpha-Multiplikator für die Air-Plate (covered und blocked). 1.0 = wie Ground. */
+    alphaScale: 1.0,
+  },
+
+  /**
+   * Air-Route-Tube — globaler Debug-Layer der die ENEMY-Routen auf der
+   * Air-Flughöhe (= `terrainHeight + airSampleYOffset`) anzeigt. Toggle
+   * via QuickActions. Bewusst farblich vom 4-State-Palette getrennt
+   * (Magenta) und gestrichelt damit man "Pfad" vs "Wand" sofort sieht.
+   */
+  airRouteTube: {
+    /** Cylinder-Radius (m). */
+    radius: 0.55,
+    /** Sub-Samples zwischen Waypoints — denser = smoother polyline. */
+    samplesPerWaypoint: 4,
+    /** Tube-Farbe. */
+    color: new Color(1.0, 0.0, 0.67),  // magenta/pink
+    /** Streifen-Frequenz entlang der Tube (period per meter). */
+    dashFrequency: 0.6,
+    /** Anteil "an" pro Streifen-Periode (0.5 = symmetrisch). */
+    dashDuty: 0.55,
+    /** Render-Opacity bei "an"-Streifen. */
+    opacityOn: 0.9,
+    /** Render-Opacity bei "aus"-Streifen (>0 für sanfteres Pattern). */
+    opacityOff: 0.05,
+  },
+} as const;
+
+/**
+ * Far-Distanz, mit der der Cube eines Towers mit Reichweite `range`
+ * gerendert wird (`TowerShadowMapper.update`).
+ *
+ * Die Reichweite ist waagerecht (`Tower.findTarget`: flat-earth distance²),
+ * die Proben liegen darüber: die Air-Probe `airSampleYOffset` über dem Boden
+ * der Zelle. Ihre Distanz zum Tip ist damit größer als die Reichweite, und
+ * ein leerer Texel dekodiert auf genau `far`. Mit `far = range` galt eine
+ * Zelle am Rand der Reichweite als verdeckt, obwohl nichts im Weg stand:
+ * beim Archer (Reichweite 30 m, Tip 5,55 m) der Ring ab etwa 27,9 m, das
+ * sind 2,8 % seiner Luft-Zellen (air-los-city.scenario.spec.ts). Der Bias
+ * kommt dazu, weil `isCubeVisible` ihn von der Blocker-Distanz abzieht.
+ *
+ * Die Kampf-LOS probt auch Randzellen, deren Fläche die Reichweite nur
+ * anschneidet (`reachBeyondRangeMeters`); ihr Mittelpunkt liegt bis zu einer
+ * halben Zelldiagonale weiter draußen.
+ *
+ * Steht eine Zelle höher als der Tip, bleibt ein Rest: der Zuschlag deckt
+ * `airSampleYOffset` über dem Tip ab, nicht über der Zelle.
+ */
+export function losCubeFarDistance(range: number): number {
+  return DetMath.hypot(range + LOS_VIZ_CONFIG.reachBeyondRangeMeters, LOS_VIZ_CONFIG.airSampleYOffset)
+    + LOS_VIZ_CONFIG.visibilityBiasMeters;
+}

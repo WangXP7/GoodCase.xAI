@@ -1,0 +1,63 @@
+// Layout of the object options: value grid, categories, palette
+.op-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--td-sp-1) var(--td-sp-2);
+}
+
+.op-cats {
+  flex-wrap: wrap;
+  gap: var(--td-sp-1);
+}
+
+.op-cat {
+  cursor: pointer;
+  border: 0;
+}
+
+.op-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: var(--td-sp-1);
+}
+
+.op-asset {
+  // Off-screen cards skip layout and paint
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--td-sp-1);
+  font-size: var(--td-fs-small);
+
+  img,
+  .op-ph {
+    width: 40px;
+    height: 40px;
+  }
+
+  .op-ph {
+    display: block;
+    border-radius: var(--td-radius);
+    opacity: 0.35;
+  }
+
+  span {
+    max-width: 100%;
+  }
+}
+
+.op-filter {
+  flex-wrap: nowrap;
+
+  > input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  > select {
+    flex: 0 0 auto;
+  }
+}

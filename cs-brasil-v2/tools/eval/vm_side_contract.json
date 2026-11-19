@@ -1,0 +1,1467 @@
+{
+  "generatedAt": "2026-10-17T03:00:31.098Z",
+  "contract": {
+    "aspects": [
+      1.7777777777777777,
+      1.5
+    ],
+    "axisDeg": [
+      22,
+      42
+    ],
+    "areaPct": [
+      4,
+      16
+    ],
+    "contactMaxM": 0.025,
+    "visibleMin": 0.7,
+    "profileMin": 0.02
+  },
+  "mutant": null,
+  "firearms": [
+    "awp",
+    "ak",
+    "m4",
+    "mp5",
+    "shotgun",
+    "deagle",
+    "pistol",
+    "m92",
+    "akm",
+    "g3",
+    "revolver38",
+    "md97",
+    "carbine",
+    "m400",
+    "mosin",
+    "rem700",
+    "lmg",
+    "scar",
+    "tavor",
+    "famas",
+    "uzi",
+    "p90",
+    "svd",
+    "g3sg1",
+    "sks"
+  ],
+  "matrix": {
+    "awp": {
+      "family": "sniper",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/sniper/sniper-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": -0.05,
+          "y": 0.15,
+          "z": -0.3296,
+          "fov": 80,
+          "rotDeg": [
+            -11.9,
+            0,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.141,
+        "y": 0.031,
+        "z": -0.1,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/awp-runtime.glb",
+        "exists": true
+      }
+    },
+    "ak": {
+      "family": "ak",
+      "active": "golden",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/models/viewmodels/coro/ak-hires.glb",
+      "license": "CC0 mold + Mint/project asset",
+      "frame": {
+        "source": "embedded-camera"
+      },
+      "goldsrcFrame": {
+        "x": 0.092,
+        "y": 0.064,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          4
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/ak-runtime.glb",
+        "exists": true
+      }
+    },
+    "m4": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0198,
+          "y": 0.061,
+          "z": -0.1649,
+          "fov": 84,
+          "rotDeg": [
+            -8,
+            0.9,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.092,
+        "y": 0.009,
+        "z": 0,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/m4-runtime.glb",
+        "exists": true
+      }
+    },
+    "mp5": {
+      "family": "mp5",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/mp5/mp5-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.091,
+          "y": -0.187,
+          "z": -0.204,
+          "fov": 84,
+          "rotDeg": [
+            -10.1,
+            0,
+            18
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.133,
+        "y": 0.068,
+        "z": 0,
+        "fov": 74
+      },
+      "assetLimit": "mint-sem-pente; weaponModel adiciona MAG procedimental",
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/mp5-runtime.glb",
+        "exists": true
+      }
+    },
+    "shotgun": {
+      "family": "shotgun",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/shotgun/shotgun-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.65,
+          "y": -0.72,
+          "z": -1,
+          "fov": 84,
+          "rotDeg": [
+            8,
+            4,
+            -5
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.355,
+        "y": 0.04,
+        "z": -0.24,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/shotgun-runtime.glb",
+        "exists": true
+      }
+    },
+    "deagle": {
+      "family": "deagle",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/deagle/deagle-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.1,
+          "y": -0.1,
+          "z": -0.25,
+          "fov": 55,
+          "rotDeg": [
+            -5,
+            15,
+            -5
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.012,
+        "y": 0.084,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          31
+        ],
+        "drawDrop": 0.513,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/deagle-runtime.glb",
+        "exists": true
+      }
+    },
+    "pistol": {
+      "family": "pistol",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/pistol/pistol-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.1,
+          "y": -0.1,
+          "z": -0.22,
+          "fov": 55,
+          "rotDeg": [
+            0,
+            15,
+            -5
+          ],
+          "drawDrop": 0.34
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.061,
+        "y": -0.043,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          41
+        ],
+        "drawDrop": 0.367,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/pistol-runtime.glb",
+        "exists": true
+      }
+    },
+    "m92": {
+      "family": "ak",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ak/ak-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0948,
+          "y": 0.0409,
+          "z": -0.1014,
+          "fov": 57,
+          "rotDeg": [
+            6,
+            15,
+            2
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.086,
+        "y": 0.012,
+        "z": -0.1,
+        "fov": 74
+      },
+      "assetLimit": "pente-fundido-na-malha Mint",
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/m92-runtime.glb",
+        "exists": true
+      }
+    },
+    "akm": {
+      "family": "ak",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ak/ak-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.065,
+          "y": 0.04,
+          "z": -0.203,
+          "fov": 57,
+          "rotDeg": [
+            1.69,
+            7.69,
+            6.19
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.092,
+        "y": 0.064,
+        "z": 0,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/akm-runtime.glb",
+        "exists": true
+      }
+    },
+    "g3": {
+      "family": "g3",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/g3/g3-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": -0.0395,
+          "y": -0.015,
+          "z": -0.2204,
+          "fov": 78,
+          "rotDeg": [
+            8,
+            -0.2,
+            18
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.183,
+        "y": 0.12,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -19
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/g3-runtime.glb",
+        "exists": true
+      }
+    },
+    "revolver38": {
+      "family": "revolver",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/revolver/revolver-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.2,
+          "y": -0.08,
+          "z": -0.4,
+          "fov": 55,
+          "rotDeg": [
+            -10,
+            16,
+            -5
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.053,
+        "y": 0.013,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          28
+        ],
+        "drawDrop": 0.333,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/revolver38-runtime.glb",
+        "exists": true
+      }
+    },
+    "md97": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0008,
+          "y": 0.1243,
+          "z": -0.068,
+          "fov": 90,
+          "rotDeg": [
+            -4,
+            -4,
+            -12
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.064,
+        "y": 0.099,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -11
+        ],
+        "fov": 74
+      },
+      "assetLimit": "mint-sem-pente; weaponModel adiciona MAG procedimental",
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/md97-runtime.glb",
+        "exists": true
+      }
+    },
+    "carbine": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.03,
+          "y": 0.1,
+          "z": -0.26,
+          "fov": 84,
+          "rotDeg": [
+            -8,
+            0.9,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.117,
+        "y": 0.085,
+        "z": 0,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/carbine-runtime.glb",
+        "exists": true
+      }
+    },
+    "m400": {
+      "family": "sniper",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/sniper/sniper-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": -0.2358,
+          "y": 0.3123,
+          "z": -0.5979,
+          "fov": 84,
+          "rotDeg": [
+            -11.9,
+            0,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.141,
+        "y": 0.031,
+        "z": -0.04,
+        "rotDeg": [
+          0,
+          0,
+          -20
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/m400-runtime.glb",
+        "exists": true
+      }
+    },
+    "mosin": {
+      "family": "bolt",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/bolt/bolt-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0667,
+          "y": 0.0733,
+          "z": -0.2739,
+          "fov": 84,
+          "rotDeg": [
+            -1.6,
+            15,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.221,
+        "y": -0.14,
+        "z": -0.08,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/mosin-runtime.glb",
+        "exists": true
+      }
+    },
+    "rem700": {
+      "family": "bolt",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/bolt/bolt-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0696,
+          "y": -0.1131,
+          "z": -0.5712,
+          "fov": 84,
+          "rotDeg": [
+            0,
+            20,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.221,
+        "y": -0.14,
+        "z": -0.08,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/rem700-runtime.glb",
+        "exists": true
+      }
+    },
+    "lmg": {
+      "family": "lmg",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/lmg/lmg-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.153,
+          "y": -0.116,
+          "z": -0.375,
+          "fov": 84,
+          "rotDeg": [
+            -5.2,
+            -0.3,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.356,
+        "y": 0.173,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -16
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/lmg-runtime.glb",
+        "exists": true
+      }
+    },
+    "scar": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": -0.0615,
+          "y": 0.0721,
+          "z": -0.1984,
+          "fov": 82,
+          "rotDeg": [
+            -8,
+            0.9,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.15,
+        "y": 0.013,
+        "z": -0.04,
+        "fov": 74
+      },
+      "assetLimit": "pente-fundido-na-malha Mint",
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/scar-runtime.glb",
+        "exists": true
+      }
+    },
+    "tavor": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.1037,
+          "y": 0.0315,
+          "z": -0.2007,
+          "fov": 84,
+          "rotDeg": [
+            -8,
+            0.9,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.046,
+        "y": 0.005,
+        "z": 0,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/tavor-runtime.glb",
+        "exists": true
+      }
+    },
+    "famas": {
+      "family": "ar",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/ar/ar-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.0755,
+          "y": 0.0731,
+          "z": -0.1424,
+          "fov": 84,
+          "rotDeg": [
+            -8,
+            0.9,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.046,
+        "y": 0.005,
+        "z": -0.15,
+        "rotDeg": [
+          0,
+          0,
+          12
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/famas-runtime.glb",
+        "exists": true
+      }
+    },
+    "uzi": {
+      "family": "smg",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/smg/smg-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.4704,
+          "y": -0.454,
+          "z": -0.4408,
+          "fov": 84,
+          "rotDeg": [
+            15.4,
+            6,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.345,
+        "y": 0.177,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          -36
+        ],
+        "drawDrop": 0.28,
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/uzi-runtime.glb",
+        "exists": true
+      }
+    },
+    "p90": {
+      "family": "p90",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/p90/p90-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.075,
+          "y": -0.02,
+          "z": -0.141,
+          "fov": 84,
+          "rotDeg": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.042,
+        "y": -0.046,
+        "z": 0,
+        "rotDeg": [
+          0,
+          0,
+          17
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/p90-runtime.glb",
+        "exists": true
+      }
+    },
+    "svd": {
+      "family": "svd",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/svd/svd-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": -0.0852,
+          "y": -0.124,
+          "z": -0.4522,
+          "fov": 84,
+          "rotDeg": [
+            1.9,
+            0.5,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.183,
+        "y": 0.12,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -21
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/svd-runtime.glb",
+        "exists": true
+      }
+    },
+    "g3sg1": {
+      "family": "g3",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/g3/g3-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.117,
+          "y": -0.062,
+          "z": -0.202,
+          "fov": 84,
+          "rotDeg": [
+            1,
+            -0.2,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.183,
+        "y": 0.12,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -20
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/g3sg1-runtime.glb",
+        "exists": true
+      }
+    },
+    "sks": {
+      "family": "marksman",
+      "active": "paid",
+      "fallback": "legacy",
+      "fallbackUsed": false,
+      "result": "autorada",
+      "asset": "/private-assets/viewmodels/marksman/marksman-runtime.glb",
+      "license": "Fab Standard License (private runtime)",
+      "frame": {
+        "source": "VM_AUTHORED_FRAME.family",
+        "value": {
+          "x": 0.24,
+          "y": -0.18,
+          "z": -0.25,
+          "fov": 84,
+          "rotDeg": [
+            0.5,
+            -0.3,
+            0
+          ]
+        }
+      },
+      "goldsrcFrame": {
+        "x": 0.158,
+        "y": 0.078,
+        "z": -0.08,
+        "rotDeg": [
+          0,
+          0,
+          -20
+        ],
+        "fov": 74
+      },
+      "assetLimit": null,
+      "cs16": {
+        "pipeline": "goldsrc",
+        "asset": "/private-assets/viewmodels/goldsrc-vm/sks-runtime.glb",
+        "exists": true
+      }
+    }
+  },
+  "goldsrc": {
+    "awp": {
+      "profile": 0.1911,
+      "contact": {
+        "left": 0.0041,
+        "right": 0.0116
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9,
+          "axisDeg": 34.02,
+          "directionDeg": -34.02
+        },
+        "3:2": {
+          "visible": 0.8886,
+          "axisDeg": 34.36,
+          "directionDeg": -34.36
+        }
+      }
+    },
+    "ak": {
+      "profile": 0.1712,
+      "contact": {
+        "left": 0.0013,
+        "right": 0.0025
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9332,
+          "axisDeg": 31,
+          "directionDeg": -31
+        },
+        "3:2": {
+          "visible": 0.898,
+          "axisDeg": 39.92,
+          "directionDeg": -39.92
+        }
+      }
+    },
+    "m4": {
+      "profile": 0.142,
+      "contact": {
+        "left": 0.003,
+        "right": 0.0014
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9637,
+          "axisDeg": 32.34,
+          "directionDeg": -32.34
+        },
+        "3:2": {
+          "visible": 0.9512,
+          "axisDeg": 33,
+          "directionDeg": -33
+        }
+      }
+    },
+    "mp5": {
+      "profile": 0.1527,
+      "contact": {
+        "left": 0.0014,
+        "right": 0.0025
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9039,
+          "axisDeg": 26.7,
+          "directionDeg": -26.7
+        },
+        "3:2": {
+          "visible": 0.8562,
+          "axisDeg": 30.15,
+          "directionDeg": -30.15
+        }
+      }
+    },
+    "shotgun": {
+      "profile": 0.1946,
+      "contact": {
+        "left": 0.0019,
+        "right": 0.004
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9077,
+          "axisDeg": 26.74,
+          "directionDeg": -26.74
+        },
+        "3:2": {
+          "visible": 0.786,
+          "axisDeg": 27.02,
+          "directionDeg": -27.02
+        }
+      }
+    },
+    "deagle": {
+      "profile": 0.2464,
+      "contact": {
+        "left": 0.0019,
+        "right": 0.0042
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 1,
+          "axisDeg": 31.8,
+          "directionDeg": -31.8
+        },
+        "3:2": {
+          "visible": 1,
+          "axisDeg": 31.8,
+          "directionDeg": -31.8
+        }
+      }
+    },
+    "pistol": {
+      "profile": 0.2712,
+      "contact": {
+        "left": 0.0016,
+        "right": 0.0046
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 1,
+          "axisDeg": 27.58,
+          "directionDeg": -27.58
+        },
+        "3:2": {
+          "visible": 1,
+          "axisDeg": 27.58,
+          "directionDeg": -27.58
+        }
+      }
+    },
+    "m92": {
+      "profile": 0.1763,
+      "contact": {
+        "left": 0.0021,
+        "right": 0.006
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.8192,
+          "axisDeg": 36.4,
+          "directionDeg": -36.4
+        },
+        "3:2": {
+          "visible": 0.7888,
+          "axisDeg": 37.51,
+          "directionDeg": -37.51
+        }
+      }
+    },
+    "akm": {
+      "profile": 0.1304,
+      "contact": {
+        "left": 0.0015,
+        "right": 0.0019
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.948,
+          "axisDeg": 27.9,
+          "directionDeg": -27.9
+        },
+        "3:2": {
+          "visible": 0.9027,
+          "axisDeg": 33.84,
+          "directionDeg": -33.84
+        }
+      }
+    },
+    "g3": {
+      "profile": 0.0825,
+      "contact": {
+        "left": 0.0021,
+        "right": 0.0026
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9776,
+          "axisDeg": 25.77,
+          "directionDeg": -25.77
+        },
+        "3:2": {
+          "visible": 0.9776,
+          "axisDeg": 25.77,
+          "directionDeg": -25.77
+        }
+      }
+    },
+    "revolver38": {
+      "profile": 0.4803,
+      "contact": {
+        "left": 0.0018,
+        "right": 0.0023
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 1,
+          "axisDeg": 34.01,
+          "directionDeg": -34.01
+        },
+        "3:2": {
+          "visible": 0.9945,
+          "axisDeg": 34.24,
+          "directionDeg": -34.24
+        }
+      }
+    },
+    "md97": {
+      "profile": 0.0909,
+      "contact": {
+        "left": 0.0018,
+        "right": 0.0069
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9283,
+          "axisDeg": 28.1,
+          "directionDeg": -28.1
+        },
+        "3:2": {
+          "visible": 0.9233,
+          "axisDeg": 27.85,
+          "directionDeg": -27.85
+        }
+      }
+    },
+    "carbine": {
+      "profile": 0.1767,
+      "contact": {
+        "left": 0.0024,
+        "right": 0.001
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9612,
+          "axisDeg": 28.08,
+          "directionDeg": -28.08
+        },
+        "3:2": {
+          "visible": 0.9451,
+          "axisDeg": 28.67,
+          "directionDeg": -28.67
+        }
+      }
+    },
+    "m400": {
+      "profile": 0.0591,
+      "contact": {
+        "left": 0.001,
+        "right": 0.0045
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.897,
+          "axisDeg": 23.38,
+          "directionDeg": -23.38
+        },
+        "3:2": {
+          "visible": 0.836,
+          "axisDeg": 30.78,
+          "directionDeg": -30.78
+        }
+      }
+    },
+    "mosin": {
+      "profile": 0.196,
+      "contact": {
+        "left": 0.0036,
+        "right": 0.0049
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.8555,
+          "axisDeg": 36.69,
+          "directionDeg": -36.69
+        },
+        "3:2": {
+          "visible": 0.8101,
+          "axisDeg": 38.96,
+          "directionDeg": -38.96
+        }
+      }
+    },
+    "rem700": {
+      "profile": 0.322,
+      "contact": {
+        "left": 0.0028,
+        "right": 0.014
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.797,
+          "axisDeg": 36.46,
+          "directionDeg": -36.46
+        },
+        "3:2": {
+          "visible": 0.7583,
+          "axisDeg": 37.86,
+          "directionDeg": -37.86
+        }
+      }
+    },
+    "lmg": {
+      "profile": 0.1177,
+      "contact": {
+        "left": 0.0051,
+        "right": 0.0045
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9779,
+          "axisDeg": 26.42,
+          "directionDeg": -26.42
+        },
+        "3:2": {
+          "visible": 0.9719,
+          "axisDeg": 26.11,
+          "directionDeg": -26.11
+        }
+      }
+    },
+    "scar": {
+      "profile": 0.0985,
+      "contact": {
+        "left": 0.002,
+        "right": 0.002
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.7795,
+          "axisDeg": 28.28,
+          "directionDeg": -28.28
+        },
+        "3:2": {
+          "visible": 0.7356,
+          "axisDeg": 34.44,
+          "directionDeg": -34.44
+        }
+      }
+    },
+    "tavor": {
+      "profile": 0.2262,
+      "contact": {
+        "left": 0.0028,
+        "right": 0.0049
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.776,
+          "axisDeg": 26.53,
+          "directionDeg": -26.53
+        },
+        "3:2": {
+          "visible": 0.7678,
+          "axisDeg": 26.49,
+          "directionDeg": -26.49
+        }
+      }
+    },
+    "famas": {
+      "profile": 0.176,
+      "contact": {
+        "left": 0.001,
+        "right": 0.0017
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.957,
+          "axisDeg": 36.41,
+          "directionDeg": -36.41
+        },
+        "3:2": {
+          "visible": 0.946,
+          "axisDeg": 36.89,
+          "directionDeg": -36.89
+        }
+      }
+    },
+    "uzi": {
+      "profile": 0.1063,
+      "contact": {
+        "left": 0.0036,
+        "right": 0.0031
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 1,
+          "axisDeg": 23.69,
+          "directionDeg": -23.69
+        },
+        "3:2": {
+          "visible": 1,
+          "axisDeg": 23.69,
+          "directionDeg": -23.69
+        }
+      }
+    },
+    "p90": {
+      "profile": 0.1739,
+      "contact": {
+        "left": 0.0012,
+        "right": 0.0014
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.893,
+          "axisDeg": 33.06,
+          "directionDeg": -33.06
+        },
+        "3:2": {
+          "visible": 0.8536,
+          "axisDeg": 39.94,
+          "directionDeg": -39.94
+        }
+      }
+    },
+    "svd": {
+      "profile": 0.0601,
+      "contact": {
+        "left": 0.0024,
+        "right": 0.0055
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9135,
+          "axisDeg": 25.65,
+          "directionDeg": -25.65
+        },
+        "3:2": {
+          "visible": 0.9036,
+          "axisDeg": 25.08,
+          "directionDeg": -25.08
+        }
+      }
+    },
+    "g3sg1": {
+      "profile": 0.0282,
+      "contact": {
+        "left": 0.0029,
+        "right": 0.014
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9672,
+          "axisDeg": 27.34,
+          "directionDeg": -27.34
+        },
+        "3:2": {
+          "visible": 0.9623,
+          "axisDeg": 26.86,
+          "directionDeg": -26.86
+        }
+      }
+    },
+    "sks": {
+      "profile": 0.0363,
+      "contact": {
+        "left": 0.0054,
+        "right": 0.0028
+      },
+      "aspects": {
+        "16:9": {
+          "visible": 0.9625,
+          "axisDeg": 26.31,
+          "directionDeg": -26.31
+        },
+        "3:2": {
+          "visible": 0.9605,
+          "axisDeg": 26,
+          "directionDeg": -26
+        }
+      }
+    }
+  },
+  "failures": []
+}

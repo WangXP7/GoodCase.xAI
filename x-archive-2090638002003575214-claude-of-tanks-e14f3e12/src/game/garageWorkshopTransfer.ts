@@ -1,0 +1,465 @@
+import * as THREE from 'three';
+import { TANK_SPECS } from '../vehicles/specs.ts';
+import { createWorkerCalls, type WorkerCallTimers } from '../workerCalls.ts';
+import {
+  createGarageWorkshopMaterialPalette,
+  garageWorkshopFinishKey,
+} from './garageWorkshopMaterials.ts';
+import type { GarageWorkshopMaterialPalette } from './garageWorkshopMaterials.ts';
+import type {
+  GarageDressingEngineContext,
+  GarageWorkshopVisual,
+} from './garageDressing.ts';
+import type {
+  FlatNodeWire,
+  GarageWorkshopGeometryWire,
+  GeometryWire,
+  MaterialWire,
+} from './garageWorkshopGeometryWorker.ts';
+
+type AttributeWire = GarageWorkshopGeometryWire['geometries'][number]['index'] & {};
+
+interface WorkerReplyBase {
+  ok: boolean;
+  requestId: number;
+  message?: string;
+}
+
+type WorkerReply = WorkerReplyBase & (
+  | {
+    kind: 'begin';
+    specId: string;
+    buildMs: number;
+    materials: MaterialWire[];
+    geometryCount: number;
+    nodeCount: number;
+    payload: GarageWorkshopGeometryWire['payload'];
+  }
+  | { kind: 'geometries'; geometries: GeometryWire[] }
+  | { kind: 'nodes'; nodes: FlatNodeWire[] }
+  | { kind: 'complete' }
+  | { kind?: undefined }
+);
+
+type MaterialPalette = GarageWorkshopMaterialPalette;
+
+/** The engine's cascade registration, which a fallback material joins and leaves like the palette's. */
+type FallbackShadowHooks = Pick<GarageDressingEngineContext, 'setupShadowMaterial' | 'releaseShadowMaterial'>;
+
+type MaterialPaletteKey = Exclude<
+  keyof MaterialPalette,
+  'dispose' | 'finishKey' | 'textureCount' | 'materialCount'
+>;
+
+const ROLE_MATERIAL_KEYS: Readonly<Record<string, MaterialPaletteKey>> = {
+  tireRubber: 'rubber',
+  hullRubber: 'rubber',
+  trackSteel: 'trackLink',
+  trackBand: 'trackLink',
+  armorPaint: 'hull',
+  fittingPaint: 'detail',
+  gunmetal: 'dark',
+  gearShadow: 'shadow',
+  opticGlass: 'glass',
+  canvas: 'canvasCloth',
+  wood: 'wood',
+  burnt: 'burnt',
+};
+
+const NAME_MATERIAL_KEYS: ReadonlyArray<readonly [RegExp, MaterialPaletteKey]> = [
+  // garage r9 (the T-90M glare): a ghillie suit's net and garnish, a decor net and a crate's wood take their colour from
+  // vertex colours and maps the wire omits, so their wire colour is the white those multiply (the suit's foliage
+  // material, configureFoliageMaterial) or a pale map base: rebuilt as plain fallbacks they rendered pure white and
+  // clipped on the T-90M's turret in every Garage. They are the exhibit's cloth and its wood.
+  [/ghillie|_net(_|$)|leaves|garnish/i, 'canvasCloth'],
+  [/wood/i, 'wood'],
+  [/glass/i, 'glass'],
+  [/runninggeardetail|wheeldisc/i, 'wheels'],
+  [/runninggeardark|shadow/i, 'shadow'],
+  [/track|tread/i, 'trackLink'],
+  [/detail|equipment|marking/i, 'detail'],
+  [/dark|mount/i, 'dark'],
+  [/gun|barrel|recoil/i, 'barrel'],
+  [/^(hull|turret)|armor|cupola|hatch/i, 'hull'],
+];
+
+function bufferAttribute(source: NonNullable<AttributeWire>): THREE.BufferAttribute {
+  return new THREE.BufferAttribute(source.array, source.itemSize, source.normalized);
+}
+
+function instancedBufferAttribute(source: NonNullable<AttributeWire>): THREE.InstancedBufferAttribute {
+  // The runtime type owns Three's vertexAttribDivisor; a type assertion on an
+  // ordinary BufferAttribute consumes one matrix/color per vertex and overruns buffers.
+  return new THREE.InstancedBufferAttribute(source.array, source.itemSize, source.normalized);
+}
+
+function geometryFromWire(source: GarageWorkshopGeometryWire['geometries'][number]): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(source.attributes)) {
+    geometry.setAttribute(name, bufferAttribute(attribute));
+  }
+  if (source.index) geometry.setIndex(bufferAttribute(source.index));
+  for (const group of source.groups) geometry.addGroup(group.start, group.count, group.materialIndex);
+  geometry.setDrawRange(source.drawRange.start, source.drawRange.count);
+  if (source.boundingBox) {
+    geometry.boundingBox = new THREE.Box3(
+      new THREE.Vector3(...source.boundingBox.slice(0, 3) as [number, number, number]),
+      new THREE.Vector3(...source.boundingBox.slice(3, 6) as [number, number, number]),
+    );
+  }
+  if (source.boundingSphere) {
+    geometry.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(...source.boundingSphere.slice(0, 3) as [number, number, number]),
+      source.boundingSphere[3],
+    );
+  }
+  return geometry;
+}
+
+const REBUILD_SLICE_MS = 3.5;
+
+function yieldToGarageFrame(): Promise<void> {
+  // A timer task gives the browser an animation/render opportunity between
+  // slices. `scheduler.yield()` alone may resume ahead of rendering, which is
+  // exactly the long-task pattern this transfer boundary exists to avoid.
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
+function materialForWire(
+  source: MaterialWire,
+  objectName: string,
+  palette: MaterialPalette,
+  fallbacks: THREE.Material[],
+  fallbackCache: Map<string, THREE.Material>,
+  shadow: FallbackShadowHooks,
+): THREE.Material {
+  const role = source.role;
+  if (role === 'wheelPaint') {
+    return /recessed/i.test(source.name) ? palette.wheelsRecessed : palette.wheels;
+  }
+  const roleMaterialKey = ROLE_MATERIAL_KEYS[role];
+  if (roleMaterialKey) return palette[roleMaterialKey];
+
+  const nameMaterialKey = NAME_MATERIAL_KEYS.find(([pattern]) => pattern.test(objectName))?.[1];
+  if (nameMaterialKey) return palette[nameMaterialKey];
+  // any other near-white wire colour is likewise the base of a dropped vertex-colour or map paint (a jerrycan's): the
+  // exhibit's fitting paint, never a white part
+  const color = source.color ?? 0x4a5040;
+  if (((color >> 16) & 0xff) >= 0xe0 && ((color >> 8) & 0xff) >= 0xe0 && (color & 0xff) >= 0xe0) return palette.detail;
+
+  const fallbackKey = [
+    color,
+    source.roughness ?? 0.75,
+    source.metalness ?? 0.1,
+    source.opacity,
+    Number(source.transparent),
+    source.side,
+    Number(source.depthWrite),
+  ].join(':');
+  const cached = fallbackCache.get(fallbackKey);
+  if (cached) return cached;
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness: source.roughness ?? 0.75,
+    metalness: source.metalness ?? 0.1,
+    opacity: source.opacity,
+    transparent: source.transparent,
+    side: source.side as THREE.Side,
+    depthWrite: source.depthWrite,
+    vertexColors: false,
+  });
+  // the fallback joins the Garage's cascade registration like the palette's materials: unregistered, three's plain
+  // directional loop lit it with all four cascade suns at once (about four times the sun on a lit face)
+  shadow.setupShadowMaterial?.(material);
+  fallbacks.push(material);
+  fallbackCache.set(fallbackKey, material);
+  return material;
+}
+
+function rebuildNodeObject(
+  source: FlatNodeWire,
+  geometries: readonly THREE.BufferGeometry[],
+  materials: readonly MaterialWire[],
+  palette: MaterialPalette,
+  fallbacks: THREE.Material[],
+  fallbackCache: Map<string, THREE.Material>,
+  shadow: FallbackShadowHooks,
+): THREE.Object3D {
+  const resolvedMaterials = source.materials.map((index) =>
+    materialForWire(materials[index], source.name, palette, fallbacks, fallbackCache, shadow));
+  let object: THREE.Object3D;
+  if (source.kind === 'instanced') {
+    const mesh = new THREE.InstancedMesh(
+      geometries[source.geometry!],
+      resolvedMaterials.length === 1 ? resolvedMaterials[0] : resolvedMaterials,
+      source.count,
+    );
+    if (source.instanceMatrix) mesh.instanceMatrix = instancedBufferAttribute(source.instanceMatrix);
+    if (source.instanceColor) mesh.instanceColor = instancedBufferAttribute(source.instanceColor);
+    object = mesh;
+  } else if (source.kind === 'mesh') {
+    object = new THREE.Mesh(
+      geometries[source.geometry!],
+      resolvedMaterials.length === 1 ? resolvedMaterials[0] : resolvedMaterials,
+    );
+  } else if (source.kind === 'lod') object = new THREE.LOD();
+  else if (source.kind === 'group') object = new THREE.Group();
+  else object = new THREE.Object3D();
+
+  object.name = source.name;
+  object.position.fromArray(source.position);
+  object.quaternion.fromArray(source.quaternion);
+  object.scale.fromArray(source.scale);
+  object.visible = source.visible;
+  object.matrixAutoUpdate = source.matrixAutoUpdate;
+  object.renderOrder = source.renderOrder;
+  Object.assign(object.userData, source.userData);
+
+  if (!object.matrixAutoUpdate) object.updateMatrix();
+  return object;
+}
+
+async function rebuildNodeTree(
+  nodes: readonly FlatNodeWire[],
+  geometries: readonly THREE.BufferGeometry[],
+  materials: readonly MaterialWire[],
+  palette: MaterialPalette,
+  fallbacks: THREE.Material[],
+  fallbackCache: Map<string, THREE.Material>,
+  shadow: FallbackShadowHooks,
+): Promise<THREE.Object3D> {
+  if (!nodes.length) throw new Error('Garage workshop worker returned an empty node tree');
+  const objects: THREE.Object3D[] = [];
+  let sliceStartedAt = performance.now();
+  for (let cursor = 0; cursor < nodes.length; cursor++) {
+    const source = nodes[cursor];
+    const object = rebuildNodeObject(
+      source,
+      geometries,
+      materials,
+      palette,
+      fallbacks,
+      fallbackCache,
+      shadow,
+    );
+    objects.push(object);
+    if (source.parentIndex >= 0) {
+      const parent = objects[source.parentIndex];
+      if (!parent) throw new Error(`Garage workshop node ${cursor} has no parent ${source.parentIndex}`);
+      if (source.lodDistance !== null) {
+        (parent as THREE.LOD).addLevel(
+          object,
+          source.lodDistance,
+          source.lodHysteresis ?? 0,
+        );
+      } else {
+        parent.add(object);
+      }
+    }
+    if (performance.now() - sliceStartedAt >= REBUILD_SLICE_MS) {
+      await yieldToGarageFrame();
+      sliceStartedAt = performance.now();
+    }
+  }
+  return objects[0];
+}
+
+async function visualFromWire(
+  wire: GarageWorkshopGeometryWire,
+  acquirePalette: (specId: string) => {
+    palette: GarageWorkshopMaterialPalette;
+    release(): void;
+  },
+  shadow: FallbackShadowHooks = {},
+): Promise<GarageWorkshopVisual> {
+  const timings: Record<string, number> = { startedAt: Math.round(performance.now()) };
+  const geometries: THREE.BufferGeometry[] = [];
+  let sliceStartedAt = performance.now();
+  for (const source of wire.geometries) {
+    geometries.push(geometryFromWire(source));
+    if (performance.now() - sliceStartedAt >= REBUILD_SLICE_MS) {
+      await yieldToGarageFrame();
+      sliceStartedAt = performance.now();
+    }
+  }
+  timings.geometriesAt = Math.round(performance.now());
+  // Background service exhibits use one fixed national delivery coat. Their
+  // complete geometry remains intact, but they do not wake the procedural
+  // camouflage painters or retain maps that cannot resolve at this distance.
+  const paletteLease = acquirePalette(wire.specId);
+  const { palette } = paletteLease;
+  timings.texturesAt = timings.geometriesAt;
+  timings.materialsAt = Math.round(performance.now());
+  const fallbackMaterials: THREE.Material[] = [];
+  const fallbackCache = new Map<string, THREE.Material>();
+  await yieldToGarageFrame();
+  const root = await rebuildNodeTree(
+    wire.nodes,
+    geometries,
+    wire.materials,
+    palette,
+    fallbackMaterials,
+    fallbackCache,
+    shadow,
+  ) as THREE.Group;
+  timings.nodesAt = Math.round(performance.now());
+  root.userData.workerGeometryBuildMs = wire.buildMs;
+  root.userData.geometryQuality = 'high';
+  root.userData.textureQuality = 'factory-solid';
+  root.userData.workshopFinish = palette.finishKey;
+  root.userData.workshopTextureCount = palette.textureCount;
+  root.userData.workshopMaterialCount = palette.materialCount + fallbackMaterials.length;
+  root.userData.workshopTransfer = 'off-main-thread-high-detail-solid-factory';
+  root.userData.workshopTransferPayload = wire.payload;
+  root.userData.workshopTransferTimings = timings;
+  let disposed = false;
+  return {
+    root,
+    resetForGaragePresentation() {
+      root.traverse((object) => {
+        object.visible = object.userData.authoredShadowProxy !== true && object.visible;
+      });
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (root.parent) root.parent.remove(root);
+      for (const geometry of geometries) geometry.dispose();
+      for (const material of fallbackMaterials) {
+        shadow.releaseShadowMaterial?.(material);
+        material.dispose();
+      }
+      paletteLease.release();
+    },
+  };
+}
+
+/** How long the workshop worker may stay silent while it holds an exhibit (ms): the page's single-job workers' 15 s
+ *  (materialPainterWorkerClient.ts; it builds the whole tank before its first batch), twice that before its first answer
+ *  while it loads the fleet's builders. */
+const WORKSHOP_SILENCE_MS = 15_000;
+const WORKSHOP_FIRST_SILENCE_MS = 30_000;
+
+export function createGarageWorkshopTransfer(
+  engineCtx: GarageDressingEngineContext,
+  options: { silenceMs?: number; firstSilenceMs?: number; timers?: WorkerCallTimers } = {},
+): {
+  createVisual(specId: string, camoSeed: number): Promise<GarageWorkshopVisual>;
+  dispose(): void;
+} {
+  let nextRequestId = 1;
+  const sharedPalettes = new Map<string, {
+    palette: GarageWorkshopMaterialPalette;
+    refs: number;
+  }>();
+  const acquirePalette = (specId: string): {
+    palette: GarageWorkshopMaterialPalette;
+    release(): void;
+  } => {
+    const spec = TANK_SPECS[specId];
+    const key = garageWorkshopFinishKey(spec);
+    let entry = sharedPalettes.get(key);
+    if (!entry) {
+      entry = {
+        palette: createGarageWorkshopMaterialPalette(spec, engineCtx),
+        refs: 0,
+      };
+      sharedPalettes.set(key, entry);
+    }
+    entry.refs++;
+    let released = false;
+    return {
+      palette: entry.palette,
+      release() {
+        if (released) return;
+        released = true;
+        if (--entry!.refs > 0) return;
+        entry!.palette.dispose();
+        sharedPalettes.delete(key);
+      },
+    };
+  };
+  interface WorkshopRequest {
+    camoSeed: number;
+    wire: GarageWorkshopGeometryWire | null;
+    geometryCount: number;
+    nodeCount: number;
+    resolve(value: GarageWorkshopVisual): void;
+    reject(error: Error): void;
+  }
+  /** One of the worker's messages for its request; true once the request has settled. */
+  const handleReply = (request: WorkshopRequest, reply: WorkerReply): boolean => {
+    if (!reply.ok) {
+      request.reject(new Error(reply.message || 'Garage workshop worker failed'));
+      return true;
+    }
+    if (reply.kind === 'begin') {
+      request.geometryCount = reply.geometryCount;
+      request.nodeCount = reply.nodeCount;
+      request.wire = {
+        requestId: reply.requestId,
+        specId: reply.specId,
+        buildMs: reply.buildMs,
+        materials: reply.materials,
+        geometries: [],
+        nodes: [],
+        payload: reply.payload,
+      };
+      return false;
+    }
+    if (!request.wire) {
+      request.reject(new Error('Garage workshop worker sent a batch before its header'));
+      return true;
+    }
+    if (reply.kind === 'geometries') {
+      request.wire.geometries.push(...reply.geometries);
+      return false;
+    }
+    if (reply.kind === 'nodes') {
+      request.wire.nodes.push(...reply.nodes);
+      return false;
+    }
+    if (reply.kind !== 'complete') return false;
+    if (request.wire.geometries.length !== request.geometryCount
+      || request.wire.nodes.length !== request.nodeCount) {
+      request.reject(new Error('Garage workshop worker transfer was incomplete'));
+      return true;
+    }
+    void visualFromWire(request.wire, acquirePalette, engineCtx)
+      .then(request.resolve, request.reject);
+    return true;
+  };
+  // (improve-271, plan 031) src/workerCalls.ts: a worker silent past its deadline (each streamed batch resets it) or one
+  // that fails rejects what it holds, so garageDressing.ts builds those exhibits in line and the covered Garage restore
+  // settles; the dead worker is terminated and the next request starts a fresh one under R6's count
+  // (src/workerClientHealth.ts)
+  const calls = createWorkerCalls<WorkerReply>({
+    name: 'Garage workshop worker',
+    spawn: () => new Worker(new URL('./garageWorkshopGeometryWorker.ts', import.meta.url), {
+      type: 'module',
+      name: 'cot-garage-workshop-geometry',
+    }),
+    idOf: (reply) => reply?.requestId,
+    silenceMs: options.silenceMs ?? WORKSHOP_SILENCE_MS,
+    firstSilenceMs: options.firstSilenceMs ?? WORKSHOP_FIRST_SILENCE_MS,
+    timers: options.timers,
+  });
+  return {
+    createVisual(specId, camoSeed) {
+      const requestId = nextRequestId++;
+      return new Promise((resolve, reject) => {
+        const request: WorkshopRequest = { camoSeed, wire: null, geometryCount: 0, nodeCount: 0, resolve, reject };
+        const posted = calls.post(requestId, { requestId, specId, camoSeed, spec: TANK_SPECS[specId] }, undefined, {
+          reply: (reply) => handleReply(request, reply),
+          fail: reject,
+        });
+        if (!posted) reject(new Error('Garage workshop worker unavailable'));
+      });
+    },
+    dispose() {
+      calls.dispose(new Error('Garage workshop worker disposed'));
+      for (const entry of sharedPalettes.values()) entry.palette.dispose();
+      sharedPalettes.clear();
+    },
+  };
+}

@@ -1,0 +1,11 @@
+/* The Garage's photo mode (photoMode.ts): the Garage's interface steps away and one bar of framings, Save and Exit
+   floats over the stage, on the kit. Copyright © 2026 Kevin B. Liu. */
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+@layer surfaces{
+body.cot-photo-on .cot-garage{visibility:hidden;}
+.cot-photo-bar{position:fixed;left:50%;bottom:max(24px,calc(env(safe-area-inset-bottom,0px) + 12px));z-index:var(--z-menu);transform:translateX(-50%);
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--s3);max-width:calc(100vw - 32px);padding:var(--s2);
+  border-radius:var(--control-radius);background:var(--glyph-plate);box-shadow:var(--ring-2);}
+.cot-photo-bar[hidden]{display:none;}
+/* the framings are the kit's segmented control (components.css .cot-c-seg): its look, its checked state, its focus */
+}

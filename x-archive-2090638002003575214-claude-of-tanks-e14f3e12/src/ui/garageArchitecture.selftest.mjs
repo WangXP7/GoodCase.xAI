@@ -1,0 +1,576 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import * as THREE from 'three';
+import { GARAGE_VARIANTS } from '../game/garageVariants.ts';
+import { GARAGE_HERO_HEADING_RAD } from '../game/garagePresentationPose.ts';
+import { createGarageArchitectureController } from './garageArchitecture.ts';
+import { createStarvationMeter, threadCpuMs } from '../../tools/starvation-meter.mjs';
+import { GARAGE_ENVIRONMENT_RECIPES } from './garageEnvironmentRecipes.ts';
+import {
+  GARAGE_FACILITY_AXIS_YAW_RAD,
+  garageTerraceAtDatum,
+  getGarageFacilityTerraces,
+} from './garageFacilityDetails.ts';
+
+const kitSource = await readFile(new URL('./garageEnvironmentKit.ts', import.meta.url), 'utf8');
+const approachSource = await readFile(new URL('./garageApproachDetails.ts', import.meta.url), 'utf8');
+const facilitySource = await readFile(new URL('./garageFacilityDetails.ts', import.meta.url), 'utf8');
+const recipeSource = await readFile(new URL('./garageEnvironmentRecipes.ts', import.meta.url), 'utf8');
+const stageSource = await readFile(new URL('./garageStage.ts', import.meta.url), 'utf8');
+assert.doesNotMatch(`${kitSource}\n${recipeSource}`,
+  /\b(createWorld|createMap|createVegetation|createProps)\s*\(|heightField\.update|from ['"]\.\.\/world\/terrain|fleetFactory|tankFactory|world\/wrecks/i,
+  'Garage packs may reuse renderer assets, never battlefield runtime services');
+assert.match(kitSource, /garageTerrainPatches\.generated\.ts/,
+  'Garage terrain must use build-time battlefield excerpts');
+assert.doesNotMatch(`${kitSource}\n${facilitySource}`,
+  /garageWreckGeometry|GARAGE_WRECK_ASSET|createWorkshopPartLibrary|workshopParts/,
+  'Garage scene packs must not retain silhouette-only vehicle or component proxies');
+assert.doesNotMatch(kitSource, /createSkyGeometry|garage_shared_sky/,
+  'outdoor Garage packs must expose the shared engine sky, not occlude it with a local sphere');
+assert.match(approachSource, /garageApproachSurface = 'terrain-conforming-ribbon'/,
+  'Garage approaches must use bounded terrain-conforming ribbons');
+assert.doesNotMatch(approachSource, /setFromUnitVectors\(LOCAL_FORWARD/,
+  'a terrain delta must never rotate a complete road panel upright');
+assert.match(recipeSource, /world\/maps\/(structureKit|railKit|villageKit|urbanKit)/,
+  'Garage recipes must use the real connected map structure builders');
+assert.doesNotMatch(kitSource, /builder\.name/,
+  'production Garage facades must never depend on minifiable function names');
+for (const [architecture, recipe] of Object.entries(GARAGE_ENVIRONMENT_RECIPES)) {
+  for (const placement of recipe.structures) {
+    assert.ok(placement.catalogId.length > 2,
+      `${architecture}/${placement.label}: stable exterior catalog id is required`);
+  }
+}
+assert.match(kitSource,
+  /map: handle\.color,[\s\S]{0,100}normalMap: handle\.normal/,
+  'Garage structure buckets must retain their surface-specific albedo and normal textures');
+for (const [architecture, recipe] of Object.entries(GARAGE_ENVIRONMENT_RECIPES)) {
+  for (const placement of recipe.structures) {
+    const axisDelta = placement.yaw - GARAGE_HERO_HEADING_RAD;
+    assert.ok(Math.abs(Math.sin(axisDelta)) < 1e-9,
+      `${architecture}/${placement.label}: structure stays parallel to the immutable hero axis`);
+    const expectedYaw = GARAGE_HERO_HEADING_RAD + (placement.depth < 0 ? Math.PI : 0);
+    assert.ok(Math.abs(Math.cos(placement.yaw - expectedYaw) - 1) < 1e-9,
+      `${architecture}/${placement.label}: working facade faces the service yard`);
+  }
+}
+assert.equal(GARAGE_FACILITY_AXIS_YAW_RAD, GARAGE_HERO_HEADING_RAD,
+  'service bays must align their rear plane with the hero tank stern plane');
+assert.doesNotMatch(facilitySource, /GARAGE_CAMERA_AZIMUTH_RAD|VIEW_YAW/,
+  'service-facility orientation must never be coupled to the opening camera');
+assert.doesNotMatch(facilitySource, /fleetFactory|tankFactory/,
+  'static facility scenery must not import the playable fleet into Garage boot');
+assert.match(stageSource, /light\.visible = true;[\s\S]*light\.intensity = isVerdant/,
+  'Verdant fixtures must preserve a stable light count across environment switches');
+assert.match(stageSource, /garage_outdoor_shader_seed/,
+  'Verdant boot must seed the shared outdoor PBR/CSM program under cover');
+assert.match(stageSource, /podTopMat\.color\.setHex\(variant\.platformTint\)/,
+  'each Garage must apply its authored turntable deck finish without rebuilding geometry');
+assert.match(stageSource, /podSideMat\.color\.copy\(platformEdge\)/,
+  'each Garage must apply its authored accent to the shared platform edge');
+assert.match(stageSource, /tree-alpha-instance[\s\S]{0,420}alphaTest: 0\.38[\s\S]{0,240}alphaToCoverage: true/,
+  'Verdant boot must seed the exact detailed-tree alpha shader before outdoor reveal');
+
+// (267, the load1 class) The timing budgets were only reported with the load above the CPU count. A build is synchronous
+// CPU work, so it is judged on the CPU the thread spent in it; a cold transaction (module load, asset preparation, build)
+// is judged net of the time the machine withheld from the thread (tools/starvation-meter.mjs). The negative control
+// plants in two kit builds: PLANT_MS blocked without CPU (not charged) and PLANT_MS spent (charged, then taken back out
+// so that Garage is still judged).
+const PLANT_MS = 150;
+const builds = [];
+const loadMeasuredKit = async () => {
+  const kit = await import('./garageEnvironmentKit.ts');
+  return {
+    ...kit,
+    buildGarageEnvironment(...args) {
+      const plant = builds.length === 1 ? 'blocked' : builds.length === 2 ? 'busy' : null;
+      const cpuFrom = threadCpuMs(), wallFrom = performance.now();
+      if (plant === 'blocked') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, PLANT_MS);
+      if (plant === 'busy') while (threadCpuMs() - cpuFrom < PLANT_MS) { /* the build's own stall: CPU */ }
+      try { return kit.buildGarageEnvironment(...args); } finally {
+        builds.push({ plant, cpuMs: threadCpuMs() - cpuFrom, wallMs: performance.now() - wallFrom });
+      }
+    },
+  };
+};
+const meter = createStarvationMeter();
+meter.start();
+const scene = new THREE.Group();
+const controller = createGarageArchitectureController({}, scene, () => {}, loadMeasuredKit);
+const signatures = new Set();
+const shelterKinds = new Map();
+const transactions = [];
+for (const variant of GARAGE_VARIANTS) {
+  if (variant.id !== 'verdant_motor_pool') {
+    const terraces = getGarageFacilityTerraces(variant);
+    // 2026-10-05: every fleet exhibit stands on a pad at the datum. The Abrams welding bay moved beside the camera
+    // onto raw terrain (sunk up to 3.2 m at Steinburg, 1.5 m clear at Sirocco) and the K2 cradle stood up to 2.8 m
+    // clear; the Abrams pad is the wider one (the tank, skirts, dolly and carts spread over about 11 m).
+    const pads = terraces.filter((terrace) => terrace.label.startsWith('fleet-service-'));
+    // 2026-10-10: the Leopard mobility bay (lift, wheel rack, kit and crew) joined them after its crew floated 1.44 m
+    assert.equal(pads.length, 5,
+      `${variant.id}: the Burlak, Abrams, T-90M, K2 and Leopard exhibits each stand on a pad`);
+    assert.equal(pads.filter((pad) => pad.radiusSide === 7.6 && pad.radiusDepth === 6.6).length, 1,
+      `${variant.id}: the Abrams welding bay's pad covers its spread`);
+    for (let left = 0; left < terraces.length; left += 1) {
+      for (let right = left + 1; right < terraces.length; right += 1) {
+        const a = terraces[left];
+        const b = terraces[right];
+        const clearance = Math.hypot(
+          (a.side - b.side) / (a.radiusSide + b.radiusSide),
+          (a.depth - b.depth) / (a.radiusDepth + b.radiusDepth),
+        );
+        assert.ok(clearance >= 1 || (garageTerraceAtDatum(a, terraces) && garageTerraceAtDatum(b, terraces)),
+          `${variant.id}: ${a.label} must not overlap ${b.label} unless both stand at the datum`);
+      }
+    }
+  }
+  const startedAt = performance.now();
+  const buildsBefore = builds.length;
+  controller.setVariant(variant);
+  const stats = await controller.whenReady();
+  const endedAt = performance.now();
+  transactions.push({ id: variant.id, startedAt, endedAt, wallMs: endedAt - startedAt, plant: builds[buildsBefore]?.plant ?? null });
+  assert.equal(stats.key, variant.architecture);
+  assert.equal(stats.mapId, variant.mapId);
+  if (variant.id === 'verdant_motor_pool') {
+    assert.equal(stats.mode, 'verdant-workshop');
+    assert.equal(stats.enclosingSurfaces, 4,
+      'Verdant must keep its restored enclosed workshop shell');
+    assert.equal(stats.source, 'verdant-workshop');
+    assert.equal(stats.terrainVertices, 0,
+      'Verdant must not allocate the replacement outdoor terrain pack');
+    assert.equal(stats.facilityStations, 4);
+    assert.ok(stats.structuralConnections >= 60);
+    assert.equal(stats.unsupportedParts, 0);
+    assert.ok(stats.heavyLiftSystems >= 2);
+    assert.ok(stats.operationalMachines >= 3);
+    assert.ok(stats.factoryProcessZones >= 1);
+    assert.ok(stats.elevatedAccessSystems >= 2);
+    assert.ok(stats.secureStorageSystems >= 1);
+    assert.ok(stats.environmentSpecificAssemblies >= 2);
+    assert.ok(stats.servicePurposeTags.length >= 8);
+    assert.ok(stats.facilityMaterialClasses >= 4);
+    assert.equal(stats.openingSightlineIntrusions, 0);
+    assert.ok(stats.platformGroundClearanceM >= 0.02,
+      'Verdant floor must remain below the complete turntable base');
+    assert.equal(stats.cached, 1);
+    signatures.add(stats.signature);
+    continue;
+  }
+  assert.equal(stats.mode, 'garage-environment');
+  assert.equal(stats.enclosingSurfaces, 0,
+    `${variant.id} must remain an open Garage environment`);
+  assert.equal(stats.source, 'authentic-garage-scene-pack');
+  assert.ok(stats.objects >= 8 && stats.drawCalls <= 26,
+    `${variant.id} must merge its scene into a bounded draw-call graph`);
+  assert.ok(stats.triangles > 0 && stats.triangles <= 72_000, // 72k since 2026-10-16 (deploy 226): see garageQualityRubric.ts
+    `${variant.id} must stay inside the Garage environment geometry budget`);
+  assert.equal(stats.terrainVertices, 41 * 37,
+    `${variant.id} must use its compact battlefield-derived terrain excerpt`);
+  assert.ok(stats.platformGroundClearanceM >= 0.02,
+    `${variant.id} terrain and hardstand must remain below the complete turntable base`);
+  assert.equal(stats.terrainSourceAnchor?.length, 2);
+  assert.ok(stats.sourceStructure && stats.sourceBeat,
+    `${variant.id} must identify its real landmark and presentation beat`);
+  assert.ok(stats.terrainProfile.length > 24,
+    `${variant.id} must identify the battlefield-derived terrain`);
+  assert.ok(stats.serviceFrame.length > 16);
+  assert.ok(stats.distinctiveElements.length >= 10);
+  assert.ok(stats.landmarkHeightM >= 7);
+  assert.equal(stats.sourceLandmarkLocal?.[1], stats.landmarkHeightM);
+  assert.ok(stats.textureSets.length >= 6,
+    `${variant.id} must use real PBR surface sets`);
+  assert.ok(stats.treeSpecies.length >= 2 && stats.trees >= 5,
+    `${variant.id} must use battlefield tree geometry`);
+  assert.equal(stats.backdropLayers, 5,
+    `${variant.id} must close the view with five map-derived terrain bands`);
+  assert.notEqual(stats.horizonStyle, 'none');
+  if (stats.skylineLandmarks) {
+    // garage r9 (K10): the horizon from the map: its near relief and its landmarks at their true bearings, the tallest
+    // seen from the opening camera low enough to leave the fair-weather sky its share of the frame
+    assert.ok(stats.skylineLandmarks.length >= 4, `${variant.id} skyline carries its map's landmarks`);
+    assert.ok(stats.skylineLandmarks.every((mark) => Number.isFinite(mark.azDeg) && mark.ringRadiusM >= 58 && mark.ringRadiusM <= 116),
+      `${variant.id} skyline landmarks stand on the horizon ring at their bearings`);
+    assert.ok(stats.horizonMaxElevationDeg > 2 && stats.horizonMaxElevationDeg <= 13,
+      `${variant.id} skyline leaves the sky its share (${stats.horizonMaxElevationDeg} deg)`);
+  } else {
+    assert.ok(stats.horizonMaxHeightM > 0 && stats.horizonMaxHeightM <= 13.2,
+      `${variant.id} skyline must stay inside its authored biome ceiling`);
+  }
+  assert.equal(stats.treeDetailTier, 'battlefield-far',
+    'headless Garage audits must retain the DOM-free battlefield tree fallback');
+  assert.ok(stats.groundCover >= 48,
+    `${variant.id} must retain bounded static biome ground cover`);
+  assert.ok(stats.structures >= 9,
+    `${variant.id} must surround the hero with at least nine connected map structures`);
+  assert.equal(stats.collisionAuditedStructures, stats.structures,
+    `${variant.id} must derive every hitbox from its real structure geometry`);
+  assert.ok(stats.collisionEnvelopeFill > 0 && stats.collisionEnvelopeFill <= 1,
+    `${variant.id} collision coverage receipt must remain normalized`);
+  assert.ok(stats.openCollisionMaxFill >= 0 && stats.openCollisionMaxFill <= 0.82,
+    `${variant.id} open-structure compounds must preserve intentional free space`);
+  assert.equal(stats.structureUnsupportedParts, 0,
+    `${variant.id} every wall, roof and fixture must connect into a grounded assembly`);
+  assert.ok(stats.maxStructureConnectionGapM <= 0.09,
+    `${variant.id} structure contact chains must stay inside the strict nine-centimetre gate`);
+  assert.ok(stats.structurePerimeterSectors >= 4,
+    `${variant.id} structure composition must survive at least four orbit sectors`);
+  assert.ok(stats.connectedExteriorBuildings >= 3,
+    `${variant.id} must apply connected exterior detail to its building district`);
+  assert.ok(stats.connectedExteriorParts >= 120,
+    `${variant.id} must retain high-detail supported facades`);
+  assert.ok(stats.maxExteriorSupportGapM <= 0.065,
+    `${variant.id} exterior fixtures must touch their authored supports`);
+  assert.ok(stats.approachConnected && stats.approachSegments >= 8,
+    `${variant.id} must carry one continuous map-authored approach to the platform`);
+  assert.ok(stats.approachDetails >= 20,
+    `${variant.id} approach must include route-specific infrastructure`);
+  assert.ok(stats.approachGroundErrorM <= 0.01,
+    `${variant.id} approach must follow the sampled battlefield terrain`);
+  assert.equal(stats.approachTerrainGraded, true,
+    `${variant.id} approach must cut a bounded grade through the terrain excerpt`);
+  assert.ok(stats.approachMaxGrade <= 0.10,
+    `${variant.id} approach must stay within a ten-percent service-road grade`);
+  assert.ok(stats.facilityProps >= 100,
+    `${variant.id} must distribute a complete service facility around the hero`);
+  assert.equal(stats.facilityStations, 2,
+    `${variant.id} must have two complete maintenance stations`);
+  assert.equal(stats.openingViewFrames, 2,
+    `${variant.id} must stage two connected service frames in the opening view`);
+  assert.ok(stats.structuralConnections >= 60,
+    `${variant.id} must certify a connected facility frame`);
+  assert.equal(stats.unsupportedParts, 0,
+    `${variant.id} must not contain a floating facility member`);
+  assert.ok(stats.heavyLiftSystems >= 2,
+    `${variant.id} must present working heavy-lift equipment`);
+  assert.ok(stats.operationalMachines >= 3,
+    `${variant.id} must present at least three assembled service machines`);
+  assert.ok(stats.factoryProcessZones >= 1,
+    `${variant.id} must present a fabrication or inspection process zone`);
+  assert.ok(stats.elevatedAccessSystems >= 2,
+    `${variant.id} must retain connected elevated inspection access`);
+  assert.ok(stats.secureStorageSystems >= 1,
+    `${variant.id} must retain a secured parts-and-fittings cage`);
+  assert.ok(stats.environmentSpecificAssemblies >= 2,
+    `${variant.id} must pair shared service hardware with signature machinery`);
+  assert.ok(stats.servicePurposeTags.length >= 8,
+    `${variant.id} must communicate a real maintenance workflow`);
+  // round 6 (waves 408, 419 and 424: "every yard repeats the same shelter frame ... with only colour swaps"): each Garage
+  // builds its bays its own way
+  const shelterTags = stats.servicePurposeTags.filter((tag) => tag.startsWith('shelter:'));
+  assert.equal(shelterTags.length, 1, `${variant.id} names one shelter kind`);
+  shelterKinds.set(variant.id, shelterTags[0]);
+  assert.ok(stats.facilityMaterialClasses >= 4,
+    `${variant.id} facility must retain steel, paint, equipment and masonry readings`);
+  assert.equal(stats.openingSightlineIntrusions, 0,
+    `${variant.id} facility must preserve the default hero sightline`);
+  assert.ok(stats.looseParts >= 40,
+    `${variant.id} must include workshop equipment and stocked spare parts`);
+  assert.ok(stats.placementZones >= 7,
+    `${variant.id} must distribute its authored service islands around the perimeter`);
+  assert.equal(stats.placementOverlaps, 0,
+    `${variant.id} must keep map structures clear of service equipment`);
+  assert.ok(stats.maxGroundContactErrorM <= 0.1,
+    `${variant.id} equipment must sit on its terrain terrace (${stats.maxGroundContactErrorM} m)`);
+  if (variant.architecture === 'rail_roundhouse') {
+    assert.ok(stats.railSegments >= 80,
+      'Cinder Junction must be a real rail facility with three complete roads');
+  }
+  if (variant.architecture === 'brick_arsenal') {
+    assert.equal(stats.horizonStyle, 'urban');
+    // round 5d-2 (waves 408 and 419: "one enormous flat, untextured grey-blue slab", "city fabric beyond the arsenal"):
+    // the town is real blocks, houses and a spire behind low land, not stepped slabs in a silhouette tint
+    assert.ok(stats.horizonMaxHeightM <= 10, `${variant.id} keeps its land low`);
+    assert.ok(stats.builtHorizonMassTopM >= 8 && stats.builtHorizonMassTopM <= 13.2,
+      `${variant.id} must retain a readable but bounded city skyline (${stats.builtHorizonMassTopM} m)`);
+  }
+  // the steelworks and the railway stand as building masses too; only slender accents rise past the biome ceiling
+  if (['brick_arsenal', 'rail_roundhouse', 'factory_line'].includes(variant.architecture)) {
+    assert.ok(stats.builtHorizonMassTopM > 6 && stats.builtHorizonMassTopM <= 13.2,
+      `${variant.id} built horizon masses stay under the biome ceiling (${stats.builtHorizonMassTopM} m)`);
+    assert.ok(stats.builtHorizonAccentTopM > stats.builtHorizonMassTopM && stats.builtHorizonAccentTopM <= 26,
+      `${variant.id} built horizon accents stay slender and bounded (${stats.builtHorizonAccentTopM} m)`);
+  } else if (variant.architecture === 'naval_drydock') {
+    // garage r9 (K10): Saltmere's coast is built too, the whitewashed village, the headland and its lighthouse, the islets
+    assert.ok(stats.builtHorizonMassTopM > 0 && stats.builtHorizonMassTopM <= 13.2,
+      `${variant.id} coastal skyline masses stay low (${stats.builtHorizonMassTopM} m)`);
+    assert.ok(stats.builtHorizonAccentTopM > stats.builtHorizonMassTopM && stats.builtHorizonAccentTopM <= 26,
+      `${variant.id} the lighthouse and the steeple stay slender and bounded (${stats.builtHorizonAccentTopM} m)`);
+  } else {
+    assert.equal(stats.builtHorizonMassTopM, 0, `${variant.id} has no built horizon`);
+  }
+  // garage r9 (K10): a Garage with a built skyline of its own names its map's landmarks
+  if (['naval_drydock', 'rail_roundhouse', 'factory_line'].includes(variant.architecture)) {
+    assert.ok(stats.kitSkylineLandmarks.length >= 4, `${variant.id} names its skyline's landmarks: ${stats.kitSkylineLandmarks.join(', ')}`);
+  }
+  if (['naval_drydock', 'rail_roundhouse'].includes(variant.architecture)) {
+    assert.ok(stats.horizonMaxHeightM <= 6.5,
+      `${variant.id} flat facility must keep its low working horizon`);
+  }
+  if (variant.architecture === 'factory_line') {
+    assert.ok(stats.horizonMaxHeightM <= 8.5,
+      `${variant.id} industrial stacks must stay below a mountain-scale wall`);
+  }
+  if (variant.architecture === 'rock_cavern') {
+    assert.equal(stats.horizonStyle, 'alpine');
+    assert.ok(stats.horizonMaxHeightM >= 10,
+      'Glacier Deployment must retain a real layered mountain skyline');
+  }
+  assert.ok(stats.cached <= stats.cacheLimit && stats.cacheLimit === 2,
+    `${variant.id} must obey the two-pack transition cache`);
+  signatures.add(stats.signature);
+}
+assert.equal(signatures.size, GARAGE_VARIANTS.length,
+  'every Garage choice must have a distinct environment signature');
+assert.equal(new Set(shelterKinds.values()).size, shelterKinds.size,
+  `every outdoor Garage builds its own kind of shelter: ${[...shelterKinds].map(([id, kind]) => `${id}=${kind}`).join(', ')}`);
+assert.equal(shelterKinds.size, GARAGE_VARIANTS.length - 1, 'the nine outdoor Garages each name a shelter kind');
+assert.equal(controller.stats().cached, 2);
+assert.ok(controller.stats().residentTextureSets <= 9,
+  'PBR residency must remain bounded after visiting every environment');
+// read once the meter has stopped: the interval holding a transaction's last stall closes at the sample after it
+meter.stop();
+for (const entry of transactions) entry.starvedMs = meter.starvedIn(entry.startedAt, entry.endedAt);
+// a build's cost is its CPU (the busy plant's PLANT_MS taken back out); a transaction's is its wall time net of starvation
+const buildCost = (build) => build.cpuMs - (build.plant === 'busy' ? PLANT_MS : 0);
+const maxBuildMs = Math.max(...builds.map(buildCost));
+const maxColdTransactionMs = Math.max(...transactions.map((entry) => entry.wallMs - entry.starvedMs - (entry.plant === 'busy' ? PLANT_MS : 0)));
+const blocked = builds.find((build) => build.plant === 'blocked'), busy = builds.find((build) => build.plant === 'busy');
+const blockedTransaction = transactions.find((entry) => entry.plant === 'blocked');
+console.log(`garageArchitecture.selftest: build ${maxBuildMs.toFixed(1)} ms of CPU at most (budget 100; wall up to ${Math.max(...builds.map((build) => build.wallMs)).toFixed(1)}), cold transaction ${maxColdTransactionMs.toFixed(1)} ms net of ${Math.max(...transactions.map((entry) => entry.starvedMs)).toFixed(0)} ms starved at most (budget 750); plants: blocked ${blocked.cpuMs.toFixed(1)} ms CPU of ${blocked.wallMs.toFixed(0)} wall, busy ${busy.cpuMs.toFixed(1)} ms CPU`);
+// (the block shows in the build's wall time and not its CPU: compared with another Garage's busy build it failed at load 300,
+// where contention doubled every build's CPU)
+assert.ok(blocked.wallMs - blocked.cpuMs >= PLANT_MS - 5 && blockedTransaction.starvedMs >= PLANT_MS - 20,
+  'the negative control: a build blocked without CPU is not charged, and its transaction is net of the block');
+assert.ok(busy.cpuMs >= PLANT_MS, 'the negative control: a build that spends the CPU is charged');
+// (267) The CPU clock takes preemption out, not the slower core or the memory contention a loaded machine also gives: at
+// load 160-166 the first build read 95-101 ms of CPU. Main's measured factor came first: a calibration kernel read before
+// and after a build differed 8-20 % at p90 (up to 45 %) at load 130-170, the thread moving between this M5 Max's Super
+// and Performance cores, over its 10 % bar, and the quiet Super-core baseline cannot be read while the lanes run. So the
+// share of the unplanted transactions' time this thread was starved is the proxy, measured, not guessed from load1:
+// past STARVED_SHARE_REPORTED the budgets are reported with it, not asserted. The controls above hold at any share.
+const STARVED_SHARE_REPORTED = 0.25;
+const unplanted = transactions.filter((entry) => entry.plant === null);
+const starvedShare = unplanted.reduce((sum, entry) => sum + entry.starvedMs, 0) / unplanted.reduce((sum, entry) => sum + entry.wallMs, 0);
+if (starvedShare > STARVED_SHARE_REPORTED) {
+  console.log(`garageArchitecture.selftest: the thread was starved ${(starvedShare * 100).toFixed(0)} % of its transactions (over ${STARVED_SHARE_REPORTED * 100} %): the budgets are reported, not asserted (build ${maxBuildMs.toFixed(1)} of 100 ms, cold transaction ${maxColdTransactionMs.toFixed(1)} of 750 ms)`);
+} else {
+  assert.ok(maxBuildMs < 100,
+    `headless environment geometry construction exceeded budget (${maxBuildMs.toFixed(1)} ms of CPU; starved ${(starvedShare * 100).toFixed(0)} %)`);
+  assert.ok(maxColdTransactionMs < 750,
+    `cold asynchronous Garage module transaction exceeded budget (${maxColdTransactionMs.toFixed(1)} ms net of starvation; starved ${(starvedShare * 100).toFixed(0)} %)`);
+}
+controller.dispose();
+assert.equal(scene.children.length, 0);
+
+// Reproduce the production white-void race: one selector prewarm is still
+// compiling while a newly selected pack finishes. The cache may temporarily
+// contain three builds, but the selected handoff target must never be the one
+// retired between preparation completion and presentation.
+const verdant = GARAGE_VARIANTS[0];
+const selectedVariant = GARAGE_VARIANTS[1];
+const blockedPrewarmVariant = GARAGE_VARIANTS[2];
+let releaseBlockedTextureWarm;
+let reportBlockedTextureWarm;
+const blockedTextureWarm = new Promise((resolve) => { releaseBlockedTextureWarm = resolve; });
+const blockedTextureWarmStarted = new Promise((resolve) => { reportBlockedTextureWarm = resolve; });
+const disposedArchitectures = [];
+const fakeAssets = {
+  retainedTextures: () => [],
+  diagnostics: () => ({ residentSets: 0, referencedSets: 0 }),
+  warmAll() {},
+  retryFailed() {},
+  dispose() {},
+};
+// every pack build holds its Garage's kit and skyline caches from its prepare to its bake, then releases them
+const cachePins = { held: 0, released: 0 };
+const fakeKit = {
+  createGarageEnvironmentAssetLibrary: () => fakeAssets,
+  pinGarageEnvironmentCaches: () => { cachePins.held += 1; return () => { cachePins.released += 1; }; },
+  prepareGarageEnvironmentAssets: async () => {},
+  buildGarageEnvironment: (_engineCtx, _assets, variant) => {
+    const root = new THREE.Group();
+    root.add(new THREE.Group());
+    Object.assign(root.userData, {
+      architectureKey: variant.architecture,
+      ready: true,
+      mode: 'garage-environment',
+      source: 'authentic-garage-scene-pack',
+      signature: `fake:${variant.architecture}`,
+      objects: 1,
+      drawCalls: 1,
+      triangles: 1,
+    });
+    return {
+      root,
+      stats: root.userData,
+      texturesReady: variant.architecture === blockedPrewarmVariant.architecture
+        ? (reportBlockedTextureWarm(), blockedTextureWarm)
+        : Promise.resolve(),
+      dispose() {
+        disposedArchitectures.push(variant.architecture);
+        root.removeFromParent();
+        root.clear();
+      },
+    };
+  },
+};
+const originalDocument = globalThis.document;
+globalThis.document = {};
+try {
+  const raceScene = new THREE.Group();
+  const raceController = createGarageArchitectureController({
+    renderer: {
+      initTexture() {},
+    },
+    scene: new THREE.Scene(),
+    camera: new THREE.PerspectiveCamera(),
+  }, raceScene, () => {}, async () => fakeKit);
+  raceController.setVariant(verdant);
+  await raceController.whenReady();
+  const blockedPrewarm = raceController.prepareVariant(blockedPrewarmVariant);
+  await blockedTextureWarmStarted;
+  raceController.setVariant(selectedVariant);
+  const selectedStats = await raceController.whenReady();
+  assert.equal(selectedStats.ready, true);
+  assert.equal(selectedStats.presented, true,
+    'selected pack must remain mounted and visible through concurrent cache trim');
+  assert.equal(disposedArchitectures.includes(selectedVariant.architecture), false,
+    'cache trim must pin the selected async handoff target');
+  releaseBlockedTextureWarm();
+  await blockedPrewarm;
+  raceController.dispose();
+} finally {
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+}
+
+// A rejected lazy chunk must be retryable; retaining the rejected import
+// promise would strand every later Garage selection until a page refresh.
+let kitLoadAttempts = 0;
+const retryScene = new THREE.Group();
+const retryController = createGarageArchitectureController({}, retryScene, () => {}, async () => {
+  kitLoadAttempts += 1;
+  if (kitLoadAttempts === 1) throw new Error('transient Garage chunk failure');
+  return fakeKit;
+});
+retryController.setVariant(selectedVariant);
+await assert.rejects(retryController.whenReady(), /transient Garage chunk failure/);
+const retryStats = await retryController.whenReady();
+assert.equal(kitLoadAttempts, 2, 'failed Garage kit imports must be requested again');
+assert.equal(retryStats.ready, true);
+retryController.dispose();
+
+// Rebuilding an evicted pack must not upload the same shared library texture
+// again. The old per-pack loop paid one animation frame per texture on every
+// switch even though the GPU resource itself had never changed.
+const originalRaf = globalThis.requestAnimationFrame;
+const originalUploadDocument = globalThis.document;
+const sharedTexture = new THREE.Texture();
+// (2026-11-02 audit R5) a loaded library texture: its image arrived and its version moved, so it has an upload to make
+// (an image-less one has nothing to upload and is never latched as uploaded: garageArchitectureRecords.selftest.mjs)
+sharedTexture.needsUpdate = true;
+let textureUploads = 0;
+let textureLibraryWarms = 0;
+globalThis.document = {};
+globalThis.requestAnimationFrame = (callback) => {
+  callback(performance.now());
+  return 1;
+};
+try {
+  const uploadScene = new THREE.Group();
+  const uploadAssets = {
+    retainedTextures: () => [sharedTexture],
+    diagnostics: () => ({ residentSets: 1, referencedSets: 1 }),
+    warmAll() { textureLibraryWarms += 1; },
+    retryFailed() {},
+    dispose() {},
+  };
+  const uploadKit = {
+    createGarageEnvironmentAssetLibrary: () => uploadAssets,
+    pinGarageEnvironmentCaches: () => () => {},
+    prepareGarageEnvironmentAssets: async () => {},
+    buildGarageEnvironment: (_engineCtx, _assets, variant) => {
+      const root = new THREE.Group();
+      const material = new THREE.MeshBasicMaterial({ map: sharedTexture });
+      root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material));
+      Object.assign(root.userData, {
+        architectureKey: variant.architecture,
+        ready: true,
+        mode: 'garage-environment',
+        source: 'authentic-garage-scene-pack',
+        signature: `upload:${variant.architecture}`,
+        objects: 1,
+        drawCalls: 1,
+        triangles: 12,
+      });
+      return {
+        root,
+        stats: root.userData,
+        texturesReady: Promise.resolve(),
+        dispose() {
+          root.removeFromParent();
+          root.children[0].geometry.dispose();
+          material.dispose();
+          root.clear();
+        },
+      };
+    },
+  };
+  const uploadController = createGarageArchitectureController({
+    renderer: { initTexture() { textureUploads += 1; } },
+  }, uploadScene, () => {}, async () => uploadKit);
+  for (const variant of [GARAGE_VARIANTS[1], GARAGE_VARIANTS[2], GARAGE_VARIANTS[3], GARAGE_VARIANTS[1]]) {
+    uploadController.setVariant(variant);
+    await uploadController.whenReady();
+  }
+  assert.equal(textureLibraryWarms, 1,
+    'the small shared surface library should start one bounded intent-time warm');
+  assert.equal(textureUploads, 1,
+    'an evicted pack must reuse the already initialized shared texture');
+  uploadController.dispose();
+} finally {
+  sharedTexture.dispose();
+  if (originalUploadDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalUploadDocument;
+  if (originalRaf === undefined) delete globalThis.requestAnimationFrame;
+  else globalThis.requestAnimationFrame = originalRaf;
+}
+
+assert.ok(cachePins.held > 0, 'the pack builds hold their Garage caches');
+assert.equal(cachePins.released, cachePins.held, 'and release every hold');
+
+// (2026-11-02 audit R5) a variant's prepared structures are held by every pin, as its kit pieces and skyline are: the first
+// release no longer disposes what a concurrent prepare built for another holder's bake, and two concurrent prepares share
+// one preparation
+{
+  const kit = await import('./garageEnvironmentKit.ts');
+  const variant = GARAGE_VARIANTS.find((entry) => entry.architecture !== 'field_shed');
+  const first = kit.pinGarageEnvironmentCaches(variant);
+  const second = kit.pinGarageEnvironmentCaches(variant);
+  const noTrees = { prepareTreeGroves: async () => {} };
+  await Promise.all([kit.prepareGarageEnvironmentAssets(noTrees, variant), kit.prepareGarageEnvironmentAssets(noTrees, variant)]);
+  assert.equal(kit.hasPreparedGarageStructures(variant.id), true);
+  first();
+  first();
+  assert.equal(kit.hasPreparedGarageStructures(variant.id), true,
+    'the first release (twice: it is idempotent) leaves the other holder\'s prepared structures');
+  second();
+  assert.equal(kit.hasPreparedGarageStructures(variant.id), false, 'the last release drops a prepare whose bake never ran');
+}
+
+// (2026-10-26, the boot census) the boot builds the stage a section at a time (one task of 120 ms on a cold desktop, 604
+// ms on the 4x phone): a generator whose yields sit between its sections, the one-call build its driver, the boot its user
+{
+  const body = stageSource.slice(stageSource.indexOf('export function* createGarageStageSteps('));
+  assert.ok(body.length < stageSource.length, 'the stage has a stepped build');
+  assert.ok((body.match(/^  yield;$/gm) ?? []).length >= 10, 'yields between its procedural sections');
+  assert.match(stageSource, /export function createGarageStage\([\s\S]*?const steps = createGarageStageSteps\(engineCtx, pos, initialVariantId, requestRender, whenSettled\);/);
+  const main = await readFile(new URL('../main.ts', import.meta.url), 'utf8');
+  const boot = main.slice(main.indexOf("bootStage('garage'"), main.indexOf("bootStage('garage'") + 1200);
+  assert.match(boot, /createGarageStageSteps\(/, 'the boot builds the stage in steps');
+  assert.match(boot, /await stageYield\(\);/, 'with the boot screen\'s cadence between them');
+}
+
+console.log('garageArchitecture.selftest: ok');

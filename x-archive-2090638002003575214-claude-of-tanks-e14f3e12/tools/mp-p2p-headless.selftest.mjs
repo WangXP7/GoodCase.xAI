@@ -1,0 +1,38 @@
+// Multiplayer v2 peer-to-peer end-to-end, headless in one process (three real sessions, the browser host runtime with
+// the actor in an in-process core, WebRTC on the scripted world, the room signaling double applying P1's rules):
+// rtc:// start with the host named and secreted, data channels through the relay, snapshots and motion on every
+// seat, sealed keyframes retained by the peers, the host's tab closing → the election after the grace → the elected
+// peer resumes from its keyframe at the continued tick and moves its own seat onto its actor, the other peer offers
+// to it, an ally's hull continuous within a tick across the migration, the room's reports from the new host, the
+// old host back as a peer through its resume, and every peer connection's ICE from the room's relay grant.
+import assert from 'node:assert/strict';
+import { formatReport, runP2pHeadless } from './mp-p2p-headless.mjs';
+
+const report = await runP2pHeadless({ hostGraceMs: 1500, playMs: 4000, world: 'terrain' });
+console.log(formatReport(report));
+assert.equal(report.pass, true, report.failures.join('; '));
+assert.equal(report.steps.start?.hostId, 'p1');
+assert.equal(report.steps.connected?.peers, 2);
+assert.equal(report.steps.migration?.generation, 2);
+assert.equal(report.steps.migration?.p2Role, 'host');
+assert.ok(report.steps.migration?.discontinuityM < 1.0, `discontinuity ${report.steps.migration?.discontinuityM} m`); // 2026-09-29: one tick of jitter under suite load (was 0.75)
+// §13.21 (2026-10-14): the elected peer hosts on the standby it prepared while it played — one host thread, its world ready
+assert.equal(report.steps.migration?.p2Cores, 1, 'p2 booted the standby it prepared, not a second host thread');
+assert.equal(report.steps.migration?.bootedPrepared, true, "p2's boot ran on the prepared world");
+assert.equal(report.steps.rejoin?.role, 'peer');
+// §13.14: the ICE of every peer connection came from the room (both sides of every link), from fewer requests than links
+assert.equal(report.steps.ice?.granted, report.steps.ice?.connections);
+assert.ok(report.steps.ice.requests >= 1 && report.steps.ice.requests < report.steps.ice.connections, JSON.stringify(report.steps.ice));
+// (mp-scale-251) the room's Workers Free requests stay linear in the seats: a peer link signals with an offer and an
+// answer (candidates in the SDP), nothing per seat is billed while the match plays (the host's reports alone), and
+// the keepalive frames never are (docs/MULTIPLAYER-V2.md §13.30)
+{
+  const billing = report.steps.billing;
+  const count = (snapshot, type) => snapshot.messages[type] ?? 0;
+  assert.ok(count(billing.connected, 'room_signal') <= 2 * 2 + 1, `two peer links signal in at most five messages (${count(billing.connected, 'room_signal')})`);
+  const during = Object.entries(billing.play.messages).filter(([type, value]) => value !== (billing.connected.messages[type] ?? 0)).map(([type]) => type);
+  assert.deepEqual(during, ['room_command:match_report'], `while the match plays only the host's reports reach the room (${during.join(', ')})`);
+  const handled = Object.values(billing.total.messages).reduce((sum, value) => sum + value, 0);
+  assert.ok(handled + billing.total.upgrades <= 45, `three seats, a migration and a rejoin cost ${handled} messages and ${billing.total.upgrades} upgrades`);
+}
+console.log('mp-p2p-headless.selftest: the peer-to-peer flow passed every gate');

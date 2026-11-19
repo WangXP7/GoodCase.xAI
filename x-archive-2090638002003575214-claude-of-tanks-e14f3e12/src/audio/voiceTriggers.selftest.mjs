@@ -1,0 +1,819 @@
+// Every crew line has a game moment that asks for it, and the moments a player cares about are heard (owner
+// 2026-10-04: voice lines for smoke, drones and the rest of the tank's systems, every line playing when it should,
+// on top of penetrations). The matrix drives the real engine through bus events and frames and reads the engine's
+// request log (sayLog: what was asked, and whether the net took it) and the radio's played log (voiceLog).
+// Also guarded: no sound or voice stands in for another (no fallbacks).
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createFakeContext, fakeBuffer } from './fakeAudioContext.test-support.mjs';
+import { createBus } from '../game/stateCore.ts';
+import { VOICE_LINES } from './voiceLines.ts';
+import { matchRulesetFor } from '../sim/matchRuleset.ts';
+
+// Shipped files from disk, "decoded" at their real lengths where timing matters: a crew take is about a second and a
+// half, the net's key-up and release clicks a tenth of a second (a 1.5 s click would hold every call a second late).
+const publicRoot = new URL('../../public/', import.meta.url);
+// (by byte length: the library decodes a copy of what it fetched)
+const keyClickBytes = new Set();
+globalThis.fetch = async (url) => {
+  try {
+    const path = String(url).replace(/^\//, '');
+    const bytes = await readFile(new URL(path, publicRoot));
+    const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    if (/radio_key_(in|out)/.test(path)) keyClickBytes.add(data.byteLength);
+    return { ok: true, status: 200, arrayBuffer: async () => data };
+  } catch {
+    return { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
+  }
+};
+globalThis.window = {};
+
+const { createAudio } = await import('./audioEngine.ts');
+const ctx = createFakeContext({ decode: (data) => fakeBuffer(keyClickBytes.has(data.byteLength) ? 0.12 : 1.5) });
+const terrain = { getHeightAt: () => 0, getGroundType: () => 'medium', getTrackSurfaceAt: () => 0, getWaterDepthAt: (x) => (x < -300 ? 2 : 0) };
+let gameMode = 'standard';
+const audio = createAudio({ context: ctx, getMapId: () => 'verdant', getGameMode: () => gameMode, getTerrain: () => terrain, tier: 'desktop' });
+const bus = createBus();
+audio.bindBus(bus);
+audio.resume();
+const probe = globalThis.window.__COT_AUDIO;
+
+const SHELLS = [{ type: 'APFSDS', caliberMm: 125 }, { type: 'HEAT', caliberMm: 125 }, { type: 'HE', caliberMm: 125 }, { type: 'HEAT', caliberMm: 125, guided: true }];
+const GUNSHIP = [
+  { type: 'AP', caliberMm: 30, soundProfile: 'gunship-autocannon' },
+  { type: 'HE', caliberMm: 152, soundProfile: 'gunship-howitzer' },
+  { type: 'HE', caliberMm: 180, guided: true, soundProfile: 'gunship-missile' },
+];
+function tank(id, { x = 0, z = 0, team = 'player', isPlayer = false, specId = 't72b3m_2022', nation = 'Russia' } = {}) {
+  return {
+    id, team, isPlayer, specId,
+    spec: { id: specId, nation, role: 'mbt', weightTons: 46.5, enginePowerHp: 1130, topSpeedKmh: 70, reverseSpeedKmh: 15, gun: { caliberMm: 125, shells: SHELLS } },
+    state: { pos: { x, y: 0, z }, speed: 0, yaw: 0, yawRate: 0, verticalSpeed: 0, grounded: true, turretYawRate: 0, gunPitch: 0 },
+    input: { throttle: 0 },
+    combat: { destroyed: false, hp: 1000, maxHp: 1000, modules: {}, ammo: [20, 10, 10, 4], ammoCapacity: [20, 10, 10, 4], shellSlot: 0, auxiliary: { gunOn: false, lights: -1 } },
+  };
+}
+// The sight looks away from every hull unless a moment lays it on one (the crew's fire command reads the lay).
+const AWAY = Object.freeze({ x: -1, y: 0, z: 0 });
+const listener = { pos: { x: 0, y: 2, z: 0 }, forward: AWAY, kind: 'player-tank', ownerId: 'me', scoped: false };
+const layOn = (foe) => {
+  const d = [foe.state.pos.x - listener.pos.x, foe.state.pos.y + 1.2 - listener.pos.y, foe.state.pos.z - listener.pos.z];
+  const n = Math.hypot(...d);
+  listener.forward = { x: d[0] / n, y: d[1] / n, z: d[2] / n };
+};
+let me, allies, foes, tanks, shells = [];
+// What the player sees (the game's rule, src/game/playerVisibility.ts, handed to audio.update as listenerPoseRuntime does):
+// our side, every hull in a mode that lights them all (spotting.ts isSpotted under alwaysVisible), and an enemy once our
+// side has spotted it this battle.
+const seen = new Set();
+bus.on('tank:spotted', (e) => { if (e?.team === 'player') seen.add(e.id); });
+const visibleToUs = (hull) => hull.team === 'player' || !!matchRulesetFor(gameMode).alwaysVisible || seen.has(hull.id);
+function roster() {
+  seen.clear();
+  me = tank('me', { isPlayer: true });
+  allies = [tank('a1', { x: 20, z: 40 }), tank('a2', { x: -20, z: 40 })];
+  foes = [tank('f1', { x: 0, z: 200, team: 'enemy' }), tank('f2', { x: 120, z: 120, team: 'enemy' }), tank('f3', { x: -120, z: 120, team: 'enemy' }),
+    tank('f4', { x: 0, z: -150, team: 'enemy' }), tank('f5', { x: 60, z: 260, team: 'enemy' })];
+  tanks = [me, ...allies, ...foes];
+}
+const frame = (dt = 0.25) => { ctx.advance(dt); audio.update(dt, listener, tanks, shells, visibleToUs); };
+const settle = (seconds = 6) => { for (let t = 0; t < seconds; t += 0.25) frame(0.25); };
+const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((resolve) => setTimeout(resolve, 0)); };
+
+async function startBattle(mode = 'standard', { before, countdown } = {}) {
+  gameMode = mode;
+  roster();
+  before?.();
+  listener.forward = AWAY;
+  bus.emit('phase:change', { phase: 'garage' });
+  bus.emit('phase:change', { phase: 'battle' });
+  await audio.warmBattleEvents(['t72b3m_2022']);
+  for (let i = 0; i < 8; i++) frame(1 / 60);
+  await flush();
+  for (let i = 0; i < 2000 && (probe.library().pending > 0 || !probe.voicesLoaded); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(probe.voicesLoaded, 'the crew pack decoded');
+  // (the count begins a moment after the battle loads)
+  if (countdown) { settle(1.5); bus.emit('battle:countdown', { seconds: countdown }); settle(countdown - 0.5); }
+  bus.emit('battle:rollout', {});
+  settle(6);
+}
+
+const covered = new Set();
+const asked = (id, since) => probe.sayLog.some((e) => e.t >= since && e.id === id);
+const spoken = (id, since) => probe.voiceLog.some((e) => e.t >= since && e.id === id);
+/**
+ * One game moment: settle the net, run it, let the radio work, and check the line was asked for — and, for the
+ * moments a player acts on (`heard`), that the crew actually said it.
+ */
+function moment(id, run, { heard = true, wait = 4, quiet = 6 } = {}) {
+  settle(quiet);
+  const since = +ctx.currentTime.toFixed(3);
+  run();
+  settle(wait);
+  assert.ok(asked(id, since) || spoken(id, since), `${id}: no game moment asked for it (${probe.sayLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  if (heard) assert.ok(spoken(id, since), `${id}: asked for but never heard (${JSON.stringify(probe.sayLog.filter((e) => e.t >= since))}; heard ${probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  covered.add(id);
+}
+const hitOn = (targetId, attackerId, extra = {}) => bus.emit('shell:hit', {
+  shellId: Math.floor(Math.random() * 1e6), pos: [0, 1.5, 200], kind: 'pen', targetId, attackerId, damage: 120, caliberMm: 125,
+  targetMaxHp: 1000, targetHpAfter: 800, modulesHit: [], crewHit: [], ...extra,
+});
+const ourHit = (extra) => hitOn('f1', 'me', extra);
+const theirHit = (extra) => hitOn('me', 'f1', { pos: [0, 1.5, 2], ...extra });
+
+// ------------------------------------------------------------------ battle one: the standard battle's lines
+await startBattle();
+assert.ok(asked('battle_start', 0) || spoken('battle_start', 0), 'the rollout calls the battle start');
+covered.add('battle_start');
+moment('on_the_move', () => { me.state.speed = 6; frame(); me.state.speed = 0; });
+
+// Spotting: our own spots of enemies, by bearing (a share of the calls are the plain "enemy spotted").
+{
+  const want = new Set(['enemy_spotted', 'spotted_front', 'spotted_left', 'spotted_right', 'spotted_rear']);
+  const bearing = { front: 'f1', left: 'f2', right: 'f3', rear: 'f4' };
+  const since = +ctx.currentTime.toFixed(3);
+  for (let round = 0; round < 40 && [...want].some((id) => !asked(id, since)); round++) {
+    for (const foe of Object.values(bearing)) {
+      settle(11);
+      bus.emit('tank:spotted', { id: foe, team: 'player', spotterId: 'me', timeS: 0 });
+    }
+  }
+  for (const id of want) { assert.ok(asked(id, since), `${id}: a spot by bearing asks for it`); covered.add(id); }
+  // An ally's spot or a spot of an ally is not ours to call.
+  settle(12);
+  const quiet = +ctx.currentTime.toFixed(3);
+  bus.emit('tank:spotted', { id: 'f1', team: 'player', spotterId: 'a1', timeS: 0 });
+  bus.emit('tank:spotted', { id: 'a1', team: 'enemy', spotterId: 'f1', timeS: 0 });
+  assert.ok(!probe.sayLog.some((e) => e.t >= quiet), 'only our own spots of enemies are called');
+}
+moment('spotted_multiple', () => { for (const id of ['f1', 'f2', 'f3']) bus.emit('tank:spotted', { id, team: 'player', spotterId: 'me', timeS: 0 }); }, { quiet: 12 });
+moment('sixth_sense', () => bus.emit('player:spotted', { timeS: 0 }), { wait: 6 });
+
+// The fire command (crew-lines-269): our sight settles on a spotted enemy with a round in the breech. The commander names
+// the round and the target, the gunner answers "identified" on the quiet net, and the shot it called for is on the way.
+bus.emit('tank:spotted', { id: 'f5', team: 'player', spotterId: 'a1', timeS: 0 });
+for (const [slot, foe, id] of [[0, 0, 'fire_command_kinetic'], [1, 1, 'fire_command_heat'], [2, 2, 'fire_command_he'], [3, 4, 'fire_command_missile']]) {
+  listener.forward = AWAY;
+  me.combat.shellSlot = slot;
+  settle(10);
+  const since = +ctx.currentTime.toFixed(3);
+  layOn(foes[foe]);
+  settle(5);
+  listener.forward = AWAY;
+  const heard = probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id);
+  assert.ok(heard.includes(id), `${id}: our sight on a spotted enemy with that round loaded (asked ${probe.sayLog.filter((e) => e.t >= since).map((e) => e.id)}, heard ${heard})`);
+  covered.add(id);
+  if (slot !== 0) continue;
+  assert.deepEqual(heard.slice(0, 2), [id, 'identified'], 'the gunner answers the fire command');
+  covered.add('identified');
+  // fired once the answer is off the net (a shot fired over it is not called: "on the way" never waits)
+  settle(2);
+  const shot = +ctx.currentTime.toFixed(3);
+  bus.emit('shell:fired', { shellId: 7601, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' });
+  settle(2);
+  assert.ok(spoken('firing', shot), 'the shot the fire command called for is "on the way"');
+}
+me.combat.shellSlot = 0;
+{
+  // a sight swept across a hull is not a lay
+  settle(10);
+  const since = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 4; i++) { layOn(foes[3]); frame(0.1); listener.forward = AWAY; frame(0.25); }
+  settle(2);
+  assert.ok(!probe.sayLog.some((e) => e.t >= since && e.id.startsWith('fire_command_')), 'no fire command for a sweep');
+}
+
+// Our gunnery: every main-gun result is called.
+moment('enemy_fire', () => ourHit({ fireStarted: true }));
+moment('enemy_ammo_rack', () => ourHit({ modulesHit: [{ module: 'ammoRack', newState: 'yellow' }] }));
+moment('enemy_immobilized', () => ourHit({ modulesHit: [{ module: 'trackL', newState: 'red' }] }));
+moment('enemy_gun_damaged', () => ourHit({ modulesHit: [{ module: 'gun', newState: 'yellow' }] }));
+moment('enemy_engine_hit', () => ourHit({ modulesHit: [{ module: 'engine', newState: 'yellow' }] }));
+moment('enemy_crew_hit', () => ourHit({ crewHit: ['gunner'] }));
+moment('enemy_crit', () => ourHit({ modulesHit: [{ module: 'optics', newState: 'yellow' }] }));
+moment('penetration', () => ourHit({}));
+moment('ricochet', () => ourHit({ kind: 'ricochet', damage: 0 }));
+moment('nonpen', () => ourHit({ kind: 'nonpen', damage: 0 }));
+moment('friendly_fire', () => hitOn('a1', 'me', {}));
+// Back to back: a shot result is not lost behind the loader's chatter or the last result.
+{
+  settle(14);
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('shell:fired', { shellId: 7001, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' });
+  probe.sayVoice('firing');
+  frame(0.3);
+  ourHit({ shellId: 7001 });
+  settle(4);
+  assert.ok(spoken('penetration', since), `a penetration cuts the loader's chatter (${probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  for (let shot = 0; shot < 3; shot++) {
+    const at = +ctx.currentTime.toFixed(3);
+    ourHit({ kind: shot % 2 ? 'nonpen' : 'pen', damage: shot % 2 ? 0 : 150 });
+    settle(3.5);
+    assert.ok(spoken(shot % 2 ? 'nonpen' : 'penetration', at), `every shot of a 3.5 s reload is called (shot ${shot + 1}: asked ${JSON.stringify(probe.sayLog.filter((e) => e.t >= at - 4))}, heard ${JSON.stringify(probe.voiceLog.filter((e) => e.t >= at - 4))}, now ${ctx.currentTime.toFixed(2)})`);
+  }
+}
+moment('miss', () => {
+  bus.emit('shell:fired', { shellId: 7101, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' });
+  frame(0.3);
+  bus.emit('shell:expired', { shellId: 7101, shooterId: 'me', pos: [0, 0, 120], hitTerrain: true, caliberMm: 125 });
+}, { quiet: 14 });
+{
+  // a round that came down beyond the hull it was laid on is "over" (the miss's third take)
+  settle(14);
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('shell:fired', { shellId: 7102, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' });
+  frame(0.3);
+  bus.emit('shell:expired', { shellId: 7102, shooterId: 'me', pos: [0, 0, 260], hitTerrain: true, caliberMm: 125 });
+  settle(3);
+  assert.ok(probe.voiceLog.some((e) => e.t >= since && e.id === 'miss' && e.take === 2), `an over is called "over" (${JSON.stringify(probe.voiceLog.filter((e) => e.t >= since))})`);
+}
+// Our round left the target standing and the gun is loaded again: the commander orders it re-engaged.
+moment('re_engage', () => {
+  ourHit({ kind: 'nonpen', damage: 0 });
+  settle(3.5);
+  bus.emit('player:reload', { total: 7, kind: 'shell', caliberMm: 125, t: 0, progress: 1, done: true });
+}, { quiet: 8 });
+// Active protection and reactive armour: ours stopped their round, theirs stopped ours (an intercepted round is no miss).
+moment('aps_intercept_us', () => bus.emit('aps:intercept', { id: 'me', shooterId: 'f1', shellId: 7701, x: 0, y: 2, z: 3, caliberMm: 125 }), { quiet: 10 });
+moment('aps_intercept_them', () => {
+  bus.emit('shell:fired', { shellId: 7702, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' });
+  frame(0.3);
+  bus.emit('aps:intercept', { id: 'f1', shooterId: 'me', shellId: 7702, x: 0, y: 2, z: 196, caliberMm: 125 });
+  bus.emit('shell:expired', { shellId: 7702, shooterId: 'me', pos: [0, 2, 196], hitTerrain: false, caliberMm: 125 });
+}, { quiet: 12 });
+assert.ok(!asked('miss', +ctx.currentTime.toFixed(3) - 4), 'a round the APS stopped is not a miss');
+moment('era_us', () => theirHit({ kind: 'era', damage: 0, targetHpAfter: 1000, eraActivations: [{ plate: 'era_front_1' }] }), { quiet: 12 });
+moment('enemy_era', () => ourHit({ kind: 'era', damage: 0, targetHpAfter: 1000, eraActivations: [{ plate: 'era_front_1' }] }), { quiet: 10 });
+moment('firing', () => bus.emit('shell:fired', { shellId: 7201, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'APFSDS' }), { heard: false, quiet: 14 });
+moment('missile_away', () => bus.emit('shell:fired', { shellId: 7301, shooterId: 'me', isPlayer: true, muzzlePos: [0, 2, 3], dir: [0, 0, 1], caliberMm: 125, shellType: 'HEAT', weaponSound: 'atgm_launch' }));
+
+// Loading and ammunition.
+moment('reloading', () => bus.emit('ui:magazineReloadStarted', {}), { quiet: 12 });
+// A refused feature is refused: the reload key alone, a denied reload, special action or empty rack never sounds like
+// it worked, and an empty round says so.
+{
+  settle(12);
+  const since = +ctx.currentTime.toFixed(3);
+  const sfxSince = probe.sfxLog.at(-1)?.seq ?? 0;
+  bus.emit('ui:magazineReload', {});
+  bus.emit('ui:magazineReloadDenied', { reason: 'MAGAZINE_FULL' });
+  bus.emit('ui:specialActionDenied', { kind: 'guided_missile', reason: 'NO_MISSILE' });
+  settle(3);
+  const names = probe.sfxLog.filter((e) => e.seq > sfxSince).map((e) => e.n);
+  assert.ok(!names.includes('magazine_swap') && !asked('reloading', since), `a refused reload is not a reload (${names})`);
+  assert.ok(names.includes('ui_error'), 'the refusal is heard');
+  moment('ammo_empty', () => bus.emit('ui:ammoSelectionDenied', { slot: 2, reason: 'AMMO_EMPTY', guided: false }));
+}
+moment('reloaded', () => {
+  for (const progress of [0, 0.5]) bus.emit('player:reload', { total: 7, kind: 'shell', caliberMm: 125, t: 7 * (1 - progress), progress });
+  bus.emit('player:reload', { total: 7, kind: 'shell', caliberMm: 125, t: 0, progress: 1, done: true });
+}, { heard: false });
+moment('load_kinetic', () => bus.emit('ui:shellSelectionChanged', { slot: 0 }));
+moment('load_heat', () => bus.emit('ui:shellSelectionChanged', { slot: 1 }));
+moment('load_he', () => bus.emit('ui:shellSelectionChanged', { slot: 2 }));
+moment('load_missile', () => bus.emit('ui:shellSelectionChanged', { slot: 3 }));
+moment('ammo_empty', () => bus.emit('ammo:empty', { id: 'me', slot: 0 }));
+moment('ammo_low', () => { me.combat.ammo = [3, 2, 1, 0]; frame(); });
+moment('ammo_out_all', () => { me.combat.ammo = [0, 0, 0, 0]; frame(); bus.emit('ammo:depleted', { id: 'me' }); }, { quiet: 12 });
+me.combat.ammo = [20, 10, 10, 4];
+moment('target_locked', () => bus.emit('ui:autoAimState', { on: true }), { heard: false });
+moment('target_lost', () => bus.emit('ui:autoAimState', { on: false, reason: 'lost' }), { heard: false });
+
+// Our own systems: every switch the sim accepts is heard, and the crew confirms it.
+moment('smoke_out', () => bus.emit('auxiliary:smokeScreens', { screens: [{ born: 30, x: 4, y: 2, z: 12, source: ['t72b3m_2022', 0.5, 2, 0.5] }] }));
+moment('roof_gun_on', () => { me.combat.auxiliary = { ...me.combat.auxiliary, gunOn: true }; frame(); });
+{
+  const since = probe.sfxLog.at(-1)?.seq ?? 0;
+  me.combat.auxiliary = { ...me.combat.auxiliary, lights: 1 };
+  frame();
+  me.combat.auxiliary = { ...me.combat.auxiliary, lights: 0, gunOn: false };
+  frame();
+  const names = probe.sfxLog.filter((e) => e.seq > since).map((e) => e.n);
+  assert.ok(names.includes('lights_on') && names.includes('switch_toggle'), `the lights clunk on and click off, the gun station switches off (${names})`);
+}
+moment('suspension_set', () => bus.emit('ui:specialActionResult', { kind: 'hydropneumatic', active: true }));
+moment('repairs', () => bus.emit('ui:consumableUsed', { slot: 0 }));
+moment('crew_recovered', () => bus.emit('ui:consumableUsed', { slot: 1 }));
+moment('extinguishing', () => bus.emit('ui:consumableUsed', { slot: 2 }));
+for (const [module, id] of [['trackL', 'track_repaired'], ['gun', 'gun_repaired'], ['engine', 'engine_repaired']]) {
+  bus.emit('module:state', { id: 'me', module, state: 'red', source: 'hit' });
+  moment(id, () => bus.emit('module:state', { id: 'me', module, state: 'yellow', repaired: true }));
+  bus.emit('module:state', { id: 'me', module, state: 'ok', repaired: true });
+}
+
+// Our drone: launched by the commander, lost to its battery or its link; a recall or a hit is not "lost".
+{
+  const ours = { id: 8801, shooterId: 'me', dead: false, spec: { tracer: 'DRONE', type: 'HE' }, pos: { x: 0, y: 14, z: 6 }, vel: { x: 0, y: 5, z: 30 } };
+  moment('drone_launch', () => { me.aerial = { kind: 'drone', active: true, launching: true, x: 0, y: 14, z: 6, batteryS: 40, cooldownS: 0 }; shells = [ours]; frame(); });
+  moment('drone_lost', () => {
+    me.aerial.batteryS = 0.3;
+    frame();
+    me.aerial = { kind: 'drone', active: false, batteryS: 0, cooldownS: 25 };
+    shells = [];
+    frame();
+  });
+  settle(10);
+  const since = +ctx.currentTime.toFixed(3);
+  const sfxSince = probe.sfxLog.at(-1)?.seq ?? 0;
+  bus.emit('ui:drone', {});
+  assert.ok(probe.sfxLog.filter((e) => e.seq > sfxSince).some((e) => e.n === 'ui_error'), 'a press while the drone recharges is refused');
+  me.aerial = { kind: 'drone', active: true, x: 0, y: 14, z: 6, batteryS: 40, cooldownS: 0 };
+  shells = [{ ...ours, id: 8802 }];
+  settle(4);
+  me.aerial = { kind: 'drone', active: false, batteryS: 0, cooldownS: 25 };
+  shells = [];
+  settle(4);
+  assert.ok(!asked('drone_lost', since), 'a recalled drone (battery to spare, inside its range) is not called lost');
+  assert.ok(!probe.sfxLog.filter((e) => e.seq > sfxSince).some((e) => e.n === 'switch_toggle'), 'no stand-in switch click for the drone');
+  delete me.aerial;
+  // a flight that runs its battery low and its link thin, recalled home to its dock
+  moment('drone_battery_low', () => { me.aerial = { kind: 'drone', active: true, x: 0, y: 14, z: 6, batteryS: 9, cooldownS: 0 }; frame(); }, { quiet: 30 });
+  moment('drone_link_weak', () => { me.aerial = { ...me.aerial, z: 760, batteryS: 8 }; frame(); });
+  // the authority's recall (sim/aerialCombat.ts recallDrone): the feed ends at once, the airframe flies home (returnS)
+  // and is parked on its dock; `recallS` is only the recall's gate at launch (round 8 Y3 review r2)
+  moment('drone_recovered', () => {
+    me.aerial = { kind: 'drone', active: false, x: 0, y: 14, z: 760, batteryS: 8, cooldownS: 9, returnS: 5 };
+    frame();
+    me.aerial = { ...me.aerial, cooldownS: 4, returnS: 0 };
+    frame();
+  });
+  delete me.aerial;
+  // the counter-drone fight: ours shot down, theirs brought down by our roof gun
+  moment('drone_shot_down', () => bus.emit('drone:down', { id: 'me', killerId: 'f1' }));
+  moment('enemy_drone_down', () => bus.emit('drone:down', { id: 'f1', killerId: 'me' }));
+}
+// The field: an enemy's smoke, backing out after a hit, through a wall, off the ground.
+moment('enemy_smoke', () => bus.emit('auxiliary:smokeScreens', { screens: [{ born: 90, x: 2, y: 2, z: 185, source: ['t72b3m_2022', 0.5, 2, 200.5] }] }));
+moment('reversing', () => { theirHit({ damage: 40, targetHpAfter: 960 }); settle(2.5); me.state.speed = -4; frame(); frame(); me.state.speed = 0; frame(); }, { quiet: 12 });
+{
+  const since = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 12 && !asked('obstacle_through', since); i++) {
+    bus.emit('prop:crushed', { id: 'me', isPlayer: true, specId: 't72b3m_2022', speedMps: 6, kind: 'wall', h: 2.4, pos: [0, 0, 6], dir: [0, 0, 1] });
+    settle(46);
+  }
+  assert.ok(asked('obstacle_through', since), 'driving through a wall asks for the driver\'s call');
+  covered.add('obstacle_through');
+}
+moment('jump_brace', () => { me.state.grounded = false; settle(1); me.state.grounded = true; frame(); });
+
+// Being hit: what broke, in priority order, and the last quarter of the hull.
+moment('were_hit', () => theirHit({}));
+moment('bounced_us', () => theirHit({ kind: 'ricochet', damage: 0 }));
+for (const [module, state, id] of [
+  ['ammoRack', 'yellow', 'ammo_rack'], ['fuelTank', 'yellow', 'fuel_tank'], ['engine', 'yellow', 'engine_damaged'], ['engine', 'red', 'engine_destroyed'],
+  ['transmission', 'yellow', 'transmission_damaged'], ['trackR', 'red', 'track_gone'], ['gun', 'yellow', 'gun_damaged'], ['turretRing', 'yellow', 'turret_jammed'],
+  ['gunMount', 'yellow', 'gun_mount_damaged'], ['autoloader', 'yellow', 'autoloader_damaged'], ['feedSystem', 'yellow', 'feed_damaged'],
+  ['roofGun', 'yellow', 'roof_gun_damaged'], ['missileRack', 'yellow', 'missile_rack_damaged'], ['optics', 'yellow', 'optics_damaged'], ['radio', 'yellow', 'radio_damaged'],
+]) moment(id, () => theirHit({ modulesHit: [{ module, newState: state }] }), { quiet: 12 });
+bus.emit('module:state', { id: 'me', module: 'radio', state: 'ok', repaired: true });
+for (const role of ['commander', 'gunner', 'driver', 'loader']) moment(`${role}_down`, () => theirHit({ crewHit: [role] }), { quiet: 13 });
+moment('low_hp', () => theirHit({ damage: 400, targetHpAfter: 200 }), { quiet: 12 });
+moment('hit_by_friendly', () => hitOn('me', 'a1', { pos: [0, 1.5, 2] }), { quiet: 12 });
+moment('rammed', () => bus.emit('tank:ram', { aId: 'f1', bId: 'me', pos: [0, 1, 4], closingMps: 6, dmgA: 40, dmgB: 40 }), { quiet: 10 });
+moment('friendly_ram', () => bus.emit('tank:ram', { aId: 'me', bId: 'a1', pos: [0, 1, 4], closingMps: 4, dmgA: 10, dmgB: 10 }), { heard: false, quiet: 14 });
+moment('missile_incoming', () => bus.emit('shell:fired', { shellId: 7401, shooterId: 'f1', muzzlePos: [0, 2, 200], dir: [0, 0, -1], caliberMm: 130, shellType: 'HEAT', weaponSound: 'atgm_launch', velocityMps: 300 }));
+{
+  const since = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 30 && !asked('near_miss', since); i++) {
+    settle(13);
+    // From 170 m off, laid 4 m beside us.
+    const d = [4 - 120, 0, 0 - 120];
+    const n = Math.hypot(...d);
+    bus.emit('shell:fired', { shellId: 7500 + i, shooterId: 'f2', muzzlePos: [120, 2, 120], dir: d.map((v) => v / n), caliberMm: 125, shellType: 'APFSDS', velocityMps: 1650 });
+    settle(1);
+  }
+  assert.ok(asked('near_miss', since), 'a round cracking past us asks for the near miss');
+  covered.add('near_miss');
+}
+moment('drone_incoming', () => {
+  shells = [{ id: 8901, shooterId: 'f1', dead: false, spec: { tracer: 'DRONE', type: 'HE' }, pos: { x: 20, y: 25, z: 60 }, vel: { x: 0, y: 0, z: -40 } }];
+  for (let i = 0; i < 20; i++) frame(1 / 30);
+  shells = [];
+}, { wait: 3 });
+moment('fire', () => bus.emit('tank:fire', { id: 'me', burning: true }));
+moment('fire_out', () => bus.emit('tank:fire', { id: 'me', burning: false }));
+moment('flipped', () => { me.state.overturned = true; frame(); });
+moment('back_on_tracks', () => { me.state.overturned = false; frame(); bus.emit('tank:selfRight', { id: 'me' }); });
+moment('taking_water', () => { me.state.pos.x = -400; for (let i = 0; i < 8; i++) frame(); });
+me.state.pos.x = 0;
+settle(2);
+moment('stuck', () => { me.input.throttle = 1; me.state.speed = 0; settle(3.5); me.input.throttle = 0; });
+
+// The world around us (AU.04, 2026-10-13): a building coming down near us, the front's aircraft passing near, the far
+// guns (the last two flavour, now and then: asked, not always heard).
+moment('building_down', () => {
+  for (let i = 0; i < 6 && !asked('building_down', +ctx.currentTime.toFixed(3) - 40); i++) {
+    bus.emit('structure:stage', { structureId: -1, massClass: 'house', cx: 40, cz: 60, hw: 5, hd: 6, yaw: 0, baseY: 0, topY: 8,
+      stage: 'collapsed', previous: 'breached', cause: 'blast', munition: 'he', x: 40, y: 2, z: 60, dirX: 1, dirZ: 0, points: 400, integrity: 0 });
+    settle(30);
+  }
+}, { heard: false });
+moment('aircraft_overhead', () => {
+  for (let i = 0; i < 12 && !asked('aircraft_overhead', +ctx.currentTime.toFixed(3) - 200); i++) {
+    bus.emit('atmosphere:flyover', { p0: [-1500, 300, 100], v: [150, 0, 0], durationS: 20 });
+    settle(95);
+  }
+}, { heard: false });
+moment('artillery_far', () => {
+  for (let i = 0; i < 20 && !asked('artillery_far', +ctx.currentTime.toFixed(3) - 200); i++) { bus.emit('atmosphere:artillery', { pos: [2500, 0, 1800], size: 1 }); settle(125); }
+}, { heard: false });
+// We pull up in cover just after a hit.
+moment('in_cover', () => { theirHit({ damage: 60, targetHpAfter: 940 }); frame(); me.state.speed = 5; frame(); frame(); me.state.speed = 0; frame(); });
+// Between fights: once the battle and the net have been quiet a while, the commander keeps the crew watching, in turn
+// (still: a sector check, a hold, the gunner's "no target"; moving: a word to the driver), and after damage, the hull.
+{
+  const sinceQuiet = +ctx.currentTime.toFixed(3);
+  const quietIds = ['quiet_scan', 'quiet_hold', 'quiet_crew'];
+  for (let i = 0; i < 12 && quietIds.some((id) => !spoken(id, sinceQuiet)); i++) settle(45);
+  for (const id of quietIds) { assert.ok(spoken(id, sinceQuiet), `${id}: a quiet stretch while we stand (asked ${probe.sayLog.filter((e) => e.t >= sinceQuiet).map((e) => e.id)})`); covered.add(id); }
+  // never more than one a minute or so, and never on a net that spoke in the last 25 s
+  const quietCalls = probe.voiceLog.filter((e) => e.t >= sinceQuiet && quietIds.includes(e.id));
+  for (let i = 1; i < quietCalls.length; i++) assert.ok(quietCalls[i].t - quietCalls[i - 1].t >= 50, `quiet calls ${quietCalls[i].t - quietCalls[i - 1].t} s apart (want >= 50)`);
+  me.state.speed = 6;
+  const sinceMove = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 12 && !spoken('quiet_move', sinceMove); i++) settle(45);
+  assert.ok(spoken('quiet_move', sinceMove), 'a quiet stretch on the move speaks to the driver');
+  covered.add('quiet_move');
+  me.state.speed = 0;
+  me.combat.hp = 600;
+  theirHit({ damage: 150, targetHpAfter: 600 });
+  const sinceHull = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 12 && !spoken('hull_status', sinceHull); i++) settle(45);
+  assert.ok(spoken('hull_status', sinceHull), 'after damage, the next quiet call is the hull');
+  covered.add('hull_status');
+  me.combat.hp = 1000;
+}
+
+// Modes: objectives and our gunship crew's drops.
+moment('objective_captured', () => bus.emit('mode:zone_captured', { zoneId: 'b', team: 'alpha' }));
+moment('objective_lost', () => bus.emit('mode:zone_captured', { zoneId: 'b', team: 'bravo' }));
+moment('objective_contested', () => bus.emit('mode:zone_contested', { zoneId: 'a', team: 'alpha' }));
+moment('flag_taken_ours', () => bus.emit('mode:flag_taken', { team: 'bravo', by: 'me' }));
+moment('flag_taken_theirs', () => bus.emit('mode:flag_taken', { team: 'alpha', by: 'f1' }));
+moment('flag_captured', () => bus.emit('mode:flag_captured', { team: 'alpha', by: 'me' }));
+moment('flag_returned', () => bus.emit('mode:flag_returned', { team: 'alpha', by: 'a1' }));
+moment('wave_incoming', () => bus.emit('mode:wave_started', { wave: 2 }));
+moment('wave_cleared', () => bus.emit('mode:wave_cleared', { wave: 2 }));
+moment('line_advanced', () => bus.emit('mode:line_advanced', { line: 1, total: 3 }));
+moment('goal_scored', () => bus.emit('mode:goal_scored', { team: 'alpha' }));
+moment('pickup_collected', () => bus.emit('mode:pickup_collected', { by: 'me', kind: 'ammo' }));
+moment('supply_ammo', () => bus.emit('mode:pickup_spawned', { airDrop: true, by: 'me', kind: 'ammo', x: 10, y: 240, z: 30 }));
+moment('supply_repair', () => bus.emit('mode:pickup_spawned', { airDrop: true, by: 'me', kind: 'heal', x: 10, y: 240, z: 30 }));
+{
+  settle(10);
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('mode:pickup_spawned', { airDrop: true, by: 'other-gunship', kind: 'ammo', x: 10, y: 240, z: 30 });
+  bus.emit('mode:zone_contested', { zoneId: 'a', team: 'bravo' });
+  settle(3);
+  assert.ok(!asked('supply_ammo', since) && !asked('objective_contested', since), 'another gunship\'s drop and the enemy\'s contested point are not our calls');
+}
+// The modes' own moments (crew-lines-269): a flag down in the field or recovered, a capture against us, their point we
+// contest, a goal against us and the ball's reset, the Horde's special waves, the Frontline's counter-attack and last
+// line, a survivor turned, Gun Game's last weapon.
+moment('flag_dropped_ours', () => bus.emit('mode:flag_dropped', { team: 'alpha', by: 'f1', x: 0, z: 100 }));
+moment('flag_dropped_theirs', () => bus.emit('mode:flag_dropped', { team: 'bravo', by: 'a1', x: 0, z: 100 }));
+moment('enemy_flag_returned', () => bus.emit('mode:flag_returned', { team: 'bravo', by: 'f1' }));
+moment('flag_lost', () => bus.emit('mode:flag_captured', { team: 'bravo', by: 'f1', score: 1 }));
+moment('objective_contesting', () => bus.emit('mode:zone_contested', { zoneId: 'c', team: 'bravo' }));
+moment('goal_conceded', () => bus.emit('mode:goal_scored', { team: 'bravo', by: 'f1', score: 1 }));
+moment('ball_reset', () => bus.emit('mode:ball_reset', { idleS: 30 }));
+moment('wave_runners', () => bus.emit('mode:wave_started', { wave: 4, enemies: 9, special: 'runner' }), { wait: 7 });
+moment('wave_swarm', () => bus.emit('mode:wave_started', { wave: 5, enemies: 12, special: 'swarm' }), { wait: 7 });
+moment('counter_attack', () => bus.emit('mode:counter_attack', { line: 1, squad: 2, x: 0, z: 100 }));
+moment('final_line', () => bus.emit('mode:line_advanced', { line: 2, total: 3 }), { wait: 7 });
+moment('ally_infected', () => bus.emit('mode:infected', { id: 'a2', team: 'bravo' }));
+moment('enemy_final_weapon', () => bus.emit('mode:weapon_advanced', { id: 'f1', stage: 4, name: 'Guided Missile' }));
+moment('gun_game_final', () => bus.emit('mode:weapon_advanced', { id: 'me', stage: 4, name: 'Guided Missile' }), { wait: 7 });
+moment('respawn', () => {
+  me.combat.destroyed = true;
+  frame();
+  me.combat.destroyed = false;
+  bus.emit('mode:respawn', { id: 'me', team: 'alpha' });
+});
+
+// The team's fortunes: kills, losses and the count.
+moment('target_destroyed', () => { foes[0].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f1', killerId: 'me', pos: [0, 0, 200], cause: 'shot' }); });
+moment('double_kill', () => { foes[1].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f2', killerId: 'me', pos: [120, 0, 120], cause: 'shot' }); }, { quiet: 4 });
+moment('ally_kill', () => { foes[4].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f5', killerId: 'a1', pos: [60, 0, 260], cause: 'shot' }); }, { heard: false });
+moment('ally_destroyed', () => { allies[0].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'a1', killerId: 'f3', pos: [20, 0, 40], cause: 'shot' }); });
+// Two enemies to our two: then our last ally falls (the last tank, outnumbered two to one), and then one enemy is left.
+moment('last_tank', () => { allies[1].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'a2', killerId: 'f3', pos: [-20, 0, 40], cause: 'shot' }); frame(); });
+moment('last_enemy', () => { foes[2].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f3', killerId: 'me', pos: [-120, 0, 120], cause: 'shot' }); frame(); }, { quiet: 8 });
+
+// Every mode opens with its own call (MODE_CREW), and has the moments only it has.
+async function opening(mode, id, before) {
+  const since = +ctx.currentTime.toFixed(3);
+  await startBattle(mode, { before });
+  const heard = probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id);
+  assert.ok(heard.includes(id) && !heard.includes('battle_start'), `${mode} opens with ${id} (heard ${heard})`);
+  covered.add(id);
+}
+/**
+ * A battle that ends for the mode's own reason, and the crew's call for it. `dead`: our tank fell first (the Horde's and
+ * the Frontline's overruns end only when no defender stands, matchModes.ts; a hunter waits to respawn when the team kills
+ * the Juggernaut): the result call is said all the same (round 8 Y3 s1-05). `network`: a network seat's order, the
+ * mode's own completion relayed first, then the authority's verdict with its generic reason (battlePresentation.ts
+ * applyVerdict's 'elimination'): the mode's reason names the ending (round 8 amendment 6).
+ */
+async function ending(mode, result, reason, id, before, { dead = false, network = false } = {}) {
+  await startBattle(mode, { before });
+  if (dead) {
+    me.combat.destroyed = true;
+    bus.emit('tank:destroyed', { id: 'me', killerId: 'f1', pos: [0, 0, 0], cause: 'shot' });
+    frame();
+  }
+  const since = +ctx.currentTime.toFixed(3);
+  if (network) {
+    bus.emit('mode:completed', { result: result === 'victory' ? 'alpha' : 'bravo', reason });
+    bus.emit('battle:ended', { result, reason: 'elimination', network: true });
+  } else bus.emit('battle:ended', { result, reason });
+  bus.emit('battle:presented', { result });
+  settle(4);
+  assert.ok(spoken(id, since) && !spoken(result, since), `${mode} ${result} by ${reason}: ${id} (heard ${probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  covered.add(id);
+}
+// An objective mode's quiet stretch on the move points the crew at the objective (and the mode opens with its own call).
+await opening('zone_control', 'start_zones');
+{
+  me.state.speed = 6;
+  const since = +ctx.currentTime.toFixed(3);
+  for (let i = 0; i < 12 && !spoken('objective_push', since); i++) settle(45);
+  assert.ok(spoken('objective_push', since), `an objective mode's quiet stretch: the objective (heard ${probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  covered.add('objective_push');
+  me.state.speed = 0;
+}
+
+// Outnumbered: a fresh battle, our side down to one tank against four.
+await startBattle();
+moment('outnumbered', () => { for (const a of allies) a.combat.destroyed = true; frame(); }, { heard: false });
+// A kill that leaves no spotted enemy near ends the engagement: "Target. Cease fire."
+moment('cease_fire', () => {
+  bus.emit('tank:spotted', { id: 'f1', team: 'player', spotterId: 'a1', timeS: 0 });
+  foes[0].combat.destroyed = true;
+  bus.emit('tank:destroyed', { id: 'f1', killerId: 'me', pos: [0, 0, 200], cause: 'shot' });
+}, { wait: 7 });
+
+// The countdown's crew report and its answer, before the rollout's call.
+{
+  const since = +ctx.currentTime.toFixed(3);
+  await startBattle('standard', { countdown: 6 });
+  const heard = probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id);
+  assert.ok(heard.indexOf('crew_report') >= 0 && heard.indexOf('crew_report') < heard.indexOf('crew_ready') && heard.includes('battle_start'),
+    `the crew reports before the rollout (heard ${heard})`);
+  covered.add('crew_report');
+  covered.add('crew_ready');
+}
+
+await opening('capture_the_flag', 'start_flag');
+await opening('turbo_ball', 'start_ball');
+{
+  // a goal's kick-off revives every tank: not "back in the fight"; a real respawn later is
+  settle(6);
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('mode:goal_scored', { team: 'alpha', by: 'a1', score: 1 });
+  bus.emit('mode:respawn', { id: 'me', team: 'alpha' });
+  settle(6);
+  assert.ok(!spoken('respawn', since), 'a kick-off is not a respawn');
+  me.combat.destroyed = true;
+  frame();
+  me.combat.destroyed = false;
+  bus.emit('mode:respawn', { id: 'me', team: 'alpha' });
+  settle(4);
+  assert.ok(spoken('respawn', since), 'a respawn after a kill is');
+}
+await opening('mars', 'start_mars');
+await opening('gun_game', 'start_gun_game');
+await opening('drone', 'start_drone');
+moment('drone_kill', () => { foes[0].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f1', killerId: 'me', pos: [0, 0, 200], cause: 'shot', source: 'drone' }); });
+await opening('endless_horde', 'start_horde');
+await opening('frontline_assault', 'start_assault');
+await opening('proving_ground', 'start_range');
+{
+  settle(6);
+  const since = +ctx.currentTime.toFixed(3);
+  me.combat.destroyed = true;
+  frame();
+  me.combat.destroyed = false;
+  bus.emit('mode:respawn', { id: 'me', team: 'alpha' });
+  settle(4);
+  assert.ok(!spoken('respawn', since), 'the range brings a tank back without a call');
+}
+// Juggernaut: our tank is the boss (alone against the field: no "last tank", no "outnumbered"), or one of its hunters.
+{
+  const since = +ctx.currentTime.toFixed(3);
+  await opening('juggernaut', 'start_juggernaut', () => { me.combat.maxHp = me.combat.hp = 8000; for (const a of allies) a.combat.destroyed = true; });
+  settle(4);
+  assert.ok(!['last_tank', 'outnumbered', 'last_enemy'].some((id) => spoken(id, since)), 'the Juggernaut is alone by design: no team count');
+}
+await opening('juggernaut', 'start_hunt', () => { foes[0].combat.maxHp = foes[0].combat.hp = 8000; });
+moment('juggernaut_spotted', () => bus.emit('tank:spotted', { id: 'f1', team: 'player', spotterId: 'a1', timeS: 0 }));
+// Infected: the last survivor, then our own crew turned.
+await opening('infected', 'start_survivors');
+moment('last_survivor', () => { for (const a of allies) a.combat.destroyed = true; frame(); });
+moment('infected_turned', () => bus.emit('mode:infected', { id: 'me', team: 'bravo' }));
+// The modes' own results (an overrun with our tank dead, as the game ends one).
+await ending('endless_horde', 'defeat', 'horde_overrun', 'defeat_overrun', undefined, { dead: true });
+await ending('frontline_assault', 'victory', 'line_held', 'victory_assault');
+await ending('frontline_assault', 'defeat', 'assault_overrun', 'defeat_overrun', undefined, { dead: true });
+await ending('infected', 'victory', 'survivors_extracted', 'victory_survivors');
+await ending('juggernaut', 'victory', 'juggernaut_survived', 'victory_juggernaut', () => { me.combat.maxHp = me.combat.hp = 8000; });
+await ending('juggernaut', 'victory', 'juggernaut_destroyed', 'juggernaut_down', () => { foes[0].combat.maxHp = foes[0].combat.hp = 8000; });
+// a network seat's overrun: the mode's completion, then the authority's verdict with its generic reason
+await ending('endless_horde', 'defeat', 'horde_overrun', 'defeat_overrun', undefined, { dead: true, network: true });
+// a hunter dead and waiting to respawn when the team brings the Juggernaut down
+await ending('juggernaut', 'victory', 'juggernaut_destroyed', 'juggernaut_down', () => { foes[0].combat.maxHp = foes[0].combat.hp = 8000; }, { dead: true });
+
+// The reasoning exchange: a Chain of Thought (the Service Record's medal, announced inside the kill's own dispatch)
+// has the commander think step by step once the kill call is done, and the gunner answer with the drill; once a battle.
+const exchangeLines = ['target_destroyed', 'double_kill', 'think_step_by_step', 'step_by_step_reply'];
+await startBattle();
+{
+  settle(6);
+  const ordinary = +ctx.currentTime.toFixed(3);
+  bus.emit('service:medal', { id: 'first_blood' });
+  settle(10);
+  assert.ok(!asked('think_step_by_step', ordinary), 'an ordinary medal does not start the exchange');
+  const since = +ctx.currentTime.toFixed(3);
+  foes[0].combat.destroyed = true;
+  bus.emit('service:medal', { id: 'chain_of_thought' });
+  bus.emit('tank:destroyed', { id: 'f1', killerId: 'me', pos: [0, 0, 200], cause: 'shot' });
+  settle(12);
+  const heard = probe.voiceLog.filter((e) => e.t >= since && exchangeLines.includes(e.id)).map((e) => e.id);
+  assert.deepEqual(heard.slice(1), ['think_step_by_step', 'step_by_step_reply'],
+    `the kill call, then the exchange in order (heard ${heard}; asked ${JSON.stringify(probe.sayLog.filter((e) => e.t >= since))})`);
+  covered.add('think_step_by_step');
+  covered.add('step_by_step_reply');
+  const again = +ctx.currentTime.toFixed(3);
+  bus.emit('service:medal', { id: 'step_by_step' });
+  settle(10);
+  assert.ok(!asked('think_step_by_step', again), 'the exchange is once a battle');
+}
+// It never costs a real call: a hit that leaves us on low hit points cuts the commander off, is heard, and the
+// gunner's answer is dropped rather than spoken after it.
+await startBattle();
+{
+  // The lines also keep a ten-minute cooldown on the net, so back-to-back battles do not repeat the joke.
+  ctx.advance(601);
+  settle(6);
+  bus.emit('service:medal', { id: 'step_by_step' });
+  for (let i = 0; i < 8 && !spoken('think_step_by_step', +ctx.currentTime.toFixed(3) - 2); i++) frame(0.25);
+  const since = +ctx.currentTime.toFixed(3) - 2;
+  assert.ok(spoken('think_step_by_step', since), 'the commander starts thinking on the quiet net');
+  frame(0.25);
+  me.combat.hp = 180;
+  theirHit({ damage: 620, targetHpAfter: 180, targetMaxHp: 1000 });
+  settle(10);
+  assert.ok(spoken('low_hp', since), `the low hit points call is heard (${probe.voiceLog.filter((e) => e.t >= since).map((e) => e.id)})`);
+  assert.ok(!spoken('step_by_step_reply', since), 'no punchline after an interruption');
+  me.combat.hp = 1000;
+}
+
+// The AC-130: the gunner names the weapon, not a tank loader's round.
+const gunship = () => { me.aerial = { kind: 'gunship', active: true, x: 0, y: 240, z: 90 }; me.spec = { ...me.spec, gun: { caliberMm: 30, shells: GUNSHIP } }; };
+await opening('ac130', 'gunship_cleared_hot', gunship);
+{
+  // an aircraft in its orbit has no driver: the tank crew's "moving" is not its call
+  const since = +ctx.currentTime.toFixed(3);
+  me.state.speed = 6;
+  settle(2);
+  me.state.speed = 0;
+  assert.ok(!spoken('on_the_move', since), 'the gunship crew never says "moving"');
+}
+moment('gunship_cannon', () => bus.emit('ui:shellSelectionChanged', { slot: 0 }));
+moment('gunship_howitzer', () => bus.emit('ui:shellSelectionChanged', { slot: 1 }));
+moment('gunship_missile', () => bus.emit('ui:shellSelectionChanged', { slot: 2 }));
+// (ac130-fx-228) the AC-130's kills are the gunship crew's calls, by the authority's source, never a tank crew's
+{
+  const since = +ctx.currentTime.toFixed(3);
+  moment('gunship_kill', () => { foes[2].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f3', killerId: 'me', pos: [-120, 0, 120], cause: 'shot', source: 'ac130' }); });
+  moment('gunship_double', () => { foes[3].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'f4', killerId: 'me', pos: [0, 0, -150], cause: 'shot', source: 'ac130' }); }, { quiet: 4 });
+  assert.ok(!['target_destroyed', 'double_kill'].some((id) => asked(id, since)), "no tank crew's kill call for the AC-130's kills");
+}
+// (crew-lines-269) the AC-130's fire control: a new target far from the last kill is a shift of fire, then the sensor's
+// tally; "rifle" on a missile; a howitzer round on open ground is a splash, on a hull good hits, by a friendly danger close.
+moment('gunship_shift_fire', () => layOn(foes[0]), { quiet: 3 });
+listener.forward = AWAY;
+moment('gunship_tally', () => layOn(foes[1]), { quiet: 10 });
+listener.forward = AWAY;
+moment('gunship_rifle', () => bus.emit('shell:fired', { shellId: 9290, shooterId: 'me', isPlayer: true, muzzlePos: [0, 238, 90], dir: [0, -0.8, -0.6], caliberMm: 180, shellType: 'HE', weaponSound: 'gunship-missile', velocityMps: 400 }));
+moment('gunship_splash', () => {
+  bus.emit('shell:fired', { shellId: 9291, shooterId: 'me', isPlayer: true, muzzlePos: [0, 238, 90], dir: [0, -0.8, -0.6], caliberMm: 152, shellType: 'HE', weaponSound: 'gunship-howitzer', velocityMps: 650 });
+  frame(0.3);
+  bus.emit('shell:expired', { shellId: 9291, shooterId: 'me', pos: [300, 0, -300], hitTerrain: true, caliberMm: 152 });
+});
+moment('gunship_good_hits', () => ourHit({ caliberMm: 152 }));
+moment('gunship_danger_close', () => bus.emit('shell:expired', { shellId: 9292, shooterId: 'me', pos: [32, 0, 40], hitTerrain: true, caliberMm: 152 }));
+moment('gunship_rounds_complete', () => {
+  for (let i = 0; i < 3; i++) {
+    bus.emit('shell:fired', { shellId: 9295 + i, shooterId: 'me', isPlayer: true, muzzlePos: [0, 238, 90], dir: [0, -0.8, -0.6], caliberMm: 152, shellType: 'HE', weaponSound: 'gunship-howitzer', velocityMps: 650 });
+    frame(1);
+  }
+}, { wait: 12, heard: false });
+// a friendly lost on the ground (wherever it was), one extracted
+moment('gunship_friendly_down', () => { allies[0].combat.destroyed = true; bus.emit('tank:destroyed', { id: 'a1', killerId: 'f1', pos: [20, 0, 40], cause: 'shot' }); });
+// (the mode's rescue: sim/matchModes.ts setLife 'rescued' takes the hull off the field, alive)
+moment('gunship_friendly_extracted', () => { allies[1].modeLife = 'rescued'; allies[1].modeActive = false; frame(); });
+{
+  settle(6);
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('ui:shellSelectionChanged', { slot: 1 });
+  settle(3);
+  assert.ok(!['load_kinetic', 'load_he', 'load_heat', 'load_missile'].some((id) => asked(id, since)), 'no tank loader\'s line standing in for the gunship crew');
+  // Its missile leaves the pylon on its own recording, never the ground ATGM's launch (the owner's "popping sound").
+  for (let shot = 0; shot < 4; shot++) {
+    settle(8);
+    const sfxSince = probe.sfxLog.at(-1)?.seq ?? 0;
+    bus.emit('shell:fired', { shellId: 9300 + shot, shooterId: 'me', isPlayer: true, muzzlePos: [0, 238, 90], dir: [0, -0.8, -0.6], caliberMm: 180, shellType: 'HE', weaponSound: 'gunship-missile', velocityMps: 400 });
+    const names = probe.sfxLog.filter((e) => e.seq > sfxSince).map((e) => e.n);
+    assert.ok(names.includes('gunship_missile_own') && !names.includes('atgm_launch') && !names.some((n) => n.startsWith('blast_punch')), `the gunship's missile launch, shot ${shot + 1} (${names})`);
+  }
+}
+
+// A round into a prop sounds of what it struck, not a coin toss between wood and concrete.
+{
+  const struck = (surfaceKind, shellId) => {
+    const since = probe.sfxLog.at(-1)?.seq ?? 0;
+    bus.emit('shell:expired', { shellId, shooterId: 'f1', pos: [10, 1, 30], hitTerrain: false, hitKind: 'prop', surfaceKind, caliberMm: 125 });
+    return probe.sfxLog.filter((e) => e.seq > since).map((e) => e.n).find((n) => n.startsWith('ground_'));
+  };
+  settle(2);
+  assert.deepEqual(['containerRow', 'truckflatbed', 'tree', 'crate', 'warehouse', 'rock', 'sandbag'].map((kind, i) => { settle(0.5); return struck(kind, 9100 + i); }),
+    ['ground_metal', 'ground_metal', 'ground_wood', 'ground_wood', 'ground_concrete', 'ground_rock', 'ground_dirt']);
+  // (2026-10-10, the owner: "proper audio like all things that can be destroyed") a burst on a building detonates (it
+  // played the wall's thud alone) and its wall crumbles; an armour-piercing round crumbles it without a detonation
+  const intoBuilding = (shellType, shellId) => {
+    settle(0.6);
+    const since = probe.sfxLog.at(-1)?.seq ?? 0;
+    bus.emit('shell:expired', { shellId, shooterId: 'f1', pos: [10, 1, 30], hitTerrain: false, hitKind: 'prop', surfaceKind: 'structure',
+      structureId: 3, shellType, caliberMm: 125 });
+    return probe.sfxLog.filter((e) => e.seq > since).map((e) => e.n);
+  };
+  const burst = intoBuilding('HE', 9200), pierce = intoBuilding('APFSDS', 9201);
+  assert.ok(burst.some((n) => n.startsWith('expl_')) && burst.includes('rubble_crunch'), `a burst on a building detonates and its wall crumbles (${burst})`);
+  assert.ok(!pierce.some((n) => n.startsWith('expl_')) && pierce.includes('rubble_crunch'), `an AP round crumbles the wall, no detonation (${pierce})`);
+}
+
+// Smoke in the next battle: the sim clock restarts at 0, so screens born earlier than the last battle's are new.
+await startBattle();
+{
+  const since = probe.sfxLog.at(-1)?.seq ?? 0;
+  bus.emit('auxiliary:smokeScreens', { screens: [{ born: 2, x: 4, y: 2, z: 12, source: ['t72b3m_2022', 0.5, 2, 0.5] }] });
+  const names = probe.sfxLog.filter((e) => e.seq > since).map((e) => e.n);
+  assert.ok(names.includes('smoke_launcher'), `a second battle's smoke is heard (${names})`);
+}
+
+// The result, said whatever happened to our tank.
+for (const result of ['victory', 'defeat', 'draw']) {
+  await startBattle();
+  const since = +ctx.currentTime.toFixed(3);
+  bus.emit('battle:ended', { result });
+  bus.emit('battle:presented', { result });
+  settle(4);
+  assert.ok(spoken(result, since), `${result} is announced`);
+  covered.add(result);
+}
+
+// The AC-130's mission ends: the convoy extracted, or lost.
+await ending('ac130', 'victory', 'escort_extracted', 'gunship_victory', gunship);
+await ending('ac130', 'defeat', 'escort_lost', 'gunship_defeat', gunship);
+
+// Air Support (air-support-270): the mode opens with its own call; our crew reads back each call-in the authority takes,
+// is called out of an enemy strike's footprint before anything lands (an air strike, a barrage), and calls an aircraft
+// our guns bring down. Another crew's call is not ours to read back, and a strike far off calls nobody out.
+await opening('air_support', 'start_air_support');
+{
+  let strikeId = 800;
+  const call = (kind, team, x, z, callerId) => bus.emit('mode:strike_called', { strikeId: strikeId++, kind, team, x, y: 0, z, heading: 0,
+    landsS: 1000 + strikeId, warningS: 6, callerId });
+  for (const [kind, id] of [['recon', 'air_call_recon'], ['artillery', 'air_call_artillery'], ['strafe', 'air_call_strafe'], ['bomb', 'air_call_bomb']]) {
+    moment(id, () => call(kind, 'alpha', 0, 300, 'me'));
+  }
+  settle(8);
+  const quiet = +ctx.currentTime.toFixed(3);
+  call('bomb', 'alpha', 0, 300, 'a1');
+  call('strafe', 'bravo', 600, 600, 'f1');
+  settle(4);
+  assert.ok(!probe.sayLog.some((e) => e.t >= quiet && /^(air_|artillery_incoming)/.test(e.id)), `an ally's call and a strike far off are not ours (${probe.sayLog.filter((e) => e.t >= quiet).map((e) => e.id)})`);
+  moment('air_incoming', () => call('strafe', 'bravo', 0, 10, 'f1'));
+  moment('artillery_incoming', () => call('artillery', 'bravo', 6, 6, 'f1'));
+  moment('aircraft_downed', () => bus.emit('mode:aircraft_down', { strikeId: 990, kind: 'bomb', team: 'bravo', by: 'me', x: 0, y: 350, z: 200 }));
+}
+
+// Every crew line in the catalog has its moment.
+const untested = Object.keys(VOICE_LINES).filter((id) => !covered.has(id));
+assert.deepEqual(untested, [], 'every crew line is driven by a game moment in this matrix');
+
+// No fallbacks: no sound or crew take stands in for another in the audio code. A cue plays its own asset or nothing;
+// a crew speaks its own pack or nothing.
+for (const file of readdirSync(new URL('.', import.meta.url)).filter((f) => f.endsWith('.ts') && !f.includes('generated'))) {
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+  const lines = source.split('\n');
+  lines.forEach((line, index) => {
+    assert.ok(!/if \(!(pool\??\.)?play\(|!\([^)]*&& *(pool\??\.)?play\(|(pool\??\.)?play\([^;]*\) *\|\| *(pool\??\.)?play\(/.test(line),
+      `${file}:${index + 1} chains one sound in for another: ${line.trim()}`);
+  });
+  assert.ok(!/fallbackLanguage/.test(source), `${file} keeps a stand-in crew`);
+}
+
+console.log(`voiceTriggers.selftest: ${covered.size} crew lines driven by their game moments (fire commands, shot results, protection, our systems, drone, gunship fire control, supply drops, every mode's opening, moments and results, Air Support's call-ins) and no stand-in sounds passed`);

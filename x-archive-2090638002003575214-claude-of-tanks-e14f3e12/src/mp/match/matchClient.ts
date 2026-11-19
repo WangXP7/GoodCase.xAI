@@ -1,0 +1,1223 @@
+import type { DestructionLogEntry } from '../../sim/destructionEvents.ts';
+import { usesLauncherMuzzles } from '../../sim/launcherPolicy.ts';
+/**
+ * MatchClient: the browser-side match layer of Multiplayer v2 (charter §3
+ * "Client", §4). It owns one transport, runs the HELLO/WELCOME handshake,
+ * keeps the server clock, samples and streams input, assembles snapshots,
+ * interpolates remote entities, predicts and reconciles the viewer's own
+ * tank, delivers reliable events on a presentation budget, and applies the
+ * recovery policy. Every part is Node-runnable: no DOM, no renderer — the
+ * presentation adapter consumes the `MatchFrame` this produces once per
+ * display frame, and the headless driver runs the same client in a soak.
+ */
+import type { MovementSpec } from '../../sim/movement.ts';
+import { TRANSPORT_CLOSE } from '../transport/transport.ts';
+import { matchRefusalCodeOf, matchRefusalMessage } from '../wire/matchBuild.ts';
+import type { Transport, TransportStateChange, TransportStats } from '../transport/transport.ts';
+import {
+  CLOSE_REASON, ENTITY_FLAGS, HELLO_CAPABILITY, MESSAGE_TYPE, NO_ENTITY, NO_TICK, PHASE, PROTOCOL_VERSION, SNAPSHOT_HZ,
+  TICK_HZ, VERDICT, VIEWER_MODULES, WIRE_VERSION, decodeMessage, dequantizeReloadS, encodeMessage,
+} from '../wire/index.ts';
+import type {
+  CloseReasonId, EntityRow, ErrorMessage, EventMessage, PhaseId, PongMessage, RosterEntry, SnapshotFrame,
+  SnapshotPacket, VerdictId, ViewerState, WelcomeMessage, WireEvent,
+} from '../wire/index.ts';
+import { ServerClock, TickClock, TimeUnwrapper } from './clock.ts';
+import { OwnShotPredictor, ReliableEventQueue } from './events.ts';
+import type { PredictedShot, ReliableEventQueueStats } from './events.ts';
+import { InputStream, NEUTRAL_CONTROL } from './inputStream.ts';
+import type { ControlSample, InputStreamOptions, PredictionControl } from './inputStream.ts';
+import { RemoteInterpolator } from './interpolation.ts';
+import type { EntitySample, FrameMetaSample, InterpolatorOptions, ShellSample } from './interpolation.ts';
+import { LocalPredictor } from './prediction.ts';
+import type { CorrectionPolicy, PredictionStats, PredictionWorld } from './prediction.ts';
+import { ConnectionRecovery, HOLD_RELEASE_MARGIN_MS, MIGRATION_WELCOME_ALLOWANCE_MS } from './recovery.ts';
+import type { ConnectionPhase, RecoveryOptions } from './recovery.ts';
+import { MigrationStore } from './migrationStore.ts';
+import { HULL_BODY_ROW_FLAGS } from './hullBodyRow.ts';
+import type { RetainedBlob } from './migrationStore.ts';
+import { SnapshotStream } from './snapshotStream.ts';
+import type { TankState } from '../../sim/movement.ts';
+
+export type Unsubscribe = () => void;
+
+/** The world and specs prediction integrates against; the presentation (or the soak) supplies it. */
+export interface PredictionProvider {
+  world: PredictionWorld;
+  specFor(specId: string): MovementSpec | null;
+}
+
+export interface MatchClientOptions {
+  transport: Transport;
+  /** Seat token issued by the room service. */
+  token: string;
+  clientBuild?: string;
+  /** HELLO_CAPABILITY bits; immediate own-shot feedback by default. */
+  capabilities?: number;
+  clock?: () => number;
+  /** Controls for a tick; null means neutral (destroyed, menu open, no device). */
+  controls?: ((tick: number) => Readonly<ControlSample> | null) | null;
+  prediction?: PredictionProvider | null;
+  correction?: Partial<CorrectionPolicy>;
+  interpolation?: InterpolatorOptions;
+  recovery?: RecoveryOptions;
+  input?: InputStreamOptions;
+  /** Assembled frames kept for delta baselines (96 ≈ 3 s; receipts shrink it to force keyframe recovery). */
+  snapshotRing?: number;
+  pingIntervalMs?: number;
+  /** The first pings go faster so the offset filter fills before the match starts. */
+  pingBurstCount?: number;
+  pingBurstIntervalMs?: number;
+  /** Errors kept for diagnostics. */
+  maxErrors?: number;
+  /**
+   * Posts `callback` as an ordinary task (the browser: setTimeout 0). The client posts one at a time from update(); while
+   * one waits longer than TASK_STARVED_MS this tab's own tasks are starved (a long task, a scheduler.yield loop) and the
+   * recovery's stall clock does not run. Absent: never starved (the receipts' virtual clocks).
+   */
+  taskProbe?: ((callback: () => void) => void) | null;
+}
+
+export interface OwnShotEvent {
+  event: WireEvent;
+  /** A flash for this shot already played from the fire edge; present the shell, not the muzzle. */
+  feedbackPredicted: boolean;
+}
+
+export interface ViewerFrame {
+  entityId: number;
+  playerId: string;
+  /** The predicted, corrected state the renderer reads; null without a prediction world (spectators). */
+  state: TankState | null;
+  /** The newest authority row, null before the first. */
+  row: EntityRow | null;
+  viewer: ViewerState | null;
+  authorityTick: number;
+  authorityReceivedAtMs: number | null;
+  /** A fire edge this frame that presentation may flash before the authority confirms it. */
+  predictedShot: PredictedShot | null;
+}
+
+export interface MatchFrame {
+  /** Tick of the newer frame the remote sample used. */
+  tick: number;
+  renderTimeMs: number;
+  entities: EntitySample[];
+  shells: ShellSample[];
+  /** Rounds gone from `shells` that left this view in flight (wire 11): out of view, not ended (FrameSample.unseenShells). */
+  unseenShells: readonly number[];
+  meta: FrameMetaSample;
+  modeStateJson: string | null;
+  /** Persistent destroyed obstacle indices and their revision (from the newest frame). */
+  destroyed: readonly number[];
+  /** Each `destroyed` index's fall in its order (wire 11, sim/obstacleFall.ts); empty: none for every one. */
+  destroyedFalls: readonly number[];
+  destructibleRevision: number;
+  /**
+   * Whether a `world_prop_destroyed` for this obstacle index is still on its way to the presentation (queued behind the
+   * presented tick, staged by the budget, or in this frame's `events`): the newest frame's destroyed list already names
+   * it, but its fall belongs to the event, not to the list (world state audit, 2026-10-01).
+   */
+  destroyedPending: (index: number) => boolean;
+  /** The destruction log (from the newest frame; append-only) and whether a structure's stage event is still owed to
+   * the presentation (its stage belongs to the event, not to the log). */
+  destruction: readonly DestructionLogEntry[];
+  destructionPending: (structureId: number) => boolean;
+  /** Whether a crater's `terrain_crater` event is still owed to the presentation (P3: the crater belongs to it). */
+  craterPending: (craterId: number) => boolean;
+  viewer: ViewerFrame;
+  /** This frame's budgeted reliable events (array reused between frames). */
+  events: WireEvent[];
+  /** The viewer's accepted shots, delivered immediately (array reused). */
+  ownShots: OwnShotEvent[];
+  extrapolatedMs: number;
+  phase: ConnectionPhase;
+  /**
+   * How many times a link's host restarted the battle under this client (MatchClientStats.battleRestarts). What the
+   * presentation laid down as settled state before a restart (fallen props, the destruction log) is of a battle no longer
+   * played: the restarted host has it standing (round 2 U1).
+   */
+  battleRestarts: number;
+}
+
+/** What this client holds for a host migration (P2 client lane): the sealed blobs and the newest assembled frame. */
+export interface RetainedMigrationState {
+  keyframe: RetainedBlob | null;
+  config: RetainedBlob | null;
+  /** The newest assembled (viewer-filtered) frame and when it arrived: exact for what this viewer could see. */
+  latestFrame: SnapshotFrame | null;
+  latestFrameAtMs: number | null;
+  /**
+   * The obstacle index of every `world_prop_destroyed` this client received in the round, presented or still queued
+   * (fix/mp-migration-props, 2026-10-02): a fall reaches a peer the tick it happens, the destroyed list only with the
+   * next snapshot, so a host that died between the two left the fall here alone. A link reset clears the event queue,
+   * never this.
+   */
+  fallen: readonly number[];
+  /** Every destruction entry a `structure_stage` (later a breach or a crater) named this round: like `fallen`, a link
+   * reset clears the queue, never this. */
+  destruction?: readonly DestructionLogEntry[];
+  /**
+   * The tick of each entity's newest `mode_respawn` this client was told of, by authoritative id (audit M1, review round
+   * 2): a hull a mode revived after the keyframe lives a life its extras never saw (migrationState.ts
+   * resumeStateFromRetained). Every viewer receives mode events.
+   */
+  respawns?: readonly (readonly [id: string, tick: number])[];
+}
+
+export interface MatchClientStats {
+  phase: ConnectionPhase;
+  welcomed: boolean;
+  matchPhase: PhaseId | null;
+  verdict: VerdictId | null;
+  rttMs: number | null;
+  rttJitterMs: number;
+  serverOffsetMs: number;
+  serverOffsetTargetMs: number;
+  clockSamples: number;
+  arrivalJitterMs: number;
+  lossRate: number;
+  interpolationDelayMs: number;
+  targetDelayMs: number;
+  extrapolatedSamples: number;
+  maxExtrapolatedMs: number;
+  /** Samples where an entity snapped (a teleport, a first sight) and the furthest an entity was continued past its own sample (P3b interest tiers). */
+  snappedSamples: number;
+  maxRowExtrapolatedMs: number;
+  bytesIn: number;
+  bytesOut: number;
+  bytesInPerS: number;
+  bytesOutPerS: number;
+  framesIn: number;
+  framesOut: number;
+  snapshotsAccepted: number;
+  keyframes: number;
+  missingBaselines: number;
+  keyframeRequests: number;
+  staleSnapshots: number;
+  inputAckLagTicks: number;
+  inputIntrinsicAckLagTicks: number;
+  inputLeadTicks: number;
+  inputMarginTicks: number;
+  pendingFireEdges: number;
+  pendingActionBits: number;
+  sampledTicks: number;
+  skippedTicks: number;
+  inputFramesSent: number;
+  prediction: PredictionStats | null;
+  events: ReliableEventQueueStats;
+  ownShotsPredicted: number;
+  ownShotsConfirmed: number;
+  transport: TransportStats;
+  transportState: string;
+  bufferedBytes: number;
+  decodeErrors: number;
+  serverErrors: number;
+  reconnects: number;
+  stalls: number;
+  outageMs: number;
+  closeReason: CloseReasonId | null;
+  /** Own-row hints sent after a resumed link (P3b: the migration seed for a hull the new host could not see). */
+  resumeHintsSent: number;
+  /** HOLD notices taken before a WELCOME (round 3 B1/X6: a host holding this seat's HELLO said how long; receiveHold). */
+  holdNotices: number;
+  /** Fresh links asked for before the WELCOME after a "hello timeout" or a "peer offered again" CLOSE (MAX_HELLO_RETRIES). */
+  helloRetries: number;
+  /** Episodes where this tab's own tasks were starved past TASK_STARVED_MS (the stall clock rested; taskProbe). */
+  taskStarvations: number;
+  /** New links whose host ran on another timeline than this client's clocks (followTimeline): the clocks re-anchored. */
+  timelineRestarts: number;
+  /**
+   * Links whose host plays another battle than the one this client followed (a battle id of its own at the WELCOME,
+   * receiveWelcome; or a battle this client saw begin shown as not begun at the first snapshot, followTimeline): what was
+   * retained of the battle before it went.
+   */
+  battleRestarts: number;
+}
+
+/**
+ * Before its WELCOME, a seat whose link the host closes with HELLO_REQUIRED "hello timeout" (the host's window ran out
+ * before the HELLO landed: a busy host or a starved seat) or REPLACED "peer offered again" (a stale offer of the seat's
+ * own, relayed late, replaced the link it is entering on) asks for a fresh link and says hello again, this many times
+ * before it gives up (2026-10-11; before, the seat read either CLOSE as the end of its seat and was never welcomed).
+ */
+export const MAX_HELLO_RETRIES = 3;
+
+interface PendingPing {
+  key: number;
+  sentAtMs: number;
+}
+
+const NO_FALLS: readonly number[] = Object.freeze([]);
+const MAX_PENDING_PINGS = 8;
+const MAX_TICKS_PER_FRAME = 4;
+/** A posted task waiting this long means this tab's own tasks are starved (taskProbe). */
+const TASK_STARVED_MS = 250;
+const CATCH_UP_LIMIT_TICKS = 8;
+/** Display-tick slew: 10 % of the error per frame, at most a tenth of a tick, resync past 8 ticks. */
+const DISPLAY_TICK_GAIN = 0.1;
+const DISPLAY_TICK_SLEW = 0.1;
+const DISPLAY_TICK_RESYNC = 8;
+const VIEWER_GUN_INDEX = VIEWER_MODULES.indexOf('gun');
+const VIEWER_GUN_MOUNT_INDEX = VIEWER_MODULES.indexOf('gunMount');
+
+function u32(value: number): number { return Math.round(value) >>> 0; }
+
+/** Whether a frame's battle had begun: playing, ended or decided (null: no frame yet). */
+function battleBegun(phase: PhaseId | null, verdict: VerdictId | null): boolean {
+  return phase === PHASE.PLAYING || phase === PHASE.ENDED || (verdict !== null && verdict !== VERDICT.NONE);
+}
+
+/**
+ * The words a player sees when the host runs another build: what happened and what to do (refresh). One vocabulary
+ * with the same-wire check's refusals (src/mp/wire/matchBuild.ts; the lobby localizes them by code).
+ */
+export function matchBuildMismatchMessage(peerWire: number): string {
+  return matchRefusalMessage(peerWire < WIRE_VERSION ? 'build_host_older' : 'build_host_newer');
+}
+
+export class MatchClient {
+  readonly transport: Transport;
+  readonly clock: () => number;
+  readonly serverClock: ServerClock;
+  readonly tickClock: TickClock;
+  readonly inputStream: InputStream;
+  readonly snapshots: SnapshotStream;
+  readonly interpolator: RemoteInterpolator;
+  readonly events: ReliableEventQueue;
+  readonly ownShots: OwnShotPredictor;
+  readonly recovery: ConnectionRecovery;
+  /** Migration blobs the host rides inside EVENT messages (kept, never presented). */
+  readonly migration = new MigrationStore();
+  private readonly token: string;
+  private readonly clientBuild: string;
+  private readonly capabilities: number;
+  private readonly controls: ((tick: number) => Readonly<ControlSample> | null) | null;
+  private readonly correction: Partial<CorrectionPolicy>;
+  private predictionProvider: PredictionProvider | null;
+  private predictor: LocalPredictor | null = null;
+  private readonly pingIntervalMs: number;
+  private readonly pingBurstCount: number;
+  private readonly pingBurstIntervalMs: number;
+  private readonly maxErrors: number;
+  private readonly timeUnwrap = new TimeUnwrapper();
+  private readonly pendingPings: PendingPing[] = [];
+  private readonly unsubscribe: Unsubscribe[] = [];
+  private readonly frame: MatchFrame;
+  /** Own shots received since the last frame; swapped into the frame at the next update. */
+  private pendingOwnShots: OwnShotEvent[] = [];
+  private helloSentAtMs: number | null = null;
+  private readonly frameListeners = new Set<(frame: MatchFrame) => void>();
+  private readonly welcomeListeners = new Set<(welcome: WelcomeMessage) => void>();
+  private readonly phaseListeners = new Set<(phase: ConnectionPhase, detail: string) => void>();
+  readonly errors: ErrorMessage[] = [];
+  private welcomeMessage: WelcomeMessage | null = null;
+  /** The authority's snapshot rate as the newest WELCOME named it (SNAPSHOT_HZ before the first). */
+  private snapshotHz = SNAPSHOT_HZ;
+  private ownPlayerId = '';
+  private ownRow: EntityRow | null = null;
+  private ownViewer: ViewerState | null = null;
+  /** The newest own authority row since the last frame (reused: no allocation per snapshot). */
+  private readonly pendingAuthority: { tick: number; row: EntityRow; viewer: ViewerState | null } = { tick: NO_TICK, row: null as unknown as EntityRow, viewer: null };
+  private hasPendingAuthority = false;
+  private ownAuthorityTick = -1;
+  private ownAuthorityAtMs: number | null = null;
+  private lastAuthorityAtMs: number | null = null;
+  private openedAtMs: number | null = null;
+  /** When the current socket's WELCOME was accepted (a held seat's comes when its new host's resume hold ends). */
+  private welcomedAtMs: number | null = null;
+  /** The host generation of the newest WELCOME: a socket opened under a newer one is a link to a newly elected host. */
+  private welcomedGeneration = 0;
+  /** The current socket's pre-WELCOME allowance (RecoveryInput.holdAllowanceMs). */
+  private holdAllowanceMs = 0;
+  private lastPingAtMs = -Infinity;
+  private pingsSent = 0;
+  private pingKey = 0;
+  private pendingSpectatorAck = NO_TICK;
+  private keyframeRequestedForGap = false;
+  private predictedShot: PredictedShot | null = null;
+  /** The fractional tick the local tank is presented at; runs at one tick per tick of local time and slews to the sampler. */
+  private displayTick = -1;
+  private closeReason: CloseReasonId | null = null;
+  private closeDetail = '';
+  private disposed = false;
+  private latestDestroyed: readonly number[] = [];
+  private latestDestroyedFalls: readonly number[] = NO_FALLS;
+  private latestRevision = 0;
+  private latestDestruction: readonly DestructionLogEntry[] = [];
+  private matchPhase: PhaseId | null = null;
+  private verdict: VerdictId | null = null;
+  private decodeErrors = 0;
+  private serverErrors = 0;
+  private keyframeRequests = 0;
+  private inputFramesSent = 0;
+  private resumeHintsSent = 0;
+  private holdNotices = 0;
+  private timelineRestarts = 0;
+  private battleRestarts = 0;
+  /** The battle id of the newest WELCOME (WelcomeMessage.battleId; null before the first): the battle this client follows. */
+  private followedBattleId: number | null = null;
+  /** The first snapshot after a WELCOME still has to be read against this client's clocks (followTimeline). */
+  private timelineCheckPending = false;
+  private helloRetries = 0;
+  private helloRetriesLeft = MAX_HELLO_RETRIES;
+  private snapshotsAccepted = 0;
+  private rateWindowStartMs: number | null = null;
+  private rateWindowBytesIn = 0;
+  private rateWindowBytesOut = 0;
+  private bytesInPerS = 0;
+  private bytesOutPerS = 0;
+  private readonly taskProbe: ((callback: () => void) => void) | null;
+  /** When the waiting probe was posted (null: none waiting). */
+  private probePostedAtMs: number | null = null;
+  /** The last frame this tab's tasks were seen starved (the recovery's stall clock restarts there). */
+  private starvedAtMs: number | null = null;
+  private starvations = 0;
+  private readonly onProbe = (): void => { this.probePostedAtMs = null; };
+
+  constructor({
+    transport,
+    token,
+    clientBuild = 'dev',
+    capabilities = HELLO_CAPABILITY.SHOT_FEEDBACK,
+    clock = () => (typeof performance === 'object' ? performance.now() : Date.now()),
+    controls = null,
+    prediction = null,
+    correction = {},
+    interpolation = {},
+    recovery = {},
+    input = {},
+    snapshotRing = 96,
+    pingIntervalMs = 1000,
+    pingBurstCount = 8,
+    pingBurstIntervalMs = 200,
+    maxErrors = 32,
+    taskProbe = null,
+  }: MatchClientOptions) {
+    if (!transport || typeof transport.send !== 'function') throw new TypeError('a transport is required');
+    if (typeof token !== 'string' || !token) throw new TypeError('a seat token is required');
+    this.transport = transport;
+    this.token = token;
+    this.clientBuild = clientBuild;
+    this.capabilities = capabilities;
+    this.clock = clock;
+    this.controls = controls;
+    this.predictionProvider = prediction;
+    this.correction = correction;
+    this.pingIntervalMs = pingIntervalMs;
+    this.pingBurstCount = pingBurstCount;
+    this.pingBurstIntervalMs = pingBurstIntervalMs;
+    this.maxErrors = maxErrors;
+    this.taskProbe = taskProbe;
+    this.serverClock = new ServerClock();
+    this.tickClock = new TickClock(TICK_HZ);
+    this.inputStream = new InputStream(input);
+    // both start at the default rate (SNAPSHOT_HZ) and follow the WELCOME's rate from the handshake on
+    this.snapshots = new SnapshotStream({ ringSize: snapshotRing, ticksPerSnapshot: TICK_HZ / SNAPSHOT_HZ });
+    this.interpolator = new RemoteInterpolator({ snapshotIntervalMs: 1000 / SNAPSHOT_HZ, ...interpolation });
+    this.events = new ReliableEventQueue();
+    this.ownShots = new OwnShotPredictor();
+    this.recovery = new ConnectionRecovery(recovery);
+    this.frame = {
+      tick: 0, renderTimeMs: 0, entities: [], shells: [], unseenShells: [],
+      meta: { phase: 0, countdownMs: 0, battleTimeMs: 0, verdict: 0, verdictReason: '', destructibleRevision: 0 },
+      modeStateJson: null, destroyed: [], destroyedFalls: NO_FALLS, destructibleRevision: 0,
+      destroyedPending: (index) => this.events.isObstaclePending(index),
+      destruction: [],
+      destructionPending: (structureId) => this.events.isStructurePending(structureId),
+      craterPending: (craterId) => this.events.isCraterPending(craterId),
+      viewer: {
+        entityId: NO_ENTITY, playerId: '', state: null, row: null, viewer: null, authorityTick: -1,
+        authorityReceivedAtMs: null, predictedShot: null,
+      },
+      events: [], ownShots: [], extrapolatedMs: 0, phase: 'idle', battleRestarts: 0,
+    };
+    this.unsubscribe.push(transport.onFrame((bytes) => this.receive(bytes)));
+    this.unsubscribe.push(transport.onState((change) => this.transportChanged(change)));
+  }
+
+  // ------------------------------------------------------------ public surface
+
+  get welcome(): WelcomeMessage | null { return this.welcomeMessage; }
+  /** The verdict the authority's frames named (NONE/null before one): the status surface reads it — a close after it is the end screen's business. */
+  get lastVerdict(): VerdictId | null { return this.verdict; }
+  get roster(): readonly RosterEntry[] { return this.welcomeMessage?.roster ?? []; }
+  get phase(): ConnectionPhase { return this.recovery.current; }
+  get isSeated(): boolean { return !!this.welcomeMessage && this.welcomeMessage.entityId !== NO_ENTITY; }
+  get ownEntityId(): number { return this.welcomeMessage?.entityId ?? NO_ENTITY; }
+  /** The authority's snapshot rate (Hz) this client runs at: the WELCOME's, SNAPSHOT_HZ before one arrives. */
+  get snapshotRateHz(): number { return this.snapshotHz; }
+  /** The presented state of the viewer's tank (null without prediction). */
+  get localTank(): TankState | null { return this.predictor?.presented ?? null; }
+  /** The prediction's simulation state at the newest sampled tick (collision framing, diagnostics). */
+  get predictionState(): TankState | null { return this.predictor?.simulationState ?? null; }
+  get lastCloseReason(): CloseReasonId | null { return this.closeReason; }
+  get lastCloseDetail(): string { return this.closeDetail; }
+  /** Allocation-free reads for the network status model (stats() copies; these do not). */
+  get lastAuthorityReceivedAtMs(): number | null { return this.lastAuthorityAtMs; }
+  get snapshotsAcceptedCount(): number { return this.snapshotsAccepted; }
+  get predictorStats(): Readonly<PredictionStats> | null { return this.predictor?.liveStats ?? null; }
+  get bytesInPerSecond(): number { return this.bytesInPerS; }
+  get bytesOutPerSecond(): number { return this.bytesOutPerS; }
+
+  /**
+   * The state a newly elected host boots from (the sealed keyframe and config, the newest frame this viewer assembled,
+   * every prop it was told fell).
+   */
+  retainedMigration(): RetainedMigrationState {
+    return {
+      keyframe: this.migration.keyframe, config: this.migration.config, latestFrame: this.snapshots.latest, latestFrameAtMs: this.lastAuthorityAtMs,
+      fallen: this.migration.fallen,
+      destruction: this.migration.destruction,
+      respawns: this.migration.respawns,
+    };
+  }
+
+  connect(): void {
+    if (this.disposed) throw new Error('match client disposed');
+    // 2026-10-20 (item/mp-rejoin-229): a link the session opened beside the world load is open already, and its `open`
+    // went by before this client listened: the handshake starts on it now. Connecting or reconnecting, its `open` is ahead.
+    if (this.transport.state === 'open') {
+      this.transportChanged({ state: 'open', previous: 'connecting', attempt: 0, resumed: false });
+      return;
+    }
+    this.transport.open();
+  }
+
+  /** Explicit leave: tells the server, ends recovery, closes the transport. */
+  leave(reason: CloseReasonId = CLOSE_REASON.CLIENT_LEAVE): void {
+    if (this.disposed) return;
+    if (this.transport.state === 'open') this.send(encodeMessage({ type: MESSAGE_TYPE.LEAVE, reason }));
+    this.recovery.end('left');
+    this.transport.close(TRANSPORT_CLOSE.CLIENT, 'leave');
+    this.notifyPhase('left', 'leave');
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.recovery.current !== 'left' && this.recovery.current !== 'failed') this.recovery.end('closed');
+    for (const off of this.unsubscribe) off();
+    this.unsubscribe.length = 0;
+    this.transport.close(TRANSPORT_CLOSE.CLIENT, 'dispose');
+    this.frameListeners.clear();
+    this.welcomeListeners.clear();
+    this.phaseListeners.clear();
+  }
+
+  /** Supply (or replace) the prediction world after construction (the presentation knows the map late). */
+  enablePrediction(provider: PredictionProvider | null): void {
+    this.predictionProvider = provider;
+    this.predictor = null;
+    this.ensurePredictor();
+  }
+
+  onFrame(listener: (frame: MatchFrame) => void): Unsubscribe {
+    this.frameListeners.add(listener);
+    return () => { this.frameListeners.delete(listener); };
+  }
+
+  onWelcome(listener: (welcome: WelcomeMessage) => void): Unsubscribe {
+    this.welcomeListeners.add(listener);
+    return () => { this.welcomeListeners.delete(listener); };
+  }
+
+  onPhase(listener: (phase: ConnectionPhase, detail: string) => void): Unsubscribe {
+    this.phaseListeners.add(listener);
+    return () => { this.phaseListeners.delete(listener); };
+  }
+
+  /**
+   * One display frame: clock slew, recovery, input ticks, pings, the remote
+   * sample at `serverNow − delay`, the local presentation, the event flush.
+   * Returns null until the first snapshot has been assembled.
+   */
+  update(nowMs: number, elapsedS: number): MatchFrame | null {
+    if (this.disposed || this.recovery.current === 'left') return null;
+    this.serverClock.advance(nowMs);
+    this.observeTaskQueue(nowMs);
+    this.stepRecovery(nowMs);
+    this.observeRates(nowMs);
+    const live = this.welcomeMessage !== null && this.transport.state === 'open' && this.recovery.current !== 'failed';
+    this.predictedShot = null;
+    this.reconcilePending();
+    if (live) {
+      this.sampleInputs(nowMs, elapsedS);
+      this.maintainPings(nowMs);
+      this.maintainAcks();
+    }
+    const serverNow = this.serverClock.serverNow(nowMs);
+    const sample = this.interpolator.sample(serverNow);
+    if (!sample) return null;
+    const frame = this.frame;
+    frame.tick = sample.tick;
+    frame.renderTimeMs = sample.renderTimeMs;
+    frame.entities = sample.entities;
+    frame.shells = sample.shells;
+    frame.unseenShells = sample.unseenShells;
+    frame.meta = sample.meta;
+    frame.modeStateJson = sample.modeStateJson;
+    frame.extrapolatedMs = sample.extrapolatedMs;
+    frame.destroyed = this.latestDestroyed;
+    frame.destroyedFalls = this.latestDestroyedFalls;
+    frame.destructibleRevision = this.latestRevision;
+    frame.destruction = this.latestDestruction;
+    frame.phase = this.recovery.current;
+    frame.battleRestarts = this.battleRestarts;
+    if (this.predictor) this.predictor.present(elapsedS, this.displayTick);
+    const viewer = frame.viewer;
+    viewer.entityId = this.ownEntityId;
+    viewer.playerId = this.ownPlayerId;
+    viewer.state = this.predictor?.presented ?? null;
+    viewer.row = this.ownRow;
+    viewer.viewer = this.ownViewer;
+    viewer.authorityTick = this.ownAuthorityTick;
+    viewer.authorityReceivedAtMs = this.ownAuthorityAtMs;
+    viewer.predictedShot = this.predictedShot;
+    // the previous frame's events were presented: the queue no longer owes them (a destroyed-list entry may now settle)
+    this.events.release(frame.events);
+    frame.events.length = 0;
+    this.events.flush(sample.tick, frame.events);
+    // Double-buffered: shots that arrived since the last frame are this frame's; the other array collects the next.
+    const delivered = frame.ownShots;
+    delivered.length = 0;
+    frame.ownShots = this.pendingOwnShots;
+    this.pendingOwnShots = delivered;
+    for (const listener of this.frameListeners) listener(frame);
+    return frame;
+  }
+
+  stats(): MatchClientStats {
+    const streams = this.snapshots.stats();
+    const input = this.inputStream.stats();
+    const interp = this.interpolator.stats();
+    return {
+      phase: this.recovery.current,
+      welcomed: this.welcomeMessage !== null,
+      matchPhase: this.matchPhase,
+      verdict: this.verdict,
+      rttMs: this.serverClock.rttMs,
+      rttJitterMs: this.serverClock.rttJitterMs,
+      serverOffsetMs: this.serverClock.offset,
+      serverOffsetTargetMs: this.serverClock.target,
+      clockSamples: this.serverClock.sampleCount,
+      arrivalJitterMs: interp.arrivalJitterMs,
+      lossRate: streams.lossRate,
+      interpolationDelayMs: interp.delayMs,
+      targetDelayMs: interp.targetDelayMs,
+      extrapolatedSamples: interp.extrapolatedSamples,
+      maxExtrapolatedMs: interp.maxExtrapolatedMs,
+      snappedSamples: interp.snappedSamples,
+      maxRowExtrapolatedMs: interp.maxRowExtrapolatedMs,
+      bytesIn: this.transport.stats.bytesReceived,
+      bytesOut: this.transport.stats.bytesSent,
+      bytesInPerS: this.bytesInPerS,
+      bytesOutPerS: this.bytesOutPerS,
+      framesIn: this.transport.stats.framesReceived,
+      framesOut: this.transport.stats.framesSent,
+      snapshotsAccepted: this.snapshotsAccepted,
+      keyframes: streams.keyframes,
+      missingBaselines: streams.missingBaselines,
+      keyframeRequests: this.keyframeRequests,
+      staleSnapshots: streams.stale,
+      inputAckLagTicks: input.ackLagTicks,
+      inputIntrinsicAckLagTicks: input.intrinsicAckLagTicks,
+      inputLeadTicks: input.leadTicks,
+      inputMarginTicks: input.lastMarginTicks,
+      pendingFireEdges: input.pendingFireEdges,
+      pendingActionBits: input.pendingActionBits,
+      sampledTicks: input.sampledTicks,
+      skippedTicks: input.skippedTicks,
+      inputFramesSent: this.inputFramesSent,
+      prediction: this.predictor?.getStats() ?? null,
+      events: this.events.stats(),
+      ownShotsPredicted: this.ownShots.predicted,
+      ownShotsConfirmed: this.ownShots.confirmed,
+      transport: { ...this.transport.stats },
+      transportState: this.transport.state,
+      bufferedBytes: this.transport.bufferedBytes,
+      decodeErrors: this.decodeErrors,
+      serverErrors: this.serverErrors,
+      reconnects: this.transport.stats.reconnects,
+      stalls: this.recovery.stallCount,
+      outageMs: this.recovery.outageStartedAtMs === null ? 0 : Math.max(0, this.clock() - this.recovery.outageStartedAtMs),
+      closeReason: this.closeReason,
+      resumeHintsSent: this.resumeHintsSent,
+      holdNotices: this.holdNotices,
+      helloRetries: this.helloRetries,
+      taskStarvations: this.starvations,
+      timelineRestarts: this.timelineRestarts,
+      battleRestarts: this.battleRestarts,
+    };
+  }
+
+  // ------------------------------------------------------------ transport
+
+  private transportChanged(change: TransportStateChange): void {
+    if (this.disposed) return;
+    if (change.state === 'open') {
+      this.openedAtMs = this.clock();
+      // a link to the host the room just elected (the session followed its host_changed: migration.setGeneration): that
+      // host's boot and resume hold may keep this seat's HELLO unanswered, so the stall clock allows both (audit M1,
+      // round 2 Q1: the hold alone ran out under a slow boot; recovery.ts MIGRATION_WELCOME_ALLOWANCE_MS) until the host
+      // says how long it holds it (round 3 B1/X6: receiveHold, which any host that holds a HELLO sends, a kept one too)
+      this.holdAllowanceMs = change.resumed && this.migration.hostGeneration > this.welcomedGeneration ? MIGRATION_WELCOME_ALLOWANCE_MS : 0;
+      // A resumed link may be a new host (a migration): the own newest authority row from the host we lost is the seed
+      // for our hull if the new host could not see it (P3b); the actor bounds it and ignores it on a plain reconnect.
+      // The hint is dated by the row's capture tick (the last time the authority captured the pose fresh), never the
+      // frame's: the actor compares it with the restored row's capture tick, so its own host's carried row reads as no
+      // newer and a hull that moved since the keyframe as newer.
+      const hint = change.resumed ? this.ownRow : null;
+      if (change.resumed) this.resetForNewSocket();
+      this.sendHello();
+      if (hint) this.sendResumeHint(hint.tick, hint);
+    } else if (change.state === 'reconnecting') {
+      this.welcomeMessage = null;
+      this.welcomedAtMs = null;
+      this.inputStream.clearPendingEdges();
+      this.ownShots.cancel();
+      this.pendingPings.length = 0;
+    } else if (change.state === 'closed') {
+      this.pendingPings.length = 0;
+      if (change.reason === TRANSPORT_CLOSE.EXHAUSTED || change.reason === TRANSPORT_CLOSE.BACKPRESSURE ||
+          change.reason === TRANSPORT_CLOSE.TIMEOUT) {
+        this.recovery.end('failed');
+        this.notifyPhase('failed', change.detail ?? change.reason);
+      } else if (change.reason === TRANSPORT_CLOSE.SERVER || change.reason === TRANSPORT_CLOSE.NETWORK ||
+          change.reason === TRANSPORT_CLOSE.PROTOCOL) {
+        if (this.recovery.current !== 'left') {
+          this.recovery.end('closed');
+          this.notifyPhase('closed', change.detail ?? change.reason);
+        }
+      }
+    }
+  }
+
+  /** A new socket: the server holds no baseline and expects a fresh HELLO. */
+  private resetForNewSocket(): void {
+    this.hasPendingAuthority = false;
+    this.snapshots.reset();
+    this.interpolator.clear();
+    this.events.clear();
+    this.predictor?.reset();
+    this.ownShots.reset();
+    this.pendingOwnShots.length = 0;
+    this.ownRow = null;
+    this.ownViewer = null;
+    this.ownAuthorityTick = -1;
+    this.ownAuthorityAtMs = null;
+    this.lastAuthorityAtMs = null;
+    this.welcomedAtMs = null;
+    this.keyframeRequestedForGap = false;
+    this.pendingSpectatorAck = NO_TICK;
+  }
+
+  private sendHello(): void {
+    this.helloSentAtMs = this.clock();
+    this.send(encodeMessage({
+      type: MESSAGE_TYPE.HELLO,
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: this.capabilities,
+      token: this.token,
+      clientBuild: this.clientBuild,
+    }));
+  }
+
+  private send(bytes: Uint8Array): boolean {
+    return this.transport.send(bytes);
+  }
+
+  /** The own row as of its capture tick `tick`, its body bits with it (round 3 A14: the new host seats them as a row's). */
+  private sendResumeHint(tick: number, row: EntityRow): void {
+    const sent = this.send(encodeMessage({
+      type: MESSAGE_TYPE.RESUME_HINT, tick, x: row.x, y: row.y, z: row.z, speed: row.speed, verticalSpeed: row.verticalSpeed,
+      yaw: row.yaw, pitch: row.pitch, roll: row.roll, turretYaw: row.turretYaw, gunPitch: row.gunPitch,
+      flags: row.flags & HULL_BODY_ROW_FLAGS,
+    }));
+    if (sent) this.resumeHintsSent++;
+  }
+
+  private receive(bytes: Uint8Array): void {
+    if (this.disposed) return;
+    const nowMs = this.clock();
+    const decoded = decodeMessage(bytes, { resolveBaseline: this.snapshots.resolveBaseline });
+    if (!decoded.ok) {
+      if (decoded.error.code === 'missing_baseline') {
+        this.snapshots.noteMissingBaseline();
+        this.requestKeyframe();
+      } else if (decoded.error.code === 'bad_version' && !this.welcomeMessage) this.endForBuildMismatch(bytes[0] ?? 0);
+      else this.decodeErrors++;
+      return;
+    }
+    const message = decoded.message;
+    switch (message.type) {
+      case MESSAGE_TYPE.WELCOME: this.receiveWelcome(message, nowMs); break;
+      case MESSAGE_TYPE.SNAPSHOT: this.receiveSnapshot(message, nowMs); break;
+      case MESSAGE_TYPE.EVENT: this.receiveEvents(message); break;
+      case MESSAGE_TYPE.PONG: this.receivePong(message, nowMs); break;
+      case MESSAGE_TYPE.HOLD: this.receiveHold(message.holdMs, nowMs); break;
+      case MESSAGE_TYPE.ERROR:
+        this.serverErrors++;
+        this.errors.push(message);
+        if (this.errors.length > this.maxErrors) this.errors.shift();
+        break;
+      case MESSAGE_TYPE.CLOSE:
+        if (!this.welcomeMessage && this.helloRetriesLeft > 0 && this.recovery.current !== 'left' && (
+          // the host's window ran out before our HELLO landed
+          (message.reason === CLOSE_REASON.HELLO_REQUIRED && message.detail === 'hello timeout')
+          // or a stale offer of ours (an attempt we gave up, relayed late) replaced the link we are entering on; after the
+          // WELCOME the same CLOSE means another tab of this seat took over, and the seat ends as before
+          || (message.reason === CLOSE_REASON.REPLACED && message.detail === 'peer offered again'))) {
+          // a fresh link, a fresh HELLO (MAX_HELLO_RETRIES)
+          this.helloRetriesLeft--;
+          this.helloRetries++;
+          this.transport.reconnect(TRANSPORT_CLOSE.STALLED, 'hello timeout');
+          break;
+        }
+        this.closeReason = message.reason;
+        // the same-wire build check (2026-10-13): the host names a refusal by code; this build words it
+        this.closeDetail = message.reason === CLOSE_REASON.PROTOCOL_VERSION && matchRefusalCodeOf(message.detail)
+          ? matchRefusalMessage(matchRefusalCodeOf(message.detail)!) : message.detail;
+        if (this.recovery.current !== 'left') this.recovery.end('closed');
+        this.transport.close(TRANSPORT_CLOSE.SERVER, this.closeDetail || String(message.reason));
+        this.notifyPhase('closed', this.closeDetail);
+        break;
+      default:
+        // Client-to-server types never arrive here; the decoder already validated the frame.
+        break;
+    }
+  }
+
+  /**
+   * A host on another build (2026-10-12, MASTER item 5). Every frame's first byte is its WIRE_VERSION, so a frame this
+   * build cannot decode still names the host's version: an old tab still hosting a room when someone joins from the new
+   * page (the common case in peer-to-peer play), or the reverse. Before the WELCOME that ends the join with a reason the
+   * player can act on, instead of a seat that is never welcomed while decode errors pile up silently.
+   */
+  private endForBuildMismatch(peerWire: number): void {
+    if (this.recovery.current === 'left' || this.closeReason === CLOSE_REASON.PROTOCOL_VERSION) return;
+    this.closeReason = CLOSE_REASON.PROTOCOL_VERSION;
+    this.closeDetail = matchBuildMismatchMessage(peerWire);
+    this.recovery.end('closed');
+    this.transport.close(TRANSPORT_CLOSE.PROTOCOL, this.closeDetail);
+    this.notifyPhase('closed', this.closeDetail);
+  }
+
+  // ------------------------------------------------------------ handshake + clock
+
+  private receiveWelcome(welcome: WelcomeMessage, nowMs: number): void {
+    if (welcome.protocolVersion !== PROTOCOL_VERSION) {
+      this.closeReason = CLOSE_REASON.PROTOCOL_VERSION;
+      this.closeDetail = `server protocol ${welcome.protocolVersion}`;
+      this.recovery.end('closed');
+      this.transport.close(TRANSPORT_CLOSE.PROTOCOL, this.closeDetail);
+      this.notifyPhase('closed', this.closeDetail);
+      return;
+    }
+    // The tick rate is the simulation's; the snapshot rate is the host's choice (P3b: 20 or 30 Hz, any divisor of the
+    // tick rate) and the interpolation delay, the extrapolation cap and the loss estimate follow it in intervals.
+    if (welcome.tickHz !== TICK_HZ || welcome.snapshotHz < 1 || TICK_HZ % welcome.snapshotHz !== 0) {
+      this.closeReason = CLOSE_REASON.PROTOCOL_VERSION;
+      this.closeDetail = `unsupported rates ${welcome.tickHz}/${welcome.snapshotHz} Hz`;
+      this.recovery.end('closed');
+      this.transport.close(TRANSPORT_CLOSE.PROTOCOL, this.closeDetail);
+      this.notifyPhase('closed', this.closeDetail);
+      return;
+    }
+    if (welcome.snapshotHz !== this.snapshotHz) {
+      this.snapshotHz = welcome.snapshotHz;
+      this.interpolator.setSnapshotInterval(1000 / welcome.snapshotHz);
+      this.snapshots.setTicksPerSnapshot(TICK_HZ / welcome.snapshotHz);
+    }
+    this.welcomeMessage = welcome;
+    this.welcomedAtMs = nowMs;
+    this.welcomedGeneration = this.migration.hostGeneration;
+    this.helloRetriesLeft = MAX_HELLO_RETRIES;
+    this.timeUnwrap.reset();
+    const serverTimeMs = this.timeUnwrap.unwrap(welcome.serverTimeMs);
+    // the link's host maps its own ticks to its time: an earlier host's anchor says nothing of a new one (observe ignores
+    // older ticks, so a host whose ticks run behind the old one's was never followed). A host on the same timeline gives
+    // the same mapping. The server clock's offset is judged at the first snapshot (followTimeline): a migrated host
+    // welcomes its held seats at the resume tick, before its loop skips the ticks it stood still.
+    this.tickClock.reset();
+    this.tickClock.observe(welcome.serverTick, serverTimeMs);
+    this.timelineCheckPending = true;
+    // what this link brings is dated by it: the snapshot that tells a restarted battle may come after some of its events
+    this.migration.beginLink();
+    // A host that plays another battle than the one this client followed restarted it (round 3 A3): the battle's id is the
+    // host's own word, kept by every resume and new at every fallback restart (migrationState.ts migrationFallback), so
+    // neither the restart's tick nor its phase against this client's clocks decides it. Before, a plain reconnect whose
+    // first snapshot came more than 2 s late read as a restart (the off-clock test), and a restart on the clock seen
+    // after its countdown read as none.
+    const battleId = welcome.battleId ?? 0;
+    if (this.followedBattleId !== null && battleId !== this.followedBattleId) this.restartBattle();
+    this.followedBattleId = battleId;
+    // HELLO -> WELCOME is a round trip with a server stamp: the first clock sample.
+    if (this.helloSentAtMs !== null) this.serverClock.observePong(this.helloSentAtMs, nowMs, serverTimeMs);
+    if (!this.serverClock.isSeeded) this.serverClock.seed(serverTimeMs, nowMs);
+    const own = welcome.roster.find((entry) => entry.entityId === welcome.entityId);
+    this.ownPlayerId = own?.playerId ?? '';
+    if (welcome.entityId !== NO_ENTITY) {
+      const startTick = Math.floor(this.tickClock.tickAt(this.serverClock.serverNow(nowMs))) + this.inputStream.lead + 1;
+      this.inputStream.start(Math.max(welcome.serverTick, startTick));
+      this.ensurePredictor();
+    }
+    this.lastPingAtMs = -Infinity;
+    this.pingsSent = 0;
+    for (const listener of this.welcomeListeners) listener(welcome);
+  }
+
+  /**
+   * The battle went: what was retained of it for the next election (MigrationStore.abandonBattle: the keyframe, whose
+   * higher tick outranked the restarted battle's, and the falls, destruction and revives the next host merges into its
+   * resume) and the phase this client saw it in (the first snapshot's phase test reads the restarted battle alone). The
+   * presentation's settled world is told by MatchFrame.battleRestarts.
+   */
+  private restartBattle(): void {
+    this.battleRestarts++;
+    this.migration.abandonBattle();
+    this.matchPhase = null;
+    this.verdict = null;
+  }
+
+  /**
+   * The first snapshot on a link, against what this client followed before it (review rounds 1 and 2, U1; round 3 A3).
+   * - The battle. A host that shows a battle this client saw begin (playing, ended or decided) as not begun went back to
+   *   its countdown: a resume from a seat whose newest frame was still in it (one host's phase only moves forward;
+   *   migrationState.ts resumePhaseOf). What this client retained of the battle since goes (restartBattle), as the
+   *   resumed host has none of it. A battle restart from the spawns is told at the WELCOME by its battle id
+   *   (receiveWelcome); its distance from the clock no longer decides it (round 3 A3): a plain reconnect whose first
+   *   snapshot came more than 2 s late read as one, and a restart on the clock after its countdown as none.
+   * - The clocks. A host whose loop runs further from the clock than the clock's own hard resync bound, which no link
+   *   delay explains, runs another timeline, and the clocks re-anchor on it at once. Kept, the old host's samples held the
+   *   offset until the window turned over, and the input stream, started at the WELCOME on the old timeline, sent every
+   *   INPUT far ahead of the new host (refused), then none at all until the new timeline caught up with it. A host on the
+   *   same timeline (a reconnect, a migration that skipped its boot's ticks) is left as it is. The snapshot's stamp seeds
+   *   the clock (one way, low by the link's delay) and a fresh ping burst corrects it, as after a first WELCOME. A first
+   *   snapshot merely late re-anchors the clocks on its stamp, and the burst corrects them; it drops nothing.
+   */
+  private followTimeline(frame: SnapshotFrame, serverTimeMs: number, nowMs: number): void {
+    const tick = frame.tick;
+    const offTimelineMs = serverTimeMs - this.serverClock.serverNow(nowMs);
+    const hardResyncMs = this.serverClock.hardResyncMs;
+    // this.matchPhase and this.verdict are still the newest frame's before this link (receiveSnapshot sets them after;
+    // restartBattle cleared them for a battle of another id)
+    if (battleBegun(this.matchPhase, this.verdict) && !battleBegun(frame.meta.phase, frame.meta.verdict)) this.restartBattle();
+    if (Math.abs(offTimelineMs) <= hardResyncMs) return;
+    this.timelineRestarts++;
+    this.serverClock.reset();
+    this.serverClock.seed(serverTimeMs, nowMs);
+    this.tickClock.reset();
+    this.tickClock.observe(tick, serverTimeMs);
+    this.pendingPings.length = 0;
+    this.lastPingAtMs = -Infinity;
+    this.pingsSent = 0;
+    if (this.isSeated) {
+      // the controls sampled for the old timeline's ticks are no one's now
+      this.predictor?.reset();
+      this.inputStream.start(Math.max(tick, Math.floor(this.tickClock.tickAt(this.serverClock.serverNow(nowMs))) + this.inputStream.lead + 1));
+    }
+  }
+
+  private ensurePredictor(): void {
+    if (this.predictor || !this.predictionProvider || !this.welcomeMessage || this.welcomeMessage.entityId === NO_ENTITY) return;
+    const own = this.welcomeMessage.roster.find((entry) => entry.entityId === this.welcomeMessage!.entityId);
+    const spec = own ? this.predictionProvider.specFor(own.specId) : null;
+    if (!spec) return;
+    this.predictor = new LocalPredictor(spec, this.predictionProvider.world, this.correction);
+  }
+
+  private maintainPings(nowMs: number): void {
+    const interval = this.pingsSent < this.pingBurstCount ? this.pingBurstIntervalMs : this.pingIntervalMs;
+    if (nowMs - this.lastPingAtMs < interval) return;
+    this.sendPing(nowMs, this.snapshots.ackTick);
+  }
+
+  private sendPing(nowMs: number, ackTick: number): void {
+    const key = u32(this.pingKey++ * 7919 + nowMs);
+    if (!this.send(encodeMessage({ type: MESSAGE_TYPE.PING, clientTimeMs: key, snapshotAckTick: ackTick }))) return;
+    this.lastPingAtMs = nowMs;
+    this.pingsSent++;
+    this.pendingPings.push({ key, sentAtMs: nowMs });
+    if (this.pendingPings.length > MAX_PENDING_PINGS) this.pendingPings.shift();
+  }
+
+  /**
+   * The host holds this seat's HELLO for at most `holdMs` more (wire HOLD, round 3 B1/X6: through its boot, matchHost.ts
+   * bootHoldNotice, or a migrated host's resume hold, matchHostCore.ts noticeHeld): the stall clock's handshake allowance
+   * runs to then, and its stall counts from there. The host's own word replaces whatever the link opened with: a newly
+   * elected host's whole boot and hold bound (MIGRATION_WELCOME_ALLOWANCE_MS, all a seat could allow before), and a kept
+   * host's nothing (matchSession.ts bootKeptHost holds its seats at the room's same generation, which the opening allowance
+   * never read). So a seat waits through a slow boot or a long hold on any link, and asks for a fresh one once its host
+   * overruns what it announced (by more than HOLD_RELEASE_MARGIN_MS, the WELCOME's way out through the host's main thread),
+   * not 33 s after the link opened. Capped at that bound; after the WELCOME it means nothing.
+   */
+  private receiveHold(holdMs: number, nowMs: number): void {
+    if (this.welcomeMessage || this.openedAtMs === null) return;
+    this.holdAllowanceMs = Math.max(0, nowMs - this.openedAtMs) + Math.min(Math.max(0, holdMs) + HOLD_RELEASE_MARGIN_MS, MIGRATION_WELCOME_ALLOWANCE_MS);
+    this.holdNotices++;
+  }
+
+  private receivePong(pong: PongMessage, nowMs: number): void {
+    const index = this.pendingPings.findIndex((ping) => ping.key === pong.clientTimeMs);
+    if (index < 0) return;
+    const [ping] = this.pendingPings.splice(index, 1);
+    this.serverClock.observePong(ping!.sentAtMs, nowMs, this.timeUnwrap.unwrap(pong.serverTimeMs));
+  }
+
+  /** Ask for a keyframe: an ack of NO_TICK (the server sends one when it holds no acked baseline). */
+  private requestKeyframe(): void {
+    if (this.keyframeRequestedForGap || this.transport.state !== 'open') return;
+    this.keyframeRequestedForGap = true;
+    this.keyframeRequests++;
+    this.sendPing(this.clock(), NO_TICK);
+  }
+
+  // ------------------------------------------------------------ snapshots + events
+
+  private receiveSnapshot(packet: SnapshotPacket, nowMs: number): void {
+    const accepted = this.snapshots.accept(packet);
+    if (!accepted.ok) {
+      if (accepted.reason === 'missing_baseline') this.requestKeyframe();
+      return;
+    }
+    const frame = accepted.frame;
+    if (accepted.keyframe) this.keyframeRequestedForGap = false;
+    const serverTimeMs = this.timeUnwrap.unwrap(frame.serverTimeMs);
+    if (this.timelineCheckPending) { this.timelineCheckPending = false; this.followTimeline(frame, serverTimeMs, nowMs); }
+    this.tickClock.observe(frame.tick, serverTimeMs);
+    this.lastAuthorityAtMs = nowMs;
+    this.snapshotsAccepted++;
+    this.inputStream.acknowledge(frame, nowMs);
+    this.interpolator.push(frame, serverTimeMs, nowMs, this.snapshots.lastGapTick === frame.tick);
+    this.latestDestroyed = frame.destroyed;
+    this.latestDestroyedFalls = frame.destroyedFalls && frame.destroyedFalls.length === frame.destroyed.length ? frame.destroyedFalls : NO_FALLS;
+    this.latestRevision = frame.meta.destructibleRevision;
+    this.latestDestruction = frame.destruction ?? [];
+    this.matchPhase = frame.meta.phase;
+    this.verdict = frame.meta.verdict;
+    this.pendingSpectatorAck = frame.tick;
+    this.observeOwnRow(frame, nowMs);
+  }
+
+  private observeOwnRow(frame: SnapshotFrame, nowMs: number): void {
+    const entityId = this.ownEntityId;
+    if (entityId === NO_ENTITY) return;
+    let row: EntityRow | null = null;
+    for (const candidate of frame.entities) if (candidate.entityId === entityId) { row = candidate; break; }
+    if (!row) return;
+    this.ownRow = row;
+    this.ownViewer = frame.viewer && frame.viewer.entityId === entityId ? frame.viewer : null;
+    // The own row is on the near tier: captured every snapshot and omitted from a delta only when identical, so a
+    // carried row (its capture tick older than the frame's) is the authority's exact pose AT THE FRAME'S TICK — reconcile
+    // there. Reconciling at the row's own tick refused every frame of a hull held still against a hull this client
+    // cannot see (an unchanged row, an older tick, "no newer authority") and the prediction drove on through it: 3.6 m
+    // of misprediction in the client soak against 0.3 (P3b, 2026-09-29).
+    this.ownAuthorityTick = frame.tick;
+    this.ownAuthorityAtMs = nowMs;
+    const viewer = this.ownViewer;
+    const own = this.welcomeMessage?.roster.find(entry => entry.entityId === entityId);
+    const gun = own ? this.predictionProvider?.specFor(own.specId)?.gun : undefined;
+    const round = gun?.shells?.[row.shellSlot];
+    const gunRed = !viewer || (usesLauncherMuzzles(gun, round)
+      ? viewer.modules[VIEWER_MODULES.indexOf('missileRack')] === 2
+      : viewer.modules[VIEWER_GUN_INDEX] === 2 || viewer.modules[VIEWER_GUN_MOUNT_INDEX] === 2
+        || viewer.modules[VIEWER_MODULES.indexOf('feedSystem')] === 2);
+    this.ownShots.observe({
+      tick: frame.tick,
+      alive: row.hp > 0 && (row.flags & ENTITY_FLAGS.DESTROYED) === 0,
+      shellSlot: row.shellSlot,
+      reloadS: dequantizeReloadS(row.reload),
+      ammo: row.shellSlot === 0 ? row.ammo0 : row.shellSlot === 1 ? row.ammo1 : row.ammo2,
+      magazineRounds: row.magazineRounds,
+      magazineCapacity: row.magazineCapacity,
+      guided: false,
+      weaponBlocked: gunRed,
+    }, nowMs);
+    this.ensurePredictor();
+    // 2026-10-15 (the MP stream): reconciled at the next frame, the newest row only (reconcilePending). The rows a stalled
+    // tab received arrive in a burst — before its waking frame or after it — and each one older than the replay window
+    // rewound the hull and replayed only the window's newest ticks, leaving it behind by the rest: metres per row at speed
+    // (the e2e seat-pause probe, 2.8 m after 0.3 s, 7.8 m and a hard snap after 0.7 s). The newest row supersedes them.
+    const pending = this.pendingAuthority;
+    pending.tick = frame.tick;
+    pending.row = row;
+    pending.viewer = this.ownViewer;
+    this.hasPendingAuthority = true;
+  }
+
+  /** The newest own authority row since the last frame, reconciled once (the frame's first step, before the sampler). */
+  private reconcilePending(): void {
+    if (!this.hasPendingAuthority) return;
+    this.hasPendingAuthority = false;
+    this.predictor?.reconcile(this.pendingAuthority, this.controlAt, this.inputStream.lastSampledTick);
+  }
+
+  private readonly controlAt = (tick: number): PredictionControl | null => this.inputStream.controlAt(tick);
+
+  private receiveEvents(message: EventMessage): void {
+    // Migration chunks are retained here and never reach the presentation or the budgeted queue.
+    let game: WireEvent[] | null = null;
+    const nowMs = this.clock();
+    for (const event of message.events) {
+      if (this.migration.receive(event, nowMs)) continue;
+      (game ??= []).push(event);
+      if (event.kind === 'world_prop_destroyed') {
+        const index = Number(event.payload.obstacleIndex);
+        if (Number.isSafeInteger(index) && index >= 0) this.migration.retainFallen(index);
+      } else if (event.kind === 'mode_respawn') {
+        if (typeof event.payload.id === 'string') this.migration.retainRespawn(event.payload.id, message.tick);
+      } else if (event.kind === 'structure_stage') {
+        const structureId = Number(event.payload.structureId), stage = event.payload.stage;
+        if (Number.isSafeInteger(structureId) && structureId >= 0
+          && (stage === 'damaged' || stage === 'breached' || stage === 'collapsed')) {
+          const cx = Number(event.payload.cx), cz = Number(event.payload.cz);
+          this.migration.retainDestruction(Number.isFinite(cx) && Number.isFinite(cz)
+            ? { kind: 'stage', structureId, stage, cx, cz } : { kind: 'stage', structureId, stage });
+        }
+      } else if (event.kind === 'structure_breach') {
+        // a hole or a fall (P2), as the log carries it (its footprint centre with it)
+        const p = event.payload;
+        const structureId = Number(p.structureId), section = Number(p.section), hole = Number(p.hole);
+        const x = Number(p.x), y = Number(p.y), z = Number(p.z), radiusM = Number(p.radiusM);
+        if (Number.isSafeInteger(structureId) && structureId >= 0 && Number.isSafeInteger(section) && Number.isSafeInteger(hole)
+          && Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) && Number.isFinite(radiusM)) {
+          const cx = Number(p.cx), cz = Number(p.cz);
+          const entry = { kind: 'breach' as const, structureId, section, hole, x, y, z, radiusM, sectionDown: p.sectionDown === true };
+          this.migration.retainDestruction(Number.isFinite(cx) && Number.isFinite(cz) ? { ...entry, cx, cz } : entry);
+        }
+      }
+    }
+    if (!game) return;
+    if (game.length !== message.events.length) message = { type: MESSAGE_TYPE.EVENT, tick: message.tick, events: game };
+    if (!this.ownPlayerId) { this.events.push(message); return; }
+    let own: WireEvent[] | null = null;
+    let rest: WireEvent[] | null = null;
+    for (const event of message.events) {
+      if (event.kind === 'shell_fired' && event.payload.shooterId === this.ownPlayerId) (own ??= []).push(event);
+      else (rest ??= []).push(event);
+    }
+    if (own) {
+      for (const event of own) {
+        const predicted = this.ownShots.confirm(event);
+        this.pendingOwnShots.push({ event, feedbackPredicted: predicted !== null });
+      }
+    }
+    if (rest) this.events.push({ type: MESSAGE_TYPE.EVENT, tick: message.tick, events: rest });
+  }
+
+  // ------------------------------------------------------------ input
+
+  /**
+   * The display tick trails the sampler by up to one tick so consecutive
+   * tick poses blend; it advances with local time and slews toward its
+   * target instead of jumping when the lead or the RTT estimate changes.
+   */
+  private advanceDisplayTick(targetTick: number, elapsedS: number): void {
+    const newest = this.inputStream.lastSampledTick;
+    if (this.displayTick < 0 || Math.abs(targetTick - this.displayTick) > DISPLAY_TICK_RESYNC) {
+      this.displayTick = targetTick;
+    } else {
+      this.displayTick += elapsedS * TICK_HZ;
+      const error = targetTick - this.displayTick;
+      this.displayTick += Math.max(-DISPLAY_TICK_SLEW, Math.min(DISPLAY_TICK_SLEW, error * DISPLAY_TICK_GAIN));
+    }
+    this.displayTick = Math.max(newest - 2, Math.min(newest, this.displayTick));
+  }
+
+  private sampleInputs(nowMs: number, elapsedS: number): void {
+    if (!this.inputStream.isStarted || !this.isSeated) return;
+    const serverNow = this.serverClock.serverNow(nowMs);
+    const oneWayMs = (this.serverClock.rttMs ?? 0) / 2;
+    const targetTick = this.tickClock.tickAt(serverNow + oneWayMs) + this.inputStream.lead;
+    const skippedFrom = this.inputStream.pendingTick;
+    const due = this.inputStream.dueTicks(targetTick, MAX_TICKS_PER_FRAME, CATCH_UP_LIMIT_TICKS);
+    // a stall: the sampler jumped over ticks the authority will hold and then release; the prediction steps them the same way
+    const skipped = this.inputStream.pendingTick - skippedFrom;
+    if (skipped > 0) this.predictor?.skipTicks(skippedFrom, skipped);
+    for (let index = 0; index < due; index++) {
+      const tick = this.inputStream.pendingTick;
+      const sample = this.controls?.(tick) ?? NEUTRAL_CONTROL;
+      const previousFireSeq = this.inputStream.currentFireSeq;
+      const control = this.inputStream.sample(sample);
+      this.predictor?.recordTick(control);
+      if (control.fireSeq !== previousFireSeq) {
+        this.predictedShot = this.ownShots.predict(control.fireSeq, control.shellSlot, nowMs) ?? this.predictedShot;
+      }
+    }
+    this.advanceDisplayTick(targetTick - 1, elapsedS);
+    if (due > 0) {
+      const message = this.inputStream.frame(this.snapshots.ackTick, this.interpolator.delay);
+      if (message && this.send(encodeMessage(message))) this.inputFramesSent++;
+    }
+  }
+
+  /** Spectators send no INPUT: acknowledge each assembled snapshot explicitly. */
+  private maintainAcks(): void {
+    if (this.isSeated || this.pendingSpectatorAck === NO_TICK) return;
+    const tick = this.pendingSpectatorAck;
+    this.pendingSpectatorAck = NO_TICK;
+    this.send(encodeMessage({ type: MESSAGE_TYPE.SNAPSHOT_ACK, tick }));
+  }
+
+  // ------------------------------------------------------------ recovery + rates
+
+  /**
+   * 2026-10-15 (the MP stream): one ordinary task in flight at a time; one still waiting past TASK_STARVED_MS means this
+   * tab could not have read the channel either (its message tasks wait behind the same work), so the stall clock rests.
+   */
+  private observeTaskQueue(nowMs: number): void {
+    const probe = this.taskProbe;
+    if (!probe) return;
+    if (this.probePostedAtMs !== null) {
+      if (nowMs - this.probePostedAtMs > TASK_STARVED_MS) {
+        if (this.starvedAtMs === null || nowMs - this.starvedAtMs > TASK_STARVED_MS * 2) this.starvations++;
+        this.starvedAtMs = nowMs;
+      }
+      return;
+    }
+    this.probePostedAtMs = nowMs;
+    probe(this.onProbe);
+  }
+
+  private stepRecovery(nowMs: number): void {
+    const step = this.recovery.update({
+      nowMs,
+      transportState: this.transport.state,
+      welcomed: this.welcomeMessage !== null,
+      lastAuthorityAtMs: this.lastAuthorityAtMs,
+      openedAtMs: this.openedAtMs,
+      welcomedAtMs: this.welcomedAtMs,
+      holdAllowanceMs: this.holdAllowanceMs,
+      starvedAtMs: this.starvedAtMs,
+    });
+    if (step.requestReconnect) {
+      this.transport.reconnect(TRANSPORT_CLOSE.STALLED, `no accepted authority for ${Math.round(this.recovery.stallMs)} ms`);
+    }
+    if (step.fail && this.transport.state !== 'closed') {
+      this.transport.close(TRANSPORT_CLOSE.TIMEOUT, `no authority for ${Math.round(step.outageMs)} ms`);
+    }
+    if (step.changed) this.notifyPhase(step.phase, step.phase === 'stalled' ? 'authority_stalled' : '');
+  }
+
+  private notifyPhase(phase: ConnectionPhase, detail: string): void {
+    for (const listener of this.phaseListeners) listener(phase, detail);
+  }
+
+  private observeRates(nowMs: number): void {
+    const stats = this.transport.stats;
+    if (this.rateWindowStartMs === null) {
+      this.rateWindowStartMs = nowMs;
+      this.rateWindowBytesIn = stats.bytesReceived;
+      this.rateWindowBytesOut = stats.bytesSent;
+      return;
+    }
+    const elapsedMs = nowMs - this.rateWindowStartMs;
+    if (elapsedMs < 1000) return;
+    this.bytesInPerS = (stats.bytesReceived - this.rateWindowBytesIn) * 1000 / elapsedMs;
+    this.bytesOutPerS = (stats.bytesSent - this.rateWindowBytesOut) * 1000 / elapsedMs;
+    this.rateWindowStartMs = nowMs;
+    this.rateWindowBytesIn = stats.bytesReceived;
+    this.rateWindowBytesOut = stats.bytesSent;
+  }
+}

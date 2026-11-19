@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Noodles</title>
+    <link rel="stylesheet" href="../../utils/lab/lab.css" />
+    <script src="../../utils/importmap.js"></script>
+  </head>
+  <body>
+    <div id="loading">
+      <p class="loading-title">Noodles</p>
+      <div class="loading-bar" role="progressbar" aria-label="Loading"></div>
+      <p class="loading-stage" aria-live="polite">Loading</p>
+    </div>
+    <script type="module">
+      import * as THREE from 'three/webgpu'
+      import { color, hash, instanceIndex, mix, vec3 } from 'three/tsl'
+      import { NoodleSimulation, NoodleSimulationHelper } from './NoodleSimulation.js'
+      import { Lab, seededRandom } from '../../utils/lab/Lab.js'
+
+      // Noodles: long cooked pasta dropped on its ends onto a big lab bench, where it buckles, coils into loops, piles up and
+      // keeps the shape it settles in. bendingCompliance droops a noodle over a length of its own, about 37 cm at 2: a
+      // noodle many times longer is floppy, so the noodles are metres long and the bench is scaled to them.
+
+      const params = {
+        // Drop (rebuilds)
+        count: 25,
+        length: 5.44, // m
+        thickness: 0.1, // m
+        particles: 35, // per noodle: one per 1.6 thicknesses
+        seed: 1,
+        // Simulation (live)
+        bendingCompliance: 2,
+        bendingDamping: 20,
+        bendingPlasticity: 2,
+        contactFriction: 0.6,
+        surfaceFriction: 0.9,
+        numSubsteps: 15,
+        timeScale: 1,
+        capsules: false,
+      }
+      const LIVE = ['bendingCompliance', 'bendingDamping', 'bendingPlasticity', 'contactFriction', 'numSubsteps', 'timeScale']
+      // Upright on a lattice filling a disc of `radius`, their tops `height` to `height + jitter` above the bench, each
+      // leaning up to `tilt` (rad): they rain down in parallel and land on their ends.
+      const DROP = { radius: 1, height: 7, jitter: 4, tilt: THREE.MathUtils.degToRad(2) }
+      // The bench, × 1.6 m: wide enough to hold the pile.
+      const LAB_SCALE = 4
+
+      const lab = await Lab.create({
+        title: 'Noodles',
+        hint: 'Drag a noodle to pull it · R drops again',
+        scale: LAB_SCALE,
+      })
+
+      const material = new THREE.MeshStandardNodeMaterial({ name: 'noodles', roughness: 0.45 })
+      // instanceIndex is the noodle: each its own shade, from the colour to a deeper one, as durum's #f4d995 to #e0b562.
+      const deep = new THREE.Color('#e0b562')
+      const base = new THREE.Color('#f4d995')
+      const deeper = vec3(deep.r / base.r, deep.g / base.g, deep.b / base.b)
+      material.colorNode = color('#ffcf57').mul(mix(vec3(1), deeper, hash(instanceIndex)))
+      material.shadowSide = THREE.DoubleSide
+
+      let noodles = null
+      let helper = null
+      let building = null
+      let rebuildQueued = false
+
+      function applySettings(sim) {
+        for (const key of LIVE) sim[key] = params[key]
+        // the bench is a collider, the floor the ground
+        sim.colliderFriction = sim.groundFriction = params.surfaceFriction
+        // Under strictCollisions' bound on the speed, 67.5 · radius · substeps.
+        sim.maxSpeed = 0.9 * 67.5 * sim.maxRadius * sim.numSubsteps
+      }
+
+      function syncHelper() {
+        helper?.removeFromParent()
+        helper = null
+        if (!noodles) return
+        // the capsules stand in for the bodies
+        noodles.visible = !params.capsules
+        if (params.capsules) {
+          helper = new NoodleSimulationHelper(noodles)
+          lab.add(helper)
+        }
+      }
+
+      // Straight noodles standing on a square lattice, as dry spaghetti stands in a box, never closer than 2.5 radii.
+      function standNoodles() {
+        const { count, length } = params
+        const random = seededRandom(params.seed)
+        const columns = Math.ceil(Math.sqrt(count))
+        const rows = Math.ceil(count / columns)
+        const cell = Math.max(1.25 * params.thickness, columns > 1 ? (DROP.radius * Math.SQRT2) / (columns - 1) : 0)
+        const axis = new THREE.Vector3()
+        return Array.from({ length: count }, (_, n) => {
+          const middle = new THREE.Vector3(
+            ((n % columns) - (columns - 1) / 2) * cell,
+            DROP.height + DROP.jitter * random() - length / 2,
+            (Math.floor(n / columns) - (rows - 1) / 2) * cell,
+          ).add(lab.surface)
+          const azimuth = random() * Math.PI * 2
+          axis.set(Math.cos(azimuth), 0, Math.sin(azimuth))
+          const half = new THREE.Vector3(0, length / 2, 0).applyAxisAngle(axis, DROP.tilt * random())
+          return new THREE.LineCurve3(middle.clone().add(half), middle.clone().sub(half))
+        })
+      }
+
+      async function build() {
+        Lab.stage('Dropping the noodles')
+        const radius = params.thickness / 2
+        const curves = standNoodles()
+        const next = new NoodleSimulation(curves, material, {
+          radius,
+          particlesPerNoodle: params.particles,
+          colliders: lab.colliders,
+          radialSegments: 8,
+          lengthSegments: 3,
+        })
+        next.name = 'noodles'
+        next.ground = lab.ground
+        applySettings(next)
+        Lab.stage('Compiling the noodles')
+        await next.compileAsync(lab.renderer)
+        if (noodles) {
+          lab.scene.remove(noodles)
+          noodles.dispose()
+        }
+        noodles = next
+        lab.add(noodles)
+        syncHelper()
+      }
+
+      // One build at a time; a change during one builds again after it.
+      async function rebuild() {
+        if (building) {
+          rebuildQueued = true
+          return
+        }
+        building = build()
+        try {
+          await building
+        } finally {
+          building = null
+        }
+        if (rebuildQueued) {
+          rebuildQueued = false
+          rebuild()
+        }
+      }
+
+      await rebuild()
+
+      lab.onFrame((delta) => noodles?.update(lab.renderer, delta))
+      lab.onReset(() => noodles?.reset())
+      // A thickness from a particle: on the noodle, not beside it.
+      const reach = () => ({ radius: params.thickness })
+      lab.onGrab({
+        hit: async (raycaster) => noodles !== null && (await noodles.pickAsync(raycaster, reach())) !== null,
+        start: (raycaster) => noodles?.pick(raycaster, reach()).grabPicked().moveGrabAlongRay(raycaster.ray),
+        move: (raycaster) => noodles?.moveGrabAlongRay(raycaster.ray),
+        end: () => noodles?.endGrab(),
+      })
+
+      const drop = lab.gui.addFolder('Drop')
+      drop.add(params, 'count', 1, 100, 1).onFinishChange(rebuild)
+      drop.add(params, 'length', 1, 10, 0.01).name('length (m)').onFinishChange(rebuild)
+      drop.add(params, 'thickness', 0.02, 0.3, 0.005).name('thickness (m)').onFinishChange(rebuild)
+      drop.add(params, 'particles', 6, 64, 1).name('particles each').onFinishChange(rebuild)
+      drop
+        .add(
+          {
+            dropNew() {
+              params.seed++
+              rebuild()
+            },
+          },
+          'dropNew',
+        )
+        .name('Drop new noodles')
+
+      const live = () => noodles && applySettings(noodles)
+      const simulation = lab.gui.addFolder('Simulation')
+      simulation.add(params, 'bendingCompliance', 0.05, 8, 0.05).name('floppiness').onChange(live)
+      simulation.add(params, 'bendingDamping', 0, 40, 0.5).name('bend damping').onChange(live)
+      simulation.add(params, 'bendingPlasticity', 0, 10, 0.1).name('plasticity').onChange(live)
+      simulation.add(params, 'contactFriction', 0, 1.5, 0.05).name('friction').onChange(live)
+      simulation.add(params, 'surfaceFriction', 0, 1.5, 0.05).name('bench friction').onChange(live)
+      simulation.add(params, 'numSubsteps', 4, 30, 1).name('substeps').onChange(live)
+      simulation.add(params, 'timeScale', 0, 2, 0.05).name('time scale').onChange(live)
+      simulation.add(params, 'capsules').name('show capsules').onChange(syncHelper)
+
+      lab.ready()
+    </script>
+  </body>
+</html>

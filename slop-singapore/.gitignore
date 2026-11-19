@@ -1,0 +1,5 @@
+.DS_Store
+# raw island-wide Overpass downloads (tools/city/fetch-island.mjs): rebuilt into tiles/, not kept
+tools/data/*/island/
+# raw MRT Overpass downloads (tools/city/mrt.mjs --fetch): rebuilt into tiles/<city>/mrt.json, not kept
+tools/data/*/mrt/*.json

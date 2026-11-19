@@ -1,0 +1,126 @@
+/**
+ * Combat UI Metadata Configuration
+ *
+ * Icons, colors, labels, and descriptions for damage and armor types.
+ * Used by UI components (tower panel, wave preview, tooltips).
+ *
+ * Mapped types enforce that every DamageType/ArmorType has an entry.
+ * Adding a new type without UI metadata is a compile-time error.
+ */
+
+import { DamageType, ArmorType } from './combat.types';
+
+// ==================== Damage Type UI ====================
+
+export interface DamageTypeUIMeta {
+  id: DamageType;
+  label: string;
+  color: string;
+  description: string;
+}
+
+/** UI metadata for each damage type. Compile-time complete. */
+export const DAMAGE_TYPE_UI: Readonly<Record<DamageType, DamageTypeUIMeta>> = {
+  physical: {
+    id: 'physical',
+    label: 'Physical',
+    color: '#B0B0B0',
+    description: 'Solid allrounder, falls off vs armor',
+  },
+  pierce: {
+    id: 'pierce',
+    label: 'Pierce',
+    color: '#FFD700',
+    description: 'High fire rate, anti-swarm',
+  },
+  siege: {
+    id: 'siege',
+    label: 'Siege',
+    color: '#FF6600',
+    description: 'Slow AoE, anti-heavy/fortified',
+  },
+  magic: {
+    id: 'magic',
+    label: 'Magic',
+    color: '#9B59B6',
+    description: 'Ethereal counter, utility',
+  },
+  fire: {
+    id: 'fire',
+    label: 'Fire',
+    color: '#FF4400',
+    description: 'DoT/Burn, anti-regen',
+  },
+  ice: {
+    id: 'ice',
+    label: 'Ice',
+    color: '#00BFFF',
+    description: 'Low DPS, strong slow/CC',
+  },
+  poison: {
+    id: 'poison',
+    label: 'Poison',
+    color: '#44CC22',
+    description: 'DoT specialist, anti-regen',
+  },
+  lightning: {
+    id: 'lightning',
+    label: 'Lightning',
+    color: '#7DD3FC',
+    description: 'Chain hitscan, anti-swarm/air',
+  },
+  chaos: {
+    id: 'chaos',
+    label: 'Chaos',
+    color: '#D946EF',
+    description: 'Full damage vs every armor, no weak spot',
+  },
+};
+
+// ==================== Armor Type UI ====================
+
+export interface ArmorTypeUIMeta {
+  id: ArmorType;
+  label: string;
+  color: string;
+  description: string;
+}
+
+/**
+ * UI metadata for each armor type. Compile-time complete.
+ *
+ * What an armor is weak to is not listed here: the sidebar reads it off
+ * DAMAGE_MATRIX (bestDamageTypesAgainst), so it follows a rebalance.
+ */
+export const ARMOR_TYPE_UI: Readonly<Record<ArmorType, ArmorTypeUIMeta>> = {
+  unarmored: {
+    id: 'unarmored',
+    label: 'Unarmored',
+    color: '#4CAF50',
+    description: 'No damage resistance',
+  },
+  light: {
+    id: 'light',
+    label: 'Light',
+    color: '#2196F3',
+    description: 'Fast, vulnerable to pierce',
+  },
+  heavy: {
+    id: 'heavy',
+    label: 'Heavy',
+    color: '#FF9800',
+    description: 'Tough, requires siege',
+  },
+  fortified: {
+    id: 'fortified',
+    label: 'Fortified',
+    color: '#F44336',
+    description: 'Very tough, DPS check',
+  },
+  ethereal: {
+    id: 'ethereal',
+    label: 'Ethereal',
+    color: '#9C27B0',
+    description: 'Resists most, weak to magic/ice/lightning',
+  },
+};

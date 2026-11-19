@@ -1,0 +1,233 @@
+import type { RuntimeValue } from '../runtimeTypes.ts';
+import type { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import type { FrameLoopDecisionObserver, FrameLoopObservation } from '../engine/frameLoopScheduler.ts';
+/**
+ * Explicit browser diagnostics surface.
+ *
+ * This module is imported only for development, `?debug=1`, and automated
+ * browser sessions. Player boot therefore does not parse or install the large
+ * engineering API, while probes keep the same live getters and actions.
+ */
+
+import type { BrowserLaunchRequest } from '../mp/session/browserComposition.ts';
+import { visitOwnedObject3DGeometries } from '../engine/resourceLifetime.ts';
+import { inspectNightHeadlight, inspectNightShtora, inspectNightWindow } from './nightWindowInspection.ts';
+import { inspectNightWorldFixture, type NightWorldFixtureKind } from './nightWorldFixtureInspection.ts';
+import type { ColliderOverlayHandle, ColliderOverlayOptions } from './colliderOverlay.ts';
+import type { FrameStageRecorder } from './frameStageRecorder.ts';
+import { createBattleHold } from './battleHold.ts';
+
+type UnknownAction = CallableFunction;
+
+interface DebugInstallTarget {
+  __DEBUG?: RuntimeValue;
+}
+
+export interface DebugSurfaceDependencies {
+  scene: RuntimeValue;
+  camera: RuntimeValue;
+  renderer: RuntimeValue;
+  post: RuntimeValue;
+  lighting: RuntimeValue;
+  game: { spotting?: RuntimeValue; devBattleHold?: boolean };
+  rig: RuntimeValue;
+  bus: RuntimeValue;
+  input: RuntimeValue;
+  settings: RuntimeValue;
+  pauseInfo: RuntimeValue;
+  garage: RuntimeValue;
+  quality: Readonly<Record<string, UnknownAction>>;
+  getFx(): RuntimeValue;
+  getBattleAtmosphere?(): RuntimeValue;
+  getNightLighting?(): RuntimeValue;
+  getMapAmbience?(): RuntimeValue;
+  getPedestalVisual(): RuntimeValue;
+  isGarageModePreviewPending?(): boolean;
+  isPedestalOnStage(): boolean;
+  getSelectedSpecId(): string;
+  /** Watch mode's controller (game/watchController.ts) while a watched battle runs, else null. */
+  getWatchController?(): RuntimeValue;
+  getPedestalCacheIds(): readonly string[];
+  getWorldCacheIds(): readonly string[];
+  getResidentLimits(): Readonly<Record<string, number>>;
+  getBattleVisualPoolStats(): RuntimeValue;
+  getGarageFramePacerStats(): RuntimeValue;
+  getFrameLoopSchedulerStats(): RuntimeValue;
+  observeFrameLoopScheduler(observer: FrameLoopDecisionObserver): FrameLoopObservation;
+  getPhaseSceneResidency(): RuntimeValue;
+  getGarageGpuResidency(): RuntimeValue;
+  getLastWorldRelease(): RuntimeValue;
+  isGraphicsContextLost(): boolean;
+  selectGarageTank(id: string): RuntimeValue;
+  stagePedestalTank(id: string): RuntimeValue;
+  getWorld(): RuntimeValue;
+  switchMap(mapId: string): RuntimeValue;
+  flags: RuntimeValue;
+  frameInfo: RuntimeValue;
+  aimAtNearest: UnknownAction;
+  gunAimError: UnknownAction;
+  playerShellLog: RuntimeValue;
+  botPressure: RuntimeValue;
+  aimState: UnknownAction;
+  fastForward: UnknownAction;
+  slayEnemies: UnknownAction;
+  startBattle: UnknownAction;
+  bakeMinimapForMap(mapId: string): Promise<RuntimeValue>;
+  beginBattleEntry: UnknownAction;
+  beginSoloBattle: UnknownAction;
+  beginNetworkBattle(request?: BrowserLaunchRequest): RuntimeValue;
+  enterGarage: UnknownAction;
+  leaveBattleToGarage: UnknownAction;
+  killcam: RuntimeValue;
+  showroom: RuntimeValue;
+  garageDressing: RuntimeValue;
+  spawnKillShell: UnknownAction;
+  getShotMode(): boolean;
+  setShotMode(value: boolean): void;
+  forceHitMark(bounced: boolean): Promise<void>;
+  getDamagePanel(): RuntimeValue;
+  devTrace: RuntimeValue;
+  getNetworkDiagnostics(): RuntimeValue;
+  /** Whether a network battle runs (the battle hold refuses one). */
+  isNetworkBattle(): boolean;
+  collectTelemetry(): RuntimeValue;
+  sampleShadowContribution(): RuntimeValue;
+}
+
+/** Install the full live QA surface on an explicit target. */
+export function installDebugSurface(
+  deps: DebugSurfaceDependencies,
+  target: DebugInstallTarget = globalThis as DebugInstallTarget,
+): RuntimeValue {
+  // the world's collider view (the hitbox lane, 2026-10-07): one overlay at a time, its module loaded on first use
+  let colliderOverlayHandle: ColliderOverlayHandle | null = null;
+  // the battle spike census's frame-stage recorder (battle-spikes-253): its module loaded on first install
+  let frameStageRecorder: FrameStageRecorder | null = null;
+  const surface = {
+    frameStages: {
+      /** `gl`: also time the WebGL program links and uploads (the context's methods wrapped until uninstall). */
+      async install(options: { capacity?: number; gl?: boolean } = {}): Promise<boolean> {
+        const { installFrameStageRecorder } = await import('./frameStageRecorder.ts');
+        frameStageRecorder?.uninstall();
+        const settings = deps.settings as { isOpen?: () => boolean } | null;
+        const killcam = deps.killcam as { isActive?: () => boolean } | null;
+        frameStageRecorder = installFrameStageRecorder({
+          renderer: deps.renderer as Parameters<typeof installFrameStageRecorder>[0]['renderer'],
+          game: deps.game as Parameters<typeof installFrameStageRecorder>[0]['game'],
+          bus: deps.bus as Parameters<typeof installFrameStageRecorder>[0]['bus'],
+          isPaused: () => !!settings?.isOpen?.(),
+          isKillcam: () => !!killcam?.isActive?.(),
+          gl: options.gl ? (deps.renderer as WebGLRenderer).getContext() as WebGL2RenderingContext : null,
+          capacity: options.capacity,
+        });
+        return true;
+      },
+      read: () => frameStageRecorder?.read() ?? null,
+      clear: () => { frameStageRecorder?.clear(); },
+      uninstall: () => { frameStageRecorder?.uninstall(); frameStageRecorder = null; },
+    },
+    /** Draw the collision records near (x, z) over the scene (orange movement, cyan shells); null removes it. */
+    colliderOverlay: async (options: ColliderOverlayOptions | null) => {
+      colliderOverlayHandle?.remove();
+      colliderOverlayHandle = null;
+      if (!options) return null;
+      const { showColliderOverlay } = await import('./colliderOverlay.ts');
+      colliderOverlayHandle = showColliderOverlay(deps.scene as Scene, deps.getWorld() as Parameters<typeof showColliderOverlay>[1],
+        deps.renderer as WebGLRenderer, options);
+      return { ...colliderOverlayHandle.records };
+    },
+    scene: deps.scene,
+    camera: deps.camera,
+    renderer: deps.renderer,
+    post: deps.post,
+    lighting: deps.lighting,
+    game: deps.game,
+    rig: deps.rig,
+    bus: deps.bus,
+    get fx() { return deps.getFx(); },
+    get battleAtmosphere() { return deps.getBattleAtmosphere?.() ?? null; },
+    get nightLighting() { return deps.getNightLighting?.() ?? null; },
+    /** The map's air (world/mapAmbienceAccess.ts): `.current.stats`, `.setEnabled(on)`, `.prepare(seed, map, time)`. */
+    get mapAmbience() { return deps.getMapAmbience?.() ?? null; },
+    input: deps.input,
+    settings: deps.settings,
+    pauseInfo: deps.pauseInfo,
+    garage: deps.garage,
+    quality: deps.quality,
+    get pedestalVisual() { return deps.getPedestalVisual(); },
+    get garageModePreviewPending() { return deps.isGarageModePreviewPending?.() ?? false; },
+    get pedestalOnStage() { return deps.isPedestalOnStage(); },
+    get selectedSpecId() { return deps.getSelectedSpecId(); },
+    /** A watched battle's controller (rideId, cycle, drone …): the spike census rides the human seat's hull with it. */
+    get watch() { return deps.getWatchController?.() ?? null; },
+    get pedestalCacheIds() { return [...deps.getPedestalCacheIds()]; },
+    get worldCacheIds() { return [...deps.getWorldCacheIds()]; },
+    get residentLimits() { return { ...deps.getResidentLimits() }; },
+    get battleVisualPool() { return deps.getBattleVisualPoolStats(); },
+    get garageFramePacer() { return deps.getGarageFramePacerStats(); },
+    get frameLoopScheduler() { return deps.getFrameLoopSchedulerStats(); },
+    observeFrameLoopScheduler: deps.observeFrameLoopScheduler,
+    get phaseSceneResidency() { return deps.getPhaseSceneResidency(); },
+    get garageGpuResidency() { return deps.getGarageGpuResidency(); },
+    get lastWorldRelease() { return deps.getLastWorldRelease(); },
+    get graphicsContextLost() { return deps.isGraphicsContextLost(); },
+    selectGarageTank: deps.selectGarageTank,
+    stagePedestalTank: deps.stagePedestalTank,
+    get world() { return deps.getWorld(); },
+    inspectNightWindow: () => {
+      const world = deps.getWorld() as { group?: Object3D } | null;
+      const camera = deps.camera as PerspectiveCamera;
+      return world?.group ? inspectNightWindow(world.group, camera.position) : null;
+    },
+    inspectNightShtora: () => {
+      const game = deps.game as { player?: { visual?: { root?: Object3D } } };
+      const root = game.player?.visual?.root, camera = deps.camera as PerspectiveCamera;
+      return root ? inspectNightShtora(root, camera.position) : null;
+    },
+    inspectNightHeadlight: () => {
+      const game = deps.game as { player?: { visual?: { root?: Object3D } } };
+      const root = game.player?.visual?.root, camera = deps.camera as PerspectiveCamera;
+      return root ? inspectNightHeadlight(root, camera.position) : null;
+    },
+    inspectNightWorldFixture: (kind: NightWorldFixtureKind) => {
+      const world = deps.getWorld() as { group?: Object3D } | null;
+      const camera = deps.camera as PerspectiveCamera;
+      return world?.group ? inspectNightWorldFixture(world.group, camera.position, kind) : null;
+    },
+    visitOwnedGeometries: visitOwnedObject3DGeometries,
+    switchMap: deps.switchMap,
+    flags: deps.flags,
+    frameInfo: deps.frameInfo,
+    aimAtNearest: deps.aimAtNearest,
+    gunAimError: deps.gunAimError,
+    playerShellLog: deps.playerShellLog,
+    botPressure: deps.botPressure,
+    aimState: deps.aimState,
+    fastForward: deps.fastForward,
+    slayEnemies: deps.slayEnemies,
+    /** The dev battle hold (battleHold.ts): `set(true)` keeps the solo battle alive and still for a check. */
+    battleHold: createBattleHold({ getGame: () => deps.game, isNetworkBattle: deps.isNetworkBattle }),
+    startBattle: deps.startBattle,
+    bakeMinimapForMap: deps.bakeMinimapForMap,
+    beginBattleEntry: deps.beginBattleEntry,
+    beginSoloBattle: deps.beginSoloBattle,
+    beginNetworkBattle: deps.beginNetworkBattle,
+    enterGarage: deps.enterGarage,
+    leaveBattleToGarage: deps.leaveBattleToGarage,
+    get spotting() { return deps.game.spotting; },
+    get killcam() { return deps.killcam; },
+    showroom: deps.showroom,
+    garageDressing: deps.garageDressing,
+    spawnKillShell: deps.spawnKillShell,
+    get shotMode() { return deps.getShotMode(); },
+    set shotMode(value: boolean) { deps.setShotMode(value); },
+    forceHitMark: deps.forceHitMark,
+    get damagePanel() { return deps.getDamagePanel(); },
+    devTrace: deps.devTrace,
+    get network() { return deps.getNetworkDiagnostics(); },
+    telemetry: deps.collectTelemetry,
+    sampleShadowContribution: deps.sampleShadowContribution,
+  };
+  target.__DEBUG = surface;
+  return surface;
+}

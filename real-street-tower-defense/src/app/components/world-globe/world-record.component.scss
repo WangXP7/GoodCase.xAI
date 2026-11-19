@@ -1,0 +1,36 @@
+@use '../../styles/game-ui' as ui;
+/* Under the run, set off by an engraved line; it fades in after the game
+   over screen has landed, so no button moves under the pointer. */
+.record {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+  animation: record-in 400ms ease-out 1200ms both;
+}
+
+@keyframes record-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@include ui.reduced-motion {
+  .record {
+    animation: none;
+  }
+}
+
+.record-text {
+  flex: 1;
+  gap: 3px;
+}
+
+.record-skip {
+  align-self: flex-start;
+}

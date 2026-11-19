@@ -1,0 +1,222 @@
+import { Object3D, PerspectiveCamera, Scene } from 'three';
+import { GlobeControls, EnvironmentControls, type TilesRenderer } from '3d-tiles-renderer';
+import { cameraTimeline } from '../utils/camera-timeline';
+import { GroundPickRoot, SceneGraphVersion, TileSetVersion } from './ground-pick-root';
+
+/**
+ * CameraRig: Controls und Startposition der Engine-Kamera.
+ *
+ * Vorher inline in `three-tiles-engine.ts` (`setupControls`, `setupDevWorldControls`).
+ * Die Kamera selbst bleibt beim Engine, weil Szene, Post-Processing, Spatial Audio und
+ * die Renderer an ihr hängen; der Rig setzt die Controls darauf und stellt die
+ * Startposition ein. Das eigentliche Framing setzt danach CameraFramingService über
+ * `setLocalCameraPosition()`.
+ *
+ * - Tiles-Pfad: GlobeControls über dem Ellipsoid der TilesRenderer-Gruppe, ihre
+ *   Raycasts treffen nur die Tiles ({@link GroundPickRoot})
+ * - DevWorld: EnvironmentControls über der flachen devWorldGroup, ebenfalls über
+ *   {@link GroundPickRoot} (Cache)
+ *
+ * Vom Engine besessen: `update()` pro Frame vor dem Tiles-Update, `dispose()` aus dem
+ * Engine-dispose().
+ */
+/**
+ * Where the camera may go over a world of limited extent (a custom map), in
+ * local coordinates: its position stays in the box, its height above the
+ * ground between `minHeight` and `maxHeight`
+ */
+export interface CameraBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  /** Least height above the ground under the camera (m) */
+  minHeight: number;
+  /** Most height above the local zero (m) */
+  maxHeight: number;
+  /** Ground height under a local point, for minHeight */
+  groundAt(x: number, z: number): number;
+}
+
+export class CameraRig {
+  private controls: GlobeControls | null = null;
+  /** Szene der Controls (nur der Boden, mit Cache), hängt in der Engine-Szene */
+  private groundPick: GroundPickRoot | null = null;
+  /** Leert den Raycast-Cache von groundPick, sobald sich die Tiles ändern */
+  private tileSetVersion: TileSetVersion | null = null;
+  /** Limits of the camera over a world of limited extent, null where it roams freely */
+  private bounds: CameraBounds | null = null;
+
+  constructor(
+    private readonly camera: PerspectiveCamera,
+    private readonly canvas: HTMLCanvasElement,
+  ) {
+    cameraTimeline.attach(camera);
+  }
+
+  /**
+   * GlobeControls für den Tiles-Pfad. Wird in `initialize()` aufgerufen, nachdem die
+   * TilesRenderer-Gruppe in der Szene hängt und bevor der Renderer die Kamera bekommt.
+   */
+  setupGlobeControls(scene: Scene, tilesRenderer: TilesRenderer): void {
+    // Zoom, pan, pivot and ground clearance raycast the tiles only, not the
+    // overlays, towers and enemies in the scene (see GroundPickRoot). A ray
+    // repeats from the cache until the tile set changes.
+    this.tileSetVersion = new TileSetVersion(tilesRenderer);
+    const groundPick = new GroundPickRoot(tilesRenderer.group, this.tileSetVersion);
+    scene.add(groundPick);
+    this.groundPick = groundPick;
+
+    // GlobeControls for earth-like navigation
+    // Don't pass tilesRenderer to constructor (deprecated), use setEllipsoid instead
+    const controls = new GlobeControls(groundPick, this.camera, this.canvas);
+    this.controls = controls;
+    controls.enableDamping = true;
+    // Library default since 0.5. A double click would start a zoom animation
+    // that the drag handlers read as a pan.
+    controls.enableDoubleTapZoom = false;
+    this.preventControlsFocus();
+
+    controls.setEllipsoid(tilesRenderer.ellipsoid, tilesRenderer.group);
+
+    this.applyStartPosition();
+  }
+
+  /**
+   * EnvironmentControls für DevWorld.
+   *
+   * Uses EnvironmentControls instead of GlobeControls because:
+   * - GlobeControls is designed for globe navigation at Earth-radius distances
+   * - DevWorld has flat terrain at local origin
+   * - EnvironmentControls raycasts against scene geometry for pivoting/panning
+   *
+   * Control scheme (same interaction model as GlobeControls):
+   * - Left mouse drag: Pan (slide camera along terrain)
+   * - Right mouse drag: Rotate (orbit around pivot point)
+   * - Scroll wheel: Zoom in/out
+   */
+  setupEnvironmentControls(scene: Scene, devWorldGroup: Object3D): void {
+    // EnvironmentControls - works with flat local terrain
+    const envControls = new EnvironmentControls(scene, this.camera, this.canvas);
+
+    // Configure controls
+    envControls.enableDamping = true;
+    envControls.enableDoubleTapZoom = false;
+    this.preventControlsFocus();
+    envControls.minDistance = 5;       // Minimum zoom distance
+    envControls.maxDistance = 2000;    // Maximum zoom distance
+    envControls.minAltitude = 0.1;     // Min camera altitude (radians from ground)
+    envControls.maxAltitude = Math.PI / 2 - 0.1; // Max altitude (near vertical)
+
+    // Raycasts against the DevWorld ground only, through the same cache as the
+    // tiles: at rest the controls cast rays below the camera every frame, and
+    // uncached against every building that was about 7 % of the main thread in
+    // the load scene (Chromium profile at 16 000 enemies, 2026-09-30)
+    const groundPick = new GroundPickRoot(devWorldGroup, new SceneGraphVersion(devWorldGroup));
+    scene.add(groundPick);
+    this.groundPick = groundPick;
+    envControls.setScene(groundPick);
+
+    // Store as GlobeControls type (EnvironmentControls is parent class)
+    this.controls = envControls as unknown as GlobeControls;
+
+    // Position camera - steep 70° view (same as real game)
+    this.applyStartPosition();
+
+    // Update controls after camera positioning
+    envControls.update();
+  }
+
+  /**
+   * Steep 70° view over the origin (minimal horizon, fewer tiles).
+   * 70° angle: height = tan(70°) * distance ≈ 2.75 * distance,
+   * for 150m horizontal offset: height ≈ 412m.
+   *
+   * With ReorientationPlugin (recenter: true) and tiles.group.rotation.x = -PI/2:
+   * - Origin (HQ) is at (0,0,0) in local space
+   * - Y is up, -Z is South, +Z is North
+   *
+   * DevWorld liegt im selben lokalen Rahmen, deshalb gilt die Startposition für beide.
+   */
+  private applyStartPosition(): void {
+    this.camera.position.set(0, 400, -145); // ~70° angle, looking north
+    this.camera.lookAt(0, 0, 0);
+    cameraTimeline.record('camera.startPosition');
+  }
+
+  /**
+   * Since 0.5 the controls make the canvas focusable and focus it on every
+   * pointerdown, then reset a running drag whenever W/A/S/D, Q/E or an arrow
+   * key goes down on it. Those are our KeyboardPanService keys, so panning
+   * with the keyboard while dragging would cancel the drag. The listener only
+   * sees keys while the canvas has focus; without a tabindex it never does.
+   * Our own key handling listens on window and is unaffected.
+   */
+  private preventControlsFocus(): void {
+    this.canvas.removeAttribute('tabindex');
+  }
+
+  /** Per Frame vor dem Tiles-Update: Damping und Eingaben der Controls anwenden, dann die Grenzen der Welt. */
+  update(): void {
+    if (this.controls) {
+      this.controls.update();
+    }
+    this.applyBounds();
+  }
+
+  /** Keep the camera over a world of limited extent (custom maps); null lifts the limits */
+  setBounds(bounds: CameraBounds | null): void {
+    this.bounds = bounds;
+    this.applyBounds();
+  }
+
+  /**
+   * The camera back into the box and between the heights. Moved, not turned:
+   * a pan against the edge stops there, the view keeps its direction.
+   */
+  private applyBounds(): void {
+    const b = this.bounds;
+    if (!b) return;
+    const p = this.camera.position;
+    const x = Math.min(b.maxX, Math.max(b.minX, p.x));
+    const z = Math.min(b.maxZ, Math.max(b.minZ, p.z));
+    const ground = b.groundAt(x, z);
+    const y = Math.min(b.maxHeight, Math.max(ground + b.minHeight, p.y));
+    if (x !== p.x || y !== p.y || z !== p.z) {
+      p.set(x, y, z);
+      this.camera.updateMatrixWorld();
+    }
+  }
+
+  /** Kamera in lokalen Koordinaten (Meter relativ zum Origin) setzen und auf das Ziel richten. */
+  setLocalPosition(x: number, y: number, z: number, targetX: number, targetY: number, targetZ: number): void {
+    this.camera.position.set(x, y, z);
+    this.camera.lookAt(targetX, targetY, targetZ);
+    cameraTimeline.record('camera.set', { target: [targetX, targetY, targetZ] }, true);
+  }
+
+  /** GlobeControls im Tiles-Pfad, EnvironmentControls in DevWorld, null vor dem Setup und nach dispose(). */
+  getControls(): GlobeControls | null {
+    return this.controls;
+  }
+
+  /**
+   * Gibt die Controls frei, damit ihre Pointer- und Wheel-Listener nicht am Canvas
+   * hängen bleiben. Nur aus dem Engine-dispose(); ein Standortwechsel (setOrigin)
+   * behält Rig und Controls.
+   */
+  dispose(): void {
+    if (this.controls) {
+      this.controls.dispose();
+      this.controls = null;
+    }
+    if (this.groundPick) {
+      this.groundPick.removeFromParent();
+      this.groundPick = null;
+    }
+    if (this.tileSetVersion) {
+      this.tileSetVersion.dispose();
+      this.tileSetVersion = null;
+    }
+  }
+}

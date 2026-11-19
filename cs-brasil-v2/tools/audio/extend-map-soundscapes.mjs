@@ -1,0 +1,45 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+// O pack privado antecede mapas novos. Reutiliza camas semanticamente próximas,
+// sem inventar caminhos de áudio nem substituir configurações curadas posteriores.
+export function extendMapSoundscapes(manifest) {
+  const maps=manifest.mapSoundscapes;
+  if(!maps) return false;
+  let changed=false;
+  for(const id of ['escadao','campomorro']) {
+    if(Object.hasOwn(maps,id)||!maps.quebrada) continue;
+    maps[id]=structuredClone(maps.quebrada);changed=true;
+  }
+  if(!Object.hasOwn(maps,'mansao')) {
+    const donor=maps.parque_treta||maps.corrego||maps.quebrada;
+    if(donor){maps.mansao=structuredClone(donor);changed=true;}
+  }
+  if(!Object.hasOwn(maps,'invasao_javaporcos')) {
+    const donor=maps.velho_oeste||maps.corrego||maps.quebrada;
+    if(donor){maps.invasao_javaporcos=structuredClone(donor);changed=true;}
+  }
+  for(const id of ['distrito_rural','vila_da_mata']) {
+    const donor=maps.invasao_javaporcos;
+    if(!Object.hasOwn(maps,id)&&donor){maps[id]=structuredClone(donor);changed=true;}
+  }
+  if(!Object.hasOwn(maps,'operacao_flavio')) {
+    const donor=maps.loja_h||maps.mansao;
+    if(donor){maps.operacao_flavio=structuredClone(donor);changed=true;}
+  }
+  return changed;
+}
+
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
+  const file=process.argv[2] || 'public/audio/manifest.json';
+  const manifest=JSON.parse(readFileSync(file,'utf8'));
+  const hadEscadao=Object.hasOwn(manifest.mapSoundscapes||{},'escadao');
+  const hadCampomorro=Object.hasOwn(manifest.mapSoundscapes||{},'campomorro');
+  const hadMansao=Object.hasOwn(manifest.mapSoundscapes||{},'mansao');
+  if(extendMapSoundscapes(manifest)) {
+    writeFileSync(file,JSON.stringify(manifest,null,1)+'\n');
+    if(!hadEscadao)console.log('AUDIO: Escadão usa a ambiência de favela existente no pack.');
+    if(!hadCampomorro)console.log('AUDIO: Campinho usa a ambiência de favela existente no pack.');
+    if(!hadMansao)console.log('AUDIO: Mansão usa água, vento e vegetação existentes no pack.');
+  }
+}

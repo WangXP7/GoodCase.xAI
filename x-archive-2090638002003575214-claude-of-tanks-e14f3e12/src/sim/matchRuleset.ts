@@ -1,0 +1,2514 @@
+// Match rulesets (owner 2026-09-14 evening: "make the mechanics actually apply and change what the
+// player has available, or change physics or gravity or more"). A ruleset is the complete, pure
+// description of how one game mode bends the simulation: gravity, speed, hit points, damage,
+// reload, the ammunition and equipment a crew may carry, consumables, respawns, the clock and the
+// solo roster split. It is derived deterministically from the mode (and a campaign operation's
+// difficulty), so the browser sim, the network authority and the receipts all compute the same
+// rules without a wire change. Everything that reads a rule reads it from here — the mode
+// controller, setupBattle, movement (gravity, speed), ballistics (shell gravity), damage (hit
+// points lost), ammunition and equipment at spawn, and the play-menu rule cards.
+import type { GameModeId } from './matchModes.ts';
+import { shell } from './shellSpec.ts';
+import type { DestructionRules } from './destructionEvents.ts';
+import { DRONE_LAUNCH_HEIGHT_M } from './droneDockRules.ts';
+import { EQUIPMENT_BY_ID, type EquipmentCategoryId } from './equipmentRules.ts';
+import type { ConsumableGateContext, ConsumableId, ConsumableTiming } from './consumableRules.ts';
+
+/** A mode's refused equipment (MatchRuleset.equipmentBan). */
+interface EquipmentBan {
+  readonly categories?: readonly Exclude<EquipmentCategoryId, 'all'>[];
+  readonly items?: readonly string[];
+}
+/** Modes where every tank is always visible: scouting equipment would do nothing, so it is refused. */
+const SCOUTING_OFF: EquipmentBan = Object.freeze({ categories: Object.freeze(['recon'] as const) });
+
+// The dock's launch column (a leaf, so the decor keep-out reads it without the ruleset: src/sim/droneDockRules.ts).
+export { DRONE_LAUNCH_HEIGHT_M } from './droneDockRules.ts';
+
+/** Mode weapons are fictional gameplay loadouts; they never mutate the fleet catalog. */
+export const GUN_GAME_WEAPONS = Object.freeze([
+  shell('30 mm Autocannon', 'AP', 30, 210, 165, 120, 1150, { reloadS: .18 }),
+  shell('105 mm Cannon', 'APFSDS', 105, 570, 520, 440, 1450, { reloadS: 3.5 }),
+  shell('120 mm Cannon', 'APFSDS', 120, 800, 750, 650, 1700, { reloadS: 4 }),
+  shell('152 mm Howitzer', 'HE', 152, 100, 100, 1250, 650, { reloadS: 5 }),
+  shell('Guided Missile', 'HEAT', 152, 1100, 1100, 1000, 350, { guided: true, reloadS: 5 }),
+]);
+export const AERIAL_RULES = Object.freeze({
+  // `cooldownS` follows an airframe lost or spent (an impact, the battery, the link's range); a recall has its own below.
+  // hitsToDown (VH.15 counter-drone): the strikes a drone's airframe takes before it falls (the roof stations' rounds
+  // land shares of a strike by range: vehicles/auxiliaryWeapons.ts droneHitAt100). 1.1, not 1 (owner 2026-10-16 on the
+  // 226 preview: "machine guns targeting drones is a lil too punishinng"): one capped 12.7 burst (5 x .2 = 1.0) or 30 mm
+  // burst (3 x .35 = 1.05) no longer downs a drone alone, a 7.62's (8 x .15 = 1.2) still does, and shares from several
+  // stations still add, so a lone gun downs a quarter to a third fewer drones and two or three stations nearly as many.
+  // Kept clear of every exact burst sum.
+  drone: Object.freeze({ launchS: 2.4, responseHz: 4.5, spotRangeM: 350, speedMps: 42, turnRadS: 2.8, climbMps: 20, batteryS: 40, cooldownS: 25, rangeM: 850, launchHeightM: DRONE_LAUNCH_HEIGHT_M, hitsToDown: 1.1,
+    /**
+     * The recall (owner 2026-10-14: "dont be able to instantly call it back, only be able to call back once weve entered
+     * screen, and if we do, show the landing animation and we should be able to launch it again after a shorter
+     * cooldown"). Both authorities (the solo step and the network authority) time it in sim/droneRecall.ts: a recall is
+     * accepted only once the pilot is in the drone's own feed (the launch climb, then the lens hand-over `feedS` that
+     * engine/aerialCamera.ts eases the chase view into the lens over); the recalled airframe flies home and lands on its
+     * dock (the presentation draws it on this same timing law), and the next launch is ready `cooldownS` after it is parked.
+     */
+    recall: Object.freeze({
+      feedS: .55,
+      /** The flight home: the horizontal distance over `transitS` at a ground speed inside [minMps, maxMps], climbing or
+       *  sinking to `cruiseAboveDockM` over the dock at `climbMps` / `sinkMps`; each leg flies faster where that pace would
+       *  not cover it inside `maxTransitS`, so a recall from the link's edge, high above or far below the tank is home
+       *  as quickly (verifier 2026-10-14: an unbounded climb or sink made a recall from 835 m up wait 81 s). */
+      transitS: 5, minMps: 20, maxMps: 60, climbMps: 8, sinkMps: 12, cruiseAboveDockM: 15, maxTransitS: 7,
+      /** The flight home's fixed beats: the hold for an impact in flight, the approach to the dock's column and its descent
+       *  (4.1 s since round 5's descent keeps at least the landing's hand-over speed down the column: a recall from over the
+       *  dock at cruise height is at the landing's first pose 1.4 s inside it, fx/droneRecallReturn.selftest.mjs). */
+      approachS: 4.1,
+      /** The landing on the dock: the descent onto the pads, the rotor spin-down and the pause before the clamps close
+       *  (fx/droneArrival.ts descentS + spoolS + pauseS = 4.85 s, drawn to the frame, fits inside). */
+      landingS: 4.9,
+      /** The relaunch wait after a recalled airframe is parked on its dock (`cooldownS` above follows a loss). From
+       *  anywhere, a recall relaunches within maxTransitS + approachS + landingS + cooldownS = 19.8 s of the press,
+       *  over 5 s sooner than the 25 s after a loss (sim/droneRecall.selftest.mjs sweeps the reachable envelope). */
+      cooldownS: 3.8,
+    }),
+  }),
+  gunship: Object.freeze({ altitudeM: 240, radiusM: 90, orbitRadS: .09 }),
+});
+export const GUNSHIP_WEAPONS = Object.freeze([
+  shell('30 mm Autocannon', 'AP', 30, 220, 180, 160, 1300, { reloadS: .14, reloadGroup: 'gunship-cannon', soundProfile: 'gunship-autocannon' }),
+  shell('152 mm Howitzer', 'HE', 152, 110, 110, 1500, 800, { reloadS: 3.5, reloadGroup: 'gunship-howitzer', blastRadiusM: 22, soundProfile: 'gunship-howitzer' }),
+  shell('Guided Missile', 'HE', 180, 320, 320, 1600, 400, { guided: true, reloadS: 7, reloadGroup: 'gunship-missile', blastRadiusM: 18, soundProfile: 'gunship-missile' }),
+]);
+// Fictional single-charge anti-armor payload: uses the same ERA, spaced armor
+// and penetration rules as other shaped charges, rather than an artillery blast.
+export const DRONE_WARHEAD = shell('FPV shaped charge', 'HEAT', 90, 350, 350, 1400, 42, { tracer: 'DRONE', gravityScale: 0, maxLifetimeS: AERIAL_RULES.drone.batteryS });
+
+/**
+ * Air Support (air-support-270; owner 2026-11-05: "a new game mode where you can call in airstrikes and jet strikes and so
+ * on and we already have that model of the ac 130", and in the lane: "a giant aiming reticle on the ground … 3 differennt
+ * kinnds of airstrikes with their own special effects annd sounnt", then "keep and add artillery annd recon with the 3
+ * airstrikes"). Every number the mode plays by: the points a crew earns, what each call-in costs, its cooldown, the warning
+ * the targeted side gets before anything of it arrives, its footprint, its rounds and its aircraft's hit points.
+ * sim/airSupport.ts runs the ledger and the strikes; sim/airSupportFire.ts fires their rounds in both authorities.
+ */
+export type AirStrikeKind = 'recon' | 'artillery' | 'strafe' | 'bomb' | 'gunship';
+/** The call-ins in the strip's order (the strike view's keys 1-5): the cheapest first. */
+export const AIR_STRIKE_KINDS: readonly AirStrikeKind[] = Object.freeze(['recon', 'artillery', 'strafe', 'bomb', 'gunship'] as const);
+/** The call-ins an aircraft flies (artillery is a battery off the map: nothing to shoot down). */
+export function airStrikeFlies(kind: AirStrikeKind): boolean { return kind !== 'artillery'; }
+/** The strike rounds: real references, in the shared shell builder (fictional numbers only where a game needs one). */
+export const AIR_STRIKE_WEAPONS = Object.freeze({
+  // M795 155 mm HE from a battery firing for effect: a plunging round with an 18 m blast.
+  artillery: shell('M795 155 mm HE', 'HE', 155, 110, 110, 1200, 820, { reloadGroup: 'strike-artillery', soundProfile: 'strike-artillery', blastRadiusM: 18 }),
+  // A-10 GAU-8/A Avenger, PGU-14/B API: a depleted-uranium core good for ~69 mm at 500 m, through any tank's roof.
+  strafe: shell('GAU-8 30 mm API', 'AP', 30, 75, 55, 110, 1010, { reloadGroup: 'strike-strafe', soundProfile: 'strike-strafe' }),
+  // GBU-12 Paveway II: a laser-guided Mk 82 (500 lb, 87 kg of Tritonal, 273 mm body), falling free onto the spot.
+  bomb: shell('GBU-12 Paveway II', 'HE', 273, 140, 140, 1700, 260, { reloadGroup: 'strike-bomb', soundProfile: 'strike-bomb', blastRadiusM: 22,
+    flight: 'free_fall' }),
+});
+export interface AirStrikeRules {
+  /** Support points the call costs, the caller's own wait before calling this kind again, and the warning (s): the
+   *  targeted side's alert and footprint go up at the call, and nothing of the strike arrives before it has run. */
+  readonly cost: number;
+  readonly cooldownS: number;
+  readonly warningS: number;
+  /** The aircraft (none for artillery: hp 0): its hit points, the sphere a round must pass through to strike it, its
+   *  height over the mark and its speed. */
+  readonly hp: number;
+  readonly hitRadiusM: number;
+  readonly altitudeM: number;
+  readonly speedMps: number;
+}
+export interface AirSupportRules {
+  readonly points: {
+    /** Points per hit point of damage a crew's own guns deal to an enemy hull. */
+    readonly perDamageHp: number;
+    readonly kill: number;
+    /** A kill a call-in made (its caller's). */
+    readonly supportKill: number;
+    /** Each crew inside a sector when its side takes it. */
+    readonly capture: number;
+    /** The crew whose eyes first spot an enemy, at most once per enemy per `spotRepeatS` for its side. */
+    readonly spot: number;
+    readonly spotRepeatS: number;
+    /** A support aircraft brought down (its last strike's shooter). */
+    readonly downed: number;
+    /** One point every `trickleS` to every living crew, the ledger's cap and its opening balance. */
+    readonly trickleS: number;
+    readonly cap: number;
+    readonly start: number;
+  };
+  /** Call-ins one side may have under way at once, and AC-130 orbits at once. */
+  readonly teamAirCap: number;
+  readonly teamGunshipCap: number;
+  /** The furthest a crew may mark from its own hull (the strike view's reach). */
+  readonly callRangeM: number;
+  /** A falling round (the barrage's, the bomb) is laid to reach the mark's ground this long after the warning has run,
+   *  so a crown or a roof on its last, steep stretch still meets it after the warning (the seeded runs: at 0.05 s a
+   *  round struck before it, once in 31 strikes). */
+  readonly fallMarginS: number;
+  /** Counter-air: roof stations engage enemy aircraft within their counter-drone range × `rangeScale`; each round lands
+   *  the drone share × `hitScale` (an aircraft is a far larger target) of `damagePerHit`. A roof station's round itself
+   *  never strikes an aircraft's sphere (its share is its hit); a main gun's does, for its damage. */
+  readonly counterAir: { readonly rangeScale: number; readonly hitScale: number; readonly damagePerHit: number };
+  /** The recon pass: a jet along the heading through the mark; every enemy within `revealM` of its track as it passes is
+   *  spotted for its side for `revealS` (through the spotting system). */
+  readonly recon: AirStrikeRules & { readonly trackM: number; readonly revealM: number; readonly revealS: number };
+  /** The barrage: `rounds` over `fireS`, each falling `flightS` from its last visible point, seeded within `radiusM`. */
+  readonly artillery: AirStrikeRules & { readonly radiusM: number; readonly rounds: number; readonly fireS: number; readonly flightS: number };
+  /** The strafing run: the lane it walks along the heading from the caller to the mark, its rounds and their spread. The
+   *  jet dives at `diveDeg` on a line that meets the lane's start, and opens fire `altitudeM` over the mark
+   *  (sim/strikeRuns.ts). */
+  readonly strafe: AirStrikeRules & { readonly lengthM: number; readonly halfWidthM: number; readonly rounds: number; readonly fireS: number;
+    readonly spreadM: number; readonly diveDeg: number };
+  /** The precision bomb: a jet's dive at `diveDeg`, released `altitudeM` over the mark at the point from which the free fall
+   *  at the jet's velocity lands fallMarginS after the warning (sim/strikeRuns.ts bombFall: a steep arrival a ridge on the
+   *  way cannot meet first); it lands within `missAlongM` of the mark along the run and `missAcrossM` across it. */
+  readonly bomb: AirStrikeRules & { readonly radiusM: number; readonly diveDeg: number; readonly missAlongM: number; readonly missAcrossM: number };
+  /** The AC-130 orbit: its ring (a left-hand pylon turn round the mark, which is also the reach its guns engage spotted
+   *  enemies in), its time on station, the speed it comes in at, and its guns' cadence. */
+  readonly gunship: AirStrikeRules & { readonly radiusM: number; readonly orbitS: number; readonly inboundMps: number;
+    readonly cannonEveryS: number; readonly howitzerEveryS: number; readonly cannonSpreadM: number; readonly howitzerSpreadM: number };
+  /** The jets' manoeuvres (sim/strikeRuns.ts): the push-over and pull-out load (g), the egress climb angle, how long a dive
+   *  settles before the attack, the egress turn's bank and length, and the exit's length and acceleration. */
+  readonly flight: { readonly pushG: number; readonly pullG: number; readonly climbDeg: number; readonly settleS: number;
+    readonly egressBankDeg: number; readonly egressS: number; readonly exitS: number; readonly exitAccelMps2: number };
+  /** Bots: how often a bot weighs a call, the friendly clearance it keeps, the targets each strike needs, the margin
+   *  a bot drives clear of a footprint by, the side's air slots bots leave free (the crews' own calls are never crowded
+   *  out) and the gap between one side's bot recon passes. */
+  readonly bots: { readonly decideEveryS: number; readonly friendlyClearM: number;
+    readonly minTargets: Readonly<Record<AirStrikeKind, number>>; readonly evadeMarginM: number; readonly leaveSlots: number;
+    readonly reconGapS: number };
+}
+export const AIR_SUPPORT_RULES: AirSupportRules = Object.freeze({
+  points: Object.freeze({ perDamageHp: 0.1, kill: 60, supportKill: 30, capture: 50, spot: 10, spotRepeatS: 30, downed: 80,
+    trickleS: 4, cap: 1000, start: 0 }),
+  teamAirCap: 2,
+  teamGunshipCap: 1,
+  callRangeM: 700,
+  fallMarginS: 0.4,
+  counterAir: Object.freeze({ rangeScale: 1.5, hitScale: 4, damagePerHit: 150 }),
+  // the photo pass: 3 s of warning, then a jet at 250 m along a 600 m track through the mark; 12 s of spotting within 160 m
+  recon: Object.freeze({ cost: 120, cooldownS: 40, warningS: 3, hp: 400, hitRadiusM: 8, altitudeM: 250, speedMps: 200,
+    trackM: 600, revealM: 160, revealS: 12 }),
+  // the battery: a 6 s warning, then ten 155 mm rounds over 5 s inside a 35 m circle, each seen falling its last 2.5 s
+  artillery: Object.freeze({ cost: 300, cooldownS: 60, warningS: 6, hp: 0, hitRadiusM: 0, altitudeM: 420, speedMps: 0,
+    radiusM: 35, rounds: 10, fireS: 5, flightS: 2.5 }),
+  // the A-10's run: 5 s of warning while it comes in from behind the caller and pushes over into a 15-degree dive, then
+  // 28 rounds walked down a 140 m lane in 1.6 s at 150 m/s from 120 m over the mark (about 460 m slant), the pull-out and
+  // a banked climb away; the rounds spread 5 m either side of the lane's line
+  strafe: Object.freeze({ cost: 400, cooldownS: 75, warningS: 5, hp: 600, hitRadiusM: 8, altitudeM: 120, speedMps: 150,
+    lengthM: 140, halfWidthM: 12, rounds: 28, fireS: 1.6, spreadM: 5, diveDeg: 15 }),
+  // the GBU-12 from a fast jet: a 7 s laser warning while it comes in high and pushes over into a 40-degree dive at
+  // 180 m/s; released 350 m over the mark (about 375 m short of it: the bomb's forward throw), it falls 2.7 s and arrives
+  // at about 46 degrees; it lands within 8 m of the spot along the run and 2 m across it
+  bomb: Object.freeze({ cost: 450, cooldownS: 90, warningS: 7, hp: 600, hitRadiusM: 8, altitudeM: 350, speedMps: 180,
+    radiusM: 22, diveDeg: 40, missAlongM: 8, missAcrossM: 2 }),
+  // the AC-130: 8 s inbound along a line tangent to its ring, slowing from 110 to 42 m/s, then 30 s on a 140 m left-hand
+  // pylon turn 180 m over the mark (the pivotal altitude of 42 m/s: v^2/g = 180 m, so its 52-degree bank lays the guns'
+  // line on the mark), engaging only the enemies its side has spotted inside the ring with the gunship's 30 mm and 152 mm
+  gunship: Object.freeze({ cost: 800, cooldownS: 150, warningS: 8, hp: 1400, hitRadiusM: 16, altitudeM: 180, speedMps: 42,
+    radiusM: 140, orbitS: 30, inboundMps: 110, cannonEveryS: 0.5, howitzerEveryS: 4, cannonSpreadM: 4, howitzerSpreadM: 3 }),
+  // the jets: a 2.5 g push-over, a 5 g pull-out, a 20-degree climb away, 1 s settled in the dive, a 60-degree bank in an
+  // 8 s egress turn, then 6 s out accelerating at 8 m/s^2
+  flight: Object.freeze({ pushG: 2.5, pullG: 5, climbDeg: 20, settleS: 1, egressBankDeg: 60, egressS: 8, exitS: 6, exitAccelMps2: 8 }),
+  bots: Object.freeze({ decideEveryS: 2, friendlyClearM: 45,
+    minTargets: Object.freeze({ recon: 0, artillery: 2, strafe: 2, bomb: 1, gunship: 2 }), evadeMarginM: 15, leaveSlots: 1,
+    reconGapS: 30 }),
+});
+
+type RulesetAmmo = 'spec' | 'he_only' | 'unlimited';
+type RulesetTimeout = 'draw' | 'defeat';
+
+/**
+ * Bot doctrine (gameplay-modes-228; owner 2026-10-18: "up its aggression of tanks more" in Frontline Assault, "increase
+ * aggression" in Endless Horde, "increase aggression of bots trying to capturing flag or pursuing ball", "infected should
+ * be super aggressie"): how a bot plays its SIDE of a mode. Every knob multiplies or gates one site of the shared
+ * controller (game/ai.ts); CLASSIC_BOT_DOCTRINE is today's controller exactly, so a mode without a table of its own plays
+ * byte-identical (server/battlePacing, the harness's standard and juggernaut rows). A doctrine is keyed by side only,
+ * never by nation: the TEAM NATIONS option decides which vehicles fill the seats, not how they drive.
+ */
+type BotHitReactions = 'all' | 'angle' | 'none';
+export interface BotDoctrine {
+  /** The opening read phase (game/ai.ts DEPLOYMENT_TUNING): long contacts are left alone for the first 2-2.75 min. */
+  readonly openingRead: boolean;
+  /** Multiplies the role's hold band (0 = no stand-off band at all). */
+  readonly holdBandScale: number;
+  /** Multiplies the role's engage envelope. */
+  readonly engageRangeScale: number;
+  /** Multiplies the cover discipline (reload cover, hull-down searches; 0 = never duck). */
+  readonly coverScale: number;
+  /** Multiplies the low-hull fallback's thresholds and divides the burst rule's (0 = never fall back). */
+  readonly fallbackScale: number;
+  /** Hit reactions: every one, only the hull turn onto the shot, or none (keep coming). */
+  readonly hitReactions: BotHitReactions;
+  /** A scout kites away from close contacts. */
+  readonly scoutKite: boolean;
+  /** Shoot-and-scoot relocations after a shot. */
+  readonly scoot: boolean;
+  /** The lone-spearhead guard (a hull out in front alone holds outside the fight). */
+  readonly spearheadGuard: boolean;
+  /** Low-odds lays at a bot are held to save rounds. Today's gate is ammunition-blind, so CLASSIC keeps it on. */
+  readonly conserveRounds: boolean;
+  /** Seconds of a silent gun with a live contact before the stalemate push (the contact push; 12 s classic). */
+  readonly stalemateSilentS: number;
+  /** Throttle of a route (and a mission) after the opening minute. */
+  readonly missionSpeed: number;
+  /** A mission bot breaks off its mission for the fallback under this hull fraction (0 = never). */
+  readonly missionBreakOffHp: number;
+  /**
+   * A labelled mission owns the hull's waypoints (gameplay-modes-228 fix (a)): no no-contact search starts while it
+   * drives, and a route another driver left is taken back. Off in the classic controller, whose search may take a mission
+   * hull as it always did (round 2, the critic's E9: with it on for every mode, solo Zone Control, Mars and the AC-130
+   * no longer played as on integ/228).
+   */
+  readonly missionOwnsRoute: boolean;
+  /**
+   * A mission route that ends short of its objective but within this of it is finished on the local router rather than
+   * released for MISSION_RELEASE_S (0 = always released: the classic controller). Round 2: a moving objective (an escort
+   * point, a carrier's intercept) or a goal off the route grid released CTF's bots 4 % of the time.
+   */
+  readonly missionLocalReachM: number;
+  /** A zone holder leaves its zone for a SPOTTED enemy this far outside its edge, then returns (0 = holds). */
+  readonly zoneSortieM: number;
+  /** The settled-shot halt (a starved trigger halts the hull for a clean shot); off, the side fires on the move. */
+  readonly settleShots: boolean;
+  /**
+   * Round 3 (the critic's M4: Frontline's bots stood still in 28-33 % of their engaged samples — a hold band's angled
+   * stand, a zone hold, the sortie's stand-off): an engaged hull its drivers leave standing `jockeyS` seconds circles the
+   * point it stood at instead (JOCKEY_DRIVE: ringM out, at its throttle), the gun as its drivers laid it — a moving firing
+   * position that keeps way on. 0 = it stands, as the classic controller does.
+   */
+  readonly jockeyS: number;
+
+  /** The hunt: drive at the target and orbit it at point blank with the gun laid; never stop in a band, steer off a ram. */
+  readonly rush: boolean;
+  /**
+   * A hard turn is driven round at JOCKEY_DRIVE.rollThrottle, never pivoted in place (round 3, the critic's M3: the
+   * infected stood still in 8-10 % of their engaged samples, a quarter of them pivots onto a new hunt point); beside a
+   * solid it still creeps round as the classic pivot does.
+   */
+  readonly rollingTurns: boolean;
+  /**
+   * The rushers' other turns keep way on too (263: the infected stood still in 12 % of their settled engaged samples,
+   * most of it pivots in the terrain escape and onto a passing leg, and the low-speed watchdog's reverse after them): the
+   * escape turn rolls while the stop corridor ahead reads clear and brakes when it does not; the turn onto a passing leg
+   * rolls unless the parked hull stands too near to turn beside. Frontline's rolling sides keep those pivots.
+   */
+  readonly rollingEscapes: boolean;
+  /**
+   * The rusher's no-ram lane without the rush (RUSH_DRIVE.noRamM): a seen enemy hull in the lane ahead brakes and turns
+   * the hull — save one within BALL_SHOT.contestM of the Turbo Ball, which is played for (round 2: Turbo Ball's ram deaths
+   * rose 0.19 to 1.25 a match with strikers converging on the ball at 1.85x speed).
+   */
+  readonly noRamLane: boolean;
+  /** The Turbo Ball striker's jump at the ball (game/botAbilities.ts). */
+  readonly offensiveJump: boolean;
+  /** The no-contact search and the scout's kite scan read live enemy positions, or only what the team has spotted. */
+  readonly searchRouting: 'live' | 'spotted';
+  /**
+   * The mode route push (sim/modeRoutePush.ts, both drivers): seconds between pushes and the move that re-routes a bot;
+   * null keeps the legacy cadence (LEGACY_ROUTE_PUSH).
+   */
+  readonly routeRefreshS: number | null;
+  readonly routeMoveM: number | null;
+  /** Targets are claimed only this close (null: any spotted target in sight); a rusher's hunt brings it closer. */
+  readonly claimRangeM: number | null;
+  /**
+   * Pack fire (gameplay-modes-233, the critic's Infected major: the fire-team allocation spread the infected's rounds a
+   * hunter a survivor, so ten survivors at 150 % hull soaked them and Verdant converted one in 7:00): each friend already
+   * laid on a target makes it read 1 + packFire times nearer. 0 keeps the classic allocation (each friend on it, farther).
+   */
+  readonly packFire: number;
+}
+/** Today's controller, knob for knob. */
+export const CLASSIC_BOT_DOCTRINE: BotDoctrine = Object.freeze({
+  openingRead: true, holdBandScale: 1, engageRangeScale: 1, coverScale: 1, fallbackScale: 1, hitReactions: 'all',
+  scoutKite: true, scoot: true, spearheadGuard: true, conserveRounds: true, stalemateSilentS: 12, missionSpeed: 0.85,
+  missionBreakOffHp: 0.25, missionOwnsRoute: false, missionLocalReachM: 0, zoneSortieM: 0, settleShots: true, jockeyS: 0, rush: false, rollingTurns: false, rollingEscapes: false, noRamLane: false, offensiveJump: false, searchRouting: 'live',
+  routeRefreshS: null, routeMoveM: null, claimRangeM: null, packFire: 0,
+});
+/**
+ * The route push before the doctrine, one for both drivers (268): the solo battle's 4 s / 18 m, `fastModes` re-routing every
+ * `fastRefreshS` on any move. The authority kept its own 3 s / 12 m (fast in the Horde and Mars too) until 268; one figure
+ * for both was the solo battle's when it last changed (round 2, the critic's E9 kept it). A doctrine's own figures win.
+ */
+const LEGACY_ROUTE_PUSH = Object.freeze({
+  refreshS: 4, moveM: 18, fastModes: Object.freeze(['turbo_ball']), fastRefreshS: 1.25,
+});
+interface RoutePush { readonly refreshS: number; readonly moveM: number }
+type BotDoctrineOverrides = { readonly alpha?: Partial<BotDoctrine>; readonly bravo?: Partial<BotDoctrine> };
+/** The Horde's zombies (and, with the hull turn, the infected): charge, fire on the move, never duck, never retreat. */
+const RUSH_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, rush: true, holdBandScale: 0, coverScale: 0, fallbackScale: 0, hitReactions: 'none', scoutKite: false,
+  scoot: false, spearheadGuard: false, conserveRounds: false, stalemateSilentS: 4, missionSpeed: 1, missionBreakOffHp: 0,
+  searchRouting: 'spotted', routeRefreshS: 1.25, routeMoveM: 8, claimRangeM: 60,
+  // round 3 (the critic's M2/M3): hard turns driven round (no jockey: a rusher's back leg is a retreat)
+  rollingTurns: true,
+  // 263: the terrain escape and the turn onto a passing leg too
+  rollingEscapes: true,
+});
+/**
+ * The hunt's drive (mission 'hunt' with `rush`): straight at a visible target inside `directM`, an orbit at
+ * [orbitMinM, orbitMaxM] once inside `orbitInM` with the turret laid, and it steers off a ram: inside `noRamM` and closing it
+ * steers to the tangent (a ram costs the fodder hull more than the survivor's). Round 3 (the critic's M3): a tighter
+ * band (16-28 m, was 25-35) run on the tangent at the radius the hull has, never back out to a wider ring.
+ */
+export const RUSH_DRIVE = Object.freeze({
+  directM: 70, orbitInM: 28, orbitMinM: 16, orbitMaxM: 28, noRamM: 12,
+  /** The run-in (directM to orbitInM) aims this far beside the target on the orbit's side, never at its hull (round 3). */
+  runInSideM: 24,
+  /** Each friendly hunter already nearer a seen target puts the orbit this much further out, at most orbitRings rings (round 3). */
+  orbitStepM: 10, orbitRings: 3,
+  /** The orbit's aim point runs this far along the tangent (closingLeadM while closing inside noRamM: out, not in). */
+  tangentLeadM: 18, closingLeadM: 6,
+  /**
+   * The no-ram lane: the two half-widths plus laneMarginM, and a crossing hull's place lookaheadS on (round 3b: 2 m and
+   * 0.6 s still let a hunter close on a hull turning across its bow — 7 hunter rams in 5 Horde runs).
+   */
+  laneMarginM: 3, lookaheadS: 1.0,
+  /**
+   * The gap before two footprints touch (round 3): inside the stopping distance plus brakeGapM the hull stops — and backs
+   * off at backOffThrottle inside backOffGapM when it stands (backing off sooner put the hull's tail into the hulls behind
+   * it: 7 hunter rams in 8 Horde runs against 1) — and inside noRamM beyond it rolls on at swerveThrottle, turning off
+   * the line.
+   */
+  brakeGapM: 3, backOffGapM: 1.5, backOffThrottle: 0.5, swerveThrottle: 0.45,
+  /**
+   * (268, item 10) A rusher that backs off a hull holds the back-off this long, its turn kept: backing off a tick at a time,
+   * the reverse never built way (the lane looks behind a hull under way backwards, and the drive took it forward again),
+   * and the hunter dithered at the gap under 0.5 m/s, face to face with its quarry or pressed on a neighbour of it.
+   */
+  backOffHoldS: 1.2,
+  /**
+   * (268, item 10; Main) A rusher held behind an ally stopped (under the controller's parked speed) for this long without
+   * a break gives way: the passing path round it (its legs cleared at the hull's half-width + 1 m, beyond the planner's
+   * + 0.5 m). The bounded yield's 8 s stood a hunter behind a standing ally in the fight (Infected, Steppe seed 7: an M60A2
+   * stopped 8 m behind a Centurion 3 for 4 s).
+   */
+  allyHoldS: 1.5,
+  /**
+   * A lane keeper that is no rusher (noRamLane: Frontline's sides, the survivors, the Horde's allies, Turbo Ball) backs off
+   * from this gap when it stands (round 3b, the critic's M4: in a sector's point-blank fight the hulls stood nose to nose,
+   * driving into one another — over half of Frontline's engaged stills on Verdant with an enemy inside 20 m).
+   */
+  laneBackOffGapM: 3,
+});
+/**
+ * The jockey (doctrine jockeyS): a hull standing in a fight (its drivers' throttle under standThrottle, held the doctrine's
+ * jockeyS) strafes round its target at the range it has, aiming leadM on round, at `throttle`; ringM from where it stood
+ * round the circle (after legMinS) it turns about toward the target and strafes back; a leg that has not made
+ * blockedMps for blockedS once legSettleS under way (a wall, a hull, the safety brakes) turns about at once; while its
+ * drivers only call it back to that ground (leashM) the strafe keeps the hull. The safety brakes after it (allies,
+ * solids, water, the no-ram lane) still stop it.
+ */
+export const JOCKEY_DRIVE = Object.freeze({ throttle: 0.35, standThrottle: 0.1, ringM: 16, leadM: 10, legMinS: 3, blockedS: 0.7, blockedMps: 0.4,
+  /** A strafe under way keeps the hull while its drivers' goal stays this near where it stood (their call back to that ground). */
+  leashM: 24,
+  /** A lap is judged for a stall only after this long under way (the roll-off itself starts from a stand). */
+  legSettleS: 1.0,
+  /** The rolling turn (doctrine rollingTurns): this drive and at most this steer, an arc in place of the pivot's lock. */
+  rollThrottle: 0.6, rollSteer: 0.6,
+  /** The 'angle' hit reaction's drive (doctrine hitReactions 'angle'): the turn onto the shot keeps way on. */
+  reactRollThrottle: 0.7 });
+/**
+ * A bot's shot at the Turbo Ball (BallBotRules.shootBall): the gun within `bearRad` of the ball's bearing, and no teammate
+ * within `clearM` of the line to it nor within clearM × `clearBallScale` of the ball. An enemy hull within `contestM` of
+ * the ball is contesting it: the no-ram lane lets a striker drive on into it.
+ */
+export const BALL_SHOT = Object.freeze({ bearRad: 0.05, clearM: 6, clearBallScale: 2.5, contestM: 14 });
+/** A zone holder's sortie (`zoneSortieM`): it drives at the spotted attacker and stops `standoffM` short (a sortie, never a ram). */
+export const SORTIE_DRIVE = Object.freeze({ standoffM: 35 });
+/** The Turbo Ball striker's offensive jump (`offensiveJump`): the ball within [minM, rangeM] ahead, inside coneRad of the bow. */
+export const STRIKER_JUMP = Object.freeze({ rangeM: 25, minM: 4, coneRad: 0.35 });
+/**
+ * The honest hunt (matchModes.ts): the nearest opponent the hunting team spots, else its freshest sighting within
+ * `lastSeenMaxS`, else a seeded sweep over the opponents' side. Hunters are assigned once a second in id order at the
+ * cost of distance + `crowdPenaltyM` per hunter already on that target beyond its fair share; until `laneUntilM` each
+ * takes a lateral lane `laneMinM`-`laneMaxM` off the line, `flankShare` of them on flank arcs of ±`flankDeg`.
+ */
+export const HUNT_RULES = Object.freeze({
+  lastSeenMaxS: 45, assignEveryS: 1, crowdPenaltyM: 60, laneMinM: 15, laneMaxM: 45, laneUntilM: 90, flankShare: 0.4,
+  flankDeg: 50, sweepRingM: 140,
+  /** The side's sightings refresh this often from the spotting hook; a sweep re-draws its bearings every sweepEpochS. */
+  intelRefreshS: 0.5, sweepEpochS: 20,
+  /**
+   * Round 3 (the critic's M1): a last contact older than sweepStaleS is no lead — the humans moved on. The hunter spirals
+   * out round the point it rose at instead: firstM out on its first epoch there, stepM more every epoch, at most maxM.
+   */
+  sweepStaleS: 30, localSweep: Object.freeze({ firstM: 80, stepM: 60, maxM: 320 }),
+  /**
+   * Round 3 (the critic's M3: the infected retreated in 12-27 % of samples, driving at the survivor in front of them while
+   * the plan had dealt them another): the crowd penalty spreads hunters only beyond spreadBeyondM of their quarry; a
+   * fight already close keeps its nearest quarry.
+   */
+  spreadBeyondM: 70,
+  /**
+   * Round 3 (the critic's M1: on Verdant a lone wave-1 zombie re-arrived round the humans for 900 s and never found
+   * them): a hull the director placed on a ring round the humans (a Horde arrival, an infected's rising) goes in along the
+   * facing it was given, to a point reachMin-reachMax of the ring's own distance on and up to spreadDeg either side — the
+   * director's placement, as it stood at the arrival and never updated — and once within arriveM of it spirals out round
+   * it (localSweep). What it spots, and its side's fresher sightings, come first as always.
+   */
+  lead: Object.freeze({ reachMin: 0.85, reachMax: 1.1, spreadDeg: 20, arriveM: 30 }),
+});
+
+interface AssaultRules {
+  /** Defenders fielded on the first sector; each further sector adds one. */
+  readonly initialActive: number;
+  /** Extra defenders per sector from the operation's difficulty. */
+  readonly extraDefenders: number;
+  /** Hit-point scale added per sector taken, up to the last sector. */
+  readonly hpPerLine: number;
+  /**
+   * Hit-point scale of the last sector's counter-attack, in place of 1 + sectors taken × hpPerLine (1.32 on the third
+   * sector). Modes lane, 2026-10-08 (owner decision: the attackers should win 40–55 % of bot tests): the attack took
+   * the first two sectors every time and lost most matches at the third, where five fresh defenders at 1.32× met the
+   * four survivors; 1.15× is the decision's first knob.
+   */
+  readonly finalLineHp: number;
+  /** Hit-point scale added by the operation's difficulty (applies to every defender). */
+  readonly difficultyHp: number;
+  /** Seconds the last sector must be held. */
+  readonly holdS: number;
+  /** Seconds one attacker alone takes to turn a sector (each further attacker adds 35 %; Zone Control's points take 8). */
+  readonly captureS: number;
+  /**
+   * A sector's defenders stand on its line from the start (gameplay-modes-228: sector 1 fell in 24 s with no shot fired,
+   * its three defenders still driving from the bravo base 800 m back): placed `lineBandM` behind its centre facing the
+   * attack, and the reinforcements for the next sector form on that sector's line.
+   */
+  readonly defendersStartOnLine: boolean;
+  readonly lineBandM: readonly [number, number];
+  /**
+   * The line's guard (round 2, the critic's E2: on compact maps the 70-110 m line saw and shot the attack's spawn at
+   * 0.2 s): a defender's slot is never within `minAttackM` of a living attacker nor (outOfSight) in an attacker's terrain
+   * sight. (268, item 9) It searches the defender's ground, judged where the placement puts the hull: back along the axis
+   * `stepBackM` at a time, `backSteps` times, and across the line `acrossSteps` slot spacings either side; with no clear
+   * slot there, it takes the clearest (outside the reach first, then out of sight, then the furthest from the attack). The
+   * march reads the Horde arrival's sight constants (ArrivalRules).
+   */
+  readonly lineGuard: { readonly minAttackM: number; readonly outOfSight: boolean; readonly stepBackM: number; readonly backSteps: number; readonly acrossSteps: number } | null;
+  /** `squad` fresh defenders drive at the sector just taken `afterCaptureS` after it falls, for `forS`, then fall back. */
+  readonly counterAttack: { readonly squad: number; readonly afterCaptureS: number; readonly forS: number } | null;
+  /** While a sector is contested and its line is short, one defender arrives from the rear this often, up to count + `reinforceExtra`. */
+  readonly reinforceTrickleS: number;
+  readonly reinforceExtra: number;
+  /** The rear the trickle arrives from: this far behind the line. */
+  readonly reinforceRearM: number;
+  /** The trickle runs while an attacker stands within the zone's radius + contestReachM of the live sector. */
+  readonly contestReachM: number;
+  /** Line slots `lineSpacingM` apart across the axis, each jittered within ±lineJitterM / 2. */
+  readonly lineSpacingM: number;
+  readonly lineJitterM: number;
+  /** A revived allied bot comes back `allyReviveBackM` behind the last sector taken. */
+  readonly allyReviveBackM: number;
+  /** The defenders hold the live sector one slot each on a ring this far round its centre (0: all on the centre). */
+  readonly holdSpreadM: number;
+  /**
+   * The regroup before the last sector (bots lane 2026-10-03): the attackers hold the sector they just took until every
+   * bot stands within `regroupRadiusM` of it, for at most `regroupMaxS`; a human within `regroupHumanM` of the last
+   * sector leads them on.
+   */
+  readonly regroupMaxS: number;
+  readonly regroupRadiusM: number;
+  readonly regroupHumanM: number;
+  /** Destroyed allied BOTS revive behind the last sector taken after this long (null: only when a sector falls). */
+  readonly allyReviveS: number | null;
+  /**
+   * The defenders' bots play this many difficulty tiers below the battle's (the Horde's `hostileDifficultyStep`): the
+   * defence's pressure is its numbers, its line and its doctrine, not a sharper aim (gameplay-modes-228).
+   */
+  readonly hostileDifficultyStep: number;
+  /** Multiplies a defender's reload (the Horde's `hostileReloadScale`; 1 = its own gun's). */
+  readonly hostileReloadScale: number;
+  /**
+   * The attack's allied BOTS take this share of the attack's hull (hpScale) at their first spawn and every revive; the
+   * human seats keep the whole of it (round 3b, the critic's M4: at x1.8 an allied bot was all but never destroyed, so the
+   * defence killed under one a minute; lighter allies that come back sooner keep the fight going while the sortie's one
+   * life stays the human's). Absent or 1: the attack's hull for every seat.
+   */
+  readonly allyBotHull?: number;
+}
+
+/**
+ * Endless Horde wave law (owner 2026-09-15: "the horde is not endless, there's only 3 tanks every time"). Zombies
+ * (owner 2026-10-17: "all the zombies actually have low hp"): the ruleset's `hpScale` is the humans' hull; the hostiles
+ * arrive as fodder at `hostileHpScale` of their own hull (about one main-gun round), so the pressure is their numbers.
+ */
+/**
+ * Where a hostile arrives (gameplay-modes-228; a game-director decision of the authority, never bot knowledge and
+ * never sent to a client): on a ring `spawnRingM` round the living humans' centroid, in `spawnSectors` sectors
+ * `sectorWidthDeg` wide centred on the bearing to the hostile base and ±`sectorSpreadDeg` (rotated per arrival), never
+ * within `spawnMinHumanM` of a human or (spawnOutOfSight) in the terrain sight of one within `sightRangeM` (a
+ * height-field march every `sightStepM` from `sightEyeM` up to the hull `sightHullM` up; a crest hides it only by
+ * `sightMarginM`), out of `spawnCandidates` seeded candidates; else at the hostile base.
+ */
+export interface ArrivalRules {
+  readonly spawnRingM: readonly [number, number];
+  readonly spawnSectors: number;
+  readonly sectorWidthDeg: number;
+  readonly sectorSpreadDeg: number;
+  readonly spawnMinHumanM: number;
+  readonly spawnOutOfSight: boolean;
+  readonly sightRangeM: number;
+  readonly sightStepM: number;
+  readonly sightEyeM: number;
+  readonly sightHullM: number;
+  readonly sightMarginM: number;
+  /**
+   * The approach stays hidden too: the point `sightLeadM` from the arrival toward the humans' centroid must be out of
+   * every human's sight as well (round 2: arrivals hidden only where they stood came over the crest at once, first
+   * contact inside 8 s on 19 of 80 waves); 0 checks the arrival point alone.
+   */
+  readonly sightLeadM: number;
+  readonly spawnCandidates: number;
+  /**
+   * The ring is pulled in to the arriving hull's own reach (round 3, the critic's M2: on Verdant a wave of 35 km/h
+   * heavies needed 39-50 s from the 320-440 m ring to its first shot, against 8-25): its top speed at the wave's pace
+   * times spawnReachS, when that is under the ring's outer edge, scales both edges down (never inside spawnMinHumanM
+   * plus 10 m); absent: the ring as it stands.
+   */
+  readonly spawnReachS?: number;
+  /**
+   * The Infected's wider ring (round 3b, the critic's M3: with ten survivors spread up to their rally reach, no point of
+   * the 70-120 m ring stood 60 m clear of every one and an infected rose at its base 600-740 m off, a minute from the
+   * fight): when neither the ring out of sight nor the ring in sight has a clear point, this ring is tried the same two
+   * ways before the base; absent: straight to the base.
+   */
+  readonly fallbackRingM?: readonly [number, number];
+}
+
+interface HordeRules extends ArrivalRules {
+  /**
+   * The wave total (gameplay-modes-228; owner 2026-10-18: "more enemies per round"): round(waveSize + waveStep·(w−1) +
+   * waveCurve·(w−1)²) hostiles a wave — 6, 9, 13, 18, 24, 30, 37, 44, 52, 61 … rising every round with no cap — times
+   * (1 + perHumanTotal per extra human). The total is not what stands on the field at once (maxAlive is): the rest
+   * queue and trickle in as the field thins.
+   */
+  readonly waveSize: number;
+  readonly waveStep: number;
+  readonly waveCurve: number;
+  readonly perHumanTotal: number;
+  /** Hostiles alive at once: maxAlive + maxAlivePerHuman per extra human, never over maxAliveCap or the pool. */
+  readonly maxAlive: number;
+  readonly maxAlivePerHuman: number;
+  readonly maxAliveCap: number;
+  /** While some of the wave is queued and the field is below maxAlive, one rested pool identity arrives this often… */
+  readonly trickleS: number;
+  /** …a wreck's identity only once it has lain this long (it never vanishes under the gun that killed it). */
+  readonly recycleAfterS: number;
+  /**
+   * A hostile on the field that has come no `strandedGainM` closer to any human for `strandedS` while farther than
+   * `strandedContactM` from all of them (cut off by the ground, wedged) is benched and queued again: it re-arrives on the
+   * ring, so a round never stalls on hostiles that cannot reach the fight (Redrock seed 2 sat 740 s on seven; at 100 m
+   * three still sat 460 s just off a ledge: the rush orbits at 25-35 m, so 50 m is out of the fight).
+   */
+  readonly strandedS: number;
+  readonly strandedGainM: number;
+  readonly strandedContactM: number;
+  /**
+   * A benched straggler re-arrives on this nearer ring (out of reach and sight as ever; round 3, the critic's M1: re-arrived
+   * at 320-440 m a lone zombie on Verdant never found the humans again, and wave 1 never cleared in 1500 s).
+   */
+  readonly strandedRingM: readonly [number, number];
+  /**
+   * A straggler benched more than this many times in one wave is retired from it (round 3b, the critic's M1: on Verdant a
+   * zombie re-arrived twenty times round humans it never found and wave 1 never cleared): it rests, the wave owes it no
+   * more, and it is the director's call alone (no bot learns where anything is).
+   */
+  readonly strandedRetireAfter: number;
+  /** A field left empty with arrivals queued for stallTrickles × trickleS takes ring points in sight (out of reach). */
+  readonly stallTrickles: number;
+  /** The lull between waves (a clear, readable break; was a 6 s literal plus 0-49 s of travel). */
+  readonly intermissionS: number;
+  /** Share of maximum hull repaired on every surviving human when a wave is cleared. */
+  readonly waveRepair: number;
+  /** A hostile's hull on the first wave, as a multiple of its vehicle's own hull (not of the humans' `hpScale`). */
+  readonly hostileHpScale: number;
+  /** Hull a hostile gains every wave after the first through wave lateFromWave − 1, as a share of its first-wave hull… */
+  readonly hpPerWave: number;
+  /** …and every wave from `lateFromWave` on (the curve that ends every run while a hostile stays fodder). */
+  readonly hpPerWaveLate: number;
+  readonly lateFromWave: number;
+  /** Every `runnerEvery`-th wave is a RUNNER wave: `runnerSpeed` × speed, light hulls first. */
+  readonly runnerEvery: number;
+  readonly runnerSpeed: number;
+  /**
+   * Every `swarmEvery`-th wave is a SWARM wave: its law total (round 2: a ×1.4 total broke "rising every round" — wave
+   * 5 outnumbered wave 6) at `swarmHull` of their own hull, trickling in `swarmTrickleScale` × as often apart.
+   */
+  readonly swarmEvery: number;
+  readonly swarmTrickleScale: number;
+  readonly swarmHull: number;
+  /** How the hunt routes: on what the hunting team spots ('spotted') — never on a hidden human's live position. */
+  readonly hunt: 'spotted' | 'live';
+  /** Allied bots hunt spotted hostiles only within this of the humans' centroid; beyond it they rejoin the humans. */
+  readonly allyLeashM: number;
+  /**
+   * Round 3 (the critic's M2: the player's hull fell first in six runs of eight while its allies stood unhurt behind it —
+   * 20 zombie kills a human death against the plan's 6-12): with nothing spotted within the leash the allied bots screen
+   * the humans, allyScreenM out from their centroid toward the threat (the side's freshest sighting of a zombie, else the
+   * zombies' deployment), allyScreenSpreadM apart across it (absent: they roam as before).
+   */
+  readonly allyScreenM?: number;
+  readonly allyScreenSpreadM?: number;
+  /** Speed a hostile (and a Frontline defender) gains every wave after the first, up to `speedPerWaveMax`. */
+  readonly speedPerWave: number;
+  readonly speedPerWaveMax: number;
+  /** Share of the caches that repair rather than rearm: `first` on wave one, `perWave` less each wave, never under `floor`. */
+  readonly cacheHeal: { readonly first: number; readonly perWave: number; readonly floor: number };
+  /** Difficulty tiers the hostiles' bots play below the battle's (0 = the same; never under the easiest). */
+  readonly hostileDifficultyStep: number;
+  /**
+   * Multiplies a hostile's reload (gameplay-modes-228): the zombies charge to point blank now, so a wave's pressure is
+   * its numbers and its speed, not a full tank gun's rate of fire from every one of them (the 10-17 ask: no
+   * steamroll). The humans' own hull, rounds and reload are never touched.
+   */
+  readonly hostileReloadScale: number;
+}
+
+/** Frontline attackers (gameplay-modes-228): the push into a sector, its anti-suicide gate and the flank lanes. */
+interface AssaultBotRules {
+  /** An attacker that has held the zone edge this long without capture progress drives into the centre… */
+  readonly pushAfterS: number;
+  /** …and a push waits until `pushMinGroup` other attackers stand within `pushGroupM` of it, or pushAfterS passes. */
+  readonly pushMinGroup: number;
+  readonly pushGroupM: number;
+  /** Where the edge is: this far outside the zone's radius, on the attack's side. */
+  readonly stageM: number;
+  /** `flankShare` of the attackers approach on lanes `flankOffsetM` off the axis, converging in the last `flankConvergeM`. */
+  readonly flankShare: number;
+  readonly flankOffsetM: number;
+  readonly flankConvergeM: number;
+}
+/** Capture the Flag bots (gameplay-modes-228: "increase aggression of bots trying to capturing flag"). */
+interface FlagBotRules {
+  /** Share of the squad (at least `recoverMin`) that recovers the own flag while it is away… */
+  readonly recoverShare: number;
+  readonly recoverMin: number;
+  /** …or every bot that is neither the carrier nor an escort (a capture needs the own flag home). */
+  readonly huntWhenHomeFlagTaken: boolean;
+  /**
+   * Escorts of the own carrier, `escortAheadM` ahead of it on its route home at ±`escortSideM`; with the own flag home
+   * `carrierGuards` guard it while the carrier runs and every other bot escorts too (a fourth and later escort is the
+   * rearguard, escortAheadM behind it).
+   */
+  readonly escorts: number;
+  readonly carrierGuards: number;
+  readonly escortAheadM: number;
+  readonly escortSideM: number;
+  /** Share of a squad of `defendMinSquad` or more that guards home while no flag is carried. */
+  readonly defendShare: number;
+  readonly defendMinSquad: number;
+  /** Recoverers aim at the enemy carrier's point this far ahead along its line home (the flag marker is public). */
+  readonly interceptLeadS: number;
+  /**
+   * The raid goes in as a group (round 3, the critic's M5: the escorts stood within 80 m of their carrier in 26-31 % of
+   * its run, the raiders having reached the flag one at a time): a raider within `raidStageM` of the enemy flag at its
+   * base waits `raidStageM - raidHoldInM` out, spread across the line, until `raidMinGroup` friends are within
+   * `raidGroupM` of it or `raidWaitS` pass, then goes in; the flag lifted, the next raid stages afresh (absent: no stage).
+   */
+  readonly raidStageM?: number;
+  readonly raidHoldInM?: number;
+  readonly raidGroupM?: number;
+  readonly raidMinGroup?: number;
+  readonly raidWaitS?: number;
+}
+/** Turbo Ball bots (gameplay-modes-228: "pursuing ball"). */
+interface BallBotRules {
+  /** Strikers per team: the chaser and a support striker `supportBackM` behind it and `supportSideM` to the side. */
+  readonly strikers: number;
+  readonly supportBackM: number;
+  readonly supportSideM: number;
+  /** A striker keeps its job this long unless a teammate is `swapM` closer to the ball. */
+  readonly strikerHoldS: number;
+  readonly swapM: number;
+  /** The intercept: the ball's point t ahead (its drag law), t its ETA iterated `leadIterations` times, at most `leadMaxS`. */
+  readonly leadMaxS: number;
+  readonly leadIterations: number;
+  /** Screens `screenNear` / `screenFar` of the way from the own goal to the ball, `screenSideM` off the line. */
+  readonly screens: number;
+  readonly screenNear: number;
+  readonly screenFar: number;
+  readonly screenSideM: number;
+  /** Keepers `keeperM` out from the own goal. */
+  readonly keepers: number;
+  readonly keeperM: number;
+  /** At most `crowdCap` bots of a team within `crowdM` of the ball; the rest hold their lanes `crowdMarginM` beyond it. */
+  readonly crowdCap: number;
+  readonly crowdM: number;
+  readonly crowdMarginM: number;
+  /** Wings stand `wingM` + `wingStepM` per rank pair off the line from the own goal to the ball. */
+  readonly wingM: number;
+  readonly wingStepM: number;
+  /**
+   * The striker's line-up: off the line behind the ball (more than `lineUpM` ahead of it or aside) it goes round,
+   * `goRoundM` aside, to `behindM` behind the ball; lined up it drives through to `throughM` past it toward the goal.
+   */
+  readonly lineUpM: number;
+  readonly goRoundM: number;
+  readonly behindM: number;
+  readonly throughM: number;
+  /**
+   * A bot may fire at the ball between `minRangeM` and `maxRangeM` when it lies inside `coneDeg` of the line to the
+   * opponent goal: the strikers only, or (`everyRole`) every role — and (`overTanks`) the ball shot comes before a tank
+   * target farther than the ball (the ball is public; round 2: the strikers alone moved it too rarely to score).
+   */
+  readonly shootBall: { readonly maxRangeM: number; readonly minRangeM: number; readonly coneDeg: number;
+    readonly everyRole: boolean; readonly overTanks: boolean } | null;
+}
+/** Turbo Ball pitch rules: the goals at the middle ± goalAxisM / 2 along the axis (null: the deployment centres). */
+interface BallPitchRules {
+  readonly goalAxisM: number | null;
+  /** A ball nobody has touched this long goes back to the kick-off spot (null: never). */
+  readonly idleResetS: number | null;
+  /**
+   * After a goal both sides line up this far back from the kick-off spot on their own halves (null: their spawns). Round 3
+   * (the critic's M6): every goal sent the bots back to their deployments 300-440 m from the kick-off, and the ball lay
+   * still for 30-40 s with no bot near it (A/B over seeds 401-408: 0.88 goals a match → 1.63, the ball still 32 % → 29 %).
+   */
+  readonly kickoffM?: number | null;
+  /** The bots take that line-up at the opening kick-off too (a human starts at its deployment). */
+  readonly kickoffAtStart?: boolean;
+  /** A revive after a death stands this far behind the team's own goal, spread across the axis (absent or null: the deployment). */
+  readonly respawnBackM?: number | null;
+}
+/**
+ * Capture the Flag pitch rules (gameplay-modes-228 round 2: with the flags on the deployment centres a carrier picked its
+ * flag up among the enemy's 6 s respawns and ran 800 m home: 18.7 pickups a match, 0.56 captures): each team's flag base
+ * stands at the middle ± baseAxisM / 2 along the axis, in front of its spawn (null: on the deployment centre).
+ */
+interface FlagPitchRules {
+  readonly baseAxisM: number | null;
+  /** A carrier drives at this share of the mode speed (absent: FLAG_CARRIER_SPEED_SCALE). */
+  readonly carrierSpeedScale?: number;
+  /**
+   * A revive stands this far behind the team's own flag base, spread across the axis (absent or null: the deployment,
+   * some 200 m further back; round 3, the critic's M5).
+   */
+  readonly respawnBackM?: number | null;
+  /**
+   * Carrying a flag reveals the carrier to every viewer (Main's ruling on audit finding 53, 2026-11-09: standard CTF).
+   * A carried flag publishes its carrier's position, so this stays true while flags publish positions: the authority's
+   * spotting filter reveals the carrier by name ('flag_carrier') and the snapshot places no hull the viewer cannot see.
+   */
+  readonly carrierRevealed?: boolean;
+}
+/** Infected survivors: unengaged survivors close on their own living centroid and hold together within this. */
+interface InfectionBotRules {
+  readonly survivorRallyM: number;
+  /**
+   * The infected rise round the survivors (the opening five and every respawn, a convert's included), out of their sight,
+   * not at a far base: the outbreak is among them. Null keeps the infected's base.
+   */
+  readonly arrival: ArrivalRules | null;
+  /**
+   * The pack hunt (gameplay-modes-233): each infected already on a survivor pulls the next hunter to it by this many
+   * metres of its distance, where the shared hunt rules spread them a hunter a quarry (HUNT_RULES.crowdPenaltyM). Absent or
+   * 0 keeps the spread.
+   */
+  readonly packPullM?: number;
+}
+
+/**
+ * Team arrangement (owner 2026-09-15): the co-op modes let the player arrange both sides — allied
+ * bots, the enemy pool (distinct hostile identities in the match), the first Horde wave and the
+ * enemy nation. Sides (owner 2026-09-18: "a switch that's default set to 7v7 but then switching it
+ * does 14v14 and you can also enter custom numbers of allies and enemies … 1 v 20"): every other mode
+ * arranges its two sides the same way — allied bots and hostiles all on the field at once — under
+ * one field limit. Absent fields keep the mode's defaults; every value is clamped by
+ * TEAM_ARRANGEMENT_LIMITS.
+ */
+/**
+ * Mars mode settings (owner 2026-09-18: "give it a bunch of boosts and settings"): the gravity world the basin
+ * plays under and how often a boost cache drops. Stored per player on the mars arrangement
+ * (game/teamArrangement.ts readMarsSettings) and carried by rooms through the lobby arrangement.
+ */
+export const MARS_GRAVITY_OPTIONS = Object.freeze({
+  // round 30 (owner 2026-09-20): the jump is a rocket boost — about 1.45x the 2026-09-18 launches
+  mars: Object.freeze({ gravityScale: 0.38, jumpMps: 9.5, recoilLaunchScale: 3 }),
+  moon: Object.freeze({ gravityScale: 0.17, jumpMps: 12.5, recoilLaunchScale: 4.5 }),
+  earth: Object.freeze({ gravityScale: 1, jumpMps: 6, recoilLaunchScale: 1.5 }),
+});
+export type MarsGravityId = keyof typeof MARS_GRAVITY_OPTIONS;
+export const MARS_GRAVITY_IDS: readonly MarsGravityId[] = Object.freeze(Object.keys(MARS_GRAVITY_OPTIONS) as MarsGravityId[]);
+const MARS_CACHE_OPTIONS = Object.freeze({
+  off: Object.freeze({ cacheFirstS: 0, cacheIntervalS: 0 }),
+  standard: Object.freeze({ cacheFirstS: 12, cacheIntervalS: 22 }),
+  frequent: Object.freeze({ cacheFirstS: 8, cacheIntervalS: 11 }),
+});
+export type MarsCachesId = keyof typeof MARS_CACHE_OPTIONS;
+export const MARS_CACHE_IDS: readonly MarsCachesId[] = Object.freeze(Object.keys(MARS_CACHE_OPTIONS) as MarsCachesId[]);
+export function isMarsGravityId(value: unknown): value is MarsGravityId {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(MARS_GRAVITY_OPTIONS, value);
+}
+export function isMarsCachesId(value: unknown): value is MarsCachesId {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(MARS_CACHE_OPTIONS, value);
+}
+interface MarsRules {
+  readonly gravity: MarsGravityId;
+  readonly caches: MarsCachesId;
+  /** Seconds into the match the first boost cache drops, then the cadence; 0 means no caches. */
+  readonly cacheFirstS: number;
+  readonly cacheIntervalS: number;
+}
+function marsRulesFor(gravity: MarsGravityId, caches: MarsCachesId): MarsRules {
+  return Object.freeze({ gravity, caches, ...MARS_CACHE_OPTIONS[caches] });
+}
+export const MARS_DEFAULT_RULES: MarsRules = marsRulesFor('mars', 'standard');
+
+/**
+ * TEAM NATIONS (gameplay-modes-228; owner 2026-10-18: "be able to select wehtehr we want team enemies to be mononation or
+ * just random"): MONO-NATION seats each side from ONE country — the allies from the player's pick's country, the
+ * enemies from one opposing country per match, shortfalls filled from the closest allied countries (sim/teamNations.ts)
+ * and said so — and RANDOM seats any vehicle on either side. The player's own pick is always kept. One per-player
+ * preference (game/teamArrangement.ts), decided by the host in a room.
+ */
+export const TEAM_NATIONS_IDS = Object.freeze(['mono', 'random'] as const);
+export type TeamNationsId = (typeof TEAM_NATIONS_IDS)[number];
+export const DEFAULT_TEAM_NATIONS: TeamNationsId = 'mono';
+export function isTeamNationsId(value: unknown): value is TeamNationsId {
+  return value === 'mono' || value === 'random';
+}
+/**
+ * The planner's numbers: the rival bloc's weight in the AUTO enemy draw, the distinct bot vehicles a multiplayer side
+ * may field (each one a procedural profile every seat loads; beyond it the side repeats), and whether the AUTO enemy
+ * must fill its seats from contemporaries alone where any country can.
+ */
+export const TEAM_NATIONS_RULES = Object.freeze({ rivalBlocWeight: 3, mpDistinctBotSpecsPerSide: 6, autoEnemyNeedsContemporaries: true });
+/**
+ * How MONO-NATION reads in each mode's fiction (the rule card and docs/GAME-MODES.md say so): `sides` the two sides it
+ * seats; a note key under `rules.teams.scope.*` when the fiction bends it.
+ */
+export const TEAM_NATIONS_MODE_SCOPE: Readonly<Record<GameModeId, { readonly note: string | null }>> = Object.freeze({
+  standard: { note: null }, capture_the_flag: { note: null }, zone_control: { note: null }, turbo_ball: { note: null },
+  mars: { note: null }, realistic: { note: null }, gun_game: { note: null }, drone: { note: null },
+  // the zombie pool is one country (every wave draws from it), the allies the player's
+  endless_horde: { note: 'horde' },
+  // the defending formation is one country (a campaign operation's in the campaign)
+  frontline_assault: { note: 'frontline' },
+  // the opening survivors are the player's country, the opening infected one enemy country; a convert keeps its hull,
+  // so the sides mix by design as the outbreak spreads
+  infected: { note: 'infected' },
+  // boss role: the hunters are one country; hunter role: the player's country against one enemy juggernaut
+  juggernaut: { note: 'juggernaut' },
+  // the escorts are the player's country, the ground force one enemy country
+  ac130: { note: 'ac130' },
+  air_support: { note: null },
+  // the proving ground is a solo range against static target hulls: no team fiction applies (230 x gameplay-modes union)
+  proving_ground: { note: null },
+});
+
+export interface TeamArrangement {
+  /** TEAM NATIONS: 'random' seats any vehicle; absent / null / 'mono' is MONO-NATION (the default). */
+  readonly teamNations?: TeamNationsId | null;
+  /** Juggernaut side, from the local player/host perspective. */
+  readonly juggernautRole?: 'boss' | 'hunter' | null;
+  /** Free-sortie objective controls; irrelevant fields are discarded at the boundary. */
+  readonly scoreTarget?: number | null;
+  readonly respawnS?: number | null;
+  readonly waveStep?: number | null;
+  readonly holdS?: number | null;
+  readonly allies?: number | null;
+  readonly enemies?: number | null;
+  readonly waveSize?: number | null;
+  /** Enemy nation id (game/teamArrangement.ts ENEMY_NATION_OPTIONS) or null for a mixed force. */
+  readonly enemyNation?: string | null;
+  /** Retired (TEAM NATIONS): the legacy "allies are the player's nation" flag, read as MONO-NATION and dropped. */
+  readonly alliedNation?: 'player' | null;
+  /** Mars mode only: the gravity world and boost-cache cadence (MARS_GRAVITY_OPTIONS / MARS_CACHE_OPTIONS). */
+  readonly marsGravity?: MarsGravityId | null;
+  readonly marsCaches?: MarsCachesId | null;
+  /** Proving ground only: the target hulls shuttle along their hull axes about their marks (PROVING_GROUND_RULES.patrol). */
+  readonly movingTargets?: boolean | null;
+}
+
+/** One lane of the proving ground: a target hull at a set range down the range axis, presenting a set angle. */
+interface ProvingLaneRule {
+  /** Range from the firing line along the range axis (m). */
+  readonly rangeM: number;
+  /** The angle the target presents to the firing line (deg): 0 nose on, 90 full broadside; + turns its nose to its left. */
+  readonly presentDeg: number;
+  /** Preferred offset across the range axis (m, + toward the shooter's left); the layout moves it off a blocked sightline. */
+  readonly lateralM: number;
+}
+
+/** One reference plate on the rack: rolled homogeneous armour `mm` thick, laid back `angleDeg` from facing the firing line;
+ * a plate laid far back may run longer up its slope than the rack's height (`lengthM`), so it still shows the line a face. */
+interface ProvingPlateRule {
+  readonly mm: number;
+  readonly angleDeg: number;
+  readonly lengthM?: number;
+}
+
+/**
+ * The plate rack (2026-10-20): reference plates standing in a row across the range at a set range, each facing the firing
+ * line and laid back by its angle, so a round fired from the line meets it at that angle. A round that strikes one is
+ * resolved by the damage law the hulls answer to (sim/damage.ts resolvePlateStrike): its once-per-shot penetration roll
+ * against the plate's effective thickness, the ricochet and overmatch rules, the slope law.
+ */
+interface ProvingPlateRackRule {
+  /** Range from the firing line along the axis (m) and the rack's centre across it (m, + toward the shooter's left). */
+  readonly rangeM: number;
+  readonly lateralM: number;
+  /** Centre-to-centre spacing across the axis, each plate's face (width x height, m), its lower edge above the ground. */
+  readonly spacingM: number;
+  readonly widthM: number;
+  readonly heightM: number;
+  readonly liftM: number;
+  readonly plates: readonly ProvingPlateRule[];
+}
+
+/** One graded feature of the drive course (sim/provingGround.ts provingCourseStamps turns each into a terrain profile). */
+type ProvingCourseFeature =
+  /** Up at `upDeg` to `heightM`, a level top `topM` long, down at `downDeg`. */
+  | { readonly kind: 'ramp'; readonly heightM: number; readonly upDeg: number; readonly topM: number; readonly downDeg: number }
+  /** A ditch `depthM` deep with walls at `wallDeg` and a floor `floorM` long. */
+  | { readonly kind: 'ditch'; readonly depthM: number; readonly wallDeg: number; readonly floorM: number }
+  /** `count` rounded humps `heightM` tall, one every `periodM`. */
+  | { readonly kind: 'moguls'; readonly heightM: number; readonly periodM: number; readonly count: number }
+  /** The ground across the course raised at `deg` (its left side up), `lengthM` along it. */
+  | { readonly kind: 'sideSlope'; readonly deg: number; readonly lengthM: number };
+
+/**
+ * The drive course (2026-10-20): graded earthworks on the meadow beside the range, in a row parallel to its axis — ramps,
+ * a ditch, moguls and a side slope — raised in the battle's ground overlay (sim/terrainDeformation.ts CourseStamp), so the
+ * hull drives what the eye sees and nothing outside the proving ground moves.
+ */
+interface ProvingCourseRule {
+  /** Where the first feature begins along the axis from the firing line (m) and the course's line across it (m, + left). */
+  readonly startM: number;
+  readonly lateralM: number;
+  /** The graded band's width (m), the skirt each side past it (m) and the level ground between two features (m). */
+  readonly widthM: number;
+  readonly skirtM: number;
+  readonly gapM: number;
+  readonly features: readonly ProvingCourseFeature[];
+}
+
+/**
+ * The proving ground (v2 progression, owner 2026-10-17: "build out all the options": proving ground / test drive). A solo
+ * range on the simulation's own armor, ballistics and damage: the player on a firing line, a target hull on every lane at
+ * a set range and presented angle, every shot's outcome on the shot card, and a range card measuring every round against
+ * the targets and against reference plates. No enemy fires, no clock runs, nothing is scored or recorded; a destroyed
+ * hull stands again at its mark. sim/provingGround.ts lays the lanes out on the battlefield; game/state.ts seats them.
+ */
+export interface ProvingGroundRules {
+  /** The range's battlefield: Kestrel Airfield's runway, a graded strip on a level plateau (world/maps/airfield.ts). */
+  readonly mapId: string;
+  /** Where the player deploys and the bearing down the range (deg from +z toward +x; 90 = east). */
+  readonly firingLine: { readonly x: number; readonly z: number; readonly bearingDeg: number };
+  readonly lanes: readonly ProvingLaneRule[];
+  /** The range card measures every round against rolled homogeneous plate at these angles from the plate normal (deg). */
+  readonly plateAnglesDeg: readonly number[];
+  /** Moving targets (the player's arrangement; off by default). */
+  readonly moving: boolean;
+  /** A moving target shuttles `halfLengthM` either way of its mark along its hull axis at this throttle, steering for a
+   * point `lookaheadM` ahead on its line with this heading gain (per radian of error). */
+  readonly patrol: { readonly halfLengthM: number; readonly throttle: number; readonly lookaheadM: number; readonly steerGain: number };
+  /** A lane whose preferred offset is blocked searches this far either side in these steps (m). */
+  readonly lateralStepM: number;
+  readonly lateralReachM: number;
+  /** Sightline heights above the ground: the shooter's sight and a target's centre (m). */
+  readonly sightHeightM: number;
+  readonly targetHeightM: number;
+  /** Nominal silhouette radius of a target hull and the clear angle kept between two lanes seen from the firing line. */
+  readonly targetRadiusM: number;
+  readonly separationDeg: number;
+  /** Ground a mark must stand on: the relief under a hull (m) and the steepest slope (the ground normal's least y). */
+  readonly markRelief: number;
+  readonly markNormalY: number;
+  /** The plate rack and the drive course beside the lanes. */
+  readonly plateRack: ProvingPlateRackRule;
+  readonly course: ProvingCourseRule;
+  /** The range's light: one time of day whatever the player's battle times (a test reads in daylight, without the
+   * long low-sun shadows that stripe the yard at a sight's zoom). */
+  readonly timeOfDay: 'day' | 'sunset' | 'night';
+}
+
+export const PROVING_GROUND_RULES: ProvingGroundRules = Object.freeze({
+  mapId: 'airfield',
+  // the runway's west end, on the runway road, looking east down the 620 m strip
+  firingLine: Object.freeze({ x: -350, z: 0, bearingDeg: 90 }),
+  // five lanes alternate across the axis so no nearer hull hides a farther one from the firing line
+  lanes: Object.freeze([
+    Object.freeze({ rangeM: 100, presentDeg: 0, lateralM: -14 }),
+    Object.freeze({ rangeM: 200, presentDeg: 30, lateralM: 20 }),
+    Object.freeze({ rangeM: 300, presentDeg: 90, lateralM: -20 }),
+    Object.freeze({ rangeM: 450, presentDeg: 45, lateralM: 14 }),
+    Object.freeze({ rangeM: 650, presentDeg: 0, lateralM: -14 }),
+  ]),
+  plateAnglesDeg: Object.freeze([0, 30, 60]),
+  moving: false,
+  patrol: Object.freeze({ halfLengthM: 22, throttle: 0.55, lookaheadM: 14, steerGain: 2.2 }),
+  lateralStepM: 6,
+  lateralReachM: 60,
+  sightHeightM: 2.2,
+  targetHeightM: 1.3,
+  targetRadiusM: 5,
+  separationDeg: 0.3,
+  markRelief: 2,
+  markNormalY: 0.94,
+  // the rack stands on the meadow left of the 100 m lane, clear of every lane's sightline: five plates square to the line
+  // (50 to 500 mm) and three laid back, the last past every armour-piercing round's ricochet angle
+  plateRack: Object.freeze({
+    rangeM: 95, lateralM: 40, spacingM: 3.4, widthM: 1.8, heightM: 2, liftM: 0.45,
+    plates: Object.freeze([
+      Object.freeze({ mm: 50, angleDeg: 0 }),
+      Object.freeze({ mm: 100, angleDeg: 0 }),
+      Object.freeze({ mm: 200, angleDeg: 0 }),
+      Object.freeze({ mm: 300, angleDeg: 0 }),
+      Object.freeze({ mm: 500, angleDeg: 0 }),
+      Object.freeze({ mm: 100, angleDeg: 45 }),
+      Object.freeze({ mm: 100, angleDeg: 60 }),
+      Object.freeze({ mm: 60, angleDeg: 82, lengthM: 4 }),
+    ]),
+  }),
+  timeOfDay: 'day',
+  // the course runs on the meadow right of the lanes, parallel to the runway: a gentle ramp, a ditch, moguls, a steep
+  // ramp and a side slope, 8 m of level ground between them
+  course: Object.freeze({
+    startM: 14, lateralM: -40, widthM: 10, skirtM: 4, gapM: 8,
+    features: Object.freeze([
+      Object.freeze({ kind: 'ramp', heightM: 2.5, upDeg: 15, topM: 6, downDeg: 15 }),
+      Object.freeze({ kind: 'ditch', depthM: 2, wallDeg: 35, floorM: 3 }),
+      Object.freeze({ kind: 'moguls', heightM: 0.7, periodM: 6, count: 4 }),
+      Object.freeze({ kind: 'ramp', heightM: 3, upDeg: 30, topM: 5, downDeg: 22 }),
+      Object.freeze({ kind: 'sideSlope', deg: 12, lengthM: 18 }),
+    ] as const),
+  }),
+});
+
+/**
+ * What a test drive launches (the Garage dossier's and the Gallery's "Test drive"): the proving ground on its own
+ * battlefield. The one place outside the ruleset table that names the practice mode; every entry point reads it here.
+ */
+export const TEST_DRIVE: { readonly gameMode: GameModeId; readonly mapId: string } = Object.freeze({
+  gameMode: 'proving_ground', mapId: PROVING_GROUND_RULES.mapId,
+});
+
+/**
+ * Vehicles one solo field may hold, the player included (owner 2026-09-18: "go up to a number that you
+ * test is the total limit to how many tanks can be in a game before performance is unacceptable" —
+ * measured on the desktop tier 2026-09-18, docs/GAME-MODES.md "Sides").
+ */
+export const BATTLE_FIELD_LIMIT = 42;
+/** The whole-game default split: the player with six allied bots against seven hostiles. */
+export const STANDARD_SIDES = Object.freeze({ allies: 6, enemies: 7 });
+/** The sides switch presets (the player counts on the allied side, so "14 v 14" is thirteen allied bots). */
+export const SIDES_PRESETS = Object.freeze({
+  '7v7': STANDARD_SIDES,
+  '14v14': Object.freeze({ allies: 13, enemies: 14 }),
+});
+type SidesPreset = keyof typeof SIDES_PRESETS | 'custom';
+type IntRange = readonly [number, number];
+const range = (low: number, high: number): IntRange => Object.freeze([low, high] as const);
+const SYMMETRIC_ALLIES = range(0, BATTLE_FIELD_LIMIT - 2), SYMMETRIC_ENEMIES = range(1, BATTLE_FIELD_LIMIT - 1);
+const COOP_ALLIES = range(0, 6);
+// the proving ground fields no allied bot and exactly one target hull per lane
+const PROVING_ALLIES = range(0, 0), PROVING_TARGETS = range(PROVING_GROUND_RULES.lanes.length, PROVING_GROUND_RULES.lanes.length);
+export const TEAM_ARRANGEMENT_LIMITS: {
+  readonly field: number;
+  readonly allies: Readonly<Record<GameModeId, IntRange>>;
+  readonly enemies: Readonly<Record<GameModeId, IntRange>>;
+  readonly waveSize: IntRange;
+} = Object.freeze({
+  field: BATTLE_FIELD_LIMIT,
+  allies: Object.freeze({
+    standard: SYMMETRIC_ALLIES, capture_the_flag: SYMMETRIC_ALLIES, zone_control: SYMMETRIC_ALLIES, turbo_ball: SYMMETRIC_ALLIES,
+    endless_horde: COOP_ALLIES, frontline_assault: COOP_ALLIES, mars: SYMMETRIC_ALLIES,
+    juggernaut: SYMMETRIC_ALLIES, infected: SYMMETRIC_ALLIES, realistic: SYMMETRIC_ALLIES, gun_game: SYMMETRIC_ALLIES, drone: SYMMETRIC_ALLIES, ac130: range(2, 8), air_support: SYMMETRIC_ALLIES,
+    proving_ground: PROVING_ALLIES,
+  }),
+  enemies: Object.freeze({
+    standard: SYMMETRIC_ENEMIES, capture_the_flag: SYMMETRIC_ENEMIES, zone_control: SYMMETRIC_ENEMIES, turbo_ball: SYMMETRIC_ENEMIES,
+    endless_horde: range(6, 20), frontline_assault: range(4, 14), mars: SYMMETRIC_ENEMIES,
+    juggernaut: SYMMETRIC_ENEMIES, infected: SYMMETRIC_ENEMIES, realistic: SYMMETRIC_ENEMIES, gun_game: SYMMETRIC_ENEMIES, drone: SYMMETRIC_ENEMIES, ac130: range(4, 24), air_support: SYMMETRIC_ENEMIES,
+    proving_ground: PROVING_TARGETS,
+  }),
+  waveSize: range(2, 12),
+});
+
+/**
+ * Impact physics (owner 2026-09-25: "add more speed based damage — running into something hard super fast like
+ * a rock or building or other tank, fall damage — and make bouncing properly work in the lower gravity modes").
+ * The laws live in sim/impact.ts (damage) and sim/movement.ts (landing rebound); this block holds every number a
+ * mode bends, so the solo step, the authority and the client prediction read one table. Energies are the hull's
+ * kinetic energy in kilojoules above the threshold speed (½ · m · (v − v_min)²), so a heavier hull takes more from
+ * the same speed and the onset is smooth.
+ */
+export interface RulesetPhysics {
+  /** Rebound share of the closing speed when a hull lands on terrain or a structure (v_out = restitution · v_in). */
+  readonly restitution: number;
+  /** A rebound slower than this settles onto the ground instead of bouncing (m/s). */
+  readonly bounceMinMps: number;
+  /** Optional arcade landing height cap, independent of the selected planet's gravity. */
+  readonly bounceMaxHeightM?: number;
+  /** Optional arcade spin damping (per second) and per-axis angular speed limit (rad/s). */
+  readonly airAngularDrag?: number;
+  readonly airAngularSpeedMax?: number;
+  /** Landing speed against the ground where fall damage begins (m/s; 6 m/s is a 1.8 m drop at 1 g). */
+  readonly fallMinMps: number;
+  /** Hull hit points per kilojoule of landing energy above the threshold. */
+  readonly fallHpPerKj: number;
+  /** Closing speed against a hard obstacle (rock, wall, structure, map edge) where impact damage begins (m/s). */
+  readonly impactMinMps: number;
+  /** Hull hit points per kilojoule of impact energy above the threshold. */
+  readonly impactHpPerKj: number;
+  /** Multiplies the tank-on-tank ram pool (damage.ts ramDamage). */
+  readonly ramScale: number;
+  /** Rebound share of a tank-on-tank contact's closing speed in the momentum exchange (0 = they stick). */
+  readonly ramRestitution: number;
+}
+
+/**
+ * The arcade modes' landing hop: the tracks leave the ground by at most this much on a landing's rebound, whatever the
+ * gravity (physics lane, 2026-10-03; gauntlet wave 2). The springs take the landing and return its rebound
+ * (sim/movement.ts); at 1.5 m a Mars rocket jump came back up a metre and the Moon's took 2.7 s to come down again, a
+ * rubber ball, not a tracked hull — the critics' target was a damped settle with low restitution. At the Moon's 0.17 g
+ * the capped rebound is under the 1.2 m/s floor, so its springs settle it.
+ */
+const LANDING_HOP_MAX_M = 0.25;
+/** The whole-game impact physics: a tracked hull barely rebounds, a 1.8 m drop is free, walls hurt from 4 m/s. */
+export const STANDARD_PHYSICS: RulesetPhysics = Object.freeze({
+  restitution: 0.15, bounceMinMps: 1.2, fallMinMps: 6, fallHpPerKj: 0.25,
+  impactMinMps: 4, impactHpPerKj: 0.16, ramScale: 1, ramRestitution: 0.2,
+});
+/** Turbo Ball: arcade rebounds at 0.6 g, a single 13 m/s jump lands free, walls at 1.85× speed cost less per kJ. */
+const TURBO_PHYSICS: RulesetPhysics = Object.freeze({
+  restitution: 0.28, bounceMinMps: 1.5, bounceMaxHeightM: LANDING_HOP_MAX_M, airAngularDrag: 0.9, airAngularSpeedMax: 1.4,
+  fallMinMps: 15, fallHpPerKj: 0.12,
+  impactMinMps: 9, impactHpPerKj: 0.05, ramScale: 1, ramRestitution: 0.5,
+});
+/** Mars: a small, bounded landing rebound; the full 9.5 m/s rocket jump still lands free. */
+const MARS_PHYSICS: RulesetPhysics = Object.freeze({
+  restitution: 0.30, bounceMinMps: 1.2, bounceMaxHeightM: LANDING_HOP_MAX_M, airAngularDrag: 0.8, airAngularSpeedMax: 1.2,
+  fallMinMps: 10.5, fallHpPerKj: 0.16,
+  impactMinMps: 5, impactHpPerKj: 0.12, ramScale: 1, ramRestitution: 0.35,
+});
+
+export interface MatchRuleset {
+  readonly alwaysVisible?: boolean;
+  readonly moduleOnlyDamage?: boolean;
+  readonly juggernaut?: { readonly team: 'alpha' | 'bravo'; readonly hpScale: number; readonly reloadScale: number; readonly speedScale: number };
+  /**
+   * Infected: the survivors' and the infected's hulls (multiples of the vehicle's own), the infected's speed and reload
+   * multipliers, and `hunt` — the infected bots drive at the nearest survivor (the Horde's law) instead of roaming. Every
+   * respawn, a converted survivor's included, waits the ruleset's `respawnS`.
+   */
+  readonly infection?: { readonly infectedSpeed: number; readonly survivorHpScale: number; readonly infectedHpScale: number; readonly infectedReloadScale: number; readonly hunt: boolean };
+  readonly gunGame?: { readonly killsPerWeapon: number };
+  readonly aerial?: 'drone' | 'gunship';
+  /** Air Support: the support points and the airstrikes (AIR_SUPPORT_RULES; sim/airSupport.ts). */
+  readonly airSupport?: AirSupportRules;
+  /** VH.15: the roof stations engage enemy drones in flight (sim/auxiliarySystems.ts; the drone mode). */
+  readonly counterDrone?: boolean;
+  readonly scoreTarget?: number | null;
+  readonly mode: GameModeId;
+  /** Multiplies 9.81 m/s² for hulls in the air, shells in flight and the ball. */
+  readonly gravityScale: number;
+  /** Impact, fall, rebound and ram-exchange laws (sim/impact.ts, sim/movement.ts). */
+  readonly physics: RulesetPhysics;
+  /** Multiplies top and reverse speed (the controller may raise it per wave / lower it for a flag carrier). */
+  readonly speedMultiplier: number;
+  /** Multiplies hull hit points at spawn and revive. */
+  readonly hpScale: number;
+  /** Multiplies every hit point lost to shells, blast and ramming. */
+  readonly damageScale: number;
+  /** Multiplies reload time. */
+  readonly reloadScale: number;
+  /** Which rounds a crew carries: the vehicle's own loadout, HE only, or the loadout with unlimited rounds. */
+  readonly ammo: RulesetAmmo;
+  /** Equipment slots honoured (0 disables equipment). */
+  readonly equipmentSlots: 0 | 1 | 2 | 3;
+  /** Equipment the mode refuses (2026-10-24, the larger catalog): whole categories and single items. The solo battle
+   *  and the authority drop them from every loadout (rulesetLoadout), so a seat cannot carry them in. */
+  readonly equipmentBan?: EquipmentBan;
+  readonly consumables: boolean;
+  /** Consumables the mode refuses beyond its own needs (2026-10-26, the larger catalog; rulesetAllowsConsumable). */
+  readonly consumableBan?: readonly ConsumableId[];
+  /** Modules, crew and fires take damage. False (owner 2026-09-15, Turbo Ball: "make modules not break since
+   * there's no consumables") keeps every critical system intact — hull hit points are the only thing a hit costs. */
+  readonly criticalDamage: boolean;
+  /** Upward launch (m/s) the F key gives a grounded, upright hull, or null when the mode has no jump (owner
+   * 2026-09-16, Turbo Ball: "make an f button that just adds an upward vector so you go flying"). */
+  readonly jumpMps: number | null;
+  /** Multiplies the hull's firing recoil into a real launch opposite the muzzle (owner: "aim behind you and launch
+   * yourself and use it as a speed boost"); 1 keeps the ordinary hull kick. */
+  readonly recoilLaunchScale: number;
+  /** Mars mode settings (gravity world, boost-cache cadence); only the mars ruleset carries them. */
+  readonly mars?: MarsRules;
+  /** Multiplies the shove a shell impact gives the hull it hits (owner: "shells should have more physics effects
+   * that knock you"); 1 is the whole-game baseline. */
+  readonly shellKnockScale: number;
+  /** Seconds to respawn, or null when a destroyed vehicle stays destroyed. */
+  readonly respawnS: number | null;
+  /**
+   * A respawn at the hull's own spawn (or its flag / ball revive slot) keeps this far from every live enemy hull, moving
+   * on the placement's rings up to 2.5 times it, else back on its spawn (spawns-234: a revive came back beside an enemy
+   * parked on the deployment). The game director's arrivals (Horde, Infected), the Frontline line slots and the kick-off
+   * keep their own rules; null keeps only the hull's own disc.
+   */
+  readonly respawnSafeM?: number | null;
+  /** Clock in seconds, or null for no clock. */
+  readonly timeLimitS: number | null;
+  /** How an expired clock resolves when the score is level (or has no score). */
+  readonly timeout: RulesetTimeout;
+  /**
+   * Battle endings (owner 2026-09-25: "handle battle ends better"): seconds the world keeps simulating after
+   * the verdict — wrecks settle, fires burn, shells in flight land — with every gun silent, so the ending beat
+   * (final-kill replay, time's-up pull-back, objective orbit) plays over a living field. Past the hold the
+   * simulation stands still under the report. Bounded: see ENDING_HOLD_LIMIT_S.
+   */
+  readonly endingHoldS: number;
+  /** Solo roster split: allied bots and enemy bots (null keeps the default 6 / 7). */
+  readonly allies: number | null;
+  readonly enemies: number | null;
+  /** Frontline Assault wave rules (campaign difficulty folds in here). */
+  readonly assault: AssaultRules | null;
+  /** Endless Horde wave law. */
+  readonly horde: HordeRules | null;
+  /** Enemy country id under MONO-NATION (null = AUTO, or the operation decides); RANDOM ignores it. */
+  readonly enemyNation: string | null;
+  /** TEAM NATIONS: MONO-NATION (each side one country, the default) or RANDOM. */
+  readonly teamNations: TeamNationsId;
+  /** Buildings that break and collapse, ground that craters (docs/DESTRUCTION.md §9). */
+  readonly destruction: DestructionRules;
+  /** Per-side bot doctrine over CLASSIC_BOT_DOCTRINE (rulesetBotDoctrine); absent = classic on both sides. */
+  readonly bots?: BotDoctrineOverrides;
+  readonly assaultBots?: AssaultBotRules;
+  readonly flagBots?: FlagBotRules;
+  readonly ballBots?: BallBotRules;
+  readonly ball?: BallPitchRules;
+  readonly flagPitch?: FlagPitchRules;
+  readonly infectionBots?: InfectionBotRules;
+  /**
+   * The battlefield variant the mode plays on (null: the base map). Frontline Assault's 'assault-trenches' carves the
+   * trench system into the terrain and dresses its works; every client builds it and the authority plays exactly it
+   * (its own collision manifest, server/world-collision-manifests/<map>@assault-trenches.json).
+   */
+  readonly terrainVariant: TerrainVariant | null;
+  /**
+   * The battle keeps records: the service record's medals and stats, the profile's result tally and the campaign ladder
+   * read a battle only where this is true. The practice modes play without a record (nothing to farm on a range).
+   */
+  readonly records: boolean;
+  /** The battle ends when a side is wiped out (Standard, Realistic): the controller's usesElimination. */
+  readonly elimination?: boolean;
+  /** A confirmed enemy destruction scores for the killer's side (the zone modes, Drone, Gun Game, Juggernaut, Realistic, AC-130). */
+  readonly scoresKills?: boolean;
+  /** The ground each side's own objective (a flag base, a goal) reserves in placement; `arena` keeps it inside the
+   *  mode arena's half-extent (sim/matchPlacement.ts). */
+  readonly objectiveFootprint?: { readonly radiusM: number; readonly arena?: boolean };
+  /** The middle point placement reserves: Turbo Ball's kick-off spot (the map's authored one where it has one) or the
+   *  AC-130's extraction, with the footprint's radius and relief. */
+  readonly middleReserve?: { readonly kind: 'kickoff' | 'extraction'; readonly radiusM: number; readonly reliefM: number; readonly arena?: boolean };
+  /** The bots' routes are pushed toward the mode's objective (sim/modeRoutePush.ts); Standard's hunt on their own. */
+  readonly routePush?: boolean;
+  /** The proving ground's range: the firing line, the lanes, the reference plates and the moving-target option. */
+  readonly provingGround?: ProvingGroundRules;
+  /** A watched battle (WATCH_RULES): no human seat, every seat a bot's, and the watcher's camera and seat rules. */
+  readonly watch?: WatchRules;
+  /** A couch battle (COUCH_RULES): phones drive seats of the roster, shown under one shared camera. */
+  readonly couch?: CouchRules;
+}
+
+/**
+ * Watch (watch-mode-243; owner 2026-10-23: "watch tank battles and be able to go into a spectator view you can control
+ * like a drone and then into any tank currently fighting (being controlled by a bot)", and the same day through Main: "be
+ * able to ride along in spectator mode but go into tank describes driving it"). A watched battle is a listed mode on any
+ * map with no human seat: the seat the player would take is set up exactly as ever (its side, spawn, role and vehicle)
+ * and a bot drives it, so every mode fields the sides it always does. The mode keeps its own clock, respawns, scores
+ * and objectives. The watcher flies a drone, rides along any tank, and may take a living bot's seat: the bot's planner
+ * pauses for that hull while the watcher's input drives it through the player's own input path, and resumes from the
+ * hull's state when the watcher leaves. A watched battle keeps no record.
+ */
+export interface WatchRules {
+  /**
+   * The modes a battle can be watched in: every battle mode whose human seat a bot plays as any other. The AC-130 is
+   * left out (its gunship is the human's alone: no bot flies it) and the proving ground has no fight to watch.
+   */
+  readonly modes: readonly GameModeId[];
+  /** The watcher may take a living bot's seat and hand it back. */
+  readonly takeControl: boolean;
+  /** A watched tank's wreck is held in a slow orbit this long before the camera rides on with its killer (or flies). */
+  readonly deathHoldS: number;
+  /** A taken seat destroyed: the player's death beat runs this long, then the watcher is back on the drone. */
+  readonly takenDeathS: number;
+  /**
+   * The watcher sees every tank (the minimap, the markers): a local battle with no human side has nothing to hide. A
+   * taken seat sees as its side does again, spotting and all.
+   */
+  readonly revealAll: boolean;
+  /** The drone opens this high over the midpoint of the two deployments, this far back along the axis, looking down. */
+  readonly openAltitudeM: number;
+  readonly openBackM: number;
+  readonly openPitchDeg: number;
+}
+export const WATCH_RULES: WatchRules = Object.freeze({
+  modes: Object.freeze(['standard', 'capture_the_flag', 'zone_control', 'turbo_ball', 'endless_horde', 'frontline_assault',
+    'mars', 'juggernaut', 'infected', 'realistic', 'gun_game', 'drone', 'air_support'] as const),
+  takeControl: true,
+  deathHoldS: 1.6,
+  takenDeathS: 3.5,
+  revealAll: true,
+  openAltitudeM: 70,
+  openBackM: 140,
+  openPitchDeg: -24,
+});
+
+/** A mode a battle can be watched in. */
+export function isWatchableMode(mode: GameModeId | string | null | undefined): boolean {
+  return (WATCH_RULES.modes as readonly string[]).includes(String(mode));
+}
+
+/** The ruleset a watched battle plays: its mode's own, with the watch rules and no record (unwatchable: unchanged). */
+export function watchRulesetFor(ruleset: MatchRuleset): MatchRuleset {
+  if (!isWatchableMode(ruleset.mode)) return ruleset;
+  return Object.freeze({ ...ruleset, records: false, watch: WATCH_RULES });
+}
+
+/**
+ * A finished battle the records read (the profile tally, the service record, the campaign ladder): its mode keeps
+ * records and it was played, not watched (`battle:ended` carries `watch`).
+ */
+export function battleKeepsRecords(event: { readonly gameMode?: unknown; readonly watch?: unknown; readonly couch?: unknown } | null | undefined): boolean {
+  return event?.watch !== true && event?.couch !== true && rulesetKeepsRecords(typeof event?.gameMode === 'string' ? event.gameMode : null);
+}
+
+/**
+ * Couch mode (docs/COUCH-MODE.md; owner 2026-11-01: "people connecting via qr code from their phones to a host of a
+ * computer ... sort of like a console split screen, up to 8 people that you can share on a big screen"). A couch battle
+ * is a local battle on the host's page: up to `maxSeats` phones each drive one tank of the mode's own roster (a seat),
+ * and the rest of the roster are its bots, as ever. Phase 1 shows every seat under one shared camera. Together puts
+ * every seat on Alpha against the mode's opponents; Teams alternates the seats between Alpha and Bravo, bots filling
+ * both sides. Guests have no profile, so a couch battle keeps no record.
+ */
+export interface CouchRules {
+  /** The modes a couch battle plays. */
+  readonly modes: readonly GameModeId[];
+  /** The modes whose opponents are the mode's own (no Bravo seat): their seats are always together. */
+  readonly togetherOnly: readonly GameModeId[];
+  readonly maxSeats: number;
+  /** The shared camera frames every living seat's hull with this margin, looking down at this pitch, from no nearer and
+   *  no farther than these distances; past the farthest it frames the largest group of seats. */
+  readonly frameMarginM: number;
+  readonly cameraPitchDeg: number;
+  readonly cameraMinDistanceM: number;
+  readonly cameraMaxDistanceM: number;
+}
+export const COUCH_RULES: CouchRules = Object.freeze({
+  modes: Object.freeze(['standard', 'capture_the_flag', 'zone_control', 'endless_horde'] as const),
+  togetherOnly: Object.freeze(['endless_horde'] as const),
+  maxSeats: 8,
+  frameMarginM: 30,
+  cameraPitchDeg: -52,
+  cameraMinDistanceM: 70,
+  cameraMaxDistanceM: 320,
+});
+
+/** How a couch battle seats its phones: all on Alpha, or alternating between the sides. */
+export type CouchSides = 'together' | 'teams';
+
+/** A mode a couch battle can play. */
+export function isCouchMode(mode: GameModeId | string | null | undefined): boolean {
+  return (COUCH_RULES.modes as readonly string[]).includes(String(mode));
+}
+
+/** The ruleset a couch battle plays: its mode's own, with the couch rules and no record (another mode: unchanged). */
+export function couchRulesetFor(ruleset: MatchRuleset): MatchRuleset {
+  if (!isCouchMode(ruleset.mode)) return ruleset;
+  return Object.freeze({ ...ruleset, records: false, couch: COUCH_RULES });
+}
+
+/**
+ * Which side each couch seat plays, seat 1 first: true is seat 1's side (Alpha), false the other (Bravo). Together, or a
+ * mode with no Bravo seat, puts every seat on Alpha; Teams alternates, Alpha first. At most `maxSeats` seats.
+ */
+export function couchSeatSides(mode: GameModeId | string | null | undefined, sides: CouchSides, seats: number): boolean[] {
+  const count = Math.max(0, Math.min(COUCH_RULES.maxSeats, Math.floor(seats) || 0));
+  const together = sides === 'together' || (COUCH_RULES.togetherOnly as readonly string[]).includes(String(mode));
+  return Array.from({ length: count }, (_, index) => together || index % 2 === 0);
+}
+
+/** A battlefield variant a mode can play (the map built with that variant's config, its own collision manifest). */
+export type TerrainVariant = 'assault-trenches';
+export const TERRAIN_VARIANTS: readonly TerrainVariant[] = Object.freeze(['assault-trenches']);
+/** The variant `mode` plays on (null: the base map). */
+export function terrainVariantFor(mode: GameModeId | string | null | undefined): TerrainVariant | null {
+  return (BASE_RULESETS as Readonly<Record<string, MatchRuleset>>)[String(mode)]?.terrainVariant ?? null;
+}
+/** The world cache key a battle in `mode` on `mapId` builds: `map#variant` for a mode that plays a variant, else the bare id
+ *  (the world coordinator keys a variant's build and cache by it; a prefetch of the bare id builds a world the battle never uses). */
+export function worldKeyFor(mapId: string, mode: GameModeId | string | null | undefined): string {
+  const variant = terrainVariantFor(mode);
+  return variant ? `${mapId}#${variant}` : mapId;
+}
+
+/** The ground a mode's placement reserves for its objectives (sim/matchPlacement.ts reads it by the mode alone, as the
+ *  world's clearings do): each side's objective footprint and the middle reserve (null: an unknown mode). */
+export function objectivePlacementFor(mode: GameModeId | string | null | undefined): Pick<MatchRuleset, 'objectiveFootprint' | 'middleReserve'> | null {
+  return (BASE_RULESETS as Readonly<Record<string, MatchRuleset>>)[String(mode)] ?? null;
+}
+
+export interface CampaignRulesetInput {
+  /** 1-based ladder difficulty. */
+  readonly difficulty: number;
+  readonly timeLimitS?: number | null;
+  /** The operation's enemy nation id (campaignOperations.ts). */
+  readonly enemy?: string | null;
+}
+
+/** The longest post-verdict hold any ruleset may declare (the report gate's watchdog sits at 16 s). */
+export const ENDING_HOLD_LIMIT_S = 12;
+/** Whole-game post-verdict hold: long enough for the 2.5 s beats and the killcam's live wreck hold. */
+const ENDING_HOLD_S = 8;
+
+/**
+ * Destruction (owner 2026-10-07: "buildings should break and collapse ... after withstanding damage and ramming"; craters
+ * "esp from like the ac 130"): on in every mode but Turbo Ball, whose pitch an unlimited HE ladder would crater under
+ * the ball; the AC-130 digs its craters a quarter wider (docs/DESTRUCTION.md §9).
+ */
+/**
+ * The crater switch (destruction core lane, 2026-10-08; docs/DESTRUCTION.md §7, crater-render-spec §F): on, the
+ * simulation digs craters in every mode that plays destruction, and the drawn terrain (world/terrainCraterMesh.ts), the
+ * ground cover (world/groundCoverCraters.ts) and the crater's own surface (fx/craterMarks.ts) follow the dug ground.
+ * On since the destruction lane's DST-04 round (2026-10-15): pacing and fairness paired against craters off, both
+ * audits and the network's stamp-once and late join passed on 2026-10-08; the world's ray march now reads the dug ground
+ * (world/map.ts, world/headlessCollisionWorld.ts); the barrage's cost and the motion strips run in the 225/226 final pass.
+ */
+const CRATERS_SWITCH = true;
+// sections (P2: holes, fallen walls, roofs and storeys that shells and sight lines pass; docs/DESTRUCTION.md §3.4, §13):
+// on since the destruction lane's DST-04 round (2026-10-15; the owner: "explosions that should be destructive and leave
+// holes"). A battle's HE now holes the wall it strikes, a section at zero falls, and a collapse comes down storey by
+// storey as the Studio's films have shown since 2026-10-08; the paired pacing, the cost runs and the motion strips run
+// in the 225/226 final pass
+const SECTIONS_SWITCH = true;
+const DESTRUCTION_ON: DestructionRules = Object.freeze({
+  structures: true, craters: CRATERS_SWITCH, sections: SECTIONS_SWITCH, structureDamageScale: 1, craterScale: 1, maxCraters: 160,
+});
+const DESTRUCTION_OFF: DestructionRules = Object.freeze({
+  structures: false, craters: false, sections: false, structureDamageScale: 0, craterScale: 0, maxCraters: 0,
+});
+
+const STANDARD: MatchRuleset = Object.freeze({
+  mode: 'standard', gravityScale: 1, physics: STANDARD_PHYSICS, speedMultiplier: 1, hpScale: 1, damageScale: 1, reloadScale: 1,
+  ammo: 'spec', equipmentSlots: 3, consumables: true, criticalDamage: true, jumpMps: null, recoilLaunchScale: 1, shellKnockScale: 0.3,
+  respawnS: null, respawnSafeM: 75, timeLimitS: 900, timeout: 'draw', endingHoldS: ENDING_HOLD_S,
+  allies: null, enemies: null, assault: null, horde: null, enemyNation: null, teamNations: DEFAULT_TEAM_NATIONS,
+  destruction: DESTRUCTION_ON, terrainVariant: null, records: true, routePush: true,
+});
+
+// Per-side doctrines (gameplay-modes-228). Each is a partial over CLASSIC_BOT_DOCTRINE; see BotDoctrine for the knobs.
+// round 3b (the critic's M2/M3: 0.31 -> 1.0 bot ram deaths a Horde run, 0.38 -> 0.94 an Infected one, nearly all of
+// them fodder hulls the humans' side drove into): the Horde's allies and the survivors keep the rushers' no-ram lane
+const HORDE_ALLY_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, conserveRounds: false, searchRouting: 'spotted', routeRefreshS: 1.25, routeMoveM: 8, noRamLane: true,
+});
+// the infected keep firing at range on the way in (a zombie's long shot is wasted; the infected's is pressure) and lay
+// on the survivor their pack already shoots (gameplay-modes-233: packFire, with infectionBots.packPullM)
+const INFECTED_DOCTRINE: Partial<BotDoctrine> = Object.freeze({ ...RUSH_DOCTRINE, hitReactions: 'angle', claimRangeM: null, packFire: 0.5 });
+const SURVIVOR_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, conserveRounds: false, fallbackScale: 0.5, hitReactions: 'angle', stalemateSilentS: 6,
+  spearheadGuard: true, scoutKite: true, holdBandScale: 1, searchRouting: 'spotted', routeRefreshS: 1.25, routeMoveM: 8,
+  noRamLane: true,
+});
+// round 2: both sides without shoot-and-scoot and at a quarter of the fallback (the A/B over the critic's 16 seeds:
+// falling back 9 % / 12 % of samples -> 5 % / 6 %); round 3: both fire on the move (no settled-shot halt), drive their hard
+// turns round and jockey where their drivers stood them (a zone hold, a hold band, the sortie's stand-off)
+const ASSAULT_ATTACKER_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, conserveRounds: false, missionSpeed: 1, missionBreakOffHp: 0, missionLocalReachM: 60, spearheadGuard: false, coverScale: 0.5,
+  fallbackScale: 0.25, scoot: false, settleShots: false, hitReactions: 'angle', stalemateSilentS: 6, holdBandScale: 0.6, searchRouting: 'spotted',
+  routeRefreshS: 1.25, routeMoveM: 8, jockeyS: 0.4, rollingTurns: true, noRamLane: true,
+});
+const ASSAULT_DEFENDER_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, conserveRounds: false, missionSpeed: 1, missionBreakOffHp: 0.15, missionLocalReachM: 60, zoneSortieM: 80, coverScale: 0.75,
+  fallbackScale: 0.25, scoot: false, settleShots: false, hitReactions: 'angle', holdBandScale: 0.7, stalemateSilentS: 6, routeRefreshS: 1.25, routeMoveM: 8,
+  jockeyS: 0.4, rollingTurns: true, noRamLane: true,
+});
+// round 2: no shoot-and-scoot and a quarter of the fallback (the A/B: 33 % of samples scooting and 11 % falling back;
+// off, the flags were run, not traded from cover)
+const FLAG_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  missionOwnsRoute: true,
+  openingRead: false, missionSpeed: 1, missionBreakOffHp: 0, missionLocalReachM: 60, fallbackScale: 0.25, scoot: false, coverScale: 0.5, hitReactions: 'angle',
+  stalemateSilentS: 8, searchRouting: 'spotted', routeRefreshS: 1.25, routeMoveM: 8,
+});
+const FAST_ROUTE_DOCTRINE: Partial<BotDoctrine> = Object.freeze({ routeRefreshS: 1.25, routeMoveM: 0 });
+const BALL_DOCTRINE: Partial<BotDoctrine> = Object.freeze({
+  ...FAST_ROUTE_DOCTRINE, openingRead: false, conserveRounds: false, missionSpeed: 1, missionBreakOffHp: 0, missionLocalReachM: 60, noRamLane: true,
+  missionOwnsRoute: true,
+  offensiveJump: true, hitReactions: 'angle',
+});
+
+// Ammunition (owner 2026-10-17: "for special modes like juggernaut, ammo should be endless"): the competitive and
+// realistic modes (Standard, Capture the Flag, Zone Control, Realistic) and Drone (owner 2026-11-02: "drone mode
+// shouldnt have infinite ammo") keep the vehicle's own loadout; every other special and arcade mode plays unlimited
+// rounds — the AC-130's escorts excepted, whose rounds are what the gunship's airdrop is for (state.ts and the authority
+// refill only the gunship there). Unlimited rounds turn every cache into a repair (cacheHealChance): an ammunition cache
+// could never be taken.
+const BASE_RULESETS: Readonly<Record<GameModeId, MatchRuleset>> = Object.freeze({
+  // the elimination battle: the side wiped out loses, and its bots hunt on their own (no objective to push toward)
+  standard: Object.freeze({ ...STANDARD, elimination: true, routePush: false }),
+  // Flags: respawning objective play on the standard physics; the controller slows a carrier.
+  // gameplay-modes-228 (owner 2026-10-18: "increase aggression of bots trying to capturing flag"): the flags are run,
+  // not brawled over — half the squad recovers a taken home flag (a capture needs it home) and the rest raid back,
+  // the carrier's team escorts it home with one guard left on its own flag, recoverers cut the carrier off (round 2:
+  // all-out recovery left the robbed side never raiding); no opening read, full pace, no mission break-off, no scoot.
+  // Round 2: the flag bases stand 400 m apart on the axis (flagPitch), in front of the spawns — picked up among the
+  // enemy's 6 s respawns and run 800 m home, a flag was taken 19 times a match and captured 0.75 (A/B over seeds
+  // 101-108: 480 m 1.5 captures, 400 m 2.25, with first pickup 102 s -> 62 s and ram deaths 22 -> 16 a match).
+  // Round 3b (the critic's M5: escorts within 80 m of the carrier 26 %, pursuers within 120 m 41 %, the nearest 45 m): a
+  // revive stands 100 m behind its own flag base (flagPitch.respawnBackM; at the deployment, 200 m further back, a robbed
+  // team's revives chased the carrier from behind its run's start), and a carrier takes 4 escorts with no guard left home
+  // (the A/B over seeds 401-402: pursuers within 120 m 0.28 -> 0.38, escorts within 80 m 0.32 -> 0.47, captures 2 a match)
+  capture_the_flag: Object.freeze({ ...STANDARD, mode: 'capture_the_flag', respawnS: 6, objectiveFootprint: Object.freeze({ radiusM: 12 }),
+    bots: Object.freeze({ alpha: FLAG_DOCTRINE, bravo: FLAG_DOCTRINE }),
+    flagBots: Object.freeze({ recoverShare: 0.5, recoverMin: 2, huntWhenHomeFlagTaken: false, escorts: 4, carrierGuards: 0,
+      escortAheadM: 24, escortSideM: 22, defendShare: 0.15, defendMinSquad: 6, interceptLeadS: 2.5,
+      raidStageM: 120, raidHoldInM: 25, raidGroupM: 70, raidMinGroup: 2, raidWaitS: 12 }),
+    // gameplay-modes-233 (owner 2026-10-18's "aggression of bots trying to capture flag"; main's 401-408: 0.88 captures a
+    // match, a capture in 3 of 8, 6 draws, first pickup 94 s, nearly every carrier killed on its run): the bases 320 m
+    // apart (was 400) and a carrier at full speed (was 85 %). The A/B over the same seeds: 1.38 captures, a capture in 6
+    // of 8, 2 draws, first pickup 64 s; the shorter pitch alone 0.88 / 6 / 3, the full-speed carrier alone 0.88 / 4 / 4
+    flagPitch: Object.freeze({ baseAxisM: 320, respawnBackM: 100, carrierSpeedScale: 1, carrierRevealed: true }) }),
+  // Zones: respawning hold-the-ground play; the 750-point target resolves inside the clock.
+  zone_control: Object.freeze({ ...STANDARD, mode: 'zone_control', respawnS: 6, scoresKills: true }),
+  // Turbo Ball: arcade physics — 0.6 g so hulls and shells fly, 1.85× speed, tough hulls, half
+  // damage, quick reloads, HE only with unlimited rounds, no equipment or consumables, 3 s
+  // respawns, a ten-minute clock.
+  turbo_ball: Object.freeze({
+    ...STANDARD, mode: 'turbo_ball', gravityScale: 0.6, physics: TURBO_PHYSICS, speedMultiplier: 1.85, hpScale: 1.5,
+    damageScale: 0.5, reloadScale: 0.7, ammo: 'unlimited', equipmentSlots: 0, consumables: false,
+    criticalDamage: false, jumpMps: 13, recoilLaunchScale: 12, shellKnockScale: 2.5, respawnS: 3, timeLimitS: 600,
+    destruction: DESTRUCTION_OFF,
+    // the goals and the kick-off spot stand inside the arena
+    objectiveFootprint: Object.freeze({ radiusM: 18, arena: true }),
+    middleReserve: Object.freeze({ kind: 'kickoff', radiusM: 12, reliefM: 3, arena: true }),
+    // gameplay-modes-228 ("pursuing ball"): two strikers on an intercept course, screens and a keeper, at most three a
+    // team on the ball; strikers jump at it and shoot it toward the goal; the goals sit goalAxisM apart (A/B-chosen).
+    // Round 3b (the critic's M6: the nearest bot 65-67 m from the ball, the crowd cap broken on Coastal): the support
+    // striker runs 10 m behind and 12 m beside the intercept (was 25 / 14), the bots keep two a team within 30 m so the
+    // three the cap allows hold through a pass-by (crowdCap 2: the screen nearest the ball stands off too), a striker lined
+    // up behind the ball may shoot it from 12 m (the line-up stands 20 m back: at a 20 m floor the ball lay still while the
+    // striker went round it), the teams line up at the kick-off at the start too and a revive stands 40 m behind its own
+    // goal (ball.kickoffAtStart, ball.respawnBackM; the A/B over seeds 401-402: nearest bot 46-75 -> 20-54 m)
+    // gameplay-modes-233 (the critic: no goal in many matches; main's 401-408: 1.38 goals a match, 4 of 8 goalless, the
+    // nearest bot 48 m off the ball, most touches long shots): three strikers on the ball (was 2; crowdCap 3, so the first
+    // screen still stands off and three a team close on it as before) and a ball shot from 100 m at most (was 160), so the
+    // bots drive the ball instead of plinking it round the middle. The A/B over the same seeds: 1.5 goals, 1 goalless, the
+    // nearest bot 39 m; a 400 m pitch instead scored 2.25 a match but left 3 goalless, and both together did worse
+    bots: Object.freeze({ alpha: BALL_DOCTRINE, bravo: BALL_DOCTRINE }),
+    ballBots: Object.freeze({ strikers: 3, supportBackM: 10, supportSideM: 12, strikerHoldS: 3, swapM: 25, leadMaxS: 3,
+      leadIterations: 2, screens: 2, screenNear: 0.85, screenFar: 0.6, screenSideM: 28, keepers: 1, keeperM: 30, crowdCap: 3,
+      crowdM: 30, crowdMarginM: 5, wingM: 40, wingStepM: 20, lineUpM: 7, goRoundM: 16, behindM: 20, throughM: 18,
+      shootBall: Object.freeze({ maxRangeM: 100, minRangeM: 12, coneDeg: 30, everyRole: true, overTanks: true }) }),
+    ball: Object.freeze({ goalAxisM: 480, idleResetS: 30, kickoffM: 60, kickoffAtStart: true, respawnBackM: 40 }),
+  }),
+  // Horde: survival — the player with four allied bots on alpha (co-op humans join it), a pool of
+  // twenty hostile identities on the far side drawn afresh every wave (six on the first wave,
+  // two more each wave and a surge every third), no respawn, no clock, unlimited rounds; clearing
+  // a wave repairs the survivors by HORDE_WAVE_REPAIR and drops a repair cache. Zombies (owner
+  // 2026-10-17: "all the zombies actually have low hp. rn its humans with low hp and a bunch of
+  // overpowered glowing zombies that can steam roll them"): the humans' hull is doubled, the
+  // hostiles arrive at 15 % of their own (about one main-gun round) plus 2 % a wave and play one
+  // difficulty tier below the battle's, so a wave is many and weak and its pressure is numbers
+  // (docs/GAME-MODES.md "Zombie balance": 1.1 waves and a 1:3 kill ratio before, measured after).
+  // gameplay-modes-228 (owner 2026-10-18: "make it work a lot more properly like youd expect, more enemies per round, and
+  // then increase aggression in that game mode too because of what it implies"): a wave TOTAL that grows every round
+  // without a cap (6, 9, 13, 18, 24, 30, 37 …), at most sixteen on the field at once (the twenty pool identities rest
+  // and rotate, trickling back in every 1.5 s), arriving 320-440 m round the humans, out of their sight, from three
+  // sectors; an 8 s lull; runner waves every fourth, swarm waves every fifth; the zombies charge (RUSH_DOCTRINE) on
+  // what they have spotted, and the allied bots stay within reach of the humans.
+  // Round 2 (critic: team survival fell to 6 rounds, first contact inside 8 s on 19 of 80 waves): an arrival's first
+  // 60 m of approach is out of sight too (sightLeadM). Round 3 (the critic's M1/M2): the zombies' guns reload at their own
+  // rate again (round 2's x2.2 left the humans almost untouched: 48 zombie kills a human death against 21 on integ/228);
+  // that hidden stretch is 60 m at the wave's own pace (a runner wave's covers more ground); a stranded straggler
+  // re-arrives on a nearer ring (strandedRingM, 160-230 m) and a hunter whose last contact is stale spirals out round
+  // where it rose (HUNT_RULES.localSweep) — on Verdant wave 1 had never cleared in 1500 s, a lone zombie re-arriving
+  // 320-440 m out every 60-90 s and sweeping a fight the humans had left 500 m back
+  endless_horde: Object.freeze({
+    ...STANDARD, mode: 'endless_horde', hpScale: 2, ammo: 'unlimited', respawnS: null, timeLimitS: null,
+    allies: 4, enemies: 20,
+    horde: Object.freeze({
+      waveSize: 6, waveStep: 3, waveCurve: 0.35, perHumanTotal: 0.25, maxAlive: 16, maxAlivePerHuman: 1, maxAliveCap: 20,
+      trickleS: 1.5, stallTrickles: 4, recycleAfterS: 6, strandedS: 40, strandedGainM: 20, strandedContactM: 50, strandedRingM: Object.freeze([160, 230] as const), strandedRetireAfter: 2, spawnRingM: Object.freeze([320, 440] as const), spawnSectors: 3, sectorWidthDeg: 60, sectorSpreadDeg: 70,
+      spawnMinHumanM: 150, spawnOutOfSight: true, sightRangeM: 450, sightStepM: 8, sightEyeM: 2.4, sightHullM: 1.5, sightMarginM: 1,
+      sightLeadM: 60, spawnCandidates: 12, spawnReachS: 26,
+      intermissionS: 8, waveRepair: 0.3,
+      hostileHpScale: 0.15, hpPerWave: 0.02, hpPerWaveLate: 0.06, lateFromWave: 11,
+      runnerEvery: 4, runnerSpeed: 1.25, swarmEvery: 5, swarmTrickleScale: 0.5, swarmHull: 0.10,
+      speedPerWave: 0.045, speedPerWaveMax: 0.55, cacheHeal: Object.freeze({ first: 0.62, perWave: 0.055, floor: 0.08 }),
+      hostileDifficultyStep: 1, hostileReloadScale: 1, hunt: 'spotted', allyLeashM: 120, allyScreenM: 40, allyScreenSpreadM: 22,
+    }),
+    bots: Object.freeze({ bravo: RUSH_DOCTRINE, alpha: HORDE_ALLY_DOCTRINE }),
+  }),
+  // Frontline Assault: the campaign sortie — three allies, no respawn, unlimited rounds, a twelve-minute
+  // clock that costs the operation when it runs out; defenders escalate per sector and per difficulty.
+  frontline_assault: Object.freeze({
+    ...STANDARD, mode: 'frontline_assault', hpScale: 1.8, ammo: 'unlimited', respawnS: null, timeLimitS: 720, timeout: 'defeat',
+    allies: 3, enemies: 12, terrainVariant: 'assault-trenches',
+    // gameplay-modes-228 (owner 2026-10-18: "up its aggression of tanks more"): every sector is fought for — its
+    // defenders dug in on the line from the start, a two-tank counter-attack on the sector just taken, a trickle from the
+    // rear while a sector is contested; the attackers push in groups on flank lanes, the defenders sortie at the
+    // attackers they see within 80 m of their line, and both fire on the move. Round 3 (the critic's M4: round 2 held the
+    // owner's 40-55 % band by slowing the defence's reload x1.35): the defence fires at its own rate; the attack's hull is
+    // x1.8 (was x1.35) and an allied bot is back 20 s after its death (was 30). The A/B over seeds 401-408 (fight seat):
+    // with the defence at full strength the attack won 1-2 of 8 at x1.35-x1.8 hulls; with its aim a tier down (the
+    // Horde's step) and its own reload, 4 of 8
+    assault: Object.freeze({ initialActive: 3, extraDefenders: 0, hpPerLine: 0.16, finalLineHp: 1.15, difficultyHp: 0, holdS: 20, captureS: 8,
+      // the line 70-110 m behind the centre: clear of the zone (30 m), so the attack can stand in it and fight for it
+      // (30-70 put the near defenders on the zone's own edge: the round-1 A/B's shield seat never took sector 1 in 12:00)
+      defendersStartOnLine: true, lineBandM: Object.freeze([70, 110] as const),
+      lineGuard: Object.freeze({ minAttackM: 200, outOfSight: true, stepBackM: 20, backSteps: 12, acrossSteps: 8 }),
+      counterAttack: Object.freeze({ squad: 2, afterCaptureS: 8, forS: 40 }),
+      reinforceTrickleS: 45, reinforceExtra: 0, reinforceRearM: 140, contestReachM: 60, lineSpacingM: 16, lineJitterM: 8, allyReviveBackM: 40, holdSpreadM: 14,
+      regroupMaxS: 25, regroupRadiusM: 80, regroupHumanM: 250, allyReviveS: 20, hostileDifficultyStep: 1, hostileReloadScale: 1,
+      allyBotHull: 1 }),
+    assaultBots: Object.freeze({ pushAfterS: 15, pushMinGroup: 2, pushGroupM: 80, stageM: 20, flankShare: 0.4, flankOffsetM: 60,
+      flankConvergeM: 80 }),
+    bots: Object.freeze({ alpha: ASSAULT_ATTACKER_DOCTRINE, bravo: ASSAULT_DEFENDER_DOCTRINE }),
+  }),
+  // Mars mode (owner 2026-09-18): Olympus Basin's own physics — 0.38 g, a 6.5 m/s jump, +25 % speed, tougher
+  // hulls, a lighter recoil launch than Turbo Ball — on the zone objective with 6 s respawns, unlimited
+  // rounds and a twelve-minute clock; the boost caches (repairs, under unlimited rounds) are the mode controller's.
+  mars: Object.freeze({
+    ...STANDARD, mode: 'mars', scoresKills: true, mars: MARS_DEFAULT_RULES, gravityScale: 0.38, physics: MARS_PHYSICS, speedMultiplier: 1.25, hpScale: 1.2, damageScale: 0.9,
+    reloadScale: 0.9, ammo: 'unlimited', jumpMps: 9.5, recoilLaunchScale: 3, shellKnockScale: 0.9, respawnS: 6, timeLimitS: 720,
+  }),
+  juggernaut: Object.freeze({ ...STANDARD, mode: 'juggernaut', scoresKills: true, ammo: 'unlimited', allies: 0, enemies: 12, respawnS: 6, timeLimitS: 600,
+    juggernaut: Object.freeze({ team: 'alpha', hpScale: 8, reloadScale: .5, speedScale: .9 }) }),
+  // Infected (owner 2026-10-17, the zombies): sturdy survivors (150 % hull) against five fragile infected (35 %) that hunt
+  // the nearest survivor at +30 % speed with no reload bonus and come back 5 s after every death, a converted survivor's
+  // included; the outbreak wins by numbers (four starters let the survivors win 3 rounds in 4, six almost never). Before: survivors at 30 % against infected at 125 % with +40 % speed and a
+  // ×0.7 reload lost every bot round inside 2:16 (docs/GAME-MODES.md "Zombie balance").
+  // gameplay-modes-228 (owner 2026-10-18: "infected should be super aggressie as well"): the infected take the Horde's
+  // charge with one difference, the hull turn onto a hit (second only to the zombies); the survivors fight back hard —
+  // no opening read, every round fired, a shorter fallback, their range kept — and close ranks round their own centroid
+  // Round 3 (the critic's M3: round 2's x1.8 reload and five-minute round made it a shooting gallery — the infected at a
+  // quarter hull died 2.6 times as often while converting barely faster, none at all in five minutes on Verdant): the
+  // plan's seven-minute round and the infected's own reload; they rise closer still (a 70-120 m ring, never inside 60 m,
+  // out of sight) at 35 % of their hull — the plan's balance knob, turned the other way (A/B over seeds 401-408: first
+  // infection 136 s -> 59 s, 2.4 -> 3.5 infections a minute; the survivors still won 1 of 8). A pack rule (the infected
+  // holding their respawns to rise together) was tried and cut: it halved the infected on the field (first infection 136 s
+  // against 50 s without it). docs/GAME-MODES.md "Bot aggression per mode".
+  // gameplay-modes-233 (the critic's major: a shooting gallery, the first infection at 87 s on main, 3.26 a minute): the
+  // infected hunt as a pack — they gather on the survivor the pack already hunts (infectionBots.packPullM 60 m a hunter,
+  // where the shared hunt rules spread them one a survivor) and lay on the hull it already shoots (the doctrine's
+  // packFire) — and the survivors stand at 130 % hull (was 150 %). The A/B on seeds 401, 403, 404, 408: the first
+  // infection 92 / 90 / 88 s -> 28 / 25 / 26 s on Steinburg, Desert and Coastal; Verdant (a WWII E-100 pick, the
+  // survivors' 128 mm rounds ~1040 a hit against a 313 hp infected) stays the survivors' round. A 3 s respawn was worse.
+  // 240 (the coordinator: survivors could never win; zombieBalance re-measured on 233's rules, 48 seeds: 0 survivor
+  // rounds, the outbreak done by a median 2:29, 2.79 infected a survivor lost): the round is three minutes (was seven)
+  // and the infected stand at a fifth of their hull (was a quarter), the pack hunt and its opening untouched. Over seeds
+  // 1-48: survivors 17 of 48 (hold-out 12 of 32), a median end 2:43, 3.92 infected a loss; the first infection 40 -> 41 s
+  // on seeds 1-8. A longer respawn (10 or 15 s), a x1.6 reload or 150-180 % survivors won no round at seven minutes and
+  // slowed the first infection to 50-77 s; at 15 % and 3:30 the survivors won 5 of 48.
+  infected: Object.freeze({ ...STANDARD, mode: 'infected', ammo: 'unlimited', allies: 9, enemies: 5, respawnS: 5, timeLimitS: 180,
+    infection: Object.freeze({ infectedSpeed: 1.3, survivorHpScale: 1.3, infectedHpScale: .2, infectedReloadScale: 1, hunt: true }),
+    bots: Object.freeze({ bravo: INFECTED_DOCTRINE, alpha: SURVIVOR_DOCTRINE }),
+    infectionBots: Object.freeze({ survivorRallyM: 90, packPullM: 60, arrival: Object.freeze({
+      spawnRingM: Object.freeze([70, 120] as const), fallbackRingM: Object.freeze([120, 200] as const), spawnSectors: 3, sectorWidthDeg: 60, sectorSpreadDeg: 70,
+      spawnMinHumanM: 60, spawnOutOfSight: true, sightRangeM: 450, sightStepM: 8, sightEyeM: 2.4, sightHullM: 1.5,
+      sightMarginM: 1, sightLeadM: 0, spawnCandidates: 12 }) }) }),
+  realistic: Object.freeze({ ...STANDARD, mode: 'realistic', elimination: true, scoresKills: true, alwaysVisible: false, moduleOnlyDamage: true, consumables: false }),
+  gun_game: Object.freeze({ ...STANDARD, mode: 'gun_game', scoresKills: true, respawnS: 4, ammo: 'unlimited', timeLimitS: 900,
+    gunGame: Object.freeze({ killsPerWeapon: 2 }) }),
+  drone: Object.freeze({ ...STANDARD, mode: 'drone', scoresKills: true, aerial: 'drone', counterDrone: true, respawnS: 6, timeLimitS: 600, scoreTarget: 20 }),
+  ac130: Object.freeze({ ...STANDARD, mode: 'ac130', scoresKills: true,
+    middleReserve: Object.freeze({ kind: 'extraction', radiusM: 30, reliefM: 7 }), aerial: 'gunship', allies: 4, enemies: 12, alwaysVisible: true, equipmentBan: SCOUTING_OFF,
+    ammo: 'unlimited', consumables: false, timeLimitS: 480, timeout: 'defeat',
+    destruction: Object.freeze({ ...DESTRUCTION_ON, craterScale: 1.25 }) }),
+  // Air Support (air-support-270): Zone Control's three sectors, 8 s respawns and a twelve-minute clock, with the support
+  // ledger and the three airstrikes; the vehicle's own loadout (the strikes are the mode's firepower, not the guns)
+  air_support: Object.freeze({ ...STANDARD, mode: 'air_support', scoresKills: true, respawnS: 8, timeLimitS: 720, airSupport: AIR_SUPPORT_RULES }),
+  // Proving ground (v2 progression, 2026-10-17): the player alone on the firing line, one target hull per lane (no allied
+  // bots, no AI on the targets), every target always in sight, unlimited rounds of the tank's own loadout, a destroyed hull
+  // back on its mark in 3 s, no clock and no record. The standard physics, damage and destruction apply unchanged, so every
+  // outcome on the range is the outcome in battle.
+  proving_ground: Object.freeze({
+    ...STANDARD, mode: 'proving_ground', alwaysVisible: true, equipmentBan: SCOUTING_OFF, ammo: 'unlimited',
+    allies: 0, enemies: PROVING_GROUND_RULES.lanes.length, respawnS: 3, respawnSafeM: null, timeLimitS: null,
+    records: false, provingGround: PROVING_GROUND_RULES,
+  }),
+});
+
+/**
+ * The span the mode's own objectives stand apart along the axis (gameplay-modes-228): Capture the Flag's flag bases
+ * (flagPitch.baseAxisM) or the Turbo Ball goals (ball.goalAxisM); null keeps them on the deployment centres. The match
+ * placement reserves them (sim/matchPlacement.ts objectiveAxisM), so the solo battle and the authority read one figure.
+ */
+export function rulesetObjectiveAxisM(ruleset: Pick<MatchRuleset, 'flagPitch' | 'ball'>): number | null {
+  return ruleset.flagPitch?.baseAxisM ?? ruleset.ball?.goalAxisM ?? null;
+}
+
+/** Score targets the modes play to (kept here so rule cards and controller agree). */
+export const RULESET_SCORE_TARGETS: Readonly<Record<string, number>> = Object.freeze({
+  capture_the_flag: 3, zone_control: 750, turbo_ball: 5, mars: 750, drone: 20,
+  // Air Support plays to 2000 (air-support-270's first seeded run: at 750 the side that took the sectors first won in under
+  // three minutes, before a crew had earned a call-in); about six to eight minutes at the usual two-to-one sector split
+  air_support: 2000,
+});
+/** The arrangement fields Deploy offers beyond the sides, and which modes take each (improve-271 plan 027). */
+export type ArrangementChoiceField = 'scoreTarget' | 'respawnS' | 'waveSize' | 'waveStep' | 'holdS' | 'juggernautRole';
+/** Whether `mode` takes `field`: one rule the clamp (normalizeTeamArrangement) and Deploy's choices (arrangementChoices) read. */
+function arrangementFieldApplies(mode: GameModeId | string, field: ArrangementChoiceField): boolean {
+  switch (field) {
+    case 'scoreTarget':
+    case 'respawnS': return Object.prototype.hasOwnProperty.call(RULESET_SCORE_TARGETS, mode);
+    case 'waveSize':
+    case 'waveStep': return mode === 'endless_horde';
+    case 'holdS': return mode === 'frontline_assault';
+    case 'juggernautRole': return mode === 'juggernaut';
+  }
+}
+/** The winning score's clamp per mode (the authority applies it; Deploy offers only values inside it). */
+const SCORE_TARGET_RANGES: Readonly<Record<string, readonly [number, number]>> = Object.freeze({
+  capture_the_flag: [1, 9], turbo_ball: [1, 15], drone: [5, 100],
+});
+const SCORE_TARGET_RANGE: readonly [number, number] = [100, 2000];
+const RESPAWN_RANGE: readonly [number, number] = [2, 15];
+const WAVE_STEP_RANGE: readonly [number, number] = [0, 3];
+const HOLD_RANGE: readonly [number, number] = [10, 60];
+/** The values Deploy offers before a mode's own default joins them (each inside its clamp). */
+const OFFERED_SCORE_TARGETS: Readonly<Record<string, readonly number[]>> = Object.freeze({
+  capture_the_flag: [1, 3, 5, 7, 9], turbo_ball: [3, 5, 7, 10, 15], drone: [5, 10, 20, 30, 50],
+});
+const OFFERED_SCORE_TARGET = [250, 500, 750, 1000, 1500, 2000];
+const OFFERED_RESPAWN_S = [2, 3, 6, 10, 15];
+const OFFERED_WAVE_STEP = [0, 1, 2, 3];
+const OFFERED_HOLD_S = [10, 20, 30, 45, 60];
+
+/** Deploy's choices for each arrangement field `mode` takes (a field it does not take is absent), in order. */
+export interface ArrangementChoices {
+  readonly scoreTarget?: readonly number[];
+  readonly respawnS?: readonly number[];
+  readonly waveSize?: readonly number[];
+  readonly waveStep?: readonly number[];
+  readonly holdS?: readonly number[];
+  readonly juggernautRole?: readonly ('boss' | 'hunter')[];
+}
+/** `offered` with the mode's own default when it is missing, ascending (Air Support's 8 s respawn joins 2, 3, 6, 10, 15). */
+const withDefault = (offered: readonly number[], fallback: number | null | undefined): readonly number[] =>
+  Object.freeze([...new Set(fallback == null || !Number.isFinite(fallback) ? offered : [...offered, fallback])].sort((a, b) => a - b));
+/**
+ * The values Deploy's further options offer for `mode`, read from this table: the mode's default is always among them and
+ * every one survives the clamp the authority applies (improve-271 plan 027: Air Support's 8 s respawn had no option).
+ */
+export function arrangementChoices(mode: GameModeId): ArrangementChoices {
+  const base = BASE_RULESETS[mode];
+  if (!base || base.provingGround) return Object.freeze({});
+  const out: { -readonly [K in keyof ArrangementChoices]: ArrangementChoices[K] } = {};
+  if (arrangementFieldApplies(mode, 'scoreTarget')) out.scoreTarget = withDefault(OFFERED_SCORE_TARGETS[mode] ?? OFFERED_SCORE_TARGET, RULESET_SCORE_TARGETS[mode]);
+  if (arrangementFieldApplies(mode, 'respawnS')) out.respawnS = withDefault(OFFERED_RESPAWN_S, base.respawnS);
+  if (arrangementFieldApplies(mode, 'waveSize')) {
+    const [lo, hi] = TEAM_ARRANGEMENT_LIMITS.waveSize;
+    out.waveSize = Object.freeze(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
+  }
+  if (arrangementFieldApplies(mode, 'waveStep')) out.waveStep = withDefault(OFFERED_WAVE_STEP, base.horde?.waveStep);
+  if (arrangementFieldApplies(mode, 'holdS')) out.holdS = withDefault(OFFERED_HOLD_S, base.assault?.holdS);
+  if (arrangementFieldApplies(mode, 'juggernautRole')) out.juggernautRole = Object.freeze(['boss', 'hunter'] as const);
+  return Object.freeze(out);
+}
+
+/** A flag carrier drives at this share of the mode speed (Capture the Flag). */
+export const FLAG_CARRIER_SPEED_SCALE = 0.85;
+/** Share of maximum hull repaired on every surviving attacker when a Horde wave is cleared (the Horde's `waveRepair`). */
+export const HORDE_WAVE_REPAIR = BASE_RULESETS.endless_horde.horde!.waveRepair;
+
+/**
+ * The numbers a mode's card, battle setup and manual quote, read from this table (`{target}`, `{gravity}`, ...), so the
+ * copy can never promise a rule the battle does not keep (2026-10-13: Zone Control's copy said 1,000 points while the
+ * mode plays to 750, and Realistic's said every tank stays visible while it plays normal spotting).
+ */
+export function modeCopyValues(mode: GameModeId): Readonly<Record<string, number>> {
+  const rules = matchRulesetFor(mode);
+  return {
+    target: RULESET_SCORE_TARGETS[mode] ?? 0,
+    gravity: rules.gravityScale,
+    minutes: rules.timeLimitS == null ? 0 : rules.timeLimitS / 60,
+    survivorHp: Math.round((rules.infection?.survivorHpScale ?? 1) * 100),
+    infectedHp: Math.round((rules.infection?.infectedHpScale ?? 1) * 100),
+    killsPerWeapon: rules.gunGame?.killsPerWeapon ?? 0,
+    weapons: GUN_GAME_WEAPONS.length,
+  };
+}
+
+/**
+ * The post-verdict hold, read by the solo step and the authority alike: while it runs the world keeps
+ * simulating with every gun silent; once it expires the step returns early and the field stands still.
+ * A null verdict time means no verdict yet (never expired); the hold is clamped to ENDING_HOLD_LIMIT_S.
+ */
+export function endingHoldExpired(
+  ruleset: Pick<MatchRuleset, 'endingHoldS'>,
+  resultTimeS: number | null | undefined,
+  timeS: number,
+): boolean {
+  if (resultTimeS == null || !Number.isFinite(resultTimeS)) return false;
+  const holdS = Number.isFinite(ruleset.endingHoldS) ? Math.min(ENDING_HOLD_LIMIT_S, Math.max(0, ruleset.endingHoldS)) : 0;
+  return timeS - resultTimeS >= holdS - 1e-9;
+}
+
+/**
+ * The side a human's verdict reads (round 2, the critic's Infected AAR: a converted player's screen read VICTORY,
+ * "Enemy force destroyed", when the outbreak it lost to completed). Infected judges every human by the survivors' side it
+ * started on; every other mode by the side it fights for now.
+ */
+export function rulesetVerdictSide(ruleset: Pick<MatchRuleset, 'infection'>, current: 'alpha' | 'bravo'): 'alpha' | 'bravo' {
+  return ruleset.infection ? 'alpha' : current;
+}
+
+/**
+ * The modes whose roles light a tank's own surfaces (the Juggernaut, a flag carrier, the infected: game/juggernautVisual.ts).
+ * Any tank of their battles can take a role, so every one wears its energy skin from its staging, dormant until a role
+ * lights it (mode-sheen-perf-243: the skin's programs compile behind the cover, never on the frame a tank first glows).
+ */
+export function modeLightsTanks(mode: string | null | undefined): boolean {
+  return mode === 'juggernaut' || mode === 'capture_the_flag' || mode === 'infected';
+}
+
+/** The role modes: their sides seat by role (Juggernaut's boss, the infected, the AC-130's crew), the room's team size
+ *  sizing neither (mp/room/roomBots.ts planRoomBots). */
+export function seatsByRole(rules: MatchRuleset): boolean {
+  return !!(rules.juggernaut || rules.infection || rules.aerial === 'gunship');
+}
+
+/** Whether a room's bots fill each side to its team size (mp/room/roomBots.ts planRoomBots' symmetric seating): neither a
+ *  role mode nor a wave mode. Takes the room's stored mode id, an unknown one reading as Standard's (matchRulesetFor). */
+export function seatsByTeamSize(mode: GameModeId | string | null | undefined, arrangement: TeamArrangement | null = null): boolean {
+  const id = String(mode ?? 'standard') as GameModeId;
+  return !isWaveMode(id) && !seatsByRole(matchRulesetFor(id, null, arrangement));
+}
+
+/** The wave modes: their enemy side is a pool drawn per wave (Horde) or per sector (Frontline). */
+export function isWaveMode(mode: GameModeId): mode is 'endless_horde' | 'frontline_assault' {
+  return mode === 'endless_horde' || mode === 'frontline_assault';
+}
+
+/**
+ * A destroyed hull stays out of the battle: no respawn, and no wave that draws the pool back in. Only then can a network
+ * seat count a side from the roster and the deaths it is sent: a hull's return out of its sight is never sent to it.
+ */
+export function deathsAreFinal(ruleset: Pick<MatchRuleset, 'mode' | 'respawnS'>): boolean {
+  return ruleset.respawnS == null && !isWaveMode(ruleset.mode);
+}
+
+/** Every registered mode arranges its sides (owner 2026-09-18); an unknown id takes none. */
+export function acceptsTeamArrangement(mode: GameModeId): boolean {
+  return Object.prototype.hasOwnProperty.call(BASE_RULESETS, mode);
+}
+
+/** The two sides a symmetric mode fields at once (bots only — the player joins the allied side). */
+export function rulesetSides(ruleset: Pick<MatchRuleset, 'allies' | 'enemies'>): { readonly allies: number; readonly enemies: number } {
+  return { allies: ruleset.allies ?? STANDARD_SIDES.allies, enemies: ruleset.enemies ?? STANDARD_SIDES.enemies };
+}
+
+/** Which switch position an arrangement is: a preset when its sides match one, otherwise custom. */
+export function sidesPresetOf(arrangement: Pick<TeamArrangement, 'allies' | 'enemies'> | null | undefined): SidesPreset {
+  const sides = rulesetSides({ allies: arrangement?.allies ?? null, enemies: arrangement?.enemies ?? null });
+  for (const [id, preset] of Object.entries(SIDES_PRESETS)) {
+    if (preset.allies === sides.allies && preset.enemies === sides.enemies) return id as SidesPreset;
+  }
+  return 'custom';
+}
+
+const clampInt = (value: unknown, range: readonly [number, number]): number | null => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(range[0], Math.min(range[1], Math.round(n)));
+};
+
+/** Clamp an arrangement to the mode's limits; null for modes that take none or an empty input. */
+export function normalizeTeamArrangement(mode: GameModeId, input: TeamArrangement | null | undefined): TeamArrangement | null {
+  if (!input || !acceptsTeamArrangement(mode)) return null;
+  // the proving ground's sides are its lanes: the moving-target switch is its only arrangement
+  if (BASE_RULESETS[mode].provingGround) return input.movingTargets === true ? Object.freeze({ movingTargets: true }) : null;
+  let allies = input.allies == null ? null : clampInt(input.allies, TEAM_ARRANGEMENT_LIMITS.allies[mode]);
+  const enemies = input.enemies == null ? null : clampInt(input.enemies, TEAM_ARRANGEMENT_LIMITS.enemies[mode]);
+  const waveSize = arrangementFieldApplies(mode, 'waveSize') && input.waveSize != null
+    ? clampInt(input.waveSize, TEAM_ARRANGEMENT_LIMITS.waveSize) : null;
+  // TEAM NATIONS: only 'random' is stored; mono is the absent default (old stores, old rooms and the retired
+  // alliedNation 'player' all read as MONO)
+  const teamNations = input.teamNations === 'random' ? 'random' : null;
+  const enemyNation = typeof input.enemyNation === 'string' && /^[a-z_]{2,24}$/.test(input.enemyNation) ? input.enemyNation : null;
+  const marsGravity = mode === 'mars' && isMarsGravityId(input.marsGravity) ? input.marsGravity : null;
+  const marsCaches = mode === 'mars' && isMarsCachesId(input.marsCaches) ? input.marsCaches : null;
+  const juggernautRole = arrangementFieldApplies(mode, 'juggernautRole') && (input.juggernautRole === 'hunter' || input.juggernautRole === 'boss') ? input.juggernautRole : null;
+  // (improve-271 plan 027) which fields a mode takes, and their clamps, are the table Deploy's choices read
+  const scoreTarget = arrangementFieldApplies(mode, 'scoreTarget') && Number.isFinite(input.scoreTarget)
+    ? clampInt(input.scoreTarget!, SCORE_TARGET_RANGES[mode] ?? SCORE_TARGET_RANGE) : null;
+  const respawnS = arrangementFieldApplies(mode, 'respawnS') && Number.isFinite(input.respawnS) ? clampInt(input.respawnS!, RESPAWN_RANGE) : null;
+  const waveStep = arrangementFieldApplies(mode, 'waveStep') && Number.isFinite(input.waveStep) ? clampInt(input.waveStep!, WAVE_STEP_RANGE) : null;
+  const holdS = arrangementFieldApplies(mode, 'holdS') && Number.isFinite(input.holdS) ? clampInt(input.holdS!, HOLD_RANGE) : null;
+  // the field limit (player included) holds whatever the two sides ask for: the enemy count is kept — it is
+  // the number the player typed for a "1 v 20" — and the allied bots yield
+  if (!isWaveMode(mode) && (allies != null || enemies != null)) {
+    const sides = rulesetSides({ allies, enemies });
+    if (sides.allies + sides.enemies + 1 > BATTLE_FIELD_LIMIT) allies = Math.max(0, BATTLE_FIELD_LIMIT - 1 - sides.enemies);
+  }
+  if (allies == null && enemies == null && waveSize == null && enemyNation == null && teamNations == null && marsGravity == null && marsCaches == null && scoreTarget == null && respawnS == null && waveStep == null && holdS == null && juggernautRole == null) return null;
+  return Object.freeze({
+    allies, enemies, waveSize, enemyNation,
+    ...(teamNations ? { teamNations } : {}),
+    ...(juggernautRole ? { juggernautRole } : {}),
+    ...(scoreTarget != null ? { scoreTarget } : {}), ...(respawnS != null ? { respawnS } : {}),
+    ...(waveStep != null ? { waveStep } : {}), ...(holdS != null ? { holdS } : {}),
+    ...(marsGravity ? { marsGravity } : {}), ...(marsCaches ? { marsCaches } : {}),
+  });
+}
+
+/**
+ * Earth's gravity lands with the whole game's bounce (physics lane round 3; gauntlet wave 23: "an Earth-gravity drop
+ * hops clear of the ground"): the basin's 30 % threw a 5.6 m/s landing at 1 g back off the ground.
+ */
+function gravityPhysics(physics: RulesetPhysics, gravity: MarsGravityId): RulesetPhysics {
+  return gravity === 'earth' ? Object.freeze({ ...physics, restitution: STANDARD_PHYSICS.restitution }) : physics;
+}
+
+/**
+ * The impact physics a hull of this mode lands by at this gravity. The client's prediction knows the room's mode and the
+ * gravity the authority sends it (viewer.modeGravityScale), not the Mars settings, and Gravity mode's Earth rewrites the
+ * mode's rebound (physics lane round 4: the prediction landed a 1 g hull at the basin's 30 % where the authority took
+ * 15 %, so a landing the authority settled bounced on the client and was corrected).
+ */
+export function rulesetPhysicsAt(mode: GameModeId, gravityScale: number): RulesetPhysics {
+  const physics = matchRulesetFor(mode).physics;
+  if (mode !== 'mars') return physics;
+  const gravity = MARS_GRAVITY_IDS.find((id) => Math.abs(MARS_GRAVITY_OPTIONS[id].gravityScale - gravityScale) < 1e-3);
+  return gravity ? gravityPhysics(physics, gravity) : physics;
+}
+
+/** The battlefield a mode plays whatever the player picked, or null for any: the proving ground's range is laid out for
+ *  one battlefield's ground (every other fails closed: sim/provingGround.ts planProvingRange). */
+export function rulesetBattlefield(mode: GameModeId): string | null {
+  return BASE_RULESETS[mode]?.provingGround?.mapId ?? null;
+}
+
+export function matchRulesetFor(
+  mode: GameModeId,
+  campaign: CampaignRulesetInput | null = null,
+  arrangement: TeamArrangement | null = null,
+): MatchRuleset {
+  const base = BASE_RULESETS[mode] ?? STANDARD;
+  let ruleset: MatchRuleset = base;
+  if (campaign && mode === 'frontline_assault' && base.assault) {
+    const difficulty = Math.max(1, Math.min(9, Math.floor(campaign.difficulty) || 1));
+    ruleset = {
+      ...base,
+      timeLimitS: campaign.timeLimitS === undefined ? base.timeLimitS : campaign.timeLimitS,
+      enemyNation: typeof campaign.enemy === 'string' ? campaign.enemy : base.enemyNation,
+      assault: Object.freeze({
+        ...base.assault,
+        // one extra defender every two operations, and 6 % hull per operation past the first
+        extraDefenders: Math.floor((difficulty - 1) / 2),
+        difficultyHp: (difficulty - 1) * 0.06,
+      }),
+    };
+  }
+  const arranged = normalizeTeamArrangement(mode, arrangement);
+  if (arranged) {
+    ruleset = {
+      ...ruleset,
+      scoreTarget: arranged.scoreTarget ?? ruleset.scoreTarget,
+      respawnS: arranged.respawnS ?? ruleset.respawnS,
+      assault: ruleset.assault && arranged.holdS != null && !campaign
+        ? Object.freeze({ ...ruleset.assault, holdS: arranged.holdS }) : ruleset.assault,
+      allies: arranged.allies ?? ruleset.allies,
+      enemies: arranged.enemies ?? ruleset.enemies,
+      teamNations: arranged.teamNations ?? ruleset.teamNations,
+      // a campaign operation's formation is not overridden by the free-sortie nation setting
+      enemyNation: campaign?.enemy ? ruleset.enemyNation : (arranged.enemyNation ?? ruleset.enemyNation),
+      // the first wave and the step are the arranged ones; the pool caps only what stands on the field at once (maxAlive)
+      horde: ruleset.horde && (arranged.waveSize != null || arranged.waveStep != null)
+        ? Object.freeze({ ...ruleset.horde, waveSize: arranged.waveSize ?? ruleset.horde.waveSize, waveStep: arranged.waveStep ?? ruleset.horde.waveStep })
+        : ruleset.horde,
+    };
+  }
+  if (mode === 'mars' && arranged && (arranged.marsGravity || arranged.marsCaches)) {
+    // Mars settings: the gravity world rewrites the physics trio, the cache choice its cadence
+    const gravity = arranged.marsGravity ?? ruleset.mars?.gravity ?? MARS_DEFAULT_RULES.gravity;
+    const caches = arranged.marsCaches ?? ruleset.mars?.caches ?? MARS_DEFAULT_RULES.caches;
+    const world = MARS_GRAVITY_OPTIONS[gravity];
+    ruleset = {
+      ...ruleset, gravityScale: world.gravityScale, jumpMps: world.jumpMps, recoilLaunchScale: world.recoilLaunchScale,
+      physics: gravityPhysics(ruleset.physics, gravity),
+      mars: marsRulesFor(gravity, caches),
+    };
+  }
+  if (ruleset.juggernaut) {
+    const hunter = arrangement?.juggernautRole === 'hunter';
+    ruleset = { ...ruleset, allies: hunter ? (arranged?.allies ?? 5) : 0,
+      enemies: hunter ? 1 : (arranged?.enemies ?? 12),
+      juggernaut: { ...ruleset.juggernaut, team: hunter ? 'bravo' : 'alpha' } };
+  }
+  if (ruleset.infection) ruleset = { ...ruleset, enemies: Math.max(3, ruleset.enemies ?? base.enemies ?? 3) };
+  if (ruleset.provingGround && arranged?.movingTargets) {
+    ruleset = { ...ruleset, provingGround: Object.freeze({ ...ruleset.provingGround, moving: true }) };
+  }
+  return ruleset === base ? base : Object.freeze(ruleset);
+}
+
+/**
+ * Hull scale a Frontline counter-attack arrives with on sector `line` (0-based) of `lines`: 1 + line × hpPerLine on
+ * the way in, finalLineHp on the last sector, plus the operation's difficulty on every one.
+ */
+export function assaultWaveHealthScale(rules: AssaultRules, line: number, lines: number): number {
+  const index = Math.max(0, Math.floor(line));
+  // the opening wave is never the counter-attack, even on a one-sector front
+  const base = index > 0 && index >= lines - 1 ? rules.finalLineHp : 1 + index * rules.hpPerLine;
+  return base + rules.difficultyHp;
+}
+
+/** The base wave law (1-based wave, one human): round(waveSize + waveStep·(w−1) + waveCurve·(w−1)²). */
+export function hordeWaveSize(rules: HordeRules, wave: number): number {
+  const k = Math.max(1, Math.floor(wave)) - 1;
+  return Math.round(rules.waveSize + rules.waveStep * k + rules.waveCurve * k * k);
+}
+
+/** A wave's kind: every swarmEvery-th a SWARM, every runnerEvery-th a RUNNER (a swarm wins when both fall due). */
+export function hordeWaveSpecial(rules: HordeRules, wave: number): 'swarm' | 'runner' | null {
+  const w = Math.max(1, Math.floor(wave));
+  if (rules.swarmEvery > 0 && w % rules.swarmEvery === 0) return 'swarm';
+  if (rules.runnerEvery > 0 && w % rules.runnerEvery === 0) return 'runner';
+  return null;
+}
+
+/** Hostiles a wave brings in total (gameplay-modes-228): the base law × (1 + perHumanTotal) per extra human, rising every round. */
+export function hordeWaveTotal(rules: HordeRules, wave: number, humans: number): number {
+  const coop = 1 + rules.perHumanTotal * (Math.max(1, Math.floor(humans)) - 1);
+  return Math.max(1, Math.round(hordeWaveSize(rules, wave) * coop));
+}
+
+/** Seconds between two arrivals of a wave's trickle: trickleS, swarmTrickleScale × it on a swarm wave. */
+export function hordeTrickleS(rules: HordeRules, wave: number): number {
+  return rules.trickleS * (hordeWaveSpecial(rules, wave) === 'swarm' ? rules.swarmTrickleScale : 1);
+}
+
+/** Hostiles on the field at once: maxAlive + maxAlivePerHuman per extra human, never over maxAliveCap or the pool. */
+export function hordeMaxAlive(rules: HordeRules, humans: number, pool: number): number {
+  const scaled = rules.maxAlive + rules.maxAlivePerHuman * (Math.max(1, Math.floor(humans)) - 1);
+  return Math.max(0, Math.min(Math.floor(pool), rules.maxAliveCap, scaled));
+}
+
+/**
+ * A Horde hostile's hull on a wave (1-based) as a multiple of its vehicle's own: the zombies' fodder law — hpPerWave a
+ * wave through lateFromWave − 1, hpPerWaveLate a wave after it (wave 10: 0.177, wave 15: 0.222), a swarm at swarmHull.
+ */
+export function hordeHostileHull(rules: HordeRules, wave: number): number {
+  const w = Math.max(1, Math.floor(wave));
+  if (hordeWaveSpecial(rules, w) === 'swarm') return rules.swarmHull;
+  const early = Math.min(w, rules.lateFromWave - 1) - 1;
+  const late = Math.max(0, w - (rules.lateFromWave - 1));
+  return rules.hostileHpScale * (1 + early * rules.hpPerWave + late * rules.hpPerWaveLate);
+}
+
+/**
+ * The health scale the controller hands a Horde hostile's revive on a wave. The revive's ruleset stamp multiplies it by
+ * `hpScale` (the humans' hull), so it is the hostile's hull divided by that: the hostile ends at hordeHostileHull.
+ */
+export function hordeWaveHealthScale(ruleset: Pick<MatchRuleset, 'hpScale'>, rules: HordeRules, wave: number): number {
+  return hordeHostileHull(rules, wave) / (ruleset.hpScale > 0 ? ruleset.hpScale : 1);
+}
+
+/** Speed multiplier the wave pressure gives a Horde hostile or a Frontline defender on a wave (1-based); runners run. */
+export function hordeWaveSpeedScale(rules: HordeRules, wave: number): number {
+  const ramp = 1 + Math.min(rules.speedPerWaveMax, (Math.max(1, Math.floor(wave)) - 1) * rules.speedPerWave);
+  return hordeWaveSpecial(rules, wave) === 'runner' ? ramp * rules.runnerSpeed : ramp;
+}
+
+const doctrineMemo = new WeakMap<object, { alpha: BotDoctrine; bravo: BotDoctrine }>();
+/**
+ * The doctrine a bot on `team` plays under a ruleset: CLASSIC_BOT_DOCTRINE under the mode's side table. The side reads
+ * the way rulesetBotDifficulty's does (`bravo` and solo's `enemy` are bravo, everything else alpha), so both builders
+ * read one table and an Infected convert switches to the infected's on its first tick. Frozen and memoised per
+ * ruleset: a tick allocates nothing.
+ */
+const routeMemo = new WeakMap<object, { alpha: RoutePush; bravo: RoutePush }>();
+/**
+ * The mode route push for a side: the side doctrine's routeRefreshS / routeMoveM, or (null) the legacy cadence
+ * (LEGACY_ROUTE_PUSH, fast in its fast modes). Frozen and memoised per ruleset like the doctrine.
+ */
+export function rulesetRoutePush(ruleset: Pick<MatchRuleset, 'bots' | 'mode'>, team: string): RoutePush {
+  let memo = routeMemo.get(ruleset);
+  if (!memo) {
+    const fast = (LEGACY_ROUTE_PUSH.fastModes as readonly string[]).includes(ruleset.mode);
+    const of = (side: string): RoutePush => {
+      const doctrine = rulesetBotDoctrine(ruleset, side);
+      return Object.freeze({
+        refreshS: doctrine.routeRefreshS ?? (fast ? LEGACY_ROUTE_PUSH.fastRefreshS : LEGACY_ROUTE_PUSH.refreshS),
+        moveM: doctrine.routeMoveM ?? (fast ? 0 : LEGACY_ROUTE_PUSH.moveM),
+      });
+    };
+    memo = { alpha: of('alpha'), bravo: of('bravo') };
+    routeMemo.set(ruleset, memo);
+  }
+  return team === 'bravo' || team === 'enemy' ? memo.bravo : memo.alpha;
+}
+
+export function rulesetBotDoctrine(ruleset: Pick<MatchRuleset, 'bots'>, team: string): BotDoctrine {
+  const bots = ruleset.bots;
+  if (!bots) return CLASSIC_BOT_DOCTRINE;
+  let memo = doctrineMemo.get(ruleset);
+  if (!memo) {
+    memo = {
+      alpha: bots.alpha ? Object.freeze({ ...CLASSIC_BOT_DOCTRINE, ...bots.alpha }) : CLASSIC_BOT_DOCTRINE,
+      bravo: bots.bravo ? Object.freeze({ ...CLASSIC_BOT_DOCTRINE, ...bots.bravo }) : CLASSIC_BOT_DOCTRINE,
+    };
+    doctrineMemo.set(ruleset, memo);
+  }
+  return team === 'bravo' || team === 'enemy' ? memo.bravo : memo.alpha;
+}
+
+/** Mars caches split evenly between a repair and a rearm (the Horde's fall with the waves). */
+const EVEN_CACHE_HEAL_CHANCE = 0.5;
+/**
+ * Share of the caches a mode drops on a wave (1-based) that repair rather than rearm: every one under unlimited rounds
+ * (an ammunition cache could never be taken and would hold a cache slot), else the Horde's falling law, else even.
+ */
+export function cacheHealChance(ruleset: Pick<MatchRuleset, 'ammo' | 'horde'>, wave: number): number {
+  if (ruleset.ammo === 'unlimited') return 1;
+  const law = ruleset.horde?.cacheHeal;
+  if (!law) return EVEN_CACHE_HEAL_CHANCE;
+  return Math.max(law.floor, law.first - (Math.max(1, Math.floor(wave)) - 1) * law.perWave);
+}
+
+/** Bot difficulty tiers, easiest first (game/input.ts AI_DIFFICULTIES; the ruleset only steps along them). */
+const BOT_DIFFICULTY_TIERS = Object.freeze(['easy', 'normal', 'hard'] as const);
+type BotDifficultyTier = (typeof BOT_DIFFICULTY_TIERS)[number];
+/**
+ * The difficulty a bot on `team` plays under a ruleset: the battle's own, except a Horde hostile, which plays
+ * `horde.hostileDifficultyStep` tiers below it and never under the easiest (zombies come on numbers, not aim). The solo
+ * battle and the network authority both read it when they build a bot.
+ */
+export function rulesetBotDifficulty(ruleset: Pick<MatchRuleset, 'horde' | 'assault'>, team: string, difficulty: BotDifficultyTier): BotDifficultyTier {
+  const step = ruleset.horde?.hostileDifficultyStep ?? ruleset.assault?.hostileDifficultyStep ?? 0;
+  if (step <= 0 || (team !== 'bravo' && team !== 'enemy')) return difficulty;
+  const index = BOT_DIFFICULTY_TIERS.indexOf(difficulty);
+  return index < 0 ? difficulty : BOT_DIFFICULTY_TIERS[Math.max(0, index - Math.floor(step))]!;
+}
+
+/** The hostile side's hull as a multiple of its vehicles' own when it differs from the humans' (Horde, Infected). */
+function hostileHullScale(ruleset: MatchRuleset): number | null {
+  if (ruleset.horde) return ruleset.horde.hostileHpScale;
+  // Frontline: the attack's hull is hpScale, the defenders field their own (the controller divides it back out)
+  if (ruleset.assault && ruleset.hpScale !== 1) return 1;
+  if (ruleset.infection) return ruleset.hpScale * ruleset.infection.infectedHpScale;
+  return null;
+}
+
+/** Whole-number percent for copy ("+50 %", "-40 %"). */
+function percent(scale: number): string {
+  const delta = Math.round((scale - 1) * 100);
+  return `${delta > 0 ? '+' : ''}${delta} %`;
+}
+
+interface RulesetLine {
+  /** i18n key under `rules.line.*`. */
+  readonly key: string;
+  readonly values: Readonly<Record<string, string>>;
+}
+
+/**
+ * The rule lines a mode card shows — only the rules that differ from Standard, in a fixed order,
+ * so every card lists exactly what the code does.
+ */
+export function rulesetLines(ruleset: MatchRuleset): RulesetLine[] {
+  const lines: RulesetLine[] = [];
+  const line = (key: string, values: Record<string, string> = {}): void => { lines.push({ key, values }); };
+  if (ruleset.moduleOnlyDamage) line('modulesOnly');
+  if (ruleset.alwaysVisible) line('alwaysVisible');
+  if (ruleset.juggernaut) line('boss', { hp: String(ruleset.juggernaut.hpScale), reload: String(ruleset.juggernaut.reloadScale) });
+  if (ruleset.infection) line('infection');
+  if (ruleset.gunGame) line('gunGame', { kills: String(ruleset.gunGame.killsPerWeapon) });
+  if (ruleset.gravityScale !== 1) line('gravity', { value: `${Math.round(ruleset.gravityScale * 100) / 100} g` });
+  if (ruleset.speedMultiplier !== 1) line('speed', { value: percent(ruleset.speedMultiplier) });
+  // the humans' hull; where the hostiles' differs (owner 2026-10-17: the Horde's and the Infected's are low-hull fodder)
+  // the same chip pairs it after a slash, own / hostile ("+100 % / -85 %"), so the card gains no line of its own
+  const humanHull = ruleset.hpScale * (ruleset.infection?.survivorHpScale ?? 1);
+  const hostileHull = hostileHullScale(ruleset);
+  if (hostileHull != null) line('hp', { value: `${percent(humanHull)} / ${percent(hostileHull)}` });
+  else if (humanHull !== 1) line('hp', { value: percent(humanHull) });
+  if (ruleset.damageScale !== 1) line('damage', { value: percent(ruleset.damageScale) });
+  if (ruleset.reloadScale !== 1) line('reload', { value: percent(1 / ruleset.reloadScale) });
+  if (ruleset.ammo === 'he_only') line('ammoHeOnly');
+  if (ruleset.ammo === 'unlimited') line('ammoUnlimited');
+  if (ruleset.equipmentSlots === 0) line('noEquipment');
+  else if (ruleset.equipmentSlots < 3) line('equipmentSlots', { value: String(ruleset.equipmentSlots) });
+  if (!ruleset.consumables) line('noConsumables');
+  if (!ruleset.criticalDamage) line('noCriticalDamage');
+  if (ruleset.jumpMps != null) line('jump', { value: String(ruleset.jumpMps) });
+  if (ruleset.recoilLaunchScale !== 1) line('recoilLaunch', { value: `×${Math.round(ruleset.recoilLaunchScale * 10) / 10}` });
+  if (ruleset.mars) {
+    if (ruleset.mars.cacheIntervalS > 0) line('marsCaches', { value: String(ruleset.mars.cacheIntervalS) });
+    else line('marsCachesOff');
+  }
+  if (ruleset.shellKnockScale !== 0.3) line('shellKnock', { value: `×${Math.round(ruleset.shellKnockScale * 10) / 10}` });
+  // impact physics (2026-09-25): a mode that rebounds harder than the whole game or forgives harder landings says so
+  if (ruleset.physics.restitution !== STANDARD_PHYSICS.restitution) {
+    line('bounce', { value: `${Math.round(ruleset.physics.restitution * 100)} %` });
+  }
+  if (ruleset.physics.fallMinMps !== STANDARD_PHYSICS.fallMinMps) line('fallDamage', { value: String(ruleset.physics.fallMinMps) });
+  if (ruleset.respawnS != null) line('respawn', { value: String(ruleset.respawnS) });
+  else if (ruleset.mode !== 'standard') line('noRespawn');
+  if (ruleset.timeLimitS == null) line('noClock');
+  else if (ruleset.timeLimitS !== STANDARD.timeLimitS || ruleset.timeout !== 'draw') {
+    line(ruleset.timeout === 'defeat' ? 'clockDefeat' : 'clock', { value: `${Math.round(ruleset.timeLimitS / 60)}` });
+  }
+  if (ruleset.provingGround) {
+    // the range's sides are its lanes (no allied bot, a target hull on every lane, none of them firing)
+    line('provingLanes', { value: String(ruleset.provingGround.lanes.length) });
+    if (ruleset.provingGround.moving) line('movingTargets');
+  } else if (isWaveMode(ruleset.mode)) {
+    if (ruleset.allies === 0) line('noAllies');
+    else if (ruleset.allies != null) line('allies', { value: String(ruleset.allies) });
+    if (ruleset.enemies != null) line('enemyPool', { value: String(ruleset.enemies) });
+  } else if (ruleset.allies != null || ruleset.enemies != null) {
+    // sides (owner 2026-09-18): "14 v 14", "1 v 20" — the player counts on the allied side
+    const sides = rulesetSides(ruleset);
+    if (sides.allies !== STANDARD_SIDES.allies || sides.enemies !== STANDARD_SIDES.enemies) {
+      line('sides', { allies: String(sides.allies + 1), enemies: String(sides.enemies) });
+    }
+  }
+  // TEAM NATIONS: the card's teams chip where it differs from Standard's MONO-NATION — RANDOM, or a mode whose fiction
+  // bends it (the note); the deploy and loading screens pair the actual flags
+  // TEAMS: the switch itself shows MONO / RANDOM with flags and the globe; a card adds one short chip only where a mode's
+  // fiction bends MONO (round 2, the critic: RANDOM's chip and the "one nation per team" prose repeated the switch)
+  const teamsNote = TEAM_NATIONS_MODE_SCOPE[ruleset.mode]?.note ?? null;
+  if (ruleset.teamNations !== 'random' && teamsNote) line('teamsMono', { scope: teamsNote });
+  if (ruleset.enemyNation && ruleset.teamNations !== 'random') line('enemyNation', { value: ruleset.enemyNation });
+  if (ruleset.scoreTarget != null) line('scoreTarget', { value: String(ruleset.scoreTarget) });
+  if (ruleset.assault) line('sectorHold', { value: String(ruleset.assault.holdS) });
+  // the carrier's chip only where carrying slows it (gameplay-modes-233: the carrier keeps its speed)
+  const carrierSpeed = ruleset.flagPitch?.carrierSpeedScale ?? FLAG_CARRIER_SPEED_SCALE;
+  if (ruleset.mode === 'capture_the_flag' && carrierSpeed !== 1) line('carrierSpeed', { value: percent(carrierSpeed) });
+  if (ruleset.horde) {
+    line('hordeWaves', { value: String(hordeWaveSize(ruleset.horde, 1)), step: String(hordeWaveSize(ruleset.horde, 2) - hordeWaveSize(ruleset.horde, 1)) });
+    line('hordeField', { value: String(ruleset.horde.maxAlive), lull: String(ruleset.horde.intermissionS) });
+    line('waveRepair', { value: `${Math.round(ruleset.horde.waveRepair * 100)} %` });
+  }
+  if (ruleset.assault) {
+    line('assaultWaves', {
+      value: String(ruleset.assault.initialActive + ruleset.assault.extraDefenders),
+      hp: percent(1 + ruleset.assault.difficultyHp),
+    });
+  }
+  if (ruleset.airSupport) {
+    // the three airstrikes, each with its price and the warning the targeted side gets (the cards and the manual)
+    for (const kind of AIR_STRIKE_KINDS) {
+      const strike = ruleset.airSupport[kind];
+      line(`airStrike.${kind}`, { cost: String(strike.cost), warning: String(strike.warningS) });
+    }
+  }
+  if (!ruleset.records) line('noRecords');
+  return lines;
+}
+
+/** The battle keeps records (the service record, the profile tally, the campaign): false in the practice modes. */
+export function rulesetKeepsRecords(mode: GameModeId | string | null | undefined): boolean {
+  return (BASE_RULESETS as Readonly<Record<string, MatchRuleset>>)[String(mode)]?.records ?? true;
+}
+
+/** Ammunition capacity for one round under a ruleset. Unlimited rounds keep the authored capacity and are refilled
+ * after every shot (refillUnlimitedAmmunition); the HUD prints ∞ from the ruleset, not from the count. */
+export function rulesetAmmoCapacity(ruleset: MatchRuleset, shellType: string, authored: number): number {
+  if (ruleset.ammo === 'he_only') return shellType === 'HE' ? Math.max(authored, 1) : 0;
+  return authored;
+}
+
+/** Reload multiplier a spawn folds into the equipment multipliers. */
+export function rulesetReloadMultiplier(ruleset: MatchRuleset): number {
+  return Math.max(0.1, ruleset.reloadScale);
+}
+
+/** Structural view of the combat state a ruleset stamps (damage.ts CombatState and the authority's share it). */
+interface RulesetCombatState {
+  hp: number;
+  maxHp: number;
+  ammo: number[];
+  ammoCapacity: number[];
+  equipMults?: Partial<Record<string, number>>;
+  /** The reload factor the ruleset folded into this life's equipMults (applyRulesetToCombat), kept so a re-equip folds it
+   *  into its new object (equipmentRules.ts applyEquipmentToCombat). Absent: no fold. */
+  rulesetReload?: number;
+  /** Multiplies every hit point lost (damage.ts hull sites and ramming). */
+  modeDamageTakenScale?: number;
+  /** False keeps modules, crew and fires intact (damage.ts rollModuleDamage / rollCrewHit). */
+  modeCriticalDamage?: boolean;
+  modeModuleOnlyDamage?: boolean;
+}
+
+interface RulesetShellSpec { readonly type?: string }
+
+/**
+ * Stamp a freshly created combat state with the ruleset: hull hit points (times the wave / health scale
+ * the mode controller hands to a revive), the damage-taken scale, the reload multiplier folded into the
+ * equipment multipliers, and the ammunition channels. Spawn and revive both go through it, after
+ * applyEquipmentToCombat, in the browser sim and the authority. The reload fold is also recorded on the
+ * state (rulesetReload): a later applyEquipmentToCombat (a live re-equip) replaces equipMults whole and
+ * folds the record into its new object, so the fold survives it (round 3 B7 review, 2026-11-06).
+ */
+export function applyRulesetToCombat(
+  combat: RulesetCombatState,
+  shells: readonly RulesetShellSpec[] | null | undefined,
+  ruleset: MatchRuleset,
+  healthScale = 1,
+): void {
+  const wave = Number.isFinite(healthScale) && healthScale > 0 ? healthScale : 1;
+  const scale = ruleset.hpScale * wave;
+  if (scale !== 1) {
+    combat.maxHp = Math.max(1, Math.round(combat.maxHp * scale));
+    combat.hp = combat.maxHp;
+  }
+  combat.modeDamageTakenScale = ruleset.damageScale;
+  combat.modeCriticalDamage = ruleset.criticalDamage;
+  combat.modeModuleOnlyDamage = !!ruleset.moduleOnlyDamage;
+  if (ruleset.reloadScale !== 1) {
+    const mults = combat.equipMults || (combat.equipMults = {});
+    const current = mults.reload;
+    const fold = rulesetReloadMultiplier(ruleset);
+    mults.reload = (Number.isFinite(current) ? current! : 1) * fold;
+    const recorded = combat.rulesetReload;
+    combat.rulesetReload = (typeof recorded === 'number' && Number.isFinite(recorded) ? recorded : 1) * fold;
+  }
+  if (ruleset.ammo === 'he_only' && Array.isArray(shells) && combat.ammoCapacity.length) {
+    const capacities = combat.ammoCapacity.map((authored, slot) =>
+      rulesetAmmoCapacity(ruleset, String(shells[slot]?.type || ''), authored));
+    // a vehicle without any HE round keeps its own loadout rather than sortieing empty
+    if (capacities.some((capacity) => capacity > 0)) {
+      for (let slot = 0; slot < capacities.length; slot++) {
+        combat.ammoCapacity[slot] = capacities[slot];
+        combat.ammo[slot] = capacities[slot];
+      }
+    }
+  }
+}
+
+/** The equipment ids a ruleset honours out of a loadout (0 slots disables equipment). */
+/**
+ * A seat's hull scale beyond the ruleset's hpScale (both builders, at the first spawn; the Frontline ally revive passes it
+ * too): Frontline's allied bots take `assault.allyBotHull`; every other seat 1.
+ */
+export function rulesetSeatHullScale(ruleset: Pick<MatchRuleset, 'assault'>, team: string, bot: boolean): number {
+  return bot && team !== 'bravo' && team !== 'enemy' ? ruleset.assault?.allyBotHull ?? 1 : 1;
+}
+
+export function rulesetLoadout(ruleset: MatchRuleset, ids: readonly string[] | null | undefined): string[] {
+  const list = (Array.isArray(ids) ? ids : []).filter((id) => rulesetAllowsEquipment(ruleset, id));
+  return ruleset.equipmentSlots >= 3 ? list : list.slice(0, ruleset.equipmentSlots);
+}
+
+/** Whether a mode lets a crew carry an item (its equipmentBan: a category or the item itself). */
+export function rulesetAllowsEquipment(ruleset: Pick<MatchRuleset, 'equipmentSlots' | 'equipmentBan'>, id: string): boolean {
+  if (ruleset.equipmentSlots === 0) return false;
+  const ban = ruleset.equipmentBan;
+  if (!ban) return true;
+  if (ban.items?.includes(id)) return false;
+  const category = EQUIPMENT_BY_ID.get(id)?.cat;
+  return !(category && ban.categories?.includes(category));
+}
+
+/**
+ * Each consumable's cooldown and uses per life (owner 2026-10-26: "have a much larger variety"; the catalog and its
+ * grounding: sim/consumableRules.ts and the release-259 consumables study). The only timing table: the page
+ * battle, the authority, the HUD and the Garage all read it. The first three keep the kits' original cooldowns.
+ */
+export const CONSUMABLE_TIMING: Readonly<Record<ConsumableId, ConsumableTiming>> = Object.freeze({
+  repair: { cooldownS: 35, charges: null },
+  repair_large: { cooldownS: 60, charges: 2 },
+  track_links: { cooldownS: 12, charges: 3 },
+  first_aid: { cooldownS: 45, charges: null },
+  rations: { cooldownS: 60, charges: 2 },
+  extinguisher: { cooldownS: 25, charges: null },
+  fire_suppression: { cooldownS: 60, charges: 2 },
+  governor_override: { cooldownS: 45, charges: 2 },
+  ammo_restock: { cooldownS: 90, charges: 1 },
+  smoke_reload: { cooldownS: 40, charges: 2 },
+  foliage: { cooldownS: 60, charges: 2 },
+  aps_charge: { cooldownS: 45, charges: 2 },
+  ir_jammer: { cooldownS: 40, charges: 3 },
+});
+
+export function consumableTiming(id: ConsumableId): ConsumableTiming {
+  return CONSUMABLE_TIMING[id] ?? { cooldownS: 30, charges: null };
+}
+
+/**
+ * Whether a mode lets a crew carry a consumable: none when the mode has no consumables, none it bans, and no Fresh
+ * Foliage where every tank is always visible (concealment would do nothing, as scouting equipment is refused there).
+ */
+/** The parts of a ruleset the consumable gate reads (the page battle's narrower ruleset view fits it). */
+interface ConsumableRulesetView {
+  readonly consumables?: boolean;
+  readonly consumableBan?: readonly ConsumableId[];
+  readonly alwaysVisible?: boolean;
+  readonly ammo?: string;
+}
+
+export function rulesetAllowsConsumable(ruleset: ConsumableRulesetView, id: string): boolean {
+  if (ruleset.consumables === false) return false;
+  if (ruleset.consumableBan?.includes(id as ConsumableId)) return false;
+  return !(id === 'foliage' && ruleset.alwaysVisible);
+}
+
+/** A mode's gate for the consumable catalog (sim/consumableRules.ts consumableLock, sanitizeConsumableLoadout). */
+export function rulesetConsumableGate(ruleset: ConsumableRulesetView): ConsumableGateContext {
+  return { finiteAmmo: ruleset.ammo !== 'unlimited', allows: (id) => rulesetAllowsConsumable(ruleset, id) };
+}
+
+/**
+ * Whether one entity's rounds are unlimited under a ruleset: the one read for both refill sites (the solo battle's and
+ * the authority's), both shell-card builders and the loader audio. The AC-130 refills only the gunship (its escorts'
+ * rounds are what the gunship's airdrop is for), so an escort shows the real empty states (critic r3). The gunship test
+ * is sim/aerialCombat isGunship, read structurally here (that module imports this one).
+ */
+export function rulesetUnlimitedFor(
+  ruleset: { readonly ammo?: string; readonly aerial?: string | null } | null | undefined,
+  entity: { readonly aerial?: { readonly kind?: string } | null } | null | undefined,
+): boolean {
+  return ruleset?.ammo === 'unlimited' && (ruleset.aerial !== 'gunship' || entity?.aerial?.kind === 'gunship');
+}
+
+/** After a shot under unlimited ammunition, refill the fired channel (the HUD keeps the loadout shape). */
+export function refillUnlimitedAmmunition(
+  ruleset: MatchRuleset,
+  combat: Pick<RulesetCombatState, 'ammo' | 'ammoCapacity'>,
+  slot: number,
+): void {
+  if (ruleset.ammo !== 'unlimited') return;
+  if (Number.isInteger(slot) && slot >= 0 && slot < combat.ammoCapacity.length) {
+    combat.ammo[slot] = combat.ammoCapacity[slot];
+  }
+}
+
+/** Solo roster caps: allied bots the player gets under a ruleset (null keeps the default split). */
+export function rulesetAllyCap(ruleset: MatchRuleset, defaultCap: number): number {
+  return ruleset.allies == null ? defaultCap : Math.max(0, Math.floor(ruleset.allies));
+}
+
+/**
+ * A mode's room (mp-scale-251, docs/MULTIPLAYER-V2.md §13.30): the team sizes a room may set, the size a new room takes,
+ * how many commanders it seats and on which sides. A room's empty slots up to its team size are the room's bots
+ * (src/mp/room/roomBots.ts planRoomBots), so a small group plays a full battle and a large one fills it. The rooms
+ * Worker, the LAN service and the hosting seat all read this table (src/mp/room/roomPolicy.ts).
+ */
+export interface RoomSizeRules {
+  /** 'versus': commanders on both sides, each up to the team size; 'coop': every commander on Alpha against the mode's hostiles. */
+  readonly sides: 'versus' | 'coop';
+  readonly minTeamSize: number;
+  readonly maxTeamSize: number;
+  readonly defaultTeamSize: number;
+  /** Commanders seated at most (null: both sides full). */
+  readonly maxHumans: number | null;
+}
+
+const VERSUS_ROOM: RoomSizeRules = Object.freeze({ sides: 'versus', minTeamSize: 1, maxTeamSize: 14, defaultTeamSize: 7, maxHumans: null });
+// the co-op modes field their own hostiles (Frontline's defenders, the Horde's pool) beside up to seven commanders
+const COOP_ROOM: RoomSizeRules = Object.freeze({ sides: 'coop', minTeamSize: 1, maxTeamSize: 7, defaultTeamSize: 7, maxHumans: 7 });
+
+/** The room rules of a mode (an unknown mode reads as standard). */
+export function roomSizeRulesFor(gameMode: string | null | undefined): RoomSizeRules {
+  return gameMode === 'endless_horde' || gameMode === 'frontline_assault' ? COOP_ROOM : VERSUS_ROOM;
+}

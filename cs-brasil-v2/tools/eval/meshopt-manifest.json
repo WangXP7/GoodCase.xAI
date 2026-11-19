@@ -1,0 +1,92 @@
+{
+  "public/models/viewmodels/coro/ak-hires.glb": {
+    "origemSha256": "3b6ca23d7ea26017803d81f476b9d7a835eeb9f679f169ad0f520db82333df29",
+    "convertidoSha256": "4094c0534f081ac96f1d6401d651c942b2b8d39dc777be30b15875706be0c48d",
+    "bytesAntes": 3414520,
+    "bytesDepois": 2001872
+  },
+  "public/models/viewmodels/coro/akm-hires.glb": {
+    "origemSha256": "1c552d389d4f463570a5e6521fcf9dbf371f0c7d52dbfd27a77249c85978d2e0",
+    "convertidoSha256": "33e6afce4e831451c11cc6d83e1b910abe1afc8fa3c2a8a4aeb5d2cc55b7e536",
+    "bytesAntes": 2371472,
+    "bytesDepois": 846480
+  },
+  "public/models/viewmodels/coro/famas-hires.glb": {
+    "origemSha256": "5db39a88dc63b8adba3f2f611d685a47c16bada491fcd04d12574df3de1a69c7",
+    "convertidoSha256": "85ba1e47ff086bd1bf3d31aac1e53937d1930ae5dda6905bff7eb6b1ff85e17d",
+    "bytesAntes": 3371272,
+    "bytesDepois": 1979272
+  },
+  "public/models/viewmodels/coro/lmg-hires.glb": {
+    "origemSha256": "56b356d7d6cc41a03af916c28f58ccd6d3dd47cc403a1ac844fc2585ea48b374",
+    "convertidoSha256": "45daf240ae368c9a2c96a5aff4d45e30f7da48ddf5e91d27863a69a14acf9aec",
+    "bytesAntes": 3486548,
+    "bytesDepois": 2035932
+  },
+  "public/models/viewmodels/coro/m4-hires.glb": {
+    "origemSha256": "66239098934bd425845e14213b5ff0c08c3fef8f1f84b04f12adca365f3f82ac",
+    "convertidoSha256": "bb6b11d47ab343a906c02661d7e11ae7872ecceaa3b632e9e6f0e6590d71a851",
+    "bytesAntes": 3488352,
+    "bytesDepois": 2006108
+  },
+  "public/models/viewmodels/coro/m92-hires.glb": {
+    "origemSha256": "f8feab99289143746eba1d7c568656e2d696d1fc6355864a2d0a8a7bee4c90bc",
+    "convertidoSha256": "952f8b701689645f974ab0d908ae83e4e3636edee5a9a7a53f286bc6186cdade",
+    "bytesAntes": 3474340,
+    "bytesDepois": 2115644
+  },
+  "public/models/viewmodels/coro/md97-hires.glb": {
+    "origemSha256": "3bc6e57fffa06049a063d617c91b0d344c145042be1f1a896a07936b73bee911",
+    "convertidoSha256": "3b33069d261a0cd753631bd903c7afdac426f7337e3863b8c56d63eb2330f718",
+    "bytesAntes": 3649800,
+    "bytesDepois": 2059256
+  },
+  "public/models/viewmodels/coro/mosin-hires.glb": {
+    "origemSha256": "e25aa12112d2a0df6b478bd102d18fc7042f2f1357c473d8a59dcbec7881100b",
+    "convertidoSha256": "40e772b25cec4a8c42205852e36d4d1ddda1fdd386d6c4d85530a6179a8fda0b",
+    "bytesAntes": 3391500,
+    "bytesDepois": 1981504
+  },
+  "public/models/viewmodels/coro/mp5-hires.glb": {
+    "origemSha256": "f543d986dde356baf200bc45b2e663b042ecaf4b3a3a8d5401898331fb59111b",
+    "convertidoSha256": "9aa5505d1bcae606d2fd0bd0ccb48ffd3c7af43a262c3462e11bbea15c61a5e9",
+    "bytesAntes": 3439116,
+    "bytesDepois": 1988864
+  },
+  "public/models/viewmodels/coro/p90-hires.glb": {
+    "origemSha256": "82e8f948a088dd41d089132ac45677f1985b26a98ce1d3b79db9eda0a7d1d2e2",
+    "convertidoSha256": "79b4234a46362a2ff78594e08194d0f3796874c662a073d722355cead1ac6916",
+    "bytesAntes": 3375348,
+    "bytesDepois": 1965676
+  },
+  "public/models/viewmodels/coro/pistol-hires.glb": {
+    "origemSha256": "5089f19efa96a2c8c8b90c0649fbeb77af8ea01f58c41835cd22fb090e800b09",
+    "convertidoSha256": "45b65dc9fee92ba1b3708007ee238c470b4b6d53c2d4fd2f50cd30667768c219",
+    "bytesAntes": 1090704,
+    "bytesDepois": 369236
+  },
+  "public/models/viewmodels/coro/scar-hires.glb": {
+    "origemSha256": "1a5b5dde2d27ce777c9a40855807ab435a6d9a7a1ac059b319226fb6baca15e0",
+    "convertidoSha256": "b383445870200da039b58127a09410019f53fb9cda34255e75c187ffc2f9446d",
+    "bytesAntes": 3393944,
+    "bytesDepois": 2010656
+  },
+  "public/models/viewmodels/coro/sks-hires.glb": {
+    "origemSha256": "6cf87e45bad9cf910364fedd8d12320a4a440a2d5eeda5efffe98f29b2289790",
+    "convertidoSha256": "72eebf3dad2b8eb28a197990095a9595bcabf1d57a2e04e4b3b1176b0ca402c0",
+    "bytesAntes": 3776000,
+    "bytesDepois": 2167684
+  },
+  "public/models/viewmodels/coro/svd-hires.glb": {
+    "origemSha256": "5f97bcdb8bcfd5f0f5b98f177af868ae93d08bac9efdc1ed0fe9e7d93003a860",
+    "convertidoSha256": "3a1a5ff19eb098f9c5b756f22ea0c31537826f92b14e85a9f646f70e45350d18",
+    "bytesAntes": 3476340,
+    "bytesDepois": 2119912
+  },
+  "public/models/viewmodels/coro/uzi-hires.glb": {
+    "origemSha256": "798dfdf01232dee6472131983e08bdc746f941326307e9a74a17590ab405bf08",
+    "convertidoSha256": "d79264e6368bae86ca12d9fd6c38d04994c109bd6b1ce39a3b6d7b0cd3e91028",
+    "bytesAntes": 3306256,
+    "bytesDepois": 1952220
+  }
+}

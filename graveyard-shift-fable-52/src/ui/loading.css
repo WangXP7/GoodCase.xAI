@@ -1,0 +1,111 @@
+/* Loading screen: the key art full-bleed under a dark gradient, the wordmark, the boot bar and a
+   rotating tip. Inlined into <head> by scripts/build.mjs so it paints with the first byte of the body.
+   main.js owns #boot-bar (width), #boot-label (text) and #boot.done (fade out). */
+#boot {
+  --ink: #ece6d6; --dim: #a7a89f; --accent: #ff4a3d; --teal: #17877d; --night: #05070a;
+  --display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue Condensed', 'Roboto Condensed', sans-serif;
+  --mono: 'Overpass', 'Helvetica Neue', 'Segoe UI', Roboto, Arial, sans-serif; /* the UI label face (ui.css --label) */
+  --u: calc(min(100vh, 56.25vw) / 1080);
+  --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px);
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+  --m: max(20px, calc(72 * var(--u)));
+  position: fixed; inset: 0; z-index: 10; overflow: hidden;
+  /* the 24x14 placeholder, blurred, is the very first paint; the full art fades in over it */
+  background: var(--night);
+  color: var(--ink); font-family: var(--mono); -webkit-font-smoothing: antialiased;
+  transition: opacity .6s ease, visibility 0s linear .6s;
+}
+#boot *, #boot *::before, #boot *::after { box-sizing: border-box; }
+#boot.done { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* ---------- art ---------- */
+#boot .ld-art { position: absolute; inset: -4%; }
+#boot .ld-art::before {
+  content: ''; position: absolute; inset: 0;
+  background: url('../../assets/keyart/keyart-lqip.webp') 58% 50% / cover no-repeat;
+  filter: blur(18px) saturate(1.1); transform: scale(1.06);
+}
+#boot .ld-art img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 58% 50%;
+  opacity: 0; transition: opacity .5s ease;
+  animation: ld-drift 26s ease-out both;
+}
+#boot .ld-art img.on { opacity: 1; }
+@keyframes ld-drift { from { transform: scale(1.06); } to { transform: scale(1); } }
+
+/* legibility: dark from the upper left (the wordmark) and the bottom (the bar and the tip) */
+#boot .ld-shade {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(5, 7, 10, .82) 0%, rgba(5, 7, 10, .42) 42%, rgba(5, 7, 10, 0) 70%),
+    linear-gradient(to top, rgba(5, 7, 10, .94) 0%, rgba(5, 7, 10, .55) 22%, rgba(5, 7, 10, 0) 46%),
+    linear-gradient(rgba(5, 7, 10, .18), rgba(5, 7, 10, .18));
+}
+
+/* ---------- wordmark ---------- */
+#boot .ld-top {
+  position: absolute; left: calc(var(--m) + var(--sl)); top: calc(var(--m) * .9 + var(--st));
+  right: calc(var(--m) + var(--sr)); max-width: calc(820 * var(--u) + 200px);
+}
+/* The wordmark is the same markup and CSS as the title screen's: src/ui/wordmark.js + wordmark.css are the
+   source of truth (loading.js imports wordmark.css; the markup in index.html mirrors WORDMARK_HTML). Keep them
+   identical. Only the size is set here (the slab is wider per em than the old condensed line). The height is
+   reserved (a, band, b = .9 + .28 + 1.99 em) so the swap from fallback to web fonts cannot move the tagline. */
+#boot { --wm-size: max(24px, calc(78 * var(--u))); }
+#boot .gs-wm { height: 3.17em; flex-shrink: 0; }
+#boot .ld-tag {
+  margin: max(10px, calc(22 * var(--u))) 0 0; max-width: 34em;
+  font: 600 max(11px, calc(17 * var(--u)))/1.45 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink); opacity: .82; text-shadow: 0 1px 2px rgba(0, 0, 0, .9); text-wrap: balance;
+}
+
+/* ---------- bar and tip ---------- */
+#boot .ld-foot {
+  position: absolute; left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr));
+  bottom: calc(var(--m) * .8 + var(--sb));
+  display: grid; gap: max(8px, calc(14 * var(--u)));
+}
+#boot .ld-tip {
+  grid-column: 1 / -1; margin: 0; min-height: 2.9em; max-width: 46em;
+  display: flex; align-items: flex-end;
+  font: 400 max(13px, calc(21 * var(--u)))/1.45 var(--mono); letter-spacing: .02em; color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+#boot .ld-tip .k {
+  display: inline-block; margin-right: 1.1em; font-size: .78em; font-weight: 600; letter-spacing: .24em;
+  text-transform: uppercase; color: var(--accent);
+}
+#boot .ld-tip .t { transition: opacity .35s ease; }
+#boot .ld-tip .t.out { opacity: 0; }
+#boot-track { position: relative; height: 3px; background: rgba(236, 230, 214, .16); overflow: hidden; }
+#boot-bar {
+  width: 0; height: 100%; background: var(--accent); transition: width .2s ease;
+  box-shadow: 0 0 10px rgba(255, 74, 61, .7);
+}
+/* main.js writes the module being built here; kept for screen readers, the bar shows the progress */
+#boot-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- portrait: the wordmark across the top, the art kept on the figure and the crowd ---------- */
+@media (orientation: portrait) {
+  #boot { --u: calc(100vw / 1080); --m: max(20px, calc(70 * var(--u))); }
+  #boot .ld-art img, #boot .ld-art::before { object-position: 76% 50%; background-position: 76% 50%; }
+  #boot { --wm-size: max(26px, calc(96 * var(--u))); }
+  #boot .ld-tag { font-size: max(11px, calc(30 * var(--u))); }
+  #boot .ld-tip { font-size: max(13px, calc(36 * var(--u))); min-height: 5.8em; }
+  #boot .ld-tip .k { display: block; margin: 0 0 .35em; }
+  #boot .ld-shade {
+    background:
+      linear-gradient(to bottom, rgba(5, 7, 10, .9) 0%, rgba(5, 7, 10, .5) 26%, rgba(5, 7, 10, 0) 44%),
+      linear-gradient(to top, rgba(5, 7, 10, .95) 0%, rgba(5, 7, 10, .6) 26%, rgba(5, 7, 10, 0) 48%);
+  }
+}
+/* short landscape phones: everything a notch smaller so the art still shows between the two blocks */
+@media (orientation: landscape) and (max-height: 500px) {
+  #boot { --wm-size: max(22px, calc(66 * var(--u))); }
+  #boot .ld-tip { min-height: 2.9em; max-width: 60%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #boot, #boot .ld-art img, #boot .ld-tip .t, #boot-bar { transition: none; }
+  #boot .ld-art img { animation: none; transform: none; }
+}

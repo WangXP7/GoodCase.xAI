@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Suggest and vote on features for Tiny World Builder. One vote per idea." />
+<title>Feature Suggestions - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  // Resolve once the Netlify Identity auth module has loaded (or time out), so the
+  // admin-by-account check can read window.TinyWorldAuth before booting.
+  (function featuresAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<style>
+/* ---- features page ---- */
+.features-list-section { width: min(1200px, calc(100% - 48px)); margin: 0 auto; padding: 8px 0 64px; }
+
+.features-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.features-filter {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-btn {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.55);
+  background: rgba(255,255,255,.45);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.filter-btn.active {
+  background: rgba(23,107,235,.14);
+  border-color: #304878;
+  color: #1a4fcf;
+}
+.filter-btn:hover:not(.active) { background: rgba(255,255,255,.65); }
+
+.suggest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(180deg,#2d7ef5 0%,#3a72c8 100%);
+  color: #fff;
+  font: 600 14px/1 'Space Grotesk',system-ui,sans-serif;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 6px 16px -8px rgba(22,76,170,.5);
+  transition: filter .12s;
+}
+.suggest-btn:hover { filter: brightness(1.1); }
+.suggest-btn svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255,255,255,.54);
+  border: 1px solid rgba(255,255,255,.62);
+  border-radius: 20px;
+  padding: 10px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.88) inset, 0 24px 56px -18px rgba(40,50,80,.28);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  min-height: 80px;
+}
+
+.feature-item {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+.feature-item:hover { background: rgba(255,255,255,.5); }
+
+.vote-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.vote-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid rgba(120,130,150,.28);
+  background: rgba(255,255,255,.6);
+  cursor: pointer;
+  color: var(--muted);
+  transition: background .1s, border-color .1s, color .1s;
+}
+.vote-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.vote-btn:hover { background: rgba(255,255,255,.9); border-color: #3a72c8; color: #1862d4; }
+.vote-btn.voted-up { background: rgba(23,107,235,.14); border-color: #304878; color: #1862d4; }
+.vote-btn.voted-down { background: rgba(200,80,60,.1); border-color: #9a3a30; color: #9a3020; }
+.vote-score {
+  font: 700 18px/1 'Space Grotesk',system-ui,sans-serif;
+  color: var(--ink);
+  min-width: 30px;
+  text-align: center;
+}
+
+.feature-body h3 { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #111b45; }
+.feature-body p { margin: 0; font-size: 15px; color: var(--muted); line-height: 1.5; }
+.feature-body .feature-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feature-wallet { font-family: ui-monospace, monospace; opacity: .65; }
+
+.feature-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  align-self: center;
+}
+.badge-open    { background:#f0f4ff; color:#2040a0; border:1px solid #bdd0f8; }
+.badge-planned { background:#e8f0fe; color:#1a4fcf; border:1px solid #b3cafd; }
+.badge-done    { background:#e6f4ea; color:#1a6632; border:1px solid #b7dfbe; }
+.badge-rejected{ background:#f5f0f0; color:#8a2a20; border:1px solid #e0bab7; }
+
+.features-empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ---- suggest modal ---- */
+.suggest-modal-back {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10,14,28,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.suggest-modal-back.open { display: flex; }
+
+.suggest-modal {
+  background: rgba(255,255,255,.88);
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 20px;
+  padding: 28px;
+  width: min(480px, 100%);
+  box-shadow: 0 40px 80px -20px rgba(20,30,50,.4);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.suggest-modal h2 { margin: 0; font-size: 22px; color: #111b45; }
+.suggest-modal p  { margin: 0; font-size: 14px; color: var(--muted); }
+
+.modal-field { display: flex; flex-direction: column; gap: 6px; }
+.modal-field label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.modal-field input,
+.modal-field textarea {
+  padding: 10px 12px;
+  border: 1px solid rgba(120,130,150,.25);
+  border-radius: 10px;
+  background: rgba(255,255,255,.7);
+  font: 14px/1.5 'Space Grotesk',system-ui,sans-serif;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+}
+.modal-field input:focus,
+.modal-field textarea:focus { border-color: #3a72c8; box-shadow: 0 0 0 3px rgba(58,114,200,.14); }
+
+.modal-wallet-status {
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(120,130,150,.2);
+}
+.wallet-ok   { color: #1a6632; }
+.wallet-none { color: var(--muted); }
+.wallet-low  { color: #9a4a20; }
+
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-cancel {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(120,130,150,.3);
+  background: transparent;
+  font: 600 14px/1 'Space Grotesk',system-ui,sans-serif;
+  cursor: pointer;
+  color: var(--muted);
+}
+.modal-cancel:hover { background: rgba(255,255,255,.6); }
+.modal-submit {
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(180deg,#2d7ef5 0%,#3a72c8 100%);
+  color: #fff;
+  font: 600 14px/1 'Space Grotesk',system-ui,sans-serif;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  transition: filter .12s;
+}
+.modal-submit:hover { filter: brightness(1.1); }
+.modal-submit:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
+.modal-error { font-size: 13px; color: #9a3020; padding: 8px 12px; background: rgba(200,80,60,.08); border-radius: 8px; }
+
+.features-admin-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background: rgba(23,107,235,.08);
+  border: 1px solid rgba(23,107,235,.22);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #164a9d;
+}
+
+.admin-status-select {
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid transparent;
+  align-self: start;
+  margin-top: 2px;
+}
+.admin-status-select.badge-open    { background:#f0f4ff; color:#2040a0; border-color:#bdd0f8; }
+.admin-status-select.badge-planned { background:#e8f0fe; color:#1a4fcf; border-color:#b3cafd; }
+.admin-status-select.badge-done    { background:#e6f4ea; color:#1a6632; border-color:#b7dfbe; }
+.admin-status-select.badge-rejected{ background:#f5f0f0; color:#8a2a20; border-color:#e0bab7; }
+
+/* WAVE launch taxonomy — public filter, per-item badge, admin set control. */
+.wave-filter {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d6dae5);
+  background: #fff;
+  color: var(--ink, #1a1d27);
+  cursor: pointer;
+}
+/* Hardcoded amber (matches .admin-wave-select) so the WAVE pill stays distinct
+   from the blue --accent status chips; do not switch back to var(--accent). */
+.wave-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #6a4a00;
+  border: 1px solid #e6c98a;
+}
+.admin-wave-select {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #e6c98a;
+  background: #fff7e6;
+  color: #6a4a00;
+  cursor: pointer;
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/features" aria-current="page">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" style="padding-bottom:24px" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Feature Suggestions</h1>
+        <p>Got an idea? Connect your Phantom wallet and submit. Each wallet gets one vote per idea.</p>
+      </div>
+    </section>
+
+    <section class="features-list-section" aria-labelledby="features-list-title">
+      <div class="features-toolbar">
+        <div class="features-filter" role="group" aria-label="Filter by status">
+          <button class="filter-btn active" data-status="open">Open</button>
+          <button class="filter-btn" data-status="planned">Planned</button>
+          <button class="filter-btn" data-status="done">Done</button>
+          <button class="filter-btn" data-status="all">All</button>
+        </div>
+        <select class="wave-filter" id="wave-filter" aria-label="Filter by wave">
+          <option value="">All waves</option>
+          <option value="WAVE1">WAVE1</option>
+          <option value="WAVE2">WAVE2</option>
+          <option value="WAVE3">WAVE3</option>
+        </select>
+        <button class="suggest-btn" id="suggest-open-btn">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Suggest a feature
+        </button>
+      </div>
+      <div class="features-list" id="features-list" aria-live="polite">
+        <div class="features-empty">Loading suggestions...</div>
+      </div>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>        
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Suggest modal -->
+  <div class="suggest-modal-back" id="suggest-modal-back" role="dialog" aria-modal="true" aria-labelledby="suggest-title">
+    <div class="suggest-modal">
+      <h2 id="suggest-title">Suggest a feature</h2>
+      <p>Requires a Phantom wallet holding at least 100 coins. Each wallet gets one vote per idea.</p>
+      <div class="modal-wallet-status wallet-none" id="wallet-status">
+        Connect your Phantom wallet to submit.
+      </div>
+      <div class="modal-field">
+        <label for="suggest-title-input">Title</label>
+        <input type="text" id="suggest-title-input" maxlength="200" placeholder="Short, clear description" />
+      </div>
+      <div class="modal-field">
+        <label for="suggest-desc-input">Details (optional)</label>
+        <textarea id="suggest-desc-input" rows="4" maxlength="1000" placeholder="Explain the problem it solves or how it would work"></textarea>
+      </div>
+      <div id="suggest-error" class="modal-error" hidden></div>
+      <div class="modal-actions">
+        <button class="modal-cancel" id="suggest-cancel-btn">Cancel</button>
+        <button class="modal-submit" id="suggest-submit-btn" disabled>Connect wallet first</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    const MIN_BALANCE = 100;
+    const STATUS_OPTS = ['open','planned','done','rejected'];
+    const WAVES = ['WAVE1','WAVE2','WAVE3'];
+
+    const FALLBACK_SUGGESTIONS = [
+      { id: -1, title: 'NPC companions', description: 'Add AI-driven NPCs that wander your world and interact with players — merchants, wanderers, quest-givers.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -2, title: 'Weather system', description: 'Dynamic weather — rain, fog, storms, and sunshine — that affects crop growth and atmosphere.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -3, title: 'World portals', description: 'Place a portal in your world that links to another player\'s world. Teleport between tinyverses seamlessly.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -4, title: 'Custom biomes', description: 'Choose from desert, tundra, jungle, or ocean biomes as the base environment for your world.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -5, title: 'Player housing', description: 'Let visiting players claim a small plot inside a world and build a personal dwelling.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -6, title: 'Day / night cycle', description: 'Wire atmosphere time-progression to a UI scrubber with real-time sky-colour transitions, lamps that light at dusk, and night ambience.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -7, title: 'Pets', description: 'Companion animals that follow your avatar and can be customised via an open-pets provider system.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -8, title: 'Fly down to the planet surface', description: 'Make the sea-covered planet beneath the floating islands reachable: extend camera far-plane with altitude, planet-aware flight collision, and a cloud-sea descent transition so you can land and splash down.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -9, title: 'Surface settlements & survivors', description: 'Procedurally place land-island settlements (huts, docks, fires) on the planet and populate them with voxel NPC survivors who offer scavenge, trade, and artifact quests.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -10, title: 'Artifact quests & island lift lore', description: 'Recover artifacts on the surface that let you raise a land island into the sky as a new floating world — the core loop between the two layers.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -11, title: 'Networked voxel avatar identity', description: 'Network a per-player voxel avatar descriptor (skin / outfit / gear) through join + presence so every peer and bot renders as their own character instead of the local default.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -12, title: 'Avatar hit & death reactions', description: 'Port voxel-poser IK and optional per-instance ragdoll so avatars react to hits and deaths instead of snapping.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -13, title: 'Mining, foraging & crafting loop', description: 'Add an inventory item table, static recipes, and an atomic resource-spend path so gathered resources can be crafted into tools and structures instead of being add-only.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -14, title: 'Resource-gated building', description: 'Make placing objects cost inventory items — building draws down your crafted/gathered resources.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -15, title: 'Tool tiers & variable yields', description: 'Better tools harvest faster and return more; tree→wood and richer node yields broaden the gather economy.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -16, title: 'World marketplace', description: 'Browse, buy, and remix worlds created by the community directly from the tinyverse map.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -17, title: 'Server-authoritative PvP battles', description: 'A dedicated battle-room type with server-owned HP, hit validation, kills, respawn, and scoring — replacing the current client-trusting honor-system combat.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -18, title: 'Game modes & teams', description: 'Match lifecycle (lobby → countdown → round → results) with team assignment, shared HP bars on ghosts, and a scoreboard.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -19, title: 'Working cannons & turrets', description: 'Make the cosmetic island shield guns fire real projectiles registered as combat targets, with destructible scenery.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -20, title: 'Voice chat in worlds', description: 'Proximity / party voice chat inside a world room, built on the existing LiveKit token infrastructure.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -21, title: 'Community hub — rooms, DMs & profiles', description: 'A lightweight Discord-style community space: text rooms, direct messages, member directory with avatars and profiles, invites, and moderation (rate limiting, blocking, timed bans).', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -22, title: 'Spectator mode', description: 'Drop into a published world or battle as a non-interacting spectator to watch the action.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -23, title: 'Mobile touch controls & responsive layout', description: 'Touch-first build controls and a responsive layout so worlds can be built and played on phones and tablets.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -24, title: 'Share a world via link', description: 'Load a world directly from a shareable ?world= URL (inline or hosted JSON), with allowlisting so the fetch is safe.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -25, title: 'Crowd walk-trail toggle', description: 'An optional rendered trail showing where ambient crowd people have walked, with a show/hide setting.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+      { id: -26, title: 'WebXR / VR world immersion', description: 'Step inside your world in VR or place it on your desk in AR via the existing WebXR seam.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
+    ];
+
+    // Admin mode is LOCAL-DEV ONLY. On production it is fully disabled and never
+    // shown, regardless of any stored secret or server env.
+    const IS_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    let wallet = null;
+    let coinBalance = 0;
+    let adminSecret = IS_LOCAL ? (sessionStorage.getItem('twAdminSecret') || '') : '';
+    let adminMode = !!adminSecret;
+    if (!IS_LOCAL) {
+      try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+      try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+    }
+    let currentFilter = 'open';
+    let currentWave = ''; // '' = all waves; otherwise WAVE1/WAVE2/WAVE3
+    let suggestions = [];
+    let myVotes = {};
+    // The server's last verdict on admin authority (verified account email on prod,
+    // or the localhost-only dev secret). Set as a side effect of loadSuggestions().
+    let serverSaysAdmin = false;
+
+    // ---- admin toggle — Ctrl+Shift+A (local dev only) ----
+    document.addEventListener('keydown', async e => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        if (!IS_LOCAL) return; // no admin on production
+        if (adminMode) { exitAdmin(); return; }
+        const s = prompt('Admin secret:');
+        if (!s) return;
+        const ok = await validateSecret(s);
+        if (!ok) { alert('Admin secret rejected — admin actions stay locked.'); return; }
+        adminSecret = s;
+        sessionStorage.setItem('twAdminSecret', s);
+        adminMode = true;
+        renderAdminBar(); renderList();
+      }
+    });
+
+    // Returns true only if the server accepts this secret as admin.
+    async function validateSecret(secret) {
+      try {
+        const r = await fetch('/api/features?status=open', { headers: { 'x-admin-secret': secret } });
+        const d = await r.json();
+        return !!d.admin;
+      } catch (_) { return false; }
+    }
+
+    function exitAdmin() {
+      adminMode = false; adminSecret = '';
+      try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+      try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+      renderAdminBar(); renderList();
+    }
+    document.getElementById('features-exit-btn')?.addEventListener('click', exitAdmin);
+
+    function renderAdminBar() {
+      const _ab = document.getElementById('features-admin-bar'); if (_ab) _ab.hidden = !adminMode;
+    }
+
+    // Bearer token for the signed-in account, if any. Mirrors scripts/admin-users.js:
+    // Identity JWT first, then wallet-session / nf_jwt cookie fallbacks. The server
+    // decides admin authority from the verified email this token resolves to.
+    function walletToken() {
+      try { return localStorage.getItem('tinyworld:auth:wallet-session.v1') || ''; } catch (_) { return ''; }
+    }
+    function cookieToken() {
+      try { const m = document.cookie.match(/(?:^|; )nf_jwt=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; } catch (_) { return ''; }
+    }
+    async function accessToken() {
+      try {
+        const A = window.TinyWorldAuth;
+        if (A && typeof A.getUser === 'function') {
+          const u = await A.getUser();
+          if (u && typeof u.jwt === 'function') {
+            const jwt = await Promise.resolve(u.jwt()).catch(() => '');
+            return jwt || (u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+          }
+          return (u && u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+        }
+      } catch (_) {}
+      return walletToken() || cookieToken() || '';
+    }
+
+    // Headers for authenticated reads/writes: the account bearer token (prod path)
+    // plus the localhost-only dev secret when present. Same-origin fetch sets Origin
+    // automatically, satisfying the server's CSRF guard.
+    async function authHeaders(withJson) {
+      const headers = withJson ? { 'Content-Type': 'application/json' } : {};
+      const token = await accessToken();
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (adminSecret) headers['x-admin-secret'] = adminSecret;
+      return headers;
+    }
+
+    // ---- phantom wallet ----
+    function getPhantom() { return window.solana && window.solana.isPhantom ? window.solana : null; }
+
+    async function connectWallet() {
+      const ph = getPhantom();
+      if (!ph) { alert('Phantom wallet not found. Install it from phantom.app'); return null; }
+      try {
+        const resp = await ph.connect();
+        wallet = resp.publicKey.toString();
+        coinBalance = await fetchCoinBalance(wallet);
+        return wallet;
+      } catch (_) { return null; }
+    }
+
+    async function fetchCoinBalance(walletAddr) {
+      // Placeholder — replace with Solana RPC call when ready.
+      return 0;
+    }
+
+    // ---- API ----
+    async function loadSuggestions(status) {
+      const waveQ = currentWave ? '&wave=' + encodeURIComponent(currentWave) : '';
+      const r = await fetch('/api/features?status=' + encodeURIComponent(status) + waveQ, { headers: await authHeaders(false), credentials: 'same-origin' });
+      const d = await r.json();
+      serverSaysAdmin = !!d.admin; // server's verdict: verified admin email OR local dev secret
+      return d.suggestions || [];
+    }
+
+    async function submitSuggestion(title, description) {
+      const headers = await authHeaders(true);
+      const effectiveWallet = adminMode ? 'admin' : wallet;
+      const effectiveBalance = adminMode ? MIN_BALANCE : coinBalance;
+      const r = await fetch('/api/features', {
+        method: 'POST', headers, credentials: 'same-origin',
+        body: JSON.stringify({ wallet: effectiveWallet, coinBalance: effectiveBalance, title, description }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Submission failed');
+      return d.suggestion;
+    }
+
+    async function castVote(suggestionId, vote) {
+      const headers = await authHeaders(true);
+      const effectiveWallet = adminMode ? 'admin' : wallet;
+      const effectiveBalance = adminMode ? MIN_BALANCE : coinBalance;
+      const r = await fetch('/api/features?action=vote', {
+        method: 'POST', headers, credentials: 'same-origin',
+        body: JSON.stringify({ wallet: effectiveWallet, coinBalance: effectiveBalance, suggestionId, vote }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Vote failed');
+      return d.suggestion;
+    }
+
+    async function patchStatus(id, status) {
+      const r = await fetch('/api/features?id=' + id, {
+        method: 'PATCH', headers: await authHeaders(true), credentials: 'same-origin',
+        body: JSON.stringify({ status }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Update failed');
+      return d.suggestion;
+    }
+
+    // Admin-only: set/clear a suggestion's launch wave ('none' clears it).
+    async function patchWave(id, wave) {
+      const r = await fetch('/api/features?id=' + id, {
+        method: 'PATCH', headers: await authHeaders(true), credentials: 'same-origin',
+        body: JSON.stringify({ wave }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Update failed');
+      return d.suggestion;
+    }
+
+    // ---- render ----
+    function fmtScore(n) {
+      if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
+      if (n >= 1000)    return (n/1000).toFixed(1).replace(/\.0$/,'') + 'k';
+      return String(n);
+    }
+
+    function fmtWallet(w) {
+      if (!w) return '';
+      if (w === 'admin') return 'Team';
+      return w.length > 12 ? w.slice(0,4) + '…' + w.slice(-4) : w;
+    }
+
+    function badgeClass(s) {
+      return s === 'open' ? 'badge-open' : s === 'planned' ? 'badge-planned' : s === 'done' ? 'badge-done' : 'badge-rejected';
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function renderList() {
+      const el = document.getElementById('features-list');
+      if (!suggestions.length) {
+        el.innerHTML = '<div class="features-empty">No suggestions yet. Be the first!</div>';
+        return;
+      }
+
+      el.innerHTML = suggestions.map(s => {
+        const score = Number(s.vote_weight) || 0;
+        const myVote = myVotes[s.id] || 0;
+        const adminStatusPicker = adminMode
+          ? `<select class="admin-status-select ${badgeClass(s.status)}" data-patch-id="${s.id}" aria-label="Change status">
+              ${STATUS_OPTS.map(o => `<option value="${o}"${o===s.status?' selected':''}>${o}</option>`).join('')}
+            </select>`
+          : `<span class="feature-status-badge ${badgeClass(s.status)}">${esc(s.status)}</span>`;
+        // WAVE label: admins get a set/clear picker; everyone else sees a badge (or nothing).
+        const waveCell = adminMode
+          ? `<select class="admin-wave-select" data-wave-id="${s.id}" aria-label="Set wave">
+              <option value="none"${!WAVES.includes(s.wave)?' selected':''}>No wave</option>
+              ${WAVES.map(w => `<option value="${w}"${w===s.wave?' selected':''}>${w}</option>`).join('')}
+            </select>`
+          : (WAVES.includes(s.wave) ? `<span class="wave-badge">${esc(s.wave)}</span>` : '');
+
+        return `<div class="feature-item" data-id="${s.id}">
+  <div class="vote-col">
+    <button class="vote-btn${myVote===1?' voted-up':''}" data-vote="1" aria-label="Upvote"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+    <span class="vote-score">${esc(fmtScore(score))}</span>
+    <button class="vote-btn${myVote===-1?' voted-down':''}" data-vote="-1" aria-label="Downvote"><svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>
+  </div>
+  <div class="feature-body">
+    <h3>${esc(s.title)}</h3>
+    ${s.description ? `<p>${esc(s.description)}</p>` : ''}
+    <div class="feature-meta">
+      <span class="feature-wallet">${esc(fmtWallet(s.wallet))}</span>
+      ${waveCell}
+    </div>
+  </div>
+  ${adminStatusPicker}
+</div>`;
+      }).join('');
+
+      // vote buttons
+      el.querySelectorAll('.vote-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!adminMode) {
+            if (!wallet) {
+              const w = await connectWallet();
+              if (!w) return;
+            }
+            if (coinBalance < MIN_BALANCE) {
+              alert('You need at least ' + MIN_BALANCE + ' coins to vote.');
+              return;
+            }
+          }
+          const item = btn.closest('.feature-item');
+          const id = Number(item && item.dataset.id);
+          const vote = Number(btn.dataset.vote);
+          try {
+            const updated = await castVote(id, vote);
+            if (updated) {
+              const idx = suggestions.findIndex(s => s.id === id);
+              if (idx >= 0) suggestions[idx] = updated;
+              myVotes[id] = vote;
+              renderList();
+            }
+          } catch (err) { alert(err.message); }
+        });
+      });
+
+      // admin status pickers
+      el.querySelectorAll('.admin-status-select').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const id = Number(sel.dataset.patchId);
+          try {
+            const updated = await patchStatus(id, sel.value);
+            if (updated) {
+              const idx = suggestions.findIndex(s => s.id === id);
+              if (idx >= 0) suggestions[idx] = updated;
+              renderList();
+            }
+          } catch (err) { alert(err.message); }
+        });
+      });
+
+      // admin wave pickers
+      el.querySelectorAll('.admin-wave-select').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const id = Number(sel.dataset.waveId);
+          try {
+            const updated = await patchWave(id, sel.value);
+            if (updated) {
+              const idx = suggestions.findIndex(s => s.id === id);
+              if (idx >= 0) suggestions[idx] = updated;
+              // If a wave filter is active and this item no longer matches, drop it.
+              if (currentWave && updated.wave !== currentWave) {
+                suggestions = suggestions.filter(s => s.id !== id);
+              }
+              renderList();
+            }
+          } catch (err) { alert(err.message); }
+        });
+      });
+    }
+
+    // ---- filter ----
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.status;
+        document.getElementById('features-list').innerHTML = '<div class="features-empty">Loading...</div>';
+        suggestions = await loadSuggestions(currentFilter).catch(() => []);
+        renderList();
+      });
+    });
+
+    // ---- wave filter ----
+    document.getElementById('wave-filter').addEventListener('change', async (e) => {
+      currentWave = e.target.value;
+      document.getElementById('features-list').innerHTML = '<div class="features-empty">Loading...</div>';
+      suggestions = await loadSuggestions(currentFilter).catch(() => []);
+      renderList();
+    });
+
+    // ---- suggest modal ----
+    const modalBack = document.getElementById('suggest-modal-back');
+    const cancelBtn = document.getElementById('suggest-cancel-btn');
+    const submitBtn = document.getElementById('suggest-submit-btn');
+    const titleInput = document.getElementById('suggest-title-input');
+    const descInput  = document.getElementById('suggest-desc-input');
+    const walletStatus = document.getElementById('wallet-status');
+    const errorEl    = document.getElementById('suggest-error');
+
+    function updateWalletStatus() {
+      if (adminMode) {
+        walletStatus.className = 'modal-wallet-status wallet-ok';
+        walletStatus.textContent = 'Admin mode — no wallet required.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit suggestion';
+        return;
+      }
+      if (!wallet) {
+        walletStatus.className = 'modal-wallet-status wallet-none';
+        walletStatus.textContent = 'Connect your Phantom wallet to submit.';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Connect wallet first';
+      } else if (coinBalance < MIN_BALANCE) {
+        walletStatus.className = 'modal-wallet-status wallet-low';
+        walletStatus.textContent = 'Connected: ' + fmtWallet(wallet) + ' — balance too low (' + coinBalance + ' coins, need ' + MIN_BALANCE + ')';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Insufficient balance';
+      } else {
+        walletStatus.className = 'modal-wallet-status wallet-ok';
+        walletStatus.textContent = 'Connected: ' + fmtWallet(wallet) + ' — ' + coinBalance.toLocaleString() + ' coins';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit suggestion';
+      }
+    }
+
+    document.getElementById('suggest-open-btn').addEventListener('click', async () => {
+      if (!adminMode && !wallet) {
+        await connectWallet();
+      }
+      updateWalletStatus();
+      modalBack.classList.add('open');
+    });
+    cancelBtn.addEventListener('click', () => modalBack.classList.remove('open'));
+    modalBack.addEventListener('click', e => { if (e.target === modalBack) modalBack.classList.remove('open'); });
+
+    submitBtn.addEventListener('click', async () => {
+      const title = (titleInput.value || '').trim();
+      if (!title) { errorEl.textContent = 'Title is required.'; errorEl.hidden = false; return; }
+      errorEl.hidden = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+      try {
+        const s = await submitSuggestion(title, (descInput.value || '').trim());
+        suggestions.unshift(s);
+        renderList();
+        modalBack.classList.remove('open');
+        titleInput.value = '';
+        descInput.value  = '';
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.hidden = false;
+      } finally {
+        updateWalletStatus();
+      }
+    });
+
+    // ---- boot ----
+    (async () => {
+      // Wait for the Identity auth module so accessToken() can read a live session
+      // on the first load (prod account-based admin), then ask the server.
+      try { await window.__tinyworldAuthReady; } catch (_) {}
+      try {
+        const s = await loadSuggestions('open'); // sets serverSaysAdmin
+        suggestions = s.length ? s : FALLBACK_SUGGESTIONS;
+      } catch (_) {
+        suggestions = FALLBACK_SUGGESTIONS;
+      }
+      // Clear a stale local dev secret the server rejected.
+      if (adminSecret && !serverSaysAdmin) {
+        adminSecret = '';
+        try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+        try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+      }
+      // Authority is the server's verdict — verified admin email (works on prod) OR
+      // the localhost-only dev secret. No client-side host gate.
+      adminMode = serverSaysAdmin;
+      renderAdminBar();
+      renderList();
+    })();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict';
+import { createActivationRuntime } from './activationRuntime.ts';
+import { createAppLifecycle } from '../../game/appLifecycle.ts';
+import { createStudioLeftWorld } from '../../world/studioLeftWorld.test-support.mjs';
+
+function createHarness({ spectator = false, observerReady = true, cameraReady = true, gunship = false, phase = 'garage', calls = [], world: givenWorld = null } = {}) {
+  let constructing = true;
+  const world = givenWorld ?? { resetDestructibles: () => calls.push(['resetWorld']) };
+  const game = {
+    mapId: null,
+    phase,
+    player: { aerial: gunship ? {kind:'gunship'} : undefined, spec: { id: 'm1a1_abrams_hc' }, visual: { id: 'visual' }, equip: { rammer: true }, state: { yaw: 1.2 } },
+  };
+  // (2026-11-02 audit F1) the session's lifecycle announces the phase the activation moves
+  createAppLifecycle({ game, announce: ({ phase }) => calls.push(['phase', phase]) });
+  const bridge = { setPerspective: (id) => calls.push(['perspective', id]) };
+  const runtime = createActivationRuntime({
+    game,
+    settings: {
+      isOpen: () => true,
+      close: (options) => calls.push(['settings', options]),
+    },
+    killcam: {
+      cancel: () => calls.push(['killcam']),
+      spectate: {
+        targetId: 'ally-2',
+        startObserver: () => {
+          calls.push(['observer']);
+          return observerReady;
+        },
+      },
+    },
+    driveTest: { resetAim: () => calls.push(['aim']) },
+    getHud: () => {
+      assert.equal(constructing, false, 'battle HUD stays lazy through boot composition');
+      return {
+        shotInfo: { setPlayer: (id) => calls.push(['shotPlayer', id]) },
+        setMode: (mode) => calls.push(['hud', mode]),
+      };
+    },
+    playerActions: {
+      setTank: (spec) => calls.push(['tank', spec.id]),
+      resetConsumables: () => calls.push(['consumables']),
+    },
+    getDamagePanel: () => {
+      assert.equal(constructing, false, 'damage panel stays lazy through boot composition');
+      return {
+        setTank: (spec, visual) => calls.push(['damageTank', spec.id, visual.id]),
+        setEquipment: (equip) => calls.push(['equipment', equip.rammer]),
+      };
+    },
+    rig: {
+      release: () => calls.push(['release']),
+      snapArcade: (...args) => calls.push(['arcade', ...args]),
+      snapSpectateForReveal: () => { calls.push(['observerCamera']); return cameraReady; },
+    },
+    presentation: {
+      setShotMode: (value) => calls.push(['shotMode', value]),
+      setCaptureHidden: (value) => calls.push(['capture', value]),
+      setNetworkSpectator: (value) => calls.push(['spectator', value]),
+      setSelectedSpecId: (id) => calls.push(['select', id]),
+      rememberSpecId: (id) => calls.push(['remember', id]),
+      setWorldDormant: (value) => calls.push(['dormant', value]),
+      getWorld: () => world,
+      setCamoBiome: (id) => calls.push(['camo', id]),
+      hideGarage: () => calls.push(['garage']),
+      hideEndOverlay: () => calls.push(['end']),
+      resetBattleResult: () => calls.push(['result']),
+      setGarageSpots: (value) => calls.push(['spots', value]),
+      setGarageSunTrim: (value) => calls.push(['sun', value]),
+      emitConsumableReset: () => calls.push(['consumableEvent']),
+      stopShowroom: () => calls.push(['showroom']),
+    },
+    arcadeDistance: 2,
+    arcadePitchRad: -0.5,
+  });
+  constructing = false;
+  runtime.activate({
+    viewerId: 'player-1',
+    own: { id: 'player-1', specId: 'm1a1_abrams_hc' },
+    spectator,
+    mapId: 'verdant',
+    bridge,
+    fx: {
+      setFrozen: (value) => calls.push(['fxFrozen', value]),
+      resetAll: () => calls.push(['fxReset']),
+    },
+  });
+  return { calls, game };
+}
+
+// (2026-11-02 audit F1 review) a round that activates over the Studio's scene (studio -> battle is no edge) is refused
+// before any presentation moves: the phase write used to throw after the HUD, the map and the Garage had changed
+{
+  const calls = [];
+  assert.throws(() => createHarness({ phase: 'studio', calls }),
+    (error) => error?.name === 'AppPhaseTransitionError' && error.from === 'studio' && error.to === 'battle');
+  assert.deepEqual(calls, [], 'nothing moved and nothing was announced');
+}
+
+const player = createHarness();
+assert.equal(player.game.mapId, 'verdant');
+assert.equal(player.game.phase, 'battle');
+for (const expected of [
+  ['select', 'm1a1_abrams_hc'], ['remember', 'm1a1_abrams_hc'], ['resetWorld'],
+  ['tank', 'm1a1_abrams_hc'], ['damageTank', 'm1a1_abrams_hc', 'visual'],
+  ['equipment', true], ['phase', 'battle'], ['arcade', 2, 1.2, -0.5],
+]) assert.deepEqual(player.calls.find((call) => call[0] === expected[0]), expected);
+assert.equal(player.calls.some(([name]) => name === 'observer'), false);
+assert.equal(player.calls.some(([name]) => name === 'observerCamera'), false);
+
+const observer = createHarness({ spectator: true });
+assert.equal(observer.calls.some(([name]) => name === 'select'), false);
+assert.equal(observer.calls.some(([name]) => name === 'tank'), false);
+assert.deepEqual(observer.calls.find(([name]) => name === 'perspective'), ['perspective', 'ally-2']);
+const observerOrder = observer.calls.map(([name]) => name);
+assert.ok(observerOrder.indexOf('observer') < observerOrder.indexOf('observerCamera'));
+assert.ok(observerOrder.indexOf('observerCamera') < observerOrder.indexOf('showroom'));
+
+assert.throws(
+  () => createHarness({ spectator: true, observerReady: false }),
+  /No live vehicle is available to spectate/,
+);
+assert.throws(() => createHarness({ spectator: true, cameraReady: false }), /observer camera could not be prepared/);
+
+// (round 3 A7/M4) A network round on a battlefield the Studio planned crushes on and never gave back (its teardown threw
+// before releaseCrushes): the activation takes its falls and sweeps for the battle.
+{
+  const left = createStudioLeftWorld();
+  createHarness({ world: left.world });
+  assert.equal(left.fallsWithUpdate(), true, 'a tree the round fells falls with its frames (before: the Studio\'s timeline held it)');
+  assert.equal(left.world.sweeps, true, 'the round\'s crush sweeps run');
+}
+
+console.log('activationRuntime.selftest: player, spectator, activation order and a Studio-left world pass');
+
+const pilot=createHarness({gunship:true});
+assert.equal(pilot.game.phase,'battle');
+assert.ok(!pilot.calls.some(([name])=>name==='damageTank'||name==='equipment'),'gunship activation never requests tank masks');

@@ -1,0 +1,195 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+import { objectiveMarkers, objectiveMarkersFor, objectiveMarkersRevision, markersStandOnSpawns, zoneLetter, objectiveSide } from './minimapObjectives.ts';
+import { Scene } from 'three';
+import { createMatchModeWorldPresentation } from '../game/matchModeWorldPresentation.ts';
+import { OBJECTIVE_PALETTE, sideColor, sideFill } from './objectiveGlyphs.ts';
+import { TOKENS } from './tokens/tokens.ts';
+import { setActiveTokens } from './tokens/tokenSelection.ts';
+
+// tactical map 2026-09-15: the minimap and the world presentation share one derivation of
+// objective markers from the mode state — sides from the viewer's team, zone letters,
+// sector statuses, flag statuses, spawns per mode.
+
+const base = {
+  perspectiveTeam: 'alpha', respawns: true, flags: [], zones: [], ball: null, goals: [], pickups: [],
+  spawns: [{ team: 'alpha', x: -300, y: 1, z: -300 }, { team: 'bravo', x: 300, y: 1, z: 300 }],
+};
+const kinds = (markers) => markers.map((marker) => marker.kind);
+
+assert.deepEqual(objectiveMarkers(null), []);
+assert.deepEqual(objectiveMarkers({ ...base, id: 'standard' }), [], 'Standard draws its bases from the roster, not from mode markers');
+assert.deepEqual(objectiveMarkers({ ...base, id: undefined }), []);
+
+assert.equal(zoneLetter(0), 'A');
+assert.equal(zoneLetter(2), 'C');
+assert.equal(zoneLetter(9), '10');
+assert.equal(objectiveSide('alpha', 'alpha'), 'own');
+assert.equal(objectiveSide('alpha', 'bravo'), 'enemy');
+assert.equal(objectiveSide(null, 'alpha'), 'enemy');
+
+// palette: the HUD blip colours, the team tokens under the player's colour preset (brand-ui H1)
+assert.equal(sideColor('own'), TOKENS['team-own']);
+assert.equal(sideColor('enemy'), TOKENS['team-enemy']);
+setActiveTokens({ cvd: 'classic' });
+assert.equal(sideColor('own'), '#7ee87e', 'the Classic preset keeps the old green');
+assert.equal(sideColor('enemy'), '#f05a5a', 'and the old red');
+setActiveTokens({ cvd: 'deutan' });
+assert.equal(sideColor('enemy'), '#e69f00', 'a deutan player sees the enemy in orange');
+assert.match(sideFill('enemy'), /^rgba\(230,159,0,/);
+setActiveTokens({});
+assert.equal(sideColor('contested'), OBJECTIVE_PALETTE.contested);
+assert.match(sideFill('neutral'), /^rgba\(/);
+
+// Zone Control: both spawns, three lettered zones, control arcs toward the capturing side
+{
+  const zones = [
+    { id: 'zone-1', x: -100, z: 0, control: 1, owner: 'alpha', contested: false },
+    { id: 'zone-2', x: 0, z: 0, control: -0.4, owner: null, contested: true },
+    { id: 'zone-3', x: 100, z: 0, control: 0, owner: null, contested: false },
+  ];
+  const markers = objectiveMarkers({ ...base, id: 'zone_control', zones });
+  assert.deepEqual(kinds(markers), ['spawn', 'spawn', 'zone', 'zone', 'zone'], 'spawns first, then the zones');
+  assert.deepEqual(markers.slice(0, 2).map((m) => [m.side, m.status]), [['own', 'respawn'], ['enemy', 'respawn']]);
+  const [a, b, c] = markers.slice(2);
+  assert.deepEqual([a.label, b.label, c.label], ['A', 'B', 'C']);
+  assert.equal(a.side, 'own'); assert.equal(a.progress, 1);
+  assert.equal(b.side, 'contested'); assert.equal(b.pulse, true);
+  assert.equal(b.progress, 0.4); assert.equal(b.progressSide, 'enemy', 'negative control is bravo taking it');
+  assert.equal(c.side, 'neutral'); assert.equal(c.progress, 0);
+  assert.equal(markersStandOnSpawns(markers), true, 'the spawn marks replace the generic base rings');
+  // the same match from bravo's seat
+  const flipped = objectiveMarkers({ ...base, perspectiveTeam: 'bravo', id: 'zone_control', zones });
+  assert.deepEqual(flipped.slice(0, 2).map((m) => m.side), ['enemy', 'own']);
+  assert.equal(flipped[2].side, 'enemy', 'alpha-owned zone is the enemy zone for bravo');
+  assert.equal(flipped[3].progressSide, 'own', 'bravo sees its own progress');
+  // no spawns in the state (older authority): zones only, bases fall back to the roster
+  const legacy = objectiveMarkers({ ...base, spawns: undefined, id: 'zone_control', zones });
+  assert.deepEqual(kinds(legacy), ['zone', 'zone', 'zone']);
+  assert.equal(markersStandOnSpawns(legacy), false);
+}
+
+// Capture the Flag: bases stay put, flags travel; the flag bases stand on the spawns
+{
+  const flags = [
+    { team: 'alpha', baseX: -300, baseZ: -300, x: -300, z: -300, status: 'home', carrierId: null },
+    { team: 'bravo', baseX: 300, baseZ: 300, x: 40, z: -20, status: 'carried', carrierId: 'p1' },
+  ];
+  const markers = objectiveMarkers({ ...base, id: 'capture_the_flag', flags });
+  assert.deepEqual(kinds(markers), ['flagBase', 'flagBase', 'flag', 'flag']);
+  assert.deepEqual(markers.slice(0, 2).map((m) => [m.side, m.status, m.x]), [['own', 'home', -300], ['enemy', 'away', 300]]);
+  const carried = markers.find((m) => m.kind === 'flag' && m.side === 'enemy');
+  assert.deepEqual([carried.x, carried.z, carried.status, carried.pulse], [40, -20, 'carried', true]);
+  const home = markers.find((m) => m.kind === 'flag' && m.side === 'own');
+  assert.deepEqual([home.status, home.pulse], ['home', false]);
+  assert.ok(carried.priority > home.priority, 'a moving flag draws over a parked one');
+  assert.equal(markersStandOnSpawns(markers), true);
+  const dropped = objectiveMarkers({ ...base, id: 'capture_the_flag',
+    flags: [{ ...flags[1], status: 'dropped', carrierId: null }] });
+  assert.equal(dropped.find((m) => m.kind === 'flag').status, 'dropped');
+}
+
+// Frontline Assault: numbered sectors — taken / active / locked, then holding the last one
+{
+  const zones = [
+    { id: 'line-1', x: -60, z: 0, control: 1, owner: 'alpha', contested: false },
+    { id: 'line-2', x: 0, z: 0, control: 0.55, owner: null, contested: true },
+    { id: 'line-3', x: 60, z: 0, control: 0, owner: null, contested: false },
+  ];
+  const markers = objectiveMarkers({ ...base, id: 'frontline_assault', respawns: false, zones, line: { index: 1, total: 3, holdS: 0 } });
+  assert.deepEqual(kinds(markers), ['spawn', 'sector', 'sector', 'sector'], 'only the human side spawn is a place');
+  assert.equal(markers[0].side, 'own');
+  const [s1, s2, s3] = markers.slice(1);
+  assert.deepEqual([s1.label, s1.status, s1.side, s1.progress], ['1', 'taken', 'own', 1]);
+  assert.deepEqual([s2.label, s2.status, s2.side, s2.progress, s2.pulse], ['2', 'active', 'contested', 0.55, true]);
+  assert.deepEqual([s3.label, s3.status, s3.side], ['3', 'locked', 'enemy']);
+  const holding = objectiveMarkers({ ...base, id: 'frontline_assault', respawns: false,
+    zones: zones.map((zone) => ({ ...zone, control: 1, owner: 'alpha', contested: false })), line: { index: 3, total: 3, holdS: 12 } });
+  const last = holding[holding.length - 1];
+  assert.deepEqual([last.status, last.pulse, last.side], ['holding', true, 'own']);
+  assert.deepEqual(holding.slice(1, 3).map((m) => m.status), ['taken', 'taken']);
+}
+
+// Turbo Ball: goals on the spawns, the ball on top; Endless Horde: caches, own spawn only
+{
+  const turbo = objectiveMarkers({ ...base, id: 'turbo_ball',
+    goals: [{ team: 'alpha', x: -300, z: -300 }, { team: 'bravo', x: 300, z: 300 }], ball: { x: 3, z: -4 } });
+  assert.deepEqual(kinds(turbo), ['goal', 'goal', 'ball']);
+  assert.deepEqual(turbo.map((m) => m.side), ['own', 'enemy', 'neutral']);
+  assert.equal(turbo[2].pulse, true);
+  const horde = objectiveMarkers({ ...base, id: 'endless_horde', respawns: false,
+    pickups: [{ kind: 'heal', x: 1, z: 2, active: true }, { kind: 'ammo', x: 3, z: 4, active: true }, { kind: 'ammo', x: 5, z: 6, active: false }] });
+  assert.deepEqual(kinds(horde), ['spawn', 'pickup', 'pickup'], 'inactive caches are not marked');
+  assert.deepEqual(horde.slice(1).map((m) => m.status), ['heal', 'ammo']);
+  assert.equal(horde[0].status, 'spawn', 'no revive in horde: a plain spawn mark');
+}
+
+// wiring: the HUD paints the markers from this derivation after the roster bases, the world
+// presentation mirrors them, and the sim publishes the spawn centres the markers rely on
+const hudSource = await readFile(new URL('./hud.ts', import.meta.url), 'utf8');
+assert.match(hudSource, /const markers = objectiveMarkersFor\(frame\.matchModeState, frame\.timeS\);\s*if \(spawnFlags && !markersStandOnSpawns\(markers\)\) drawMinimapBases\(plMapX, plMapY\);/,
+  'the minimap skips its generic base rings when the mode marks the spawns itself');
+assert.match(hudSource, /drawMinimapObjectives\(markers, frame\.timeS, plMapX, plMapY, !!player\?\.combat\?\.destroyed\)/);
+assert.match(hudSource, /export interface HudMatchModeState extends ObjectiveStateView/);
+assert.match(hudSource, /paintMinimapRelief\(bctx, heightField, N\)/, 'the baked map carries the hillshade');
+assert.match(hudSource, /paintMinimapWaterLayers\(octx, f, pal\)/, 'the baked map carries its water layers');
+assert.match(hudSource, /paintMinimapShorelines\(context, features\.liquidPatches, palette\.waterStroke, MINIMAP_WATERLINE_RIM\)/,
+  'liquid water carries a shoreline with its waterline rim');
+assert.match(hudSource, /paintMinimapShoreBands\(context, mask, palette\.waterStroke, MINIMAP_WATERLINE_RIM\)/,
+  'and so does the world\'s visible-water raster (phase 2)');
+const worldSource = await readFile(new URL('../game/matchModeWorldPresentation.ts', import.meta.url), 'utf8');
+assert.match(worldSource, /const changed = deriveViews\(objectiveMarkersFor\(state, timeS\)\);/, 'the world presentation derives the same markers');
+// (improve-271 plan 023) neither consumer derives its own copy, and the world's frame stage keeps no per-frame filter
+assert.doesNotMatch(hudSource, /objectiveMarkers\(/, 'the minimap reads the retained derivation');
+assert.doesNotMatch(worldSource, /objectiveMarkers\(/, 'the world reads the retained derivation');
+assert.doesNotMatch(worldSource, /marks\.filter\(|markers\.filter\(/, 'the world stage filters no marker list per frame');
+assert.match(worldSource, /from '\.\.\/ui\/objectiveGlyphs\.ts'/, 'world icons are rasterised from the shared glyphs');
+const simSource = await readFile(new URL('../sim/matchModes.ts', import.meta.url), 'utf8');
+assert.match(simSource, /spawns: state\.spawns\.map\(\(spawn\) => \(\{ \.\.\.spawn \}\)\)/, 'serialize clones the spawn centres');
+
+
+// The attackers remain alpha even when the observer follows a defender.
+{
+  const state = { ...base, id: 'frontline_assault', perspectiveTeam: 'bravo',
+    line: { index: 1, total: 3, holdS: 0 },
+    zones: [0, 1, 2].map(i => ({ x: i * 50, z: 0, control: i === 0 ? 1 : 0,
+      owner: i === 0 ? 'alpha' : null, contested: false })) };
+  const marks = objectiveMarkers(state);
+  assert.deepEqual(marks.filter(m => m.kind === 'spawn').map(m => [m.x, m.side]), [[-300, 'enemy']]);
+  assert.deepEqual(marks.filter(m => m.kind === 'sector').map(m => m.side), ['enemy', 'neutral', 'own']);
+  state.line.index = 3; state.line.holdS = 10;
+  assert.equal(objectiveMarkers(state).find(m => m.status === 'holding').side, 'enemy');
+}
+
+// (improve-271 plan 023) the derivation is retained: once per change of the mode state (a new object, the battle clock
+// that the local step advances while mutating its state in place, the viewing side), never once per rendered frame
+{
+  const zones = [0, 1].map((i) => ({ id: `z${i}`, x: i * 80, y: 0, z: 0, control: 0, owner: null, contested: false }));
+  const state = { ...base, id: 'zone_control', label: 'Zone Control', target: null, score: { alpha: 0, bravo: 0 },
+    horde: null, playerAmmo: null, playerAmmoCapacity: null, zones };
+  const view = createMatchModeWorldPresentation(new Scene());
+  const before = objectiveMarkersRevision();
+  for (let frame = 0; frame < 1000; frame++) view.update(state, 12);
+  const first = objectiveMarkersFor(state, 12);
+  assert.equal(objectiveMarkersRevision() - before, 1, 'a thousand frames on one mode state derive its markers once');
+  assert.equal(objectiveMarkersFor(state, 12), first, 'the minimap reads the same retained markers');
+  // the local step mutates its state in place and advances the clock: the next frame derives again
+  zones[0].owner = 'alpha'; zones[0].control = 1;
+  view.update(state, 12 + 1 / 60);
+  assert.equal(objectiveMarkersRevision() - before, 2, 'a stepped state derives again');
+  assert.equal(objectiveMarkersFor(state, 12 + 1 / 60).find((mark) => mark.kind === 'zone').side, 'own');
+  assert.equal(view.root.getObjectByName('capture-zone-1').userData.markerMaterial.color.getHex(), 0x6fe887,
+    'and the world shows the new owner (the own side\'s colour, matchModeWorldPresentation.selftest ALLY)');
+  // a new object (a room's next snapshot) derives again; so does the viewing side flipped between steps
+  view.update({ ...state, zones: zones.map((zone) => ({ ...zone })) }, 12 + 1 / 60);
+  assert.equal(objectiveMarkersRevision() - before, 3, 'a new state object derives again');
+  const flipped = { ...state };
+  view.update(flipped, 13);
+  flipped.perspectiveTeam = 'bravo';
+  view.update(flipped, 13);
+  assert.equal(objectiveMarkersRevision() - before, 5, 'a flipped viewing side derives again');
+  view.dispose();
+}
+
+console.log('minimapObjectives.selftest: sides, zones, flags, sectors, turbo, horde, spawns and wiring passed; one derivation per mode-state change');

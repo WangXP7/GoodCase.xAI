@@ -1,0 +1,31 @@
+async (page) => {
+ await page.goto('http://localhost:3000/?genex_local_test=1');
+ await page.getByRole('button',{name:'Online Match',exact:true}).waitFor({timeout:25000});
+ await page.getByRole('button',{name:'Open game menu',exact:true}).click();await page.getByRole('navigation',{name:'Menu sections'}).getByRole('button',{name:'Weapons',exact:true}).click();
+ await page.getByRole('heading',{name:'Choose your steel.'}).waitFor();
+ await page.locator('.weapon-preview canvas').waitFor();
+ await page.waitForTimeout(2000);
+ await page.screenshot({path:'output/playwright/armory-desktop.png'});
+ await page.locator('.armory-rack button').filter({hasText:'Iron mace'}).click();
+ if (await page.getByRole('button',{name:'Equip Iron mace',exact:true}).count()) await page.getByRole('button',{name:'Equip Iron mace',exact:true}).click();
+ await page.getByRole('button',{name:'Equipped',exact:true}).waitFor();
+ await page.locator('.armory-rack button').filter({hasText:'Ravenblade'}).click();
+ await page.waitForTimeout(1800);
+ await page.screenshot({path:'output/playwright/ravenblade-armory.png'});
+ if(!await page.getByRole('button',{name:'Shop unavailable',exact:true}).isDisabled())throw new Error('Local test must never allow purchase');
+ await page.getByRole('button',{name:'Back to menu',exact:true}).click();
+ if(await page.getByRole('group',{name:'Choose your weapon'}).getByRole('button',{name:'Iron mace',exact:true}).getAttribute('aria-pressed')!=='true')throw new Error('Loadout not applied');
+ await page.reload();await page.locator('.weapon-tile[aria-label="Iron mace"][aria-pressed="true"]').waitFor({timeout:25000});
+ const context=await page.context().browser().newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});const phone=await context.newPage();
+ await phone.goto('http://localhost:3000/?genex_local_test=1');
+ await phone.locator('[data-step="move"]').waitFor({timeout:25000});
+ await phone.getByRole('button',{name:'Open game menu',exact:true}).click();
+ await phone.getByRole('button',{name:'Skip training',exact:true}).click();
+ await phone.getByRole('dialog').waitFor({state:'hidden'});await phone.getByRole('group',{name:'Choose your weapon'}).getByRole('button',{name:'Ravenblade',exact:true}).click();
+ await phone.locator('.armory-rack button').filter({hasText:'Ravenblade'}).click();await phone.waitForTimeout(1800);
+ await phone.screenshot({path:'output/playwright/armory-mobile.png'});
+ const overflow=await phone.evaluate(()=>document.documentElement.scrollWidth>innerWidth);if(overflow)throw new Error('Mobile overflow');
+ await context.close();
+ await page.getByRole('button',{name:'Open game menu',exact:true}).click();await page.getByRole('navigation',{name:'Menu sections'}).getByRole('button',{name:'Weapons',exact:true}).click();await page.locator('.armory-rack button').filter({hasText:'Arming sword'}).click();await page.getByRole('button',{name:'Equip Arming sword',exact:true}).click();await page.getByRole('button',{name:'Back to menu',exact:true}).click();
+ console.log('Desktop and phone armory, equip persistence and locked premium passed.');
+}

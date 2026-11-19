@@ -1,0 +1,50 @@
+// Layout of the sound window: counts, the budgets with their bars, the
+// event log taking the rest of the height.
+
+.sound-debug-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 260px;
+}
+
+.log-section {
+  flex: 1;
+  min-height: 0;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 70px 56px 1fr;
+  gap: 8px;
+}
+
+.bar-container > .bar {
+
+  &.enemy { background: var(--td-health-red); }
+  &.projectile { background: var(--td-brass); }
+}
+
+.event-log {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+}
+
+.event-line {
+  &.event-play { color: var(--td-green); }
+  &.event-warning { color: var(--td-warn-text); }
+  &.event-muted { color: var(--td-text-muted); }
+}

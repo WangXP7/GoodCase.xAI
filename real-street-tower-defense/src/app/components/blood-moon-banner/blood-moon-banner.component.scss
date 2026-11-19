@@ -1,0 +1,15 @@
+// Layout of the blood moon chip: over the canvas, below the HUD column at the
+// top, never in the way of a click; red edge like the air alert. Invisible
+// until a blood moon wave starts, see the component.
+
+.bmb {
+  opacity: 0;
+}
+
+.bmb-icon {
+  color: var(--td-health-red);
+}
+
+.bmb-text {
+  gap: 2px;
+}

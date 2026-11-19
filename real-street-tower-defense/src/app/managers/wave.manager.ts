@@ -1,0 +1,742 @@
+import { signal } from '@angular/core';
+import { EnemyManager } from './enemy.manager';
+import { GameClock } from './game-state/game-clock';
+import { ENEMY_TYPES, EnemyTypeId, enemyRewardWeight, lineageRewardWeight, spawnFloorMs } from '../configs/enemy-types.config';
+import { GamePhase, GeoPosition } from '../models/game.types';
+import { GameEventBus, SubscriptionBag } from '../game-engine/game-event-bus';
+import type { IGameManager } from '../game-engine/game-manager.interface';
+import { GAME_BALANCE, closeCallHp } from '../configs/game-balance.config';
+import type { WaveGoldBreakdown } from '../game-engine/game-event-bus';
+import { waveGoldTotal } from '../services/economy.service';
+import type { SpawnerState } from '../simulator/wave-snapshot';
+import { assignPlainFields, decodeNumber, encodeNumber, plainFields, type PlainRecord } from '../simulator/plain-fields';
+import { spawnsWithRoutes } from '../utils/spawn-lanes';
+
+/** What a finished wave came to. */
+export interface WaveEndResult {
+  wave: number;
+  perfect: boolean;
+  closeCall: boolean;
+  hpLost: number;
+}
+
+export interface SpawnPoint extends GeoPosition {
+  id: string;
+  name: string;
+}
+
+/** A single spawn entry in a wave schedule */
+export interface SpawnEntry {
+  enemyType: EnemyTypeId;
+  speed: number;
+  health?: number;
+  /** Per-entry delay override in ms (overrides schedule baseDelay) */
+  delay?: number;
+  /** Extra pause in ms after this spawn (for wave-in-wave pattern) */
+  pauseAfter?: number;
+  /** Spawn at this spawn point, not by spawnMode: a coop lane (laneSchedule) */
+  spawnPointId?: string;
+  /** An elite of its kind (WaveEnemyGroup.elite): its health is the elite's, it is marked */
+  elite?: boolean;
+  /** Camouflaged (WaveEnemyGroup.camo, Enemy.camo): its health is CAMO_HP_FACTOR of what it would be */
+  camo?: boolean;
+}
+
+/**
+ * The schedule once per coop lane (docs/COOP_PLAN.md, D13): every entry
+ * spawns on each lane's spawn point, the copies right after each other,
+ * the gap after an entry as before. Every lane gets the whole wave, bosses
+ * included (D27); the gaps draw from the spawn stream as often as the
+ * schedule alone would.
+ */
+export function laneSchedule(schedule: SpawnSchedule, lanes: readonly string[]): SpawnSchedule {
+  if (lanes.length === 0) return schedule;
+  const last = lanes.length - 1;
+  const entries: SpawnEntry[] = [];
+  for (const entry of schedule.entries) {
+    lanes.forEach((spawnPointId, i) => {
+      const copy: SpawnEntry = { ...entry, spawnPointId };
+      if (i < last) {
+        copy.delay = 0;
+        delete copy.pauseAfter;
+      }
+      entries.push(copy);
+    });
+  }
+  return { ...schedule, entries };
+}
+
+/**
+ * Pre-built spawn schedule — the WaveManager's only spawn pipeline.
+ *
+ * Single-enemy waves are simply schedules with one entry per spawn.
+ * Mixed-enemy waves are schedules whose entries interleave types per the
+ * chosen spawn-pattern (built upstream by `buildSpawnSchedule`).
+ */
+export interface SpawnSchedule {
+  entries: SpawnEntry[];
+  baseDelay: number;
+  /**
+   * Spread of the gap between spawns around baseDelay, 0..1: each gap is
+   * drawn from baseDelay * (1 ± delayVariation) out of the run's spawn
+   * stream, when the spawn comes due. Data, not a function, so a wave config
+   * goes into the command log and over the wire whole (SIMULATOR_PLAN.md).
+   */
+  delayVariation?: number;
+  /**
+   * Spawn-point selection mode. 'each' = round-robin across spawn points,
+   * 'random' = uniform pick. Default 'random'. Maps with one spawn point
+   * behave identically under both modes.
+   */
+  spawnMode?: 'each' | 'random';
+  /**
+   * false: the gaps are the wave's own, without the spawn floor per enemy
+   * type (spawnFloorMs, E50); the debug panel's custom wave. Absent in every
+   * planned wave and in older logs, which keep the floor they were run with.
+   */
+  spawnFloor?: false;
+}
+
+/**
+ * The gap before the next spawn, ms: baseDelay, or with delayVariation drawn
+ * from baseDelay * (1 ± delayVariation) out of `random` (the spawn stream).
+ * Draws nothing without a variation.
+ */
+export function drawSpawnGap(schedule: SpawnSchedule, random: () => number): number {
+  const variation = schedule.delayVariation ?? 0;
+  if (variation <= 0) return schedule.baseDelay;
+  const min = schedule.baseDelay * (1 - variation);
+  const max = schedule.baseDelay * (1 + variation);
+  return Math.round(min + random() * (max - min));
+}
+
+/**
+ * Runtime wave configuration. Schedule-only — no parallel single-type path.
+ * Producers (AI Director, static campaign, debug-panel) all funnel through
+ * `adaptDirectorWave` which always emits a Schedule.
+ */
+export interface WaveConfig {
+  schedule: SpawnSchedule;
+}
+
+/**
+ * Manages wave spawning and game phases
+ *
+ * Framework-agnostic, event-based:
+ * - No @Injectable decorator
+ * - Constructor injection
+ * - Emits events: wave:started, wave:completed
+ */
+export class WaveManager implements IGameManager {
+  readonly phase = signal<GamePhase>('setup');
+  readonly waveNumber = signal(0);
+
+  /** The lanes: the spawn points with a route (spawnsWithRoutes), in the world's order */
+  spawnPoints: SpawnPoint[] = [];
+  private cachedPaths = new Map<string, GeoPosition[]>();
+  /** Each lane with its route, in `spawnPoints` order */
+  private lanes: { point: SpawnPoint; path: GeoPosition[] }[] = [];
+
+  /**
+   * The run's spawn stream (GameRng). Default `Math.random` so a WaveManager
+   * built in a spec without a seed still works; the game wires the stream in
+   * `GameStateManager.initialize()`.
+   */
+  // eslint-disable-next-line no-restricted-properties -- fallback for specs; the game sets the spawn stream (setRandom)
+  private random: () => number = () => Math.random();
+
+  /** The seeded stream the run's spawns draw from. */
+  setRandom(random: () => number): void {
+    this.random = random;
+  }
+
+  /**
+   * Active spawn controller — driven by tickSpawn() each sub-step in game-time.
+   * Sub-stepping guarantees each tick is small (~16ms game-time), so no
+   * sub-frame-advance compensation is needed.
+   */
+  private activeSpawner: {
+    waveId: number;
+    accumulatedMs: number;      // game-time since last spawn
+    nextDelayMs: number;        // game-time until next spawn
+    spawnIndex: number;         // next entry to spawn
+    spawnAndAdvance: () => boolean;
+    recomputeDelay: () => number;
+  } | null = null;
+
+  // Track spawning state to prevent premature wave completion
+  private expectedEnemyCount = 0;
+  private spawnedEnemyCount = 0;
+  // Reward weight of every body the wave can field, split children and worm
+  // segments included: EnemyManager spreads the kill gold by it
+  private expectedBodyWeight = 0;
+  // Coop lanes the wave runs on (laneSchedule): each got the whole wave, and
+  // with it the whole kill gold; 1 in the single player game
+  private waveLaneCount = 1;
+
+  /**
+   * Maximum number of enemies that may be spawned in a single tickSpawn() call
+   * (i.e. per sub-step, 90 per second of game time at 30 sub-steps). Keeps a
+   * spawn delay of 0 from locking up the loop in a tight spawn burst. The run
+   * plan's delays are 100 ms and more, so only debug waves reach it. The name
+   * stays for the snapshot's counters.
+   */
+  maxSpawnsPerFrame = 3;
+
+  // Track Perfect/CloseCall signals per wave
+  private damageTakenThisWave = 0;
+  private currentHealthProvider: (() => number) | null = null;
+  /** The run's HQ maximum (RunRules.hqHealth), the close call's reference */
+  private maxHealthProvider: () => number = () => GAME_BALANCE.player.startHealth;
+  private waveGoldProvider: ((result: WaveEndResult) => WaveGoldBreakdown) | null = null;
+
+  /** EventBus subscriptions — disposed in destroy(). */
+  private readonly subs = new SubscriptionBag();
+
+  constructor(
+    private eventBus: GameEventBus,
+    private enemyManager: EnemyManager
+  ) {
+    // Accumulate damage-to-base during active waves (for Perfect-detection)
+    this.subs.add(this.eventBus.on('enemy:reached-base', (e) => {
+      if (this.phase() === 'wave') {
+        this.damageTakenThisWave += e.damage;
+      }
+      this._waveCheckDirty = true;
+    }));
+    // An ooze flowing in costs HP before it reaches the base as a whole
+    this.subs.add(this.eventBus.on('enemy:leaking', (e) => {
+      if (this.phase() === 'wave') {
+        this.damageTakenThisWave += e.damage;
+      }
+    }));
+    // Any enemy lifecycle change invalidates the cached wave-complete result
+    this.subs.add(this.eventBus.on('enemy:died', () => {
+      this._waveCheckDirty = true;
+    }));
+  }
+
+  /**
+   * Wave-completion dirty flag: avoids the full `checkWaveComplete()` body when
+   * nothing changed since the last check. Set by enemy lifecycle events and
+   * by spawn-progress; cleared at the end of each completed check.
+   */
+  private _waveCheckDirty = true;
+  private _cachedWaveComplete = false;
+
+  /**
+   * Set the current-health provider (from GameStateManager).
+   * Used for CloseCall-detection at wave end.
+   */
+  setCurrentHealthProvider(provider: () => number, maxHealth: () => number = () => GAME_BALANCE.player.startHealth): void {
+    this.currentHealthProvider = provider;
+    this.maxHealthProvider = maxHealth;
+  }
+
+  /**
+   * Books the wave's completion gold and hands back how it came about.
+   *
+   * Set by the GameStateManager, which owns the economy. The booking happens
+   * inside `endWave()` so `wave:completed` can carry the real amount and its
+   * parts instead of a zero the listeners had to guess around
+   * (docs/RUN_LOG.md).
+   */
+  setWaveGoldProvider(provider: (result: WaveEndResult) => WaveGoldBreakdown): void {
+    this.waveGoldProvider = provider;
+  }
+
+  /**
+   * Expected number of enemies the current wave's schedule spawns. Wave
+   * completion waits for them; split children are not in it.
+   */
+  getExpectedEnemyCount(): number {
+    return this.expectedEnemyCount;
+  }
+
+  /** Scheduled enemies of the current wave that have not spawned yet */
+  getEnemiesToSpawn(): number {
+    return Math.max(0, this.expectedEnemyCount - this.spawnedEnemyCount);
+  }
+
+  /**
+   * Reward weight of every body the current wave can field: each scheduled
+   * enemy plus everything a kill splits it into (lineageRewardWeight), and a
+   * worm's segments once it is out. EnemyManager spreads the kill budget by
+   * it, so a split never raises the wave's gold.
+   */
+  /**
+   * The coop lanes the current wave runs on: every lane got the whole wave
+   * (laneSchedule, D13), so the wave pays the kill gold once per lane. Read
+   * from the wave's own schedule, so a player leaving mid-wave changes nothing.
+   */
+  getWaveLaneCount(): number {
+    return this.waveLaneCount;
+  }
+
+  getExpectedBodyWeight(): number {
+    return this.expectedBodyWeight;
+  }
+
+  /**
+   * Debug kill-all (the debug:kill-all command, GameStateManager.debugKillAll):
+   * nothing more spawns, every enemy dies. It does NOT award credits (Phase
+   * 5.16), otherwise it'd be an instant gold farm during testing. Nor does it
+   * split a skeleton: kill-all has to leave nothing of the wave.
+   */
+  killAll(): void {
+    this.stopSpawning();
+    for (const enemy of this.enemyManager.getAlive()) {
+      if (enemy.alive) {
+        this.enemyManager.kill(enemy, 'debug', { kind: 'debug' });
+      }
+    }
+  }
+
+  /** The world's spawn points and routes; a spawn point without a route stays out (spawnsWithRoutes). */
+  initialize(spawnPoints: SpawnPoint[], cachedPaths: Map<string, GeoPosition[]>): void {
+    this.spawnPoints = spawnsWithRoutes(spawnPoints, cachedPaths);
+    this.cachedPaths = cachedPaths;
+    this.lanes = this.spawnPoints.map((point) => ({ point, path: cachedPaths.get(point.id)! }));
+  }
+
+  /** Whether a wave can come at all: one spawn point at least has a route to the HQ. */
+  hasLanes(): boolean {
+    return this.lanes.length > 0;
+  }
+
+  /** The route of spawn point `id`, the array its enemies hold */
+  pathOf(id: string): GeoPosition[] | undefined {
+    return this.cachedPaths.get(id);
+  }
+
+  /** The routes the enemies walk, one per spawn point, in spawn order. */
+  getPaths(): Iterable<GeoPosition[]> {
+    return this.cachedPaths.values();
+  }
+
+  /**
+   * Begin wave phase (for manual enemy spawning)
+   */
+  beginWave(): void {
+    this.waveNumber.update((n) => n + 1);
+    this.phase.set('wave');
+
+    // Reset spawn tracking (manual mode - unlimited spawning)
+    this.expectedEnemyCount = 0;
+    this.spawnedEnemyCount = 0;
+    this.expectedBodyWeight = 0;
+    this.damageTakenThisWave = 0;
+    this._waveCheckDirty = true;
+    this._cachedWaveComplete = false;
+
+    // Emit wave:started event
+    this.eventBus.emit({
+      type: 'wave:started',
+      wave: this.waveNumber(),
+      enemyCount: 0, // Manual mode - count unknown
+    });
+  }
+
+  /**
+   * Start a new wave from a pre-built SpawnSchedule.
+   *
+   * The schedule is the single source of truth — entries determine count,
+   * order, types, per-entry speed/health overrides; schedule.baseDelay (or
+   * delayVariation) determines the gap between spawns; schedule.spawnMode
+   * determines spawn-point selection.
+   */
+  startWave(config: WaveConfig): void {
+    this._resetStuckDetector();
+
+    const schedule = config.schedule;
+    const entries = schedule.entries;
+    // Without a lane nothing could spawn: GameStateManager.startWave refuses such a start first
+    if (entries.length === 0 || !this.hasLanes()) return;
+
+    this.waveNumber.update((n) => n + 1);
+    this.phase.set('wave');
+
+    this.expectedEnemyCount = entries.length;
+    let weight = 0;
+    for (const entry of entries) weight += lineageRewardWeight(entry.enemyType);
+    this.expectedBodyWeight = weight;
+    // A lane named that has no route spawns on another (spawnOne) and adds none
+    const lanes = new Set(entries.map((entry) => entry.spawnPointId).filter((id) => id !== undefined && this.laneOf(id) !== undefined));
+    this.waveLaneCount = Math.max(1, lanes.size);
+    this.spawnedEnemyCount = 0;
+    this.damageTakenThisWave = 0;
+    this._waveCheckDirty = true;
+    this._cachedWaveComplete = false;
+
+    this.eventBus.emit({
+      type: 'wave:started',
+      wave: this.waveNumber(),
+      enemyCount: entries.length,
+    });
+    this.armSpawner(config, null);
+  }
+
+  /**
+   * The spawner of `config`'s wave (the current wave number), at its start or,
+   * with `state`, where captureWaveState() found it.
+   */
+  private armSpawner(config: WaveConfig, state: SpawnerState | null): void {
+    const schedule = config.schedule;
+    const entries = schedule.entries;
+    const getDelay = (): number => drawSpawnGap(schedule, this.random);
+    const spawnMode = schedule.spawnMode ?? 'random';
+    const waveId = this.waveNumber();
+
+    // Compute delay for the *current* entry about to be spawned (used to
+    // determine the gap BEFORE spawning this enemy, matching pre-refactor
+    // setTimeout semantics where pauseAfter extended the gap to the NEXT spawn).
+    //
+    // The gap is at least the spawn floor of both neighbours (spawnFloorMs,
+    // TODO E50), after the spread: a compressed wave used to put golems 62 ms
+    // apart. A coop lane's copy (delay 0) spawns with the entry before it, on
+    // another lane.
+    const delayForEntry = (idx: number): number => {
+      if (idx <= 0) return getDelay();
+      const prev = entries[idx - 1];
+      const extraPause = prev.pauseAfter ?? 0;
+      if (prev.delay === 0) return extraPause;
+      const floor = schedule.spawnFloor === false ? 0 : Math.max(spawnFloorMs(prev.enemyType), spawnFloorMs(entries[idx].enemyType));
+      return Math.max(prev.delay ?? getDelay(), floor) + extraPause;
+    };
+
+    const spawnOne = (): boolean => {
+      if (this.phase() !== 'wave' || this.waveNumber() !== waveId) return false;
+      if (spawner.spawnIndex >= entries.length) return false;
+
+      const entry = entries[spawner.spawnIndex];
+      // Every lane has its route: a lane named without one (none in a world
+      // from buildSimWorld) falls back to spawnMode like an entry without
+      const { path } = (entry.spawnPointId !== undefined ? this.laneOf(entry.spawnPointId) : undefined)
+        ?? this.selectLane(spawnMode, spawner.spawnIndex);
+      const enemy = this.enemyManager.spawn(path, entry.enemyType, entry.speed, false, entry.health, 'portal', entry.elite === true, entry.camo === true);
+      // A worm puts all its segments on the route from this one entry
+      if (enemy.worm !== null) {
+        this.expectedBodyWeight += (enemy.worm.group.size - 1) * enemyRewardWeight(ENEMY_TYPES[entry.enemyType].baseHp);
+      }
+      spawner.spawnIndex++;
+      this.spawnedEnemyCount++;
+      this._waveCheckDirty = true;
+      return spawner.spawnIndex < entries.length;
+    };
+
+    const spawner = {
+      waveId,
+      accumulatedMs: 0,
+      nextDelayMs: 0,
+      spawnIndex: 0,
+      spawnAndAdvance: spawnOne,
+      recomputeDelay: () => delayForEntry(spawner.spawnIndex),
+    };
+    if (state) {
+      spawner.waveId = state.waveId;
+      spawner.accumulatedMs = decodeNumber(state.accumulatedMs);
+      spawner.nextDelayMs = decodeNumber(state.nextDelayMs);
+      spawner.spawnIndex = state.spawnIndex;
+    } else {
+      // Spawn the first immediately: its delay drawn once, as both fields (two
+      // draws gave two values, and the first waited for their difference)
+      const first = delayForEntry(0);
+      spawner.accumulatedMs = first;
+      spawner.nextDelayMs = first;
+    }
+    this.activeSpawner = spawner;
+  }
+
+  /** Where the running wave's spawner stands, for the state hash; null while none runs */
+  spawnerProgress(): { accumulatedMs: number; nextDelayMs: number; spawnIndex: number } | null {
+    const spawner = this.activeSpawner;
+    return spawner ? { accumulatedMs: spawner.accumulatedMs, nextDelayMs: spawner.nextDelayMs, spawnIndex: spawner.spawnIndex } : null;
+  }
+
+  /** The spawner and the wave's counters mid-wave, for the wave snapshot (wave-snapshot.ts) */
+  captureWaveState(): { spawner: SpawnerState | null; counters: PlainRecord } {
+    const spawner = this.activeSpawner;
+    return {
+      spawner: spawner ? {
+        waveId: spawner.waveId,
+        accumulatedMs: encodeNumber(spawner.accumulatedMs),
+        nextDelayMs: encodeNumber(spawner.nextDelayMs),
+        spawnIndex: spawner.spawnIndex,
+      } : null,
+      counters: plainFields(this, ['maxSpawnsPerFrame']),
+    };
+  }
+
+  /**
+   * Put the running wave back as captureWaveState() found it: phase, wave
+   * number and counters, and the spawner of `config` where it was. No
+   * wave:started goes out.
+   */
+  restoreWaveState(config: WaveConfig, spawner: SpawnerState | null, counters: PlainRecord, running = true): void {
+    assignPlainFields(this, counters);
+    this.activeSpawner = null;
+    // A snapshot between waves keeps the build phase: the leftovers of the last wave walk on,
+    // but no wave runs that could end and pay its completion gold a second time (coop resync)
+    if (!running) return;
+    this.phase.set('wave');
+    if (spawner) this.armSpawner(config, spawner);
+  }
+
+  /**
+   * Drive the active spawner forward by `gameTimeDeltaMs` (game-time of one
+   * sub-step, ~16ms). Called per sub-step from GameStateManager. With sub-
+   * stepping each tick is small, so a single sub-step usually triggers 0-1
+   * spawns — no sub-frame head-start gymnastics needed.
+   */
+  tickSpawn(gameTimeDeltaMs: number): void {
+    const spawner = this.activeSpawner;
+    if (!spawner) return;
+    if (this.phase() !== 'wave' || this.waveNumber() !== spawner.waveId) {
+      this.activeSpawner = null;
+      return;
+    }
+
+    spawner.accumulatedMs += gameTimeDeltaMs;
+    let spawnsThisCall = 0;
+    while (spawnsThisCall < this.maxSpawnsPerFrame) {
+      // Delay-gated path: wait for the accumulator to reach the next delay.
+      // 0-delay short-circuits this check so synchronous bursts work.
+      if (spawner.nextDelayMs > 0 && spawner.accumulatedMs < spawner.nextDelayMs) break;
+      if (spawner.nextDelayMs > 0) {
+        spawner.accumulatedMs -= spawner.nextDelayMs;
+      }
+      const stillActive = spawner.spawnAndAdvance();
+      spawnsThisCall++;
+      if (!stillActive) {
+        this.activeSpawner = null;
+        return;
+      }
+      spawner.nextDelayMs = spawner.recomputeDelay();
+    }
+  }
+
+  /** The lane of spawn point `id`, undefined for one without a route */
+  private laneOf(id: string): { point: SpawnPoint; path: GeoPosition[] } | undefined {
+    return this.lanes.find((lane) => lane.point.id === id);
+  }
+
+  /** The lane of the `index`th entry by `mode`: round robin, or drawn from the spawn stream. */
+  private selectLane(mode: 'each' | 'random', index: number): { point: SpawnPoint; path: GeoPosition[] } {
+    const lanes = this.lanes;
+    return mode === 'each' ? lanes[index % lanes.length] : lanes[Math.floor(this.random() * lanes.length)];
+  }
+
+  /**
+   * Check if wave is complete (all enemies spawned AND all enemies dead).
+   *
+   * Hot-path optimization: short-circuits via `_waveCheckDirty` only when
+   * the cached result is already `true`. That's the case that matters for
+   * idle frames after a wave completes. We deliberately do NOT cache a
+   * `false` result, because some state transitions happen silently
+   * (death-animation finalization removes an enemy without emitting an
+   * `enemy:died` event), and we'd never re-evaluate.
+   */
+  checkWaveComplete(): boolean {
+    if (this.phase() !== 'wave') return false;
+    if (!this._waveCheckDirty && this._cachedWaveComplete) return true;
+
+    const allEnemiesSpawned = this.expectedEnemyCount === 0 || this.spawnedEnemyCount >= this.expectedEnemyCount;
+    const aliveCount = this.enemyManager.getAliveCount();
+    const killingCount = this.enemyManager.getKillingCount();
+    const totalEntities = this.enemyManager.getAll().length;
+    // Worm segments still in the portal come out yet (EnemyManager.getPendingSpawnCount)
+    const allEnemiesDead = aliveCount === 0 && killingCount === 0
+      && this.enemyManager.getPendingSpawnCount() === 0;
+
+    // Stuck-detection: log ONCE per wave when spawning is fully done, the
+    // counters are frozen and no enemy gets anywhere over a whole window of
+    // STUCK_WINDOW_STEPS sub-steps. Frozen counters alone are no sign: a lone
+    // boss walks its route for a minute without one changing (playtest
+    // 2026-09-15, an ooze of a Custom Wave). `_loggedStuckForWave` ensures we
+    // don't re-log if counters briefly advance then freeze again mid-wave.
+    const stuckCandidate = allEnemiesSpawned && !allEnemiesDead;
+    if (stuckCandidate) {
+      const progressChanged =
+        aliveCount !== this._lastAlive || killingCount !== this._lastKilling;
+      if (progressChanged) {
+        this._stuckFrames = 0;
+        this._stuckProgress = NaN;
+      } else {
+        this._stuckFrames++;
+      }
+      this._lastAlive = aliveCount;
+      this._lastKilling = killingCount;
+
+      // Sampled at the end of each window only, not per sub-step: the first
+      // window takes the sample, a later one without a change logs
+      let stuck = false;
+      if (!this._loggedStuckForWave && this._stuckFrames >= WaveManager.STUCK_WINDOW_STEPS) {
+        const progress = this.enemyProgress();
+        stuck = progress === this._stuckProgress;
+        this._stuckProgress = progress;
+        this._stuckFrames = 0;
+      }
+      if (stuck) {
+        const enemies = this.enemyManager.getAll();
+        const pending = this.enemyManager.getPendingDeathsSnapshot();
+        console.warn(`[WaveManager] STUCK wave ${this.waveNumber()} (all spawned, counters frozen):`, {
+          waveNumber: this.waveNumber(),
+          aliveCount, killingCount, totalEntities,
+          expectedEnemyCount: this.expectedEnemyCount,
+          spawnedEnemyCount: this.spawnedEnemyCount,
+          phase: this.phase(),
+          activeSpawner: this.activeSpawner !== null,
+          pendingDeathsSample: pending.slice(0, 3),
+          entitySnapshot: enemies.slice(0, 5).map(e => ({
+            id: e.id,
+            type: e.typeConfig.id,
+            alive: e.alive,
+            hp: e.health.hp,
+            maxHp: e.health.maxHp,
+            paused: e.movement.paused,
+            active: e.active,
+            pathIndex: e.movement.currentIndex,
+            pathLength: e.movement.path.length,
+            progress: e.movement.progress,
+          })),
+        });
+        this._loggedStuckForWave = true;
+      }
+    } else {
+      // Wave not yet fully-spawned (or complete) — reset diagnostic state.
+      this._stuckFrames = 0;
+      this._lastAlive = aliveCount;
+      this._lastKilling = killingCount;
+    }
+
+    const complete = allEnemiesSpawned && allEnemiesDead;
+    this._cachedWaveComplete = complete;
+    this._waveCheckDirty = false;
+    return complete;
+  }
+
+  /**
+   * What the living enemies have got done: metres walked, metres of an
+   * ooze's body flowed into the HQ (its tip stands meanwhile), HP lost to a
+   * fight at a standstill. The same value twice means nothing moved.
+   */
+  private enemyProgress(): number {
+    let sum = 0;
+    for (const enemy of this.enemyManager.getAlive()) {
+      sum += enemy.movement.getDistanceAlongPath() + (enemy.body?.tailM ?? 0) - enemy.health.hp;
+    }
+    return sum;
+  }
+
+  /** Reset stuck-detection flag on wave transitions (called from endWave + reset). */
+  private _resetStuckDetector(): void {
+    this._loggedStuckForWave = false;
+    this._stuckFrames = 0;
+    this._stuckProgress = NaN;
+    this._lastAlive = 0;
+    this._lastKilling = 0;
+  }
+
+  /**
+   * Sub-steps of frozen counters the stuck detection looks at at once: 10 s
+   * of game time (none runs in a pause), longer than any halt (a machine's
+   * 6 s stun), so a halted enemy is not taken for a stuck one.
+   */
+  private static readonly STUCK_WINDOW_STEPS = GameClock.stepsIn(10_000);
+
+  private _loggedStuckForWave = false;
+  private _stuckFrames = 0;
+  /** enemyProgress() at the end of the last window, NaN before the first */
+  private _stuckProgress = NaN;
+  private _lastAlive = 0;
+  private _lastKilling = 0;
+
+  /**
+   * End the current wave
+   */
+  endWave(): WaveEndResult {
+    const waveNum = this.waveNumber();
+    this.enemyManager.clear();
+    this.phase.set('setup');
+
+    // Compute Perfect/CloseCall quality signals
+    const hpLost = this.damageTakenThisWave;
+    const perfect = hpLost === 0;
+    const hpAtEnd = this.currentHealthProvider ? this.currentHealthProvider() : 100;
+    const closeCall = !perfect && hpAtEnd <= closeCallHp(this.maxHealthProvider());
+
+    const result: WaveEndResult = { wave: waveNum, perfect, closeCall, hpLost };
+    // Book the completion gold here, so the event carries what was paid.
+    const creditsBreakdown = this.waveGoldProvider?.(result);
+    const credits = creditsBreakdown ? waveGoldTotal(creditsBreakdown) : 0;
+
+    this.eventBus.emitDeferred({
+      type: 'wave:completed',
+      wave: waveNum,
+      credits,
+      creditsBreakdown,
+      perfect,
+      closeCall,
+      hpLost,
+    });
+
+    return result;
+  }
+
+  /**
+   * Stop all pending spawns (for Kill All functionality).
+   * Cancels the active spawner and adjusts expectedEnemyCount so wave can complete.
+   */
+  stopSpawning(): void {
+    this.activeSpawner = null;
+    this.expectedEnemyCount = this.spawnedEnemyCount;
+    this._waveCheckDirty = true;
+  }
+
+  /**
+   * Debug: set the counter to `lastWave` as if it had just been played, so
+   * the next start is wave lastWave + 1. Between waves only. Nothing spawns
+   * and no wave event goes out, GameStateManager.jumpToWave announces it.
+   */
+  jumpTo(lastWave: number): void {
+    if (this.phase() !== 'setup') return;
+    this.waveNumber.set(lastWave);
+  }
+
+  /**
+   * Reset wave manager
+   */
+  reset(): void {
+    this.activeSpawner = null;
+    this.enemyManager.clear();
+    this.phase.set('setup');
+    this.waveNumber.set(0);
+
+    // Reset spawn tracking counters (prevents stale state after game over mid-wave)
+    this.expectedEnemyCount = 0;
+    this.spawnedEnemyCount = 0;
+    this.expectedBodyWeight = 0;
+    this._waveCheckDirty = true;
+    this._cachedWaveComplete = false;
+    this._resetStuckDetector();
+  }
+
+  /**
+   * Per-frame update (wave logic is event/timeout-driven, no per-frame work needed)
+   */
+  update(_dt: number): void {
+    // Wave spawning is driven by timeouts, not per-frame updates
+  }
+
+  /**
+   * Destroy the wave manager - cleanup all resources
+   */
+  destroy(): void {
+    this.subs.disposeAll();
+    this.reset();
+    // Drops the reference only: the map is PathAndRouteService's route cache
+    this.cachedPaths = new Map();
+    this.spawnPoints = [];
+    this.lanes = [];
+  }
+}

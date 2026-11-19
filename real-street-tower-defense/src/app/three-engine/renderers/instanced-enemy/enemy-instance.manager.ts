@@ -1,0 +1,1096 @@
+import {
+  InstancedMesh,
+  InstancedBufferAttribute,
+  Material,
+  Matrix4,
+  Vector3,
+  Quaternion,
+  Scene,
+  ShaderMaterial,
+  Texture,
+} from 'three';
+import { VATData } from './vat-baker';
+import { createVATBloodMoonUniforms, createVATMaterial, setVATTexture } from './vat-material';
+import { createPortalClipUniforms, type PortalClipUniforms } from '../portal-clip';
+import { STATE_LERP_JUMP_M, StateLerp } from '../state-lerp';
+import { bloodMoonMultiplier } from '../../blood-moon/blood-moon-mood';
+import { EnemyTypeConfig } from '../../../configs/enemy-types.config';
+import { InstanceSlotAllocator, grownAttribute } from '../instance-slot-allocator';
+import { DrawGate } from '../draw-gate';
+
+/**
+ * Instances a type's buffers hold at first; they double whenever an enemy
+ * finds no free slot, so a wave of 25 000 of one type draws them all (TODO
+ * E77), and the types a place never spawns keep small buffers.
+ */
+const INITIAL_INSTANCES_PER_TYPE = 512;
+const UP = new Vector3(0, 1, 0);
+
+/** Per-enemy animation and visual state */
+export interface EnemyInstanceState {
+  id: string;
+  typeId: string;
+  index: number; // Instance slot index
+  currentAnim: string; // Current animation clip name
+  animTime: number; // Accumulated animation time (seconds)
+  animSpeed: number; // Playback speed multiplier
+  speedMultiplier: number; // From movement (walk/run speed ratio)
+  isWalking: boolean;
+  isDead: boolean;
+  /** Slowed (ice tower): the freeze tint, unless switched off */
+  frozen: boolean;
+  /** Frozen solid (freeze status): the iced tint, always shown */
+  iced: boolean;
+  /** Stunned (stun status): the stun tint */
+  stunned: boolean;
+  poisoned: boolean;
+  burning: boolean;
+  /** performance.now() timestamp when an active hit-flash expires (0 = no flash). */
+  hitFlashEnd: number;
+  /** Last global VAT frame written to the GPU attr — gate redundant writes/uploads. */
+  lastFrame: number;
+  /**
+   * Metres walked, for a type that steps its walk clip by the ground
+   * (EnemyTypeConfig.gaitStride): the horizontal way its place has come
+   * since the first update, which starts it at its place along its heading.
+   */
+  gait: number;
+  /** Place (x, z) of the last update the gait counted from; NaN before the first */
+  gaitX: number;
+  gaitZ: number;
+  /** Cached heading quaternion + the total angle it was built for (skips sin/cos when heading is unchanged). */
+  headingQuat?: Quaternion;
+  lastTotalHeading?: number;
+  config: EnemyTypeConfig;
+  /** Pool the slot lives in, so per-frame writers skip the typeId → pool lookup. */
+  pool: TypePool;
+  /**
+   * Set once the slot is freed (removeEnemy / clear); a released state is
+   * never reused. Holders of a cached state resolve it again by id.
+   */
+  released: boolean;
+  /** Health-bar slot, set by InstancedEnemyRenderer.create() (-1 = none). */
+  healthBarIndex: number;
+  /**
+   * Scale on the pool's model for this instance, its health bar height with
+   * it: a type drawn with another type's pool (EnemyTypeConfig.renderAs), an
+   * elite. 1 for most.
+   */
+  size: number;
+  /** Scale on top of `size` from what the simulation marks it as (setMark: an elite) */
+  markScale: number;
+  /** Tint the instance shows while no status tint is on (an elite, a raging boss), null for none. */
+  baseTint: readonly [number, number, number] | null;
+  // Debug overrides (only set for debug-spawned enemies, undefined in normal gameplay)
+  debugScale?: number;
+  debugHeightOffset?: number;
+  debugRotation?: number;
+  debugHealthBarOffset?: number;
+}
+
+/** Per-type InstancedMesh pool */
+export interface TypePool {
+  typeId: string;
+  instancedMesh: InstancedMesh;
+  vatData: VATData;
+  config: EnemyTypeConfig;
+
+  // Instance management
+  instances: Map<string, EnemyInstanceState>;
+  /** Slot free list; its activeCount is the draw count and upload length. */
+  slots: InstanceSlotAllocator;
+  /** Hides the mesh while no slot is drawn (R6). */
+  gate: DrawGate;
+
+  // Per-instance attributes
+  animFrameAttr: InstancedBufferAttribute;
+  tintColorAttr: InstancedBufferAttribute;
+  /** aPrevOffset (state-lerp.ts); goes out with the matrix */
+  prevOffsetAttr: InstancedBufferAttribute;
+
+  // Dirty flags for batched GPU buffer updates (set per-instance, flushed once per frame)
+  matrixDirty: boolean;
+  tintDirty: boolean;
+  animFrameDirty: boolean;
+}
+
+// Freeze tint color (light blue)
+const FREEZE_TINT_R = 0.4;
+const FREEZE_TINT_G = 0.8;
+const FREEZE_TINT_B = 1.0;
+
+// Iced tint color (white-cyan): frozen solid, reads apart from the slow's blue
+const ICED_TINT_R = 0.9;
+const ICED_TINT_G = 0.97;
+const ICED_TINT_B = 1.0;
+
+// Stun tint color (violet-blue, electric; apart from the hit flash's blue-white)
+const STUN_TINT_R = 0.6;
+const STUN_TINT_G = 0.5;
+const STUN_TINT_B = 1.0;
+
+// Poison tint color (green)
+const POISON_TINT_R = 0.2;
+const POISON_TINT_G = 0.8;
+const POISON_TINT_B = 0.1;
+
+// Burn tint color (orange)
+const BURN_TINT_R = 1.0;
+const BURN_TINT_G = 0.45;
+const BURN_TINT_B = 0.05;
+
+// Hit-flash tint color (electric blue-white, used for lightning chain hits)
+const HIT_FLASH_R = 0.85;
+const HIT_FLASH_G = 0.95;
+const HIT_FLASH_B = 1.0;
+
+/**
+ * DataTexture.onUpdate for VATs. three calls it right after uploading the
+ * texels; from then on the shader reads the GPU copy only, so the CPU copy
+ * goes. After a WebGL context loss three would upload from that copy again;
+ * InstancedEnemyRenderer bakes those VATs again instead
+ * (rebakeAfterContextRestore).
+ */
+function releaseTexels(texture: Texture): void {
+  (texture.image as { data: unknown }).data = null;
+}
+
+/**
+ * Count the horizontal way `state` has come to `position` into its gait
+ * (EnemyTypeConfig.gaitStride). The first update starts the gait at the
+ * place's distance along the heading: instances that come out at one place
+ * (the rings of a worm from the portal) start alike and part by what each
+ * walks, ones first shown side by side along their way (a worm in the
+ * replay after a jump) start as far apart as they stand.
+ */
+function walkGait(state: EnemyInstanceState, position: Vector3, heading: number): void {
+  if (Number.isNaN(state.gaitX)) {
+    // The model looks along +z, turned by the heading round +y
+    const total = heading + (state.config.headingOffset ?? 0);
+    state.gait = position.x * Math.sin(total) + position.z * Math.cos(total);
+  } else {
+    state.gait += Math.hypot(position.x - state.gaitX, position.z - state.gaitZ);
+  }
+  state.gaitX = position.x;
+  state.gaitZ = position.z;
+}
+
+/** Pick a death animation: random entry from deathAnimations pool, falling back to deathAnimation. Only returns clips the pool actually baked. */
+function pickDeathAnimation(config: EnemyTypeConfig, pool: TypePool): string | undefined {
+  const candidates: string[] = [];
+  if (config.deathAnimations) {
+    for (const name of config.deathAnimations) {
+      if (pool.vatData.animations.has(name)) candidates.push(name);
+    }
+  }
+  if (candidates.length > 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  if (config.deathAnimation && pool.vatData.animations.has(config.deathAnimation)) {
+    return config.deathAnimation;
+  }
+  return undefined;
+}
+
+/**
+ * EnemyInstanceManager
+ *
+ * Manages per-enemy-type InstancedMesh pools with VAT-based animation.
+ * Each enemy type gets one InstancedMesh (1 draw call per type).
+ *
+ * Animation is driven by per-instance `aAnimFrame` attribute that indexes
+ * into the VAT DataTexture. Frame computation happens in updateAnimations().
+ */
+export class EnemyInstanceManager {
+  private pools = new Map<string, TypePool>();
+  private enemyToType = new Map<string, string>(); // enemyId → typeId
+  private cachedAllIds: string[] | null = null; // null-invalidation cache
+
+  /** Instances with a hit-flash running, so expiry skips everyone else. */
+  private readonly flashing: EnemyInstanceState[] = [];
+
+  /** setVisible() state, also applied to pools created later. */
+  private shown = true;
+
+  /** Blood moon uniforms every pool's material shares, see setBloodMoon(). */
+  private readonly bloodMoon = createVATBloodMoonUniforms();
+  /** Seconds the camouflage shimmer has run (vat-material.ts uCamoTime), shared by every type */
+  private readonly camoTime = { value: 0 };
+
+  // Reusable temp objects
+  private readonly matrix = new Matrix4();
+  private static readonly _tempQuat = new Quaternion();
+  private static readonly _tempPos = new Vector3();
+  private static readonly _carriedMatrix = new Matrix4();
+
+  /** Share of a body's old offset it is still shown at while a state is written (StateLerp.begin) */
+  private carry = 0;
+  /** The offset the last updateEnemyState() wrote: the health bar slides by the same */
+  readonly lastOffset = new Vector3();
+
+  /**
+   * @param portalClip The spawn portals' clip every pool's material shares (portal-clip.ts)
+   * @param stateLerp The slide between two states every pool's material shares (state-lerp.ts)
+   */
+  constructor(
+    private readonly scene: Scene,
+    private readonly portalClip: PortalClipUniforms = createPortalClipUniforms(),
+    readonly stateLerp: StateLerp = new StateLerp(),
+  ) {}
+
+  /**
+   * A state of the simulation is about to be written (updateEnemyState per
+   * enemy): the slide starts over. Returns the share of the old offsets
+   * still shown (StateLerp.begin), for what slides on the same clock.
+   */
+  beginState(now: number): number {
+    return (this.carry = this.stateLerp.begin(now));
+  }
+
+  /**
+   * Create a pool for an enemy type with baked VAT data.
+   */
+  createPool(typeId: string, vatData: VATData, config: EnemyTypeConfig): void {
+    if (this.pools.has(typeId)) return;
+
+    // The VAT lives on the GPU once uploaded (up to 53 MB per type on the CPU otherwise).
+    vatData.positionTexture.onUpdate = releaseTexels;
+    const material = createVATMaterial(vatData, {
+      emissiveIntensity: config.emissiveIntensity,
+      emissiveColor: config.emissiveColor,
+      colorMultiplier: config.colorMultiplier,
+      bloodMoon: this.bloodMoon,
+      portalClip: this.portalClip,
+      stateLerp: this.stateLerp.uniform,
+      camoTime: this.camoTime,
+    });
+    const instancedMesh = new InstancedMesh(
+      vatData.geometry,
+      material,
+      INITIAL_INSTANCES_PER_TYPE,
+    );
+    instancedMesh.count = 0;
+    instancedMesh.frustumCulled = false;
+
+    // Per-instance attributes
+    const animFrameData = new Float32Array(INITIAL_INSTANCES_PER_TYPE);
+    // rgb the tint, a the camouflage (setCamo)
+    const tintColorData = new Float32Array(INITIAL_INSTANCES_PER_TYPE * 4);
+
+    const animFrameAttr = new InstancedBufferAttribute(animFrameData, 1);
+    const tintColorAttr = new InstancedBufferAttribute(tintColorData, 4);
+    const prevOffsetAttr = new InstancedBufferAttribute(new Float32Array(INITIAL_INSTANCES_PER_TYPE * 3), 3);
+
+    instancedMesh.geometry.setAttribute('aAnimFrame', animFrameAttr);
+    instancedMesh.geometry.setAttribute('aTintColor', tintColorAttr);
+    instancedMesh.geometry.setAttribute('aPrevOffset', prevOffsetAttr);
+
+    // count=0 → GPU renders nothing; slots are initialized on first use.
+    // The gate keeps the empty mesh out of the render list.
+    const gate = new DrawGate([instancedMesh]);
+    gate.setShown(this.shown);
+    this.scene.add(instancedMesh);
+
+    this.pools.set(typeId, {
+      typeId,
+      instancedMesh,
+      vatData,
+      config,
+      instances: new Map(),
+      slots: new InstanceSlotAllocator(INITIAL_INSTANCES_PER_TYPE),
+      gate,
+      animFrameAttr,
+      tintColorAttr,
+      prevOffsetAttr,
+      matrixDirty: false,
+      tintDirty: false,
+      animFrameDirty: false,
+    });
+  }
+
+  /**
+   * Add an enemy instance. Returns the instance state, or null if the pool
+   * doesn't exist. The pool grows when all its slots are taken.
+   */
+  addEnemy(
+    id: string,
+    typeId: string,
+    position: Vector3,
+    heading: number,
+    size = 1,
+    baseTint: readonly [number, number, number] | null = null,
+  ): EnemyInstanceState | null {
+    const pool = this.pools.get(typeId);
+    if (!pool) return null;
+    if (pool.instances.has(id)) return pool.instances.get(id)!;
+
+    // Allocate instance slot
+    let index = pool.slots.alloc();
+    if (index < 0) {
+      this.growPool(pool, pool.slots.capacity * 2);
+      index = pool.slots.alloc();
+    }
+    this.syncDrawCount(pool);
+
+    // Set instance matrix. A new body (or a slot taken again) slides from nowhere
+    this.setInstanceMatrix(pool, index, position, heading);
+    pool.prevOffsetAttr.setXYZ(index, 0, 0, 0);
+
+    // Set initial attributes; they go out with the frame flush.
+    pool.animFrameAttr.setX(index, 0);
+    pool.tintColorAttr.setXYZW(index, baseTint?.[0] ?? 0, baseTint?.[1] ?? 0, baseTint?.[2] ?? 0, 0);
+    pool.animFrameDirty = true;
+    pool.tintDirty = true;
+
+    // Determine initial animation
+    const config = pool.config;
+    const walkAnim = config.walkAnimation ?? '';
+    const initialAnim = pool.vatData.animations.has(walkAnim) ? walkAnim : 'static';
+
+    const state: EnemyInstanceState = {
+      id,
+      typeId,
+      index,
+      currentAnim: initialAnim,
+      animTime: config.randomAnimationStart ? Math.random() * 2.0 : 0,
+      animSpeed: config.animationSpeed ?? 1.0,
+      speedMultiplier: 1.0,
+      isWalking: true,
+      isDead: false,
+      frozen: false,
+      iced: false,
+      stunned: false,
+      poisoned: false,
+      burning: false,
+      hitFlashEnd: 0,
+      lastFrame: -1,
+      gait: 0,
+      gaitX: NaN,
+      gaitZ: NaN,
+      config,
+      pool,
+      released: false,
+      healthBarIndex: -1,
+      size,
+      markScale: 1,
+      baseTint,
+    };
+
+    pool.instances.set(id, state);
+    this.enemyToType.set(id, typeId);
+    this.cachedAllIds = null;
+
+    return state;
+  }
+
+  /**
+   * Update an instance's matrix and animation speed. Takes the state (see
+   * InstancedEnemyRenderer.resolveSlot) rather than an id: resolving the id
+   * cost three string-keyed Map lookups per enemy per frame. The state must
+   * not be released.
+   */
+  updateEnemyState(
+    state: EnemyInstanceState,
+    position: Vector3,
+    heading: number,
+    currentSpeed?: number,
+  ): void {
+    this.lastOffset.set(0, 0, 0);
+    if (state.isDead) return;
+
+    // Update matrix (state passed for debug overrides)
+    this.setInstanceMatrix(state.pool, state.index, position, heading, state, true);
+
+    // The ground walked, for a walk clip that steps by it
+    if (state.config.gaitStride !== undefined) walkGait(state, position, heading);
+
+    // Update speed multiplier for animation
+    if (currentSpeed !== undefined && state.config.baseSpeed > 0) {
+      let effectiveBaseSpeed = state.config.baseSpeed;
+      if (!state.isWalking && state.config.runSpeedMultiplier) {
+        effectiveBaseSpeed *= state.config.runSpeedMultiplier;
+      }
+      state.speedMultiplier = currentSpeed / effectiveBaseSpeed;
+    }
+  }
+
+  /**
+   * Set animation to walk
+   */
+  startWalkAnimation(id: string): void {
+    const state = this.getState(id);
+    if (!state || state.isDead) return;
+
+    const walkAnim = state.config.walkAnimation;
+    if (!walkAnim) return;
+
+    const pool = this.pools.get(state.typeId);
+    if (!pool || !pool.vatData.animations.has(walkAnim)) return;
+
+    state.currentAnim = walkAnim;
+    state.isWalking = true;
+    // Don't reset animTime to preserve continuity
+  }
+
+  /**
+   * Set animation to run. Visual only: the speed is simulation state
+   * (Enemy.rush / Enemy.setRunning), this just shows it.
+   */
+  startRunAnimation(id: string): void {
+    const state = this.getState(id);
+    if (!state || state.isDead) return;
+
+    const runAnim = state.config.runAnimation;
+    if (!runAnim) return;
+
+    const pool = this.pools.get(state.typeId);
+    if (!pool || !pool.vatData.animations.has(runAnim)) return;
+
+    state.currentAnim = runAnim;
+    state.isWalking = false;
+  }
+
+  /**
+   * Play death animation (non-looping, clamp at last frame)
+   */
+  playDeathAnimation(id: string): void {
+    const state = this.getState(id);
+    if (!state) return;
+
+    state.isDead = true;
+    state.animTime = 0;
+
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    // No state moves a corpse any more: it lies where it was shown, or every new state would slide it again
+    this.settleShown(pool, state.index);
+
+    const pickedDeath = pickDeathAnimation(state.config, pool);
+    if (pickedDeath) {
+      state.currentAnim = pickedDeath;
+    }
+  }
+
+  /**
+   * Set freeze visual (tint color)
+   */
+  setFreezeVisual(id: string, active: boolean): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.frozen = active;
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    this.applyTint(state, pool);
+  }
+
+  /**
+   * What the simulation marks the enemy as, from its packet flags
+   * (FramePresenter): a scale on its size and a tint under the status tints.
+   */
+  setMark(id: string, scale: number, tint: readonly [number, number, number] | null): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.markScale = scale;
+    state.baseTint = tint;
+    this.applyTint(state, state.pool);
+  }
+
+  /** Camouflage of the enemy (vat-material.ts aTintColor.a): 1 hidden, 0.5 revealed, 0 none */
+  setCamo(id: string, level: number): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.pool.tintColorAttr.setW(state.index, level);
+    state.pool.tintDirty = true;
+  }
+
+  /** The camouflage shimmer runs on, `deltaMs` of wall time */
+  advanceCamo(deltaMs: number): void {
+    this.camoTime.value = (this.camoTime.value + deltaMs / 1000) % 1000;
+  }
+
+  /** Frozen solid (freeze status): the iced tint, over every tint but the hit flash */
+  setIcedVisual(id: string, active: boolean): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.iced = active;
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    this.applyTint(state, pool);
+  }
+
+  /** Stunned (stun status): the stun tint, after the iced one */
+  setStunVisual(id: string, active: boolean): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.stunned = active;
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    this.applyTint(state, pool);
+  }
+
+  setPoisonVisual(id: string, active: boolean): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.poisoned = active;
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    this.applyTint(state, pool);
+  }
+
+  setBurnVisual(id: string, active: boolean): void {
+    const state = this.getState(id);
+    if (!state) return;
+    state.burning = active;
+    const pool = this.pools.get(state.typeId);
+    if (!pool) return;
+    this.applyTint(state, pool);
+  }
+
+  /**
+   * Trigger a transient hit-flash on a single enemy (e.g. lightning chain hit).
+   * Overrides freeze/poison briefly, then auto-reverts in expireHitFlashes()
+   * once `durationMs` has elapsed.
+   */
+  triggerHitFlash(id: string, durationMs = 130): void {
+    const state = this.getState(id);
+    if (!state) return;
+    if (state.hitFlashEnd === 0) this.flashing.push(state);
+    state.hitFlashEnd = performance.now() + durationMs;
+    this.applyTint(state, state.pool);
+  }
+
+  /**
+   * Revert expired hit-flash tints to the persistent one (freeze/poison/none).
+   * Once per frame, independent of the animation toggle; walks only the
+   * flashing instances, not the pools.
+   */
+  expireHitFlashes(): void {
+    if (this.flashing.length === 0) return;
+    const now = performance.now();
+    for (let i = this.flashing.length - 1; i >= 0; i--) {
+      const state = this.flashing[i];
+      if (!state.released && now < state.hitFlashEnd) continue;
+      this.flashing[i] = this.flashing[this.flashing.length - 1];
+      this.flashing.pop();
+      state.hitFlashEnd = 0;
+      // A released state's slot may already belong to another enemy.
+      if (!state.released) this.applyTint(state, state.pool);
+    }
+  }
+
+  /** VFX setting freezeTint; while off a slowed enemy shows no freeze tint. */
+  private freezeTint = true;
+
+  /**
+   * Blood moon look at `amount` (0..1, BloodMoonLook): the glow of every
+   * type, and for the blending types, which draw after the mood's quad,
+   * the mood's multiplier in the values of the target. Two uniform writes
+   * for all pools, pools created later included.
+   */
+  setBloodMoon(amount: number, linearOutput: boolean): void {
+    this.bloodMoon.bloodMoonGlow.value = amount;
+    bloodMoonMultiplier(amount, linearOutput, this.bloodMoon.bloodMoonTint.value);
+  }
+
+  /**
+   * Show or hide the freeze tint (VFX setting freezeTint). Enemies stay
+   * marked as slowed, so the tint comes back on the ones slowed right now.
+   */
+  setFreezeTintEnabled(enabled: boolean): void {
+    if (enabled === this.freezeTint) return;
+    this.freezeTint = enabled;
+    for (const pool of this.pools.values()) {
+      for (const state of pool.instances.values()) {
+        if (state.frozen) this.applyTint(state, pool);
+      }
+    }
+  }
+
+  /**
+   * Compute the correct tint colour for an enemy given its state and write
+   * it into the instance attribute. Priority: hit-flash > iced > stunned >
+   * freeze (unless switched off) > burn > poison > none.
+   */
+  private applyTint(state: EnemyInstanceState, pool: TypePool): void {
+    if (state.hitFlashEnd > performance.now()) {
+      pool.tintColorAttr.setXYZ(state.index, HIT_FLASH_R, HIT_FLASH_G, HIT_FLASH_B);
+    } else if (state.iced) {
+      pool.tintColorAttr.setXYZ(state.index, ICED_TINT_R, ICED_TINT_G, ICED_TINT_B);
+    } else if (state.stunned) {
+      pool.tintColorAttr.setXYZ(state.index, STUN_TINT_R, STUN_TINT_G, STUN_TINT_B);
+    } else if (state.frozen && this.freezeTint) {
+      pool.tintColorAttr.setXYZ(state.index, FREEZE_TINT_R, FREEZE_TINT_G, FREEZE_TINT_B);
+    } else if (state.burning) {
+      pool.tintColorAttr.setXYZ(state.index, BURN_TINT_R, BURN_TINT_G, BURN_TINT_B);
+    } else if (state.poisoned) {
+      pool.tintColorAttr.setXYZ(state.index, POISON_TINT_R, POISON_TINT_G, POISON_TINT_B);
+    } else if (state.baseTint) {
+      pool.tintColorAttr.setXYZ(state.index, state.baseTint[0], state.baseTint[1], state.baseTint[2]);
+    } else {
+      pool.tintColorAttr.setXYZ(state.index, 0, 0, 0);
+    }
+    pool.tintDirty = true;
+  }
+
+  /**
+   * Called with the enemy id where its walk clip passes one of the phases in
+   * EnemyTypeConfig.footstep: a foot lands (the stone golem's heavy steps).
+   */
+  onFootstep: ((id: string) => void) | null = null;
+
+  /**
+   * Update all animation frames. Called once per render frame.
+   */
+  updateAnimations(deltaTime: number): void {
+    for (const pool of this.pools.values()) {
+      if (pool.instances.size === 0) continue;
+      const gaitStride = pool.config.gaitStride;
+      const stepPhases = this.onFootstep !== null ? pool.config.footstep?.phases : undefined;
+      const walkClip = pool.config.walkAnimation;
+
+      for (const state of pool.instances.values()) {
+        const entry = pool.vatData.animations.get(state.currentAnim);
+        if (!entry) continue;
+
+        let localFrame: number;
+        const totalTime = entry.totalTime;
+
+        if (gaitStride !== undefined) {
+          // Stepped by the ground walked (walkGait), not by the clock, so
+          // nothing moves in the pause. A dead one keeps the frame it died in.
+          if (state.isDead) continue;
+          const loops = state.gait / gaitStride;
+          localFrame = Math.floor((loops - Math.floor(loops)) * entry.frameCount) % entry.frameCount;
+        } else if (state.isDead) {
+          // Death: advance but will clamp
+          state.animTime += deltaTime * state.animSpeed;
+          // Clamp at last frame. The bake cuts death clips where the enemy
+          // is removed (vatClips), so a clip that runs longer holds its
+          // last baked frame rather than looping back to frame 0.
+          const maxFrame = entry.frameCount - 1;
+          localFrame = Math.min(
+            Math.floor((state.animTime / totalTime) * entry.frameCount),
+            maxFrame,
+          );
+        } else {
+          // Loop
+          const loopsBefore = state.animTime / totalTime;
+          state.animTime += deltaTime * state.animSpeed * state.speedMultiplier;
+          if (stepPhases && state.currentAnim === walkClip) {
+            const loopsAfter = state.animTime / totalTime;
+            for (const phase of stepPhases) {
+              if (Math.floor(loopsAfter - phase) > Math.floor(loopsBefore - phase)) {
+                this.onFootstep!(state.id);
+                break;
+              }
+            }
+          }
+          const normalizedTime = (state.animTime / totalTime) % 1.0;
+          localFrame = Math.floor(normalizedTime * entry.frameCount) % entry.frameCount;
+        }
+
+        const globalFrame = entry.frameStart + localFrame;
+        // Only write + flag dirty when the integer frame actually changed.
+        // VAT frames are integers, so at 60fps a 30-frame clip changes only
+        // ~every 2nd frame (slower clips less often) — when nothing changed,
+        // the whole-buffer upload is skipped entirely.
+        if (globalFrame !== state.lastFrame) {
+          state.lastFrame = globalFrame;
+          pool.animFrameAttr.setX(state.index, globalFrame);
+          pool.animFrameDirty = true; // uploaded in flushDirtyFlags()
+        }
+      }
+    }
+  }
+
+  /**
+   * Remove an enemy instance
+   */
+  removeEnemy(id: string): void {
+    const typeId = this.enemyToType.get(id);
+    if (!typeId) return;
+    const pool = this.pools.get(typeId);
+    if (!pool) return;
+
+    const state = pool.instances.get(id);
+    if (!state) return;
+
+    // Hide instance (a slot below the top stays inside the draw count).
+    // Goes out with the frame flush: a per-slot range here would pile up
+    // while nothing renders, and headless training keeps removing enemies.
+    this.matrix.makeTranslation(0, -10000, 0);
+    pool.instancedMesh.setMatrixAt(state.index, this.matrix);
+    pool.prevOffsetAttr.setXYZ(state.index, 0, 0, 0);
+    pool.matrixDirty = true;
+
+    pool.instances.delete(id);
+    pool.slots.release(state.index);
+    this.syncDrawCount(pool);
+    this.enemyToType.delete(id);
+    this.cachedAllIds = null;
+    state.released = true;
+  }
+
+  /**
+   * Move an enemy's instance into the pool of `typeId`: a worm segment that
+   * becomes a head. Place, heading and tints go along, and so does the
+   * health bar slot; the animation starts over in the new pool. The old
+   * state is released, holders resolve the new one by id. Until the next
+   * updateEnemyState() the new slot keeps the old matrix, so the new model
+   * shows at the old one's scale for at most that frame. Null without a pool
+   * for `typeId` (the enemy stays where it was).
+   */
+  changeType(id: string, typeId: string): EnemyInstanceState | null {
+    const old = this.getState(id);
+    if (!old || old.typeId === typeId) return old;
+    const pool = this.pools.get(typeId);
+    if (!pool) return old;
+
+    // Own matrix: removeEnemy() and addEnemy() write this.matrix
+    const carried = EnemyInstanceManager._carriedMatrix;
+    old.pool.instancedMesh.getMatrixAt(old.index, carried);
+    this.removeEnemy(id);
+    const state = this.addEnemy(id, typeId, EnemyInstanceManager._tempPos.setFromMatrixPosition(carried), 0);
+    if (!state) return null;
+    pool.instancedMesh.setMatrixAt(state.index, carried);
+    pool.matrixDirty = true;
+
+    state.healthBarIndex = old.healthBarIndex;
+    // The ground walked goes along: the new model's clip steps on from there
+    state.gait = old.gait;
+    state.gaitX = old.gaitX;
+    state.gaitZ = old.gaitZ;
+    state.isDead = old.isDead;
+    state.frozen = old.frozen;
+    state.poisoned = old.poisoned;
+    state.burning = old.burning;
+    state.debugScale = old.debugScale;
+    state.debugHeightOffset = old.debugHeightOffset;
+    state.debugRotation = old.debugRotation;
+    state.debugHealthBarOffset = old.debugHealthBarOffset;
+    state.size = old.size;
+    state.markScale = old.markScale;
+    state.baseTint = old.baseTint;
+    this.applyTint(state, pool);
+    return state;
+  }
+
+  /**
+   * Check if a type pool exists
+   */
+  hasPool(typeId: string): boolean {
+    return this.pools.has(typeId);
+  }
+
+  /**
+   * Get instance state
+   */
+  getState(id: string): EnemyInstanceState | null {
+    const typeId = this.enemyToType.get(id);
+    if (!typeId) return null;
+    const pool = this.pools.get(typeId);
+    if (!pool) return null;
+    return pool.instances.get(id) ?? null;
+  }
+
+  /**
+   * Get all instance IDs
+   */
+  getAllIds(): string[] {
+    if (!this.cachedAllIds) {
+      this.cachedAllIds = Array.from(this.enemyToType.keys());
+    }
+    return this.cachedAllIds;
+  }
+
+  /**
+   * Get total instance count
+   */
+  get count(): number {
+    return this.enemyToType.size;
+  }
+
+  /**
+   * Set visibility of all instanced enemy meshes
+   */
+  setVisible(visible: boolean): void {
+    this.shown = visible;
+    for (const pool of this.pools.values()) {
+      pool.gate.setShown(visible);
+    }
+  }
+
+  /**
+   * Clear all instances (keep pools)
+   */
+  clear(): void {
+    for (const pool of this.pools.values()) {
+      for (const state of pool.instances.values()) {
+        this.matrix.makeTranslation(0, -10000, 0);
+        pool.instancedMesh.setMatrixAt(state.index, this.matrix);
+        state.released = true;
+      }
+      // Whole buffer was rewritten — drop any pending per-slot ranges so this
+      // really is a full upload and not a partial one covering a few slots.
+      pool.instancedMesh.instanceMatrix.clearUpdateRanges();
+      pool.instancedMesh.instanceMatrix.needsUpdate = true;
+      (pool.prevOffsetAttr.array as Float32Array).fill(0);
+      pool.prevOffsetAttr.clearUpdateRanges();
+      pool.prevOffsetAttr.needsUpdate = true;
+      pool.instances.clear();
+      pool.slots.reset();
+      this.syncDrawCount(pool);
+    }
+    this.enemyToType.clear();
+    this.cachedAllIds = null;
+    this.flashing.length = 0;
+  }
+
+  /**
+   * Apply debug overrides to an enemy instance (scale, height, rotation, animation speed).
+   * Only used by the enemy debugger for live tuning of a single enemy.
+   */
+  applyDebugOverrides(id: string, overrides: {
+    scale?: number;
+    heightOffset?: number;
+    healthBarOffset?: number;
+    rotation?: number;
+    animationSpeed?: number;
+  }): void {
+    const state = this.getState(id);
+    if (!state) return;
+
+    if (overrides.scale !== undefined) state.debugScale = overrides.scale;
+    if (overrides.heightOffset !== undefined) state.debugHeightOffset = overrides.heightOffset;
+    if (overrides.rotation !== undefined) state.debugRotation = overrides.rotation;
+    if (overrides.healthBarOffset !== undefined) state.debugHealthBarOffset = overrides.healthBarOffset;
+    if (overrides.animationSpeed !== undefined) state.animSpeed = overrides.animationSpeed;
+  }
+
+  /** Types whose VAT has dropped its CPU copy after the upload (releaseTexels). */
+  typesWithReleasedVAT(): string[] {
+    const types: string[] = [];
+    for (const pool of this.pools.values()) {
+      if ((pool.vatData.positionTexture.image as { data: unknown }).data == null) types.push(pool.typeId);
+    }
+    return types;
+  }
+
+  /**
+   * Swap in a VAT baked again after a WebGL context loss: same model, same
+   * layout and clips, so the geometry and the frame table stay. The old
+   * texture is not disposed: its GPU copy went with the lost context, and
+   * disposing it would hand the restored context a stale texture handle.
+   */
+  replaceVATAfterContextLoss(typeId: string, vatData: VATData): void {
+    const pool = this.pools.get(typeId);
+    if (!pool) return;
+    vatData.positionTexture.onUpdate = releaseTexels;
+    setVATTexture(pool.instancedMesh.material as ShaderMaterial, vatData);
+    pool.vatData = { ...pool.vatData, positionTexture: vatData.positionTexture, encoding: vatData.encoding };
+  }
+
+  /**
+   * Dispose all resources
+   */
+  dispose(): void {
+    this.clear();
+    for (const pool of this.pools.values()) {
+      this.scene.remove(pool.instancedMesh);
+      pool.instancedMesh.geometry.dispose();
+      (pool.instancedMesh.material as Material).dispose();
+      pool.vatData.positionTexture.dispose();
+    }
+    this.pools.clear();
+  }
+
+  // =====================================================
+  // PRIVATE
+  // =====================================================
+
+  /** Slots a type's buffers hold, taken or free (0 without a pool) */
+  capacityOf(typeId: string): number {
+    return this.pools.get(typeId)?.slots.capacity ?? 0;
+  }
+
+  /**
+   * Room for `capacity` instances of a type, every instance kept. The mesh
+   * and the geometry are disposed first: three frees the GPU buffer of an
+   * instance matrix only with its mesh, that of an attribute only with its
+   * geometry, and uploads the model and the grown buffers again on the
+   * next draw. A handful of times in a run (doubling).
+   */
+  private growPool(pool: TypePool, capacity: number): void {
+    const mesh = pool.instancedMesh;
+    mesh.dispose();
+    mesh.geometry.dispose();
+    mesh.instanceMatrix = grownAttribute(mesh.instanceMatrix, capacity);
+    pool.animFrameAttr = grownAttribute(pool.animFrameAttr, capacity);
+    pool.tintColorAttr = grownAttribute(pool.tintColorAttr, capacity);
+    pool.prevOffsetAttr = grownAttribute(pool.prevOffsetAttr, capacity);
+    mesh.geometry.setAttribute('aAnimFrame', pool.animFrameAttr);
+    mesh.geometry.setAttribute('aTintColor', pool.tintColorAttr);
+    mesh.geometry.setAttribute('aPrevOffset', pool.prevOffsetAttr);
+    pool.slots.grow(capacity);
+  }
+
+  /** Draw count follows the slot allocator; the gate hides an empty pool. */
+  private syncDrawCount(pool: TypePool): void {
+    pool.instancedMesh.count = pool.slots.activeCount;
+    pool.gate.setCount(pool.slots.activeCount);
+  }
+
+  private setInstanceMatrix(
+    pool: TypePool,
+    index: number,
+    position: Vector3,
+    heading: number,
+    state?: EnemyInstanceState,
+    slide = false,
+  ): void {
+    const configOffset = pool.config.headingOffset ?? 0;
+    const rotationOffset = state?.debugRotation ?? 0;
+    const totalHeading = heading + configOffset + rotationOffset;
+    // Position changes every frame (enemy moving) so compose() always runs, but
+    // the rotation quaternion only needs rebuilding (sin/cos) when the heading
+    // actually changed — cache it per instance.
+    let quat: Quaternion;
+    if (state) {
+      if (!state.headingQuat) state.headingQuat = new Quaternion();
+      if (state.lastTotalHeading !== totalHeading) {
+        state.headingQuat.setFromAxisAngle(UP, totalHeading);
+        state.lastTotalHeading = totalHeading;
+      }
+      quat = state.headingQuat;
+    } else {
+      quat = EnemyInstanceManager._tempQuat.setFromAxisAngle(UP, totalHeading);
+    }
+
+    const scale = state?.debugScale ?? pool.config.scale * (state ? state.size * state.markScale : 1);
+
+    // Apply debug height offset if present
+    let py = position.y;
+    if (state?.debugHeightOffset !== undefined) {
+      const heightDelta = state.debugHeightOffset - pool.config.heightOffset;
+      py += heightDelta;
+    }
+
+    // Matrix4.compose() + setMatrixAt(), written straight into the instance
+    // buffer: the same arithmetic in the same order as three r186's compose
+    // (with the uniform scale on all three axes), so the stored floats are
+    // identical, minus the intermediate Matrix4 and its 16-element copy.
+    const qx = quat.x, qy = quat.y, qz = quat.z, qw = quat.w;
+    const x2 = qx + qx, y2 = qy + qy, z2 = qz + qz;
+    const xx = qx * x2, xy = qx * y2, xz = qx * z2;
+    const yy = qy * y2, yz = qy * z2, zz = qz * z2;
+    const wx = qw * x2, wy = qw * y2, wz = qw * z2;
+
+    const te = pool.instancedMesh.instanceMatrix.array as Float32Array;
+    const o = index * 16;
+    if (slide) {
+      // From where the body is shown now (its last state and what is left of that slide) to the new state
+      const off = pool.prevOffsetAttr.array as Float32Array;
+      const p = index * 3;
+      const carry = this.carry;
+      let dx = te[o + 12] + off[p] * carry - position.x;
+      let dy = te[o + 13] + off[p + 1] * carry - py;
+      let dz = te[o + 14] + off[p + 2] * carry - position.z;
+      // Switched off, or a jump (a teleport, a restore): the body stands where its state puts it
+      if (!this.stateLerp.enabled || dx * dx + dy * dy + dz * dz > STATE_LERP_JUMP_M * STATE_LERP_JUMP_M) {
+        dx = dy = dz = 0;
+      }
+      off[p] = dx;
+      off[p + 1] = dy;
+      off[p + 2] = dz;
+      this.lastOffset.set(dx, dy, dz);
+    }
+    te[o] = (1 - (yy + zz)) * scale;
+    te[o + 1] = (xy + wz) * scale;
+    te[o + 2] = (xz - wy) * scale;
+    te[o + 3] = 0;
+    te[o + 4] = (xy - wz) * scale;
+    te[o + 5] = (1 - (xx + zz)) * scale;
+    te[o + 6] = (yz + wx) * scale;
+    te[o + 7] = 0;
+    te[o + 8] = (xz + wy) * scale;
+    te[o + 9] = (yz - wx) * scale;
+    te[o + 10] = (1 - (xx + yy)) * scale;
+    te[o + 11] = 0;
+    te[o + 12] = position.x;
+    te[o + 13] = py;
+    te[o + 14] = position.z;
+    te[o + 15] = 1;
+    pool.matrixDirty = true;
+  }
+
+  /** The body of `index` from now on where it is shown at this moment, without a slide left. */
+  private settleShown(pool: TypePool, index: number): void {
+    const off = pool.prevOffsetAttr.array as Float32Array;
+    const p = index * 3;
+    if (off[p] === 0 && off[p + 1] === 0 && off[p + 2] === 0) return;
+    const left = 1 - this.stateLerp.uniform.value;
+    const te = pool.instancedMesh.instanceMatrix.array as Float32Array;
+    const o = index * 16;
+    te[o + 12] += off[p] * left;
+    te[o + 13] += off[p + 1] * left;
+    te[o + 14] += off[p + 2] * left;
+    off[p] = off[p + 1] = off[p + 2] = 0;
+    pool.matrixDirty = true;
+  }
+
+  /**
+   * Where the body of `state` is shown now (its state's place and what is
+   * left of the slide), scene-local. For probes of the picture's smoothness.
+   */
+  shownPosition(state: EnemyInstanceState, out: Vector3): Vector3 {
+    const te = state.pool.instancedMesh.instanceMatrix.array as Float32Array;
+    const off = state.pool.prevOffsetAttr.array as Float32Array;
+    const o = state.index * 16;
+    const p = state.index * 3;
+    const left = 1 - this.stateLerp.uniform.value;
+    return out.set(te[o + 12] + off[p] * left, te[o + 13] + off[p + 1] * left, te[o + 14] + off[p + 2] * left);
+  }
+
+  /**
+   * Flush all dirty GPU buffer flags. Call once per frame after all updates.
+   */
+  flushDirtyFlags(): void {
+    for (const pool of this.pools.values()) {
+      // (0, activeCount) covers every drawn slot. Clearing first drops the
+      // range of a flush the renderer never uploaded (e.g. mesh toggled
+      // invisible), so the ranges array cannot grow. Without a range
+      // Three.js would upload the full buffer, free slots included.
+      // activeCount 0 means every slot was released since the write and
+      // nothing is drawn. No range then: bufferSubData reads a length of 0
+      // as "up to the end", so (0, 0) would upload the whole buffer.
+      const activeCount = pool.slots.activeCount;
+      if (pool.matrixDirty) {
+        if (activeCount > 0) {
+          pool.instancedMesh.instanceMatrix.clearUpdateRanges();
+          pool.instancedMesh.instanceMatrix.addUpdateRange(0, activeCount * 16);
+          pool.instancedMesh.instanceMatrix.needsUpdate = true;
+          pool.prevOffsetAttr.clearUpdateRanges();
+          pool.prevOffsetAttr.addUpdateRange(0, activeCount * 3);
+          pool.prevOffsetAttr.needsUpdate = true;
+        }
+        pool.matrixDirty = false;
+      }
+      if (pool.tintDirty) {
+        if (activeCount > 0) {
+          pool.tintColorAttr.clearUpdateRanges();
+          pool.tintColorAttr.addUpdateRange(0, activeCount * 4);
+          pool.tintColorAttr.needsUpdate = true;
+        }
+        pool.tintDirty = false;
+      }
+      if (pool.animFrameDirty) {
+        if (activeCount > 0) {
+          pool.animFrameAttr.clearUpdateRanges();
+          pool.animFrameAttr.addUpdateRange(0, activeCount);
+          pool.animFrameAttr.needsUpdate = true;
+        }
+        pool.animFrameDirty = false;
+      }
+    }
+  }
+}

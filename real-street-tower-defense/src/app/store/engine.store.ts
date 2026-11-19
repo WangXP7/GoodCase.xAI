@@ -1,0 +1,107 @@
+import { Injectable, signal } from '@angular/core';
+import { CameraDebugInfo, SoundCounts, TileStats } from './tower-defense.store.types';
+
+@Injectable({ providedIn: 'root' })
+export class EngineStore {
+  // NOTE: loading, error, loadingSteps signals are owned by
+  // EngineInitializationService (the writer). TowerDefenseStore proxies them
+  // directly from the service. EngineStore no longer duplicates them.
+
+  // NOTE: tilesLoading, osmLoading, heightsLoading
+  // are owned by EngineInitializationService / HeightUpdateService (the writers).
+  // Component reads them directly from those services.
+
+  /** Frames per second */
+  readonly fps = signal<number>(0);
+
+  /** Tile loading statistics */
+  readonly tileStats = signal<TileStats>({ parsing: 0, downloading: 0, total: 0, visible: 0, cacheMB: 0 });
+
+  /** Sound one-shots asked for and played so far */
+  readonly soundCounts = signal<SoundCounts>({ requested: 0, played: 0 });
+
+  /** The credits of the map on screen, the world's (WorldProvider.attribution); none before an engine */
+  readonly mapAttribution = signal<readonly string[]>([]);
+
+  /** Camera compass heading (0=N, 90=E, 180=S, 270=W) */
+  readonly cameraHeading = signal<number>(0);
+
+  /** Accumulated compass rotation (avoids 0°/360° flip) */
+  readonly compassRotation = signal<number>(0);
+
+  /** Camera debug overlay enabled */
+  readonly cameraDebugEnabled = signal<boolean>(false);
+
+  /** Camera debug info */
+  readonly cameraDebugInfo = signal<CameraDebugInfo | null>(null);
+
+  /** Camera framing debug visualization */
+  readonly cameraFramingDebug = signal<boolean>(false);
+
+  /**
+   * Update performance stats from engine.
+   * Called ~10Hz from the game loop (outside Angular zone).
+   * Pure state update — no side effects.
+   */
+  updateEngineStats(snapshot: {
+    fps: number;
+    tileStats: TileStats;
+    soundCounts: SoundCounts;
+    attribution?: readonly string[];
+    cameraHeading: number;
+    cameraDebugInfo?: CameraDebugInfo | null;
+  }): void {
+    // Only update fps when value changed (avoid unnecessary signal notifications)
+    if (this.fps() !== snapshot.fps) {
+      this.fps.set(snapshot.fps);
+    }
+
+    // Only update tileStats when values changed
+    const prev = this.tileStats();
+    const next = snapshot.tileStats;
+    if (prev.parsing !== next.parsing || prev.downloading !== next.downloading ||
+        prev.total !== next.total || prev.visible !== next.visible ||
+        prev.cacheMB !== next.cacheMB) {
+      this.tileStats.set(next);
+    }
+
+    const sounds = this.soundCounts();
+    if (sounds.requested !== snapshot.soundCounts.requested || sounds.played !== snapshot.soundCounts.played) {
+      this.soundCounts.set(snapshot.soundCounts);
+    }
+
+    // Every change, also to none (a world without credits after one with)
+    const credits = snapshot.attribution;
+    if (credits && credits.join('\n') !== this.mapAttribution().join('\n')) {
+      this.mapAttribution.set(credits);
+    }
+
+    // Compass heading with wrap-around
+    const heading = Math.round(snapshot.cameraHeading);
+    if (heading !== this.cameraHeading()) {
+      const oldHeading = this.cameraHeading();
+      this.cameraHeading.set(heading);
+
+      let delta = heading - oldHeading;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      this.compassRotation.update(rot => rot + delta);
+    }
+
+    if (this.cameraDebugEnabled() && snapshot.cameraDebugInfo) {
+      this.cameraDebugInfo.set(snapshot.cameraDebugInfo);
+    }
+  }
+
+  resetAll(): void {
+    this.fps.set(0);
+    this.tileStats.set({ parsing: 0, downloading: 0, total: 0, visible: 0, cacheMB: 0 });
+    this.soundCounts.set({ requested: 0, played: 0 });
+    this.mapAttribution.set([]);
+    this.cameraHeading.set(0);
+    this.compassRotation.set(0);
+    this.cameraDebugEnabled.set(false);
+    this.cameraDebugInfo.set(null);
+    this.cameraFramingDebug.set(false);
+  }
+}

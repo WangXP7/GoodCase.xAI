@@ -1,0 +1,389 @@
+/**
+ * Typed message shapes of the Multiplayer v2 wire. Every numeric field is the
+ * quantized integer that travels on the wire (see constants.ts and
+ * quantize.ts); the simulation-unit conversions are the caller's.
+ */
+import type { DestructionLogEntry } from '../../sim/destructionEvents.ts';
+import type { CloseReasonId, MESSAGE_TYPE, PhaseId, TeamId, VerdictId } from './constants.ts';
+
+export interface HelloMessage {
+  type: typeof MESSAGE_TYPE.HELLO;
+  protocolVersion: number;
+  /** Bit set from HELLO_CAPABILITY. */
+  capabilities: number;
+  /** Seat token issued by the room service. */
+  token: string;
+  /** Free-form build stamp for logs (<= MAX_BUILD_BYTES). */
+  clientBuild: string;
+}
+
+/** One tick of controls; ticks inside an INPUT frame are consecutive. */
+export interface ControlFrame {
+  /** i8: -127..127 (throttle / CONTROL_AXIS_SCALE). */
+  throttle: number;
+  steer: number;
+  /** CONTROL_FLAGS bit set. */
+  flags: number;
+  /** u16 turn. */
+  aimYaw: number;
+  /** i16 over +-pi/2. */
+  aimPitch: number;
+  /** u16 in AIM_DISTANCE_SCALE units. */
+  aimDistance: number;
+  shellSlot: number;
+  /** Monotonic per trigger press; the server fires once per new value. */
+  fireSeq: number;
+  /** Monotonic per action press; the server applies actionBits once per new value. */
+  actionSeq: number;
+  actionBits: number;
+}
+
+export interface InputMessage {
+  type: typeof MESSAGE_TYPE.INPUT;
+  /** Tick of the newest control; older controls are clientTick - n. */
+  clientTick: number;
+  /** Newest snapshot tick the client has assembled, or NO_TICK. */
+  snapshotAckTick: number;
+  /** The client's current interpolation delay (0..255 ms) for lag compensation. */
+  interpDelayMs: number;
+  /** Oldest first; 1..MAX_CONTROLS_PER_INPUT entries. */
+  controls: ControlFrame[];
+}
+
+export interface SnapshotAckMessage {
+  type: typeof MESSAGE_TYPE.SNAPSHOT_ACK;
+  /** The newest assembled snapshot tick, or NO_TICK to drop the baseline and request a keyframe. */
+  tick: number;
+}
+
+export interface PingMessage {
+  type: typeof MESSAGE_TYPE.PING;
+  clientTimeMs: number;
+  snapshotAckTick: number;
+}
+
+export interface ChatMessage {
+  type: typeof MESSAGE_TYPE.CHAT;
+  text: string;
+}
+
+export interface LeaveMessage {
+  type: typeof MESSAGE_TYPE.LEAVE;
+  reason: CloseReasonId;
+}
+
+/**
+ * The viewer's own newest authority row from the host it lost, sent once after the HELLO of a resumed link (P3b,
+ * 2026-09-29; docs/MULTIPLAYER-V2.md §13.9): the elected host restored a hull it could not see from a sealed keyframe up
+ * to a keyframe interval old, and this is the same authority's fresher row for that one hull. The actor applies it only
+ * to an entity it restored from the migration state, only when it is newer than the restored row, and only within the
+ * distance the hull could have driven since — a client never places itself; pose fields alone, never combat state.
+ */
+export interface ResumeHintMessage {
+  type: typeof MESSAGE_TYPE.RESUME_HINT;
+  /** The tick of the row (the old host's timeline). */
+  tick: number;
+  /** mm */
+  x: number;
+  y: number;
+  z: number;
+  /** cm/s */
+  speed: number;
+  verticalSpeed: number;
+  /** u16 turns */
+  yaw: number;
+  pitch: number;
+  roll: number;
+  turretYaw: number;
+  gunPitch: number;
+  /**
+   * The row's body bits (round 3 A14, protocol 12; ENTITY_FLAGS AIRBORNE, OVERTURNED, AUTO_RIGHTING, TUMBLING, STACKED,
+   * src/mp/match/hullBodyRow.ts; absent on the producer side: 0): the new host seats the hint's ground contact and body
+   * mode as it seats a row's (authorityRow.ts applyAuthorityRow), never from its height.
+   */
+  flags?: number;
+}
+
+export interface RosterEntry {
+  entityId: number;
+  /** NO_SEAT for bots. */
+  seat: number;
+  team: TeamId;
+  bot: boolean;
+  connected: boolean;
+  playerId: string;
+  name: string;
+  specId: string;
+  /** A bot's paint (268, item 6: the authority's roll, sim/camoPaint.ts botCamoRoll): flags bit 2 when AUTO, else its
+   * stock scheme; absent on a seat, whose paint the room carries. */
+  camo?: 'auto' | 'factory';
+}
+
+export interface WelcomeMessage {
+  type: typeof MESSAGE_TYPE.WELCOME;
+  protocolVersion: number;
+  tickHz: number;
+  snapshotHz: number;
+  seat: number;
+  /** NO_ENTITY for spectators. */
+  entityId: number;
+  team: TeamId;
+  serverTick: number;
+  serverTimeMs: number;
+  seed: number;
+  /** Capabilities the server honours (subset of HELLO's). */
+  capabilities: number;
+  roomId: string;
+  mapId: string;
+  mode: string;
+  /** JSON text of the match ruleset (sim/matchRuleset.ts shape). */
+  rulesetJson: string;
+  roster: RosterEntry[];
+  /**
+   * The battle this host plays (round 3 A3, protocol 12; u32, absent on the producer side: 0): 0 for a match's first
+   * battle, kept by every host that resumes it (the sealed keyframe carries it, migrationState.ts), a fresh value when a
+   * host restarts it from its spawns (migrationState.ts migrationFallback). A client that followed another battle id
+   * drops what it retained of that battle (MatchClient receiveWelcome).
+   */
+  battleId?: number;
+}
+
+/** Full quantized state of one entity as the wire carries it. */
+export interface EntityRow {
+  auxiliaryJson?: string;
+  entityId: number;
+  /**
+   * The authority tick this row was captured at (P3b, 2026-09-29). Equal to the frame's tick for a row refreshed in that
+   * snapshot; older for a row the host's interest tiers held over (the entity was far from the viewer) or that a delta
+   * left untouched — the client interpolates each entity between its own distinct samples, never treating a held row as
+   * a fresh pose.
+   */
+  tick: number;
+  /** mm */
+  x: number;
+  y: number;
+  z: number;
+  /** cm/s along the hull yaw (signed) and vertical. */
+  speed: number;
+  verticalSpeed: number;
+  /** u16 turns */
+  yaw: number;
+  pitch: number;
+  roll: number;
+  turretYaw: number;
+  gunPitch: number;
+  hp: number;
+  maxHp: number;
+  /** RELOAD_MS_UNITS steps */
+  reload: number;
+  reloadTotal: number;
+  reloadKind: number;
+  gunReload: number;
+  gunReloadTotal: number;
+  gunReloadKind: number;
+  magazineRounds: number;
+  magazineCapacity: number;
+  shellSlot: number;
+  ammo0: number;
+  ammo1: number;
+  ammo2: number;
+  /** ENTITY_FLAGS bit set. */
+  flags: number;
+  /** Sorted spec-order ERA plate indices that have been spent. */
+  eraSpent: number[];
+  /** A wreck's turret body (physics lane, wire 5); absent or null while it has none. */
+  wreckBody?: WreckBodyRow | null;
+}
+
+/** A wreck's turret frame where its rigid body lies: mm, i16 quaternion units (WRECK_BODY_Q_SCALE), asleep. */
+export interface WreckBodyRow {
+  x: number;
+  y: number;
+  z: number;
+  qx: number;
+  qy: number;
+  qz: number;
+  qw: number;
+  asleep: boolean;
+}
+
+/** A row as decoded from a snapshot: only the groups present on the wire. */
+export interface EntityRowPatch {
+  entityId: number;
+  mask: number;
+  fields: Partial<Omit<EntityRow, 'entityId' | 'eraSpent'>>;
+  /** Status-word mirror bit (gun reload channel equals the main channel); null when STATUS is absent. */
+  mirrors: boolean | null;
+  /** With ROW_GROUP.ERA_ADD: indices to add; with ERA_RESET: the whole set. */
+  era: number[] | null;
+}
+
+export interface ShellRow {
+  id: number;
+  shooterEntityId: number;
+  x: number;
+  y: number;
+  z: number;
+  /** SHELL_VELOCITY_SCALE units */
+  vx: number;
+  vy: number;
+  vz: number;
+  /** Index into SHELL_TYPE_NAMES or SHELL_TYPE_OTHER. */
+  shellType: number;
+  flags: number;
+}
+
+/** Viewer-only prediction authority for the seated player's own tank. */
+export interface ViewerState {
+  entityId: number;
+  /** MODULE_STATE_NAMES index per VIEWER_MODULES entry. */
+  modules: number[];
+  /** bit i set = VIEWER_CREW[i] is able. */
+  crewBits: number;
+  /** MULTIPLIER_SCALE units per VIEWER_EQUIPMENT entry. */
+  equipment: number[];
+  modeSpeedMultiplier: number;
+  modeGravityScale: number;
+  /** Versioned movement integrator checkpoint (0 = absent). */
+  movementVersion: number;
+  movementFlags: number;
+  movementValues: number[];
+}
+
+/** Match-wide state every snapshot carries. */
+export interface SnapshotMeta {
+  smokeJson?: string;
+  phase: PhaseId;
+  countdownMs: number;
+  battleTimeMs: number;
+  verdict: VerdictId;
+  verdictReason: string;
+  destructibleRevision: number;
+}
+
+/** A snapshot as it travels: keyframe rows or patches against `baseTick`. */
+export interface SnapshotPacket {
+  type: typeof MESSAGE_TYPE.SNAPSHOT;
+  tick: number;
+  serverTimeMs: number;
+  keyframe: boolean;
+  /** NO_TICK on keyframes. */
+  baseTick: number;
+  ackedInputTick: number;
+  ackedFireSeq: number;
+  ackedActionSeq: number;
+  /** Ticks of margin the newest input arrived with (negative = late); INPUT_MARGIN_UNKNOWN when unmeasured. */
+  inputMarginTicks: number;
+  meta: SnapshotMeta;
+  /** Keyframe: the whole destroyed list; delta: indices destroyed since the baseline. */
+  destroyed: number[];
+  /** Each `destroyed` index's fall (wire 11, sim/obstacleFall.ts), in its order; absent or short: none for every one. */
+  destroyedFalls?: number[];
+  /** Keyframe: the whole destruction log; delta: the entries after the baseline's `destructionBase` (destructionLog.ts). */
+  destruction: DestructionLogEntry[];
+  /** The log length the entries follow (0 in a keyframe). */
+  destructionBase: number;
+  entities: EntityRowPatch[];
+  /** Entity ids present in the baseline but hidden now (delta only). */
+  removed: number[];
+  shells: ShellRow[];
+  /** Rounds this viewer was shown that left its view still in flight (wire 11; see SnapshotFrame.unseenShells). */
+  unseenShells?: readonly number[];
+  viewer: ViewerState | null;
+  /** JSON text of the mode presentation state, or null in standard mode. */
+  modeStateJson: string | null;
+}
+
+/** A fully resolved snapshot (keyframe, or a delta applied to its baseline). */
+export interface SnapshotFrame {
+  tick: number;
+  serverTimeMs: number;
+  ackedInputTick: number;
+  ackedFireSeq: number;
+  ackedActionSeq: number;
+  inputMarginTicks: number;
+  meta: SnapshotMeta;
+  /** Sorted destroyed obstacle indices (persistent within the round). */
+  destroyed: number[];
+  /**
+   * How each `destroyed` index fell, in its order (wire 11, round 2 U27; sim/obstacleFall.ts): the cause and direction
+   * as this viewer may read them, what a seat that did not see a fall lays the prop with. Absent, or not as long as
+   * `destroyed`: none for every index (a ram along the prop's own heading, sim/obstacleFall.ts withheldObstacleFall, as a
+   * withheld live event lays it). Falls take only the room a frame leaves (destroyedSet.ts writeDestroyedFalls): a
+   * decoded frame may hold none where its host's held some.
+   */
+  destroyedFalls?: number[];
+  /** The destruction log so far (persistent within the round, append-only; absent reads as empty). */
+  destruction?: DestructionLogEntry[];
+  entities: EntityRow[];
+  shells: ShellRow[];
+  /**
+   * The rounds (ShellRow ids, ascending) this viewer was shown that left its view still in flight (wire 11, round 2 U31):
+   * the authority hides a round with its shooter, so a round absent from `shells` is either ended or unseen, and only the
+   * authority can tell which. Each is named for UNSEEN_SHELL_MARK_TICKS after it left, whatever happens to it then (its
+   * end stays the authority's), so a lost snapshot does not lose the mark; a mark ends sooner only when its round is in
+   * view again, or when a burst of departures past MAX_SHELLS (the most named) takes its place (round 3 A13). Absent:
+   * none. Read-only, and typed so: on the authority the list is server/match/unseenShellMarks.ts's, never written once a
+   * frame holds it, and frames with the same names share it (round 4 E11: a frame kept as a delta baseline keeps its own
+   * names).
+   */
+  unseenShells?: readonly number[];
+  viewer: ViewerState | null;
+  modeStateJson: string | null;
+}
+
+export interface WireEvent {
+  /** Event type name (EVENT_KIND_NAMES entry or any other short name). */
+  kind: string;
+  /** Plain JSON object payload (<= MAX_EVENT_JSON_BYTES encoded; wire 8 carries it in binary, eventPayload.ts). */
+  payload: Record<string, unknown>;
+  /**
+   * The payload already encoded (eventPayload.ts encodeEventPayload; the encoder writes it in place of encoding
+   * `payload`): a host encodes an event once for every viewer that receives it (mp-scale-251). Never decoded: a reader
+   * gets `payload`.
+   */
+  encoded?: Uint8Array;
+}
+
+export interface EventMessage {
+  type: typeof MESSAGE_TYPE.EVENT;
+  tick: number;
+  events: WireEvent[];
+}
+
+export interface PongMessage {
+  type: typeof MESSAGE_TYPE.PONG;
+  clientTimeMs: number;
+  serverTimeMs: number;
+  serverTick: number;
+}
+
+export interface CloseMessage {
+  type: typeof MESSAGE_TYPE.CLOSE;
+  reason: CloseReasonId;
+  detail: string;
+}
+
+export interface ErrorMessage {
+  type: typeof MESSAGE_TYPE.ERROR;
+  reason: CloseReasonId;
+  detail: string;
+}
+
+/**
+ * Sent before the WELCOME by a host that holds the seat's HELLO (round 3 B1/X6, protocol 12): through its boot, before its
+ * actor runs (the host runtime on its main thread, matchHost.ts bootHoldNotice; round 4 F0), or its resume hold
+ * (matchHostCore.ts noticeHeld). `holdMs`: the most it will hold from now. The seat's stall clock waits that long and a
+ * release margin, at most 33 s together, before it counts (MatchClient receiveHold); a later notice replaces an earlier one.
+ */
+export interface HoldMessage {
+  type: typeof MESSAGE_TYPE.HOLD;
+  holdMs: number;
+}
+
+type ClientMessage =
+  | HelloMessage | InputMessage | SnapshotAckMessage | PingMessage | ChatMessage | LeaveMessage | ResumeHintMessage;
+type ServerMessage =
+  | WelcomeMessage | SnapshotPacket | EventMessage | PongMessage | CloseMessage | ErrorMessage | HoldMessage;
+export type WireMessage = ClientMessage | ServerMessage;
+

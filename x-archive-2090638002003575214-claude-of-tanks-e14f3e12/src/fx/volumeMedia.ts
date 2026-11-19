@@ -1,0 +1,1120 @@
+/**
+ * volumeMedia.ts — simulated volumetric media: smoke, dust, soil and fireball bodies (destruction-fx lane, 2026-10-07).
+ *
+ * The puffs sample flipbooks that tools/fx-volume-bake.mjs built as 3D billow volumes and ray-marched with the light
+ * transport baked in (sheet A: light from card +x, +y, -x and coverage; sheet B: light from -y, emission, motion vectors). What
+ * this layer does with them, and why (the FX round 6 diagnosis, 2026-10-07: outlined lobes, blue ghosts, one
+ * silhouette everywhere, clouds that fall apart, spinning stickers, unsorted pops):
+ *
+ * LIGHT — six-way: the sun's direction in the card's frame weights the four baked axis responses; light from the
+ * camera side and from behind the card follows from coverage (uniform-medium transport along the view ray: front =
+ * 1 - a/2, back = tau (1 - a) / a), with a forward-scattering gain on the back term (silver linings where the sun
+ * stands behind the smoke, never an outline). Sky light is the scene's own, DESATURATED toward its luminance (shaded
+ * dust reads grey, never blue) and weighted by the up-facing response; the ground pole lights the underside. Bright
+ * media (dust, spray, snow powder) lift their dark sides by a multiple-scattering term; soot does not.
+ *
+ * MOTION — every puff follows one law (the CPU sort evaluates the same one): launch velocity relaxing toward the
+ * scene wind times its coupling plus a terminal rise, plus a ballistic term. No spin beyond a slow drift, no smear,
+ * no camera-dependent squash. The flipbook advances on the sim's own time (warped by gamma, the bake's frame spacing)
+ * over the puff's playSeconds, blending frames ALONG the baked motion vectors (no cross-fade ghosting).
+ *
+ * ORDER — normal-blended media must draw back to front. The pool keeps its records on the CPU and, every frame that
+ * any puff is alive, writes the live ones into the instance buffers sorted by view depth (an insertion sort over the
+ * previous order: nearly sorted, O(n)), one contiguous upload. Nothing allocates per frame; nothing runs while the
+ * pool is empty.
+ *
+ * Budget: one draw call for every medium (all media share one atlas pair), capacity 640 puffs on desktop. Textures:
+ * sheet A RGBA8 at 128 px tiles, sheet B baked at half resolution (its responses are smooth), lazy-loaded at battle
+ * warm (warm()), never in the boot chunk, and decoded UN-premultiplied (createImageBitmap premultiplyAlpha 'none'): the
+ * colour channels are light and motion data, not colour over coverage, so a premultiplied decode would crush them
+ * wherever the alpha channel is low. The phone tier does not create this layer (effects.ts keeps its
+ * pooled puffs there).
+ */
+import * as THREE from 'three';
+import { LATE_FX_LAYER } from './layers.ts';
+import { LOCAL_LIGHT_GLSL, localLightUniforms, registerLocalLightMaterial } from './localLights.ts';
+import { refreshWorldWind, worldWind } from './worldWind.ts';
+
+// ---------------------------------------------------------------------------------------------------------------
+// Atlas layout (the bake's ledger; volumeMedia.selftest.mjs holds the two in step)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Media in the shared atlas, in band order (each medium owns `variants` consecutive bands). */
+type VolumeMediumId = 'billow' | 'burst';
+
+interface VolumeAtlasLayout {
+  readonly columns: number;
+  readonly rowsPerBand: number;
+  readonly frames: number;
+  readonly tile: number;
+  /** Bands per medium, in atlas order. */
+  readonly media: Readonly<Record<VolumeMediumId, { readonly firstBand: number; readonly variants: number;
+    readonly gamma: number }>>;
+  readonly bands: number;
+  readonly flowScale: number;
+  readonly urlA: string;
+  readonly urlB: string;
+}
+
+export const VOLUME_ATLAS: VolumeAtlasLayout = Object.freeze({
+  columns: 8,
+  rowsPerBand: 8,
+  frames: 64,
+  tile: 128,
+  media: Object.freeze({
+    billow: Object.freeze({ firstBand: 0, variants: 1, gamma: 1.5 }),
+    burst: Object.freeze({ firstBand: 1, variants: 1, gamma: 1.8 }),
+  }),
+  bands: 2,
+  flowScale: 0.25,
+  urlA: '/fx/vol-media-a.png',
+  urlB: '/fx/vol-media-b.png',
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// The puff record
+// ---------------------------------------------------------------------------------------------------------------
+
+/** One puff's emit record. Recipes keep ONE and mutate it per emit (no allocation). */
+export interface VolumePuff {
+  /** origin (m) and birth offset relative to now (s; negative backdates, positive delays) */
+  x: number; y: number; z: number; birthOffset: number;
+  /** launch velocity (m/s) and life (s) */
+  vx: number; vy: number; vz: number; life: number;
+  /** drag (1/s), terminal rise (m/s, + up), wind coupling (0..1.3), ballistic gravity (m/s², + up) */
+  drag: number; rise: number; windK: number; grav: number;
+  /** card size at birth and at the end of life (m), growth exponent (fast early growth > 1), rotation (rad) */
+  size0: number; size1: number; growExp: number; rot: number;
+  /** albedo at birth and at death (linear rgb), peak opacity, fade-in (s) */
+  r0: number; g0: number; b0: number; density: number;
+  r1: number; g1: number; b1: number; fadeIn: number;
+  /** flipbook: medium, variant (taken modulo the medium's variants), mirrored, sim seconds the life plays, start frame */
+  medium: VolumeMediumId; variant: number; mirror: boolean; playSeconds: number; startFrame: number;
+  /** the card's width over its height (1 square; a base surge lies wide and flat, an ejecta jet stands tall) */
+  aspect: number;
+  /** heat at birth (emission gain), cooling rate (1/s), fade-out start (life fraction), slow spin (rad/s); (fx 8r) an
+   *  unheated puff (heat 0) may give a NEGATIVE cool: its soft-depth feather scale (1-3), for a puff meeting a wall */
+  heat: number; cool: number; fadeOut: number; spin: number;
+  /** a billow body born low over the ground (centre under ~1.5 m): its silhouette softened further (the emitter's
+   *  context decides it per emit; packed into the fade-out start, which stays below 1) */
+  low?: boolean;
+}
+
+export function makeVolumePuff(): VolumePuff {
+  return {
+    x: 0, y: 0, z: 0, birthOffset: 0, vx: 0, vy: 0, vz: 0, life: 1,
+    drag: 1, rise: 0, windK: 1, grav: 0, size0: 1, size1: 2, growExp: 2, rot: 0,
+    r0: 0.5, g0: 0.5, b0: 0.5, density: 1, r1: 0.5, g1: 0.5, b1: 0.5, fadeIn: 0.05,
+    medium: 'burst', variant: 0, mirror: false, playSeconds: 4, startFrame: 0, aspect: 1,
+    heat: 0, cool: 1, fadeOut: 0.5, spin: 0,
+  };
+}
+
+/** How far the pool scans the ring for a free slot before it steals the puff nearest its end. */
+const SLOT_SCAN = 48;
+/** Floats per record (8 vec4 attributes). */
+const STRIDE = 32;
+const ATTRS = ['aPB', 'aVL', 'aDY', 'aSZ', 'aCA', 'aCB', 'aFB', 'aHT'] as const;
+
+/**
+ * The motion law, shared by the shader and the CPU sort (and by recipes that need a puff's position):
+ *   target = wind * windK + up * rise
+ *   x(t) = x0 + target t + (v0 - target)(1 - e^-kt)/k + up * grav t^2 / 2
+ */
+/** (dust-orient-271) a wide card's body: its short horizontal axis this share of the way from the card's height to its
+ *  length (seeded per body, uniform between min and max), so from above no two bodies have one shape or one bearing. */
+export const VOLUME_FLAT_SHORT = Object.freeze({ min: 0.3, max: 0.75 });
+/** (dust-orient-271) the least a body's opacity thins when its silhouette outgrows the old card (seen across its flat side). */
+export const VOLUME_FLAT_THIN_MIN = 0.7;
+/** Wind shear (1/m): the wind a puff takes grows with its height over its birth (a column leans over as it climbs). */
+export const VOLUME_SHEAR_K = 0.03;
+/** Eddies: a puff wanders by this share of its size per second of age (up to 4 s), on slow seeded cycles. */
+export const VOLUME_TURB_K = 0.05;
+/** (233, the smoke-wind films' "flat, hard, ground-hugging base" and "rectangular haze panel over the Verdant trees", and
+ *  the "speckle inside the smoke") a card drawn through its body's centre slices whatever stands in the body: the ground
+ *  it sits on drew a hard flat foot, a tree clump inside a thin veil showed the crowns before its plane crisp and those
+ *  behind it hazed (a flat panel through the canopy), and the grass inside a low bank punched blade-shaped holes in it.
+ *  A card is drawn at its body's near side instead — this share of its size toward the lens (at most VOLUME_FRONT_MAX_M,
+ *  and never past half the way to the lens), its corners scaled so its footprint on the screen is unchanged — and its
+ *  soft fade runs over the body's whole thickness: what stands inside the body is covered by the smoke in front of it, in
+ *  proportion to its depth in it. */
+const VOLUME_FRONT_K = 0.3, VOLUME_FRONT_MAX_M = 5;
+
+export function volumePositionAt(rec: ArrayLike<number>, o: number, windX: number, windZ: number, age: number,
+  out: Float32Array | number[]): void {
+  const k = Math.max(rec[o + 8], 1e-3);
+  const tx = windX * rec[o + 10], ty = rec[o + 9], tz = windZ * rec[o + 10];
+  const s = (1 - Math.exp(-k * age)) / k;
+  out[0] = rec[o] + tx * age + (rec[o + 4] - tx) * s;
+  out[1] = rec[o + 1] + ty * age + (rec[o + 5] - ty) * s + 0.5 * rec[o + 11] * age * age;
+  out[2] = rec[o + 2] + tz * age + (rec[o + 6] - tz) * s;
+  // the shear (the eddies, under a metre for most puffs, are left to the shader: the sort does not need them)
+  const up = Math.max(0, out[1] - rec[o + 1]) * VOLUME_SHEAR_K * age * rec[o + 10];
+  out[0] += windX * up;
+  out[2] += windZ * up;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Shaders
+// ---------------------------------------------------------------------------------------------------------------
+
+const FOG_PARS_V = `
+#ifdef USE_FOG
+  varying float vFogDepth;
+#endif
+`;
+const FOG_PARS_F = `
+#ifdef USE_FOG
+  uniform vec3 fogColor;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear;
+    uniform float fogFar;
+  #endif
+  varying float vFogDepth;
+#endif
+`;
+
+/** Burst glow slots (a ring: the oldest is replaced). */
+const GLOW_SLOTS = 4;
+/** (ac130-fx-228 follow-up) the heavy bursts' night embers: their own slots (the 30 mm's pulses never recycle them) */
+const EMBER_SLOTS = 2;
+
+const VOLUME_VERT = /* glsl */ `
+attribute vec4 aPB;
+attribute vec4 aVL;
+attribute vec4 aDY;
+attribute vec4 aSZ;
+attribute vec4 aCA;
+attribute vec4 aCB;
+attribute vec4 aFB;
+attribute vec4 aHT;
+uniform float uTime;
+uniform vec3 uWind;
+uniform vec3 uSunDir;
+uniform vec4 uAtlas;      // columns, total rows, rows per band, frames
+uniform vec2 uNearFade;
+uniform vec4 uBandWarp[ ${VOLUME_ATLAS.bands} ]; // per band: 1/gamma, unused...
+uniform vec4 uGlowP[ ${GLOW_SLOTS} ];  // a burst's light inside the medium: centre xyz, birth (fx clock)
+uniform vec4 uGlowK[ ${GLOW_SLOTS} ];  // its radius (m), peak, duration (s), unused
+uniform float uHeatCool;  // (ac130-fx-228 r3) the fire's cooling rate for this camera: a heat-imaging lens sees it cool slower
+uniform vec4 uEmberP[ ${EMBER_SLOTS} ]; // (ac130-fx-228 follow-up) a heavy burst's embers: centre xyz, birth (fx clock)
+uniform vec4 uEmberK[ ${EMBER_SLOTS} ]; // their radius (m), peak, duration (s), unused
+uniform vec4 uGrade2;     // (as the fragment's) .y the night level: 0 by day, 1 at night; .z the embers' level
+varying float vGlow;
+varying vec2 vUvA;
+varying vec2 vUvB;
+varying vec4 vTiles;      // tile min corners (atlas uv) of frames A and B
+varying float vBlend;
+varying vec4 vColor;
+varying vec4 vW;          // six-way weights: +x, -x, +y, -y (card frame)
+varying vec2 vWfb;        // front, back
+varying float vHeat;
+varying float vMirror;
+varying float vT;
+varying float vFade;
+varying float vParticleDepth;
+varying float vFeather;
+varying float vThick;     // (233) the body's thickness the soft fade runs over (m)
+varying vec2 vDetail;
+varying vec3 vSoft;       // card-local uv, 1 for the billow medium (its softened silhouette)
+#ifdef FX_LOCAL_LIGHTS
+varying vec3 vLocal;      // (EF.10) the local lights at this corner: headlights, the muzzle, burning wrecks
+${LOCAL_LIGHT_GLSL}
+#endif
+${FOG_PARS_V}
+void main() {
+  float life = aVL.w;
+  float age = uTime - aPB.w;
+  if ( life <= 0.0 || age < 0.0 || age > life ) {
+    vUvA = vec2( 0.0 ); vUvB = vec2( 0.0 ); vTiles = vec4( 0.0 ); vBlend = 0.0; vColor = vec4( 0.0 ); vDetail = vec2( 0.0 );
+    vW = vec4( 0.0 ); vWfb = vec2( 0.0 ); vHeat = 0.0; vMirror = 1.0; vT = 0.0; vFade = 1.0; vParticleDepth = 1e9;
+    vFeather = 1.0; vThick = 0.0; vGlow = 0.0; vSoft = vec3( 0.5, 0.5, 0.0 );
+    #ifdef FX_LOCAL_LIGHTS
+      vLocal = vec3( 0.0 );
+    #endif
+    gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );
+    #ifdef USE_FOG
+      vFogDepth = 1.0;
+    #endif
+    return;
+  }
+  float t = age / life;
+  vT = t;
+  // --- motion
+  float k = max( aDY.x, 1e-3 );
+  vec3 target = uWind * aDY.z + vec3( 0.0, aDY.y, 0.0 );
+  vec3 center = aPB.xyz + target * age + ( aVL.xyz - target ) * ( ( 1.0 - exp( -k * age ) ) / k )
+    + vec3( 0.0, 0.5 * aDY.w * age * age, 0.0 );
+  // (round 7b, wave m2: "chimney columns") the wind grows with height over the puff's birth: a column leans over
+  // downwind as it climbs
+  center.xz += uWind.xz * ( max( 0.0, center.y - aPB.y ) * ${VOLUME_SHEAR_K.toFixed(3)} * age * aDY.z );
+  // --- size and the card
+  float grow = 1.0 - pow( 1.0 - t, max( aSZ.z, 0.3 ) );
+  float size = mix( aSZ.x, aSZ.y, grow );
+  // eddies: slow seeded cycles push each puff about, more as it ages and the bigger it is (no two neighbours move alike)
+  float ph1 = fract( aPB.w * 0.7548777 + aPB.x * 0.013 ) * 6.2832, ph2 = fract( aPB.w * 0.5698403 + aPB.z * 0.017 ) * 6.2832;
+  center += vec3( sin( age * 0.83 + ph1 ), 0.4 * sin( age * 1.13 + ph2 ), cos( age * 0.71 + ph2 ) )
+    * ( ${VOLUME_TURB_K.toFixed(3)} * size * min( age, 4.0 ) );
+  float ang = aSZ.w + aHT.w * age;
+  float ca = cos( ang ), sa = sin( ang );
+  vec3 camRight = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
+  vec3 camUp    = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
+  vec3 camBack  = vec3( viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2] );
+  // aFB.y: the card's aspect (width / height), negative when the card is mirrored
+  float aspect = max( abs( aFB.y ), 0.25 );
+  // (dust-orient-271, the owner 2026-11-09 looking down on a track's dust: "theyre all like parallel with each other") the
+  // aspect is the BODY's shape, never the screen's: a card stretched along camRight lay every skirt and surge the same way
+  // across the frame from above. A wide card is a flat body of dust on the ground — its long axis on its own seeded
+  // bearing, its short axis a seeded share of the way from its height to its length, the pair scaled so a level view
+  // sees the old width on average — and a tall card a column standing up; the card is that ellipsoid's silhouette from
+  // this camera (its covariance projected on the card plane, the symmetric square root for the stretch, so the flipbook
+  // turns only by the card's own rotation). A round puff is a sphere: its card is unchanged.
+  vec3 bh = fract( ( aPB.xyz + aVL.xyz * 1.7 + vec3( aVL.w * 3.1 ) ) * 0.1031 );
+  bh += dot( bh, bh.yzx + 33.33 );
+  float bYaw = fract( ( bh.x + bh.y ) * bh.z ) * 6.2832;
+  float wideB = step( 1.0, aspect );
+  float rS = mix( 1.0, aspect, mix( ${VOLUME_FLAT_SHORT.min.toFixed(2)}, ${VOLUME_FLAT_SHORT.max.toFixed(2)}, fract( ( bh.x + bh.z ) * bh.y ) ) );
+  float rK = wideB > 0.5 ? aspect * inversesqrt( 0.5 * ( aspect * aspect + rS * rS ) ) : 1.0;
+  float rL = wideB > 0.5 ? aspect * rK : aspect;
+  rS = wideB > 0.5 ? rS * rK : aspect;
+  vec2 bAx = vec2( cos( bYaw ), sin( bYaw ) );
+  vec2 pL = vec2( camRight.x * bAx.x + camRight.z * bAx.y, camUp.x * bAx.x + camUp.z * bAx.y ) * rL;
+  vec2 pS = vec2( camRight.z * bAx.x - camRight.x * bAx.y, camUp.z * bAx.x - camUp.x * bAx.y ) * rS;
+  vec2 pV = vec2( camRight.y, camUp.y );
+  float sxx = pL.x * pL.x + pS.x * pS.x + pV.x * pV.x;
+  float sxy = pL.x * pL.y + pS.x * pS.y + pV.x * pV.y;
+  float syy = pL.y * pL.y + pS.y * pS.y + pV.y * pV.y;
+  float sDet = sqrt( max( sxx * syy - sxy * sxy, 1e-6 ) );
+  float sNorm = inversesqrt( max( sxx + syy + 2.0 * sDet, 1e-6 ) );
+  vec2 bodyC = mat2( sxx + sDet, sxy, sxy, syy + sDet ) * position.xy * sNorm;
+  vec2 corner = vec2( bodyC.x * ca - bodyC.y * sa, bodyC.x * sa + bodyC.y * ca ) * size;
+  // a silhouette larger than the old card (aspect x 1) thins by the square root of its growth — from above a skirt is a
+  // lighter veil than edge-on, still a trail (r2: the whole growth, floored at half, left Oasis a faint haze) — never thicker
+  float bodyThin = clamp( sqrt( aspect / sDet ), ${VOLUME_FLAT_THIN_MIN.toFixed(2)}, 1.0 );
+  // (233) the card at the body's near side (VOLUME_FRONT_K), its footprint on the screen kept
+  float camD = distance( center, cameraPosition );
+  float pull = min( min( ${VOLUME_FRONT_K.toFixed(2)} * size, ${VOLUME_FRONT_MAX_M.toFixed(1)} ), max( 0.0, 0.5 * ( camD - 1.5 ) ) );
+  float keep = ( camD - pull ) / max( camD, 1e-3 );
+  vec3 wpos = center + ( cameraPosition - center ) * ( pull / max( camD, 1e-3 ) )
+    + ( camRight * corner.x + camUp * corner.y ) * keep;
+  vThick = 2.0 * pull;
+  // --- flipbook: the sim's own clock (gamma-warped frame spacing), blended along the motion vectors
+  float band = aFB.x;
+  float mirror = aFB.y < 0.0 ? -1.0 : 1.0;
+  vMirror = mirror;
+  float invGamma = uBandWarp[ int( band + 0.5 ) ].x;
+  float frames = uAtlas.w;
+  float p = clamp( age / max( aFB.z, 0.05 ), 0.0, 1.0 );
+  float fpos = clamp( aFB.w + ( frames - 1.0 ) * pow( p, invGamma ), 0.0, frames - 1.0 );
+  float f0 = floor( fpos );
+  float f1 = min( f0 + 1.0, frames - 1.0 );
+  vBlend = fpos - f0;
+  vec2 local = vec2( mirror < 0.0 ? 1.0 - uv.x : uv.x, uv.y );
+  vSoft = vec3( local, band < ${VOLUME_ATLAS.media.billow.firstBand + VOLUME_ATLAS.media.billow.variants}.0 - 0.5 ? 1.0 + step( 1.5, aHT.z ) : 0.0 );
+  float cols = uAtlas.x, rows = uAtlas.y;
+  vec2 tileA = vec2( mod( f0, cols ), rows - 1.0 - ( band * uAtlas.z + floor( f0 / cols ) ) );
+  vec2 tileB = vec2( mod( f1, cols ), rows - 1.0 - ( band * uAtlas.z + floor( f1 / cols ) ) );
+  vTiles = vec4( tileA / vec2( cols, rows ), tileB / vec2( cols, rows ) );
+  vUvA = ( tileA + local ) / vec2( cols, rows );
+  vUvB = ( tileB + local ) / vec2( cols, rows );
+  // the fine tear riding the card: its own place in the tiling noise (from its birth), drifting up through it
+  vDetail = local * 1.7 + fract( vec2( aPB.w * 0.6180339, aPB.w * 0.4142136 ) ) * 9.0 + vec2( 0.0, -0.06 * age );
+  // --- six-way weights: the sun in the card's (rotated, mirrored) frame
+  vec3 rightC = camRight * ca + camUp * sa;
+  vec3 upC = -camRight * sa + camUp * ca;
+  vec3 s = vec3( dot( uSunDir, rightC ) * mirror, dot( uSunDir, upC ), dot( uSunDir, camBack ) );
+  vec3 sp = max( s, 0.0 ), sn = max( -s, 0.0 );
+  vW = vec4( sp.x * sp.x, sn.x * sn.x, sp.y * sp.y, sn.y * sn.y );
+  vWfb = vec2( sp.z * sp.z, sn.z * sn.z );
+  // --- colour, opacity, heat
+  float fadeIn = aCB.w > 0.0 ? smoothstep( 0.0, aCB.w, age ) : 1.0;
+  // the fade-out dissolves the medium from its thin edges inward (the fragment shader's erosion), so a dying puff never
+  // lingers as a uniformly faded ghost of its own silhouette
+  // the fade-out start carries the low-body flag (+2)
+  float lowB = step( 1.5, aHT.z );
+  vFade = smoothstep( aHT.z - 2.0 * lowB, 1.0, t );
+  // (2026-10-08, the owner's "black screens") the medium thins as the camera enters it, judged from the puff's centre
+  // against its own size: a corner's distance let a big dark puff round the camera (the 7c smoke reaches ~11 m on a
+  // 125 mm burst, ~19 m on a 152 mm) draw one flat dark card over the whole frame for seconds
+  float near = smoothstep( uNearFade.x + 0.25 * size, uNearFade.y + 0.6 * size, distance( center, cameraPosition ) );
+  // (the coordinator, chase range at sunset: low ground bodies near the camera "read as flat tan cut-outs") a low body
+  // that covers a large part of the screen within ~15 m thins hard: its radius against the half-height of the view
+  vec4 mvC = viewMatrix * vec4( center, 1.0 );
+  float scr = 0.5 * size * projectionMatrix[1][1] / max( -mvC.z, 0.5 );
+  float big = lowB * smoothstep( 0.15, 0.45, scr ) * ( 1.0 - smoothstep( 12.0, 18.0, distance( center, cameraPosition ) ) );
+  vColor = vec4( mix( aCA.rgb, aCB.rgb, smoothstep( 0.0, 1.0, t ) ), aCA.w * fadeIn * near * ( 1.0 - 0.75 * big ) * bodyThin );
+  vHeat = aHT.x > 0.0 ? aHT.x * exp( -aHT.y * uHeatCool * age ) : 0.0;
+  // the bursts' light inside the medium: each recent burst lights the puffs round it for a moment, falling off with the
+  // distance from its heart (its own fireball and soil, and the dust of an earlier burst it landed in)
+  float gl = 0.0;
+  for ( int i = 0; i < ${GLOW_SLOTS}; i++ ) {
+    vec4 gp = uGlowP[ i ];
+    vec4 gk = uGlowK[ i ];
+    float ga = uTime - gp.w;
+    if ( gk.z <= 0.0 || ga < 0.0 || ga > gk.z ) continue;
+    float q = 1.0 - ga / gk.z;
+    vec3 gd = center - gp.xyz;
+    gl += gk.y * q * q * exp( -dot( gd, gd ) / max( gk.x * gk.x, 1e-3 ) );
+  }
+  // (ac130-fx-228 follow-up, the coordinator: "the night 152 mm smoke column holds its height for about 4 s ... light it
+  // so it reads at night") a heavy burst's embers light its column from the burning ground for a few seconds — at night
+  // only (the night level; by day nothing is added, and with no ember live nothing either), slow to fade (1 - f^2); a
+  // heat-imaging lens sees none (its blind critic: a pale veil over the target — the lens's fire gain on the ember light)
+  if ( uGrade2.z > 0.0 ) {
+    for ( int i = 0; i < ${EMBER_SLOTS}; i++ ) {
+      vec4 ep = uEmberP[ i ];
+      vec4 ek = uEmberK[ i ];
+      float ea = uTime - ep.w;
+      if ( ek.z <= 0.0 || ea < 0.0 || ea > ek.z ) continue;
+      float f = ea / ek.z;
+      vec3 ed = center - ep.xyz;
+      gl += uGrade2.z * ek.y * ( 1.0 - f * f ) * exp( -dot( ed, ed ) / max( ek.x * ek.x, 1e-3 ) );
+    }
+  }
+  vGlow = gl;
+  // (EF.10, MASTER 19) headlights, the muzzle and burning wrecks light the medium (a burst's own pulse is uGlow's;
+  // compiled out on Low and Ultra Low)
+  // (233, the FX follow-up: the wreck's fire "doesn't light its own smoke base") by day taken a third of the way from the
+  // body's heart to the corner: a column body's corners stood metres out of a fire's few-metre reach while its heart sat
+  // over the flames; at night (uGrade2.y) at the corner, as main (the integrator's critic: the night smoke over-lit far
+  // above the fire)
+  #ifdef FX_LOCAL_LIGHTS
+    vLocal = localLightAt( mix( mix( center, wpos, 0.35 ), wpos, uGrade2.y ), 1.0 );
+  #endif
+  // (fx 8q, wave 381's pack: the collapse dust "darker and browner than A's warm lit tan"; full-resolution crops showed the
+  // same puffs dark olive-brown in B against walls in full sun) no cloud shade on the media: 8c's per-vertex cloud shade
+  // took the sun off the puffs on Caldera and urban scenes where the world itself stayed sunlit; the media take the sun
+  // as they always had (and lose a texture fetch per vertex)
+  // (fx 8r, wave 337 / the w5 film: a big card meeting a house's wall showed a straight cut) an unheated puff born by a
+  // wall asks for a wider soft fade into the scene's depth (a negative cool: the scale, VolumePuff); every other puff
+  // keeps the feather it had
+  float featherK = aHT.x > 0.0 ? 1.0 : clamp( -aHT.y, 1.0, 3.0 );
+  // (billow round 3) a low body melts into the grass and the ground over a deeper band (its lower half thins where the
+  // ground nears it)
+  vFeather = clamp( size * ( 0.22 + 0.33 * lowB ) * featherK, 0.5 + 0.7 * lowB, 6.0 * featherK );
+  vec4 mvPosition = viewMatrix * vec4( wpos, 1.0 );
+  vParticleDepth = -mvPosition.z;
+  #ifdef USE_FOG
+    vFogDepth = -mvPosition.z;
+  #endif
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+const VOLUME_FRAG = /* glsl */ `
+uniform sampler2D uMapA;
+uniform sampler2D uMapB;
+uniform vec4 uAtlas;
+uniform float uFlowScale;
+uniform vec3 uSunCol;     // sun irradiance / pi (gained)
+uniform vec3 uSkyCol;     // sky irradiance / pi, desaturated (gained)
+uniform vec3 uGroundCol;  // ground pole / pi
+uniform vec4 uGrade;      // alpha gain, emission gain, back-scatter gain, multiple-scatter lift
+uniform vec4 uGrade2;     // ground-bounce gain, (EF.11) the night level (0 day .. 1 night), the embers' level (ac130-fx-228), (FX 10-17) the night floor's share
+uniform vec3 uSunDir;
+uniform sampler2D uSceneDepth;
+uniform vec2 uSoftViewport;
+uniform float uCameraNear;
+uniform float uCameraFar;
+uniform sampler2D uDetail;
+uniform float uDetailK;
+uniform float uWarpK;
+uniform float uHeatSmoke; // (245) a cold medium's share of its opacity to this camera (effects.ts THERMAL_SMOKE_ALPHA)
+varying vec2 vDetail;
+varying vec2 vUvA;
+varying vec2 vUvB;
+varying vec4 vTiles;
+varying float vBlend;
+varying vec4 vColor;
+varying vec4 vW;
+varying vec2 vWfb;
+varying float vHeat;
+varying float vMirror;
+varying float vT;
+varying float vFade;
+varying float vParticleDepth;
+varying float vFeather;
+varying float vThick;
+varying float vGlow;
+#ifdef FX_LOCAL_LIGHTS
+varying vec3 vLocal;
+#endif
+varying vec3 vSoft;
+${FOG_PARS_F}
+float softDepthFadeV() {
+  vec2 suv = gl_FragCoord.xy / max( uSoftViewport, vec2( 1.0 ) );
+  float rawDepth = texture2D( uSceneDepth, suv ).x;
+  float sceneDepthM = -( uCameraNear * uCameraFar ) / ( ( uCameraFar - uCameraNear ) * rawDepth - uCameraFar );
+  // (233) over the body's thickness at least: the smoke in front of what stands inside it
+  return smoothstep( 0.0, max( vFeather, 0.8 * vThick ), sceneDepthM - vParticleDepth );
+}
+vec3 blackbody( float h ) {
+  // ember red -> orange -> yellow -> white (linear; saturated so the filmic curve keeps it fire)
+  vec3 c = mix( vec3( 0.55, 0.06, 0.01 ), vec3( 1.0, 0.30, 0.03 ), smoothstep( 0.05, 0.35, h ) );
+  c = mix( c, vec3( 1.0, 0.58, 0.14 ), smoothstep( 0.3, 0.65, h ) );
+  return mix( c, vec3( 1.0, 0.86, 0.55 ), smoothstep( 0.62, 1.0, h ) );
+}
+vec2 clampTile( vec2 uv, vec2 tileMin, vec2 tileSize ) {
+  vec2 m = tileSize * 0.012;
+  return clamp( uv, tileMin + m, tileMin + tileSize - m );
+}
+void main() {
+  vec2 tileSize = 1.0 / uAtlas.xy;
+  // motion vectors (tile uv per frame, x mirrored with the card) carry frame A forward and frame B back
+  vec2 fl = ( texture2D( uMapB, vUvA ).ba * 2.0 - 1.0 ) * uFlowScale;
+  fl.x *= vMirror;
+  fl *= tileSize;
+  // (round 7b, wave m2: "cotton-ball puffs") the card's lookup warped by a slow turbulent field: no silhouette is a clean
+  // round ball, and the warp grows as the puff ages and spreads
+  vec2 wn = vec2( texture2D( uDetail, vDetail * 0.37 + vec2( 0.11, 0.29 ) ).r, texture2D( uDetail, vDetail * 0.37 + vec2( 0.53, 0.71 ) ).r ) - 0.5;
+  vec2 warp = wn * tileSize * uWarpK * ( 0.5 + 0.8 * vT );
+  vec2 uvA = clampTile( vUvA - fl * vBlend + warp, vTiles.xy, tileSize );
+  vec2 uvB = clampTile( vUvB + fl * ( 1.0 - vBlend ) + warp, vTiles.zw, tileSize );
+  vec4 A = mix( texture2D( uMapA, uvA ), texture2D( uMapA, uvB ), vBlend );
+  vec4 B = mix( texture2D( uMapB, uvA ), texture2D( uMapB, uvB ), vBlend );
+  float cov = A.a;
+  // erode from the thin edges inward as the puff dies (vFade 0 -> 1)
+  float k = vFade;
+  float covE = clamp( ( cov - 0.8 * k ) / max( 1.0 - 0.8 * k, 0.05 ), 0.0, 1.0 );
+  // the thin rim tears into fine wisps at every distance (a tiling noise finer than the flipbook's texels); the dense
+  // body keeps its shape
+  float dn = texture2D( uDetail, vDetail ).r * 0.62 + texture2D( uDetail, vDetail * 2.31 + 0.37 ).r * 0.38;
+  float er = uDetailK * ( 1.0 - smoothstep( 0.2, 0.9, cov ) ) * dn;
+  covE = clamp( ( covE - er ) / max( 1.0 - er, 0.05 ), 0.0, 1.0 );
+  // (the coordinator, at chase range: the billow "still reads as a cut-out cloud with a defined lobed silhouette") the
+  // billow's density thins toward its rim (a gentler coverage response) and the card's outer lobes fall away on a
+  // noisy radius (the warp's own low-frequency noise: no extra fetch), so its silhouette dissolves into the air rather
+  // than ending on a drawn lobe line; the burst medium (dust, soil) keeps its torn rim, and a fireball keeps its lobes
+  // while it burns (the softening comes in as its heat dies into smoke)
+  // (the coordinator, chase range: the low ground puffs "still show a cut-out silhouette") a body born low over the
+  // ground (vSoft.z 2) takes a stronger rim falloff and a noisier, wider-swinging edge
+  float sb = min( vSoft.z, 1.0 ) * ( 1.0 - smoothstep( 0.05, 0.4, vHeat ) );
+  float lowS = max( vSoft.z - 1.0, 0.0 ) * sb;
+  float rr = length( vSoft.xy - 0.5 ) * 2.0;
+  float edgeN = wn.x + 0.5 + lowS * ( dn - 0.5 ) * 0.9;
+  float fall = 1.0 - smoothstep( 0.4 - 0.14 * lowS + ( 0.36 + 0.14 * lowS ) * edgeN, 1.02, rr );
+  float covS = mix( covE, pow( covE, 1.6 + 0.6 * lowS ) * fall, sb );
+  // (245) a heat-imaging camera sees through the cold medium (uHeatSmoke: the share of its opacity it keeps); hot gas and a
+  // burst's lit heart keep all of it
+  float heatSeen = smoothstep( 0.04, 0.35, B.g * B.g * vHeat + vGlow );
+  float a = covS * vColor.a * ( 1.0 - k * k ) * uGrade.x * mix( uHeatSmoke, 1.0, heatSeen );
+  if ( a < 0.003 ) discard;
+  a *= softDepthFadeV();
+  if ( a < 0.003 ) discard;
+  // decode (sqrt-stored) responses; a mirrored card swaps its left and right
+  float rx = A.r * A.r, lx = A.b * A.b;
+  float R = vMirror > 0.0 ? rx : lx;
+  float L = vMirror > 0.0 ? lx : rx;
+  float U = A.g * A.g, D = B.r * B.r;
+  // the billow's lobes blend into one another: their six-way shading pulled a third of the way to its mean (each lobe's
+  // light kept, the hard step between neighbouring lobes softened)
+  float m4 = 0.25 * ( R + L + U + D );
+  float lb = 0.42 * sb;
+  R = mix( R, m4, lb ); L = mix( L, m4, lb ); U = mix( U, m4, lb ); D = mix( D, m4, lb );
+  float tau = -log( max( 1.0 - cov * 0.995, 1e-3 ) );
+  float front = 1.0 - 0.5 * cov;
+  float back = clamp( tau * ( 1.0 - cov ) / max( cov, 1e-3 ), 0.0, 1.0 );
+  float sunL = ( vW.x * R + vW.y * L + vW.z * U + vW.w * D + vWfb.x * front + vWfb.y * back * uGrade.z )
+    * ( 0.88 + 0.24 * dn );
+  float skyL = 0.5 * U + 0.15 * ( R + L ) + 0.2 * front;
+  // multiple scattering: bright media (dust, powder, spray) lift their shaded side; soot stays dark
+  float albedoL = dot( vColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float bright = smoothstep( 0.08, 0.5, albedoL );
+  float ms = uGrade.w * bright;
+  sunL = mix( sunL, sqrt( sunL ), ms );
+  skyL = mix( skyL, sqrt( skyL ), ms * 0.6 );
+  // dark media take the sky neutral: soot scatters what little it does without the sky's blue (round 4: a rocket's
+  // smoke read as blue ghosts), bright dust keeps a little of it
+  float skyLum = dot( uSkyCol, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 skyC = mix( vec3( skyLum ), uSkyCol, smoothstep( 0.04, 0.3, albedoL ) );
+  // (EF.11, DO-FX-08: "a bright blue-cyan fringe" on smoke edges against the sky) the thin rim, where the sun's share of
+  // the baked light falls away first, was lit by the sky's blue alone: it takes the sky's light at its luminance, grey,
+  // and the body keeps the hue
+  skyC = mix( vec3( skyLum ), skyC, smoothstep( 0.15, 0.6, cov ) );
+  // the shade's light: the sky over it, the ground's under it (the reference every medium has always taken)
+  vec3 amb0 = skyC * skyL + uGroundCol * ( 0.35 * D + 0.1 );
+  // (fx 8c, the critics after atmos r2: "a cool white wall in the desert that ignores warm light"; fx 8k, wave 354a: a
+  // collapse's dust read "a dark, thin, flat haze", "murky olive" with the 8c ground light over dark and green ground) a
+  // bright medium scatters the ground's light through its whole body as it does the sky's: its shade takes that light's
+  // HUE at the reference's own LUMINANCE (never darker, never brighter), and only from a warm ground (sand, warm soil):
+  // a screen over sand creams, dust over turf or asphalt keeps the sun-and-sky tan it always had; (fx 8q, wave 381: the
+  // warehouse's dust "browner" over Caldera's warm dark ground) only the near-white media take it (screens, snow powder,
+  // sand dust: albedo over ~0.5) — masonry powder (held under 0.4, structureFx dustOf) and earth shade exactly as before
+  // (fx 9, wave 403: "over warm sand the shaded sides stay neutral grey") the ground's share of a near-white medium's
+  // shade doubled (its hue only: the luminance stays the reference's), so a screen's shade creams over warm sand
+  vec3 amb1 = skyC * skyL * 0.55 + uGroundCol * ( 1.0 * D + 0.3 * ( R + L ) + 0.45 );
+  float gLum = dot( uGroundCol, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float warmG = smoothstep( 0.02, 0.16, ( uGroundCol.r - uGroundCol.g ) / max( gLum, 1e-4 ) );
+  float lum0 = dot( amb0, vec3( 0.2126, 0.7152, 0.0722 ) ), lum1 = dot( amb1, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 amb = mix( amb0, amb1 * ( lum0 / max( lum1, 1e-5 ) ), smoothstep( 0.45, 0.65, albedoL ) * warmG * uGrade2.x );
+  vec3 col = vColor.rgb * ( uSunCol * sunL + amb );
+  // (EF.11, DO-FX-08: "night smoke drawn as flat black cut-outs over fire") at night a dark medium still scatters the
+  // sky's glow: its light never falls under a share of the sky's own, shaded by its top and its front, so a column keeps
+  // a volume against the night sky instead of a flat black hole (its fire lights its underside: EF.10's local lights)
+  // (the coordinator on round 2's night cook-off: "pink-beige and too bright against the night sky ... real night smoke
+  // over a fire is dark grey to near-black") a quarter of the sky's light, neutral grey (no hue from the sky term)
+  if ( uGrade2.y > 0.0 ) {
+    float floorL = skyLum * uGrade2.y * uGrade2.w * ( 0.35 + 0.5 * U + 0.15 * front );
+    col = max( col, vec3( floorL ) );
+  }
+  // (the coordinator: at sunset the low sun front-lights the low dust "too bright and opaque") a low body's lit
+  // brightness is capped against the ground's own (the sun's share at its elevation, the sky's, the bounce), and it thins
+  // as the sun drops: dust over the grass stays a veil, not a sheet
+  if ( lowS > 0.0 ) {
+    const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+    float bgL = 0.3 * ( dot( uSunCol, LUMA ) * max( uSunDir.y, 0.0 ) + dot( uSkyCol, LUMA ) ) + dot( uGroundCol, LUMA );
+    float cL = dot( col, LUMA );
+    col *= mix( 1.0, min( 1.0, 2.0 * bgL / max( cL, 1e-4 ) ), lowS );
+    a *= 1.0 - 0.3 * lowS * ( 1.0 - smoothstep( 0.12, 0.4, uSunDir.y ) );
+  }
+  // fire inside the medium: the baked temperature x the puff's heat, on a blackbody ramp; the soot it lights
+  float tb = B.g * B.g;
+  float h = clamp( tb * vHeat, 0.0, 1.6 );
+  if ( h > 0.002 ) {
+    // (round 7b, wave m2: "flat orange fireballs with no core") a white-yellow heart (the bake's hottest) inside a darker,
+    // sooty shell: the heat rises at the core and falls at the rim, and the rim's own colour is the soot's
+    float core = smoothstep( 0.3, 0.85, tb );
+    float hc = h * ( 0.5 + 0.85 * core );
+    vec3 glow = blackbody( min( hc, 1.0 ) ) * ( 6.5 * hc * hc ) * uGrade.y;
+    col = col * ( 1.0 - 0.85 * smoothstep( 0.1, 0.55, hc ) ) * mix( 0.5, 1.0, core ) + glow;
+  }
+  // lit from inside by a burst: the thick body more than its thin rim, in the medium's own colour warmed by the fire
+  if ( vGlow > 0.002 ) col += ( vColor.rgb * 0.6 + vec3( 0.55, 0.2, 0.05 ) ) * vGlow * ( 0.35 + 0.65 * cov ) * uGrade.y;
+  // (EF.10) the local lights scatter in the medium's own colour, the thick body more than its thin rim (a headlight's
+  // beam shows in the dust it drives through; a burning wreck lights its smoke's underside)
+  // (233) by day soot scatters a fire's light at 7 % at least (at its own ~3 % albedo the flames' light on their smoke
+  // base was lost under the sun's); at night (uGrade2.y) at its own albedo, or the column washes cream
+  #ifdef FX_LOCAL_LIGHTS
+    col += max( vColor.rgb, vec3( 0.07 * ( 1.0 - uGrade2.y ) ) ) * vLocal * ( 0.35 + 0.65 * cov );
+  #endif
+  #ifdef USE_FOG
+    #ifdef FOG_EXP2
+      float fogFactor = 1.0 - exp( -fogDensity * fogDensity * vFogDepth * vFogDepth );
+    #else
+      float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+    #endif
+    col = mix( col, fogColor, fogFactor );
+  #endif
+  // (2026-10-08, the owner's black screens) the emission stays far inside half-float range, and a NaN or Inf fragment
+  // is dropped rather than written (the late composite's guard is the backstop behind this one)
+  col = min( col, vec3( 4096.0 ) );
+  if ( !( abs( col.r ) < 6.0e4 && abs( col.g ) < 6.0e4 && abs( col.b ) < 6.0e4 && abs( a ) < 6.0e4 ) ) discard;
+  gl_FragColor = vec4( col, min( a, 1.0 ) );
+}
+`;
+
+// ---------------------------------------------------------------------------------------------------------------
+// The pool
+// ---------------------------------------------------------------------------------------------------------------
+
+interface SoftParticleUniforms {
+  uSceneDepth: { value: unknown };
+  uSoftViewport: { value: THREE.Vector2 };
+  uCameraNear: { value: number };
+  uCameraFar: { value: number };
+}
+
+interface LightRigLike {
+  sunIntensity?: number; sunColor?: THREE.Color; hemiIntensity?: number; hemiSky?: THREE.Color; hemiGround?: THREE.Color;
+}
+interface LightModelLike {
+  mode?: string; envIntensity?: number; envDiffuseGain?: number; groundRadiance?: readonly number[];
+}
+interface SceneLightData {
+  sunDirWorld?: THREE.Vector3; lightRig?: LightRigLike; lightModel?: LightModelLike; skyIrradiance?: THREE.Color;
+  surfaceWind?: { x: number; z: number } | null;
+  volumetricClouds?: { currentPreset?: { windDirRad?: number; windSpeed?: number } | null } | null;
+}
+
+
+/** Diagnostic grade (live-tunable through group.userData.volumeTune; play values below). */
+// skySat 0.22 -> 0.12 (wave 273: thinning dust turned bluish)
+// night 0.25 -> 0.5 (FX lane 2026-10-17, the media critics' "flat black plume" on ~15 night takes: a night plume read as a
+// flat black cut-out against the sky; the coordinator's EF.11 ruling stands — dark grey, never beige — so the floor stays
+// neutral and under the sky's own level, now with the body's top lit over its heart)
+const DEFAULT_TUNE = Object.freeze({ sun: 1.0, sky: 1.0, skySat: 0.12, alpha: 1.0, glow: 1.0, back: 1.6, ms: 0.55, detail: 0.55,
+  warp: 0.16, ground: 1.0, night: 0.5 });
+
+interface VolumeMediaOptions {
+  soft: SoftParticleUniforms;
+  now: () => number;
+  scene?: THREE.Scene | null;
+  capacity?: number;
+  /** (ac130-fx-228 r3) the fire's emission gain for this frame's camera (a heat-imaging lens reads hot gas as hot) */
+  heatGain?: (camera: THREE.Camera | null | undefined) => number;
+  /** (ac130-fx-228 r3) the fire's cooling-rate factor for this frame's camera (a heat-imaging lens sees the gas cool slower) */
+  heatCool?: (camera: THREE.Camera | null | undefined) => number;
+  /** (245) the share of its opacity a cold medium keeps to this frame's camera (a heat-imaging lens sees through smoke) */
+  heatSmoke?: (camera: THREE.Camera | null | undefined) => number;
+}
+
+/** How far the detail tear eats into a puff's thin rim (0 off). */
+const DETAIL_K = 0.55;
+
+/** A tileable 128 x 128 fractal value noise (seeded; built once): the fine tear of the media's thin rims. */
+function detailNoiseTexture(seed: number): THREE.DataTexture {
+  const S = 128;
+  const out = new Float32Array(S * S);
+  let a = seed | 0;
+  const rand = (): number => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let amp = 1, norm = 0;
+  for (const period of [8, 16, 32, 64]) {
+    const lat = new Float32Array(period * period);
+    for (let i = 0; i < lat.length; i++) lat[i] = rand();
+    const cell = S / period;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const gx = x / cell, gy = y / cell;
+      const x0 = Math.floor(gx), y0 = Math.floor(gy);
+      let fx = gx - x0, fy = gy - y0;
+      fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+      const x1 = (x0 + 1) % period, y1 = (y0 + 1) % period;
+      const v00 = lat[y0 * period + x0], v10 = lat[y0 * period + x1], v01 = lat[y1 * period + x0], v11 = lat[y1 * period + x1];
+      out[y * S + x] += amp * (v00 + (v10 - v00) * fx + (v01 - v00) * fy + (v00 - v10 - v01 + v11) * fx * fy);
+    }
+    norm += amp;
+    amp *= 0.55;
+  }
+  const data = new Uint8Array(S * S * 4);
+  for (let i = 0; i < S * S; i++) {
+    // stretch the sum's narrow middle toward 0..1
+    const v = Math.min(1, Math.max(0, (out[i] / norm - 0.5) * 2.2 + 0.5));
+    const b = Math.round(v * 255);
+    data[i * 4] = b; data[i * 4 + 1] = b; data[i * 4 + 2] = b; data[i * 4 + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, S, S);
+  t.name = 'fx-volume-detail';
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.colorSpace = THREE.NoColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+export interface VolumeMedia {
+  readonly group: THREE.Group;
+  /** Start (or join) the atlas load; resolves true when both sheets are on their textures. */
+  warm(): Promise<boolean>;
+  readonly ready: boolean;
+  emit(p: VolumePuff): void;
+  /** Per render frame: light, wind, the depth sort and the upload (no work while nothing is alive). */
+  update(camera: THREE.Camera | null | undefined): void;
+  shiftTime(delta: number): void;
+  reset(): void;
+  isActive(): boolean;
+  /** receipts: live count, capacity, the last frame's sorted count, the current wind */
+  stats(): { live: number; capacity: number; drawn: number; wind: [number, number]; ready: boolean };
+  /** receipts: the motion law's wind */
+  readonly wind: THREE.Vector3;
+  /** A burst's light inside the medium for `durS` from now + `birthOffset` (centre, radius m, peak 0..~1.5). */
+  glow(x: number, y: number, z: number, radiusM: number, peak: number, durS: number, birthOffset?: number): void;
+  /** (ac130-fx-228 follow-up) a heavy burst's embers lighting its column at night only, for `durS` (centre, radius m, peak) */
+  ember(x: number, y: number, z: number, radiusM: number, peak: number, durS: number, birthOffset?: number): void;
+  /** (EF.04) the media's own light and wind uniforms, shared with other normal-blended smoke (the missile ribbons) so
+   *  it is lit as the media are, by the time of day; refreshShading() brings them up to the scene's light now */
+  readonly shading: VolumeShading;
+  refreshShading(): void;
+}
+
+export interface VolumeShading {
+  readonly uTime: { value: number };
+  readonly uWind: { value: THREE.Vector3 };
+  readonly uSunDir: { value: THREE.Vector3 };
+  readonly uSunCol: { value: THREE.Vector3 };
+  readonly uSkyCol: { value: THREE.Vector3 };
+  readonly uGroundCol: { value: THREE.Vector3 };
+}
+
+export function createVolumeMedia(o: VolumeMediaOptions): VolumeMedia {
+  // (round 3: longer-lived column puffs; 1024 records hold six burning hulls and a barrage)
+  const capacity = Math.max(16, o.capacity ?? 1536);
+  const group = new THREE.Group();
+  group.name = 'fx-volume-media';
+  group.matrixAutoUpdate = false;
+
+  // CPU records (emit slots, ring) and the GPU instance arrays (sorted live copy)
+  const rec = new Float32Array(capacity * STRIDE);
+  const live = new Int32Array(capacity);
+  const order = new Int32Array(capacity);
+  let orderCount = 0;
+  const depth = new Float32Array(capacity);
+  const inOrder = new Uint8Array(capacity);
+  let cursor = 0;
+  let liveUntil = -Infinity;
+
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  geo.setIndex([0, 1, 2, 0, 2, 3]);
+  geo.instanceCount = 0;
+  const gpu: Float32Array[] = [];
+  const attrs: THREE.InstancedBufferAttribute[] = [];
+  for (const name of ATTRS) {
+    const arr = new Float32Array(capacity * 4);
+    const attr = new THREE.InstancedBufferAttribute(arr, 4);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute(name, attr);
+    gpu.push(arr);
+    attrs.push(attr);
+  }
+
+  // textures: 1x1 transparent placeholders until warm() lands the sheets
+  const placeholder = (): THREE.DataTexture => {
+    const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 0]), 1, 1);
+    t.needsUpdate = true;
+    return t;
+  };
+  const mapA = { value: placeholder() as THREE.Texture };
+  const mapB = { value: placeholder() as THREE.Texture };
+  const uTime = { value: 0 };
+  // (EF.12) the presentation's one surface wind (worldWind.ts): the scene's, else the clouds' brought down, else a lean
+  const uWind = { value: new THREE.Vector3(worldWind.x, 0, worldWind.z) };
+  const uSunDir = { value: new THREE.Vector3(0.527, 0.574, -0.627).normalize() };
+  const uSunCol = { value: new THREE.Vector3(1.4, 1.35, 1.25) };
+  const uSkyCol = { value: new THREE.Vector3(0.3, 0.32, 0.35) };
+  const uGroundCol = { value: new THREE.Vector3(0.14, 0.13, 0.11) };
+  const uGrade = { value: new THREE.Vector4(1, 1, DEFAULT_TUNE.back, DEFAULT_TUNE.ms) };
+  const uGrade2 = { value: new THREE.Vector4(DEFAULT_TUNE.ground, 0, 0, DEFAULT_TUNE.night) };
+  const uHeatCool = { value: 1 };
+  const uHeatSmoke = { value: 1 };
+  const totalRows = VOLUME_ATLAS.bands * VOLUME_ATLAS.rowsPerBand;
+  const bandWarp: THREE.Vector4[] = [];
+  for (let b = 0; b < VOLUME_ATLAS.bands; b++) bandWarp.push(new THREE.Vector4(1, 0, 0, 0));
+  for (const id of Object.keys(VOLUME_ATLAS.media) as VolumeMediumId[]) {
+    const m = VOLUME_ATLAS.media[id];
+    for (let v = 0; v < m.variants; v++) bandWarp[m.firstBand + v].x = 1 / m.gamma;
+  }
+  const tune = { ...DEFAULT_TUNE };
+  const glowP: THREE.Vector4[] = [], glowK: THREE.Vector4[] = [];
+  for (let i = 0; i < GLOW_SLOTS; i++) { glowP.push(new THREE.Vector4(0, 0, 0, -1e9)); glowK.push(new THREE.Vector4(1, 0, 0, 0)); }
+  let glowNext = 0;
+  const emberP: THREE.Vector4[] = [], emberK: THREE.Vector4[] = [];
+  for (let i = 0; i < EMBER_SLOTS; i++) { emberP.push(new THREE.Vector4(0, 0, 0, -1e9)); emberK.push(new THREE.Vector4(1, 0, 0, 0)); }
+  let emberNext = 0;
+  const detail = detailNoiseTexture(0x5eedde7);
+  const uDetailK = { value: DETAIL_K };
+  const uWarpK = { value: DEFAULT_TUNE.warp };
+  group.userData.volumeTune = tune;
+
+  const material = new THREE.ShaderMaterial({
+    vertexShader: VOLUME_VERT,
+    fragmentShader: VOLUME_FRAG,
+    uniforms: Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), {
+      uTime, uWind, uSunDir, uSunCol, uSkyCol, uGroundCol, uGrade, uGrade2, uHeatCool, uHeatSmoke,
+      uMapA: mapA, uMapB: mapB,
+      uAtlas: { value: new THREE.Vector4(VOLUME_ATLAS.columns, totalRows, VOLUME_ATLAS.rowsPerBand, VOLUME_ATLAS.frames) },
+      uFlowScale: { value: VOLUME_ATLAS.flowScale },
+      uBandWarp: { value: bandWarp },
+      uGlowP: { value: glowP }, uGlowK: { value: glowK }, uEmberP: { value: emberP }, uEmberK: { value: emberK },
+      ...localLightUniforms,
+      uNearFade: { value: new THREE.Vector2(0.8, 3.4) },
+      uDetail: { value: detail }, uDetailK, uWarpK,
+      uSceneDepth: o.soft.uSceneDepth,
+      uSoftViewport: o.soft.uSoftViewport,
+      uCameraNear: o.soft.uCameraNear,
+      uCameraFar: o.soft.uCameraFar,
+    }),
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.NormalBlending,
+    fog: true,
+  });
+  // (EF.10) the local light loop compiles in only above Low (localLights.ts)
+  registerLocalLightMaterial(material);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.name = 'fx-volume-media';
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  // draw order in the late pass: the battle dust (20) and smoke (21) under it, the additive fire (22) over it
+  mesh.renderOrder = 21.4;
+  mesh.layers.set(LATE_FX_LAYER);
+  mesh.visible = false;
+  group.add(mesh);
+
+  // --- the atlas load (lazy: warm() at battle warm or Studio entry)
+  let ready = false;
+  let loading: Promise<boolean> | null = null;
+  async function loadSheet(src: string): Promise<ImageBitmap | HTMLImageElement> {
+    if (typeof createImageBitmap === 'function' && typeof fetch === 'function') {
+      try {
+        const blob = await (await fetch(src)).blob();
+        return await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none', imageOrientation: 'flipY' });
+      } catch { /* fall back to an image element below */ }
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = async () => { try { await img.decode?.(); } catch { /* onload suffices */ } resolve(img); };
+      img.onerror = () => reject(new Error(`volume media atlas failed: ${src}`));
+      img.src = src;
+    });
+  }
+  function sheetTexture(img: ImageBitmap | HTMLImageElement, name: string): THREE.Texture {
+    const t = new THREE.Texture(img as unknown as HTMLImageElement);
+    t.name = name;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.colorSpace = THREE.NoColorSpace; // data, not colour: the shader decodes it
+    t.premultiplyAlpha = false;
+    // an ImageBitmap arrives already flipped (imageOrientation 'flipY'); an image element flips on upload
+    t.flipY = !(typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap);
+    t.needsUpdate = true;
+    return t;
+  }
+  function warm(): Promise<boolean> {
+    if (ready) return Promise.resolve(true);
+    if (typeof Image === 'undefined' && typeof createImageBitmap !== 'function') return Promise.resolve(false);
+    if (!loading) {
+      loading = Promise.all([loadSheet(VOLUME_ATLAS.urlA), loadSheet(VOLUME_ATLAS.urlB)]).then(([a, b]) => {
+        (mapA.value as THREE.Texture).dispose();
+        (mapB.value as THREE.Texture).dispose();
+        mapA.value = sheetTexture(a, 'fx-volume-a');
+        mapB.value = sheetTexture(b, 'fx-volume-b');
+        ready = true;
+        return true;
+      }).catch(() => { loading = null; return false; });
+    }
+    return loading;
+  }
+
+  const o_now = o.now;
+  /** this frame's fire emission gain (the camera's heat imaging), set by update() before the light refresh */
+  let heatK = 1;
+  // --- emit
+  const bandOf = (p: VolumePuff): number => {
+    const m = VOLUME_ATLAS.media[p.medium];
+    return m.firstBand + (Math.abs(Math.floor(p.variant)) % m.variants);
+  };
+  /**
+   * (fx 8e, dcore's pool-pressure check: lingering collapse dust and long burst smoke) the slot a new puff takes: the next
+   * free one within a short scan of the ring (dead, or never used), else the scanned puff nearest its own end — never a
+   * fresh body by ring order alone. A puff scheduled for later (its birth ahead) counts as live. O(SLOT_SCAN), no
+   * allocation; with the pool under capacity it is the ring's own order.
+   */
+  function takeSlot(now: number): number {
+    let best = cursor, bestEnd = Infinity;
+    for (let k = 0; k < SLOT_SCAN; k++) {
+      const i = (cursor + k) % capacity;
+      const ob = i * STRIDE;
+      const end = rec[ob + 7] > 0 ? rec[ob + 3] + rec[ob + 7] : -Infinity;
+      if (end < now) { best = i; break; }
+      if (end < bestEnd) { bestEnd = end; best = i; }
+    }
+    cursor = (best + 1) % capacity;
+    return best;
+  }
+  function emit(p: VolumePuff): void {
+    const now = o_now();
+    const i = takeSlot(now);
+    const o = i * STRIDE;
+    const birth = now + p.birthOffset;
+    rec[o] = p.x; rec[o + 1] = p.y; rec[o + 2] = p.z; rec[o + 3] = birth;
+    rec[o + 4] = p.vx; rec[o + 5] = p.vy; rec[o + 6] = p.vz; rec[o + 7] = p.life;
+    rec[o + 8] = p.drag; rec[o + 9] = p.rise; rec[o + 10] = p.windK; rec[o + 11] = p.grav;
+    rec[o + 12] = p.size0; rec[o + 13] = p.size1; rec[o + 14] = p.growExp; rec[o + 15] = p.rot;
+    rec[o + 16] = p.r0; rec[o + 17] = p.g0; rec[o + 18] = p.b0; rec[o + 19] = p.density;
+    rec[o + 20] = p.r1; rec[o + 21] = p.g1; rec[o + 22] = p.b1; rec[o + 23] = p.fadeIn;
+    rec[o + 24] = bandOf(p); rec[o + 25] = (p.mirror ? -1 : 1) * Math.min(4, Math.max(0.25, p.aspect > 0 ? p.aspect : 1)); rec[o + 26] = p.playSeconds; rec[o + 27] = p.startFrame;
+    rec[o + 28] = p.heat; rec[o + 29] = p.cool; rec[o + 30] = Math.min(0.999, p.fadeOut) + (p.low ? 2 : 0); rec[o + 31] = p.spin;
+    if (birth + p.life > liveUntil) liveUntil = birth + p.life;
+  }
+
+  // --- per frame
+  const _pos = new Float32Array(3);
+  const _camPos = new THREE.Vector3();
+  const _camFwd = new THREE.Vector3();
+  let drawn = 0;
+  let liveCount = 0;
+  function refreshLight(): void {
+    const ud = (o.scene?.userData ?? null) as SceneLightData | null;
+    const sunDir = ud?.sunDirWorld;
+    if (sunDir && sunDir.lengthSq() > 1e-8) uSunDir.value.copy(sunDir).normalize();
+    const rig = ud?.lightRig;
+    if (rig) {
+      const si = (rig.sunIntensity ?? 4.5) * tune.sun / Math.PI;
+      const sc = rig.sunColor;
+      uSunCol.value.set(sc ? sc.r * si : si, sc ? sc.g * si : si, sc ? sc.b * si : si);
+      const model = ud?.lightModel;
+      const irr = ud?.skyIrradiance;
+      const physical = model?.mode === 'physical' && !!irr;
+      const hi = (rig.hemiIntensity ?? 0.4) * (physical ? 1 : 2.2) * tune.sky / Math.PI;
+      const sky = rig.hemiSky, gnd = rig.hemiGround;
+      let sr = sky ? sky.r * hi : hi, sg = sky ? sky.g * hi : hi, sb = sky ? sky.b * hi : hi;
+      let gr = gnd ? gnd.r * hi : hi, gg = gnd ? gnd.g * hi : hi, gb = gnd ? gnd.b * hi : hi;
+      if (physical && irr) {
+        const kk = (model?.envIntensity ?? 1) * (model?.envDiffuseGain ?? 1) * tune.sky;
+        sr += irr.r * kk; sg += irr.g * kk; sb += irr.b * kk;
+        const g2 = model?.groundRadiance;
+        if (g2 && g2.length >= 3) { gr += g2[0] * kk; gg += g2[1] * kk; gb += g2[2] * kk; }
+      }
+      // desaturate the sky pole: light scattered inside dust and smoke mixes the sky with the sun and the ground —
+      // a shaded face reads grey (FX round 6's thin puffs read sky-blue)
+      const lum = 0.2126 * sr + 0.7152 * sg + 0.0722 * sb;
+      const ks = tune.skySat;
+      uSkyCol.value.set(lum + (sr - lum) * ks, lum + (sg - lum) * ks, lum + (sb - lum) * ks);
+      uGroundCol.value.set(gr, gg, gb);
+    }
+    uGrade.value.set(tune.alpha, tune.glow * heatK, tune.back, tune.ms);
+    uGrade2.value.x = tune.ground;
+    uGrade2.value.w = tune.night;
+    // (EF.11) the night level: the rig's sun (Verdant: day 4.5, sunset 2.8, night 0.6) under ~2.2 fades in the night floor
+    { const sunI = rig ? (rig.sunIntensity ?? 4.5) : 4.5; const k = Math.min(1, Math.max(0, (sunI - 0.9) / 1.3));
+      uGrade2.value.y = 1 - k * k * (3 - 2 * k); }
+    // (ac130-fx-228 follow-up) the embers' level: the night level, but dark to a heat-imaging camera (its raised fire gain):
+    // the ember is the column's firelight for the eye; the heat lens images the gas's own heat and the crater's
+    uGrade2.value.z = heatK > 1 ? 0 : uGrade2.value.y;
+    uDetailK.value = tune.detail;
+    uWarpK.value = tune.warp;
+    refreshWorldWind(ud);
+    uWind.value.set(worldWind.x, 0, worldWind.z);
+  }
+
+  function update(camera: THREE.Camera | null | undefined): void {
+    const now = o_now();
+    uTime.value = now;
+    if (!(now <= liveUntil)) {
+      if (geo.instanceCount !== 0) geo.instanceCount = 0;
+      // idle: out of the render list entirely (no program bind, no uniform upload, no draw)
+      mesh.visible = false;
+      drawn = 0; liveCount = 0; orderCount = 0;
+      return;
+    }
+    heatK = o.heatGain ? o.heatGain(camera) : 1;
+    uHeatCool.value = o.heatCool ? o.heatCool(camera) : 1;
+    uHeatSmoke.value = o.heatSmoke ? o.heatSmoke(camera) : 1;
+    refreshLight();
+    // live set (birth <= now <= birth + life), keeping last frame's order for an almost-sorted start
+    let n = 0;
+    inOrder.fill(0);
+    for (let q = 0; q < orderCount; q++) {
+      const i = order[q];
+      const ob = i * STRIDE;
+      const age = now - rec[ob + 3];
+      if (rec[ob + 7] > 0 && age >= 0 && age <= rec[ob + 7]) { live[n++] = i; inOrder[i] = 1; }
+    }
+    for (let i = 0; i < capacity; i++) {
+      if (inOrder[i]) continue;
+      const ob = i * STRIDE;
+      const age = now - rec[ob + 3];
+      if (rec[ob + 7] > 0 && age >= 0 && age <= rec[ob + 7]) live[n++] = i;
+    }
+    liveCount = n;
+    // view depth along the camera's forward axis (farthest first)
+    if (camera) {
+      camera.getWorldPosition(_camPos);
+      camera.getWorldDirection(_camFwd);
+    }
+    const wx = uWind.value.x, wz = uWind.value.z;
+    for (let q = 0; q < n; q++) {
+      const i = live[q];
+      const ob = i * STRIDE;
+      volumePositionAt(rec, ob, wx, wz, now - rec[ob + 3], _pos);
+      depth[i] = (_pos[0] - _camPos.x) * _camFwd.x + (_pos[1] - _camPos.y) * _camFwd.y + (_pos[2] - _camPos.z) * _camFwd.z;
+    }
+    // insertion sort, descending depth (stable: equal depths keep their order)
+    for (let q = 1; q < n; q++) {
+      const i = live[q];
+      const di = depth[i];
+      let r = q - 1;
+      while (r >= 0 && depth[live[r]] < di) { live[r + 1] = live[r]; r--; }
+      live[r + 1] = i;
+    }
+    for (let q = 0; q < n; q++) order[q] = live[q];
+    orderCount = n;
+    // the sorted copy into the instance arrays, one contiguous range per attribute
+    for (let q = 0; q < n; q++) {
+      const ob = live[q] * STRIDE;
+      const og = q * 4;
+      for (let a = 0; a < 8; a++) {
+        const g = gpu[a];
+        const s = ob + a * 4;
+        g[og] = rec[s]; g[og + 1] = rec[s + 1]; g[og + 2] = rec[s + 2]; g[og + 3] = rec[s + 3];
+      }
+    }
+    for (let a = 0; a < 8; a++) {
+      const attr = attrs[a];
+      attr.clearUpdateRanges();
+      if (n > 0) attr.addUpdateRange(0, n * 4);
+      attr.needsUpdate = true;
+    }
+    geo.instanceCount = n;
+    mesh.visible = n > 0;
+    drawn = n;
+  }
+
+  function shiftTime(delta: number): void {
+    for (let i = 0; i < capacity; i++) {
+      const ob = i * STRIDE;
+      if (rec[ob + 7] > 0) rec[ob + 3] += delta;
+    }
+    if (Number.isFinite(liveUntil)) liveUntil += delta;
+    // (round 3 B5) the instance copies' births too: the drawn ones are right before the next sort rewrites them, and the
+    // ones past the drawn count (last drawn earlier) keep no pre-rebase time
+    const pb = gpu[ATTRS.indexOf('aPB')];
+    for (let i = 3; i < pb.length; i += 4) pb[i] += delta;
+    attrs[ATTRS.indexOf('aPB')].needsUpdate = true;
+    for (const g of glowP) if (g.w > -1e8) g.w += delta;
+    // (2026-11-02 audit R7) the embers' births are fx-clock stamps too (a forward rebase expired them at once)
+    for (const e of emberP) if (e.w > -1e8) e.w += delta;
+  }
+
+  function reset(): void {
+    for (let i = 0; i < capacity; i++) rec[i * STRIDE + 7] = 0;
+    cursor = 0;
+    orderCount = 0;
+    liveUntil = -Infinity;
+    geo.instanceCount = 0;
+    mesh.visible = false;
+    drawn = 0; liveCount = 0;
+    for (let i = 0; i < GLOW_SLOTS; i++) { glowP[i].set(0, 0, 0, -1e9); glowK[i].set(1, 0, 0, 0); }
+    glowNext = 0;
+    for (let i = 0; i < EMBER_SLOTS; i++) { emberP[i].set(0, 0, 0, -1e9); emberK[i].set(1, 0, 0, 0); }
+    emberNext = 0;
+  }
+
+  function glow(x: number, y: number, z: number, radiusM: number, peak: number, durS: number, birthOffset = 0): void {
+    if (!(radiusM > 0) || !(peak > 0) || !(durS > 0)) return;
+    const i = glowNext;
+    glowNext = (glowNext + 1) % GLOW_SLOTS;
+    glowP[i].set(x, y, z, o_now() + birthOffset);
+    glowK[i].set(radiusM, peak, durS, 0);
+  }
+
+  function ember(x: number, y: number, z: number, radiusM: number, peak: number, durS: number, birthOffset = 0): void {
+    if (!(radiusM > 0) || !(peak > 0) || !(durS > 0)) return;
+    const i = emberNext;
+    emberNext = (emberNext + 1) % EMBER_SLOTS;
+    emberP[i].set(x, y, z, o_now() + birthOffset);
+    emberK[i].set(radiusM, peak, durS, 0);
+  }
+
+  return {
+    group,
+    warm,
+    get ready() { return ready; },
+    emit,
+    update,
+    shiftTime,
+    reset,
+    glow,
+    ember,
+    isActive: () => o_now() <= liveUntil,
+    stats: () => ({ live: liveCount, capacity, drawn, wind: [uWind.value.x, uWind.value.z], ready }),
+    wind: uWind.value,
+    shading: { uTime, uWind, uSunDir, uSunCol, uSkyCol, uGroundCol },
+    refreshShading: () => { uTime.value = o_now(); refreshLight(); },
+  };
+}

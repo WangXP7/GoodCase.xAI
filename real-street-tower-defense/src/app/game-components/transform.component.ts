@@ -1,0 +1,166 @@
+import { Component } from '../core/component';
+import { GameObject } from '../core/game-object';
+import { GeoPosition } from '../models/game.types';
+import { geoHeading } from '../utils/geo-utils';
+
+/**
+ * Receives whether a TransformComponent still has to turn, i.e. whether
+ * `update()` would move `rotation`. An owner that keeps this flag can skip
+ * the call without loading the component. EnemyManager would otherwise make
+ * it for every enemy every sub-step while only those rounding a corner turn.
+ */
+/** See TransformComponent.getRotationState. Plain data. */
+export interface TransformRotationState {
+  rotation: number;
+  target: number;
+  initialized: boolean;
+}
+
+export interface TurningFlagSink {
+  isTurning: boolean;
+}
+
+/** Game-time ms the rotation smoothing factor counts for: a sub-step of 60 a second, which it was tuned at */
+const ROTATION_SMOOTHING_REF_MS = 1000 / 60;
+
+/**
+ * TransformComponent handles position, rotation, and scale of a GameObject
+ */
+export class TransformComponent extends Component {
+  position: GeoPosition = { lat: 0, lon: 0, height: 0 };
+  scale = 1.0;
+  terrainHeight = 0; // Must be set from terrain sampling before use
+
+  // Rotation smoothing
+  private _rotation = 0; // Heading in radians (smoothed), see `rotation`
+  private targetRotation = 0;
+  private rotationInitialized = false;
+  rotationSmoothingFactor = 0.15; // Share of the way per ROTATION_SMOOTHING_REF_MS: 0 = no smoothing, 1 = instant
+
+  constructor(
+    gameObject: GameObject,
+    private readonly turnSink: TurningFlagSink | null = null,
+  ) {
+    super(gameObject);
+    this.syncTurningFlag();
+  }
+
+  /** Heading in radians (smoothed). An accessor so every write keeps the TurningFlagSink exact. */
+  get rotation(): number {
+    return this._rotation;
+  }
+  set rotation(value: number) {
+    this._rotation = value;
+    this.syncTurningFlag();
+  }
+
+  /**
+   * Set position in geo coordinates
+   */
+  setPosition(lat: number, lon: number, height?: number): void {
+    this.position.lat = lat;
+    this.position.lon = lon;
+    if (height !== undefined) this.position.height = height;
+  }
+
+  /**
+   * Look at a target position (updates target rotation, smoothed in update)
+   *
+   * The heading is metric (geoHeading scales the longitude delta by
+   * cos(lat)) like the scene. On raw degree deltas an enemy on a 45° street
+   * at 49°N faced about 12° off its walking direction.
+   *
+   * Coordinate system (with ReorientationPlugin + tiles.group.rotation.x = -PI/2):
+   * - Local: -X = East, +Z = North, +Y = Up
+   * - Geo: +lon = East, +lat = North
+   *
+   * Three.js rotation.y (counterclockwise from above):
+   * - 0 = facing +Z (North)
+   * - PI/2 = facing +X (West)
+   * - PI or -PI = facing -Z (South)
+   * - -PI/2 = facing -X (East)
+   *
+   * @returns false if the target was too close to derive a heading from (the
+   *   target rotation is left as it was), true if the target rotation was set.
+   */
+  lookAt(target: GeoPosition): boolean {
+    const dLon = target.lon - this.position.lon;
+    const dLat = target.lat - this.position.lat;
+
+    // Skip if movement is too small (prevents jitter)
+    if (Math.abs(dLat) < 0.0000001 && Math.abs(dLon) < 0.0000001) return false;
+
+    // geoHeading turns clockwise from north (east positive), rotation.y
+    // counterclockwise, hence the sign
+    this.targetRotation = -geoHeading(this.position, target);
+
+    // Initialize rotation immediately on first call
+    if (!this.rotationInitialized) {
+      this._rotation = this.targetRotation;
+      this.rotationInitialized = true;
+    }
+    this.syncTurningFlag();
+    return true;
+  }
+
+  /**
+   * Face `heading` (radians, as lookAt measures it) at once, without easing
+   * towards it: for an enemy whose heading follows from where it stands, a
+   * worm segment (managers/worm/worm-path.ts).
+   */
+  /** Heading, the heading it turns to and whether it has one, for a snapshot (docs/SIMULATOR_PLAN.md, P4). */
+  getRotationState(): TransformRotationState {
+    return { rotation: this._rotation, target: this.targetRotation, initialized: this.rotationInitialized };
+  }
+
+  /** Put the heading back where getRotationState() found it. */
+  setRotationState(state: TransformRotationState): void {
+    this._rotation = state.rotation;
+    this.targetRotation = state.target;
+    this.rotationInitialized = state.initialized;
+    this.syncTurningFlag();
+  }
+
+  setHeading(heading: number): void {
+    this.targetRotation = heading;
+    this._rotation = heading;
+    this.rotationInitialized = true;
+    this.syncTurningFlag();
+  }
+
+  update(deltaTime: number): void {
+    // Smoothly interpolate rotation towards target
+    if (this.rotationInitialized && this._rotation !== this.targetRotation) {
+      // Handle angle wrapping (shortest path)
+      let diff = this.targetRotation - this._rotation;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+
+      // Lerp towards target (frame-independent smoothing)
+      if (Math.abs(diff) < 0.001) {
+        this._rotation = this.targetRotation;
+      } else {
+        // The factor is the share of the way per ROTATION_SMOOTHING_REF_MS; by time, so the turn takes
+        // as long at any sub-step length. Linear instead of the exact 1 - (1 - f)^(dt / ref): plain
+        // arithmetic gives every browser the same bits, Math.pow does not. At twice the reference
+        // the step is 0.30 where the exact curve has 0.28.
+        const t = Math.min(1, this.rotationSmoothingFactor * deltaTime / ROTATION_SMOOTHING_REF_MS);
+        this._rotation += diff * t;
+        // Normalize rotation
+        while (this._rotation > Math.PI) this._rotation -= 2 * Math.PI;
+        while (this._rotation < -Math.PI) this._rotation += 2 * Math.PI;
+      }
+      this.syncTurningFlag();
+    }
+  }
+
+  /**
+   * Runs after every write to the rotation state, so the sink holds exactly
+   * the condition under which `update()` does anything.
+   */
+  private syncTurningFlag(): void {
+    if (this.turnSink !== null) {
+      this.turnSink.isTurning = this.rotationInitialized && this._rotation !== this.targetRotation;
+    }
+  }
+}

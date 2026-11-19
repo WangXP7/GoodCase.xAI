@@ -1,0 +1,115 @@
+import { ChangeDetectionStrategy, Component, computed, inject, isDevMode, output, signal } from '@angular/core';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { ConfigService } from '../../core/services/config.service';
+import { RovingGroupDirective } from '../roving-group.directive';
+import { APP_DOWNLOADS, coopAccess, type CoopAccess } from '../../coop/coop-access';
+import { readDesktopBridge } from '../../core/desktop-bridge';
+import { FIRST_MAP_ID, WorldChoiceService } from '../../world/world-choice.service';
+import { CUSTOM_MAPS_OPEN } from '../../world/custom-maps-open';
+
+/**
+ * First-run screen that asks the player for their own tile credentials.
+ *
+ * The game streams Google's Photorealistic 3D Tiles, which are billed per
+ * request, shipping a build with the maintainer's token would mean handing
+ * every player a share of that bill. So the build ships without credentials and
+ * the player brings their own; they stay in this browser's `localStorage` and
+ * are sent only to the tile provider.
+ *
+ * Both routes to the same tiles stay open: Cesium Ion (an ion token, works
+ * anywhere) or Google's Map Tiles API directly (an API key, restricted by HTTP
+ * referrer and not available in every region).
+ *
+ * Shown before the engine starts (no credentials at all) and after a rejected
+ * one, which is why the copy has to work for both cases. It covers the page,
+ * so it holds the focus (cdkTrapFocus): Tab cannot wander into the hidden HUD.
+ */
+@Component({
+  selector: 'td-token-setup',
+  standalone: true,
+  imports: [CdkTrapFocus, RovingGroupDirective],
+  host: { '(document:keydown.escape)': 'dismiss()' },
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './token-setup.component.html',
+  styleUrl: './token-setup.component.scss',
+})
+export class TokenSetupComponent {
+  readonly config = inject(ConfigService);
+  private readonly worlds = inject(WorldChoiceService);
+  /** The maps open; until their release "Play the maps" shows disabled */
+  readonly mapsOpen = inject(CUSTOM_MAPS_OPEN);
+  /** The coop room of an invite link this page came with (?room=), to say why a key is asked for (review R8) */
+  readonly coopRoom = new URLSearchParams(window.location.search).get('room');
+  /** Where coop may be played: in a browser on the site the invite points to the desktop app (E114) */
+  readonly coopAccess: CoopAccess = coopAccess(readDesktopBridge() !== null, window.location.hostname, isDevMode());
+  protected readonly appDownloads = APP_DOWNLOADS.all;
+
+  /** Emitted once credentials are stored, so the caller can start the engine. */
+  readonly tokenSaved = output<void>();
+
+  readonly provider = signal<'cesium' | 'google'>(this.config.tileProvider());
+  readonly value = signal('');
+  readonly rejected = this.config.credentialsRejected;
+
+  /** A voluntary visit can be left again; a missing key cannot. */
+  readonly dismissible = computed(
+    () => this.config.setupRequested() && !this.config.needsCredentials()
+  );
+
+  readonly testing = signal(false);
+  readonly testResult = signal<{ ok: boolean; message: string } | null>(null);
+
+  selectProvider(provider: 'cesium' | 'google'): void {
+    this.provider.set(provider);
+    this.value.set('');
+    this.testResult.set(null);
+  }
+
+  onInput(event: Event): void {
+    this.value.set((event.target as HTMLInputElement).value);
+    this.testResult.set(null);
+  }
+
+  /**
+   * Check the credentials against the provider before committing to them, so a
+   * typo shows up here instead of as a map that never appears.
+   */
+  async test(): Promise<void> {
+    this.testing.set(true);
+    this.testResult.set(null);
+    try {
+      this.testResult.set(await this.config.validateCredentials(this.provider(), this.value()));
+    } finally {
+      this.testing.set(false);
+    }
+  }
+
+  submit(event: Event): void {
+    event.preventDefault();
+    const value = this.value().trim();
+    if (!value) return;
+
+    this.config.setCredentials(this.provider(), value);
+    this.config.setupRequested.set(false);
+    this.tokenSaved.emit();
+  }
+
+  /** The custom maps need no key: the page loads on a shipped one, the menu then lists them all */
+  playMaps(): void {
+    if (!this.mapsOpen) return;
+    this.config.setupRequested.set(false);
+    this.worlds.playMap(FIRST_MAP_ID);
+  }
+
+  dismiss(): void {
+    // Ignored while credentials are missing, there is no game to go back to.
+    if (!this.dismissible()) return;
+    this.config.setupRequested.set(false);
+  }
+
+  clear(): void {
+    this.config.clearStoredCredentials();
+    this.value.set('');
+    this.testResult.set(null);
+  }
+}

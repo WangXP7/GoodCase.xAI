@@ -1,0 +1,105 @@
+// Layout of the wave section: the enemies of the running wave, alerts, the
+// wave button with its bar, the options under it, the timeline.
+
+// Tighter than the other sections: a block the eye reads at a glance
+:host.td-side-section {
+  gap: 7px;
+}
+
+/* The wave button: the main action of the sidebar, full width. Running, it
+   stands pressed in teal with the share of enemies left as a bar; counting
+   down, the bar drains with the seconds. */
+.td-wave-btn {
+  position: relative;
+  justify-content: space-between;
+  width: 100%;
+  overflow: hidden;
+}
+
+.td-wave-btn.td-wave-running {
+  color: var(--td-teal-light);
+}
+
+.wp-btn-main {
+  gap: var(--td-sp-2);
+}
+
+.wp-countdown {
+  opacity: 0.8;
+}
+
+.wp-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--td-sp-2);
+}
+
+/* Alerts: air or ethereal enemies in the next waves; the ghost in violet */
+.wp-alert-icon {
+  flex: 0 0 auto;
+  color: var(--td-health-red);
+}
+
+.wp-alert.is-ethereal .wp-alert-icon {
+  color: var(--td-ethereal);
+}
+
+.wp-alert-text {
+  gap: 1px;
+}
+
+.wp-alert-title {
+  font-weight: 700;
+  color: var(--td-text-primary);
+}
+
+/* What the whole wave costs the HQ if all of it gets through */
+.wp-leak b {
+  color: var(--td-hp-text);
+}
+
+.wp-group {
+  justify-content: flex-start;
+  gap: var(--td-sp-2);
+  padding: 4px 6px 4px 4px;
+}
+
+.wp-preview {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+}
+
+.wp-info {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.wp-info-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.wp-count {
+  font-weight: 700;
+  color: var(--td-warn-text);
+}
+
+.wp-stats {
+  gap: 2px 8px;
+}
+
+.wp-armor {
+  gap: 3px;
+}
+
+/* An enemy's trait, a remark under its line */
+.wp-trait {
+  font-style: italic;
+}

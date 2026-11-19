@@ -1,0 +1,602 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+    EngineObject, ParticleEmitter, TileLayerData, TileInfo, TextureInfo,
+    TileLayer, TileCollisionLayer, CanvasLayer, Medal,
+    Timer, tile, vec2, rgb, engineObjects, engineObjectsDestroy, engineObjectsUpdate, objectMaxSpeed,
+} from '../dist/littlejs.esm.js';
+
+const near = (a, b, eps=1e-9) => Math.abs(a - b) <= eps;
+
+// Tier 2-lite: verify core engine primitives can be constructed without
+// crashing or tripping ASSERTs (debug bundle keeps them live). We do NOT
+// boot the engine via engineInit and we do NOT call render() (which would
+// require a canvas context). update() on the base EngineObject is safe
+// because the default is a no-op.
+
+test('bundle exposes core engine symbols', () =>
+{
+    // If the bundle failed to load under our stubs, this file wouldn't
+    // have imported at all — so reaching here proves import succeeded.
+    // These checks also guard against an export regression stripping
+    // core names from the public surface.
+    assert.equal(typeof EngineObject, 'function');
+    assert.equal(typeof Timer, 'function');
+    assert.equal(typeof tile, 'function');
+    assert.equal(typeof vec2, 'function');
+});
+
+test('EngineObject constructs and base update is safe', () =>
+{
+    const o = new EngineObject(vec2(0, 0), vec2(1, 1));
+    assert.equal(o.pos.x, 0);
+    assert.equal(o.pos.y, 0);
+    assert.equal(o.size.x, 1);
+    assert.equal(o.size.y, 1);
+    // base class update is an empty method — calling it should not throw
+    assert.doesNotThrow(() => o.update());
+});
+
+test('EngineObject with color and angle constructs', () =>
+{
+    const o = new EngineObject(vec2(5, -3), vec2(2, 2), undefined, Math.PI/4, rgb(1, 0, 0));
+    assert.equal(o.pos.x, 5);
+    assert.equal(o.angle, Math.PI/4);
+});
+
+test('tile() returns a TileInfo', () =>
+{
+    const t = tile(0, 16);
+    assert(t instanceof TileInfo);
+});
+
+test('ParticleEmitter constructs with defaults', () =>
+{
+    // minimum reasonable args: pos, angle, emitSize, emitTime, emitRate
+    const e = new ParticleEmitter(vec2(0, 0), 0, 0, 0, 0);
+    assert(e instanceof ParticleEmitter);
+    assert(e instanceof EngineObject);
+});
+
+test('TileLayerData constructs', () =>
+{
+    // TileLayerData(tile, direction, mirror, color) — minimal form; tile 0 is a tile, an empty cell is undefined
+    const first = new TileLayerData(0);
+    assert.equal(first.tile, 0);
+    first.clear();
+    assert.equal(first.tile, undefined);
+    assert.doesNotThrow(() => new TileLayerData(5, 1, false));
+});
+
+test('Timer lifecycle (unset -> set -> elapsed check)', () =>
+{
+    const t = new Timer();
+    assert.equal(t.isSet(), false);
+    assert.equal(t.get(), 0);              // returns 0 when unset
+    assert.equal(t.getSetTime(), 0);
+    t.set(1);
+    assert.equal(t.isSet(), true);
+    assert.equal(t.getSetTime(), 1);
+    t.unset();
+    assert.equal(t.isSet(), false);
+});
+
+test('Timer constructed with duration is set', () =>
+{
+    const t = new Timer(5);
+    assert.equal(t.isSet(), true);
+    assert.equal(t.getSetTime(), 5);
+});
+
+// The engine's `time` global stays at 0 because the main loop never runs
+// in headless mode without engineInit. That lets us check time-derived
+// Timer methods against known reference points.
+
+test('Timer active / elapsed / get for a fresh positive-duration timer', () =>
+{
+    const t = new Timer(1);
+    assert.equal(t.active(), true);                  // time(0) < setAt(1)
+    assert.equal(t.elapsed(), false);
+    assert(near(t.get(), -1));                       // negative = still active
+});
+
+test('Timer active / elapsed / get for an already-elapsed timer', () =>
+{
+    // negative duration -> timer's internal target is in the past
+    const t = new Timer(-2);
+    assert.equal(t.active(), false);
+    assert.equal(t.elapsed(), true);
+    assert(near(t.get(), 2));                        // positive = how long since elapsed
+});
+
+test('Timer with zero duration is immediately elapsed', () =>
+{
+    const t = new Timer(0);
+    assert.equal(t.active(), false);
+    assert.equal(t.elapsed(), true);
+    assert(near(t.get(), 0));
+});
+
+test('Timer getPercent for fresh positive-duration timer is 0', () =>
+{
+    // at time=0 with a timer set for duration 1, no time has elapsed yet
+    assert(near(new Timer(1).getPercent(), 0));
+});
+
+test('Timer unset returns 0 from get/getPercent/getSetTime', () =>
+{
+    const t = new Timer();
+    assert.equal(t.isSet(), false);
+    assert.equal(t.get(), 0);
+    assert.equal(t.getPercent(), 0);
+    assert.equal(t.getSetTime(), 0);
+});
+
+///////////////////////////////////////////////////////////////////////////////
+// EngineObject methods
+
+test('EngineObject.setCollision applies each flag to the right slot', () =>
+{
+    // Asymmetric patterns: each of the four (collideSolidObjects, isSolid,
+    // collideLevel, collideRaycast) slots gets a different value from its
+    // neighbors, so any pairwise swap of assignments would show up.
+    const o = new EngineObject(vec2(0, 0), vec2(1, 1));
+    // pattern A: [T, F, T, F]
+    o.setCollision(true, false, true, false);
+    assert.equal(o.collideSolidObjects, true);
+    assert.equal(o.isSolid, false);
+    assert.equal(o.collideLevel, true);
+    assert.equal(o.collideRaycast, false);
+    // pattern B: [T, T, F, T] — flips everything from A (ASSERT requires collideSolidObjects||!isSolid)
+    o.setCollision(true, true, false, true);
+    assert.equal(o.collideSolidObjects, true);
+    assert.equal(o.isSolid, true);
+    assert.equal(o.collideLevel, false);
+    assert.equal(o.collideRaycast, true);
+    // defaults: all true
+    o.setCollision();
+    assert.equal(o.collideSolidObjects, true);
+    assert.equal(o.isSolid, true);
+    assert.equal(o.collideLevel, true);
+    assert.equal(o.collideRaycast, true);
+});
+
+test('EngineObject.addChild / removeChild maintain bidirectional links', () =>
+{
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const localPos = vec2(2, 3);
+    parent.addChild(child, localPos, 0.5);
+    assert.equal(child.parent, parent);
+    assert.deepEqual(parent.children, [child]);
+    assert.equal(child.localAngle, 0.5);
+    // localPos is stored as a copy — mutating the original doesn't affect the child
+    assert.equal(child.localPos.x, 2);
+    assert.equal(child.localPos.y, 3);
+    localPos.x = 999;
+    assert.equal(child.localPos.x, 2);
+    // removeChild clears parent and splices children
+    parent.removeChild(child);
+    assert.equal(child.parent, undefined);
+    assert.deepEqual(parent.children, []);
+});
+
+test('EngineObject.destroy is idempotent and cascades to children', () =>
+{
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const childA = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const childB = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(childA);
+    parent.addChild(childB);
+    parent.destroy();
+    assert.equal(parent.destroyed, true);
+    // children cascade-destroyed
+    assert.equal(childA.destroyed, true);
+    assert.equal(childB.destroyed, true);
+    // children have parent cleared
+    assert.equal(childA.parent, undefined);
+    assert.equal(childB.parent, undefined);
+    // idempotent — second call is a no-op (no throw)
+    assert.doesNotThrow(() => parent.destroy());
+});
+
+test('EngineObject.destroy disconnects from parent', () =>
+{
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child);
+    child.destroy();
+    assert.equal(child.destroyed, true);
+    assert.equal(child.parent, undefined);
+    assert.deepEqual(parent.children, []);           // parent's children array spliced
+});
+
+// Regression pins for the inline-math rewrite of updateTransforms.
+// The fast path skips trig when parent.angle === 0; the slow path uses
+// Vector2.rotate semantics: c=cos(-a), s=sin(-a), (x*c - y*s, x*s + y*c).
+test('updateTransforms parent at origin, no rotation: child.pos == localPos', () =>
+{
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1));
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child, vec2(2, 3));
+    parent.updateTransforms();
+    assert(near(child.pos.x, 2));
+    assert(near(child.pos.y, 3));
+});
+
+test('updateTransforms parent translated, no rotation: child.pos = localPos + parent.pos', () =>
+{
+    const parent = new EngineObject(vec2(10, -5), vec2(1, 1));
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child, vec2(2, 3));
+    parent.updateTransforms();
+    assert(near(child.pos.x, 12));
+    assert(near(child.pos.y, -2));
+});
+
+test('updateTransforms parent rotated PI: child localPos (1,0) -> (-1,0)', () =>
+{
+    // Rotating a vector 180° flips both axes, no sign-convention ambiguity.
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1), undefined, Math.PI);
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child, vec2(1, 0));
+    parent.updateTransforms();
+    assert(near(child.pos.x, -1, 1e-9));
+    assert(near(child.pos.y, 0, 1e-9));
+    assert(near(child.angle, Math.PI));
+});
+
+test('updateTransforms parent rotated PI/2 matches Vector2.rotate semantics', () =>
+{
+    // LittleJS rotation is clockwise from up: cos(-a), sin(-a) form.
+    // Pin against the engine's own Vector2.rotate so the regression check
+    // can't drift from the engine's chosen convention.
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1), undefined, Math.PI/2);
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child, vec2(1, 0));
+    parent.updateTransforms();
+    const expected = vec2(1, 0).rotate(Math.PI/2);
+    assert(near(child.pos.x, expected.x, 1e-9));
+    assert(near(child.pos.y, expected.y, 1e-9));
+});
+
+test('updateTransforms mirrored parent flips child x and angle', () =>
+{
+    const parent = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.mirror = true;
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    parent.addChild(child, vec2(2, 3), 0.5);
+    parent.updateTransforms();
+    assert(near(child.pos.x, -2));                  // x mirrored
+    assert(near(child.pos.y, 3));                   // y unchanged
+    assert(near(child.angle, -0.5));                // angle mirrored
+});
+
+test('EngineObject.getAliveTime is 0 right after construction (time=0 in headless)', () =>
+{
+    const o = new EngineObject(vec2(0, 0), vec2(1, 1));
+    assert(near(o.getAliveTime(), 0));
+});
+
+///////////////////////////////////////////////////////////////////////////////
+// Medal
+
+test('Medal construction sets fields and registers in medals[]', () =>
+{
+    const m = new Medal(100, 'Test Medal', 'A test medal', '🏆');
+    assert.equal(m.id, 100);
+    assert.equal(m.name, 'Test Medal');
+    assert.equal(m.description, 'A test medal');
+    assert.equal(m.icon, '🏆');
+    assert.equal(m.unlocked, false);
+});
+
+test('Medal description and icon default when omitted', () =>
+{
+    const m = new Medal(101, 'Defaults Medal');
+    assert.equal(m.description, '');
+    assert.equal(m.icon, '🏆');                      // default trophy
+    assert.equal(m.unlocked, false);
+});
+
+///////////////////////////////////////////////////////////////////////////////
+// CanvasLayer / TileLayer
+
+test('CanvasLayer extends EngineObject and has no canvas in headless', () =>
+{
+    const cl = new CanvasLayer(vec2(0, 0), vec2(10, 10), 0, 0, vec2(64), false);
+    assert(cl instanceof EngineObject);
+    assert(cl instanceof CanvasLayer);
+    assert.equal(cl.canvas, undefined);              // headless: no OffscreenCanvas created
+    assert.equal(cl.mass, 0);                        // physics disabled by default
+});
+
+test('TileLayer extends CanvasLayer and stubs render methods in headless', () =>
+{
+    const tl = new TileLayer(vec2(0, 0), vec2(4, 3), tile(0, 16), 0, false);
+    assert(tl instanceof CanvasLayer);
+    assert(tl instanceof TileLayer);
+    // in headless the render-family methods are replaced with no-op arrow functions
+    assert.doesNotThrow(() => tl.render());
+    assert.doesNotThrow(() => tl.redraw());
+});
+
+// Regression pin for the texture-wrap default flip (CLAMP_TO_EDGE by default).
+// A revert of this change would silently re-enable global REPEAT — this test
+// catches it.
+test('TextureInfo wrap defaults to false (CLAMP_TO_EDGE)', () =>
+{
+    const stubImage = { width: 64, height: 64 };
+    const ti = new TextureInfo(stubImage);
+    assert.equal(ti.wrap, false);
+});
+
+test('TextureInfo wrap=true is respected when explicitly passed', () =>
+{
+    const stubImage = { width: 64, height: 64 };
+    const ti = new TextureInfo(stubImage, true, true);
+    assert.equal(ti.wrap, true);
+});
+
+test('TextureInfo.setWrap() toggles the wrap flag', () =>
+{
+    const stubImage = { width: 64, height: 64 };
+    const ti = new TextureInfo(stubImage);
+    assert.equal(ti.wrap, false);
+    ti.setWrap();                                    // default arg is true
+    assert.equal(ti.wrap, true);
+    ti.setWrap(false);
+    assert.equal(ti.wrap, false);
+});
+
+test('drawTextureWrapped is exported', async () =>
+{
+    const mod = await import('../dist/littlejs.esm.js');
+    assert.equal(typeof mod.drawTextureWrapped, 'function');
+});
+
+test('drawTextureWrapped is callable in headless mode', async () =>
+{
+    const mod = await import('../dist/littlejs.esm.js');
+    const { drawTextureWrapped, vec2 } = mod;
+    // headlessMode short-circuits before texture lookup, so this just
+    // exercises argument-type ASSERTs (which are stripped in release)
+    assert.doesNotThrow(() =>
+        drawTextureWrapped(vec2(), vec2(1, 1), vec2(2, 2)));
+});
+
+test('drawCircleGradient is exported', async () =>
+{
+    const mod = await import('../dist/littlejs.esm.js');
+    assert.equal(typeof mod.drawCircleGradient, 'function');
+});
+
+test('drawCircleGradient is callable in headless mode', async () =>
+{
+    const mod = await import('../dist/littlejs.esm.js');
+    const { drawCircleGradient, vec2, rgb } = mod;
+    assert.doesNotThrow(() =>
+        drawCircleGradient(vec2(), 1, rgb(1, 1, 1), rgb(0, 0, 0)));
+});
+
+test('persistent objects survive engineObjectsDestroy but not their own destroy', () =>
+{
+    engineObjects.length = 0;
+    const level = new EngineObject(vec2(), vec2(1));
+    const camera = new EngineObject(vec2(), vec2(1));
+    const held = camera.addChild(new EngineObject(vec2(), vec2(1)));
+    camera.persistent = true;
+    assert.equal(level.persistent, false, 'off by default');
+    engineObjectsDestroy();
+    assert.equal(level.destroyed, true);
+    assert.equal(camera.destroyed, false, 'a persistent object is left alone');
+    assert.equal(held.destroyed, false, 'and so is what it is holding');
+    assert.deepEqual(engineObjects, [camera, held]);
+    camera.destroy(); // destroy still means destroy
+    assert.equal(camera.destroyed, true);
+    assert.equal(held.destroyed, true);
+    engineObjects.length = 0;
+});
+
+test('a detached child stays where it was, attach keeps a child in place, and localPos only exists on a child', () =>
+{
+    const parent = new EngineObject(vec2(5, 5), vec2(1, 1));
+    parent.angle = Math.PI / 2;
+    const child = new EngineObject(vec2(0, 0), vec2(1, 1));
+    assert.equal(child.localPos, undefined, 'a root has no local position');
+    parent.addChild(child, vec2(2, 0), .25);
+    // a positive angle turns clockwise, so a quarter turn takes the local offset (2, 0) to (0, -2)
+    assert.ok(Math.abs(child.pos.x - 5) < 1e-9 && Math.abs(child.pos.y - 3) < 1e-9);
+    parent.removeChild(child);
+    assert.ok(Math.abs(child.pos.x - 5) < 1e-9 && Math.abs(child.pos.y - 3) < 1e-9, 'detached where it was');
+    assert.ok(Math.abs(child.angle - (Math.PI / 2 + .25)) < 1e-9, 'with the angle it had');
+
+    // attach takes the world values back to local ones, so nothing moves, through a mirrored parent as well
+    const loose = new EngineObject(vec2(3, 9), vec2(1, 1));
+    loose.angle = 1;
+    for (const mirror of [false, true])
+    {
+        parent.mirror = mirror;
+        assert.equal(parent.attach(loose), loose);
+        assert.equal(loose.parent, parent);
+        assert.ok(Math.abs(loose.pos.x - 3) < 1e-9 && Math.abs(loose.pos.y - 9) < 1e-9, 'attached in place, mirror ' + mirror);
+        assert.ok(Math.abs(loose.angle - 1) < 1e-9, 'angle kept, mirror ' + mirror);
+        parent.updateTransforms(); // the next frame agrees
+        assert.ok(Math.abs(loose.pos.x - 3) < 1e-9 && Math.abs(loose.pos.y - 9) < 1e-9, 'still in place after an update, mirror ' + mirror);
+        assert.ok(Math.abs(loose.angle - 1) < 1e-9, 'angle still kept, mirror ' + mirror);
+        parent.removeChild(loose);
+    }
+});
+
+test('a child that destroys itself in update does not skip the sibling after it', () =>
+{
+    const parent = new EngineObject(vec2(), vec2(1));
+    const counts = [0, 0, 0];
+    const make = (i, dies)=>
+    {
+        const o = new EngineObject(vec2(), vec2(1));
+        o.update = ()=> { ++counts[i]; dies && o.destroy(); };
+        parent.addChild(o);
+        return o;
+    };
+    make(0, true); make(1, false); make(2, false);
+    engineObjectsUpdate();
+    assert.deepEqual(counts, [1, 1, 1], 'every child updated once');
+    assert.equal(parent.children.length, 2);
+    // a child that destroys the one before it and the one after it
+    for (const child of [...parent.children]) child.destroy();
+    const before = make(0, false), killer = new EngineObject(vec2(), vec2(1));
+    let killerRuns = 0;
+    killer.update = ()=> { ++killerRuns; before.destroy(); parent.children[parent.children.length - 1].destroy(); };
+    parent.addChild(killer);
+    const after = make(2, false);
+    counts.fill(0);
+    engineObjectsUpdate();
+    assert.equal(killerRuns, 1, 'the killer ran once');
+    assert.ok(before.destroyed && after.destroyed);
+    assert.ok(counts[2] <= 1, 'nothing ran twice');
+    assert.deepEqual(parent.children, [killer]);
+    parent.destroy();
+    engineObjectsUpdate();
+});
+
+test('a particle emitter in local space spawns its box unrotated, and a fast particle is slowed before it moves', () =>
+{
+    // a 4 by 2 box turned a quarter: in world space it spans 2 across and 4 up, in local space it is the box itself
+    for (const localSpace of [false, true])
+    {
+        const e = new ParticleEmitter(vec2(), Math.PI / 2, vec2(4, 2), 0, 0);
+        e.localSpace = localSpace;
+        let maxX = 0, maxY = 0;
+        for (let i = 0; i < 300; ++i)
+        {
+            const p = e.emitParticle();
+            maxX = Math.max(maxX, Math.abs(p.pos.x)); maxY = Math.max(maxY, Math.abs(p.pos.y));
+        }
+        if (localSpace)
+            assert.ok(maxX > 1.5 && maxY < 1.01, 'local box unrotated, spans ' + maxX + ' by ' + maxY);
+        else
+            assert.ok(maxX < 1.01 && maxY > 1.5, 'world box turned, spans ' + maxX + ' by ' + maxY);
+        e.destroy();
+    }
+    // the speed limit that keeps a particle from passing through a wall has to apply before the step it protects
+    const e = new ParticleEmitter(vec2(), 0, 0, 0, 0, 1);
+    e.collideLevel = true;
+    e.damping = 1;
+    const p = e.emitParticle();
+    p.pos.set(0, 0);
+    p.velocity.set(3, 0);
+    p.update();
+    assert.ok(p.pos.x <= objectMaxSpeed + 1e-9, 'moved ' + p.pos.x + ', no further than the speed limit');
+    e.destroy();
+});
+
+test('a particle reports its death once however it dies, and a local space emitter cannot collide with tiles', () =>
+{
+    let deaths = 0;
+    const e = new ParticleEmitter(vec2(), 0, 0, 0, 0);
+    e.particleDestroyCallback = ()=> ++deaths;
+    const p = e.emitParticle();
+    p.destroy();
+    p.destroy();
+    p.update(); // its time may be up as well
+    assert.equal(deaths, 1, 'destroyed once');
+    const q = e.emitParticle();
+    e.particleDestroyCallback = ()=> { ++deaths; q.destroy(); }; // and from its own callback
+    q.destroy();
+    assert.equal(deaths, 2);
+    e.destroy();
+
+    // local space particles are relative to the emitter, the tile collision is in the world
+    const local = new ParticleEmitter(vec2(), 0, 0, 0, 0);
+    local.localSpace = true;
+    local.collideLevel = true;
+    assert.throws(()=> local.update(), /Assert/);
+    local.destroy();
+});
+
+test('a particle calls its update callback once each update, after it moves, and not once it dies', () =>
+{
+    let calls = 0;
+    const e = new ParticleEmitter(vec2(), 0, 0, 0, 0);
+    e.damping = 1;
+    e.gravityScale = 0;
+    e.particleUpdateCallback = (p)=> { ++calls; p.velocity.x = 0; };
+    const p = e.emitParticle();
+    p.pos.set(0, 0);
+    p.velocity.set(1, 0);
+    p.update();
+    assert.equal(calls, 1);
+    assert.equal(p.pos.x, 1, 'moved before the callback stopped it');
+    p.update();
+    assert.equal(calls, 2);
+    assert.equal(p.pos.x, 1, 'the callback change held');
+
+    // the tile collision path reaches it too
+    e.collideLevel = true;
+    p.update();
+    assert.equal(calls, 3);
+
+    // a particle whose time is up is not called
+    p.lifeTime = 0;
+    p.update();
+    assert.equal(calls, 3);
+    e.destroy();
+});
+
+test('a particle destroyed by its collide callback is not passed to the update callback', () =>
+{
+    const layer = new TileCollisionLayer(vec2(0, 0), vec2(4, 4));
+    layer.setCollisionData(vec2(1, 0));
+    let calls = 0;
+    const e = new ParticleEmitter(vec2(), 0, 0, 0, 0);
+    e.collideLevel = true;
+    e.damping = 1;
+    e.gravityScale = 0;
+    e.particleCollideCallback = (p)=> { p.destroy(); return true; };
+    e.particleUpdateCallback = ()=> ++calls;
+    const p = e.emitParticle();
+    p.pos.set(.5, .5);
+    p.velocity.set(1, 0); // into the solid cell
+    p.update();
+    assert.ok(p.destroyed, 'the collide callback ran');
+    assert.equal(calls, 0);
+    e.destroy();
+    layer.destroy();
+});
+
+test('an object that detaches from its parent in update is not updated again as a root in the same pass', () =>
+{
+    const parent = new EngineObject(vec2(), vec2(1));
+    const child = new EngineObject(vec2(), vec2(1));
+    let updates = 0;
+    child.update = ()=> { ++updates; child.parent && child.parent.removeChild(child); };
+    parent.addChild(child);
+    engineObjectsUpdate();
+    assert.equal(updates, 1, 'once in the pass it detached in');
+    engineObjectsUpdate();
+    assert.equal(updates, 2, 'and once in the next, as a root');
+    parent.destroy(); child.destroy();
+    engineObjectsUpdate();
+});
+
+test('the object queries skip objects destroyed this frame, and a circle is given by its diameter', async () =>
+{
+    const { engineObjectsCollect, engineObjectsCallback, engineObjectsRaycast } = await import('../dist/littlejs.esm.js');
+    const near = new EngineObject(vec2(1, 0), vec2(1)), far = new EngineObject(vec2(3, 0), vec2(1));
+    const gone = new EngineObject(vec2(0, 0), vec2(1));
+    for (const o of [near, far, gone]) o.setCollision(false, false, false, true);
+    gone.destroy(); // still in the list until the frame ends
+    const objects = [near, far, gone];
+
+    assert.deepEqual(engineObjectsCollect(vec2(), 4, objects), [near], 'a circle 4 across reaches 2 out, so not 3');
+    assert.deepEqual(engineObjectsCollect(vec2(), 7, objects), [near, far]);
+    assert.deepEqual(engineObjectsCollect(vec2(), vec2(3), objects), [near], 'a box, its full size');
+    assert.deepEqual(engineObjectsCollect(undefined, undefined, objects), [near, far], 'everything but the destroyed');
+    const called = [];
+    engineObjectsCallback(vec2(), 7, (o)=> called.push(o), objects);
+    assert.deepEqual(called, [near, far]);
+    assert.deepEqual(engineObjectsRaycast(vec2(-5, 0), vec2(5, 0), objects), [near, far]);
+    near.destroy(); far.destroy();
+    engineObjectsUpdate();
+});

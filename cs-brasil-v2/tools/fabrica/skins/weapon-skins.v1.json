@@ -1,0 +1,342 @@
+{
+  "schemaVersion": "cs-weapon-skin-catalog/1",
+  "families": {
+    "brasa-fosca": {
+      "id": "brasa-fosca",
+      "description": "Verniz cobre queimado fosco aplicado como fatores PBR sobre a textura licenciada já embutida em cada arma; não cria imagem, logo, rig ou geometria.",
+      "provenance": {
+        "type": "procedural-parameters",
+        "license": "Autoral do projeto CS BRASIL; nenhuma textura externa é adicionada.",
+        "evidence": "tools/fabrica/skins/weapon-skins.v1.json"
+      },
+      "material": {
+        "baseColorFactor": [0.32, 0.09, 0.025, 1],
+        "metallicFactor": 0.48,
+        "roughnessFactor": 0.5
+      },
+      "approved": false,
+      "store": false
+    }
+  },
+  "factoryRecipes": {
+    "ak47": {
+      "id": "ak47",
+      "description": "Identidade AK-47 do jogo sobre o AK-200 do pack: coronha/guarda-mão de madeira, aço escuro, pente de aço. Só material — a malha é a do pack.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/akm.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "91ee56bd36a34f8b616e6038ce04139c258dbf9dfa4a8e1dd0cec751a6252a05",
+          "worldReferenceSha256": "aae400d6e93372ddd0e138b6ac24b2cd4b8efc7cd0169483ac0755703a456eca"
+        }
+      },
+      "partMappings": ["M_Polymer_Furniture", "M_Finish", "M_Finish_Milled", "M_Polymer_Mag", "M_Mag_Translucent"],
+      "materials": {
+        "M_Polymer_Furniture": { "cor": "6e3f1f", "metal": 0, "rugosidade": 0.58 },
+        "M_Finish": { "cor": "2b2d31", "metal": 0.65, "rugosidade": 0.42 },
+        "M_Finish_Milled": { "cor": "3a3d42", "metal": 0.7, "rugosidade": 0.36 },
+        "M_Polymer_Mag": { "cor": "2e2b28", "metal": 0.55, "rugosidade": 0.45 },
+        "M_Mag_Translucent": { "cor": "2e2b28", "metal": 0.55, "rugosidade": 0.45 }
+      }
+    },
+    "escopeta": {
+      "id": "escopeta",
+      "description": "Cartucho amarelo na KXG12: o vermelho do pack some contra a manga vermelha do braço coro-ak e o crítico lia a mão vazia no laço da recarga. Só o material do cartucho; o resto é o do pack.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/shotgun.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "8b3c8639cad501ac42893e4829efbbfab901f227f7da203ad39325496f088a80",
+          "worldReferenceSha256": "982c4ce508a512f99662c1e00236412697188e8858a9a68a0071eac74e926093"
+        }
+      },
+      "partMappings": ["KSG_Ammo"],
+      "materials": {
+        "KSG_Ammo": { "cor": "e0b230", "metal": 0.35, "rugosidade": 0.4 }
+      }
+    },
+    "famas": {
+      "id": "famas",
+      "description": "Receita histórica do chassi MX16A4: polímero e acabamento escuros. A ficha atual usa malha própria da FAMAS e não consome estes slots; o catálogo a preserva como insumo rastreável, não como equivalência 1P↔3P.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/famas.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "47e12d76849026f5b663f0ff4454216316478504daf5cd333284d69b7ff653dd",
+          "worldReferenceSha256": "159c0750b378252a7c5da16837b1e4c584e900416a2085dfd662cb38ea60405a"
+        }
+      },
+      "partMappings": ["finish", "finish_alu", "finish_dark", "polymer", "polymer_grip"],
+      "materials": {
+        "finish": { "cor": "2c2f33", "metal": 0.4, "rugosidade": 0.5 },
+        "finish_alu": { "cor": "24272b", "metal": 0.45, "rugosidade": 0.48 },
+        "finish_dark": { "cor": "1e2023", "metal": 0.35, "rugosidade": 0.52 },
+        "polymer": { "cor": "1f2124", "metal": 0.05, "rugosidade": 0.6 },
+        "polymer_grip": { "cor": "1a1c1e", "metal": 0.05, "rugosidade": 0.65 }
+      }
+    },
+    "m92": {
+      "id": "m92",
+      "description": "Identidade Zastava M92 sobre o AK-200 do pack: aço oxidado escuro e guarnições de polímero preto. Só material — a malha é a do pack.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/m92.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "c8fcfb1276481e184033543f150c72fc474b71f59f8930a1f2bb139262a0c07a",
+          "worldReferenceSha256": "575ff58ae569392386edd2d8147904dd9e9dd75cb8979c1a95196457dbf70230"
+        }
+      },
+      "partMappings": ["M_Polymer_Furniture", "M_Finish", "M_Finish_Milled", "M_Polymer_Mag", "M_Mag_Translucent"],
+      "materials": {
+        "M_Polymer_Furniture": { "cor": "1d1d1e", "metal": 0, "rugosidade": 0.68 },
+        "M_Finish": { "cor": "26282b", "metal": 0.65, "rugosidade": 0.44 },
+        "M_Finish_Milled": { "cor": "33363a", "metal": 0.7, "rugosidade": 0.38 },
+        "M_Polymer_Mag": { "cor": "2a2723", "metal": 0.55, "rugosidade": 0.46 },
+        "M_Mag_Translucent": { "cor": "2a2723", "metal": 0.55, "rugosidade": 0.46 }
+      }
+    },
+    "md97": {
+      "id": "md97",
+      "description": "Identidade IMBEL MD97 sobre o MX16A4 do pack: aço fosfatizado escuro, polímero preto e carregador de aço. Só material — a malha é a do pack.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/md97.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "f17921e1c1db424f9bd18f651fe5fa5a25cd795732936d47b139945948914e26",
+          "worldReferenceSha256": "16dd73c34583cd96ec6bfe71771ad32fe98caadf3966bb70f15c6d43d67ec9d5"
+        }
+      },
+      "partMappings": ["finish", "finish_alu", "finish_dark", "polymer", "polymer_grip", "mag"],
+      "materials": {
+        "finish": { "cor": "2a2c2f", "metal": 0.6, "rugosidade": 0.5 },
+        "finish_alu": { "cor": "303236", "metal": 0.6, "rugosidade": 0.48 },
+        "finish_dark": { "cor": "1e1f21", "metal": 0.55, "rugosidade": 0.5 },
+        "polymer": { "cor": "1b1b1c", "metal": 0, "rugosidade": 0.7 },
+        "polymer_grip": { "cor": "1b1b1c", "metal": 0, "rugosidade": 0.72 },
+        "mag": { "cor": "34363a", "metal": 0.6, "rugosidade": 0.45 }
+      }
+    },
+    "pt38": {
+      "id": "pt38",
+      "description": "Identidade da PT-38 aprovada sobre o X18 do pack: a receita PISTOL_MATERIALS do build pago.",
+      "origin": "../studio/tools/blender/viewmodels/build_paid_family.py (PISTOL_MATERIALS)",
+      "source": {
+        "evidence": "tools/fabrica/fichas/pistol.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "4c9e3a1a29908310c9e6d555c3dadf783e75d5858c646bd10060081aaabe7f6a",
+          "worldReferenceSha256": "1b7a497f6b60a69fe218212db73bf677349c39f9f6234c05c4069ecc6a841596"
+        }
+      },
+      "partMappings": ["polymer", "finish_dark", "finish_barrel", "primer", "casing"],
+      "materials": {
+        "polymer": { "cor": "111820", "metal": 0.08, "rugosidade": 0.58 },
+        "finish_dark": { "cor": "171d24", "metal": 0.5, "rugosidade": 0.42 },
+        "finish_barrel": { "cor": "323a43", "metal": 0.78, "rugosidade": 0.34 },
+        "primer": { "cor": "8a5c18", "metal": 0.7, "rugosidade": 0.35 },
+        "casing": { "cor": "8a5c18", "metal": 0.7, "rugosidade": 0.35 }
+      },
+      "default": { "cor": "252c34", "metal": 0.5, "rugosidade": 0.44 }
+    },
+    "scar": {
+      "id": "scar",
+      "description": "Identidade SCAR-H sobre o Mk14 EBR do pack: caixa/chassi FDE, polímero FDE escuro, cano e aço pretos. Só material — a malha é a do pack.",
+      "source": {
+        "evidence": "tools/fabrica/fichas/scar.json",
+        "fingerprints": {
+          "factoryCandidateSha256": "e15febed0de571bb81b388fd4b64a1852785906412ddaf675ab66e1957dc7b01",
+          "worldReferenceSha256": "16f0bc90aba6cb1c236e95e45acd51d6e9f1fdf6fd328b313ab46d033eebd99f"
+        }
+      },
+      "partMappings": ["finish_chassis", "finish2", "polymer", "finish", "finish_bright"],
+      "materials": {
+        "finish_chassis": { "cor": "a68d64", "metal": 0.15, "rugosidade": 0.62 },
+        "finish2": { "cor": "a68d64", "metal": 0.15, "rugosidade": 0.62 },
+        "polymer": { "cor": "8c7654", "metal": 0, "rugosidade": 0.7 },
+        "finish": { "cor": "26272a", "metal": 0.6, "rugosidade": 0.45 },
+        "finish_bright": { "cor": "3a3b3e", "metal": 0.7, "rugosidade": 0.4 }
+      }
+    }
+  },
+  "coverage": {
+    "awp": {
+      "status": "incompatible",
+      "reason": "O 1P ativo é o chassi L96X e reutiliza só a luneta da AWP 3P; não há correspondência integral de malha/material.",
+      "thirdPerson": { "path": "public/models/weapons/awp.glb", "sha256": "6a303a1b97dfd23b9e1e9c979700119dffbb0ee3c48551751887f7f86a372a2a", "materialNames": ["sniper Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/awp-fabrica.glb", "sha256": "3df6baabdb3db80a93fcece4e829fcc53cbb764a7bb4581e33fb7b4710178e31", "pipeline": "fabrica" }
+    },
+    "ak": {
+      "status": "supported",
+      "reason": "A golden 1P incorpora a AK 3P do projeto e conserva o material da superfície; peças móveis são partições do mesmo insumo.",
+      "thirdPerson": { "path": "public/models/weapons/ak.glb", "sha256": "aae400d6e93372ddd0e138b6ac24b2cd4b8efc7cd0169483ac0755703a456eca", "materialNames": ["assault_ak Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/ak-hires.glb", "sha256": "4094c0534f081ac96f1d6401d651c942b2b8d39dc777be30b15875706be0c48d", "pipeline": "golden", "materialNames": ["assault_ak Material"], "derivedFrom3pSha256": "aae400d6e93372ddd0e138b6ac24b2cd4b8efc7cd0169483ac0755703a456eca" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["assault_ak Material"], "thirdPersonMaterials": ["assault_ak Material"] }]
+    },
+    "m4": {
+      "status": "supported",
+      "reason": "A golden 1P mantém o material assault_m4 da malha 3P particionada; o MX16A4 ativo fica registrado separadamente como incompatível.",
+      "thirdPerson": { "path": "public/models/weapons/m4.glb", "sha256": "e0904b474581b66168d2ec6c190e32528ce7c5ad80a98329da1622f548795932", "materialNames": ["assault_m4 Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/m4-hires.glb", "sha256": "bb6b11d47ab343a906c02661d7e11ae7872ecceaa3b632e9e6f0e6590d71a851", "pipeline": "golden-review", "materialNames": ["assault_m4 Material"], "derivedFrom3pSha256": "e0904b474581b66168d2ec6c190e32528ce7c5ad80a98329da1622f548795932" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/m4-fabrica.glb", "sha256": "c500cfe6320ac063d72c60750adecce0a91179b8b53881f3b48e30f6918a2a9a", "pipeline": "fabrica", "status": "incompatible", "reason": "MX16A4 do pack não é a malha M4 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["assault_m4 Material"], "thirdPersonMaterials": ["assault_m4 Material"] }]
+    },
+    "mp5": {
+      "status": "supported",
+      "reason": "A golden 1P mantém o material smg da arma 3P particionada; o MPS5 ativo é outro chassi.",
+      "thirdPerson": { "path": "public/models/weapons/mp5.glb", "sha256": "c623f27ccc2ca163f9d7b4bb94524ff9bf8b69b805fdafba2fb913e8c1a6382d", "materialNames": ["smg Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/mp5-hires.glb", "sha256": "9aa5505d1bcae606d2fd0bd0ccb48ffd3c7af43a262c3462e11bbea15c61a5e9", "pipeline": "golden-review", "materialNames": ["smg Material"], "derivedFrom3pSha256": "c623f27ccc2ca163f9d7b4bb94524ff9bf8b69b805fdafba2fb913e8c1a6382d" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/mp5-fabrica.glb", "sha256": "d26da9f0abc835518f0b7bb84cbf2c84804b2929f8661c0cd36303d618c97bd7", "pipeline": "fabrica", "status": "incompatible", "reason": "MPS5 do pack não é a malha MP5 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["smg Material"], "thirdPersonMaterials": ["smg Material"] }]
+    },
+    "shotgun": {
+      "status": "incompatible",
+      "reason": "O 1P ativo usa KXG12 e a receita atual seleciona KSG_Ammo; o 3P é uma malha única sem slot de cartucho correspondente.",
+      "thirdPerson": { "path": "public/models/weapons/shotgun.glb", "sha256": "982c4ce508a512f99662c1e00236412697188e8858a9a68a0071eac74e926093", "materialNames": ["shotgun Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/shotgun-fabrica.glb", "sha256": "8b3c8639cad501ac42893e4829efbbfab901f227f7da203ad39325496f088a80", "pipeline": "fabrica" }
+    },
+    "deagle": {
+      "status": "incompatible",
+      "reason": "O 1P ativo é o DGL50 do pack e não compartilha a malha/material da Deagle 3P.",
+      "thirdPerson": { "path": "public/models/weapons/deagle.glb", "sha256": "8ee26366d66873f98aa78d83a1a5b8da05c0b187512428e2dca282f743a304ac", "materialNames": ["deagle Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/deagle-fabrica.glb", "sha256": "a08149fe7315fc5703535c149ddaa6c185674df2b4291401c43f76d9cb90b12d", "pipeline": "fabrica" }
+    },
+    "pistol": {
+      "status": "supported",
+      "reason": "A golden PT-38 1P incorpora explicitamente pistol.glb e mantém o material principal; o X18 ativo é incompatível e permanece separado.",
+      "thirdPerson": { "path": "public/models/weapons/pistol.glb", "sha256": "1b7a497f6b60a69fe218212db73bf677349c39f9f6234c05c4069ecc6a841596", "materialNames": ["pistol Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/pistol-hires.glb", "sha256": "45b65dc9fee92ba1b3708007ee238c470b4b6d53c2d4fd2f50cd30667768c219", "pipeline": "golden-review", "materialNames": ["pistol Material"], "derivedFrom3pSha256": "1b7a497f6b60a69fe218212db73bf677349c39f9f6234c05c4069ecc6a841596" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/pistol-fabrica.glb", "sha256": "4c9e3a1a29908310c9e6d555c3dadf783e75d5858c646bd10060081aaabe7f6a", "pipeline": "fabrica", "status": "incompatible", "reason": "X18 do pack não é a malha pistol.glb." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["pistol Material"], "thirdPersonMaterials": ["pistol Material"] }]
+    },
+    "knife": {
+      "status": "supported",
+      "reason": "A faca 1P declara public/models/weapons/knife.glb como geometria visível e conserva o material knife.",
+      "thirdPerson": { "path": "public/models/weapons/knife.glb", "sha256": "98fbd147a22064271d65db55222b754640de49987bbb651fd792eb90c699f2d9", "materialNames": ["knife Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/melee/knife-hires.glb", "sha256": "3e04fbcb67480cec0638ca552d308379c5bff7c5689ae39c8aa88e566c992621", "pipeline": "golden-melee", "materialNames": ["knife Material"], "derivedFrom3pSha256": "98fbd147a22064271d65db55222b754640de49987bbb651fd792eb90c699f2d9" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["knife Material"], "thirdPersonMaterials": ["knife Material"] }]
+    },
+    "m92": {
+      "status": "supported",
+      "reason": "A golden M92 mantém o material Wood Booster Draco da malha 3P particionada; o produto ativo usa AK-200 com apenas a frente M92.",
+      "thirdPerson": { "path": "public/models/weapons/m92.glb", "sha256": "575ff58ae569392386edd2d8147904dd9e9dd75cb8979c1a95196457dbf70230", "materialNames": ["Wood Booster Draco Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/m92-hires.glb", "sha256": "952f8b701689645f974ab0d908ae83e4e3636edee5a9a7a53f286bc6186cdade", "pipeline": "golden-review", "materialNames": ["Wood Booster Draco Material"], "derivedFrom3pSha256": "575ff58ae569392386edd2d8147904dd9e9dd75cb8979c1a95196457dbf70230" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/m92-fabrica.glb", "sha256": "c8fcfb1276481e184033543f150c72fc474b71f59f8930a1f2bb139262a0c07a", "pipeline": "fabrica", "status": "incompatible", "reason": "AK-200 com recorte frontal não corresponde à malha M92 integral." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["Wood Booster Draco Material"], "thirdPersonMaterials": ["Wood Booster Draco Material"] }]
+    },
+    "akm": {
+      "status": "supported",
+      "reason": "A golden AKM conserva o material akm da malha 3P particionada; o produto ativo usa AK-200.",
+      "thirdPerson": { "path": "public/models/weapons/akm.glb", "sha256": "3b835674db9d5c11d75f8652ef3edc9794e529091bff91795eb3e08881bfd0b3", "materialNames": ["akm Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/akm-hires.glb", "sha256": "33e6afce4e831451c11cc6d83e1b910abe1afc8fa3c2a8a4aeb5d2cc55b7e536", "pipeline": "golden-review", "materialNames": ["akm Material"], "derivedFrom3pSha256": "3b835674db9d5c11d75f8652ef3edc9794e529091bff91795eb3e08881bfd0b3" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/akm-fabrica.glb", "sha256": "91ee56bd36a34f8b616e6038ce04139c258dbf9dfa4a8e1dd0cec751a6252a05", "pipeline": "fabrica", "status": "incompatible", "reason": "AK-200 do pack não é a malha AKM 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["akm Material"], "thirdPersonMaterials": ["akm Material"] }]
+    },
+    "g3": {
+      "status": "unknown",
+      "reason": "O G3 do pack no 1P não possui fingerprint de correspondência com a malha G3 3P; sem prova de origem, a fábrica não força equivalência nem incompatibilidade.",
+      "thirdPerson": { "path": "public/models/weapons/g3.glb", "sha256": "b19eb799350ce0a264b6cce90552bb9849ec34fb95260177357c3f53c7b7bb9e", "materialNames": ["Olive Steel G3 Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/g3-fabrica.glb", "sha256": "41e72be5d88dfde2c46d8d3f559c498c678957141f5e62778630f572ad6b9e33", "pipeline": "fabrica" }
+    },
+    "revolver38": {
+      "status": "incompatible",
+      "reason": "O 1P ativo é Viper-357, com tambor/recarga próprios, e não corresponde ao revolver38.glb 3P.",
+      "thirdPerson": { "path": "public/models/weapons/revolver38.glb", "sha256": "2e4df847150e8752277dd8567945e5dcd0f73f4fce9411ec9bbf757e456238cd", "materialNames": ["revolver38 Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/revolver38-fabrica.glb", "sha256": "9204c8df66922c6f02392573b4220aaf3295bac3e46fb47df7caf1f270046ea5", "pipeline": "fabrica" }
+    },
+    "md97": {
+      "status": "supported",
+      "reason": "A golden MD97 conserva o material md97 da malha 3P particionada; o produto ativo usa MX16A4.",
+      "thirdPerson": { "path": "public/models/weapons/md97.glb", "sha256": "16dd73c34583cd96ec6bfe71771ad32fe98caadf3966bb70f15c6d43d67ec9d5", "materialNames": ["md97 Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/md97-hires.glb", "sha256": "3b33069d261a0cd753631bd903c7afdac426f7337e3863b8c56d63eb2330f718", "pipeline": "golden-review", "materialNames": ["md97 Material"], "derivedFrom3pSha256": "16dd73c34583cd96ec6bfe71771ad32fe98caadf3966bb70f15c6d43d67ec9d5" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/md97-fabrica.glb", "sha256": "f17921e1c1db424f9bd18f651fe5fa5a25cd795732936d47b139945948914e26", "pipeline": "fabrica", "status": "incompatible", "reason": "MX16A4 do pack não corresponde à MD97 3P integral." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["md97 Material"], "thirdPersonMaterials": ["md97 Material"] }]
+    },
+    "carbine": {
+      "status": "supported",
+      "reason": "A ficha usa carbine.glb integral como malha própria; a separação de peças móveis preserva a origem 3P.",
+      "thirdPerson": { "path": "public/models/weapons/carbine.glb", "sha256": "9bbed4fec57b56c9a0aafe50a74bc4df6c3a138f2671dbb15c0d5cc6a27d4f3f", "materialNames": ["carbine Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/carbine-fabrica.glb", "sha256": "d9c3907371d7f5879a8c2156dc284520bf77a4e25d84b72e19e30f9a7c073290", "pipeline": "fabrica-full-world-mesh", "materialNames": ["CoroSolto_MP_carbine Material"], "derivedFrom3pSha256": "9bbed4fec57b56c9a0aafe50a74bc4df6c3a138f2671dbb15c0d5cc6a27d4f3f" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["CoroSolto_MP_carbine Material"], "thirdPersonMaterials": ["carbine Material"] }]
+    },
+    "m400": {
+      "status": "incompatible",
+      "reason": "O 1P ativo usa MX16A4 e só recorta a luneta da M400 3P; não há superfície integral correspondente.",
+      "thirdPerson": { "path": "public/models/weapons/m400.glb", "sha256": "f5a0bb493381eba107dd23fb5e702c2719bdba2f4f8b01bec62c832467b91109", "materialNames": ["m400scope Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/m400-fabrica.glb", "sha256": "a9f4bce104f31563c59ecd0d7a369026b0bb9c9e1d0e2bdb4cfc8577fa5a4793", "pipeline": "fabrica" }
+    },
+    "mosin": {
+      "status": "supported",
+      "reason": "A golden Mosin conserva o material mosin da malha 3P particionada; o produto ativo usa Kar98K.",
+      "thirdPerson": { "path": "public/models/weapons/mosin.glb", "sha256": "bea36493dc9005436e9e65d969ef3d9e480dedba6c76564200dc534d48ae39a9", "materialNames": ["mosin Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/mosin-hires.glb", "sha256": "40e772b25cec4a8c42205852e36d4d1ddda1fdd386d6c4d85530a6179a8fda0b", "pipeline": "golden-review", "materialNames": ["mosin Material"], "derivedFrom3pSha256": "bea36493dc9005436e9e65d969ef3d9e480dedba6c76564200dc534d48ae39a9" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/mosin-fabrica.glb", "sha256": "71b22a261d20006e95886af09bad40859d489dd0b7827e5e20c000387590d21a", "pipeline": "fabrica", "status": "incompatible", "reason": "Kar98K do pack não corresponde ao Mosin 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["mosin Material"], "thirdPersonMaterials": ["mosin Material"] }]
+    },
+    "rem700": {
+      "status": "incompatible",
+      "reason": "O 1P ativo usa Kar98K e apenas uma luneta derivada do REM 700 3P.",
+      "thirdPerson": { "path": "public/models/weapons/rem700.glb", "sha256": "65f27ce977bc651a58d46510f91cd46df1d13d6a7e4cfade1790be9799ec2141", "materialNames": ["rem700 Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/rem700-fabrica.glb", "sha256": "4cbc945120022d89c93056e1f86573954687ebb7a94b7c44088a062388cc6b45", "pipeline": "fabrica" }
+    },
+    "lmg": {
+      "status": "supported",
+      "reason": "A golden LMG conserva o material lmg da malha 3P particionada; o produto ativo MGX5 é outro chassi.",
+      "thirdPerson": { "path": "public/models/weapons/lmg.glb", "sha256": "025954f12c40aa62253ac8c30ad8eddce889eec600713ac138b5798e11e6c7fe", "materialNames": ["lmg Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/lmg-hires.glb", "sha256": "45daf240ae368c9a2c96a5aff4d45e30f7da48ddf5e91d27863a69a14acf9aec", "pipeline": "golden-review", "materialNames": ["lmg Material"], "derivedFrom3pSha256": "025954f12c40aa62253ac8c30ad8eddce889eec600713ac138b5798e11e6c7fe" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/lmg-fabrica.glb", "sha256": "527c3d411e39f5c57cc66d2434afa22eaccd489477f933c9e725bc827b825ece", "pipeline": "fabrica", "status": "incompatible", "reason": "MGX5 do pack não corresponde à LMG 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["lmg Material"], "thirdPersonMaterials": ["lmg Material"] }]
+    },
+    "scar": {
+      "status": "supported",
+      "reason": "A golden SCAR conserva o material scar da malha 3P particionada; o produto ativo usa Mk14 com só o quebra-chama da SCAR.",
+      "thirdPerson": { "path": "public/models/weapons/scar.glb", "sha256": "16f0bc90aba6cb1c236e95e45acd51d6e9f1fdf6fd328b313ab46d033eebd99f", "materialNames": ["scar Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/scar-hires.glb", "sha256": "b383445870200da039b58127a09410019f53fb9cda34255e75c187ffc2f9446d", "pipeline": "golden-review", "materialNames": ["scar Material"], "derivedFrom3pSha256": "16f0bc90aba6cb1c236e95e45acd51d6e9f1fdf6fd328b313ab46d033eebd99f" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/scar-fabrica.glb", "sha256": "e15febed0de571bb81b388fd4b64a1852785906412ddaf675ab66e1957dc7b01", "pipeline": "fabrica", "status": "incompatible", "reason": "Mk14 EBR com quebra-chama SCAR não corresponde à malha SCAR 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["scar Material"], "thirdPersonMaterials": ["scar Material"] }]
+    },
+    "tavor": {
+      "status": "supported",
+      "reason": "A ficha usa tavor.glb integral como malha própria e registra o fingerprint 3P.",
+      "thirdPerson": { "path": "public/models/weapons/tavor.glb", "sha256": "958f09eec9033af88c954d57fef4130827a2b2958109c12f52644e1e7ace573c", "materialNames": ["tavor Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/tavor-fabrica.glb", "sha256": "88a6aeec814e23d4e8206135ba7116420d7a03d83670efdb244b6ab7c39f923f", "pipeline": "fabrica-full-world-mesh", "materialNames": ["CoroSolto_MP_tavor Material"], "derivedFrom3pSha256": "958f09eec9033af88c954d57fef4130827a2b2958109c12f52644e1e7ace573c" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["CoroSolto_MP_tavor Material"], "thirdPersonMaterials": ["tavor Material"] }]
+    },
+    "famas": {
+      "status": "supported",
+      "reason": "A ficha ativa usa famas.glb integral como malha própria; a receita histórica MX16A4 não é usada para declarar a paridade.",
+      "thirdPerson": { "path": "public/models/weapons/famas.glb", "sha256": "159c0750b378252a7c5da16837b1e4c584e900416a2085dfd662cb38ea60405a", "materialNames": ["famas Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/famas-fabrica.glb", "sha256": "47e12d76849026f5b663f0ff4454216316478504daf5cd333284d69b7ff653dd", "pipeline": "fabrica-full-world-mesh", "materialNames": ["CoroSolto_MP_famas Material"], "derivedFrom3pSha256": "159c0750b378252a7c5da16837b1e4c584e900416a2085dfd662cb38ea60405a" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["CoroSolto_MP_famas Material"], "thirdPersonMaterials": ["famas Material"] }]
+    },
+    "uzi": {
+      "status": "supported",
+      "reason": "A ficha ativa usa uzi.glb integral como malha própria e registra o fingerprint 3P.",
+      "thirdPerson": { "path": "public/models/weapons/uzi.glb", "sha256": "213b06a54610f35bf7315d6e85946604688315b9074f01f6040c2c33b3cf5edd", "materialNames": ["uzi Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/uzi-fabrica.glb", "sha256": "59756a6f187a031a5b1fe822c135be20e6509ba51a1cf6e818261868381e32b8", "pipeline": "fabrica-full-world-mesh", "materialNames": ["CoroSolto_MP_uzi Material"], "derivedFrom3pSha256": "213b06a54610f35bf7315d6e85946604688315b9074f01f6040c2c33b3cf5edd" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["CoroSolto_MP_uzi Material"], "thirdPersonMaterials": ["uzi Material"] }]
+    },
+    "p90": {
+      "status": "supported",
+      "reason": "A golden P90 conserva o material p90 da malha 3P particionada; o produto ativo PDW90 é outro chassi.",
+      "thirdPerson": { "path": "public/models/weapons/p90.glb", "sha256": "6fda87809ab60e1fea7a1e7bf5ebc5355e6ee70d595f7c4610ed88e847560aa2", "materialNames": ["p90 Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/p90-hires.glb", "sha256": "79b4234a46362a2ff78594e08194d0f3796874c662a073d722355cead1ac6916", "pipeline": "golden-review", "materialNames": ["p90 Material"], "derivedFrom3pSha256": "6fda87809ab60e1fea7a1e7bf5ebc5355e6ee70d595f7c4610ed88e847560aa2" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/p90-fabrica.glb", "sha256": "f0ab213493475f1d152871d46b76e6bd268f4b77fc2fa5abc04d0f0c56564a11", "pipeline": "fabrica", "status": "incompatible", "reason": "PDW90 do pack não corresponde à P90 3P." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["p90 Material"], "thirdPersonMaterials": ["p90 Material"] }]
+    },
+    "svd": {
+      "status": "supported",
+      "reason": "A ficha ativa usa svd.glb integral como malha própria e registra o fingerprint 3P.",
+      "thirdPerson": { "path": "public/models/weapons/svd.glb", "sha256": "8ef2fe292c39a6a46a40500cdaf65900c7f3b1671d970ee382ab85b11de6b337", "materialNames": ["Walnut Scope Dragunov Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/svd-fabrica.glb", "sha256": "8932f87984c5778d8b617f4ccac591838fbbfe6e06c4f7e98baba75d85088ccc", "pipeline": "fabrica-full-world-mesh", "materialNames": ["CoroSolto_MP_Walnut Scope Dragunov Material"], "derivedFrom3pSha256": "8ef2fe292c39a6a46a40500cdaf65900c7f3b1671d970ee382ab85b11de6b337" },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["CoroSolto_MP_Walnut Scope Dragunov Material"], "thirdPersonMaterials": ["Walnut Scope Dragunov Material"] }]
+    },
+    "g3sg1": {
+      "status": "incompatible",
+      "reason": "O 1P ativo usa G3 do pack e só recorta luneta/coronha da G3SG1 3P; não há superfície integral correspondente.",
+      "thirdPerson": { "path": "public/models/weapons/g3sg1.glb", "sha256": "3634db457fe27b5904955efb64c74dadf2336263fa64e153014d76df31770ddb", "materialNames": ["Matte Scope Marksman Material"] },
+      "firstPerson": { "path": "public/private-assets/viewmodels/fabrica/g3sg1-fabrica.glb", "sha256": "e9248df6b25a5e407bf3fa9c1275b6e18928805bdd5f1ee22967c54efa89ee75", "pipeline": "fabrica" }
+    },
+    "sks": {
+      "status": "supported",
+      "reason": "A golden SKS conserva o material da malha 3P particionada; o produto ativo Kar98K com recortes fica separado.",
+      "thirdPerson": { "path": "public/models/weapons/sks.glb", "sha256": "5c88a3ab53e236f0557bf974cff79d63351cf5331ba3e710a0698f5045a8936a", "materialNames": ["Scoped Bayonet Carbine Material"] },
+      "firstPerson": { "path": "public/models/viewmodels/coro/sks-hires.glb", "sha256": "72eebf3dad2b8eb28a197990095a9595bcabf1d57a2e04e4b3b1176b0ca402c0", "pipeline": "golden-review", "materialNames": ["Scoped Bayonet Carbine Material"], "derivedFrom3pSha256": "5c88a3ab53e236f0557bf974cff79d63351cf5331ba3e710a0698f5045a8936a" },
+      "runtimeFirstPerson": { "path": "public/private-assets/viewmodels/fabrica/sks-fabrica.glb", "sha256": "39c44f6e413db048dc5d48aeb0e410bac2711b843b521156585308af0aab0947", "pipeline": "fabrica", "status": "incompatible", "reason": "Kar98K com caixa/luneta SKS não corresponde à malha SKS integral." },
+      "partMappings": [{ "part": "weapon-surface", "firstPersonMaterials": ["Scoped Bayonet Carbine Material"], "thirdPersonMaterials": ["Scoped Bayonet Carbine Material"] }]
+    }
+  }
+}

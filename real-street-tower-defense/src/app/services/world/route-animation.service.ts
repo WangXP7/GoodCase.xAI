@@ -1,0 +1,438 @@
+import { Injectable, inject } from '@angular/core';
+import { Color, Group, Vector3, Vector2 } from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { ThreeTilesEngine } from '../../three-engine';
+import { clipLineMaterial } from '../../three-engine/renderers/portal-clip';
+import { GeoPosition } from '../../models/game.types';
+import { routePathToLocalPoints } from '../../utils/route-path.util';
+import { SpawnPoint } from './marker-visualization.service';
+import { PathAndRouteService } from './path-route.service';
+import { corridorTrace } from '../../utils/corridor-trace';
+
+/**
+ * Animated route data for a single spawn path
+ */
+interface AnimatedRoute {
+  id: string;
+  // Glow layer (wider, white/pink, behind)
+  glowLine: Line2;
+  glowMaterial: LineMaterial;
+  // Main line (narrower, bright red, in front)
+  mainLine: Line2;
+  mainMaterial: LineMaterial;
+  totalLength: number;
+  pointCount: number;
+}
+
+/**
+ * RouteAnimationService
+ *
+ * Renders an animated "Knight Rider" effect along enemy routes at game start.
+ * A glowing red head with trailing tail runs from spawn to HQ, signaling danger.
+ *
+ * This is separate from the debug route visualization (static red lines).
+ */
+@Injectable({ providedIn: 'root' })
+export class RouteAnimationService {
+  // ========================================
+  // CONFIGURATION
+  // ========================================
+
+  /** Speed of the animated pattern in meters per second */
+  private readonly ANIMATION_SPEED = 90; // 1.5x faster than original
+
+  /** Number of animation cycles before fade-out */
+  private readonly MAX_CYCLES = 1; // Single pass
+
+  /** Duration of fade-out in milliseconds */
+  private readonly FADE_DURATION = 800; // Quick fade
+
+  // --- MAIN LINE (flowing red dashes) ---
+  /** Main line color (vivid red) */
+  private readonly MAIN_COLOR = new Color(0xff2020);
+  /** Main line width in meters (slim elegant look) */
+  private readonly MAIN_LINE_WIDTH = 1.0;
+  /** Longer dashes for elongated look */
+  private readonly MAIN_DASH_SIZE = 8;
+  /** Gaps between dashes */
+  private readonly MAIN_GAP_SIZE = 4;
+
+  // --- GLOW LINE (thin soft halo) ---
+  /** Glow line color (soft pink-red) */
+  private readonly GLOW_COLOR = new Color(0xff6666);
+  /** Glow line width in meters (subtle halo) */
+  private readonly GLOW_LINE_WIDTH = 1.8;
+  /** Continuous glow - no dashes */
+  private readonly GLOW_DASHED = false;
+
+  // ========================================
+  // STATE
+  // ========================================
+
+  /** Same lift as the static route line (routeLineLift), so both sit at the same height. */
+  private readonly pathAndRoute = inject(PathAndRouteService);
+
+  private engine: ThreeTilesEngine | null = null;
+  private overlayGroup: Group | null = null;
+  private animatedRoutes: AnimatedRoute[] = [];
+  private isAnimating = false;
+  private startTime = 0;
+  private disposed = false;
+
+  /**
+   * While true the animation loops instead of fading out. Held by the intro
+   * camera flight so the route stays lit for the whole cinematic, which can
+   * easily outlast the animation's own single pass.
+   */
+  private holdUntilReleased = false;
+
+  /** When the hold was lifted — anchors the fade so it actually plays. */
+  private releasedAt: number | null = null;
+
+  // ========================================
+  // INITIALIZATION
+  // ========================================
+
+  /**
+   * Initialize the route animation service
+   * @param engine ThreeTilesEngine instance
+   */
+  initialize(engine: ThreeTilesEngine): void {
+    this.engine = engine;
+    this.overlayGroup = engine.getOverlayGroup();
+    this.disposed = false;
+  }
+
+  // ========================================
+  // ANIMATION CONTROL
+  // ========================================
+
+  /**
+   * Start the route animation
+   * @param cachedPaths Map of spawn ID to path (GeoPosition[])
+   * @param _spawnPoints Array of spawn points (for colors)
+   */
+  startAnimation(
+    cachedPaths: Map<string, GeoPosition[]>,
+    _spawnPoints: SpawnPoint[],
+  ): void {
+    if (!this.engine || !this.overlayGroup || this.disposed) return;
+    if (cachedPaths.size === 0) return;
+    // Who restarts the dash animation, which resets its offset.
+    corridorTrace.log('routeAnimation.start', { routes: cachedPaths.size, restart: this.isAnimating });
+
+    // Clean up any existing animation
+    this.stopAnimation();
+
+    // Create animated routes for each path
+    for (const [spawnId, path] of cachedPaths) {
+      if (path.length < 2) continue;
+
+      const animatedRoute = this.createAnimatedRoute(spawnId, path);
+      if (animatedRoute) {
+        this.animatedRoutes.push(animatedRoute);
+      }
+    }
+
+    if (this.animatedRoutes.length === 0) return;
+
+    // Start animation
+    this.isAnimating = true;
+    this.startTime = performance.now();
+    // A release timestamp from a previous run would sit in the past and make
+    // this fresh animation fade out on its very first frame.
+    this.releasedAt = null;
+  }
+
+  /**
+   * Update animation (called every frame)
+   * @param deltaTime Time since last frame in milliseconds
+   */
+  update(_deltaTime: number): void {
+    if (!this.isAnimating || this.animatedRoutes.length === 0) return;
+
+    const elapsedTime = performance.now() - this.startTime;
+
+    for (const route of this.animatedRoutes) {
+      // Calculate total animation duration
+      const cycleDuration = (route.totalLength / this.ANIMATION_SPEED) * 1000;
+      const totalDuration = cycleDuration * this.MAX_CYCLES;
+
+      // Animation continues running throughout (including during fade-out)
+      const offset = (elapsedTime / 1000) * this.ANIMATION_SPEED;
+      route.mainMaterial.dashOffset = -offset;
+
+      // Very subtle pulsing for main line (minimal brightness variation)
+      const intensity = 0.5 + Math.sin(elapsedTime * 0.004) * 0.03;
+      route.mainMaterial.color.setHSL(0.0, 1.0, intensity);
+
+      // Glow stays steady pink-red
+      route.glowMaterial.color.setHSL(0.0, 0.6, 0.55);
+
+      // While held (intro camera flight is running) the animation keeps
+      // cycling instead of fading — the dash offset grows unbounded and the
+      // dashed material repeats, so it simply loops. On release the fade
+      // starts from `releasedAt`, not from `totalDuration`, which by then is
+      // long past and would otherwise skip the fade entirely.
+      if (this.holdUntilReleased) {
+        route.mainMaterial.opacity = 0.9;
+        route.glowMaterial.opacity = 0.35;
+        continue;
+      }
+
+      const fadeAnchor = this.releasedAt ?? (this.startTime + totalDuration);
+      const now = this.startTime + elapsedTime;
+
+      if (now >= fadeAnchor) {
+        // Fade out phase - subtle fade, stays visible
+        const fadeElapsed = now - fadeAnchor;
+        const fadeProgress = Math.min(fadeElapsed / this.FADE_DURATION, 1);
+        // Ease-out curve for smoother fade
+        const easedFade = 1 - Math.pow(1 - fadeProgress, 2);
+
+        // Only fade to 70% of original (subtle reduction, not full fade-out)
+        const fadeAmount = easedFade * 0.7; // Max 70% reduction
+        route.mainMaterial.opacity = 0.9 * (1 - fadeAmount);
+        route.glowMaterial.opacity = 0.35 * (1 - fadeAmount);
+
+        if (fadeProgress >= 1) {
+          this.stopAnimation();
+          return;
+        }
+      } else {
+        // Normal animation phase - steady opacity
+        route.mainMaterial.opacity = 0.9;
+        route.glowMaterial.opacity = 0.35;
+      }
+    }
+  }
+
+  /**
+   * Stop the animation and clean up
+   */
+  stopAnimation(): void {
+    if (!this.overlayGroup) return;
+
+    for (const route of this.animatedRoutes) {
+      // Remove and dispose glow line
+      this.overlayGroup.remove(route.glowLine);
+      if (route.glowLine.geometry) route.glowLine.geometry.dispose();
+      if (route.glowMaterial) route.glowMaterial.dispose();
+      // Remove and dispose main line
+      this.overlayGroup.remove(route.mainLine);
+      if (route.mainLine.geometry) route.mainLine.geometry.dispose();
+      if (route.mainMaterial) route.mainMaterial.dispose();
+    }
+
+    this.animatedRoutes = [];
+    this.isAnimating = false;
+    // NOTE: `holdUntilReleased` deliberately survives a stop/restart.
+    // `onTilesLoaded` restarts this animation on every tile batch so it picks
+    // up the refreshed paths — during the intro flight that
+    // fires constantly. Clearing the hold here made the restarted animation
+    // fade after its single pass, so the red line vanished mid-cinematic.
+    // Only `setHoldUntilReleased(false)` lifts it, and the flight always
+    // does that in its own stop().
+  }
+
+  /**
+   * Check if animation is currently running
+   */
+  isRunning(): boolean {
+    return this.isAnimating;
+  }
+
+  /**
+   * Keep the animation looping instead of letting it fade after its single
+   * pass. Releasing it starts the normal fade from that moment.
+   *
+   * Owned by `IntroCameraFlightService` for the duration of the intro flight.
+   */
+  setHoldUntilReleased(hold: boolean): void {
+    if (hold === this.holdUntilReleased) return;
+    this.holdUntilReleased = hold;
+    this.releasedAt = hold ? null : performance.now();
+  }
+
+  // ========================================
+  // GEOMETRY CREATION
+  // ========================================
+
+  /**
+   * Create an animated route from path data
+   * @param id Route identifier
+   * @param path Path as GeoPosition array
+   * @returns AnimatedRoute or null if creation failed
+   */
+  private createAnimatedRoute(id: string, path: GeoPosition[]): AnimatedRoute | null {
+    if (!this.engine || !this.overlayGroup) return null;
+
+    // Convert GeoPosition[] to local Vector3[]
+    const rawPoints = this.convertPathToLocalPoints(path);
+    if (rawPoints.length < 2) return null;
+
+    // Interpolate for smooth animation (1 point every 2 meters)
+    const points = this.interpolatePoints(rawPoints, 2);
+
+    // Calculate total length
+    let totalLength = 0;
+    for (let i = 1; i < points.length; i++) {
+      totalLength += points[i].distanceTo(points[i - 1]);
+    }
+    if (totalLength < 1) return null;
+
+    // Create positions array
+    const positions: number[] = [];
+    for (const p of points) {
+      positions.push(p.x, p.y, p.z);
+    }
+
+    // === GLOW LINE (wider, behind, creates halo effect) ===
+    const glowGeometry = new LineGeometry();
+    glowGeometry.setPositions(positions);
+    const glowMaterial = this.createGlowMaterial();
+    const glowLine = new Line2(glowGeometry, glowMaterial);
+    glowLine.computeLineDistances();
+    glowLine.renderOrder = 2; // Behind main line
+    glowLine.frustumCulled = false;
+    this.overlayGroup.add(glowLine);
+
+    // === MAIN LINE (bright red, in front) ===
+    const mainGeometry = new LineGeometry();
+    mainGeometry.setPositions(positions);
+    const mainMaterial = this.createMainMaterial();
+    const mainLine = new Line2(mainGeometry, mainMaterial);
+    mainLine.computeLineDistances();
+    mainLine.renderOrder = 3; // In front of glow
+    mainLine.frustumCulled = false;
+    this.overlayGroup.add(mainLine);
+
+    return {
+      id,
+      glowLine,
+      glowMaterial,
+      mainLine,
+      mainMaterial,
+      totalLength,
+      pointCount: points.length,
+    };
+  }
+
+  /**
+   * Convert GeoPosition path to local Vector3 points
+   * @param path Path as GeoPosition array
+   * @returns Array of local Vector3 points
+   */
+  private convertPathToLocalPoints(path: GeoPosition[]): Vector3[] {
+    if (!this.engine) return [];
+    return routePathToLocalPoints(this.engine, path, this.pathAndRoute.routeLineLift());
+  }
+
+  /**
+   * Create main line material (bright red, dashed)
+   */
+  private createMainMaterial(): LineMaterial {
+    const mat = new LineMaterial({
+      color: this.MAIN_COLOR.getHex(),
+      linewidth: this.MAIN_LINE_WIDTH,
+      transparent: true,
+      opacity: 1.0,
+      depthTest: true,
+      depthWrite: false,
+      dashed: true,
+      dashSize: this.MAIN_DASH_SIZE,
+      gapSize: this.MAIN_GAP_SIZE,
+      dashOffset: 0,
+      worldUnits: true,
+    });
+
+    if (this.engine) {
+      const size = this.engine.getRenderer().getSize(new Vector2());
+      mat.resolution.set(size.x, size.y);
+      // Behind a spawn portal's plane the route does not show
+      clipLineMaterial(mat, this.engine.portalClip);
+    }
+
+    return mat;
+  }
+
+  /**
+   * Create glow line material (soft continuous halo, behind main)
+   */
+  private createGlowMaterial(): LineMaterial {
+    const mat = new LineMaterial({
+      color: this.GLOW_COLOR.getHex(),
+      linewidth: this.GLOW_LINE_WIDTH,
+      transparent: true,
+      opacity: 0.4,
+      depthTest: true,
+      depthWrite: false,
+      dashed: this.GLOW_DASHED,
+      worldUnits: true,
+    });
+
+    if (this.engine) {
+      const size = this.engine.getRenderer().getSize(new Vector2());
+      mat.resolution.set(size.x, size.y);
+      clipLineMaterial(mat, this.engine.portalClip);
+    }
+
+    return mat;
+  }
+
+  // ========================================
+  // INTERPOLATION
+  // ========================================
+
+  /**
+   * Interpolate points for smoother animation
+   * @param points Original points
+   * @param segmentLength Target distance between points in meters
+   * @returns Interpolated points array
+   */
+  private interpolatePoints(points: Vector3[], segmentLength: number): Vector3[] {
+    if (points.length < 2) return points;
+
+    const result: Vector3[] = [points[0].clone()];
+
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const distance = prev.distanceTo(curr);
+
+      if (distance > segmentLength) {
+        // Interpolate intermediate points
+        const segments = Math.ceil(distance / segmentLength);
+        for (let j = 1; j <= segments; j++) {
+          const t = j / segments;
+          result.push(new Vector3().lerpVectors(prev, curr, t));
+        }
+      } else {
+        result.push(curr.clone());
+      }
+    }
+
+    return result;
+  }
+
+  // ========================================
+  // CLEANUP
+  // ========================================
+
+  /**
+   * Dispose all resources
+   */
+  dispose(): void {
+    this.disposed = true;
+    this.stopAnimation();
+    // stopAnimation deliberately keeps the hold across restarts; on teardown
+    // it must go, or a later animation would loop forever with no flight
+    // around to release it.
+    this.holdUntilReleased = false;
+    this.releasedAt = null;
+    this.engine = null;
+    this.overlayGroup = null;
+  }
+}

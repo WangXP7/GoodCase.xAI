@@ -1,0 +1,90 @@
+/**
+ * finalBlow.ts — the report's final-blow line (battle endings, owner 2026-09-25): who fired the shot that
+ * ended the battle, whom it destroyed and with what, from the resolved events shotInfo.ts already ledgers —
+ * the last lethal `shell:hit` and the last `tank:destroyed`. Nothing is recomputed: a ram or a burn-out has no
+ * lethal shell and reads from the destruction's cause and killer alone.
+ */
+import { t } from './i18n.ts';
+import { killSourceIdentity } from './killSourceIdentity.ts';
+
+export interface FinalBlowLethal {
+  attackerId: string | null;
+  attackerName: string | null;
+  targetId: string | null;
+  targetName: string | null;
+  shellName: string | null;
+  shellType: string | null;
+}
+
+export interface FinalBlowDestroyed {
+  id: string;
+  killerId: string | null;
+  cause: string | null;
+  /** (ac130-fx-228) what the kill was made with when not the killer's vehicle (the authority's sim/aerialCombat.ts killSourceOf) */
+  source?: string | null;
+}
+
+/** impact / fall (impact physics, 2026-09-25): a hull that crashed into something hard or landed too hard. */
+type FinalBlowCause = 'shot' | 'ammorack' | 'ram' | 'fire' | 'impact' | 'fall';
+
+export interface FinalBlow {
+  cause: FinalBlowCause;
+  attacker: string | null;
+  target: string;
+  /** The shell's display name for a shot; null for a ram or a burn-out. */
+  shell: string | null;
+  attackerIsPlayer: boolean;
+  targetIsPlayer: boolean;
+}
+
+const asCause = (value: string | null | undefined): FinalBlowCause =>
+  (value === 'ammorack' || value === 'ram' || value === 'fire' || value === 'impact' || value === 'fall' ? value : 'shot');
+
+/**
+ * @param lethal the last lethal shell hit on any pair (null when the battle saw none)
+ * @param destroyed the last destruction the bus announced
+ * @param playerId the viewer's entity id (null: no player perspective)
+ * @param nameOf the ledger's display name for an entity id
+ */
+export function resolveFinalBlow(
+  lethal: FinalBlowLethal | null,
+  destroyed: FinalBlowDestroyed | null,
+  playerId: string | null,
+  nameOf: (id: string) => string | null,
+): FinalBlow | null {
+  if (!destroyed) return null;
+  const cause = asCause(destroyed.cause);
+  const lethalMatches = !!(lethal && lethal.targetId === destroyed.id);
+  const target = nameOf(destroyed.id) || (lethalMatches && lethal ? lethal.targetName : null) || destroyed.id;
+  let attackerId: string | null = destroyed.killerId;
+  // (ac130-fx-228) an AC-130's or a drone's kill names its platform
+  let attacker: string | null = killSourceIdentity(destroyed.source)?.label ?? (attackerId ? nameOf(attackerId) : null);
+  let shell: string | null = null;
+  if ((cause === 'shot' || cause === 'ammorack') && lethalMatches && lethal) {
+    attackerId = lethal.attackerId ?? attackerId;
+    attacker = lethal.attackerName || attacker || (attackerId ? nameOf(attackerId) : null);
+    shell = lethal.shellName || lethal.shellType || null;
+  }
+  return {
+    cause,
+    attacker,
+    target,
+    shell,
+    attackerIsPlayer: !!(playerId && attackerId === playerId),
+    targetIsPlayer: !!(playerId && destroyed.id === playerId),
+  };
+}
+
+/** The hero line under the verdict: "Final blow — A destroyed B with X" and its ram / fire / you variants. */
+export function finalBlowLine(blow: FinalBlow): string {
+  const attacker = blow.attacker || t('killcam.enemy');
+  if (blow.cause === 'ammorack') return t('endScreen.finalBlow.ammorack', { attacker, target: blow.target });
+  if (blow.cause === 'ram') return t('endScreen.finalBlow.ram', { attacker, target: blow.target });
+  if (blow.cause === 'fire') return t('endScreen.finalBlow.fire', { target: blow.target });
+  if (blow.cause === 'impact') return t('endScreen.finalBlow.impact', { target: blow.target });
+  if (blow.cause === 'fall') return t('endScreen.finalBlow.fall', { target: blow.target });
+  const shell = blow.shell || t('killcam.enemyFire');
+  if (blow.attackerIsPlayer) return t('endScreen.finalBlow.byYou', { target: blow.target, shell });
+  if (blow.targetIsPlayer) return t('endScreen.finalBlow.onYou', { attacker, shell });
+  return t('endScreen.finalBlow.shot', { attacker, target: blow.target, shell });
+}

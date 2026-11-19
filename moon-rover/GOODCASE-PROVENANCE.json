@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/winchxyz/moon-rover",
+  "commit": "f5f25ba6bf7477c612b408b265c9275a4fd1200d",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 46,
+  "bytes": 2780108
+}

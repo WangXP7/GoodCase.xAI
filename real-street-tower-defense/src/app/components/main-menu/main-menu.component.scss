@@ -1,0 +1,240 @@
+// Layout of the main menu (docs/MAIN_MENU_UI_PLAN.md): the column with logo
+// and list on the left, a page as a dialog beside it, tip and version at the
+// foot, the loading plate bottom right. The look comes from the td-* classes.
+
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+}
+
+.mm-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  box-sizing: border-box;
+  padding: 56px 90px 0;
+  overflow: auto;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+// The start menu stands over the globe (or the place loading): dark only behind the column
+.mm-root.mm-start {
+  background: var(--td-backdrop-start);
+}
+
+.mm-column {
+  display: flex;
+  flex: 0 0 var(--td-menu-width);
+  flex-direction: column;
+  gap: 40px;
+  /* Room for tip and version under the list */
+  padding-bottom: 168px;
+}
+
+.mm-logo {
+  display: block;
+  /* Centred over the list's panel, the tagline under it on the same axis */
+  align-self: center;
+  width: 180px;
+  max-width: calc(100vw - 32px);
+  height: auto;
+}
+
+.mm-tagline {
+  align-self: center;
+  margin: -28px 0 0;
+  text-align: center;
+}
+
+.mm-pause {
+  /* The top bar stays in view behind the pause menu: start under it */
+  padding-top: calc(var(--td-h-topbar) + 16px);
+
+  .mm-logo {
+    width: 135px;
+  }
+}
+
+.mm-page {
+  flex: 0 1 720px;
+  width: auto;
+  /* Ends above the window's foot; only the page body scrolls */
+  max-height: calc(100vh - 56px - 32px);
+}
+
+.mm-pause .mm-page {
+  max-height: calc(100vh - var(--td-h-topbar) - 16px - 32px);
+}
+
+.mm-foot {
+  position: absolute;
+  left: 90px;
+  bottom: 48px;
+  /* As wide as the list: the tip never runs under a page beside it */
+  width: var(--td-menu-width);
+  max-width: calc(100vw - 32px);
+}
+
+/* A small card: the tip, the dots page through all of them */
+.mm-tip {
+  display: grid;
+  gap: var(--td-sp-2);
+  padding: var(--td-sp-3) var(--td-sp-4);
+}
+
+.mm-tip.is-hidden {
+  visibility: hidden;
+}
+
+.mm-tip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mm-tip-label {
+  color: var(--td-brass);
+}
+
+.mm-tip-dots {
+  display: flex;
+  gap: 2px;
+}
+
+.mm-tip-dot {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+
+  &::before {
+    content: '';
+    display: block;
+    width: 5px;
+    height: 5px;
+    margin: auto;
+    border-radius: 50%;
+    background: var(--td-text-disabled);
+  }
+
+  &:hover::before {
+    background: var(--td-text-muted);
+  }
+
+  &.is-on::before {
+    background: var(--td-brass);
+  }
+}
+
+.mm-tip-text {
+  margin: 0;
+}
+
+.mm-tip-gold {
+  font-weight: 600;
+  color: var(--td-brass-light);
+}
+
+.mm-tip-teal {
+  font-weight: 600;
+  color: var(--td-teal-light);
+}
+
+/* Legal and Privacy first, the build and world quieter behind */
+.mm-version {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--td-sp-3);
+  margin: var(--td-sp-3) 0 0;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--td-brass-light);
+  }
+}
+
+.mm-version-build {
+  color: var(--td-text-dim);
+}
+
+.mm-loading {
+  position: absolute;
+  right: 64px;
+  bottom: 56px;
+}
+
+// Short windows (1280x720 and the like): less padding, so logo and list fit;
+// the tip makes way where the list reaches it (tipFits), the version stays.
+@media (max-height: 820px) and (min-width: 761px) {
+  .mm-root {
+    padding-top: 28px;
+  }
+
+  .mm-root.mm-pause {
+    padding-top: calc(var(--td-h-topbar) + 12px);
+  }
+
+  .mm-column {
+    gap: 24px;
+    padding-bottom: 72px;
+  }
+
+  .mm-page {
+    max-height: calc(100vh - 28px - 24px);
+  }
+
+  .mm-pause .mm-page {
+    max-height: calc(100vh - var(--td-h-topbar) - 12px - 24px);
+  }
+
+  .mm-pause .mm-logo {
+    width: 120px;
+  }
+
+  .mm-tagline {
+    margin-top: -16px;
+  }
+
+  .mm-foot,
+  .mm-loading {
+    bottom: 24px;
+  }
+}
+
+// Phone width: one column, the page under the list
+@media (max-width: 760px) {
+  .mm-root {
+    flex-direction: column;
+    gap: var(--td-sp-5);
+    padding: var(--td-sp-5) 16px;
+  }
+
+  .mm-column {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .mm-page {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .mm-foot,
+  .mm-loading {
+    position: static;
+  }
+}

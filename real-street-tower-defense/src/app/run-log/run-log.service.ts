@@ -1,0 +1,609 @@
+/**
+ * The run log's collector.
+ *
+ * Listens on the event bus, stamps everything with the sub-step it happened
+ * in, and closes one block per wave. Angular-free on purpose: the bots drive
+ * it in DevWorld, the desktop app writes it to disk, and a spec can play a
+ * whole run into it without a DOM (docs/RUN_LOG.md).
+ *
+ * Cost: a handful of counters per event, one sample per second of game time
+ * and one pass over the towers at a wave's end. Nothing per hit and nothing
+ * per sub-step, which is what keeps it out of the way at 5000 enemies.
+ */
+
+import type { SubscriptionBag, CreditsSource } from '../game-engine/game-event-bus';
+import type { MainEventBus } from '../sim/client/view-events';
+import type { KilledBy } from '../game-engine/events/event-types';
+import type { Tower } from '../entities/tower.entity';
+import type { WaveSourceId } from '../director/wave-source';
+import {
+  RUN_LOG_FORMAT,
+  reconcileWave,
+  type RunEndReason,
+  type RunLog,
+  type RunLogEvent,
+  type RunLogEventKind,
+  type RunLogHead,
+  type RunLogRecord,
+  type RunLogTowerWave,
+  type RunLogWave,
+  type RunMap,
+  type RunPlayer,
+} from './run-log.types';
+import { balanceConfigHash } from './config-hash';
+import { BUILD_VERSION } from '../configs/build-info.config';
+import { buildCommit } from './build-commit';
+import type { WorldRef } from '../world/world-ref';
+
+/** Game time between two samples. */
+export const SAMPLE_INTERVAL_MS = 1000;
+
+/** What the collector reads from the running game when it writes a record. */
+export interface RunLogWorld {
+  /** Sub-steps since the run started (GameClock.subStep). */
+  step: () => number;
+  /** Game time in ms. */
+  timeMs: () => number;
+  credits: () => number;
+  baseHealth: () => number;
+  enemiesAlive: () => number;
+  /** Total DPS of the defense, hero included. */
+  dps: () => number;
+  /** The towers that stand right now. */
+  towers: () => readonly Tower[];
+  /**
+   * Coop: whether a tower or a kill is this player's. The run log is this
+   * player's run, a partner's towers and kills are theirs. Absent: all are.
+   */
+  ownsTower?: (tower: Tower) => boolean;
+  ownsKill?: (killedBy: KilledBy | null) => boolean;
+  /** HP this player's abilities took so far; the wave gets the difference. Absent: not recorded. */
+  abilityDamage?: () => number;
+}
+
+/** What the head says about the run, beyond what the collector knows itself. */
+export interface RunLogContext {
+  seed: number;
+  map: RunMap;
+  /** Which world the run plays (WorldRef) */
+  world?: WorldRef;
+  player: RunPlayer;
+  botSkill?: string;
+  location?: { name: string; lat: number; lon: number };
+  routeFingerprint?: string;
+  directorParams?: string;
+  /** The wave source this run plays; the config hash follows it. */
+  waveSource?: WaveSourceId;
+}
+
+/** A tower's numbers when a wave started, to subtract at its end. */
+interface TowerMark {
+  damage: number;
+  kills: number;
+}
+
+/** A block's mean lifetime as a wave record field, left out without any (TODO E51) */
+function lifetime<K extends string>(key: K, life: { sum: number; count: number }): Partial<Record<K, { meanMs: number; count: number }>> {
+  if (life.count === 0) return {};
+  return { [key]: { meanMs: Math.round(life.sum / life.count), count: life.count } } as Partial<Record<K, { meanMs: number; count: number }>>;
+}
+
+export class RunLogCollector {
+  private head: RunLogHead | null = null;
+  private records: RunLogRecord[] = [];
+  private world: RunLogWorld | null = null;
+
+  private wave = 0;
+  private waveStartStep = 0;
+  private waveStartTimeMs = 0;
+  private waveStartCredits = 0;
+  private waveStartHealth = 0;
+  private income: Partial<Record<CreditsSource, number>> = {};
+  private spending: Partial<Record<CreditsSource, number>> = {};
+  /** Build and upgrade gold per tower type, for damage per gold per type. */
+  private towerSpending: Record<string, number> = {};
+  private enemiesSpawned = 0;
+  /** Enemies still standing when the block began; the last wave's leftovers. */
+  private enemiesAtStart = 0;
+  private killsByTower = 0;
+  private killsByHero = 0;
+  private killsByAbility = 0;
+  private killsByDebug = 0;
+  private killsByOther = 0;
+  /** Game time each living enemy spawned at, and the lifetimes of this block (TODO E51) */
+  private readonly spawnedAt = new Map<string, number>();
+  private lifeKilled = { sum: 0, count: 0 };
+  private lifeLeaked = { sum: 0, count: 0 };
+  /** HP the dev tools changed in this block */
+  private healthCheat = 0;
+  /** abilityDamage() when the block began */
+  private abilityDamageMark = 0;
+  private killsByPartner = 0;
+  private leaked = 0;
+  /** An ooze counts once: as a leak from its first point, not again on arrival. */
+  private readonly leaking = new Set<string>();
+  private readonly towerMarks = new Map<string, TowerMark>();
+  /** Towers sold during the wave keep the numbers they had at the sale. */
+  private soldThisWave: RunLogTowerWave[] = [];
+  private nextSampleAtMs = 0;
+  private waveGold: RunLogWave['waveGold'] | undefined;
+  /** A wave is running and has no block yet. */
+  private waveOpen = false;
+  /** Records already handed to the bot server. */
+  private drained = 0;
+  /**
+   * The run ended, but its records are still here to be picked up.
+   *
+   * Game over reaches two listeners: this log closes the run, and the bot
+   * session sends what is left to the server. Whoever runs second used to
+   * find an empty collector, so every bot run on the server lacked its last
+   * wave and its end record. The run stays readable until the next one opens.
+   */
+  private closed = false;
+
+  /** The run so far, or null before one was opened. */
+  current(): RunLog | null {
+    return this.head ? { head: this.head, records: [...this.records] } : null;
+  }
+
+  /**
+   * The records written since the last drain, for the bot server.
+   *
+   * A bot sends its log per wave, so a tab that freezes or is closed costs
+   * the server at most the running wave (BALANCING_PLAN.md, phase 2b).
+   */
+  drain(): RunLogRecord[] {
+    const fresh = this.records.slice(this.drained);
+    this.drained = this.records.length;
+    return fresh;
+  }
+
+  /** True while a run is open. A closed run can still be read and drained. */
+  get isOpen(): boolean {
+    return this.head !== null && !this.closed;
+  }
+
+  /**
+   * Start a run. Everything from a previous one is dropped, so a restart
+   * cannot bleed into the next log.
+   */
+  open(context: RunLogContext, world: RunLogWorld, now = new Date()): RunLogHead {
+    this.world = world;
+    this.records = [];
+    this.drained = 0;
+    this.closed = false;
+    this.wave = 0;
+    this.beginBlock();
+    this.nextSampleAtMs = 0;
+
+    this.head = {
+      kind: 'head',
+      format: RUN_LOG_FORMAT,
+      runId: `${now.toISOString().replace(/[:.]/g, '-')}-${context.map}`,
+      startedAt: now.toISOString(),
+      gameVersion: BUILD_VERSION,
+      commit: buildCommit(),
+      configHash: balanceConfigHash(context.waveSource),
+      seed: context.seed,
+      player: context.player,
+      ...(context.botSkill ? { botSkill: context.botSkill } : {}),
+      map: context.map,
+      ...(context.world ? { world: context.world } : {}),
+      ...(context.location ? { location: context.location } : {}),
+      ...(context.routeFingerprint ? { routeFingerprint: context.routeFingerprint } : {}),
+      ...(context.directorParams ? { directorParams: context.directorParams } : {}),
+      ...(context.waveSource ? { waveSource: context.waveSource } : {}),
+    };
+    this.records.push(this.head);
+    this.event('run-opened', { id: context.map });
+    return this.head;
+  }
+
+  /**
+   * Go on with a run from a save game (TODO E110): its head and records as
+   * they were saved, between waves after `wavesDone` finished, the next
+   * block from the state loaded now. The store keeps it under its run id,
+   * so the saved run grows on instead of a second one starting.
+   */
+  resume(run: RunLog, wavesDone: number, world: RunLogWorld): void {
+    this.world = world;
+    this.head = { ...run.head };
+    this.records = [this.head, ...run.records.slice(1).filter((record) => record.kind !== 'end')];
+    this.drained = this.records.length;
+    this.closed = false;
+    this.wave = wavesDone;
+    this.beginBlock();
+    this.nextSampleAtMs = 0;
+    this.event('run-resumed', { value: wavesDone + 1 });
+  }
+
+  /**
+   * Close the run and hand back what it came to. A second call returns null,
+   * so game over followed by a reset writes exactly one end record.
+   */
+  close(reason: RunEndReason): RunLog | null {
+    const head = this.head;
+    if (!head || this.closed) return null;
+    this.flushOpenWave();
+    this.records.push({
+      kind: 'end',
+      step: this.step(),
+      timeMs: this.timeMs(),
+      waveReached: this.wave,
+      reason,
+    });
+    this.closed = true;
+    return { head, records: [...this.records] };
+  }
+
+  /** Waves the run finished. */
+  get waveReached(): number {
+    return this.wave;
+  }
+
+  /**
+   * Stamp the build's commit into the head of the open run.
+   *
+   * The commit is fetched once at startup and arrives a moment after the
+   * first run was opened, so the head would keep the `unknown` it was born
+   * with. Only an `unknown` is replaced; a head that already names a commit
+   * is never rewritten.
+   */
+  /** Mark the open run as a coop run (review R16): the game starts it with a reset, before the players are known */
+  markCoop(players: string[], you: string): void {
+    if (this.head && !this.closed) this.head.coop = { players: [...players], you };
+  }
+
+  setCommit(commit: string): void {
+    if (this.head && this.head.commit === 'unknown' && commit !== 'unknown') {
+      this.head.commit = commit;
+    }
+  }
+
+  /**
+   * Write the block of a wave that is still running.
+   *
+   * The wave the base falls in never completes, and it is the most
+   * interesting one of the run. Idempotent: a second call does nothing, so
+   * game over, the summary and the close all see the same one block.
+   */
+  flushOpenWave(): void {
+    if (this.waveOpen) this.onWaveCompleted();
+  }
+
+  /** Subscribe to the bus; the bag owns the subscriptions. */
+  attach(bus: MainEventBus, bag: SubscriptionBag): void {
+    bag.add(bus.onLive('wave:planned', (e) => this.noteDirectorDecision({
+      waveSource: e.waveSource,
+      template: e.director.templateName,
+      reason: e.director.explanation?.reasons?.slice(),
+      composition: e.director.enemies.map((group) => ({
+        type: group.type,
+        count: group.count,
+        hp: group.healthMultiplier ?? 1,
+      })),
+      ...e.log,
+    })));
+    bag.add(bus.onLive('wave:started', (e) => this.onWaveStarted(e.wave)));
+    bag.add(bus.onLive('wave:completed', (e) => {
+      this.waveGold = e.creditsBreakdown;
+      this.onWaveCompleted();
+    }));
+    bag.add(bus.onLive('wave:jumped', (e) => {
+      this.event('wave-jump', { credits: e.credits, value: e.skipped });
+      this.wave = e.wave - 1;
+    }));
+
+    bag.add(bus.onLive('enemy:spawned', (e) => {
+      this.enemiesSpawned++;
+      this.spawnedAt.set(e.enemy.id, this.timeMs());
+    }));
+    bag.add(bus.onLive('enemy:died', (e) => {
+      this.endLife(e.enemy.id, this.lifeKilled);
+      // An ooze that dies while it flows in was already counted as a leak
+      if (this.leaking.delete(e.enemy.id)) return;
+      if (this.world?.ownsKill && !this.world.ownsKill(e.killedBy)) {
+        this.killsByPartner++;
+        return;
+      }
+      switch (e.killedBy?.kind) {
+        case 'tower': this.killsByTower++; break;
+        case 'hero': this.killsByHero++; break;
+        case 'ability': this.killsByAbility++; break;
+        case 'debug': this.killsByDebug++; break;
+        default: this.killsByOther++; break;
+      }
+    }));
+    bag.add(bus.onLive('enemy:leaking', (e) => {
+      if (this.leaking.has(e.enemy.id)) return;
+      this.endLife(e.enemy.id, this.lifeLeaked);
+      this.leaking.add(e.enemy.id);
+      this.countLeak(e.enemy.typeConfig?.id, e.damage);
+    }));
+    bag.add(bus.onLive('enemy:reached-base', (e) => {
+      if (this.leaking.delete(e.enemy.id)) return;
+      this.endLife(e.enemy.id, this.lifeLeaked);
+      this.countLeak(e.enemy.typeConfig?.id, e.damage);
+    }));
+
+    // The run log is this player's run: a coop partner's bookings are theirs
+    bag.add(bus.onLive('credits:changed', (e) => { if (e.local) this.book(e.delta, e.source); }));
+
+    bag.add(bus.onLive('tower:placed', (e) => {
+      if (!this.owns(e.tower)) return;
+      this.towerMarks.set(e.tower.id, { damage: e.tower.combat.damageDealt, kills: e.tower.combat.kills });
+      this.bookTower(e.tower.typeConfig.id, e.cost);
+      this.event('tower-built', {
+        id: e.tower.typeConfig.id,
+        credits: -e.cost,
+        at: { lat: e.position.lat, lon: e.position.lon },
+      });
+    }));
+    bag.add(bus.onLive('tower:upgraded', (e) => {
+      if (e.cost <= 0) return;   // the dev max-upgrade is not a decision
+      if (!this.owns(e.tower)) return;
+      this.bookTower(e.tower.typeConfig.id, e.cost);
+      this.event('tower-upgraded', { id: e.tower.typeConfig.id, credits: -e.cost, value: e.upgradeId });
+    }));
+    bag.add(bus.onLive('tower:sold', (e) => {
+      if (!this.owns(e.tower)) return;
+      // The numbers of the sale: the shadow tower's are the packet's before
+      this.soldThisWave.push({ ...this.towerWave(e.tower, e.damageDealt, e.kills), sold: true });
+      this.towerMarks.delete(e.tower.id);
+      this.event('tower-sold', { id: e.tower.typeConfig.id, credits: e.refund });
+    }));
+
+    // This player's research, as with the credits
+    bag.add(bus.onLive('research:started', (e) => { if (e.local) this.event('research-started', { id: e.researchId }); }));
+    bag.add(bus.onLive('research:completed', (e) => { if (e.local) this.event('research-completed', { id: e.researchId }); }));
+    bag.add(bus.onLive('research:cancelled', (e) => {
+      if (e.local) this.event('research-cancelled', { id: e.researchId, credits: e.refund });
+    }));
+
+    bag.add(bus.onLive('ability:used', (e) => { if (e.local) this.event('ability-used', { id: e.abilityId }); }));
+    bag.add(bus.onLive('hero:level-up', (e) => { if (e.local) this.event('hero-level', { value: e.level }); }));
+
+    bag.add(bus.onLive('debug:add-credits', (e) => this.event('cheat', { id: 'credits', credits: e.amount })));
+    // The change itself, not the command: in coop it acts on every client, and so it lands in every log
+    bag.add(bus.onLive('health:changed', (e) => {
+      if (e.cause !== 'cheat') return;
+      this.healthCheat += e.delta;
+      this.event('cheat', { id: 'health', value: e.delta });
+    }));
+  }
+
+  /**
+   * Once per frame: writes a sample when a second of game time has passed.
+   * Reading the world costs a loop over the towers, so it stays at 1 Hz.
+   */
+  tick(): void {
+    if (!this.isOpen || !this.world) return;
+    const timeMs = this.timeMs();
+    if (timeMs < this.nextSampleAtMs) return;
+    this.nextSampleAtMs = timeMs + SAMPLE_INTERVAL_MS;
+    this.records.push({
+      kind: 'sample',
+      step: this.step(),
+      timeMs,
+      wave: this.wave,
+      credits: this.world.credits(),
+      baseHealth: this.world.baseHealth(),
+      enemiesAlive: this.world.enemiesAlive(),
+      dps: Math.round(this.world.dps()),
+    });
+  }
+
+  /** What the director decided for the wave that is about to run. */
+  noteDirectorDecision(decision: {
+    /** Which wave source planned it, so a run is attributable to one. */
+    waveSource?: WaveSourceId;
+    template?: string;
+    reason?: string[];
+    survivableCount?: number | null;
+    pressureMultiplier?: number;
+    targetPressure?: number;
+    /** Numbers only this source knows; stored as they come. */
+    diagnostics?: Readonly<Record<string, number | string | boolean | null>>;
+    composition?: { type: string; count: number; hp: number }[];
+  }): void {
+    this.pendingDecision = decision;
+  }
+
+  /** The game speed changed (also the bots' 75x). */
+  noteSpeed(speed: number): void {
+    this.event('speed', { value: speed });
+  }
+
+  /** The game was paused or resumed. */
+  notePause(paused: boolean): void {
+    this.event('pause', { value: paused });
+  }
+
+  /** The hero was hired. */
+  noteHeroHired(cost: number): void {
+    this.event('hero-hired', { credits: -cost });
+  }
+
+  /** A boss came through the portal. */
+  noteBossSpawned(enemyType: string): void {
+    this.event('boss-spawned', { id: enemyType });
+  }
+
+  private pendingDecision: Parameters<RunLogCollector['noteDirectorDecision']>[0] | null = null;
+
+  // === INTERNALS ===
+
+  private step(): number {
+    return this.world?.step() ?? 0;
+  }
+
+  private timeMs(): number {
+    return this.world?.timeMs() ?? 0;
+  }
+
+  private event(event: RunLogEventKind, fields: Partial<RunLogEvent> = {}): void {
+    if (!this.isOpen) return;
+    this.records.push({
+      kind: 'event',
+      event,
+      step: this.step(),
+      timeMs: this.timeMs(),
+      wave: this.wave,
+      ...fields,
+    });
+  }
+
+  private book(delta: number, source: CreditsSource): void {
+    if (!this.isOpen || delta === 0) return;
+    const into = delta > 0 ? this.income : this.spending;
+    into[source] = (into[source] ?? 0) + Math.abs(delta);
+  }
+
+  /**
+   * Gold that went into one tower type. A build and an upgrade land in the
+   * same number: what a type cost is the tower plus everything bought on it.
+   */
+  private bookTower(type: string, cost: number): void {
+    if (!this.isOpen || cost <= 0) return;
+    this.towerSpending[type] = (this.towerSpending[type] ?? 0) + cost;
+  }
+
+  /** An enemy's life ended, killed or at the HQ: its length goes into `into` */
+  private endLife(enemyId: string, into: { sum: number; count: number }): void {
+    const at = this.spawnedAt.get(enemyId);
+    if (at === undefined) return;
+    this.spawnedAt.delete(enemyId);
+    into.sum += this.timeMs() - at;
+    into.count++;
+  }
+
+  private countLeak(enemyType: string | undefined, damage: number): void {
+    this.leaked++;
+    this.event('leak', { id: enemyType, value: damage });
+  }
+
+  private onWaveStarted(wave: number): void {
+    this.wave = wave;
+    this.waveStartStep = this.step();
+    this.waveStartTimeMs = this.timeMs();
+    this.waveOpen = true;
+    this.event('wave-started', { value: wave });
+  }
+
+  /**
+   * Start a new block. It runs from the end of the last wave to the end of
+   * the next one, so the build phase in between belongs to the wave it
+   * prepares: that is where the player spends, and a block that started at
+   * `wave:started` lost every one of those bookings.
+   */
+  private beginBlock(): void {
+    this.waveStartStep = this.step();
+    this.waveStartTimeMs = this.timeMs();
+    this.waveStartCredits = this.world?.credits() ?? 0;
+    this.waveStartHealth = this.world?.baseHealth() ?? 0;
+    this.income = {};
+    this.spending = {};
+    this.towerSpending = {};
+    this.enemiesSpawned = 0;
+    this.enemiesAtStart = this.world?.enemiesAlive() ?? 0;
+    this.killsByTower = 0;
+    this.killsByHero = 0;
+    this.killsByAbility = 0;
+    this.killsByDebug = 0;
+    this.killsByOther = 0;
+    this.killsByPartner = 0;
+    this.healthCheat = 0;
+    this.lifeKilled = { sum: 0, count: 0 };
+    this.lifeLeaked = { sum: 0, count: 0 };
+    this.abilityDamageMark = this.world?.abilityDamage?.() ?? 0;
+    this.leaked = 0;
+    this.leaking.clear();
+    this.soldThisWave = [];
+    this.waveGold = undefined;
+    this.waveOpen = false;
+    this.markTowers();
+  }
+
+  /** Remember what every standing tower had, so the wave's share is a difference. */
+  private markTowers(): void {
+    this.towerMarks.clear();
+    for (const tower of this.myTowers()) {
+      this.towerMarks.set(tower.id, { damage: tower.combat.damageDealt, kills: tower.combat.kills });
+    }
+  }
+
+  private owns(tower: Tower): boolean {
+    return this.world?.ownsTower?.(tower) ?? true;
+  }
+
+  /** This player's standing towers. */
+  private myTowers(): readonly Tower[] {
+    return (this.world?.towers() ?? []).filter((tower) => this.owns(tower));
+  }
+
+  private towerWave(tower: Tower, damageDealt = tower.combat.damageDealt, kills = tower.combat.kills): RunLogTowerWave {
+    const mark = this.towerMarks.get(tower.id) ?? { damage: 0, kills: 0 };
+    const levels: Record<string, number> = {};
+    for (const upgrade of tower.typeConfig.upgrades) {
+      const level = tower.getUpgradeLevel(upgrade.id);
+      if (level > 0) levels[upgrade.id] = level;
+    }
+    return {
+      id: tower.id,
+      type: tower.typeConfig.id,
+      levels,
+      damage: Math.round(damageDealt - mark.damage),
+      kills: kills - mark.kills,
+    };
+  }
+
+  private onWaveCompleted(): void {
+    if (!this.isOpen || this.wave <= 0) return;
+    this.waveOpen = false;
+
+    const towers = [
+      ...(this.myTowers()).map((t) => this.towerWave(t)),
+      ...this.soldThisWave,
+    ].filter((t) => t.damage > 0 || t.kills > 0 || Object.keys(t.levels).length > 0);
+
+    const abilityDamage = Math.round((this.world?.abilityDamage?.() ?? 0) - this.abilityDamageMark);
+    const record: RunLogWave = {
+      kind: 'wave',
+      wave: this.wave,
+      step: this.waveStartStep,
+      timeMs: this.waveStartTimeMs,
+      durationMs: Math.round(this.timeMs() - this.waveStartTimeMs),
+      ...(this.pendingDecision ?? {}),
+      creditsStart: this.waveStartCredits,
+      creditsEnd: this.world?.credits() ?? 0,
+      income: this.income,
+      spending: this.spending,
+      towerSpending: this.towerSpending,
+      ...(this.waveGold ? { waveGold: this.waveGold } : {}),
+      enemiesSpawned: this.enemiesSpawned,
+      killsByTower: this.killsByTower,
+      killsByHero: this.killsByHero,
+      killsByAbility: this.killsByAbility,
+      killsByDebug: this.killsByDebug,
+      killsByOther: this.killsByOther,
+      ...(this.killsByPartner > 0 ? { killsByPartner: this.killsByPartner } : {}),
+      leaked: this.leaked,
+      enemiesAtStart: this.enemiesAtStart,
+      enemiesAlive: this.world?.enemiesAlive() ?? 0,
+      healthStart: this.waveStartHealth,
+      healthEnd: this.world?.baseHealth() ?? 0,
+      ...(this.healthCheat !== 0 ? { healthCheat: this.healthCheat } : {}),
+      ...(abilityDamage > 0 ? { abilityDamage } : {}),
+      ...lifetime('lifetimeKilled', this.lifeKilled),
+      ...lifetime('lifetimeLeaked', this.lifeLeaked),
+      towers,
+    };
+
+    const mismatches = reconcileWave(record);
+    if (mismatches.length > 0) record.mismatches = mismatches;
+
+    this.records.push(record);
+    this.pendingDecision = null;
+    this.beginBlock();
+  }
+}

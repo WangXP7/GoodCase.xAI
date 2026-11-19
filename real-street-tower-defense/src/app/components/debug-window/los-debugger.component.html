@@ -1,0 +1,112 @@
+@if (windowService.losWindow().isOpen) {
+  <app-draggable-debug-panel
+    windowId="los"
+    title="LOS Cubemap"
+    icon="eye"
+    [position]="windowService.losWindow().position"
+    [zIndex]="windowService.losWindow().zIndex"
+    (closed)="windowService.close('los')"
+    (positionChange)="windowService.updatePosition('los', $event)"
+    (focused)="windowService.bringToFront('los')"
+  >
+    <div class="los-content">
+      <!-- Header: Tower-Info + Layer-Toggle -->
+      <div class="los-header">
+        @if (losDebug.activeTower(); as t) {
+          <span class="td-section">{{ t.typeConfig.id }}, {{ losDebug.cellCount() }} cells</span>
+        } @else if (mapperReady()) {
+          <span class="td-section">Build preview (no cell hover)</span>
+        } @else {
+          <span class="td-note">No tower selected</span>
+        }
+        <div class="td-seg is-compact" role="group" aria-label="LOS layer">
+          <button type="button" [attr.aria-pressed]="layer() === 'ground'" (click)="setLayer('ground')">Ground</button>
+          <button type="button" [attr.aria-pressed]="layer() === 'air'" (click)="setLayer('air')">Air</button>
+        </div>
+      </div>
+
+      <!-- 4×3 Cross-Layout -->
+      <div
+        class="cross-grid"
+        #crossGrid
+        [style.grid-template-columns]="'repeat(4, ' + faceDisplayPx() + 'px)'"
+        [style.grid-template-rows]="'repeat(3, ' + faceDisplayPx() + 'px)'"
+        [style.width.px]="faceDisplayPx() * 4 + 6"
+      >
+        @for (f of faceOrder; track f.face) {
+          <div
+            class="td-well face-slot"
+            [style.grid-column]="f.col + 1"
+            [style.grid-row]="f.row + 1"
+            [style.width.px]="faceDisplayPx()"
+            [style.height.px]="faceDisplayPx()"
+          >
+            <canvas
+              #faceCanvas
+              [width]="faceSize"
+              [height]="faceSize"
+              [attr.data-face]="f.face"
+              (mousemove)="onCanvasMove($event, f.face)"
+              (mouseleave)="onCanvasLeave()"
+            ></canvas>
+            <span class="td-tag face-label">{{ f.label }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Color-Legende: Mapping depth → color (single source of truth
+           passt zum Shader in TowerShadowMapper.ensureDebugResources) -->
+      <div class="td-note legend">
+        <span class="legend-label">Blocker near</span>
+        <span class="legend-gradient"></span>
+        <span class="legend-label">clear (far/no hit)</span>
+      </div>
+
+      <!-- Hover-Readout + Zoom-Viewport -->
+      <div class="readout-row">
+      <div class="td-well td-log readout">
+        @if (losDebug.hoveredPixel(); as p) {
+          <div class="td-kv">
+            <span>Pixel</span>
+            <b>face={{ p.face }} ({{ faceLabel(p.face) }}), ({{ p.px }}, {{ p.py }})</b>
+          </div>
+          @if (pixelRgb(); as rgb) {
+            <div class="td-kv">
+              <span>Color</span>
+              <b>
+                <span class="td-swatch is-lg los-swatch" [style.--td-mark]="rgb.css"></span>
+                R={{ rgb.r }} G={{ rgb.g }} B={{ rgb.b }}, depth={{ rgb.depth }}
+              </b>
+            </div>
+          }
+          <div class="td-kv">
+            <span>Cells</span>
+            <b>{{ losDebug.cellsAtHoveredPixel().length }}</b>
+          </div>
+          @if (hoverCellInfo(); as info) {
+            <div class="td-kv">
+              <span>Cell</span>
+              <b>key={{ info.key }}, dist={{ info.dist }}m, y={{ info.y }}m</b>
+            </div>
+            <div class="td-kv">
+              <span>Blocker</span>
+              <b>{{ info.blockerDist }} ({{ info.visible }})</b>
+            </div>
+          }
+        } @else {
+          <div class="td-muted">Hover a face (or a cell on the route) to inspect</div>
+        }
+      </div>
+      <div class="zoom-wrap">
+        <canvas
+          #zoomCanvas
+          [width]="zoomCanvasPx"
+          [height]="zoomCanvasPx"
+          class="td-well zoom-canvas"
+        ></canvas>
+        <span class="td-note td-num">{{ zoomSourcePx }}px to {{ zoomFactor }}×</span>
+      </div>
+      </div>
+    </div>
+  </app-draggable-debug-panel>
+}

@@ -1,0 +1,759 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Tween, tweenProperty, tweenStopAll, tweenUpdate, Ease, vec2, rgb, Vector2, Color, vec3 } from '../dist/littlejs.esm.js';
+
+test('Tween, tweenProperty, tweenStopAll, tweenUpdate, Ease are exported from the bundle', () =>
+{
+    assert.equal(typeof Tween, 'function');
+    assert.equal(typeof tweenProperty, 'function');
+    assert.equal(typeof tweenStopAll, 'function');
+    assert.equal(typeof tweenUpdate, 'function');
+    assert.equal(typeof Ease, 'object'); // namespace object, not a class
+    assert.equal(typeof Ease.LINEAR, 'function');
+});
+
+const near = (a, b, eps=1e-9) => Math.abs(a - b) <= eps;
+
+test('Ease.LINEAR is the identity on [0,1]', () =>
+{
+    assert(near(Ease.LINEAR(0), 0));
+    assert(near(Ease.LINEAR(0.5), 0.5));
+    assert(near(Ease.LINEAR(1), 1));
+});
+
+test('Ease.POWER(2) returns x squared', () =>
+{
+    const f = Ease.POWER(2);
+    assert(near(f(0), 0));
+    assert(near(f(0.5), 0.25));
+    assert(near(f(1), 1));
+});
+
+test('Ease.SINE / CIRC / BACK / SPRING anchor at both 0 and 1; EXPO and ELASTIC only at 1', () =>
+{
+    for (const f of [Ease.SINE, Ease.CIRC, Ease.BACK])
+    {
+        assert(near(f(0), 0), `${f.name}(0) should be 0`);
+        assert(near(f(1), 1), `${f.name}(1) should be 1`);
+    }
+    // EXPO doesn't hit 0 exactly at x=0 by formula (2^-10 ≈ 0.001), but does hit 1 at x=1
+    assert(near(Ease.EXPO(1), 1));
+    // ELASTIC also doesn't start at 0 (formula gives -2^-10 * sin(37π/6) ≈ -0.0005),
+    // but does finish at exactly 1 at x=1.
+    assert(near(Ease.ELASTIC(1), 1));
+    // SPRING formula evaluates to 1 at x=1
+    assert(near(Ease.SPRING(1), 1));
+});
+
+test('Ease.BOUNCE finishes at 1', () =>
+{
+    assert(near(Ease.BOUNCE(1), 1, 1e-6));
+});
+
+test('Ease.IN is the identity transformer: returns the curve unchanged', () =>
+{
+    // Direction-modifier shape: takes a curve, returns a curve. Used for
+    // programmatic direction picking, e.g. (bouncy ? Ease.OUT : Ease.IN)(curve).
+    assert.equal(Ease.IN(Ease.SINE), Ease.SINE);
+    assert.equal(Ease.IN(Ease.BACK), Ease.BACK);
+    // The implementation is a true identity function, so passing a number
+    // also returns it unchanged — meaning Ease.IN doubles as a linear curve.
+    assert(near(Ease.IN(0), 0));
+    assert(near(Ease.IN(0.5), 0.5));
+    assert(near(Ease.IN(1), 1));
+});
+
+test('Ease.OUT(LINEAR) is identity', () =>
+{
+    const f = Ease.OUT(Ease.LINEAR);
+    assert(near(f(0), 0));
+    assert(near(f(0.5), 0.5));
+    assert(near(f(1), 1));
+});
+
+test('Ease.OUT(POWER(2)) starts fast, ends slow', () =>
+{
+    const f = Ease.OUT(Ease.POWER(2));
+    assert(near(f(0), 0));
+    assert(near(f(1), 1));
+    // f(x) = 1 - (1-x)^2; f(0.5) = 1 - 0.25 = 0.75
+    assert(near(f(0.5), 0.75));
+});
+
+test('Ease.PIECEWISE splits range across the supplied curves', () =>
+{
+    // PIECEWISE(LINEAR, LINEAR) is equivalent to LINEAR
+    const f = Ease.PIECEWISE(Ease.LINEAR, Ease.LINEAR);
+    assert(near(f(0), 0));
+    assert(near(f(0.25), 0.25));
+    assert(near(f(0.5), 0.5));
+    assert(near(f(0.75), 0.75));
+    assert(near(f(0.9999), 0.9999, 1e-3));
+});
+
+test('Ease.IN_OUT(LINEAR) at 0.5 is 0.5 (regression: original referenced undefined Piecewise)', () =>
+{
+    const f = Ease.IN_OUT(Ease.LINEAR);
+    assert(near(f(0), 0));
+    assert(near(f(0.5), 0.5));
+    assert(near(f(1), 1, 1e-3));
+});
+
+test('Ease.BOUNCE is the ease-in form (slow ramp, bouncing impacts near the end)', () =>
+{
+    // Mirror of easeOutBounce: where easeOutBounce peaks at 1 at x = 4/11
+    // (early), easeInBounce reaches 0 at x = 1 - 4/11 = 7/11 (late dip near
+    // the start). This direction matches the other ease-in base curves.
+    assert(near(Ease.BOUNCE(7/11), 0, 1e-9));
+    // At x=0.5 the ease-in form is 1 - 0.765625 = 0.234375.
+    assert(near(Ease.BOUNCE(0.5), 0.234375, 1e-9));
+    // Endpoints
+    assert(near(Ease.BOUNCE(0), 0, 1e-9));
+    assert(near(Ease.BOUNCE(1), 1, 1e-9));
+});
+
+test('Ease.OUT(Ease.BOUNCE) is the canonical "ground impact" easeOutBounce', () =>
+{
+    const f = Ease.OUT(Ease.BOUNCE);
+    // Now THIS is the form where the value peaks at 1 at x = 4/11 (early
+    // bounce) — the shape users expect when they want a bouncing landing.
+    assert(near(f(4/11), 1, 1e-9));
+    assert(near(f(0.5), 0.765625, 1e-9));
+});
+
+test('Ease.BEZIER(0,0,1,1) is approximately linear', () =>
+{
+    const f = Ease.BEZIER(0, 0, 1, 1);
+    assert(near(f(0), 0, 1e-3));
+    assert(near(f(0.25), 0.25, 1e-3));
+    assert(near(f(0.5), 0.5, 1e-3));
+    assert(near(f(0.75), 0.75, 1e-3));
+    assert(near(f(1), 1, 1e-3));
+});
+
+test('Ease.BEZIER endpoints are (0,0) and (1,1) for symmetric ease-in-out', () =>
+{
+    // ease-in-out style control points
+    const f = Ease.BEZIER(0.42, 0, 0.58, 1);
+    assert(near(f(0), 0, 1e-3));
+    assert(near(f(1), 1, 1e-3));
+    // crosses 0.5 at x=0.5 due to symmetry
+    assert(near(f(0.5), 0.5, 1e-2));
+});
+
+test('Tween constructor calls callback once with the start value', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 5, 10, 1);
+    assert.deepEqual(calls, [5]);
+    t.stop(); // cleanup
+});
+
+test('Tween constructor stores duration, ease, useRealTime, paused options', () =>
+{
+    const t = new Tween(() => {}, 0, 1, 2, { ease: Ease.SINE, useRealTime: true, paused: true });
+    assert.equal(t.duration, 2);
+    assert.equal(t.life, 2);
+    assert.equal(t.ease, Ease.SINE);
+    assert.equal(t.useRealTime, true);
+    assert.equal(t.paused, true);
+    t.stop();
+});
+
+test('Tween defaults: start=0 end=1 duration=1 ease=LINEAR useRealTime=false paused=false', () =>
+{
+    const t = new Tween(() => {});
+    assert.equal(t.start, 0);
+    assert.equal(t.end, 1);
+    assert.equal(t.duration, 1);
+    assert.equal(t.ease, Ease.LINEAR);
+    assert.equal(t.useRealTime, false);
+    assert.equal(t.paused, false);
+    t.stop();
+});
+
+test('Tween.setEase returns this and updates ease', () =>
+{
+    const t = new Tween(() => {});
+    const ret = t.setEase(Ease.SINE);
+    assert.equal(ret, t);
+    assert.equal(t.ease, Ease.SINE);
+    t.stop();
+});
+
+test('Tween advances toward end as tweenUpdate is called', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1); // 1 second, 0 → 10
+    // constructor pushed start
+    assert.deepEqual(calls, [0]);
+    tweenUpdate(0.5); // halfway
+    assert.equal(calls.length, 2);
+    assert(near(calls[1], 5));
+    t.stop();
+});
+
+test('Tween completes after duration seconds and fires the end value', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1);
+    tweenUpdate(1.0); // exactly one duration
+    // expect [start=0, end=10] — final callback fires with the end value
+    assert.deepEqual(calls, [0, 10]);
+});
+
+test('Tween.then(fn) fires once at completion', () =>
+{
+    let thenCalls = 0;
+    const t = new Tween(() => {}, 0, 1, 1).then(() => thenCalls++);
+    tweenUpdate(1.0);
+    assert.equal(thenCalls, 1);
+    // a second update must not re-fire it (tween is removed from active list)
+    tweenUpdate(1.0);
+    assert.equal(thenCalls, 1);
+});
+
+test('Tween.then returns this for chaining', () =>
+{
+    const t = new Tween(() => {});
+    assert.equal(t.then(() => {}), t);
+    t.stop();
+});
+
+test('Tween that overshoots its remaining life still fires end value once', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1);
+    tweenUpdate(5.0); // way past duration
+    assert.deepEqual(calls, [0, 10]);
+});
+
+test('useRealTime: true tween advances on realDelta even when gameDelta is 0', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1, { useRealTime: true });
+    tweenUpdate(0, 1.0); // game frozen, real time advances 1s
+    assert.deepEqual(calls, [0, 10]);
+});
+
+test('Default tween (game time) does not advance when gameDelta is 0', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1);
+    tweenUpdate(0, 1.0); // game frozen, only real advances; default tween ignores realDelta
+    assert.deepEqual(calls, [0]);
+    t.stop();
+});
+
+test('Multiple tweens complete in a single tweenUpdate without skipping', () =>
+{
+    const aCalls = [];
+    const bCalls = [];
+    let aThen = 0;
+    let bThen = 0;
+    new Tween((v) => aCalls.push(v), 0, 10, 1).then(() => aThen++);
+    new Tween((v) => bCalls.push(v), 0, 20, 1).then(() => bThen++);
+    tweenUpdate(1.0); // both should finish
+    assert.deepEqual(aCalls, [0, 10]);
+    assert.deepEqual(bCalls, [0, 20]);
+    assert.equal(aThen, 1);
+    assert.equal(bThen, 1);
+});
+
+test('tweenUpdate skips a tween whose paused field is true', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1, { paused: true });
+    tweenUpdate(2.0);
+    assert.deepEqual(calls, [0]); // only the constructor start snap
+    t.stop();
+});
+
+test('Tween.pause prevents advancement', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1);
+    t.pause();
+    tweenUpdate(0.5);
+    assert.deepEqual(calls, [0]); // no advance
+    t.stop();
+});
+
+test('Tween.resume re-enables advancement', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1, { paused: true });
+    tweenUpdate(0.5); // paused, no advance
+    assert.deepEqual(calls, [0]);
+    t.resume();
+    tweenUpdate(0.5);
+    assert.equal(calls.length, 2);
+    assert(near(calls[1], 5));
+    t.stop();
+});
+
+test('Tween.stop prevents the then-callback from firing', () =>
+{
+    let thenCalls = 0;
+    const t = new Tween(() => {}, 0, 1, 1).then(() => thenCalls++);
+    t.stop();
+    tweenUpdate(2.0);
+    assert.equal(thenCalls, 0);
+});
+
+test('Tween.restart resets life, clears pause, re-snaps to start', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1);
+    tweenUpdate(0.6); // partway: calls = [0, 6]
+    t.pause();
+    t.restart();
+    assert.equal(t.life, 1);
+    assert.equal(t.paused, false);
+    // restart fires callback with start again
+    assert.equal(calls[calls.length - 1], 0);
+    t.stop();
+});
+
+test('Tween.restart re-adds a stopped tween to the active list', () =>
+{
+    const calls = [];
+    const t = new Tween((v) => calls.push(v), 0, 10, 1);
+    t.stop();
+    assert.equal(t.isActive(), false);
+    t.restart();
+    assert.equal(t.isActive(), true);
+    t.stop();
+});
+
+test('Tween.isActive reflects active list + pause', () =>
+{
+    const t = new Tween(() => {}, 0, 1, 1);
+    assert.equal(t.isActive(), true);
+    t.pause();
+    assert.equal(t.isActive(), false);
+    t.resume();
+    assert.equal(t.isActive(), true);
+    t.stop();
+    assert.equal(t.isActive(), false);
+});
+
+test('Tween.loop(3) runs 3 total iterations', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1).loop(3);
+    // iteration 1: constructor pushes 0; tweenUpdate(1.0) pushes 10
+    tweenUpdate(1.0);
+    // then-callback fires, creates iteration 2; that constructor pushes 0
+    // iteration 2: tweenUpdate below pushes 10, etc
+    tweenUpdate(1.0);
+    tweenUpdate(1.0);
+    // 3 iterations × 2 callback fires (start, end) each = 6 calls
+    assert.deepEqual(calls, [0, 10, 0, 10, 0, 10]);
+});
+
+test('Tween.loop(1) is the same as no loop (chain ends after first iteration)', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1).loop(1);
+    tweenUpdate(1.0);
+    tweenUpdate(1.0); // no second iteration scheduled
+    assert.deepEqual(calls, [0, 10]);
+});
+
+test('Tween.loop returns this for chaining', () =>
+{
+    const t = new Tween(() => {});
+    assert.equal(t.loop(2), t);
+    t.stop();
+});
+
+test('Calling Tween.then after Tween.loop fires once the loop is done', () =>
+{
+    let thenCalls = 0;
+    new Tween(() => {}, 0, 10, 1)
+        .loop(2)
+        .then(() => thenCalls++);
+    tweenUpdate(1.0); // iteration 1 ends, the loop goes on
+    assert.equal(thenCalls, 0);
+    tweenUpdate(1.0); // iteration 2 ends, the whole tween is done
+    assert.equal(thenCalls, 1);
+});
+
+test('Tween.pingPong(3) swaps start/end between iterations', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1).pingPong(3);
+    tweenUpdate(1.0); // iter 1 (0→10) completes; iter 2 (10→0) starts (snaps to 10)
+    tweenUpdate(1.0); // iter 2 completes (→0); iter 3 (0→10) starts (snaps to 0)
+    tweenUpdate(1.0); // iter 3 completes (→10); chain ends
+    assert.deepEqual(calls, [0, 10, 10, 0, 0, 10]);
+});
+
+test('Tween.pingPong returns this for chaining', () =>
+{
+    const t = new Tween(() => {});
+    assert.equal(t.pingPong(2), t);
+    t.stop();
+});
+
+test('Tween.pingPong(1) ends after one iteration', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), 0, 10, 1).pingPong(1);
+    tweenUpdate(1.0);
+    tweenUpdate(1.0);
+    assert.deepEqual(calls, [0, 10]);
+});
+
+test('tweenProperty drives a flat property by name', () =>
+{
+    const obj = { x: 0 };
+    const t = tweenProperty(obj, 'x', 0, 10, 1);
+    assert.equal(obj.x, 0); // constructor snaps to start
+    tweenUpdate(0.5);
+    assert(near(obj.x, 5));
+    tweenUpdate(0.5);
+    assert(near(obj.x, 10));
+});
+
+test('tweenProperty walks dot paths into nested objects', () =>
+{
+    const obj = { pos: { x: 0, y: 0 } };
+    tweenProperty(obj, 'pos.x', 0, 10, 1);
+    assert.equal(obj.pos.x, 0);
+    assert.equal(obj.pos.y, 0); // unaffected
+    tweenUpdate(1.0);
+    assert(near(obj.pos.x, 10));
+    assert.equal(obj.pos.y, 0);
+});
+
+test('tweenProperty returns the underlying Tween for chaining', () =>
+{
+    const obj = { x: 0 };
+    const t = tweenProperty(obj, 'x', 0, 10, 1);
+    assert(t instanceof Tween);
+    // chain methods work
+    assert.equal(t.setEase(Ease.SINE), t);
+    t.stop();
+});
+
+test('tweenProperty supports options like useRealTime', () =>
+{
+    const obj = { x: 0 };
+    const t = tweenProperty(obj, 'x', 0, 10, 1, { useRealTime: true });
+    assert.equal(t.useRealTime, true);
+    tweenUpdate(0, 1.0); // game frozen, real advances
+    assert(near(obj.x, 10));
+});
+
+test('integration: chain setEase + then + tweenProperty + useRealTime', () =>
+{
+    const obj = { value: 0 };
+    let chainFinished = false;
+
+    tweenProperty(obj, 'value', 0, 100, 2, { useRealTime: true })
+        .setEase(Ease.OUT(Ease.POWER(2)))
+        .then(() => { chainFinished = true; });
+
+    assert.equal(obj.value, 0);
+    tweenUpdate(0, 1.0); // half duration on real time
+    assert(obj.value > 0 && obj.value < 100, 'value should be partway');
+    tweenUpdate(0, 1.0); // finish
+    assert(near(obj.value, 100));
+    assert.equal(chainFinished, true);
+});
+
+test('Tween.getPercent: 0 at start, 0.5 at midpoint, 1 at completion', () =>
+{
+    const t = new Tween(() => {}, 0, 10, 1);
+    assert.equal(t.getPercent(), 0);
+    tweenUpdate(0.5);
+    assert(near(t.getPercent(), 0.5));
+    tweenUpdate(0.5); // completes the tween
+    assert.equal(t.getPercent(), 1);
+});
+
+test('Tween.getPercent clamps overshoot to 1', () =>
+{
+    const t = new Tween(() => {}, 0, 10, 1);
+    tweenUpdate(5.0); // overshoot
+    assert.equal(t.getPercent(), 1);
+});
+
+test('tweenStopAll stops every active tween and prevents then-callbacks from firing', () =>
+{
+    let cbCalls = 0;
+    let thenCalls = 0;
+    new Tween(() => cbCalls++, 0, 1, 1).then(() => thenCalls += 100);
+    new Tween(() => cbCalls++, 0, 1, 1).then(() => thenCalls += 100);
+    new Tween(() => cbCalls++, 0, 1, 1);
+    // 3 callbacks fired from constructors snapping to start
+    assert.equal(cbCalls, 3);
+    tweenStopAll();
+    tweenUpdate(2.0); // would normally complete every tween, but they're stopped
+    assert.equal(cbCalls, 3); // no advancement — still just the snaps
+    assert.equal(thenCalls, 0); // no then-callbacks fired
+});
+
+test('Tween accepts Vector2 start/end and interpolates each component', () =>
+{
+    const calls = [];
+    new Tween((v) => calls.push(v), vec2(0, 0), vec2(10, 20), 1);
+    // Constructor snap fires the start value
+    assert.equal(calls.length, 1);
+    assert(calls[0] instanceof Vector2);
+    assert(near(calls[0].x, 0));
+    assert(near(calls[0].y, 0));
+
+    // Halfway: interpolated component-wise
+    tweenUpdate(0.5);
+    assert.equal(calls.length, 2);
+    assert(near(calls[1].x, 5));
+    assert(near(calls[1].y, 10));
+
+    // Completion: end value fires once
+    tweenUpdate(0.5);
+    assert.equal(calls.length, 3);
+    assert(near(calls[2].x, 10));
+    assert(near(calls[2].y, 20));
+});
+
+test('Tween accepts Color start/end and interpolates each channel', () =>
+{
+    const calls = [];
+    new Tween((c) => calls.push(c), rgb(0, 0, 0, 1), rgb(1, 1, 1, 0), 1);
+    // Halfway should be (0.5, 0.5, 0.5, 0.5)
+    tweenUpdate(0.5);
+    const mid = calls[calls.length - 1];
+    assert(mid instanceof Color);
+    assert(near(mid.r, 0.5));
+    assert(near(mid.g, 0.5));
+    assert(near(mid.b, 0.5));
+    assert(near(mid.a, 0.5));
+});
+
+test('tweenProperty walks dot-paths and assigns Vector2 values', () =>
+{
+    const obj = { pos: vec2(0, 0) };
+    tweenProperty(obj, 'pos', vec2(0, 0), vec2(10, 20), 1);
+    // Constructor snap: obj.pos is replaced with a fresh Vector2 equal to start
+    assert(obj.pos instanceof Vector2);
+    assert(near(obj.pos.x, 0));
+    assert(near(obj.pos.y, 0));
+
+    // Completion
+    tweenUpdate(1.0);
+    assert(near(obj.pos.x, 10));
+    assert(near(obj.pos.y, 20));
+});
+
+test('Tween throws on type mismatch (Vector2 start, Color end)', () =>
+{
+    assert.throws(() => new Tween(() => {}, vec2(0, 0), rgb(1, 0, 0, 1), 1));
+});
+
+test('Tween.getValue returns the current interpolated value', () =>
+{
+    const t = new Tween(() => {}, 0, 100, 1);
+    assert.equal(t.getValue(), 0); // at construction
+    tweenUpdate(0.25);
+    assert(near(t.getValue(), 25));
+    tweenUpdate(0.25);
+    assert(near(t.getValue(), 50));
+    t.stop();
+});
+
+test('Tween.getValue returns a Vector2 for Vector2 tweens', () =>
+{
+    const t = new Tween(() => {}, vec2(0, 0), vec2(10, 20), 1);
+    const v = t.getValue();
+    assert(v instanceof Vector2);
+    assert(near(v.x, 0));
+    assert(near(v.y, 0));
+    t.stop();
+});
+
+test('a callback that stops every tween, or another one, does not break the update, and the finished one is the one removed', () =>
+{
+    tweenStopAll();
+    let ended = 0;
+    // three tweens: the one that finishes first stops all from its callback, so the loop must not read past the end
+    new Tween(()=> {}, 0, 1, 5);
+    new Tween((v)=> { v >= 1 && tweenStopAll(); }, 0, 1, 1);
+    new Tween(()=> {}, 0, 1, 5);
+    assert.doesNotThrow(()=> tweenUpdate(1));
+
+    // a finishing tween whose callback stops a tween before it: the finished one is removed, the other stays
+    const stays = new Tween(()=> {}, 0, 1, 5);
+    const first = new Tween(()=> {}, 0, 1, 5);
+    const done = new Tween((v)=> { v >= 1 && first.stop(); }, 0, 1, 1).then(()=> ++ended);
+    tweenUpdate(1);
+    assert.equal(ended, 1, 'the finished tween ran its then');
+    assert.doesNotThrow(()=> tweenUpdate(1));
+    let moved = 0;
+    stays.then(()=> ++moved);
+    tweenUpdate(10);
+    assert.equal(moved, 1, 'the tween that was not stopped finished later');
+    assert.equal(done.thenCallback, undefined);
+    tweenStopAll();
+});
+
+test('looping tweens that finish together each move once per update', () =>
+{
+    tweenStopAll();
+    const counts = [0, 0, 0];
+    const tweens = [0, 1, 2].map(i=> new Tween(()=> ++counts[i], 0, 1, 1));
+    // finite loops, so a regression runs too many turns and fails instead of never returning
+    tweens[0].loop(9); tweens[1].loop(4); tweens[2].pingPong(9);
+    counts.fill(0);
+    tweenUpdate(1); // each finishes its first second and starts its second
+    assert.deepEqual(counts, [2, 2, 2], 'the end value, then the start of the next iteration, once each');
+    for (const t of tweens) assert.ok(Math.abs(t.life - 1) < 1e-9, 'a whole second left of the new iteration');
+    counts.fill(0);
+    tweenUpdate(.5);
+    assert.deepEqual(counts, [1, 1, 1]);
+    tweenStopAll();
+
+    // a looping tween and a plain one, and a loop that stops the other from its callback
+    let plain = 0;
+    const other = new Tween(()=> ++plain, 0, 1, 1);
+    const stopper = new Tween((v)=> v >= 1 && other.stop(), 0, 1, 1).loop();
+    plain = 0;
+    tweenUpdate(1);
+    assert.ok(plain <= 1, 'the stopped one moved at most once');
+    tweenUpdate(1);
+    assert.ok(plain <= 1, 'and not again');
+    stopper.stop();
+    tweenStopAll();
+});
+
+test('a vector tween overshoots with its easing like a number tween does, a color stays in range', () =>
+{
+    tweenStopAll();
+    let n, v, v3, c;
+    const tn = new Tween((x)=> n = x, 0, 10, 1).setEase(Ease.BACK);
+    const tv = new Tween((x)=> v = x, vec2(), vec2(10), 1).setEase(Ease.BACK);
+    const t3 = new Tween((x)=> v3 = x, vec3(), vec3(10), 1).setEase(Ease.BACK);
+    const tc = new Tween((x)=> c = x, rgb(0, 0, 0), rgb(1, 1, 1), 1).setEase(Ease.BACK);
+    tweenUpdate(.1);
+    assert.ok(n < 0, 'the number goes back past its start, ' + n);
+    assert.ok(Math.abs(v.x - n) < 1e-9 && Math.abs(v.y - n) < 1e-9, 'the vector follows it, ' + v.x);
+    assert.ok(Math.abs(v3.z - n) < 1e-9, 'so does a Vector3');
+    assert.ok(c.r >= 0, 'a color does not go below black');
+    tweenUpdate(.9);
+    assert.equal(n, 10, 'a finished tween is on its end exactly, the easing may round short of it');
+    assert.equal(v.x, 10); assert.equal(v3.x, 10);
+    tweenStopAll();
+});
+
+test('a tween restarted after a nested tweenUpdate keeps running, and completes only when that run ends', () =>
+{
+    tweenStopAll();
+    let restarted = false, completions = 0;
+    const values = [];
+    const tween = new Tween((value)=>
+    {
+        values.push(value);
+        if (value === 1 && !restarted)
+        {
+            restarted = true;
+            tweenUpdate(0); // a nested update moves the pass count on
+            tween.restart();
+        }
+    }, 0, 1, 1).then(()=> ++completions);
+    tweenUpdate(1);
+    assert.equal(tween.isActive(), true, 'the restart holds');
+    assert.equal(completions, 0, 'the run it ended does not complete');
+    tweenUpdate(.5);
+    assert.deepEqual(values, [0, 1, 0, .5]);
+    tweenUpdate(.5);
+    assert.equal(completions, 1, 'the restarted run completes');
+    tweenStopAll();
+});
+
+test('a nested tweenUpdate then a restart of a tween still waiting in the outer update leaves it for the next', () =>
+{
+    tweenStopAll();
+    const values = [];
+    // made first, so the outer update, walking newest first, reaches it after the other's callback
+    const other = new Tween((value)=> values.push(value), 0, 1, 1);
+    let done = false;
+    new Tween((value)=>
+    {
+        if (done || !value) return; // not the start value it is made with
+        done = true;
+        tweenUpdate(0);
+        other.restart();
+    }, 0, 1, 1);
+    values.length = 0;
+    tweenUpdate(.5);
+    assert.deepEqual(values, [0], 'restarted to its start, and not moved again by the outer update');
+    tweenUpdate(.5);
+    assert.deepEqual(values, [0, .5], 'the next update moves it');
+    tweenStopAll();
+});
+
+test('a tween whose callback or easing throws as it is made is not left running, others go on', () =>
+{
+    tweenStopAll();
+    const other = [];
+    new Tween((v)=> other.push(v), 0, 1, 1);
+    for (const make of [
+        (count)=> new Tween(()=> { ++count.n; throw new Error('failed'); }, 0, 1, .1),
+        (count)=> new Tween(()=> {}, 0, 1, .1, {ease: ()=> { ++count.n; throw new Error('failed'); }})])
+    {
+        const count = {n: 0};
+        assert.throws(()=> make(count), /failed/);
+        for (let i = 10; i--;)
+            tweenUpdate(.1);
+        assert.equal(count.n, 1, 'run once, as it was made, and never again');
+    }
+    assert.ok(other.length > 10, 'the other tween went on');
+    tweenStopAll();
+});
+
+test('a tween whose last callback throws is ended, not called again every update', () =>
+{
+    tweenStopAll();
+    let calls = 0;
+    new Tween((v)=> { ++calls; if (v === 1) throw new Error('at the end'); }, 0, 1, .1);
+    assert.throws(()=> tweenUpdate(.2), /at the end/);
+    const after = calls;
+    tweenUpdate(.1); tweenUpdate(.1);
+    assert.equal(calls, after);
+    tweenStopAll();
+});
+
+test('a tween whose callback throws anywhere is ended: mid-run, on restart, and as a loop starts again', () =>
+{
+    tweenStopAll();
+    const ended = (make, act)=>
+    {
+        let calls = 0, throwing = false;
+        const tween = make((v)=> { ++calls; if (throwing) throw new Error('broke'); });
+        throwing = true;
+        try { act(tween); } catch {}
+        const after = calls;
+        for (let i = 5; i--;)
+            try { tweenUpdate(.05); } catch {}
+        return [tween.isActive(), calls - after];
+    };
+    assert.deepEqual(ended((f)=> new Tween(f, 0, 1, 1), ()=> tweenUpdate(.1)), [false, 0], 'mid-run');
+    assert.deepEqual(ended((f)=> new Tween(f, 0, 1, 1), (t)=> t.restart()), [false, 0], 'on restart');
+    assert.deepEqual(ended((f)=> new Tween(f, 0, 1, .1).loop(), ()=> tweenUpdate(.15)), [false, 0], 'a loop again');
+    tweenStopAll();
+});
+
+test('a tween whose easing throws partway through is ended, as one whose callback throws is', () =>
+{
+    tweenStopAll();
+    let eases = 0;
+    new Tween(()=> {}, 0, 1, 1, {ease: (p)=> { if (p > .5) { ++eases; throw new Error('eased'); } return p; }});
+    let thrown = 0;
+    for (let i = 10; i--;)
+        try { tweenUpdate(.2); } catch { ++thrown; }
+    assert.equal(thrown, 1, 'it threw once and was ended');
+    assert.equal(eases, 1);
+    tweenStopAll();
+});

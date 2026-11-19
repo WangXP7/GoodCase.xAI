@@ -1,0 +1,536 @@
+import {
+  Scene,
+  Object3D,
+  Camera,
+  Vector3,
+} from 'three';
+import { CoordinateSync } from '../index';
+import { EnemyTypeId, ENEMY_TYPES, EnemyTypeConfig } from '../../../configs/enemy-types.config';
+import { AssetManagerService } from '../../../services/infrastructure/asset-manager.service';
+import { EnemyInstanceManager, EnemyInstanceState } from './enemy-instance.manager';
+import { HealthBarInstanceManager } from './health-bar-instance.manager';
+import { createPortalClipUniforms, type PortalClipUniforms } from '../portal-clip';
+import { StateLerp, stateLerpParam } from '../state-lerp';
+import { bakeEnemyVAT } from './vat-baker';
+
+// Dummy Object3D shared across all instanced enemy stubs
+const DUMMY_OBJECT = new Object3D();
+
+/**
+ * Debug overrides for enemy visual properties.
+ * Used by enemy debugger for live tuning of a single enemy.
+ */
+export interface EnemyDebugOverrides {
+  scale?: number;
+  heightOffset?: number;
+  healthBarOffset?: number;
+  rotation?: number; // Y rotation in radians
+  animationSpeed?: number; // Direct timeScale override
+}
+
+/**
+ * Enemy render data - returned by create() for compatibility with enemy manager.
+ * For instanced enemies this is a lightweight stub (mesh = DUMMY_OBJECT).
+ */
+export interface EnemyRenderData {
+  id: string;
+  mesh: Object3D;
+  typeConfig: EnemyTypeConfig;
+  isDestroyed: boolean;
+  isWalking: boolean;
+  lastHeading: number;
+}
+
+/**
+ * InstancedEnemyRenderer
+ *
+ * GPU-instanced enemy renderer using Vertex Animation Textures (VAT)
+ * for massive draw call reduction.
+ *
+ * All enemies use instanced rendering. Debug overrides (scale, height,
+ * rotation, animation speed) are supported natively per-instance.
+ *
+ * Target: ~1000 draw calls → ~14 draw calls for 500 enemies
+ */
+export class InstancedEnemyRenderer {
+  // Instanced rendering
+  private readonly instanceManager: EnemyInstanceManager;
+  private readonly healthBarManager: HealthBarInstanceManager;
+
+  // Track active enemies
+  private instancedEnemies = new Set<string>();
+
+  // Track loaded types
+  private loadedTypes = new Set<string>();
+  private bakingPromises = new Map<string, Promise<void>>();
+
+  // Cached parsed health bar colors per type (avoid repeated hex parsing)
+  private healthBarColorCache = new Map<string, { r: number; g: number; b: number } | null>();
+
+  // Display toggle state
+  private _showEnemies = true;
+  private _showHealthBars = true;
+  private _showAnimations = true;
+
+  /** Removes the webglcontextrestored listener (rebakeOnContextRestore). */
+  private stopRebakeOnRestore: (() => void) | null = null;
+
+  /** @param portalClip The spawn portals' clip, which the enemies and their health bars share (portal-clip.ts) */
+  constructor(
+    scene: Scene,
+    private readonly sync: CoordinateSync,
+    private readonly assetManager: AssetManagerService,
+    portalClip: PortalClipUniforms = createPortalClipUniforms(),
+  ) {
+    // The slide between two states, one clock for the enemies and their bars (state-lerp.ts)
+    this.stateLerp = new StateLerp(stateLerpParam(typeof location === 'undefined' ? '' : location.search));
+    this.instanceManager = new EnemyInstanceManager(scene, portalClip, this.stateLerp);
+    this.healthBarManager = new HealthBarInstanceManager(scene, portalClip, this.stateLerp.uniform);
+  }
+
+  /** The slide between two states of the simulation (state-lerp.ts) */
+  readonly stateLerp: StateLerp;
+
+  /**
+   * A state of the simulation is about to be written (updateSlot per enemy);
+   * `now`: performance.now(). Returns the carry for what slides on the same
+   * clock (projectiles, heroes), see StateLerp.begin.
+   */
+  beginState(now: number): number {
+    return this.instanceManager.beginState(now);
+  }
+
+  /**
+   * Where up to `count` enemies are shown now, x and z each, scene-local:
+   * the same enemies from call to call while they live (`reset` picks anew).
+   * For the measure of how evenly the picture moves (e2e/perf/sim-load.ts).
+   */
+  shownPositions(count: number, reset = false): number[] {
+    if (reset || this.probeIds.length === 0) this.probeIds = this.instanceManager.getAllIds().slice(0, count);
+    const out: number[] = [];
+    for (const id of this.probeIds) {
+      const state = this.instanceManager.getState(id);
+      if (!state || state.isDead) {
+        out.push(NaN, NaN);
+        continue;
+      }
+      const at = this.instanceManager.shownPosition(state, this.probeAt);
+      out.push(at.x, at.z);
+    }
+    return out;
+  }
+
+  private probeIds: string[] = [];
+  private readonly probeAt = new Vector3();
+
+  // =====================================================
+  // PRELOADING
+  // =====================================================
+
+  async preloadModel(typeId: EnemyTypeId): Promise<void> {
+    const config = ENEMY_TYPES[typeId];
+    if (!config) return;
+    // Drawn with another type's pool
+    if (config.renderAs) return this.preloadModel(config.renderAs);
+
+    // Skip if already loaded or loading
+    if (this.loadedTypes.has(typeId)) return;
+    if (this.bakingPromises.has(typeId)) return this.bakingPromises.get(typeId)!;
+
+    const promise = this.bakeAndCreatePool(typeId, config);
+    this.bakingPromises.set(typeId, promise);
+    await promise;
+    this.bakingPromises.delete(typeId);
+  }
+
+  /**
+   * A pool for every type that spawns as an instance; an ooze's body is drawn
+   * by the ooze renderer, a type with `renderAs` by that type's pool.
+   */
+  async preloadAllModels(): Promise<void> {
+    const types = (Object.keys(ENEMY_TYPES) as EnemyTypeId[]).filter((t) => !ENEMY_TYPES[t].ooze && !ENEMY_TYPES[t].renderAs);
+    await Promise.all(types.map((t) => this.preloadModel(t)));
+  }
+
+  private async bakeAndCreatePool(typeId: string, config: EnemyTypeConfig): Promise<void> {
+    try {
+      const cached = await this.assetManager.loadModel(config.modelUrl);
+
+      // Clone with skeleton for VAT baking; for a model without bones it is a plain clone.
+      const clone = this.assetManager.cloneModel(config.modelUrl, { preserveSkeleton: true });
+      if (!clone) {
+        console.error(`[InstancedRenderer] Clone failed for ${typeId}, enemy type will not render`);
+        this.loadedTypes.add(typeId);
+        return;
+      }
+
+      const vatData = bakeEnemyVAT(config, clone, cached.animations);
+      if (vatData) {
+        // Use config's unlit flag (material detection is unreliable before conversion)
+        if (config.unlit) vatData.isUnlit = true;
+        this.instanceManager.createPool(typeId, vatData, config);
+      } else {
+        console.error(`[InstancedRenderer] VAT bake failed for ${typeId}, enemy type will not render`);
+      }
+      this.loadedTypes.add(typeId);
+    } catch (err) {
+      console.error(`[InstancedRenderer] Failed to bake ${typeId}:`, err);
+      this.loadedTypes.add(typeId);
+    }
+  }
+
+  /**
+   * Bake again the VATs that dropped their CPU copy after the upload
+   * (EnemyInstanceManager.createPool) and swap them into their pools. After
+   * a WebGL context loss three uploads every texture again from its CPU copy,
+   * which such a VAT no longer has. Costs the bake time of those types.
+   */
+  rebakeAfterContextRestore(): void {
+    const start = performance.now();
+    const types = this.instanceManager.typesWithReleasedVAT();
+    for (const typeId of types) {
+      const config = ENEMY_TYPES[typeId];
+      const cached = config ? this.assetManager.getCachedModel(config.modelUrl) : undefined;
+      const clone = cached ? this.assetManager.cloneModel(config.modelUrl, { preserveSkeleton: true }) : null;
+      const vatData = cached && clone ? bakeEnemyVAT(config, clone, cached.animations) : null;
+      if (vatData) {
+        this.instanceManager.replaceVATAfterContextLoss(typeId, vatData);
+      } else {
+        console.error(`[InstancedRenderer] VAT rebake failed for ${typeId} after a context loss, its enemies collapse`);
+      }
+    }
+    if (types.length > 0) {
+      console.log(`[InstancedRenderer] Baked ${types.length} VATs again after a context loss (${(performance.now() - start).toFixed(0)} ms)`);
+    }
+  }
+
+  /**
+   * Bake the released VATs again whenever `canvas` gets its WebGL context
+   * back. three's own listener, added when the renderer was created, has
+   * restored its state by then, and no frame is drawn in between.
+   * dispose() stops listening.
+   */
+  rebakeOnContextRestore(canvas: HTMLCanvasElement): void {
+    this.stopRebakeOnRestore?.();
+    const onRestored = (): void => this.rebakeAfterContextRestore();
+    canvas.addEventListener('webglcontextrestored', onRestored);
+    this.stopRebakeOnRestore = () => canvas.removeEventListener('webglcontextrestored', onRestored);
+  }
+
+  // =====================================================
+  // CREATE / REMOVE
+  // =====================================================
+
+  /**
+   * @param height Geo height of the model origin: the enemy's ground plus
+   *   its height offset (Enemy.heightOffset), as EnemyManager.presentFrame()
+   *   pushes it afterwards
+   */
+  async create(
+    id: string,
+    typeId: EnemyTypeId,
+    lat: number,
+    lon: number,
+    height: number,
+  ): Promise<EnemyRenderData | null> {
+    const config = ENEMY_TYPES[typeId];
+    if (!config) return null;
+    // A type drawn with another's pool, at its own scale (EnemyTypeConfig.renderAs)
+    const poolType = config.renderAs ?? typeId;
+    const size = config.renderAs ? config.scale / ENEMY_TYPES[poolType].scale : 1;
+
+    // Wait for baking if still in progress
+    if (this.bakingPromises.has(poolType)) {
+      await this.bakingPromises.get(poolType);
+    }
+
+    if (!this.instanceManager.hasPool(poolType)) {
+      console.warn(`[InstancedRenderer] No pool for ${typeId} — cannot create enemy`);
+      return null;
+    }
+
+    // Convert geo to local position
+    const localPos = this.sync.geoToLocal(lat, lon, height);
+
+    // Add to instance pool
+    const state = this.instanceManager.addEnemy(id, poolType, localPos, 0, size);
+    if (!state) return null;
+
+    // Add health bar (use cached parsed color)
+    let fixedColor = this.healthBarColorCache.get(typeId);
+    if (fixedColor === undefined) {
+      if (config.healthBarColor) {
+        const hex = parseInt(config.healthBarColor.replace('#', ''), 16);
+        fixedColor = {
+          r: ((hex >> 16) & 0xff) / 255,
+          g: ((hex >> 8) & 0xff) / 255,
+          b: (hex & 0xff) / 255,
+        };
+      } else {
+        fixedColor = null;
+      }
+      this.healthBarColorCache.set(typeId, fixedColor);
+    }
+
+    state.healthBarIndex = this.healthBarManager.add(
+      id,
+      localPos,
+      state.config.healthBarOffset * state.size,
+      fixedColor,
+      6, // barWidth (matches original Sprite scale)
+      1, // barHeight
+    );
+
+    // No per-slot hide for the global health-bar toggle — that runs at mesh
+    // level via setVisible(), and marking the fresh slot hidden would retire
+    // its bar for good (hide() is the "this enemy died" signal).
+
+    this.instancedEnemies.add(id);
+
+    // Return stub EnemyRenderData
+    return {
+      id,
+      mesh: DUMMY_OBJECT,
+      typeConfig: config,
+      isDestroyed: false,
+      isWalking: true,
+      lastHeading: 0,
+    };
+  }
+
+  /**
+   * Draw enemy `id` from the pool of `typeId` from now on, at the same place,
+   * with its tints and health bar: a worm segment that becomes the head of
+   * its worm. Its old slot is released (EnemyInstanceState.released).
+   */
+  setRenderType(id: string, typeId: EnemyTypeId): void {
+    if (this.instancedEnemies.has(id)) this.instanceManager.changeType(id, typeId);
+  }
+
+  remove(id: string): void {
+    if (this.instancedEnemies.has(id)) {
+      this.instanceManager.removeEnemy(id);
+      this.healthBarManager.remove(id);
+      this.instancedEnemies.delete(id);
+    }
+  }
+
+  // =====================================================
+  // UPDATE
+  // =====================================================
+
+  /**
+   * The instance slot of an enemy, or null when it has none (pool not baked
+   * yet, bake failed, or removed). Callers that push state every frame keep
+   * the slot and resolve again only once `slot.released` is set (see
+   * EnemyManager.presentFrame()).
+   */
+  resolveSlot(id: string): EnemyInstanceState | null {
+    return this.instanceManager.getState(id);
+  }
+
+  /**
+   * Push one enemy's frame state to its slot. `localPos` is the render
+   * position, height offset included. `slot` must not be released.
+   */
+  updateSlot(
+    slot: EnemyInstanceState,
+    localPos: Vector3,
+    heading: number,
+    healthPercent: number,
+    currentSpeed: number,
+    /** False for a hidden camouflaged enemy: no bar gives it away */
+    barShown = true,
+  ): void {
+    if (!this._showEnemies) return;
+
+    // Update instance position/rotation
+    this.instanceManager.updateEnemyState(slot, localPos, heading, currentSpeed);
+
+    // Update health bar (with debug healthBarOffset if set)
+    if (slot.healthBarIndex < 0) return;
+    const barOffset = slot.debugHealthBarOffset ?? slot.config.healthBarOffset * slot.size * slot.markScale;
+    this.healthBarManager.updateAt(
+      slot.healthBarIndex,
+      localPos,
+      barOffset,
+      healthPercent,
+      barShown ? 6 : 0, // barWidth
+      barShown ? 1 : 0, // barHeight
+      this.instanceManager.lastOffset,
+    );
+  }
+
+  // =====================================================
+  // ANIMATIONS
+  // =====================================================
+
+  startWalkAnimation(id: string): void {
+    this.instanceManager.startWalkAnimation(id);
+  }
+
+  /** See EnemyInstanceManager.setCamo */
+  setCamo(id: string, level: number): void {
+    this.instanceManager.setCamo(id, level);
+  }
+
+  /** See EnemyInstanceManager.setMark */
+  setMark(id: string, scale: number, tint: readonly [number, number, number] | null): void {
+    this.instanceManager.setMark(id, scale, tint);
+  }
+
+  startRunAnimation(id: string): void {
+    this.instanceManager.startRunAnimation(id);
+  }
+
+  playDeathAnimation(id: string): void {
+    this.instanceManager.playDeathAnimation(id);
+    this.healthBarManager.hide(id);
+  }
+
+  updateAnimations(deltaTime: number, camera: Camera): void {
+    // How far the bodies are on their way to their newest state; projectiles and heroes go by it too
+    this.stateLerp.update(performance.now());
+    this.instanceManager.advanceCamo(deltaTime);
+
+    // Hidden enemies get no per-frame writes (updateSlot returns early), so
+    // there is nothing to flush either.
+    if (!this._showEnemies) return;
+
+    // Hit-flash tints run out on the clock, not with the animation toggle.
+    this.instanceManager.expireHitFlashes();
+
+    // The animation toggle only holds the VAT frames. Positions and health
+    // keep arriving through updateSlot() and still have to be flushed,
+    // otherwise enemies and bars freeze on screen while the game goes on.
+    if (this._showAnimations) {
+      this.instanceManager.updateAnimations(deltaTime);
+    }
+
+    // Flush batched GPU buffer dirty flags (matrices, tint colors)
+    this.instanceManager.flushDirtyFlags();
+
+    // Update health bar billboards (also flushes health bar dirty flags)
+    this.healthBarManager.updateBillboard(camera);
+  }
+
+  // =====================================================
+  // VISUAL EFFECTS
+  // =====================================================
+
+  /** Called with the enemy id where a walk clip lands a foot (EnemyTypeConfig.footstep). */
+  setFootstepListener(listener: ((id: string) => void) | null): void {
+    this.instanceManager.onFootstep = listener;
+  }
+
+  setFreezeVisual(id: string, active: boolean): void {
+    this.instanceManager.setFreezeVisual(id, active);
+  }
+
+  /** Frozen solid (freeze status), see EnemyInstanceManager.setIcedVisual. */
+  setIcedVisual(id: string, active: boolean): void {
+    this.instanceManager.setIcedVisual(id, active);
+  }
+
+  /** Stunned (stun status), see EnemyInstanceManager.setStunVisual. */
+  setStunVisual(id: string, active: boolean): void {
+    this.instanceManager.setStunVisual(id, active);
+  }
+
+  /** VFX setting freezeTint, see EnemyInstanceManager.setFreezeTintEnabled. */
+  setFreezeTintEnabled(enabled: boolean): void {
+    this.instanceManager.setFreezeTintEnabled(enabled);
+  }
+
+  /** Blood moon glow and tint, see EnemyInstanceManager.setBloodMoon. */
+  setBloodMoon(amount: number, linearOutput: boolean): void {
+    this.instanceManager.setBloodMoon(amount, linearOutput);
+  }
+
+  setPoisonVisual(id: string, active: boolean): void {
+    this.instanceManager.setPoisonVisual(id, active);
+  }
+
+  setBurnVisual(id: string, active: boolean): void {
+    this.instanceManager.setBurnVisual(id, active);
+  }
+
+  /**
+   * Trigger a short electric blue-white tint flash on an enemy (lightning chain hit).
+   * Auto-reverts after `durationMs` (default 130ms).
+   */
+  triggerHitFlash(id: string, durationMs?: number): void {
+    this.instanceManager.triggerHitFlash(id, durationMs);
+  }
+
+  // =====================================================
+  // QUERIES
+  // =====================================================
+
+  get(_id: string): EnemyRenderData | undefined {
+    // Instanced enemies have no full render data — return undefined
+    return undefined;
+  }
+
+  getAllIds(): string[] {
+    return this.instanceManager.getAllIds();
+  }
+
+  get count(): number {
+    return this.instanceManager.count;
+  }
+
+  // =====================================================
+  // DISPLAY TOGGLES
+  // =====================================================
+
+  setHealthBarsVisible(visible: boolean): void {
+    this._showHealthBars = visible;
+    this.healthBarManager.setVisible(visible);
+  }
+
+  setAnimationsEnabled(enabled: boolean): void {
+    this._showAnimations = enabled;
+  }
+
+  setEnemiesVisible(visible: boolean): void {
+    if (this._showEnemies === visible) return;
+    this._showEnemies = visible;
+    this.instanceManager.setVisible(visible);
+    this.healthBarManager.setVisible(visible && this._showHealthBars);
+  }
+
+  // =====================================================
+  // DEBUG OVERRIDES (native instanced support)
+  // =====================================================
+
+  /**
+   * Apply debug overrides to an enemy instance.
+   * Supports scale, heightOffset, healthBarOffset, rotation, animationSpeed.
+   * Used by the enemy debugger for live tuning.
+   */
+  applyDebugOverrides(id: string, overrides: EnemyDebugOverrides): void {
+    this.instanceManager.applyDebugOverrides(id, overrides);
+  }
+
+  // =====================================================
+  // CLEANUP
+  // =====================================================
+
+  clear(): void {
+    this.instanceManager.clear();
+    this.healthBarManager.clear();
+    this.stateLerp.reset();
+    this.probeIds = [];
+    this.instancedEnemies.clear();
+  }
+
+  dispose(): void {
+    this.stopRebakeOnRestore?.();
+    this.stopRebakeOnRestore = null;
+    this.clear();
+    this.instanceManager.dispose();
+    this.healthBarManager.dispose();
+    this.loadedTypes.clear();
+  }
+}

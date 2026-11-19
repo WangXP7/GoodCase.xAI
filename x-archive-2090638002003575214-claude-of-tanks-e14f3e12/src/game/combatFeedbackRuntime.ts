@@ -1,0 +1,230 @@
+import type { RuntimeValue } from '../runtimeTypes.ts';
+import * as THREE from 'three';
+import type { MovementShellSpec, MovementSpec } from '../sim/movement.ts';
+import type { EventBus } from './stateCore.ts';
+import { SHAKE_SUSTAIN_TRAUMA_PER_S, SHOT_CADENCE_WINDOW_S, createShotCadence, shotShakeScale } from './shotCadence.ts';
+import { isRapidFireHit } from './weaponHitKind.ts';
+import { pulseJuggernautImpact } from './juggernautVisual.ts';
+import { stripActivatedEra, type EraVisual } from './eraActivation.ts';
+
+interface FeedbackShellSpec extends MovementShellSpec {
+  name: string;
+  type: string;
+  caliberMm?: number;
+}
+
+interface FeedbackTankSpec extends MovementSpec {
+  gun: MovementSpec['gun'] & {
+    shells?: readonly FeedbackShellSpec[];
+  };
+}
+
+interface FeedbackTankVisual extends EraVisual {
+  root?: THREE.Object3D;
+  hitFlinch?(normalX: number, normalZ: number, strength: number, yaw?: number): void;
+}
+
+interface FeedbackTank {
+  id: string;
+  spec: FeedbackTankSpec;
+  state?: { yaw?: number } | null;
+  visual?: FeedbackTankVisual | null;
+}
+
+interface FeedbackGame {
+  player: FeedbackTank | null;
+  tankById: Map<string, FeedbackTank>;
+}
+
+interface FeedbackRig {
+  addTrauma(amount: number): void;
+  recoilKick?(amount: number, fovScale: number): RuntimeValue;
+}
+
+interface FeedbackFx {
+  propCrush(position: THREE.Vector3, direction: THREE.Vector3, heightM: number): void;
+}
+
+interface ShellHitEvent {
+  pos?: readonly number[];
+  impactFrame?: string;
+  targetId?: string;
+  attackerId?: string;
+  normal?: readonly number[];
+  kind: string;
+  damage?: number;
+  caliberMm?: number;
+  eraPlate?: string | null;
+  /** (272) the round's type and the solo step's clock (a network hit carries none): a fast gun's hail shakes by its cadence */
+  shellType?: string;
+  guided?: boolean;
+  timeS?: number;
+}
+
+interface ShellFiredEvent {
+  isPlayer?: boolean;
+  shooterId?: string;
+  feedbackPredicted?: boolean;
+  /** (270) a rotary gun's round between two full ones (sim/fireCycleFloor.ts createRotaryShotThinning): no flash, report or kick */
+  thinned?: boolean;
+  shellName?: string;
+  shellType?: string;
+  caliberMm?: number;
+  /** (272) the round's gun and the simulation clock it was fired on: the camera kick's cadence (game/shotCadence.ts) */
+  weaponSound?: string | null;
+  timeS?: number;
+}
+
+interface PropCrushedEvent {
+  pos: readonly number[];
+  dir: readonly number[];
+  h: number;
+}
+
+interface DestroyedPropEvent {
+  kind: string;
+  pos: number[];
+  cause: 'ram' | 'shell' | 'blast';
+}
+
+type DestroyedEventSink = (event: DestroyedPropEvent) => void;
+
+interface CombatFeedbackRuntimeOptions {
+  bus: EventBus;
+  game: FeedbackGame;
+  rig: FeedbackRig;
+  getFx(): FeedbackFx | null;
+  hasNetworkMatch(): boolean;
+  shotRecoilScale(spec: FeedbackTankSpec, shell: FeedbackShellSpec | null): number;
+  setDestroyedEventSink(sink: DestroyedEventSink | null): void;
+  trimGarageTanks(capacity: number): void;
+  getDeviceTier(): string;
+}
+
+interface CombatFeedbackRuntime {
+  dispose(): void;
+}
+
+/** Own discrete combat-to-presentation reactions outside the simulation. */
+export function createCombatFeedbackRuntime({
+  bus,
+  game,
+  rig,
+  getFx,
+  hasNetworkMatch,
+  shotRecoilScale,
+  setDestroyedEventSink,
+  trimGarageTanks,
+  getDeviceTier,
+}: CombatFeedbackRuntimeOptions): CombatFeedbackRuntime {
+  const effectPosition = new THREE.Vector3();
+  const effectDirection = new THREE.Vector3();
+  const unsubscribe: Array<() => void> = [];
+  const listen = (event: string, listener: (payload: RuntimeValue) => void): void => {
+    unsubscribe.push(bus.on(event, listener));
+  };
+
+  const hitShake = createShotCadence();
+  listen('shell:hit', (payload) => {
+    const event = payload as ShellHitEvent;
+    const target = event.targetId ? game.tankById.get(event.targetId) : null;
+    if (target?.visual) stripActivatedEra(event, target.visual);
+    if(target?.visual?.root && event.pos) pulseJuggernautImpact(target.visual.root,event.pos,event.impactFrame);
+    if (target?.visual && event.normal) {
+      const penetrated = event.kind === 'pen' || event.kind === 'he_pen';
+      target.visual.hitFlinch?.(
+        event.normal[0],
+        event.normal[2],
+        ((event.caliberMm || 90) / 100) * (penetrated ? 1 : 0.55),
+        target.state?.yaw,
+      );
+    }
+    const player = game.player;
+    if (!player) return;
+    if (event.targetId === player.id && (event.damage || 0) > 0) {
+      const shock = Math.min(
+        0.62,
+        0.24 + (event.damage || 0) / 2400 + (event.caliberMm || 90) / 1200,
+      );
+      // (272) a fast gun's hail on our hull shakes once a shake window (game/shotCadence.ts), its folded rounds' shake held
+      // under the rig's decay: twenty damaging 30 mm hits a second pinned the camera at its full shake. A main gun's hit,
+      // and a hail's first, shake as before.
+      const rounds = isRapidFireHit(event)
+        ? hitShake.admit('shake', player.id, event.attackerId ?? '', Number.isFinite(event.timeS) ? event.timeS! : performance.now() / 1000)
+        : 1;
+      if (rounds > 0) rig.addTrauma(rounds > 1 ? Math.min(shock, SHAKE_SUSTAIN_TRAUMA_PER_S * SHOT_CADENCE_WINDOW_S.shake) : shock);
+    }
+  });
+
+  // (272) the network seat's camera kick by its gun's cadence, as the solo step's (state.ts applyShotFeedback)
+  const shotShake = createShotCadence();
+  const playShotRecoil = (event: ShellFiredEvent): void => {
+    const player = game.player;
+    // (270) a rotary gun's thinned rounds kick nothing: its camera kick at the floor's density
+    if (!event.isPlayer || event.thinned || !hasNetworkMatch() || !player) return;
+    const shells = player.spec.gun.shells || [];
+    let shellSpec: FeedbackShellSpec | null = null;
+    let typeFallback: FeedbackShellSpec | null = null;
+    for (const shell of shells) {
+      if (shell.name === event.shellName) {
+        shellSpec = shell;
+        break;
+      }
+      if (!typeFallback && shell.type === event.shellType) typeFallback = shell;
+    }
+    shellSpec ||= typeFallback;
+    const recoilScale = shotRecoilScale(player.spec, shellSpec);
+    const caliberMm = shellSpec?.caliberMm || event.caliberMm || player.spec.gun.caliberMm;
+    const caliberK = Math.max(0, Math.min(1, (caliberMm - 30) / 122));
+    const trauma = (0.10 + caliberK * 0.20) * recoilScale;
+    // a shot with no clock (a probe's) kicks as it always did
+    const kick = Number.isFinite(event.timeS)
+      ? shotShakeScale(shotShake.admit('shake', event.shooterId ?? player.id, event.weaponSound || caliberMm, event.timeS!), trauma) : 1;
+    if (kick <= 0) return;
+    rig.addTrauma(trauma * kick);
+    rig.recoilKick?.((0.006 + caliberK * 0.011) * recoilScale * kick, recoilScale);
+  };
+
+  listen('shell:fired', (payload) => {
+    const event = payload as ShellFiredEvent;
+    if (!event.feedbackPredicted) playShotRecoil(event);
+  });
+  listen('weapon:predicted', (payload) => {
+    const event = payload as ShellFiredEvent;
+    if (event.shooterId === game.player?.id) playShotRecoil(event);
+  });
+
+  // (272) a burst of crushes in one frame (a network tick's world events released at once, a returning tab's backlog) draws
+  // the dust and chips of the first PROP_CRUSH_FX_PER_FRAME; the props still go (the world applies them, not this). One
+  // crush, or a hull rolling through a fence line, plays every effect as before.
+  const PROP_CRUSH_FX_PER_FRAME = 8;
+  let crushFrameMs = -Infinity;
+  let crushesThisFrame = 0;
+  listen('prop:crushed', (payload) => {
+    const event = payload as PropCrushedEvent;
+    const fx = getFx();
+    // a crush without a place (a prop this world lacks) has no effect to play; the listener must never throw inside the frame pump
+    if (!fx || !event.pos || !event.dir) return;
+    const nowMs = performance.now();
+    if (nowMs - crushFrameMs > 16) { crushFrameMs = nowMs; crushesThisFrame = 0; }
+    if (++crushesThisFrame > PROP_CRUSH_FX_PER_FRAME) return;
+    effectPosition.set(event.pos[0], event.pos[1], event.pos[2]);
+    effectDirection.set(event.dir[0], 0, event.dir[2]);
+    fx.propCrush(effectPosition, effectDirection, event.h);
+  });
+
+  listen('phase:change', (payload) => {
+    const event = payload as { phase?: string };
+    if (event.phase === 'battle') trimGarageTanks(getDeviceTier() === 'mobile' ? 1 : 3);
+  });
+
+  const destroyedSink: DestroyedEventSink = (event) => bus.emit('prop:destroyed', event);
+  setDestroyedEventSink(destroyedSink);
+
+  return {
+    dispose() {
+      for (const stop of unsubscribe.splice(0)) stop();
+      setDestroyedEventSink(null);
+    },
+  };
+}

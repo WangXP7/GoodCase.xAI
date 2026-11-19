@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voxel Plane - Three.js</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(#ccefff, #f5fdff);
+      font-family: system-ui, sans-serif;
+    }
+    #info {
+      position: fixed;
+      left: 14px;
+      top: 12px;
+      z-index: 5;
+      color: #123;
+      background: rgba(255,255,255,.65);
+      border: 1px solid rgba(255,255,255,.8);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      box-shadow: 0 10px 30px rgba(20, 80, 120, .12);
+    }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="info">Voxel Plane<br/>Drag to orbit · Scroll to zoom · Propeller spins</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.185.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.185.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xcdf1ff);
+    scene.fog = new THREE.Fog(0xcdf1ff, 40, 120);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(24, 18, 30);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 1.2, 0);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x78a8c8, 2.4);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 2.1);
+    sun.position.set(16, 24, 12);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -35;
+    sun.shadow.camera.right = 35;
+    sun.shadow.camera.top = 35;
+    sun.shadow.camera.bottom = -35;
+    scene.add(sun);
+
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0xdff8ff, roughness: 0.95 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -4.6;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const blue = new THREE.MeshStandardMaterial({ color: 0x0874e8, roughness: 0.52, metalness: 0.02 });
+    const darkBlue = new THREE.MeshStandardMaterial({ color: 0x0452b8, roughness: 0.58 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xf4f2eb, roughness: 0.48 });
+    const grey = new THREE.MeshStandardMaterial({ color: 0x8fa1a0, roughness: 0.68 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x171b1d, roughness: 0.5 });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.86 });
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0x16d8ff,
+      emissive: 0x028eb0,
+      emissiveIntensity: 0.25,
+      roughness: 0.18,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0.62
+    });
+
+    const plane = new THREE.Group();
+    scene.add(plane);
+
+    const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
+    function cube(x, y, z, sx = 1, sy = 1, sz = 1, mat = blue, parent = plane) {
+      const m = new THREE.Mesh(cubeGeo, mat);
+      m.position.set(x, y, z);
+      m.scale.set(sx, sy, sz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    }
+
+    function blockLine(axis, start, end, fixed, mat = blue, size = [1,1,1]) {
+      const [sx, sy, sz] = size;
+      for (let i = start; i <= end; i++) {
+        const x = axis === 'x' ? i : fixed[0];
+        const y = axis === 'y' ? i : fixed[1];
+        const z = axis === 'z' ? i : fixed[2];
+        cube(x, y, z, sx, sy, sz, mat);
+      }
+    }
+
+    // Fuselage: blocky blue body with tapered nose and tail.
+    for (let z = -8; z <= 7; z++) {
+      const width = z < -5 ? 2 : z > 5 ? 2 : 3;
+      const height = z < -5 ? 2 : z > 5 ? 2 : 3;
+      for (let x = -Math.floor(width/2); x <= Math.floor(width/2); x++) {
+        for (let y = 0; y < height; y++) {
+          const mat = (z < -6 && y > 0) ? white : blue;
+          cube(x, y, z, 0.98, 0.98, 0.98, mat);
+        }
+      }
+    }
+
+    // White nose cap and lower belly.
+    for (let z = -10; z <= -8; z++) {
+      cube(0, 1, z, 2.4, 1.8, 1, white);
+      cube(0, 0, z, 2.1, 1, 1, grey);
+    }
+    cube(0, 1, -11, 1.2, 1.2, 1, blue);
+    for (let z = -4; z <= 6; z++) cube(0, -0.65, z, 2.2, 0.55, 1, grey);
+
+    // Main wings with white racing stripes.
+    for (let x = -14; x <= 14; x++) {
+      for (let z = -2; z <= 2; z++) {
+        let mat = blue;
+        if (Math.abs(x) === 9 || Math.abs(x) === 10) mat = white;
+        if (Math.abs(x) > 12 && Math.abs(z) === 2) continue;
+        cube(x, 0.95, z, 1, 0.32, 1, mat);
+      }
+    }
+    cube(-15, 0.95, 0, 1, 0.32, 3, blue);
+    cube(15, 0.95, 0, 1, 0.32, 3, blue);
+
+    // Small under-wing supports / floats.
+    [-5, 5].forEach(x => {
+      cube(x, -1.0, -0.5, 0.8, 2.1, 0.8, darkBlue);
+      cube(x, -2.1, -0.5, 1.2, 0.42, 2.4, grey);
+      cube(x, -2.35, -1.5, 1.1, 0.3, 0.45, dark);
+    });
+
+    // Tail boom and vertical stabilizer.
+    for (let z = 7; z <= 11; z++) cube(0, 1, z, 2, 2, 1, blue);
+    for (let y = 2; y <= 7; y++) {
+      const w = y < 5 ? 1.5 : 1.0;
+      cube(0, y, 9.5, w, 1, 1, y === 6 ? white : blue);
+    }
+    cube(0, 7, 9.5, 1, 1, 1, blue);
+
+    // Horizontal tail wings.
+    for (let x = -5; x <= 5; x++) {
+      let mat = Math.abs(x) === 3 ? white : blue;
+      cube(x, 2.05, 9.8, 1, 0.35, 2, mat);
+    }
+    cube(-6, 2.05, 9.8, 1, 0.35, 1.5, blue);
+    cube(6, 2.05, 9.8, 1, 0.35, 1.5, blue);
+
+    // Cockpit glass as voxel canopy and black frame lines.
+    for (let z = -4; z <= 0; z++) {
+      cube(0, 3.1, z, 2.5, 0.9, 0.9, glass);
+      cube(-1.25, 2.75, z, 0.16, 0.9, 0.92, dark);
+      cube(1.25, 2.75, z, 0.16, 0.9, 0.92, dark);
+    }
+    cube(0, 3.65, -2, 1.75, 0.25, 3.6, glass);
+    [-4, -2, 0].forEach(z => cube(0, 3.75, z, 2, 0.15, 0.16, dark));
+    [-0.8, 0, 0.8].forEach(x => cube(x, 3.76, -2, 0.12, 0.18, 3.7, dark));
+
+    // Landing gear.
+    [-1.6, 1.6].forEach(x => {
+      cube(x, -1.5, -8.2, 0.45, 1.8, 0.45, grey);
+      cube(x, -2.55, -8.2, 0.95, 0.95, 0.45, rubber);
+    });
+    cube(0, -1.7, -10.6, 0.38, 1.5, 0.38, grey);
+    cube(0, -2.55, -10.6, 0.75, 0.75, 0.4, rubber);
+    cube(0, -1.0, 10.7, 0.35, 1.5, 0.35, grey);
+    cube(0, -1.85, 10.7, 0.65, 0.65, 0.35, rubber);
+
+    // Spinning propeller assembly at the nose.
+    const propeller = new THREE.Group();
+    propeller.position.set(0, 1, -12.1);
+    plane.add(propeller);
+    cube(0, 1, -11.65, 0.9, 0.9, 0.5, dark, plane);
+
+    function propBlock(x, y, z, sx, sy, sz, mat) {
+      const m = new THREE.Mesh(cubeGeo, mat);
+      m.position.set(x, y, z);
+      m.scale.set(sx, sy, sz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      propeller.add(m);
+      return m;
+    }
+    // Prop plane is XY, spinning around Z.
+    propBlock(0, 0, 0, 0.8, 0.8, 0.35, dark);
+    for (let i = 1; i <= 3; i++) {
+      propBlock(0, i * 0.62, 0, 0.45, 0.75, 0.24, dark);
+      propBlock(0, -i * 0.62, 0, 0.45, 0.75, 0.24, dark);
+      propBlock(i * 0.62, 0, 0, 0.75, 0.45, 0.24, dark);
+      propBlock(-i * 0.62, 0, 0, 0.75, 0.45, 0.24, dark);
+    }
+    propBlock(0, 2.7, 0, 0.6, 0.55, 0.24, rubber);
+    propBlock(0, -2.7, 0, 0.6, 0.55, 0.24, rubber);
+    propBlock(2.7, 0, 0, 0.55, 0.6, 0.24, rubber);
+    propBlock(-2.7, 0, 0, 0.55, 0.6, 0.24, rubber);
+
+    // Optional soft transparent spin disc for motion feel.
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(3.25, 48),
+      new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.045, side: THREE.DoubleSide })
+    );
+    disc.position.z = -0.08;
+    propeller.add(disc);
+
+    // Floating voxel cloud bits for depth.
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+    function cloud(cx, cy, cz, s = 1) {
+      const g = new THREE.Group(); scene.add(g); g.position.set(cx, cy, cz);
+      [[0,0,0],[1,0,0],[-1,0,0],[0.5,0.4,0],[-0.5,0.35,0],[1.6,0.25,0]].forEach(([x,y,z]) => {
+        const m = new THREE.Mesh(cubeGeo, cloudMat);
+        m.position.set(x*s,y*s,z*s); m.scale.set(s,s*0.7,s); m.castShadow = false; g.add(m);
+      });
+    }
+    cloud(-20, 9, -8, 1.1);
+    cloud(18, 12, 10, 0.9);
+    cloud(-12, 14, 16, 0.75);
+
+    // Pixelated material edge lines / outline effect with bevel-free cubes.
+    const edges = new THREE.Group();
+    // Keeping simple: voxel grid faces do the work.
+
+    function makeTinyClock() {
+      const start = performance.now() / 1000;
+      let last = start;
+      return {
+        elapsedTime: 0,
+        getDelta() {
+          const now = performance.now() / 1000;
+          const dt = now - last;
+          last = now;
+          this.elapsedTime = now - start;
+          return dt;
+        },
+      };
+    }
+    const clock = makeTinyClock();
+    function animate() {
+      const dt = clock.getDelta();
+      propeller.rotation.z += dt * 20;
+      plane.rotation.y += dt * 0.12;
+      plane.position.y = Math.sin(clock.elapsedTime * 1.2) * 0.18;
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

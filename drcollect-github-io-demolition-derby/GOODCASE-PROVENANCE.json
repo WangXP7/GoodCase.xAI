@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/drcollect/demolition-derby",
+  "commit": "f559fc60a7f2ee3a21a4faf77e998ae31ad67c43",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 105,
+  "bytes": 1510603
+}

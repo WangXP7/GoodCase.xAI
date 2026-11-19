@@ -1,0 +1,1171 @@
+/* NETCODE DO CLIENTE. O game.js só chama ganchos `this._mp?.xxx()` e nunca importa este
+   arquivo; quem injeta é o main.js. Desenho e decisões: docs/MULTIPLAYER.md. */
+import * as THREE from 'three';
+import { poseCharacter, byId } from './characters.js';
+import { WEAPONS, supDeCod, anguloDeDisparo } from './game.js';
+import { frase } from './i18n.js';
+import { preloadEyewearAssets } from './eyewear.js';
+import { preloadCosmeticAssets } from './glbchars.js';
+import { emoteInfo, V9_EMOTE_IDS, V10_EMOTE_IDS } from './data/emote-catalog.js';
+import { InterpolationClock, ensureEntityBuffer, pushEntitySample, sampleEntityBuffer } from './net-interpolation.js';
+
+export function makeNetcode(game, net) { return new Netcode(game, net); }
+
+const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const V9_EMOTES = new Set(V9_EMOTE_IDS), V10_EMOTES = new Set(V10_EMOTE_IDS);
+function rosterPlayerId(entity, row) {
+  return !entity?.bot && PLAYER_ID.test(row?.pid || '') ? row.pid : '';
+}
+function emoteDeRede(net, id) {
+  const version = Number(net.meta?.protocolVersion) || 0;
+  return (version >= 10 ? V10_EMOTES : V9_EMOTES).has(id) ? id : null;
+}
+
+class Netcode {
+  constructor(game, net) {
+    this.game = game;
+    this.net = net;
+    this._netMap = new Map();   // id do servidor -> entidade local
+    this._netTick = -1;
+    this._alvoSpec = null;      // quem o espectador está seguindo
+    this.specDist = 1.7;        // câmera do espectador: metros atrás do ombro do alvo (BUG-117)
+    this._evOn = !!(net.meta && net.meta.events);   // servidor manda `ev`; sem a flag, heurística velha (BUG-90)
+    this._pickPendente = null;   // null = nada pendente; ID 0 é um pedido válido (bug do truthiness, 10/11)
+    /* FLASH online: o servidor de hoje só aceita `nade` 'smoke'|'frag' e não emite `boom` da
+       flash. Até ele anunciar `meta.flash` (com `ev`), o jogo recusa equipar a flash online
+       (game._flashLiberada) em vez de gastar o estoque num pedido que o servidor descarta. */
+    this.flashOn = this._evOn && !!(net.meta && net.meta.flash);
+    /* Buffer base ~2,4 snapshots; gaps repetidos ampliam até 140 ms para o remoto
+       não congelar, e a rede estável volta ao atraso mínimo (BUG-87). */
+    this.snapshotHz = Math.max(1, Number(net.meta?.snapshotHz) || 20);
+    this._interpolation = null;
+    this._arrivalGaps = [];
+    this._tAt = []; this._tT = [];   // chegada ↔ tempo-de-servidor dos últimos snapshots
+    this._remoteSample = { vx: 0, vz: 0, segYaw: null };
+    this._atualizarAtrasoCallback = (gapMs) => this._atualizarAtrasoInterpolacao(gapMs);
+    // Predições indexadas pelo seq que o snapshot v4 reconhece. Arrays planos evitam objeto
+    // por quadro no hot path; 180 entradas cobrem 3 s a 60 fps antes do fallback de desync.
+    this._predSeq = []; this._predX = []; this._predY = []; this._predZ = [];
+    this._corrX = 0; this._corrY = 0; this._corrZ = 0;
+    this._ackSeq = 0; this._ackOn = false; this._authWeapon = null;
+    this._loadoutSeq = 0;
+    this._armaEnviada = null;   // arma do último input enviado: separa tecla nova de pedido recusado
+    this._reconcileSamples = []; this._reconcileWindow = []; this._reconcileCount = 0; this._reconcileMax = 0;
+    // economia de partida (docs/ECONOMIA-PARTIDA.md): resposta do nó vai para o menu de compra
+    net.onCompra = (m) => { try { this.game._compra?.respostaRemota(m); } catch { /* HUD */ } };
+    net.startPing();
+    /* Ocultar/sair/fechar o WS envia a janela parcial de stats; voltar à aba
+     * antecipa a próxima janela para preservar amostras curtas. */
+    this._flushStatsParcial = () => {
+      const game = this.game;
+      if (game._disposed || !game.online || !this.net) return;
+      if (!(this._nsFps > 0)) return;                 // nunca renderizou visível: sem janela útil
+      try { this.enviarJanelaStats(); } catch { /* flush nunca derruba o jogo */ }
+    };
+    this._onPageHide = () => this._flushStatsParcial();
+    this._onVisChange = () => { if (typeof document !== 'undefined' && document.hidden) this._flushStatsParcial(); };
+    globalThis.addEventListener?.('pagehide', this._onPageHide);
+    // harness sem DOM: `document` pode nem existir como global — o encadeamento
+    // opcional não protege global indefinido, só propriedade. O guard é o typeof.
+    if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', this._onVisChange);
+    this._prevOnClose = net.onClose;
+    this._onCloseNetGame = (motivo) => { this._flushStatsParcial(); this._prevOnClose?.(motivo); };
+    net.onClose = this._onCloseNetGame;
+    // Interval PRÓPRIO: o overlay segue vivo na pausa (o WS continua recebendo snapshots).
+    this._nsTimer = setInterval(() => { this.updateStats(); this._pulsoDePausa(); }, 250);
+    this._statsInactive = false;
+    this._nextClientStats = this._now() + 2000;
+    // trocar de time / virar espectador remonta o casamento de ids na próxima nevada
+    this._prevOnSlot = net.onSlot;
+    this._onSlot = (m) => {
+      this._netMap.clear(); this._srvHas = 0; this._clearPrediction();
+      if (m.yourTeam === 'E' || m.yourTeam === 'B') {
+        this.game.playerTeam = m.yourTeam;
+        this.game.enemyTeam = m.yourTeam === 'B' ? 'E' : 'B';
+        if (this.game.player) this.game.player.team = m.yourTeam;
+      }
+      this._prevOnSlot?.(m);
+    };
+    net.onSlot = this._onSlot;
+    this._prevOnPersonagem = net.onPersonagem;
+    this._cosmeticRevisions = new Map();
+    this._onPersonagem = (m, notify = true) => {
+      const corpo = m.ent === net.yourEnt && !this.espectador ? this.game.player : this._netMap.get(m.ent);
+      if (m.team === 'J' || corpo?._objectiveNpc || net.meta?.roster?.some(r => r.id === m.ent && r.team === 'J')) return;
+      const def = byId(m.char);
+      const revision = (this._cosmeticRevisions.get(m.ent) || 0) + 1;
+      this._cosmeticRevisions.set(m.ent,revision);
+      const apply = (reload = false) => {
+        if (!def || this._cosmeticRevisions.get(m.ent) !== revision || net.onPersonagem !== this._onPersonagem) return;
+        const alvo = m.ent === net.yourEnt && !this.espectador ? this.game.player : this._netMap.get(m.ent);
+        if (alvo && !alvo._objectiveNpc) this.game._trocarPersonagem(alvo,{...def,skinId:m.skinId || null,eyewearId:m.eyewearId || null},reload);
+      };
+      if (m.skinId || m.eyewearId) void Promise.all([preloadCosmeticAssets([m.skinId]),preloadEyewearAssets([m.eyewearId])]).then(()=>apply(true)); else apply();
+      if (notify) this._prevOnPersonagem?.(m);
+    };
+    net.onPersonagem = this._onPersonagem;
+  }
+
+  dispose() {
+    if (this._nsTimer) { clearInterval(this._nsTimer); this._nsTimer = null; }
+    globalThis.removeEventListener?.('pagehide', this._onPageHide);
+    if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', this._onVisChange);
+    if (this.net?.onClose === this._onCloseNetGame) this.net.onClose = this._prevOnClose;
+    try { this.net.stopPing(); } catch { /* já fechada */ }
+    if (this.net.onSlot === this._onSlot) this.net.onSlot = this._prevOnSlot;
+    if (this.net.onPersonagem === this._onPersonagem) this.net.onPersonagem = this._prevOnPersonagem;
+  }
+
+  get espectador() { return this.net.espectador || this.net.yourEnt == null; }
+
+  // Campos históricos continuam mutáveis para as réguas e para os consumidores de apresentação.
+  _clock() {
+    if (!this._interpolation) {
+      this._interpolation = new InterpolationClock({
+        snapshotHz: this.snapshotHz,
+        now: () => this._now(),
+        ping: () => this.net.stats?.ping,
+      });
+      this._arrivalGaps = this._interpolation.arrivalGaps;
+      this._tAt = this._interpolation.arrivalTimes;
+      this._tT = this._interpolation.serverTimes;
+    }
+    return this._interpolation;
+  }
+  get interpAtrasoMs() { return this._clock().delayMs; }
+  set interpAtrasoMs(v) { this._clock().delayMs = v; }
+  get _baseInterpAtrasoMs() { return this._clock().baseDelayMs; }
+  get _offMs() { return this._clock().offsetMs; }
+  get _snapPrevT() { return this._interpolation?.previousServerTime; }
+  get _snapCurT() { return this._interpolation?.currentServerTime; }
+  get _snapArrPrev() { return this._interpolation?.previousArrivalTime; }
+  get _snapArrCur() { return this._interpolation?.currentArrivalTime; }
+
+  // Relógio de parede do netcode — indireção para a régua fabricar jitter determinístico.
+  _now() { return performance.now(); }
+
+  /* Tempo-de-SERVIDOR que o cliente está renderizando os remotos AGORA (entre os dois últimos
+     snapshots). Vai no input para o servidor rebobinar as hitboxes exatamente para cá (lag
+     compensation) — é o que faz o tiro cair onde você VIU o alvo, e não onde ele já está. */
+  renderTime() {
+    // Mesmo relógio da interpolação (BUG-118): o rewind cai exatamente no que a tela mostrou.
+    if (this._tT.length) return this._clock().renderTime(this._snapCurT || 0, this._relogioAgora());
+    return this._snapCurT || 0;
+  }
+
+  // Relógio do buffer dos remotos = tempo do SERVIDOR, não a chegada (BUG-118, KNOWN-BUGS.md).
+  // Costura da régua: o mutante troca os dois pelo relógio de chegada.
+  _relogioSnap(snap, nowMs) { return this._clock().snapshotTime(snap, nowMs); }
+  _relogioAgora() { return this._clock().serverNow(); }
+
+  _atualizarAtrasoInterpolacao(gapMs) { this._clock().updateDelay(gapMs); }
+
+  /* Chamado pelo game._updatePlayer logo DEPOIS do _moveEntity (a predição já aconteceu na
+     tela). Reconcilia com a pose autoritativa e manda o input pro servidor. */
+  stepPlayer(p, input, dt = 1 / 60) {
+    if (this.espectador) return;
+    if (this._ackOn) {
+      const a = 1 - Math.exp(-14 * Math.max(0, Math.min(0.05, Number(dt) || 0)));
+      const dx = this._corrX * a, dy = this._corrY * a, dz = this._corrZ * a;
+      if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 1e-7) {
+        p.pos.x += dx; p.pos.y += dy; p.pos.z += dz;
+        if (p.mantle) {
+          p.mantle.x0 += dx; p.mantle.x1 += dx;
+          p.mantle.y0 += dy; p.mantle.y1 += dy;
+          p.mantle.z0 += dz; p.mantle.z1 += dz;
+        }
+        // A base local mudou; poses antigas precisam mudar junto para o próximo ack não
+        // cobrar de novo a parcela que já foi aplicada.
+        for (let i = 0; i < this._predSeq.length; i++) {
+          this._predX[i] += dx; this._predY[i] += dy; this._predZ[i] += dz;
+        }
+        this._corrX -= dx; this._corrY -= dy; this._corrZ -= dz;
+      }
+    } else if (this._srvHas) {
+      const err = Math.hypot(this._srvX - p.pos.x, this._srvZ - p.pos.z);
+      /* Só corrige desync REAL: o adiantamento normal da predição é esperado, e "corrigi-lo"
+         é justamente o rubber-banding que as pessoas chamam de lag. */
+      if (err > 2.5) { p.pos.set(this._srvX, this._srvY, this._srvZ); p.vel.set(0, 0, 0); }
+    }
+    // px/py/pz = a posição PREDITA de onde você mira. O servidor atira DESTA origem (validada
+    // dentro de 3 m); sem isso o raio sai da posição dele — atrasada pelo RTT — e passa ao lado.
+    const tinhaIntent = p.weapon !== this._authWeapon || this._pickPendente != null
+      || this._pickupWeaponPendente || this._reloadPendente;
+    const shotAim = anguloDeDisparo(p, this.game.camView);
+    const seq = this.net.sendInput({
+      ax: input.ax, az: input.az, crouch: input.crouch, shift: input.shift, jump: input.jump,
+      yaw: shotAim.yaw, pitch: shotAim.pitch,
+      shoot: !!this.game.mouseDown0, weapon: p.weapon,
+      // INTENÇÃO de mirar (1 bit). Quem integra o `adsF` — e portanto a precisão — é o servidor.
+      ads: !!p.scoped,
+      emote: emoteDeRede(this.net, this.game._emoteAtual),
+      px: p.pos.x, py: p.pos.y, pz: p.pos.z, rt: this.renderTime(),
+      // duração DESTE passo (teto do laço do navegador): o servidor integra o comando por ela,
+      // e não pelo tick dele — senão o ack compara poses de instantes diferentes (BUG-152).
+      dtms: Math.min(50, Math.max(1, Math.round((Number(dt) || 0) * 100000) / 100)),
+      ...(this._pickPendente != null ? { pick: this._pickPendente } : {}),
+      ...(this._pickupWeaponPendente ? { pickupWeapon: this._pickupWeaponPendente } : {}),
+      ...(this._reloadPendente ? { reload: this._reloadPendente } : {}),
+      ...(this._nadePendente ? { nade: this._nadePendente } : {}),
+    });
+    if (seq > 0) {
+      this._predSeq.push(seq); this._predX.push(p.pos.x); this._predY.push(p.pos.y); this._predZ.push(p.pos.z);
+      if (this._predSeq.length > 180) { this._predSeq.shift(); this._predX.shift(); this._predY.shift(); this._predZ.shift(); }
+      if (tinhaIntent) this._loadoutSeq = seq;
+      this._armaEnviada = p.weapon;
+      this._pickPendente = null;   // um pedido por E; o servidor responde com `gone` + `drop` da antiga; null = nada (ID 0 é válido)
+      this._pickupWeaponPendente = '';
+      this._reloadPendente = '';
+      this._nadePendente = '';  // um pedido por tecla; o servidor responde com `nade` (fase 3)
+    }
+    this._inputAt = this._now();
+  }
+  // E num drop/rack: pede ao servidor; a troca local é só predição até o ack do v4.
+  pedirPick(pk) {
+    if (!pk) return;
+    if (pk._nid != null) this._pickPendente = pk._nid;
+    else if (WEAPONS[pk.weapon]) this._pickupWeaponPendente = pk.weapon;
+  }
+  pedirReload(w) { if (!this.espectador && WEAPONS[w]) this._reloadPendente = w; }
+  // 4/5 online: pede a granada ao servidor; devolve false sem a flag (aí o local lança, como antes).
+  pedirNade(kind) { if (!this._evOn || this.espectador) return false; this._nadePendente = kind; return true; }
+  // Economia de partida: repassa o pedido ao nó (seq para casar compra-ok/compra-nack).
+  pedirCompra(id) {
+    if (!this._evOn || this.espectador) return 0;
+    return this.net.pedirCompra(id);
+  }
+  // Drops de rede (com `_nid`) somem; o rack do spawn fica. Chamado no countdown e no `partida`.
+  limparDropsDeRede() {
+    const game = this.game;
+    for (let i = game.drops.length - 1; i >= 0; i--) if (game.drops[i]._nid != null) game._sumirDrop(i);
+  }
+  _dropDeRede(e) {
+    const game = this.game;
+    if (!e || !Number.isInteger(e.i) || game.drops.some((d) => d._nid === e.i)) return;
+    if (!WEAPONS[e.w]) return;
+    game._dropWeapon(+e.x || 0, +e.z || 0, e.w, false, 0.01, 0);   // quem some é o `gone` — ou o prazo abaixo
+    const d = game.drops[game.drops.length - 1];
+    // TTL do servidor quando vem (> 0, no evento e no welcome); sem ele, teto local de 25 s
+    const ttl = Number.isFinite(e.ttl) && e.ttl > 0 ? e.ttl : 25;
+    if (d) { d._nid = e.i; d._expiraRedeEm = game.time + ttl + 2; }
+  }
+
+  _clearPrediction() {
+    this._predSeq.length = 0; this._predX.length = 0; this._predY.length = 0; this._predZ.length = 0;
+    this._corrX = 0; this._corrY = 0; this._corrZ = 0; this._ackOn = false; this._ackSeq = 0;
+    this._loadoutSeq = 0; this._armaEnviada = null;
+  }
+
+  _ackPlayer(e, p, imediato = false) {
+    if (!Number.isInteger(e.ackSeq) || e.ackSeq < 0) return;
+    this._ackOn = true;
+    const i = this._predSeq.indexOf(e.ackSeq);
+    if (!imediato && i >= 0 && e.ackSeq >= this._ackSeq) {
+      const dx = e.x - this._predX[i], dy = e.y - this._predY[i], dz = e.z - this._predZ[i];
+      const err = Math.hypot(dx, dy, dz);
+      if (err > 6) {
+        p.pos.set(e.x, e.y, e.z); p.vel.set(0, 0, 0); this._clearPrediction(); this._ackOn = true;
+      } else {
+        this._corrX = dx; this._corrY = dy; this._corrZ = dz;
+        if (err >= 0.005) {
+          this._reconcileCount++; this._reconcileMax = Math.max(this._reconcileMax, err);
+          this._reconcileSamples.push(err);
+          if (this._reconcileSamples.length > 240) this._reconcileSamples.shift();
+          this._reconcileWindow.push(err);
+        }
+      }
+    }
+    this._ackSeq = Math.max(this._ackSeq, e.ackSeq);
+    let n = 0;
+    while (n < this._predSeq.length && this._predSeq[n] <= e.ackSeq) n++;
+    if (n) { this._predSeq.splice(0, n); this._predX.splice(0, n); this._predY.splice(0, n); this._predZ.splice(0, n); }
+  }
+
+  _syncPlayerLoadout(e, p) {
+    /* ECONOMIA DE PARTIDA (v8): o saldo, a janela de compra e o equipamento são do nó —
+       chegam em TODO snapshot e valem antes da guarda de ackSeq (compra não é loadout
+       predito). Nó sem economia (v7-) não manda os campos e nada muda. */
+    const compra = this.game._compra;
+    if (compra && this.game.online) {
+      if (e.saldo != null) p.carteira.saldo = e.saldo;
+      if (e.compraRestante != null) compra.compraAte = this.game.time + e.compraRestante;
+      if (e.colete != null) { p.armor = e.colete; p.helmet = !!e.capacete; p.flashes = e.flashes | 0; }
+    }
+    if (!Number.isInteger(e.ackSeq) || e.ackSeq < this._loadoutSeq) return;
+    // Tecla entre este snapshot e o próximo input ainda não saiu: o servidor não a recusou.
+    // Sem a guarda a troca morria antes de ser pedida (MP, 13/10). Régua: troca-arma-mp-check.
+    const teclaNaoEnviada = !this.__mutSemGuardaTroca && this._armaEnviada != null && p.weapon !== this._armaEnviada;
+    if (e.weapon && WEAPONS[e.weapon] && p.weapon !== e.weapon && !teclaNaoEnviada) {
+      this.game._switchWeapon(e.weapon);
+      // Morto/estado transitório pode bloquear o helper visual; a autoridade ainda precisa
+      // assentar o dado para o próximo respawn/snapshot.
+      if (p.weapon !== e.weapon) { p.weapon = e.weapon; this.game._applyVmVisibility?.(); }
+    }
+    this._authWeapon = e.weapon || this._authWeapon;
+    if (e.primary && WEAPONS[e.primary]) p.primary = e.primary;
+    // Economia: o nó zera a primária na morte (rearmar = faca + pistola). Sem limpar, o
+    // HUD continuaria mostrando a arma comprada que o servidor já tirou do inventário.
+    else if (e.primary === null && this.game._compra && this.game.online) p.primary = null;
+    if (e.secondary && WEAPONS[e.secondary]) p.secondary = e.secondary;
+    if (e.weapon && WEAPONS[e.weapon] && Number.isInteger(e.mag) && Number.isInteger(e.res)) {
+      p.ammo[e.weapon] ||= { mag: 0, res: 0 };
+      p.ammo[e.weapon].mag = e.mag; p.ammo[e.weapon].res = e.res;
+    }
+    const reloadIn = Math.max(0, Number(e.reloadIn) || 0);
+    const estava = !!this._authReloading;
+    this._authReloading = reloadIn > 0;
+    if (reloadIn > 0) {
+      if (!estava) {
+        if (p.reloadUntil <= this.game.time) {
+          const w = e.weapon;
+          const a = p.ammo[w];
+          const faltam = Math.max(1, Math.min((WEAPONS[w]?.mag || 0) - (a?.mag || 0), a?.res || 0));
+          if (this.game.vm?.authored?.active(w)) this.game.vm.authored.reload(w, reloadIn, a?.mag === 0, faltam);
+          else this.game.vm?.rig?.startReload(reloadIn);
+        }
+        this.game.el?.reloadNote?.classList.remove('hidden');
+      }
+      p.reloadUntil = this.game.time + reloadIn;
+      p.reloadWeapon = e.weapon || p.weapon;   // a conclusão serve SÓ esta arma (game _armasServidasPelaRecarga)
+    } else if (estava) {
+      p.reloadUntil = 0; p.reloadWeapon = '';
+      this.game.el?.reloadNote?.classList.add('hidden');
+    }
+  }
+
+  // Pausado o stepPlayer não manda nada e o servidor soltava o slot após 45 s (BUG-115):
+  // um input PARADO a cada 2 s segura o corpo. Movimento zero, sem tiro.
+  _pulsoDePausa() {
+    const game = this.game, p = game.player;
+    if (!game.paused || this.espectador || !p) return;
+    const now = this._now();
+    if (this._inputAt && now - this._inputAt < 2000) return;
+    this.net.sendInput({
+      ax: 0, az: 0, crouch: false, shift: false, jump: false,
+      yaw: p.yaw, pitch: p.pitch, shoot: false, weapon: p.weapon,
+      emote: emoteDeRede(this.net, game._emoteAtual),
+      px: p.pos.x, py: p.pos.y, pz: p.pos.z, rt: this.renderTime(), dtms: 1,
+    });
+    this._inputAt = now;
+  }
+
+  /* Casa os ids do servidor com os corpos locais. POR TIME, nunca por ordem de chegada: um
+     inimigo do servidor tem que virar um boneco INIMIGO na tela (cor e brasão certos), senão
+     amigo vira inimigo e o jogo fica ininteligível. */
+  _casar(snap) {
+    const game = this.game, net = this.net;
+    const livres = [...game.bots];
+    /* Casa por PERSONAGEM (exato), time como rede de segurança, qualquer corpo por último —
+       entidade sem corpo é boneco invisível. Ver docs/MULTIPLAYER.md. */
+    const roster = (net.meta && net.meta.roster) || [];
+    const rosterById = new Map(roster.map((row) => [row.id, row]));
+    const charDe = (id) => rosterById.get(id)?.char;
+    /* Com identidade autoritativa, o corpo do VIP fica reservado mesmo se um humano
+       usar o mesmo personagem. Sem essa extensão, permanece o casamento legado. */
+    const vipId = snap.objective?.vipId;
+    const vipValido = Number.isInteger(vipId) && vipId >= 0 && vipId <= 0xffffffff;
+    const vipLocal = vipValido ? game.objective?.vip : null;
+    if (vipLocal) {
+      const iv = livres.indexOf(vipLocal);
+      if (iv >= 0) livres.splice(iv, 1);   // corpo reservado ao NPC: ninguém mais o recebe
+    }
+    const pega = (team, id) => {
+      const alvo = charDe(id);
+      let i = alvo ? livres.findIndex((b) => b.def && b.def.id === alvo && b.team === team) : -1;
+      if (i < 0) i = livres.findIndex((b) => b.team === team);
+      if (i < 0) i = 0;
+      return livres.splice(i, 1)[0] || null;
+    };
+    for (const e of snap.ents) {
+      const row = rosterById.get(e.id);
+      const pid = rosterPlayerId(e, row);
+      if (!this.espectador && e.id === net.yourEnt) {
+        game.player._playerId = pid;
+        game.player._netBot = false;
+        this._netMap.set(e.id, game.player);
+        continue;
+      }
+      const bot = (vipValido && e.id === vipId && vipLocal) ? vipLocal : pega(e.team, e.id);
+      if (!bot) continue;
+      bot._remote = e.id; bot._netId = e.id;
+      bot._netStateTick = null;   // casamento novo não herda o relógio visual do corpo anterior
+      bot.team = e.team;                      // o lado do corpo passa a ser o do servidor
+      bot.name = e.bot ? `[BOT] ${e.name}` : e.name; bot._nomeServidor = e.name;
+      bot._playerId = pid;
+      bot.pos.set(e.x, e.y, e.z); bot.yaw = e.yaw;
+      this._netMap.set(e.id, bot);
+      if (row) this._onPersonagem({...row,ent:e.id},false);
+    }
+    // corpos locais que sobraram (mais bots do que ents): viram fantasmas invisíveis
+    for (const gb of livres) {
+      gb._remote = 'ghost'; gb.alive = false;
+      if (gb.mesh && gb.mesh.group) gb.mesh.group.visible = false;
+    }
+  }
+
+  /* Aplica o snapshot do servidor. É aqui que o mundo do multiplayer acontece. */
+  applySnapshot() {
+    const game = this.game, net = this.net;
+    if (!net || !net.snap || !Array.isArray(net.snap.ents)) return;
+    const snap = net.snap;
+    if (this._netMap.size === 0) {
+      this._casar(snap);
+      if (this._netTick < 0 && Number.isFinite(snap.roundNum)) this._netRodada = snap.roundNum;   // só o 1º snapshot herda a rodada em curso
+      if (this._evOn && Array.isArray(net.meta?.drops)) for (const d of net.meta.drops) this._dropDeRede(d);   // quem entra no meio vê os drops vivos
+    }
+
+    /* Relógio, placar e ESTADO da rodada vêm do servidor — a máquina local está desligada no
+       online (game.update). Sem copiar o estado, o cliente ficaria eternamente em 'countdown'
+       e nada se moveria. */
+    const estadoAntes = game.state, placarAntes = game.roundsWon ? { E: game.roundsWon.E, B: game.roundsWon.B } : null;
+    game.state = snap.state || game.state;
+    // virada de round é TELEPORTE (o servidor recoloca todos no spawn): reancorar, não suavizar
+    // — senão o jogador se vê deslizando e a telemetria engole o trajeto (BUG-155).
+    const viradaDeRound = !this.__mutSemVirada && estadoAntes !== game.state && (game.state === 'countdown' || game.state === 'live');
+    if (Number.isFinite(snap.timeLeft)) game.timeLeft = snap.timeLeft;
+    if (Number.isFinite(snap.roundNum)) game.roundNum = snap.roundNum;
+    if (game.roundsWon && Number.isFinite(snap.scoreE)) { game.roundsWon.E = snap.scoreE; game.roundsWon.B = snap.scoreB; }
+    if (game.roundKills && Number.isFinite(snap.roundKillsE) && Number.isFinite(snap.roundKillsB)) {
+      game.roundKills.E = snap.roundKillsE;
+      game.roundKills.B = snap.roundKillsB;
+    }
+    /* roundEnd lê as entidades atuais; countdown reseta antes de recebê-las.
+       A guarda anterior ao incremento do tick mantém a entrada sem cerimônia. */
+    const fimPorTroca = game.state !== estadoAntes && this._netTick >= 0;
+    if (fimPorTroca && game.state !== 'roundEnd') this.transicaoDeEstado(estadoAntes, game.state, placarAntes);
+    // Rodada nova por IDENTIDADE (roundNum) vale em countdown/live/roundEnd; matchEnd não é
+    // rodada de jogo. O countdown da transição acima já resetou e selou _netRodada da rodada.
+    const rodadaNova = this._netTick >= 0 && game.state !== 'matchEnd'
+      && ((Number.isFinite(snap.roundNum) && snap.roundNum !== this._netRodada)
+        || (game.state === 'live' && estadoAntes === 'roundEnd' && !Number.isFinite(snap.roundNum)));
+    // roundEnd de OUTRA rodada: reset acima antes das entidades e a cerimônia do resultado
+    // ATUAL uma única vez, adiada para depois do laço de entidades.
+    const fimDeRound = game.state === 'roundEnd' && this._netTick >= 0 && (fimPorTroca || rodadaNova);
+    if (rodadaNova) {
+      // O servidor zera `drops` no _startRound sem mandar `gone`: a retomada sem
+      // countdown recebe a mesma limpeza do countdown, antes das entidades.
+      if (this._evOn) this.limparDropsDeRede();
+      const relogioDoServidor = game.timeLeft;   // prepareRound escreve 360: o relógio é do servidor
+      game._resultado = null; game._showScoreboard(false);
+      game._retomarCorposDaCerimonia?.();
+      game.objective?.prepareRound?.();
+      this._netRodada = Number.isFinite(snap.roundNum) ? snap.roundNum : game.roundNum;
+      if (Number.isFinite(relogioDoServidor)) game.timeLeft = relogioDoServidor;
+    }
+    this.vagas = snap.livre || null;
+    // O objetivo é consumido antes da deduplicação de tick, inclusive na primeira amostra.
+    // A cerimônia de roundEnd continua usando snap.objective.winner depois das entidades.
+    if (snap.objective) game.objective?.applyNetState?.(snap.objective);
+
+    if (snap.tick === this._netTick) return;
+    this._netTick = snap.tick;
+    const nowMs = this._now();
+    /* Tempos do LAG COMP: chegada ↔ tempo-de-servidor dos últimos snapshots. É desta tabela
+       que o renderTime() deriva o instante do servidor que a tela está mostrando. */
+    this._clock().observe(snap, nowMs, this._atualizarAtrasoCallback);
+
+    const primeiroSnap = this._tAt.length <= 1;   // no casamento inicial, alive true->false é estado herdado, não morte
+    if (game.ctf && snap.ctf) this.applyCtfState(snap.ctf);
+    let dorDoJogador = 0;
+    for (const e of snap.ents) {
+      const ent = this._netMap.get(e.id);
+      if (ent) ent.clanTag = e.bot ? null : (this.net.meta?.clanTags || []).find(c => c.id === e.id)?.tag || null;
+      if (!ent) continue;
+      const wasHp = ent.hp, wasAlive = ent.alive;
+      ent.hp = e.hp; ent.alive = e.alive;
+      ent.kills = e.k | 0; ent.deaths = e.d | 0;     // scoreboard vem do servidor
+      // nome vem do servidor a cada snapshot (humano que toma o slot do bot) — BUG-112
+      if (ent !== game.player && e.name) {
+        ent._nomeServidor = e.name;
+        const rotulo = e.bot ? `[BOT] ${e.name}` : e.name;   // pedido do dono (02/09): bot é bot, gente é gente
+        if (ent.name !== rotulo) ent.name = rotulo;
+      }
+      if (ent !== game.player) ent._netBot = !!e.bot;   // IA: frente +Z (yaw); humano: convenção da câmera (yaw+π) — BUG-117
+      if (ent !== game.player && e.weapon) {
+        const trocouArma = !primeiroSnap && wasAlive && e.alive && ent.weapon && ent.weapon !== e.weapon;
+        // O id lógico sozinho não troca a arma que foi montada dentro do GLB do personagem.
+        // O helper remonta a 3ª pessoa quando pickup/respawn muda a arma autoritativa.
+        if (ent.weapon !== e.weapon || ent._meshWeapon !== e.weapon) game._syncRemoteWeapon?.(ent, e.weapon);
+        else ent.weapon = e.weapon;
+        if (trocouArma) ent.mesh?.ctrl?.draw?.();
+      }
+      if (ent === game.player) {
+        this._meuNomeServidor = e.name || this._meuNomeServidor;   // o servidor trunca o apelido; é este nome que vem em `killedBy`
+        const renasceu = !wasAlive && e.alive;
+        if (game.state === 'live' && e.alive && e.hp < wasHp - 0.5) { game._playerHurtFx(); dorDoJogador = wasHp - e.hp; }
+        if (wasAlive && !e.alive) {
+          if (!this._evOn) {   // com `ev` o `kill` do servidor faz o feed (autor, arma, headshot)
+            const att = this._corpoPorNome(e.killedBy);   // a própria morte também entra no killfeed (BUG-122)
+            try { game._feed(att, ent, att ? this._armaCurta(att.weapon) : '', false); } catch { /* HUD ainda não montado */ }
+          }
+          this.playerDied(e, snap);
+        }
+        else if (renasceu) this.playerRespawned();
+        /* O cliente também cria um spawn local. No primeiro snapshot e no respawn ele não é
+           uma predição adiantada: é uma posição concorrente, às vezes de outro slot/mapa.
+           Nestes dois marcos a autoridade precisa vencer imediatamente, inclusive no Y. */
+        // Retomada live→live (roundNum+1) não muda estado: a detecção ÚNICA de rodada
+        // nova também reancora o jogador — o servidor teleportou todos (BUG-155).
+        const imediato = primeiroSnap || renasceu || viradaDeRound || (!this.__mutSemVirada && rodadaNova);
+        // teleporte invalida toda pose predita: sem zerar, o ack seguinte cobra a distância
+        // dele como divergência (BUG-153).
+        if (imediato) { ent.pos.set(e.x, e.y, e.z); ent.vel.set(0, 0, 0); this._clearPrediction(); }
+        if (e.respawnIn != null) game.player.respawnAt = game.time + e.respawnIn;
+        this._srvX = e.x; this._srvY = e.y; this._srvZ = e.z; this._srvHas = 1;   // campos planos: zero alocação no hot path
+        this._ackPlayer(e, ent, imediato);
+        this._syncPlayerLoadout(e, ent);
+        continue;
+      }
+      // Estados v9 seguem o tick monotônico da Room; posições antigas ainda entram no buffer ordenado.
+      const estadoNovo = ent._netStateTick == null || snap.tick > ent._netStateTick;
+      if (estadoNovo) {
+        ent._netCrouch = !!e.crouch;
+        ent.crouchF = ent._netCrouch ? 1 : 0;
+        const reloadIn = e.alive ? Math.max(0, Number(e.reloadIn) || 0) : 0;
+        // Fim autoritativo separa ciclos apesar de perda/jitter; tolerância v9 de 0,1 s.
+        // Game.t novo reancora sem zerar o tick da Room (docs/EMOTES-BR.md).
+        const reloadEndT = snap.t + reloadIn;
+        const clockRecuou = ent._netStateTick != null && snap.t < ent._netReloadAtT;
+        const reloadEndAntes = clockRecuou ? null : ent._netReloadEndT;
+        const novoCicloReload = reloadIn > 0 && reloadEndAntes != null && reloadEndT - reloadEndAntes > 0.100001;
+        if (novoCicloReload) ent._netReloadActive = false;
+        // Um relógio novo reancora a comparação do servidor, mas nunca alonga o prazo
+        // local do mesmo ciclo. Zero ou um fim autoritativo maior abrem outro ciclo.
+        ent._netReloadEndT = reloadIn > 0
+          ? reloadEndAntes == null || novoCicloReload ? reloadEndT : Math.min(reloadEndAntes, reloadEndT)
+          : null;
+        ent._netReloadAtT = snap.t;
+        const reloadUntilMs = nowMs + reloadIn * 1000;
+        ent._netReloadUntilMs = reloadIn > 0
+          ? (novoCicloReload ? reloadUntilMs : Math.min(ent._netReloadUntilMs || reloadUntilMs, reloadUntilMs))
+          : 0;
+        ent._netEmote = e.alive && game.state === 'live' && emoteInfo(e.emote) ? e.emote : null;
+        ent._netEmoteElapsed = Math.max(0, Number(e.emoteElapsed) || 0);
+        ent._netStateAtMs = nowMs;
+        ent._netStateTick = snap.tick;
+      }
+      this._syncRemoteStates(ent);
+      /* Interpolação contínua entre pacotes (reiniciar picota o boneco). Campos PLANOS de
+         propósito: um {x,y,z} por ent × frequência de rede gera GC que trava o vsync. */
+      if (ent._ipT1 == null) {
+        ent._ipx0 = ent._ipx1 = e.x; ent._ipy0 = ent._ipy1 = e.y; ent._ipz0 = ent._ipz1 = e.z;
+        ent._ipyaw0 = ent._ipyaw1 = e.yaw; ent._ipT0 = nowMs - 50; ent._ipT1 = nowMs;
+      } else {
+        ent._ipx0 = ent._ipx1; ent._ipy0 = ent._ipy1; ent._ipz0 = ent._ipz1;
+        ent._ipyaw0 = ent._ipyaw1; ent._ipT0 = ent._ipT1;
+        ent._ipx1 = e.x; ent._ipy1 = e.y; ent._ipz1 = e.z; ent._ipyaw1 = e.yaw; ent._ipT1 = nowMs;
+      }
+      const salto = Math.hypot(ent._ipx1 - ent._ipx0, ent._ipz1 - ent._ipz0);
+      if (salto > 3) { ent._ipx0 = ent._ipx1; ent._ipy0 = ent._ipy1; ent._ipz0 = ent._ipz1; ent._ipyaw0 = ent._ipyaw1; }  // respawn/teleporte: colapsa
+      /* A animação mede o deslocamento no relógio AUTORITATIVO. Intervalo de chegada contém
+         jitter: usá-lo fazia o mesmo bot alternar câmera lenta/velocidade alta ("na lua"). */
+      const srvDt = ent._ipSrvT == null ? 0.05 : snap.t - ent._ipSrvT;
+      ent._ipSrvT = snap.t;
+      const moveDt = Number.isFinite(srvDt) && srvDt > 0 ? srvDt : Math.max(0.001, (ent._ipT1 - ent._ipT0) / 1000);
+      ent._netSpd = salto > 3 ? 0 : salto / Math.max(0.001, moveDt);   // alimenta a animação de andar
+      /* BUFFER de amostras (BUG-87, KNOWN-BUGS.md): arrays planos, cap 10 (zero objeto no
+         hot path). Teleporte esvazia — interpolar através de respawn varreria o mapa. */
+      ensureEntityBuffer(ent);
+      const tBuf = this._relogioSnap(snap, nowMs);
+      pushEntitySample(ent, tBuf, e, salto > 3, this.__mutOrdemAntiga);
+      ent._netPitch = e.pitch || 0;
+      // v5 manda CONTADOR (bandeira de um snapshot some com o pacote); v4 manda bandeira
+      const atirou = e.fireN == null ? !!e.fire : (ent._fireNvisto != null && e.fireN !== ent._fireNvisto);
+      if (e.fireN != null) ent._fireNvisto = e.fireN;
+      if (atirou && ent.alive) { ent._fireAtMs = nowMs; this.gunshot(ent); if (ent.mesh && ent.mesh.isGLB) { try { ent.mesh.ctrl.shoot(); } catch { /* sem clipe */ } } }
+      const falou = e.voiceN == null ? !!e.voice : (ent._voiceNvisto != null && e.voiceN !== ent._voiceNvisto);
+      if (e.voiceN != null) ent._voiceNvisto = e.voiceN;
+      if (falou && e.voice) this.voice(ent, e.voice);
+      /* Killfeed do MP: o `_kill` local não roda online — a transição vivo->morto do
+         snapshot + `killedBy` é o evento de morte (BUG-90, KNOWN-BUGS.md). */
+      if (!this._evOn && !primeiroSnap && wasAlive && !e.alive) {
+        const att = this._corpoPorNome(e.killedBy);
+        try { game._feed(att, ent, att ? this._armaCurta(att.weapon) : '', false); } catch { /* HUD ainda não montado */ }
+        this.morteRemota(ent, att);
+      }
+    }
+    if (fimDeRound) this.transicaoDeEstado(estadoAntes, 'roundEnd', placarAntes, snap.objective?.winner);
+    if (this._evOn) this._drenar(snap, primeiroSnap);
+    /* Arco de dano no MP: heurística do atirador mais próximo <600 ms — o snapshot não diz
+       QUEM acertou; causa, medição e pendência de protocolo no BUG-90 (KNOWN-BUGS.md). */
+    if (!this._evOn && dorDoJogador > 0 && !this.espectador) {
+      const att = this._atacanteProvavel(nowMs);
+      if (att) {
+        try { game._dmgArc(att, game.player, dorDoJogador); } catch { /* HUD ainda não montado */ }
+        game._noteHit(att, this._armaCurta(att.weapon), dorDoJogador, false,
+          Math.hypot(att.pos.x - game.player.pos.x, att.pos.z - game.player.pos.z));
+      }
+    }
+    if (this.espectador) this.cameraEspectador();
+  }
+
+  /* EVENTOS DO SERVIDOR: lotes `ev` (tick ≤ snapshot) viram feedback com o autor REAL. O lote do
+     tick de entrada é estado herdado (como `primeiroSnap`), e lote com 3 s de atraso (pausa) some. */
+  _drenar(snap, primeiroSnap) {
+    const fila = this.net.events;
+    if (fila && fila.length) {
+      while (fila.length && fila[0].tick <= snap.tick) {
+        const lote = fila.shift();
+        if (primeiroSnap || snap.tick - lote.tick > 90) continue;
+        for (const e of lote.list) { try { this._evento(e); } catch { /* HUD ainda não montado */ } }
+      }
+    }
+    /* `gone` perdido (lote atrasado) deixava ARMA FANTASMA no chão até a virada da rodada.
+       O servidor manda o TTL do drop no próprio evento e no welcome: ele é a rede de
+       segurança — quem passar do prazo some sozinho, como o `gone` faria. */
+    const game = this.game;
+    for (let i = game.drops.length - 1; i >= 0; i--) {
+      const d = game.drops[i];
+      if (d._nid != null && d._expiraRedeEm != null && game.time >= d._expiraRedeEm) game._sumirDrop(i);
+    }
+  }
+  // IDs uint32 de eventos não podem truncar para signed nem coagir inválidos em zero.
+  _idDeRede(id) {
+    return Number.isInteger(id) && id >= 0 && id <= 0xffffffff ? id : null;
+  }
+  _evento(e) {
+    const game = this.game, p = game.player, meu = this.net.yourEnt;
+    if (!e || typeof e !== 'object') return;
+    const aId = this._idDeRede(e.a), vId = this._idDeRede(e.v);
+    const att = aId == null ? null : (this._netMap.get(aId) || null);
+    const vic = vId == null ? null : (this._netMap.get(vId) || null);
+    const d = Math.max(0, Math.min(999, e.d | 0)), h = e.h === 1 || e.h === true, w = String(e.w || '').slice(0, 8);
+    const dist = (a) => (a && a.pos && p && p.pos) ? Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) : 0;
+    if (e.k === 'hit') {
+      if (vId !== meu) {
+        if (att?.pos && vic?.pos && vic !== p && vic.alive) {
+          vic.mesh?.ctrl?.flinch?.({ x: vic.pos.x - att.pos.x, z: vic.pos.z - att.pos.z }, d / 100, h);
+        }
+        return;
+      }
+      if (!att || this.espectador || vId !== meu) return;
+      try { game._dmgArc(att, p, d); } catch { /* HUD */ }
+      game._noteHit(att, w, d, h, dist(att));
+    } else if (e.k === 'kill') {
+      if (!vic) return;
+      try { game._feed(att, vic, w, h); } catch { /* HUD */ }
+      if (att === p && game._compra) game._compra.ganhoAbate(w, vic.team === p.team);   // +TRETA$ do nó
+      if (vic === p) { if (att && !this.espectador) game._noteHit(att, w, d, h, dist(att)); }
+      else {
+        if (!vic.alive && att?.pos && vic.pos) vic.mesh?.ctrl?.die?.({ x: vic.pos.x - att.pos.x, z: vic.pos.z - att.pos.z });
+        this.morteRemota(vic, att, h);
+      }
+    } else if (e.k === 'tiro') {
+      this.tiroDeRede(att, e);
+    } else if (e.k === 'drop') {
+      this._dropDeRede(e);
+    } else if (e.k === 'gone') {
+      const i = game.drops.findIndex((x) => x._nid === e.i);
+      if (i >= 0) game._sumirDrop(i);
+    } else if (e.k === 'nade') {
+      if (!Number.isInteger(e.i) || game._grenades.some((x) => x._nid === e.i)) return;
+      if (e.kind === 'flash' && !this.flashOn) return;   // flash desligado não vira frag local (#1179)
+      const kind = e.kind === 'smoke' || e.kind === 'flash' ? e.kind : 'frag';
+      const oId = this._idDeRede(e.o);
+      const dono = oId == null ? null : (this._netMap.get(oId) || (oId === meu ? p : null));
+      const origem = new THREE.Vector3(+e.x || 0, +e.y || 0, +e.z || 0), dir = new THREE.Vector3(+e.vx || 0, +e.vy || 0, +e.vz || 0);
+      game._spawnGrenade(origem, dir.lengthSq() ? dir.clone().normalize() : new THREE.Vector3(0, 0, -1), kind, dono);
+      const gr = game._grenades[game._grenades.length - 1];
+      /* Se o boom autoritativo atrasar, o fuse visual local de 8 s impede que
+       * a granada fique congelada para sempre. */
+      if (gr) { gr._nid = e.i; gr.v.copy(dir); gr.mesh.position.copy(origem); gr.fuse = 8; }
+    } else if (e.k === 'boom') {
+      const i = game._grenades.findIndex((x) => x._nid === e.i);
+      if (i >= 0) { game.scene.remove(game._grenades[i].mesh); game._grenades.splice(i, 1); }
+      const pos = new THREE.Vector3(+e.x || 0, +e.y || 0, +e.z || 0);
+      const oId = this._idDeRede(e.o);
+      const dono = oId == null ? null : (this._netMap.get(oId) || null);
+      if (e.kind === 'smoke') game._popSmoke(pos);
+      // cegueira é LOCAL: cada cliente mede a do próprio olho; a dos bots quem mede é o servidor
+      else if (e.kind === 'flash') { if (this.flashOn) game._popFlash(pos, dono); }
+      else game._explodeFrag(pos, dono);
+    }
+  }
+
+  /* Transições de rodada no online: a máquina local está desligada, só o feedback é replicado
+     (vencedor = diferença do placar do servidor). Sem isto: BUG-114 (KNOWN-BUGS.md). */
+  transicaoDeEstado(antes, depois, placarAntes, winnerAtual = null) {
+    const game = this.game;
+    if (this._netTick < 0) return;   // 1º snapshot: entrou no meio de algo — sem cerimônia (e sem "empate" inventado)
+    try {
+      if (depois === 'roundEnd') {
+        // Vencedor autoritativo vem do snapshot ATUAL. Objetivos legados conservam o
+        // fallback de estado; a escolta nunca herda winner de uma rodada anterior.
+        const winnerRede = winnerAtual === 'E' || winnerAtual === 'B' || winnerAtual === 'J' || winnerAtual === 'draw' ? winnerAtual : null;
+        const winnerLegado = game.objective?.vip ? null : game.objective?.state?.winner;
+        let winner = winnerRede || winnerLegado, resultadoDesconhecido = false;
+        if (!winnerRede && !winnerLegado && placarAntes && game.roundsWon) {
+          // Salto de 2+ rodadas soma nos dois placares: sem protocolo de vencedor,
+          // não encenar campeão falso — só um ÚNICO lado crescido define o winner.
+          const subiuE = game.roundsWon.E > placarAntes.E, subiuB = game.roundsWon.B > placarAntes.B;
+          resultadoDesconhecido = subiuE && subiuB;
+          if (subiuE !== subiuB) winner = subiuE ? 'E' : 'B';
+        }
+        game.player.scoped = false; game.el.scope?.classList.remove('on');
+        game.radioOpen = null; game._radioUi?.();
+        game._compra?.fimDeRodadaRemoto?.(winner === game.playerTeam);   // festa local; crédito é do nó
+        if (!resultadoDesconhecido) game._cerimoniaCorpos?.(winner);
+        if (resultadoDesconhecido) game._resultadoDaRodada('RESULTADO ATUALIZADO', 'a sala avançou durante a reconexão');
+        else if (!winner) { game._resultadoDaRodada('EMPATE NA TRETA', 'ninguém convenceu ninguém'); game.sfx.roundLose(); }
+        else {
+          const mine = winner === game.playerTeam;
+          if (game.objective?.roundResult) {
+            const fim = game.objective.roundResult(winner);
+            // Escolta: o placar não cobre a cinemática. Horda mantém a apresentação original.
+            if (game.world?.mode === 'escort' || game.objective?.vip) {
+              game._resultadoDaRodada(fim.title, fim.detail, false);
+            } else {
+              game._resultadoDaRodada(fim.title, fim.detail);
+            }
+          } else {
+            game._resultadoDaRodada(`${game._teamName(winner)} LEVARAM O ROUND`, mine ? '— o povo (você) agradece' : '— a oposição (você) pede revanche');
+          }
+          game.objective?.startCinematic?.(winner);
+          if (winner !== 'J' && winner !== 'draw') game._roundWinnerVoice?.(winner);
+          if (winner === 'J' || winner === 'draw' || !game.sfx.roundSound(game._voiceKey(winner))) mine ? game.sfx.roundWin() : game.sfx.roundLose();
+        }
+        try { game._ensureDolly(); } catch { /* sem canvas do dollynho */ }
+      } else if (depois === 'countdown') {
+        game._releaseInput?.();
+        if (this._evOn) this.limparDropsDeRede();   // o servidor zera `drops` no _startRound sem mandar `gone`
+        game._resultado = null;
+        game._showScoreboard(false);
+        if (game.objective?.prepareRound) {
+          // Religar a apresentação da rodada (cinemática/avião/viewmodel do round anterior).
+          // prepareRound escreve timeLeft=360: o relógio autoritativo já veio do snapshot.
+          const relogioDoServidor = game.timeLeft;
+          game.objective.prepareRound();
+          this._netRodada = game.roundNum;   // countdown já preparou: o 'live' da rodada não repete o reset
+          if (Number.isFinite(relogioDoServidor)) game.timeLeft = relogioDoServidor;
+        }
+        const subRound = game.ctf
+          ? frase('alvoBandeiras', game.capsToWin)
+          : game.objective?.roundIntro ? game.objective.roundIntro()
+          : (game.roundNum === 1 ? frase('comeceTreta') : frase('voltaTreta'));
+        game._banner(frase('round', game.roundNum),
+          game.roundNum === 1 ? `${subRound} · ${frase('formatoMelhorDe', game.roundsMax, game.roundsToWin)}` : subRound);
+        if (!game.sfx.roundNumber(game.roundNum) && !game.sfx.csSound('roundstart')) game.sfx.vuvuzela(1.4);
+      } else if (depois === 'live' && antes === 'countdown') {
+        game._banner(frase('valendo'), 'A treta está liberada');
+      } else if (depois === 'matchEnd') {
+        game._showScoreboard(false);
+        game._endMatch();   // tela de VITÓRIA/DERROTA + envio do resultado; o servidor gira o mapa em ~8 s (`partida`)
+      }
+    } catch (e) { console.warn('[mp] transição de estado falhou (segue o jogo):', e && e.message); }
+  }
+
+  /* Morte de remoto no online: o `_kill` local não roda — replica só o feedback dele (sting,
+     kill confirm/multikill quando VOCÊ mata, poça). A morte em si é do servidor. BUG-116. */
+  morteRemota(ent, att, head = false) {
+    const game = this.game, p = game.player;
+    try {
+      const d = ent.pos ? ent.pos.distanceTo(game.camera.position) : 0;
+      const rel = ent.pos ? Math.atan2(ent.pos.x - p.pos.x, ent.pos.z - p.pos.z) - p.yaw : 0;
+      const pan = Math.max(-0.85, Math.min(0.85, Math.sin(rel) * 0.8));
+      game.sfx.death(ent.def?.id, Math.max(0, 1 - d / 55), pan, Math.min(0.25, d / 343));
+    } catch { /* ctx mudo */ }
+    if (att === p && !this.espectador) {
+      game._playerKillFeedback(att, head);
+      game._fragRestockStep?.(att);   // prediz a frag de sequência (o servidor roda o mesmo passo)
+    } else if (att && att.team === p.team) {
+      try {
+        game.sfx.characterVoice(att.def?.id, 'kill', { fallbackFaction: game._voiceKey(att.team) });
+      } catch { /* ctx mudo */ }   // o combatente comemora (como no _kill)
+    }
+    try { if (ent.pos && game._bloodPoolAt) game._bloodPoolAt(ent.pos); } catch { /* sem fx */ }
+  }
+
+  /* Estado CTF do servidor. O cliente online não executa `_updateCTF`, então copiar só
+     round/score deixaria bandeiras permanentemente neutras. Mantém os objetos/meshes locais
+     e aplica somente os campos da simulação autoritativa. */
+  applyCtfState(state) {
+    const game = this.game;
+    if (!state || !Array.isArray(state.points) || !Array.isArray(game.ctfPts)) return;
+    game.ctfCaps.E = state.capsE | 0; game.ctfCaps.B = state.capsB | 0;
+    game.roundCaps.E = state.roundCapsE | 0; game.roundCaps.B = state.roundCapsB | 0;
+    if (Number.isFinite(state.capsToWin)) game.capsToWin = state.capsToWin;
+    if (Number.isFinite(state.matchLeft)) game.ctfMatchLeft = state.matchLeft;
+    const n = Math.min(game.ctfPts.length, state.points.length);
+    for (let i = 0; i < n; i++) {
+      const pt = game.ctfPts[i], src = state.points[i];
+      pt.owner = src.owner === 'E' || src.owner === 'B' ? src.owner : null;
+      pt.capTeam = src.capTeam === 'E' || src.capTeam === 'B' ? src.capTeam : null;
+      pt.contested = !!src.contested;
+      pt.prog = Math.max(0, Math.min(1, Number(src.prog) || 0));
+      if (pt.ring && pt.ring.material) {
+        if (pt.owner) pt.ring.material.color.set(game._teamColor(pt.owner)).lerp(game._ctfGray, 0.45);
+        else pt.ring.material.color.set(0xb8b4a8);
+        pt.ring.material.opacity = pt.contested ? 0.95 : 0.5 + 0.45 * (pt.prog || (pt.owner ? 1 : 0));
+      }
+      if (pt.flag && pt.flag.material) {
+        const fac = pt.owner || null;   // pano do LADO dono: online a facção do jogador é a categoria do corpo
+        if (pt._flagFac !== fac) { pt._flagFac = fac; pt.flag.material.map = game._flagTexFor(fac); pt.flag.material.needsUpdate = true; }
+        pt.flag.material.color.set(pt.owner ? 0xe6e6e6 : 0xaaaaaa);
+      }
+    }
+    game._updateCtfHud();
+  }
+
+  // corpo local (ou o próprio jogador) pelo NOME que o servidor mandou no killedBy
+  _corpoPorNome(nome) {
+    if (!nome) return null;
+    const game = this.game;
+    if (game.player && (game.player.name === nome || nome === this._meuNomeServidor)) return game.player;
+    for (const b of this._netMap.values()) if (b !== game.player && (b._nomeServidor === nome || b.name === nome)) return b;
+    return null;
+  }
+  // rótulo curto da arma pro killfeed/painel (mesmo formato que o _damage usa no SP)
+  _armaCurta(wid) { const W = wid && WEAPONS[wid]; return (W && (W.short || W.name)) || wid || ''; }
+  // inimigo vivo mais próximo que atirou há <600 ms — a melhor aproximação de "quem me acertou"
+  _atacanteProvavel(nowMs) {
+    const game = this.game, p = game.player;
+    let melhor = null, md = 1e9;
+    for (const b of this._netMap.values()) {
+      if (b === p || !b.alive || b.team === p.team) continue;
+      if (!b._fireAtMs || nowMs - b._fireAtMs > 600) continue;
+      const d = Math.hypot(b.pos.x - p.pos.x, b.pos.z - p.pos.z);
+      if (d < md) { melhor = b; md = d; }
+    }
+    return melhor;
+  }
+
+  /* CÂMERA DE ESPECTADOR. Segue um jogador em 1ª pessoa (o mais "quente" por padrão: quem
+     está vivo e com mais abates), e ANDA sozinha para o próximo quando o alvo morre — ficar
+     preso num defunto é o defeito clássico do modo espectador. */
+  cameraEspectador() {
+    const game = this.game;
+    if (game.objective?.cinematicActive) return;   // a cena manda na câmera; follow retoma após o pulo
+    const vivos = game.bots.filter((b) => b.alive && b._remote && b._remote !== 'ghost');
+    if (!vivos.length) return;
+    if (!this._alvoSpec || !this._alvoSpec.alive || !vivos.includes(this._alvoSpec)) {
+      this._alvoSpec = vivos.slice().sort((a, b) => (b.kills | 0) - (a.kills | 0))[0];
+    }
+    const a = this._alvoSpec;
+    // 3ª pessoa atrás do ombro (números do camView 'third'), por QUADRO — BUG-117, KNOWN-BUGS.md.
+    const yaw = (a.yaw || 0) + (a._netBot === false ? 0 : Math.PI);   // para onde o corpo OLHA, na convenção da câmera
+    const pitch = Math.max(-1.2, Math.min(1.2, a._netPitch || 0));
+    const eye = a.pos.y + 1.62 - 0.52 * (a.crouchF || 0);
+    game._tpEul.set(pitch, yaw, 0, 'YXZ');
+    const fwd = game._tpFwd.set(0, 0, -1).applyEuler(game._tpEul);
+    const right = game._tpRight.set(1, 0, 0).applyEuler(game._tpEul);
+    const cam = game.camera;
+    cam.position.set(a.pos.x, eye, a.pos.z).addScaledVector(fwd, -this.specDist).addScaledVector(right, 0.28);
+    cam.position.y += 0.18;
+    if (game.world && game.world.groundHeightAt) {
+      const gy = game.world.groundHeightAt(cam.position.x, cam.position.z, cam.position.y) + 0.2;
+      if (cam.position.y < gy) cam.position.y = gy;   // não atravessa o chão
+    }
+    cam.rotation.set(pitch, yaw, 0);
+    this.nomeAlvo = a.name;
+  }
+  /* Passa para o próximo jogador (a UI liga isto no clique/seta). */
+  trocarAlvo(dir = 1) {
+    const vivos = this.game.bots.filter((b) => b.alive && b._remote && b._remote !== 'ghost');
+    if (!vivos.length) return;
+    const i = vivos.indexOf(this._alvoSpec);
+    this._alvoSpec = vivos[((i < 0 ? 0 : i) + dir + vivos.length) % vivos.length];
+  }
+
+  // Voz de um combatente remoto (rádio ao avistar / comemoração de abate) — é o que devolve o
+  // "papo" dos personagens ao multiplayer. Rádio segue a régua do `_botCall` do single.
+  voice(ent, kind) {
+    const game = this.game, p = game.player;
+    if (kind === 'radio') {
+      if (!this.espectador && ent.pos && p?.pos && ent.pos.distanceTo(p.pos) > 55) return;
+      const mine = !this.espectador && ent.team === p.team;
+      if (!mine && Math.random() < 0.6) return;
+      this._radioLog(ent, mine);
+    }
+    const fac = game._voiceKey(ent.team);
+    try {
+      this.game.sfx.characterVoice(ent.def?.id, kind, {
+        fallbackFaction: fac, interrupt: kind === 'radio',
+      });
+    } catch { /* ctx mudo */ }
+  }
+  _radioLog(ent, mine) {
+    const radioLog = this.game.el?.radioLog;
+    if (!radioLog) return;
+    const lines = mine
+      ? ['Contato!', 'Tô vendo um aqui!', 'Inimigo na minha frente!', 'Cobre eu que eu vou!']
+      : ['Achei um!', 'Tá aqui, ó!'];
+    const log = document.createElement('div');
+    log.className = 'radio-line';
+    log.style.opacity = mine ? '1' : '0.75';
+    log.textContent = `${ent.name} (RÁDIO): ${lines[(Math.random() * lines.length) | 0]}`;
+    radioLog.appendChild(log);
+    setTimeout(() => log.remove(), 3600);
+    while (radioLog.children.length > 3) radioLog.firstChild.remove();
+  }
+
+  // Tiro posicional de um remoto: som atenuado por distância, com pan pelo lado da câmera, e
+  // clarão no cano. Sem isto o mundo do multiplayer é um tiroteio MUDO.
+  // Traçante, poeira e furo nos pontos que o NÓ calculou (BUG-159/BUG-161). O orçamento de
+  // FX é o dos bots: perto sai tudo, longe sai menos — o dano já aconteceu no servidor.
+  tiroDeRede(ent, e) {
+    const game = this.game, p = game.player;
+    if (!ent || !Array.isArray(e.p) || !e.p.length) return;
+    /* O evento leva a origem usada pelo nó. A pose interpolada pode ter avançado metros até
+       o lote chegar; reconstruir o raio dela fazia o traçante cruzar a tela de lado em 3P. */
+    const olho = Array.isArray(e.o) && e.o.length === 3 && e.o.every(Number.isFinite)
+      ? new THREE.Vector3(e.o[0], e.o[1], e.o[2])
+      : ent.pos.clone().setY(ent.pos.y + 1.45);   // compatibilidade com nó anterior
+    const dist = p && p.pos ? Math.hypot(ent.pos.x - p.pos.x, ent.pos.z - p.pos.z) : 0;
+    const cheio = ent === p || (dist < 45 && game.settings.quality !== 'low');
+    // Boca da arma na tela (eval:boca-cano): remoto só se a ≤1,5 m da origem do evento (pose
+    // adiantada volta ao olho, MPT1); eu mesmo uso a origem do traçante do jogo local.
+    const primeiroP = e.p[0];
+    const dirP = primeiroP ? new THREE.Vector3(+primeiroP[0] || 0, +primeiroP[1] || 0, +primeiroP[2] || 0).sub(olho).normalize() : null;
+    let boca = null;
+    try {
+      if (ent === p) boca = dirP && game._bocaLigada?.() ? game._origemTracerJogador(olho, dirP) : null;
+      else {
+        const b = game._bocaDaArmaDoCorpo?.(ent.mesh?.group);
+        if (b && b.distanceTo(olho) <= 1.5) boca = b;
+      }
+    } catch { boca = null; }
+    const tetos = cheio ? 4 : 1;   // shotgun não vira 9 traçantes na tela de ninguém
+    const sup = typeof e.s === 'string' ? e.s : '';
+    for (let i = 0; i < Math.min(tetos, e.p.length); i++) {
+      const a = e.p[i];
+      const alvo = new THREE.Vector3(+a[0] || 0, +a[1] || 0, +a[2] || 0);
+      try { game._tracer(boca ? boca.clone() : olho.clone().lerp(alvo, 0.06), alvo, ent === p && game.camView === 'first' && !!boca); } catch { /* sem fx */ }
+      /* POEIRA E SOM no ponto verdadeiro. Saíam do `_fireHitscan`, que o online não chama
+         mais — sem isto o tiro na parede virou mudo e limpo (o furo sumiu da tela). */
+      const surf = supDeCod(sup[i]);
+      if (sup[i] && sup[i] !== '-') {
+        const nv = Array.isArray(e.n) && Array.isArray(e.n[i]) ? e.n[i] : null;
+        const n = nv ? new THREE.Vector3(+nv[0] || 0, +nv[1] || 0, +nv[2] || 0) : olho.clone().sub(alvo).normalize();
+        try { game._puff(alvo, n, surf, false); } catch { /* sem fx */ }
+        if (ent === p && i === 0) { try { game._impactSfx(surf, alvo, olho.distanceTo(alvo)); } catch { /* ctx mudo */ } }
+      }
+    }
+    const primeiro = e.p[0];
+    if (primeiro) {
+      const dir = new THREE.Vector3(+primeiro[0] || 0, +primeiro[1] || 0, +primeiro[2] || 0).sub(olho).normalize();
+      // Eco do meu tiro: se o _tryShoot já acendeu na boca há <0,5 s (RTT), não acende um segundo;
+      // tiro que só o nó deu (dessincronia de cadência) ainda ganha clarão.
+      const ecoLocal = ent === p && boca && game.time - (game._claraoLocalEm ?? -Infinity) < 0.5;
+      if (!ecoLocal) {
+        try { game._flash(boca ? boca.clone() : olho.clone().addScaledVector(dir, 0.35), dir); } catch { /* sem fx */ }
+      }
+    }
+  }
+
+  gunshot(ent) {
+    const game = this.game;
+    const cam = game.camera.position;
+    const dx = ent.pos.x - cam.x, dz = ent.pos.z - cam.z;
+    const sd = Math.hypot(dx, dz);
+    const yaw = game.camera.rotation.y;
+    const pan = Math.max(-1, Math.min(1, (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / (sd || 1)));
+    try { game.sfx.shotWeapon(ent.weapon || 'ak', sd, 0.5, pan, Math.min(0.25, sd / 343)); } catch { /* ctx mudo */ }
+    // Com `ev`, o tiroDeRede já acende na mesma boca: dois clarões sobrepostos dobravam brilho e custo.
+    if (this._evOn && game._bocaLigada?.()) return;
+    // clarão na boca da arma do corpo (eval:boca-cano); sem corpo, o ponto antigo no peito
+    let boca = null;
+    try { boca = game._bocaDaArmaDoCorpo?.(ent.mesh?.group) || null; } catch { boca = null; }
+    try { game._flash(boca || ent.pos.clone().setY(ent.pos.y + 1.4), new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw))); } catch { /* sem fx */ }
+  }
+
+  /* MORTE do jogador local no MULTIPLAYER: quem mata é o servidor (alive true->false no
+     snapshot), então `_kill`/`_respawnPlayer` locais não rodam. Aqui replicamos só o
+     FEEDBACK; posição, vida e instante do respawn continuam vindo do servidor. */
+  playerDied(e, snap) {
+    const game = this.game;
+    game._releaseInput?.();
+    game._resetKillSequence();
+    try { game._scope(false, true); } catch { /* sem luneta */ }
+    if (game.el.respawn) game.el.respawn.classList.remove('hidden');
+    try { game.sfx.death(game.player.def?.id); } catch { /* ctx mudo */ }
+    // o assassino vem como NOME; procuramos o corpo dele no snapshot para a killcam apontar.
+    const nome = e && e.killedBy;
+    /* Se o _noteHit do arco de dano já registrou este assassino há <3 s, o painel de morte
+       fica com o registro RICO (arma, dano, quadrante) em vez do esqueleto abaixo. */
+    const h = game._lastHit;
+    if (h && nome && h.name === nome && game.time - h.at < 3) return;
+    const alvo = nome && snap ? snap.ents.find((x) => x.name === nome && x.alive) : null;
+    game._lastHit = {
+      at: game.time, name: nome || 'INIMIGO', tier: '', weap: '', dmg: 0, head: false,
+      dist: alvo ? Math.hypot(alvo.x - e.x, alvo.z - e.z) : 0, total: 0, quad: '',
+      pos: alvo ? new THREE.Vector3(alvo.x, alvo.y, alvo.z) : null,
+    };
+  }
+  playerRespawned() {
+    const game = this.game;
+    game._releaseInput?.();
+    // o corpo TP do jogador: no online o respawn NÃO passa pelo _respawnPlayer, e sem este
+    // reset o corpo ficava deitado pra sempre, arrastado pelo mundo (BUG-86).
+    try { game._tpRevive(); } catch { /* corpo ainda não construído */ }
+    if (game.el.respawn) game.el.respawn.classList.add('hidden');
+    if (game._deathPanel) { try { game._deathPanel.remove(); } catch { /* já foi */ } game._deathPanel = null; }
+    game._lastHit = null;
+    // O que o _respawnPlayer faz no SP e o servidor não faz por nós: munição, rolagem da câmera, som (BUG-119).
+    const p = game.player;
+    for (const w of [p.primary, p.secondary]) if (w && WEAPONS[w] && p.ammo[w]) p.ammo[w] = { mag: WEAPONS[w].mag, res: WEAPONS[w].reserve };
+    p._lifeDmg = 0; p.crouchF = 0;
+    // Mesma limpeza do _respawnPlayer: nada da vida passada (recarga/arremesso congelados na
+    // morte) pode descongelar na base — o viewmodel volta no idle e SACA.
+    p.reloadUntil = 0; p.reloadWeapon = ''; p.nadeBusyUntil = 0; p._nextNade = 0;
+    game._voltarPraBase?.();
+    p.smokes = 5; p.frags = 1; game._updateSmokeHud?.();   // como o _startRound (fase 3 do `ev`)
+    if (game.camera) game.camera.rotation.z = 0;
+    try { game.sfx.respawn(); } catch { /* ctx mudo */ }
+  }
+
+  /* Os estados vivem na entidade, não no GLB: uma troca de malha no meio da ação
+     recebe o restante atual. O import só instala o driver; nunca inicia dança num
+     callback atrasado, que poderia ressuscitar uma intenção já cancelada. */
+  _syncRemoteStates(b) {
+    const ctrl = b.mesh?.isGLB && b.mesh.ctrl;
+    if (!ctrl) return;
+    const novo = b._netVisualCtrl !== ctrl;
+    if (novo) {
+      b._netVisualCtrl = ctrl;
+      b._netReloadActive = false;
+      b._netEmoteAppliedTick = null;
+    }
+    ctrl.setCrouch?.(b.alive && !!b._netCrouch);
+    if (!b.alive) {
+      ctrl.cancelReload?.(); ctrl.pararEmote?.();
+      b._netVisualCtrl = null;
+      return;
+    }
+    if (ctrl.dead) return;   // updateRemoteBot revive antes de reaplicar a vida nova
+    const agora = this._now();
+    const restante = Math.max(0, ((b._netReloadUntilMs || 0) - agora) / 1000);
+    if (restante > 0 && !b._netReloadActive) ctrl.reload?.(restante);
+    else if (restante === 0 && b._netReloadActive) ctrl.cancelReload?.();
+    b._netReloadActive = restante > 0;
+    const info = emoteInfo(b._netEmote);
+    if (!info || this.game.state !== 'live') {
+      ctrl.pararEmote?.(); b._netEmoteAppliedTick = null;
+      return;
+    }
+    if (!this.game._emoteMod) {
+      if (!b._netEmoteLoading) {
+        b._netEmoteLoading = true;
+        void this.game._emoteMods().finally(() => { b._netEmoteLoading = false; });
+      }
+      return;
+    }
+    if (b._netEmoteAppliedTick === b._netStateTick && !novo) return;
+    const elapsed = b._netEmoteElapsed + Math.max(0, agora - b._netStateAtMs) / 1000;
+    if (!info.laco && elapsed >= info.dur) ctrl.pararEmote?.();
+    else ctrl.emote?.(info.id, info.laco ? elapsed % info.dur : elapsed);
+    b._netEmoteAppliedTick = b._netStateTick;
+  }
+
+  /* Render de um boneco REMOTO. Chamado pelo game._updateBot para corpos com `_remote`.
+     Espelha a lógica de morte do _updateBot local. */
+  updateRemoteBot(b, dt, positionOnly = false) {
+    const game = this.game;
+    const g = b.mesh && b.mesh.group;
+    if (!g) return;
+    if (b._remote === 'ghost') { g.visible = false; return; }
+    let vx = 0, vz = 0, segYaw = null;
+    if (b._bufAt && b._bufAt.length) {
+      /* Renderiza o remoto `interpAtrasoMs` no PASSADO, interpolando no buffer: absorve o
+         jitter que congelava o boneco a cada pacote atrasado (BUG-87). NUNCA extrapola. */
+      const sample = sampleEntityBuffer(b, this._relogioAgora() - this.interpAtrasoMs, this._remoteSample);
+      vx = sample.vx; vz = sample.vz; segYaw = this.__mutYawInstante ? null : sample.segYaw;
+    }
+    if (positionOnly) { g.visible = false; return; }
+    if (b.alive) {
+      if (b._deadShown) { if (b.mesh.isGLB) b.mesh.ctrl.revive && b.mesh.ctrl.revive(); b._deadShown = false; b.deadT = 0; }
+      if (b.mesh.isGLB) this._syncRemoteStates(b);
+      const corpoYaw = b._netBot === false ? b.yaw + Math.PI : b.yaw;   // humano remoto olhava pra trás
+      g.position.copy(b.pos); g.rotation.set(0, corpoYaw, 0); g.visible = true;
+      const spd = Math.min(6, b._netSpd || 0);
+      const fwdYaw = segYaw == null ? corpoYaw : (b._netBot === false ? segYaw + Math.PI : segYaw);
+      const fwd = vx * Math.sin(fwdYaw) + vz * Math.cos(fwdYaw);
+      // Mesmo eixo do controlador 3P: lateral positiva é a direita visual do corpo (−X local).
+      // Para humano remoto, fwdYaw já inclui π; a projeção continua usando o yaw do segmento.
+      const lat = vz * Math.sin(fwdYaw) - vx * Math.cos(fwdYaw);
+      if (b.mesh.isGLB) {
+        const distCam = Math.hypot(b.pos.x - game.camera.position.x, b.pos.z - game.camera.position.z);
+        b.mesh.ctrl.lod = distCam > 45 ? 2 : (distCam > 25 ? 1 : 0);
+        // update(dt, moving, hasTarget, speed, back): a velocidade REAL vai no 4º argumento —
+        // com speed=0 o clipe rodava a 0,45× e o boneco deslizava (BUG-113).
+        b.mesh.ctrl.aimPitch = Math.max(-0.6, Math.min(0.6, b._netPitch || 0));
+        // O progresso ativo alimenta a transição aérea antes da pose e do amortecimento.
+        const mMantle = Number.isFinite(b.mantleF) && b.mantleF > 0 && b.mantleF < 1;
+        b.mesh.ctrl.setAr?.(mMantle);
+        b.mesh.ctrl.setMantle?.(mMantle ? b.mantleF : null);
+        b.mesh.ctrl.update(dt, spd < 0.35 ? 0 : 1, !!b._fireAtMs && this._now() - b._fireAtMs < 1500, spd, fwd < -0.25, lat);
+      } else poseCharacter(b.mesh.parts, spd, 0, game.time);
+    } else {
+      b.deadT = (b.deadT || 0) + dt; b._deadShown = true;
+      if (b.mesh.isGLB) {
+        b.mesh.ctrl.die(); b.mesh.ctrl.update(dt, 0, false);
+        g.position.copy(b.pos);
+        g.visible = b.deadT <= 1.2;
+      } else {
+        g.position.set(b.pos.x, b.pos.y + Math.max(-0.6, -b.deadT * 0.3), b.pos.z);
+        g.rotation.x = Math.max(-Math.PI / 2, (g.rotation.x || 0) - dt * 5);
+      }
+    }
+    try { game._updateTeamMark(b); } catch { /* marca opcional */ }
+  }
+
+  // Recolhe métricas para telemetria sem desenhar diagnóstico durante a partida.
+  updateStats() {
+    const game = this.game;
+    if (game._disposed || !game.online || !this.net) return;
+    // fps = frames REAIS de render na janela, e não as chamadas deste interval
+    const now = performance.now();
+    const inactive = !!game.paused || (typeof document !== 'undefined' && !!document.hidden);
+    if (inactive !== this._statsInactive) {
+      this._statsInactive = inactive;
+      this._nsT0 = now;
+      this._nsF0 = game._rafFrames || 0;
+      this._nsFps = null;
+      this._reconcileWindow.length = 0;
+      this.net.drainRttSamples?.();
+      this.net.drainGapSamples?.();
+      // Voltou a ficar VISÍVEL: a próxima janela sai em 2 s (não 10) — quem abre e
+      // fecha a aba rápido (mobile) ainda produz amostra na sessão.
+      this._nextClientStats = now + (inactive ? 10000 : 2000);
+    }
+    if (this._nsT0 == null) { this._nsT0 = now; this._nsF0 = game._rafFrames || 0; }
+    const dframes = (game._rafFrames || 0) - this._nsF0, dtime = now - this._nsT0;
+    if (dtime >= 400) {
+      if (dframes > 0) this._nsFps = Math.round((dframes * 1000) / dtime);   // pausado (0 frames) mantém o último fps de jogo
+      this._nsT0 = now; this._nsF0 = game._rafFrames || 0;
+    }
+    if (!inactive && now >= this._nextClientStats && this._nsFps > 0) this.enviarJanelaStats();
+  }
+
+  /* Envia janelas fechadas e flushes parciais uma única vez; depois reinicia
+   * a contagem para não repetir amostras. */
+  enviarJanelaStats() {
+    const game = this.game;
+    if (game._disposed || !game.online || !this.net) return;
+    const s = this.net.computeStats();
+    this._nextClientStats = this._now() + 10000;
+    const correcoes = this._reconcileWindow;
+    // O HUD conserva o pior gap recente; a telemetria usa p95 dos intervalos
+    // desta janela para que um pico isolado não defina a qualidade inteira.
+    const gaps = this.net.drainGapSamples?.();
+    this.net.sendClientStats?.({
+      fps: this._nsFps, rtt: s.ping, rttSamples: this.net.drainRttSamples?.(), snap: s.hz, gap: this._percentil(gaps, 0.95),
+      reconcileP95: this._percentil(correcoes, 0.95),
+      // O p95 da sessão precisa dos eventos, não do p95 de cada janela. Em uma
+      // janela anormalmente cheia, distribuir as 512 amostras por toda ela.
+      reconcileSamples: correcoes.length <= 512 ? correcoes.slice() : Array.from({ length: 512 }, (_, i) =>
+        correcoes[Math.floor((i + 0.5) * correcoes.length / 512)]),
+      reconcileMax: correcoes.length ? +Math.max(...correcoes).toFixed(3) : null,
+      reconcileCount: correcoes.length,
+      quality: game.settings?.quality || null,
+    });
+    // A próxima janela não repete os mesmos eventos. Os totais acima continuam vivos
+    // para o registro da sessão; o servidor soma somente os eventos novos de cada 10 s.
+    correcoes.length = 0;
+  }
+
+  _percentil(values, q) {
+    if (!values || !values.length) return null;
+    const a = [...values].sort((x, y) => x - y);
+    return +a[Math.min(a.length - 1, Math.floor((a.length - 1) * q))].toFixed(3);
+  }
+}

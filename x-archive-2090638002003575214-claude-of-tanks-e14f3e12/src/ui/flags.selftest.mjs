@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { FLAG_ICON_CODE_BY_NATION, flagIconCode } from './flagCodes.ts';
+
+const expected = {
+  USA: 'us', Germany: 'de', USSR: 'ru', Russia: 'ru', 'USSR/Russia': 'ru',
+  UK: 'gb', France: 'fr', China: 'cn', Israel: 'il', Italy: 'it', Japan: 'jp',
+  Poland: 'pl', 'South Korea': 'kr', Sweden: 'se', Denmark: 'dk', Ukraine: 'ua', Canada: 'ca', 'South Africa': 'za', Australia: 'au', Brazil: 'br', Community: 'xx',
+};
+
+assert.deepEqual(FLAG_ICON_CODE_BY_NATION, expected, 'every roster nation has a stable flag-icons code');
+assert.equal(flagIconCode('not-a-roster-nation'), 'xx', 'unknown nations use the package fallback');
+
+const require = createRequire(import.meta.url);
+const packageRoot = dirname(require.resolve('flag-icons/package.json'));
+for (const code of new Set(Object.values(expected))) {
+  const svg = await readFile(join(packageRoot, 'flags', '4x3', `${code}.svg`), 'utf8');
+  assert.match(svg, new RegExp(`id=["']flag-icons-${code}["']`), `${code} resolves to an official package SVG`);
+}
+
+const uiDir = dirname(fileURLToPath(import.meta.url));
+const flagsSource = await readFile(join(uiDir, 'flags.ts'), 'utf8');
+assert.doesNotMatch(flagsSource, /<svg|<rect|<polygon|function star/, 'flag UI no longer draws replacement flags');
+// every mapped code is bundled and served: a code with no import resolved to undefined and drew a broken image (Brazil's
+// 'br' in release 266's preview: the Gallery's eight Brazilian records and its nation facet, every Brazilian flag chip)
+const flagTable = /const FLAG_URL[^=]*=\s*Object\.freeze\(\{([^}]*)\}\)/.exec(flagsSource)?.[1] ?? '';
+const tableCodes = new Set(flagTable.split(',').map((entry) => entry.trim()).filter(Boolean));
+for (const code of new Set(Object.values(expected))) {
+  assert.match(flagsSource, new RegExp(`^import ${code} from 'flag-icons/flags/4x3/${code}\\.svg\\?url';$`, 'm'), `flags.ts bundles ${code}.svg`);
+  assert.ok(tableCodes.has(code), `FLAG_URL serves ${code}`);
+}
+
+const garageSource = await readFile(join(uiDir, 'garage.ts'), 'utf8');
+// the camo picker (INTERACTION-REDESIGN B) retired the flag-only country collections: a paint names its nation in the
+// locale as a fact, from the same flag-tag map
+assert.match(garageSource, /nationOfTag: camoTagNation,\s*nationName: tNation,/,
+  "the camo picker names a paint's nation in the locale");
+
+const srcRoot = join(uiDir, '..');
+for (const relative of ['ui/garage.ts', 'ui/flags.ts', 'ui/flagCodes.ts']) {
+  const source = await readFile(join(srcRoot, relative), 'utf8');
+  assert.doesNotMatch(source, /[\u{1F1E6}-\u{1F1FF}]/u, `${relative} has no native flag emoji`);
+}
+
+console.log(`flags.selftest: ${Object.keys(expected).length} nation labels -> ${new Set(Object.values(expected)).size} official assets`);

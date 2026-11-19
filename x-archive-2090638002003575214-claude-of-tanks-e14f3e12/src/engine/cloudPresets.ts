@@ -1,0 +1,416 @@
+/**
+ * cloudPresets.ts — a map's volumetric cloud layer from its authored sky preset and cloudscape (round 68,
+ * 2026-09-24; round 71, 2026-09-25: the cloudscape regimes).
+ *
+ * Every map keeps its identity without a new field in its sky block (the Garage copies deep-equal those
+ * blocks, `garageSkyPresets.selftest`): the layer reads the same cloud fields the baked decks read —
+ * `cloudOpacity` (how much sky the deck covered), `cloudOpacity2`, `turbidity`, `cloudAltM` (an authored
+ * low deck), `cloudTintHex`, `cloudShadowAmp`, `fogDensity`, `rayleigh`, `skyIntensity` — and derives a
+ * coverage, a regime and the slab. The legacy overcast rule of sky.ts (both decks near-opaque under a
+ * turbid sky, or an authored deck at or below 400 m with an opaque low deck) selects the stratus regime,
+ * which is what restores the white sky of the overcast presets (the round-65 open note). Round 71: a map's
+ * `clouds` block (cloudscapes.ts, carried on the preset as `sky.cloudscape`) names a regime and any knob; the
+ * regime's row fills what the map leaves unset, the sky block what the row leaves open (the base of an authored
+ * deck, the tint, the wind across the sun). A map may still author the resolved layer raw through
+ * `sky.cloudLayer` (a partial `CloudLayerPreset`, null = derived), which wins field by field.
+ */
+import type { AtmosphereSkyPresetInput } from './atmosphere.ts';
+import { CLOUDSCAPE_REGIMES, type CloudscapeConfig, type CloudscapeRegime } from './cloudscapes.ts';
+import { CLOUD_CONTRAIL_MAX } from './cloudWeatherLayers.ts';
+import { lightTune } from './lightModelCore.ts';
+import { createLazyChunk } from '../app/lazyChunk.ts';
+
+export type CloudLayerRegime = 'scattered' | 'broken' | 'overcast' | 'storm' | CloudscapeRegime;
+
+export interface CloudLayerPreset {
+  /** The regime (documentation and the shadow / shape policy; the numbers below carry the look). */
+  regime: CloudLayerRegime;
+  /** Fraction of the equalised weather field admitted as cloud: the sky fraction before the shape erodes it. */
+  coverage: number;
+  /** Cloud base altitude (m). */
+  baseM: number;
+  /** Slab thickness (m) at full column height. */
+  thicknessM: number;
+  /** 0..1: how far cumulus columns may rise above the slab as towers (storm turrets at 1). */
+  towers: number;
+  /** 0..1: stratiform (flat, featureless, ambient-lit) against cumuliform (domed, sun-modelled). */
+  stratiform: number;
+  /** 0..1: the weather field the coverage cuts — the cell-carried cumuliform one (0) or the broad stratiform one (1). */
+  fieldMix: number;
+  /** Extinction coefficient (1/m) of the densest cloud. */
+  density: number;
+  /** Linear albedo tint (the authored cloudTintHex, perceptually halved). */
+  tint: readonly [number, number, number];
+  /** Wind: drift direction (rad, world XZ, the direction the wind blows toward) and speed (m/s). */
+  windDirRad: number;
+  windSpeed: number;
+  /** Per-map weather decorrelation offset in tiles. */
+  offset: readonly [number, number];
+  /** A storm keeps the sky over the camera open: its towers stand off beyond this horizontal radius (m, 0 = none). */
+  clearRadiusM: number;
+  /** Whether the layer casts real cloud shadows through the CSM (cumulus regimes under a strong sun only). */
+  shadow: boolean;
+  /**
+   * 2026-10-05: the share of the cloud shade map's pattern the layer casts by day — a shadow-casting regime whole, a
+   * stratiform deck by its gaps (1 at a coverage under CLOUD_LAYER_RULES.deckClosedCoverage[0], 0 over [1]), none at night.
+   */
+  shadowPattern: number;
+  /** 2026-10-09 (the shadows lane): the share of the clear beam a deck's thickest cell passes (CloudscapeConfig.deckBeam). */
+  deckBeam?: number;
+  /** Alpha test on the equalised coverage field for the shadow footprint (the cloud's dense core). */
+  shadowThreshold: number;
+  /** Round 71: the cloud type range the weather's vigour channel maps between (0 stratus, 0.5 cumulus, 1 cumulonimbus). */
+  typeRange: readonly [number, number];
+  /** Round 71: 0..1 anvils on the deepest columns. */
+  anvil: number;
+  /** Round 71: 0..1 billowy → wispy erosion. */
+  wispiness: number;
+  /** Round 71: the horizontal lean of a column across the slab's height (m, along the wind). */
+  shearM: number;
+  /** Round 71: 0..1 share of the street-aligned weather field. */
+  streets: number;
+  /** Round 71: the high cirrus layer — coverage 0..1, streak direction (rad), altitude (m), optical density. */
+  cirrus: number;
+  cirrusAngleRad: number;
+  cirrusAltM: number;
+  cirrusDensity: number;
+  /** Round 71: multipliers on the sun's and the ambient's contributions (1 = physical). */
+  sunGain: number;
+  ambientScale: number;
+  /** Round 71: the far horizon stratocumulus band — coverage 0..1 and its altitude (m). */
+  farBand: number;
+  farBandAltM: number;
+  /** Round 71: 0..1 ragged low fragments under the base. */
+  scud: number;
+  /** Round 76 (the deck pass): the cellular structure of a deck (0..1) and its cell diameter (m). */
+  cells: number;
+  cellM: number;
+  /** Round 76: 0..1 the underside lit by the column's transmitted light (the diffusion law) instead of the sky-mean floor. */
+  deckLight: number;
+  /** Round 76: 0..1 undulatus bands across a deck's thickness from the wind-frame rolls. */
+  undulatus: number;
+  /** Round 76: 0..1 the interior density octave inside cumuliform masses (a detailed first light tap). */
+  interior: number;
+  /** 2026-10-03: 0..1 a deck's sub-cell lumps (cloudscapes.ts CloudscapeConfig.lumps). */
+  lumps: number;
+  /**
+   * 2026-10-03 (the skies lane; the gauntlet's wave 0: "round-bottomed cotton-ball clouds"): 0..1 a cumulus base cut at
+   * its condensation level — the base's rise sharpened and the erosion kept to the flanks and tops (0 = the round-71 base).
+   */
+  baseFlat?: number;
+  /** 2026-10-03: 0..1 the cumulus fields and gaps (cloudscapes.ts CloudscapeConfig.cluster). */
+  cluster?: number;
+  /** 2026-10-03: 0..1 a deck's definition (cloudscapes.ts CloudscapeConfig.deckDetail). */
+  deckDetail?: number;
+  /** 2026-10-18: a deck's drawn extinction share (cloudscapes.ts CloudscapeConfig.deckDensity; 1 when absent). */
+  deckDensity?: number;
+  /** 2026-10-01: the time of day the layer was resolved for (cloudTimeOfDay: the diurnal law's input). */
+  timeOfDay: CloudTimeOfDay;
+  /** 2026-10-01: contrails — how many (0..6) and their mean spread (0 fresh, 1 old contrail cirrus). */
+  contrails: number;
+  contrailAge: number;
+  /** 2026-10-01: 0..1 rain shafts under the precipitating cores, and the share of their fall that evaporates (virga). */
+  rain: number;
+  virga: number;
+  /** 2026-10-01: 0..1 a fog bank on the sea at the horizon and its top (m over the camera's ground). */
+  fogBank: number;
+  fogBankTopM: number;
+  /** 2026-10-01: the ground's light on the cloud bases (linear rgb, already scaled by the night amount: 0 by day). */
+  groundGlow: readonly [number, number, number];
+  /** 2026-10-01: the key light's colour on the clouds (luminance 1): white by day (the atmosphere colours the sun), the moonlight's at night. */
+  keyTint: readonly [number, number, number];
+}
+
+/** 2026-10-01: the three skies a battle can open under (battleWeatherPolicy.ts BATTLE_TIMES). */
+export type CloudTimeOfDay = 'day' | 'sunset' | 'night';
+
+/** The sky preset fields the derivation reads (a subset of sky.ts's SkyPreset). */
+export interface CloudLayerSkyInput extends AtmosphereSkyPresetInput {
+  skyIntensity: number;
+  cloudOpacity: number;
+  cloudOpacity2: number;
+  cloudTintHex: number;
+  cloudAltM: number | null;
+  cloudShadowAmp: number | null;
+  fogDensity: number;
+  /** The key light's colour (the moon's at night: battleAtmosphereRuntime's night preset). */
+  sunColorHex?: number;
+  cloudLayer?: Partial<CloudLayerPreset> | null;
+  /** Round 71: the map's authored cloudscape (its `clouds` block, carried on the preset by main.ts). */
+  cloudscape?: CloudscapeConfig | null;
+  /**
+   * 2026-10-05 (the skies lane: one scene wind, world/sceneWind.ts): the map's clouds' drift — its surface wind veered with
+   * height — carried on the preset beside the cloudscape; it replaces both the sun-derived legacy drift and a cloudscape's
+   * own windDirDeg (the table keeps an authored one's wind as the surface wind it came from)
+   */
+  sceneWind?: { cloudDirDeg: number } | null;
+  /** A forced night sky (sky.ts; the galaxy domes): its key is daylight, never the night's (2026-10-07: the night key). */
+  nightSky?: number | null;
+}
+
+/**
+ * The fair-weather cumulus base (the owner's twelve good maps keep their sky mostly open: small sparse puffs high
+ * over the thin baked veil) and the legacy overcast stratus altitude (the decks' AUTO value).
+ */
+export const CLOUD_LAYER_DEFAULT_BASE_M = 1400;
+export const CLOUD_LAYER_CUMULUS_BASE_MIN_M = 1200;
+export const CLOUD_LAYER_OVERCAST_BASE_M = 340;
+/** Regime thresholds on the derived coverage and the legacy overcast rule's inputs. */
+export const CLOUD_LAYER_RULES = Object.freeze({
+  /**
+   * coverage = clamp(0.22 · cloudOpacity^1.3, 0.05, 0.97) of the cell-carried field: the legacy deck at
+   * cloudOpacity 1 maps onto 0.22 (the strongest cell cores as separate puffs — the sky stays mostly open,
+   * the good maps' sky bands within the round's tolerance of the base); fainter authored decks thin toward
+   * wisps (Olympus Basin 0.3 → 0.05), heavier ones (delta 1.16 → 0.27, alpine 1.12 → 0.25) carry more puffs
+   */
+  coverageGain: 0.22,
+  coveragePower: 1.3,
+  coverageBias: 0,
+  coverageMin: 0.05,
+  // (2026-10-02: 1 — a whiteout's total overcast; at the old 0.97 its deck kept a blue ink-blot hole in the sky west)
+  coverageMax: 1,
+  /** sky.ts's overcast rule: cloudOpacity ≥ 0.95, cloudOpacity2 ≥ 0.9, turbidity ≥ 7 */
+  overcastOpacity: 0.95,
+  overcastOpacity2: 0.9,
+  overcastTurbidity: 7,
+  /** an authored deck this low with an opaque low deck is a stratus ceiling too */
+  overcastAuthoredAltM: 400,
+  overcastCoverageFloor: 0.94,
+  /** a storm is an overcast preset with the thickest fog (Monsoon: 0.00088) */
+  stormFogDensity: 0.00086,
+  /**
+   * a storm keeps its tropical blue sky (the owner's approved base) with towering cumulus off toward the
+   * horizon: this coverage of the cell field, and no tower within this radius of the camera
+   */
+  stormCoverage: 0.28,
+  stormClearRadiusM: 2500,
+  /** an authored deck at or below this altitude is a low-deck identity the layer keeps (polders 420 m) */
+  lowDeckAuthoredAltM: 600,
+  /** scattered below, broken from here (no shipped map reaches it: the regime is for authored decks) */
+  brokenCoverage: 0.30,
+  /** the shadow caster needs a fair-weather cloud-shadow amplitude (the legacy AUTO is 0.22) and a day sky */
+  shadowMinAmp: 0.15,
+  shadowMinSkyIntensity: 0.3,
+  /**
+   * the shade map's cut over the visible coverage's (1 - coverage + band). 2026-10-05 (the skies lane, the clouds and the
+   * land): 0.06 → 0 — the band drew every shadow smaller than its cloud (only the dense core cast one), so a sunlit gap
+   * read wider on the ground than in the sky; the footprint is now the visible cloud's, its edge the shade map's soft band
+   */
+  shadowCoreBand: 0,
+  /**
+   * 2026-10-05 (the skies lane: a deck with gaps): the coverage over which a stratiform deck closes (lightModelCore.ts
+   * DECK_CLOSED_COVERAGE, the receipt pins them equal) — under the first its cells cast the shade map's pattern by day
+   * and the sun shines in its gaps; over the second the light model cuts the sun uniformly
+   */
+  deckClosedCoverage: [0.95, 0.97] as readonly [number, number],
+  /** the share of the sun a deck's cell takes on the shade map (a stratocumulus cell is optically thick) */
+  deckShadowCore: 0.9,
+  /** round 71: a sheet this stratiform takes the overcast tint power (a quarter) and the diffuse lighting */
+  sheetStratiform: 0.7,
+  /** round 71: the cirrus sheet's optical density at full coverage and the far band's ceiling altitude (m) */
+  cirrusDensity: 0.35,
+  farBandMaxAltM: 2200,
+  /** round 71: the cirrus streak direction sits a third of a quarter turn off the wind (the upper wind veers) */
+  cirrusVeerRad: Math.PI / 6,
+});
+
+/**
+ * 2026-10-01: the time of day from the sky preset the battle applies — the night preset dims the dome to .08 (the
+ * night amount of sky.ts: full at .08, none from .30), the sunset preset lowers the sun to 7°.
+ */
+const CLOUD_TIME_RULES = Object.freeze({ nightTop: 0.30, nightFull: 0.08, sunsetMaxElevationDeg: 10 });
+
+export function cloudNightAmount(skyIntensity: number): number {
+  const R = CLOUD_TIME_RULES;
+  return clamp((R.nightTop - skyIntensity) / (R.nightTop - R.nightFull), 0, 1);
+}
+
+export function cloudTimeOfDay(sky: { skyIntensity: number; sunElevationDeg: number }): CloudTimeOfDay {
+  if (cloudNightAmount(sky.skyIntensity) >= 0.5) return 'night';
+  return sky.sunElevationDeg <= CLOUD_TIME_RULES.sunsetMaxElevationDeg ? 'sunset' : 'day';
+}
+
+/** 2026-10-01: the weather beyond the slab's defaults (the fog bank, the night glow and albedo). */
+const CLOUD_WEATHER_RULES = Object.freeze({
+  fogBankTopM: 120,
+  /** the sodium-orange glow of a lit town on the cloud bases (a map authors its own hue) */
+  nightGlowHex: 0xff9a52,
+  /** the night albedo: a moonlit cloud is a grey-white diffuser — the night preset's dark blue deck tint is a dome colour */
+  nightTintHex: 0xe9edf2,
+  /**
+   * 2026-10-07 (night-key 84d0ef10e; taken by the SKY lane 2026-10-14 as the night's moonlit clouds, settled conflict 3;
+   * the gauntlet's wave 250 on Highland Reservoir at night, both critics: "the cumulus across the top third is lit like
+   * daytime clouds"): the night's key on the clouds. The night preset puts the moon where the sun was, and the cloud layer
+   * lit it as the sun, with only the dome's dimming between them, so the clouds stood over the night sky at the day's
+   * contrast: a blue-tinted day. A moonlit cloud is a dim grey mass lit by the moon and the sky, its edges silver toward
+   * the moon. At full night the moon's share of the layer's light is nightKey of the sun's (the forward lobe keeps its
+   * shape), and the sky's is nightAmbient. QA: __LIGHT_TUNE.NIGHT_CLOUD_KEY, NIGHT_CLOUD_AMBIENT.
+   */
+  // (2026-10-17, 227; the media lane's QA on live 226: Copper Mesa's night lost its moonlit clouds — a flat dark gradient
+  // where the approved frame drew silvered night clouds over the stars) the approved night keeps the layer's moonlight
+  // whole: the key and the sky's share at 1 (QA: NIGHT_CLOUD_KEY / NIGHT_CLOUD_AMBIENT still dim them)
+  nightKey: 1,
+  nightAmbient: 1,
+});
+
+function hexToLinear(hex: number): [number, number, number] {
+  const srgb = [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((c) => c / 255);
+  return srgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)) as [number, number, number];
+}
+
+const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
+
+/** The decks' per-map decorrelation hash (sky.ts updateCloudDecks), reused so the layer keys the same way. */
+function mapOffset(sunAzimuthDeg: number, sunElevationDeg: number): [number, number] {
+  const h1 = Math.sin(sunAzimuthDeg * 12.9898 + sunElevationDeg * 78.233) * 43758.5453;
+  const h2 = Math.sin(sunAzimuthDeg * 39.4185 + sunElevationDeg * 11.135) * 24634.6345;
+  return [h1 - Math.floor(h1), h2 - Math.floor(h2)];
+}
+
+/** The albedo tint: the authored deck tint was composited over a white sky, so as an albedo it is perceptually halved; a sheet takes a quarter. */
+function tintOf(hex: number, sheet: boolean): [number, number, number] {
+  const power = sheet ? 0.25 : 0.5;
+  return hexToLinear(hex).map((c) => clamp(c, 0, 1) ** power) as [number, number, number];
+}
+
+/** The round-68 derivation: the layer from the deck fields alone (a map without a cloudscape, the Garage). */
+function deriveLegacy(sky: CloudLayerSkyInput): CloudLayerPreset {
+  const R = CLOUD_LAYER_RULES;
+  const co = Math.max(0, sky.cloudOpacity);
+  const co2 = Math.max(0, sky.cloudOpacity2);
+  const turbidity = Math.max(0, sky.turbidity);
+  const legacyOvercast = co >= R.overcastOpacity && co2 >= R.overcastOpacity2 && turbidity >= R.overcastTurbidity;
+  const authoredLowDeck = sky.cloudAltM != null && sky.cloudAltM <= R.overcastAuthoredAltM && co >= R.overcastOpacity;
+  const storm = (legacyOvercast || authoredLowDeck) && sky.fogDensity >= R.stormFogDensity;
+  const overcast = !storm && (legacyOvercast || authoredLowDeck);
+  let coverage = clamp(R.coverageGain * co ** R.coveragePower + R.coverageBias, R.coverageMin, R.coverageMax);
+  if (overcast) coverage = Math.max(coverage, R.overcastCoverageFloor);
+  if (storm) coverage = R.stormCoverage;
+  const regime: CloudLayerRegime = storm ? 'storm' : overcast ? 'overcast' : coverage >= R.brokenCoverage ? 'broken' : 'scattered';
+  const towers = storm ? 1 : overcast ? 0 : clamp((co - 0.95) * 1.2, 0, 1) * (turbidity >= 5.5 ? 1 : 0.4);
+  const stratiform = storm ? 0.2 : overcast ? 0.85 : regime === 'broken' ? 0.3 : 0.12;
+  // a storm's towers rise from wide bases (half the broad field), a broken sky merges a few cells, an
+  // overcast is the broad field itself
+  const fieldMix = overcast ? 1 : storm ? 0.85 : regime === 'broken' ? 0.15 : 0;
+  const authoredAlt = sky.cloudAltM;
+  const baseM = overcast ? (authoredAlt ?? CLOUD_LAYER_OVERCAST_BASE_M)
+    : authoredAlt != null && authoredAlt <= R.lowDeckAuthoredAltM ? authoredAlt
+      : Math.max(authoredAlt ?? CLOUD_LAYER_DEFAULT_BASE_M, CLOUD_LAYER_CUMULUS_BASE_MIN_M);
+  const thicknessM = storm ? 1600 : overcast ? 320 : regime === 'broken' ? 420 + towers * 400 : 320 + towers * 300;
+  const density = storm ? 0.09 : overcast ? 0.035 : regime === 'broken' ? 0.09 : 0.11;
+  const tint = tintOf(sky.cloudTintHex, overcast);
+  const shadowAmp = sky.cloudShadowAmp ?? (overcast ? 0.10 : 0.22);
+  const shadow = !overcast && shadowAmp >= R.shadowMinAmp && sky.skyIntensity >= R.shadowMinSkyIntensity;
+  // the wind runs across the sun (the cirrus deck's quarter turn): shadows drift sideways through the frame — unless the
+  // map's scene wind is carried (2026-10-05, world/sceneWind.ts: the surface wind veered with height)
+  const windDirRad = (sky.sceneWind && Number.isFinite(sky.sceneWind.cloudDirDeg) ? sky.sceneWind.cloudDirDeg : sky.sunAzimuthDeg + 90) * Math.PI / 180;
+  const windSpeed = storm ? 11 : overcast ? 4 : regime === 'broken' ? 8 : 6;
+  return {
+    regime, coverage, baseM, thicknessM, towers, stratiform, fieldMix, density, tint, windDirRad, windSpeed,
+    offset: mapOffset(sky.sunAzimuthDeg, sky.sunElevationDeg),
+    clearRadiusM: storm ? R.stormClearRadiusM : 0,
+    shadow, shadowPattern: shadow ? 1 : 0, shadowThreshold: clamp(1 - coverage + R.shadowCoreBand, 0, 1),
+    // round 71 fields at their neutral values: a cumulus type range, no anvils, the round-68 erosion, no lean,
+    // no streets, no cirrus, physical gains, no far band, no scud
+    typeRange: storm ? [0.6, 1] : overcast ? [0, 0.2] : [0.3, 0.6], anvil: storm ? 0.5 : 0, wispiness: 0.3, shearM: 0, streets: 0,
+    cirrus: 0, cirrusAngleRad: windDirRad + R.cirrusVeerRad, cirrusAltM: 10000, cirrusDensity: R.cirrusDensity,
+    sunGain: 1, ambientScale: 1, farBand: 0, farBandAltM: Math.min(R.farBandMaxAltM, baseM + thicknessM * 0.5), scud: 0,
+    // round 76 fields at their neutral values: no deck cells, the round-71 floor lighting, no undulatus, no interior octave
+    cells: 0, cellM: 1200, deckLight: 0, undulatus: 0, interior: 0, lumps: 0,
+    // 2026-10-01 fields at their neutral values: no weather beyond the slab, a white key light, no ground glow
+    ...neutralWeather(cloudTimeOfDay(sky)),
+  };
+}
+
+/** The 2026-10-01 fields at their neutral values (a sky block alone, the Garage). */
+function neutralWeather(timeOfDay: CloudTimeOfDay): Pick<CloudLayerPreset,
+  'timeOfDay' | 'contrails' | 'contrailAge' | 'rain' | 'virga' | 'fogBank' | 'fogBankTopM' | 'groundGlow' | 'keyTint'> {
+  return {
+    timeOfDay, contrails: 0, contrailAge: 0.5, rain: 0, virga: 0, fogBank: 0, fogBankTopM: CLOUD_WEATHER_RULES.fogBankTopM,
+    groundGlow: [0, 0, 0], keyTint: [1, 1, 1],
+  };
+}
+
+
+/** What cloudPresets.ts hands the cloudscape resolver on load, so its chunk imports nothing at runtime. */
+export interface CloudscapeEnv {
+  readonly rules: typeof CLOUD_LAYER_RULES;
+  readonly weather: typeof CLOUD_WEATHER_RULES;
+  readonly regimes: typeof CLOUDSCAPE_REGIMES;
+  readonly contrailMax: number;
+  readonly clamp: typeof clamp;
+  readonly tintOf: typeof tintOf;
+  readonly hexToLinear: typeof hexToLinear;
+  readonly neutralWeather: typeof neutralWeather;
+  readonly cloudNightAmount: typeof cloudNightAmount;
+  readonly cloudTimeOfDay: typeof cloudTimeOfDay;
+}
+type CloudscapeResolver = (legacy: CloudLayerPreset, sky: CloudLayerSkyInput, scape: CloudscapeConfig) => CloudLayerPreset;
+let cloudscape: CloudscapeResolver | null = null;
+// (round 3 A4) the cloudscape's chunk under the one lazy-chunk policy (app/lazyChunk.ts). Its memo was cleared on a
+// failure and asked again at once by the next call, and the battle atmosphere's prepare asks it on every call, which the
+// Studio makes once per sun-dial or slider move: after one failed transfer every move asked again, offline too.
+// (round 4 F2) Exported for the battle atmosphere's prepare (battleAtmosphereAccess.ts), whose entry asks it at once
+// whatever the backoff and whose Studio applies never await its re-ask (the Studio lights again once it lands)
+export const cloudscapeChunk = createLazyChunk((): Promise<void> => import('./cloudscapeLayer.ts').then((module) => {
+  cloudscape = module.cloudscapeLayer({
+    rules: CLOUD_LAYER_RULES, weather: CLOUD_WEATHER_RULES, regimes: CLOUDSCAPE_REGIMES, contrailMax: CLOUD_CONTRAIL_MAX,
+    clamp, tintOf, hexToLinear, neutralWeather, cloudNightAmount, cloudTimeOfDay,
+  });
+}));
+/** (round 5 U8) Whether the cloudscape is installed: the load installs it a moment before cloudscapeChunk reads 'ready'
+ *  (battleAtmosphereAccess.ts: a relight's landing). */
+export function cloudscapeLayersInstalled(): boolean {
+  return cloudscape !== null;
+}
+/**
+ * 2026-10-02 (the boot weight): a map's cloudscape (its regime, its knobs, the time of day, the weather beyond the
+ * slab) lights only a battlefield, so it loads behind the battle entry (cloudscapeLayer.ts: the battle atmosphere's
+ * prepare and the capture staging await it); the Garage's open destinations read the deck derivation alone. Never
+ * rejects: a failed chunk keeps the deck derivation, and a later call asks again as the lazy-chunk policy allows (at once
+ * after one failure, then past its backoff, never offline).
+ */
+export function loadCloudscapeLayers(): Promise<void> {
+  return cloudscapeChunk.load().then(undefined, () => undefined);
+}
+
+/** Derive the layer from a sky preset; the cloudscape refines it, an authored `cloudLayer` override wins field by field. */
+export function deriveCloudLayerPreset(sky: CloudLayerSkyInput): CloudLayerPreset {
+  const legacy = deriveLegacy(sky);
+  // (2026-10-05: the scene wind's drift in place of the cloudscape's own — one wind per battlefield)
+  const scape = sky.cloudscape && sky.sceneWind && Number.isFinite(sky.sceneWind.cloudDirDeg)
+    ? { ...sky.cloudscape, windDirDeg: sky.sceneWind.cloudDirDeg } : sky.cloudscape;
+  const derived = scape && cloudscape ? cloudscape(legacy, sky, scape) : legacy;
+  const authored = sky.cloudLayer;
+  if (!authored) return nightKeyed(derived, sky);
+  const merged = { ...derived };
+  for (const key of Object.keys(authored) as (keyof CloudLayerPreset)[]) {
+    const value = authored[key];
+    if (value !== undefined && value !== null) (merged as Record<string, unknown>)[key] = value;
+  }
+  return nightKeyed(merged, sky);
+}
+
+/**
+ * 2026-10-07: the night's key on the layer (CLOUD_WEATHER_RULES.nightKey): the moon's and the sky's shares of its light by
+ * the night amount, over whatever the map authored. A day or a sunset sky is untouched, and so is a constant sky
+ * (`diurnal: false`, Mars' dimmed galaxy dome) and a forced night sky (the galaxy domes: their key is daylight).
+ */
+function nightKeyed(p: CloudLayerPreset, sky: CloudLayerSkyInput): CloudLayerPreset {
+  const night = sky.cloudscape?.diurnal === false || (sky.nightSky ?? 0) > 0.5 ? 0 : cloudNightAmount(sky.skyIntensity);
+  if (!(night > 0)) return p;
+  const W = CLOUD_WEATHER_RULES;
+  const key = 1 - night * (1 - Math.max(0, lightTune('NIGHT_CLOUD_KEY', W.nightKey)));
+  const ambient = 1 - night * (1 - Math.max(0, lightTune('NIGHT_CLOUD_AMBIENT', W.nightAmbient)));
+  return { ...p, sunGain: p.sunGain * key, ambientScale: p.ambientScale * ambient };
+}
+
+/** A stable key of everything the layer's uniforms and shadow caster read (a preset change re-keys the history). */
+export function cloudLayerKey(p: CloudLayerPreset): string {
+  return [p.regime, p.coverage, p.baseM, p.thicknessM, p.towers, p.stratiform, p.fieldMix, p.density, ...p.tint,
+    p.windDirRad, p.windSpeed, ...p.offset, p.clearRadiusM, p.shadow ? 1 : 0, p.shadowPattern ?? 0, p.deckBeam ?? 0, p.shadowThreshold,
+    ...p.typeRange, p.anvil, p.wispiness, p.shearM, p.streets, p.cirrus, p.cirrusAngleRad, p.cirrusAltM, p.cirrusDensity,
+    p.sunGain, p.ambientScale, p.farBand, p.farBandAltM, p.scud, p.cells, p.cellM, p.deckLight, p.undulatus, p.interior, p.lumps ?? 0, p.baseFlat ?? 0, p.cluster ?? 0, p.deckDetail ?? 0, p.deckDensity ?? 1,
+    p.timeOfDay, p.contrails, p.contrailAge, p.rain, p.virga, p.fogBank, p.fogBankTopM, ...p.groundGlow, ...p.keyTint,
+  ].map((v) => (typeof v === 'number' ? v.toFixed(5) : v)).join(',');
+}

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Procedural Tokyo</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1220; }
+      canvas { display: block; }
+      #hud {
+        position: fixed; top: 12px; left: 12px; padding: 10px 12px; max-width: 340px;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; color: #e8ecf2;
+        background: rgba(10, 14, 22, 0.66); border-radius: 6px; pointer-events: none; white-space: pre;
+      }
+      #credits {
+        position: fixed; right: 8px; bottom: 6px; font: 11px system-ui, sans-serif; color: rgba(255, 255, 255, 0.75);
+        text-shadow: 0 1px 2px #000;
+      }
+      #github {
+        position: fixed; right: 8px; bottom: 26px; display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 6px; border-radius: 14px;
+        font: 12px system-ui, sans-serif; color: rgba(255, 255, 255, 0.85); text-decoration: none; background: rgba(10, 14, 22, 0.45);
+      }
+      #github:hover { color: #fff; background: rgba(10, 14, 22, 0.8); }
+      #github svg { width: 16px; height: 16px; fill: currentColor; }
+      /* the switch between the city as it is and its abstract model: a picture of the one it changes to */
+      #mode {
+        position: fixed; left: 12px; bottom: 12px; width: 68px; height: 68px; padding: 0; border: 2px solid #fff; border-radius: 12px; cursor: pointer;
+        background: #cfd6dc center / cover no-repeat; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); transition: box-shadow 0.12s ease;
+      }
+      /* (live: the picture is drawn by the scene itself, under the switch — which is then only its frame) */
+      #mode.live { background: none !important; }
+      #mode:hover { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55), 0 3px 12px rgba(0, 0, 0, 0.6); }
+      #mode:active { border-color: #d6e4ff; }
+      /* shown while a city loads: at start-up and when another city is chosen */
+      #loader {
+        position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+        background: radial-gradient(ellipse at 50% 60%, #1a1140 0%, #0a0d1c 55%, #05060c 100%); color: #f4f8ff;
+        font-family: "Yu Gothic", "Meiryo", "Hiragino Kaku Gothic ProN", system-ui, sans-serif; transition: opacity 0.7s ease;
+      }
+      #loader.done { opacity: 0; pointer-events: none; }
+      #loader .jp { font-size: 15px; letter-spacing: 0.6em; color: #22e6ff; text-shadow: 0 0 12px #22e6ff; }
+      #loader .city { font-size: clamp(34px, 6vw, 68px); font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 0 18px #ff3d9a, 0 0 46px #ff3d9a; }
+      #loader .bar { width: min(420px, 60vw); height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+      #loader .fill { height: 100%; width: 0%; background: linear-gradient(90deg, #22e6ff, #ff3d9a); box-shadow: 0 0 12px #ff3d9a; transition: width 0.25s ease; }
+      #loader .step { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; color: rgba(244, 248, 255, 0.6); min-height: 1.4em; }
+    </style>
+  </head>
+  <body>
+    <div id="loader">
+      <div class="jp">東京</div>
+      <div class="city"></div>
+      <div class="bar"><div class="fill"></div></div>
+      <div class="step">starting…</div>
+    </div>
+    <script>
+      // The city's name goes on the loading screen before anything else runs, so it never changes under the eye.
+      (function () {
+        var id = new URLSearchParams(location.search).get('area') || 'tokyo', name = null;
+        try { name = localStorage.getItem('procedural-tokyo:name:' + id); } catch (e) {}
+        document.querySelector('#loader .city').textContent = name || id.charAt(0).toUpperCase() + id.slice(1);
+      })();
+    </script>
+    <!-- the info panel: hidden until asked for (control panel: info panel) -->
+    <div id="hud" style="display: none">loading…</div>
+    <button id="mode" type="button" aria-label="Switch between the photorealistic city and the abstract model"></button>
+    <a id="github" href="https://github.com/jeantimex/tokyo" target="_blank" rel="noopener" title="Source on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      jeantimex
+    </a>
+    <div id="credits"></div>
+    <script>
+      // The atmosphere works out its tables (the sky's colours, the light on the clouds) in the browser's idle
+      // time, of which a busy page — the whole city loaded, clouds on — has none: the sky would stay dull and the
+      // clouds dark for as long as it is busy. Idle work is given a deadline, so that it is done all the same.
+      // (Here, before the modules: the library takes hold of the function when it is loaded.)
+      if (window.requestIdleCallback) {
+        const idle = window.requestIdleCallback.bind(window);
+        window.requestIdleCallback = (callback, options) => idle(callback, { timeout: 30, ...options });
+      }
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

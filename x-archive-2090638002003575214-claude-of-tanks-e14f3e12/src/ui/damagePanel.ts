@@ -1,0 +1,1295 @@
+import { DAMAGE_PANEL_CSS } from './damagePanelStyle.ts';
+import { createUiCanvas, scratchCanvas } from './uiCanvas.ts';
+// src/ui/damagePanel.ts — bottom-left player damage panel, WoT panel
+// language. r9 REBUILD (owner: "reflect the actual top down view of the tank,
+// and make the hull move correctly"): the plan view is now the REAL vehicle —
+// two orthographic top-down masks of the actual built model (tankThumbs.ts
+// getTopDownMasks: hull layer, turret+gun layer) — and the panel is
+// CAMERA-UP: the hull layer rotates with the true hull heading relative to
+// the camera yaw, the turret+gun layer with hull+turret, so the panel gun
+// points where the real gun points on screen. Module hit-markers are stamped
+// in HULL space (turret modules in TURRET space) so they ride their layer.
+// The healthy panel now keeps a quiet module-location layer visible: every
+// authored damageable system and crew station gets a compact glyph at its real
+// hull/turret volume center. Owner rule (2026-09-25): a marker sits EXACTLY on
+// that center projected through its layer's rotation, markers MAY overlap, and
+// every icon is painted upright in panel space, never rotated with its layer —
+// the old screen-space separation solver made markers wiggle around each other
+// as the layers turned. Damage promotes the same marker to the shared
+// orange/red state language; hit-zone floods still come from the real armor
+// model. No letterforms inside the silhouette, ever. HP bar and fire indicator.
+// Covered battle entry awaits the actual vehicle masks. Live tank switches
+// leave the schematic blank while preparing; never draw a generic vehicle.
+// Failed builds retain bounded retries and `hud_mask_failed` telemetry.
+// Contract: docs/ARCHITECTURE.md §3.7.2 (API preserved; setPose added).
+
+import { ensureFonts } from './fonts.ts';
+import { telemetryTankId } from '../game/tankIdBoundaries.ts';
+import { ensureStyle } from './styleLayers.ts';
+import { formatNumber, t } from './i18n.ts';
+import { datumAttr, markDatum } from './dom.ts';
+import {
+  getTopDownMasks,
+  prepareTopDownMasks,
+  type TankMaskSpec,
+  type TankMaskVisual,
+  type TopDownMaskEntry,
+  type TopDownMaskFailure,
+} from './tankThumbs.ts';
+import { getEntryTelemetry, type TelemetryEvent } from '../entry/telemetry.ts';
+// EQUIPMENT SYSTEM: quiet mounted-loadout readout at the panel foot — the
+// same white-silhouette glyphs as the garage slots, at healthy-pip alpha.
+import { equipIconSVG } from './equipIcons.ts';
+import { EQUIPMENT_BY_ID } from '../game/equipment.ts';
+
+// WoT module-state ramp (ORANGE damaged, RED knocked out) comes from the
+// shared module registry — one presentation truth across the damage panel,
+// shot cards, killcam and HUD alerts (module_hitbox r1).
+import { STATE_COLOR } from './moduleRegistry.ts';
+
+type Vec2 = [number, number];
+type Vec3 = readonly [number, number, number];
+type ModuleStateName = 'ok' | 'yellow' | 'red';
+
+interface DamagePanelModuleVolume {
+  module: string;
+  min: Vec3;
+  max: Vec3;
+  turretLocal?: boolean;
+}
+
+interface DamagePanelCrewVolume {
+  crew: string;
+  min: Vec3;
+  max: Vec3;
+  turretLocal?: boolean;
+}
+
+interface DamagePanelTankSpec extends TankMaskSpec {
+  hp: number;
+  dims?: {
+    hullLengthM?: number;
+    overallLengthM?: number;
+    widthM?: number;
+  };
+  armor?: {
+    modules?: readonly DamagePanelModuleVolume[];
+    crew?: readonly DamagePanelCrewVolume[];
+    turretPivot?: Vec3;
+    gunBarrel?: { lengthM?: number };
+  };
+}
+
+interface DamagePanelModuleState {
+  hp: number;
+  maxHp: number;
+  state: ModuleStateName;
+  repairT: number;
+}
+
+interface DamagePanelCombatState {
+  hp: number;
+  maxHp: number;
+  destroyed?: boolean;
+  modules: Record<string, DamagePanelModuleState>;
+  crew: Record<string, boolean>;
+  fire: { burning: boolean; tickTimer?: number; ticksLeft?: number };
+}
+
+interface DamagePanelPoseSample {
+  hull?: number;
+  turret?: number;
+  cam?: number;
+}
+
+interface DamagePanelStateSample {
+  hp?: number;
+  maxHp?: number;
+  hpFrac?: number;
+  modules?: Record<string, ModuleStateName | DamagePanelModuleState>;
+  crew?: Record<string, boolean>;
+  burning?: boolean;
+  fire?: DamagePanelCombatState['fire'];
+  destroyed?: boolean;
+  pose?: DamagePanelPoseSample;
+}
+
+interface MaskTints {
+  hullBody: HTMLCanvasElement;
+  hullRim: HTMLCanvasElement;
+  turretRim: HTMLCanvasElement;
+  turretBody: Record<string, HTMLCanvasElement>;
+}
+
+interface ModuleAnchor {
+  kind: 'module';
+  name: string;
+  x: number;
+  z: number;
+  sourceX: number;
+  sourceZ: number;
+  turretLocal: boolean;
+}
+
+interface CrewAnchor {
+  kind: 'crew';
+  name: string;
+  x: number;
+  z: number;
+  sourceX: number;
+  sourceZ: number;
+  turretLocal: boolean;
+}
+
+type DamagePanelAnatomyAnchor = ModuleAnchor | CrewAnchor;
+
+/** A marker as last painted: its projected panel point (probe/receipt introspection). */
+interface DamagePanelMarkerDebug {
+  kind: 'module' | 'crew';
+  name: string;
+  x: number;
+  y: number;
+}
+
+type ModuleIconPainter = (context: CanvasRenderingContext2D, color: string) => void;
+
+/** The mask pipeline the panel talks to (tankThumbs by default; receipts script it). */
+interface DamagePanelMaskSource {
+  get: typeof getTopDownMasks;
+  prepare: typeof prepareTopDownMasks;
+}
+
+/** Where a terminal mask failure is reported (the entry beacon by default). */
+interface DamagePanelTelemetrySink {
+  send(event: TelemetryEvent): boolean;
+}
+
+interface DamagePanelOptions {
+  maskSource?: DamagePanelMaskSource;
+  /** `null` disables reporting; omitted resolves the page's entry beacon lazily (browser only). */
+  telemetry?: DamagePanelTelemetrySink | null;
+  schedule?: (callback: () => void, delayMs: number) => unknown;
+  cancel?: (handle: unknown) => void;
+}
+
+// Mask retry policy (2026-09-25 owner report: an M1A3 battle kept the vector
+// stand-in until reload). Attempt 1 borrows the live battle visual; attempt 2
+// (after 1.5 s) drops it, so a source disposed mid-build cannot cancel the
+// rebuild and the factory build path owns its resources; attempt 3 follows
+// 8 s later. Then the panel keeps the stand-in, warns once and beacons
+// `hud_mask_failed` with the spec id and the pipeline's failure code.
+export const DAMAGE_PANEL_MASK_RETRY = Object.freeze({
+  maxAttempts: 3,
+  /** Delay before attempt n+1 once attempt n has failed. */
+  delaysMs: Object.freeze([1500, 8000] as const),
+});
+
+export interface DamagePanelController {
+  root: HTMLElement;
+  prepareTankMasks(spec: DamagePanelTankSpec, sourceVisual?: TankMaskVisual | null): Promise<boolean>;
+  setTank(spec: DamagePanelTankSpec, sourceVisual?: TankMaskVisual | null): void;
+  /** The battle is over (2026-11-02 audit, 04-ui-1 #7: the Garage return's clearBattle under the veil, and phase:change
+   *  'garage'): a pending mask retry is cancelled, a build still in flight is ignored when it lands, and the panel lets
+   *  go of the battle's tank, its masks and its visual until the next setTank, which starts afresh. Idempotent. */
+  clear(): void;
+  /** The battle is leaving while its screens stay up (the Garage return's clearBattle with keepScreens: a mid-battle
+   *  Leave, a report that prepares the Garage behind it; integration review r1): a pending mask retry is cancelled, a
+   *  build still in flight is ignored when it lands, and the battle's visual is let go (it moves to the Garage pedestal),
+   *  but the tank and its masks stay, so the panel still paints until clear(). Idempotent. */
+  release(): void;
+  update(combat: DamagePanelCombatState): void;
+  setPose(hullYaw?: number | null, turretYaw?: number | null, camYaw?: number | null): void;
+  setTurretYaw(yaw?: number | null): void;
+  setEquipment(ids: readonly string[] | null): void;
+  debugState(): {
+    masksReady: boolean;
+    /** Whether the panel holds a battle visual to clone for its masks (setTank's; clear lets it go). */
+    holdsSourceVisual: boolean;
+    hullPhi: number;
+    gunPhi: number;
+    specId: string | null;
+    markers: DamagePanelMarkerDebug[];
+  };
+  setState(sample: DamagePanelStateSample | DamagePanelCombatState): void;
+}
+
+/** The hull points bar's cells (the direction's .seg20). */
+const HP_CELLS = 20;
+/** The hull bar's least gap between cells (damagePanelStyle.ts .hptrack). */
+const HP_CELL_GAP = 2;
+
+function canvas2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('damagePanel.ts: Canvas2D is unavailable');
+  return context;
+}
+
+function requiredElement<T extends HTMLElement>(root: ParentNode, selector: string): T {
+  const element = root.querySelector<T>(selector);
+  if (!element) throw new Error(`damagePanel.ts: required element ${selector} is unavailable`);
+  return element;
+}
+
+function isFullCombatState(
+  sample: DamagePanelStateSample | DamagePanelCombatState,
+): sample is DamagePanelCombatState {
+  if (sample.maxHp == null || sample.hp == null || !sample.modules) return false;
+  const firstModule = Object.values(sample.modules)[0];
+  return typeof firstModule === 'object' && firstModule !== null;
+}
+
+/** White mask canvas -> solid-tint copy (r9: layers are tinted per state). */
+function tintCanvas(src: HTMLCanvasElement, color: string): HTMLCanvasElement {
+  const c = scratchCanvas(src.width, src.height);
+  const x = canvas2d(c);
+  x.drawImage(src, 0, 0);
+  x.globalCompositeOperation = 'source-in';
+  x.fillStyle = color;
+  x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+// layer color language (r6-2 three-tone read, kept): mid-steel hull under a
+// clearly LIGHTER turret; near-black contour ink.
+const HULL_BODY = '#a2adb6';
+const TURRET_BODY = '#ccd6de';
+const RIM_INK = 'rgba(6,10,14,0.98)';
+export const DAMAGE_PANEL_MARKER_STYLE = Object.freeze({
+  moduleHealthyColor: '#82e6a0',
+  crewHealthyColor: '#5aa9ff',
+  weaponCarrier: 'diamond',
+  movementCarrier: 'hexagon',
+  crewCarrier: 'circle',
+} as const);
+
+const HEALTHY_MODULE_COLOR = DAMAGE_PANEL_MARKER_STYLE.moduleHealthyColor;
+const HEALTHY_CREW_COLOR = DAMAGE_PANEL_MARKER_STYLE.crewHealthyColor;
+
+// ---------------------------------------------------------------------------
+// Vector module icons — each drawn centered at (0,0) in a ~12px box, using
+// the module state color.
+// ---------------------------------------------------------------------------
+const MODULE_ICON: Record<string, ModuleIconPainter> = {
+  gun(c, col) {
+    // barrel with muzzle brake
+    c.fillStyle = col;
+    c.fillRect(-1.5, -6, 3, 9.5);
+    c.fillRect(-2.5, -6.5, 5, 2);
+    c.fillRect(-3, 3.5, 6, 2.5);
+  },
+  engine(c, col) {
+    // engine block with cylinder head bumps
+    c.fillStyle = col;
+    c.fillRect(-5, -2.5, 10, 7);
+    for (let i = 0; i < 3; i++) c.fillRect(-4 + i * 3.2, -4.5, 2, 2.4);
+    c.clearRect(-3.2, -0.8, 2.2, 3.4);
+    c.clearRect(1, -0.8, 2.2, 3.4);
+  },
+  transmission(c, col) {
+    c.fillStyle = col;
+    c.fillRect(-5.5, -3.4, 11, 6.8);
+    c.fillStyle = 'rgba(8,12,16,0.82)';
+    for (const x of [-3, 3]) {
+      c.beginPath(); c.arc(x, 0, 2, 0, Math.PI * 2); c.fill();
+    }
+    c.fillStyle = col;
+    c.fillRect(-7, -1, 1.8, 2); c.fillRect(5.2, -1, 1.8, 2);
+  },
+  fuelTank(c, col) {
+    // jerrycan with X emboss
+    c.fillStyle = col;
+    c.fillRect(-4.5, -4, 9, 9.5);
+    c.fillRect(1, -5.5, 2.5, 2);
+    c.strokeStyle = 'rgba(8,12,16,0.95)';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(-3, -2.5); c.lineTo(3, 4);
+    c.moveTo(3, -2.5); c.lineTo(-3, 4);
+    c.stroke();
+  },
+  ammoRack(c, col) {
+    // two shells side by side (body + pointed tip + rim)
+    c.fillStyle = col;
+    for (const x of [-3.4, 1]) {
+      c.fillRect(x, -2.5, 2.4, 8);
+      c.beginPath();
+      c.moveTo(x, -2.5); c.lineTo(x + 1.2, -6.2); c.lineTo(x + 2.4, -2.5);
+      c.closePath();
+      c.fill();
+      c.fillRect(x - 0.5, 4.2, 3.4, 1.6);
+    }
+  },
+  radio(c, col) {
+    // box with antenna + signal arcs
+    c.fillStyle = col;
+    c.fillRect(-5, 1, 10, 4.5);
+    c.strokeStyle = col;
+    c.lineWidth = 1.3;
+    c.beginPath();
+    c.moveTo(-2, 1); c.lineTo(-2, -5.5);
+    c.stroke();
+    c.beginPath(); c.arc(-2, -5.5, 3, -0.5, 1.2); c.stroke();
+    c.beginPath(); c.arc(-2, -5.5, 5, -0.3, 1.0); c.stroke();
+  },
+  optics(c, col) {
+    // lens: ring with crosshair notch
+    c.strokeStyle = col;
+    c.lineWidth = 1.8;
+    c.beginPath(); c.arc(0, 0, 4.4, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = col;
+    c.beginPath(); c.arc(0, 0, 1.6, 0, Math.PI * 2); c.fill();
+    c.lineWidth = 1.1;
+    c.beginPath();
+    c.moveTo(0, -6.3); c.lineTo(0, -4.4);
+    c.moveTo(0, 4.4); c.lineTo(0, 6.3);
+    c.moveTo(-6.3, 0); c.lineTo(-4.4, 0);
+    c.moveTo(4.4, 0); c.lineTo(6.3, 0);
+    c.stroke();
+  },
+  turretRing(c, col) {
+    // open ring with gear notches
+    c.strokeStyle = col;
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(0, 0, 4.2, 0.35, Math.PI * 2 - 0.35); c.stroke();
+    c.fillStyle = col;
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + Math.PI / 4;
+      c.fillRect(Math.cos(a) * 4.2 - 1, Math.sin(a) * 4.2 - 1, 2, 2);
+    }
+  },
+  autoloader(c, col) {
+    c.strokeStyle = col; c.lineWidth = 1.7;
+    c.beginPath(); c.arc(0, 0.8, 5, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = col;
+    c.beginPath(); c.moveTo(0, -6); c.lineTo(2, -2); c.lineTo(-2, -2); c.closePath(); c.fill();
+    c.fillRect(-1.4, -2, 2.8, 7);
+  },
+  feedSystem(c, col) {
+    c.strokeStyle = col; c.lineWidth = 1.5;
+    c.strokeRect(-6, -3.5, 12, 7);
+    c.fillStyle = col;
+    for (const x of [-3.5, 0, 3.5]) { c.beginPath(); c.arc(x, 0, 1.4, 0, Math.PI * 2); c.fill(); }
+  },
+  missileRack(c, col) {
+    c.fillStyle = col;
+    for (const x of [-3, 3]) {
+      c.fillRect(x - 1.2, -3, 2.4, 8);
+      c.beginPath(); c.moveTo(x - 1.2, -3); c.lineTo(x, -6); c.lineTo(x + 1.2, -3); c.closePath(); c.fill();
+    }
+  },
+};
+MODULE_ICON.roofGun = MODULE_ICON.gun;
+MODULE_ICON.gunMount = MODULE_ICON.turretRing;
+
+export const DAMAGE_PANEL_MODULE_ICON_IDS = Object.freeze(Object.keys(MODULE_ICON));
+
+type DamagePanelModuleKind = 'weapon' | 'movement';
+
+// The compact HUD needs only two mechanical silhouettes. Powertrain/fuel
+// systems use a broad hexagon; every fighting-system component uses a diamond.
+// Tracks already read through the two exterior rails and do not get a duplicate
+// marker, but remain classified for callers that share this vocabulary.
+export const DAMAGE_PANEL_MODULE_KIND_BY_ID: Readonly<Record<string, DamagePanelModuleKind>> = Object.freeze({
+  gun: 'weapon',
+  turretRing: 'weapon',
+  gunMount: 'weapon',
+  autoloader: 'weapon',
+  feedSystem: 'weapon',
+  missileRack: 'weapon',
+  roofGun: 'weapon',
+  ammoRack: 'weapon',
+  radio: 'weapon',
+  optics: 'weapon',
+  engine: 'movement',
+  transmission: 'movement',
+  fuelTank: 'movement',
+  trackL: 'movement',
+  trackR: 'movement',
+} as const satisfies Readonly<Record<string, DamagePanelModuleKind>>);
+
+// Role-specific crew symbols. They share the saturated-blue circular carrier
+// so crew never reads as another mechanical module, while their inner marks remain
+// recognizable at the panel's deliberately compact scale.
+const CREW_ICON: Record<string, ModuleIconPainter> = {
+  commander(c, col) {
+    c.fillStyle = col;
+    c.beginPath(); c.arc(-2.6, 0, 2.2, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(2.6, 0, 2.2, 0, Math.PI * 2); c.fill();
+    c.fillRect(-1.5, -1, 3, 2);
+    c.fillRect(-4.2, -4.6, 2.2, 2.8); c.fillRect(2, -4.6, 2.2, 2.8);
+  },
+  gunner(c, col) {
+    c.strokeStyle = col; c.lineWidth = 1.6;
+    c.beginPath(); c.arc(0, 0, 4.2, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.moveTo(0, -6); c.lineTo(0, -2.3); c.moveTo(0, 2.3); c.lineTo(0, 6);
+    c.moveTo(-6, 0); c.lineTo(-2.3, 0); c.moveTo(2.3, 0); c.lineTo(6, 0); c.stroke();
+    c.fillStyle = col; c.beginPath(); c.arc(0, 0, 1.4, 0, Math.PI * 2); c.fill();
+  },
+  driver(c, col) {
+    c.strokeStyle = col; c.lineWidth = 1.7;
+    c.beginPath(); c.arc(0, 0, 4.8, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(0, 4.8);
+    c.moveTo(0, 0); c.lineTo(-4.2, -2.3); c.moveTo(0, 0); c.lineTo(4.2, -2.3); c.stroke();
+    c.fillStyle = col; c.beginPath(); c.arc(0, 0, 1.5, 0, Math.PI * 2); c.fill();
+  },
+  loader(c, col) {
+    c.fillStyle = col;
+    c.fillRect(-1.4, -2.5, 2.8, 7.4);
+    c.beginPath(); c.moveTo(-1.4, -2.5); c.lineTo(0, -6); c.lineTo(1.4, -2.5); c.closePath(); c.fill();
+    c.fillRect(-2.2, 4, 4.4, 1.5);
+  },
+  radioOperator(c, col) {
+    c.strokeStyle = col; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(0, 0.5, 3.5, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+    c.beginPath(); c.moveTo(-3.4, 0); c.lineTo(-3.4, 4); c.moveTo(3.4, 0); c.lineTo(3.4, 4); c.stroke();
+    c.fillStyle = col; c.fillRect(-4.7, 2.2, 2.3, 3.2); c.fillRect(2.4, 2.2, 2.3, 3.2);
+    c.beginPath(); c.arc(0, -1.2, 2.4, 0, Math.PI * 2); c.fill();
+  },
+};
+CREW_ICON.assistantDriver = CREW_ICON.driver;
+CREW_ICON.assistantLoader = CREW_ICON.loader;
+CREW_ICON.weaponOperatorLeft = CREW_ICON.gunner;
+CREW_ICON.weaponOperatorRight = CREW_ICON.gunner;
+
+export const DAMAGE_PANEL_CREW_ICON_IDS = Object.freeze(Object.keys(CREW_ICON));
+
+/**
+ * Collect exact module centers from the authoritative combat volumes. The
+ * panel paints each marker exactly on its center projected through the hull or
+ * turret rotation; nothing nudges these coordinates away from the simulation
+ * truth (owner rule 2026-09-25: overlapping markers are allowed).
+ */
+export function layoutDamagePanelModuleAnchors(
+  modules: readonly DamagePanelModuleVolume[],
+  _pixelsPerMeter?: number,
+): ModuleAnchor[] {
+  const points: ModuleAnchor[] = [];
+  for (const module of modules) {
+    if (module.module === 'trackL' || module.module === 'trackR') continue;
+    if (!module.min || !module.max || !MODULE_ICON[module.module]) continue;
+    const sourceX = (module.min[0] + module.max[0]) / 2;
+    const sourceZ = (module.min[2] + module.max[2]) / 2;
+    points.push({
+      kind: 'module',
+      name: module.module,
+      x: sourceX,
+      z: sourceZ,
+      sourceX,
+      sourceZ,
+      turretLocal: !!module.turretLocal,
+    });
+  }
+  return points;
+}
+
+/** Collect exact crew-seat centers from the same armor model used by hits. */
+export function layoutDamagePanelCrewAnchors(
+  crew: readonly DamagePanelCrewVolume[],
+): CrewAnchor[] {
+  const points: CrewAnchor[] = [];
+  for (const station of crew) {
+    if (!station.min || !station.max || !CREW_ICON[station.crew]) continue;
+    const sourceX = (station.min[0] + station.max[0]) / 2;
+    const sourceZ = (station.min[2] + station.max[2]) / 2;
+    points.push({
+      kind: 'crew',
+      name: station.crew,
+      x: sourceX,
+      z: sourceZ,
+      sourceX,
+      sourceZ,
+      turretLocal: !!station.turretLocal,
+    });
+  }
+  return points;
+}
+
+/**
+ * Create the player damage panel (top-down plan layers + modules + HP + fire).
+ * The root is not attached to the document — hud.setDamagePanel mounts it.
+ * @param {DamagePanelOptions} options mask source, failure sink and timers (receipts inject them)
+ * @returns {{root:HTMLElement,setTank:Function,update:Function,setPose:Function,setTurretYaw:Function,setEquipment:Function,setState:Function}} Panel
+ */
+export function createDamagePanel(options: DamagePanelOptions = {}): DamagePanelController {
+  ensureFonts();
+  ensureStyle('cot-dp-style', DAMAGE_PANEL_CSS, 'surfaces');
+  const maskSource: DamagePanelMaskSource = options.maskSource
+    ?? { get: getTopDownMasks, prepare: prepareTopDownMasks };
+  const telemetry = options.telemetry;
+  const schedule = options.schedule ?? ((callback, delayMs) => setTimeout(callback, delayMs));
+  const cancel = options.cancel ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+
+  const root = document.createElement('div');
+  root.className = 'cot-dp';
+  // the hull points over the direction's 20-cell bar (brand-ui H4): each cell 5 % of the hull, lit while it stands
+  root.innerHTML =
+    `<div class="hprow"><span class="hplabel">HP</span><span class="hpnum num"${datumAttr('hp')}>—</span><small class="hpmax num"></small></div>` +
+    `<div class="hptrack" aria-hidden="true"></div>`;
+  // (no ON FIRE word on the plan: the status chips over the panel are fire's, module's and crew's one place, with their
+  // severity and the repair's fill, vehicleStatus.ts; UI-LOCKDOWN B2, the registry's ruling)
+  const hpNum = requiredElement<HTMLElement>(root, '.hpnum');
+  const hpMax = requiredElement<HTMLElement>(root, '.hpmax');
+  const hpTrack = requiredElement<HTMLElement>(root, '.hptrack');
+  const hpCells = Array.from({ length: HP_CELLS }, () => hpTrack.appendChild(document.createElement('i')));
+  // Whole-pixel cells: twenty in a fractional width rounded some to 2 px and some to 3 (gauntlet r15). Each takes the
+  // same whole width; the pixels left over widen the gaps one each, spread along the bar (measured on a resize only).
+  const fitHpCells = (): void => {
+    const width = hpTrack.clientWidth;
+    if (!(width > 0)) return;
+    const gaps = (HP_CELLS - 1) * HP_CELL_GAP;
+    const cell = Math.max(1, Math.floor((width - gaps) / HP_CELLS));
+    const spare = Math.max(0, width - gaps - cell * HP_CELLS);
+    for (let i = 0; i < HP_CELLS; i++) {
+      const extra = i === 0 ? 0 : Math.floor((spare * i) / (HP_CELLS - 1)) - Math.floor((spare * (i - 1)) / (HP_CELLS - 1));
+      const style = hpCells[i].style;
+      style.width = `${cell}px`;
+      style.marginLeft = i === 0 ? '0' : `${HP_CELL_GAP + extra}px`;
+    }
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fitHpCells).observe(hpTrack);
+  let hpLit = -1;
+
+  // Fixed camera-up stage. Fit the armored vehicle body rather than the full
+  // muzzle sweep: the barrel may reach the canvas edge, while the hull and
+  // internal module map stay large enough to read.
+  const CW = 142, CH = 138;
+  // (UI-LOCKDOWN A) the plan draws in its CW x CH design space; uiCanvas stretches it over the canvas's box (142 x 138,
+  // smaller on the touch layouts) at min(DPR, 2), redraws it on a box or ratio change and holds no store while hidden
+  // (it was a fixed 2x store: 284 x 276 at DPR 1)
+  const stage = createUiCanvas(root, '', { box: [CW, CH], units: [CW, CH], draw: () => paintPlan() });
+  root.style.width = `${CW + 18}px`; // padding 8+8 + 1px borders
+  const ctx = stage.context;
+  const cx = CW / 2, cy = CH / 2;
+
+  // EQUIPMENT SYSTEM: loadout readout row (populated via setEquipment)
+  const equipRow = document.createElement('div');
+  equipRow.className = 'equiprow';
+  markDatum(equipRow, 'equipment');
+  root.appendChild(equipRow);
+
+  let spec: DamagePanelTankSpec | null = null;
+  let combat: DamagePanelCombatState | null = null;
+  let lastHpText = '';
+
+  // --- r9 pose: the panel is CAMERA-UP ---------------------------------------
+  // hud.update feeds hull yaw, hull-relative turret yaw and camera yaw every
+  // frame (setPose). Layer rotations use the project yaw convention
+  // forwardAxis(yaw)=[sin,0,cos] with screen-right = -world-x: a nose-up
+  // sprite must be canvas-rotated by (camYaw - worldYaw).
+  let hullYawW = 0;    // hull world yaw
+  let turretYawH = 0;  // turret yaw, hull-relative
+  let camYawW = 0;     // camera world yaw
+  const hullPhi = () => camYawW - hullYawW;
+  const gunPhi = () => camYawW - hullYawW - turretYawH;
+  // A wreck's plan holds still (owner 2026-10-13: "even if im destroyed, the tank in bottom left corner can have
+  // its turret rotating, fix"). setPose only stages the frame's pose; update() commits it while the vehicle lives,
+  // so a destroyed vehicle keeps the pose of its last live frame through the death cam orbit, an ally's spectate
+  // camera, the kill cam and a respawn countdown. Its first live frame (a revive) commits again; a vehicle first
+  // seen as a wreck commits its given pose once. setState (the screenshot hook) still places a pose directly.
+  let stagedHullYawW = 0;
+  let stagedTurretYawH = 0;
+  let stagedCamYawW = 0;
+  let poseCommitted = false;
+  function commitStagedPose(destroyed: boolean): void {
+    if (destroyed && poseCommitted) return;
+    hullYawW = stagedHullYawW;
+    turretYawH = stagedTurretYawH;
+    camYawW = stagedCamYawW;
+    poseCommitted = true;
+  }
+
+  // --- r9 mask layers ---------------------------------------------------------
+  let masks: TopDownMaskEntry | null = null;       // tankThumbs.getTopDownMasks entry
+  let maskSourceVisual: TankMaskVisual | null = null;
+  let tints: MaskTints | null = null;       // per-entry tinted copies {hullBody,hullRim,turretRim,turretBody:{state:canvas}}
+  let scaleS = 8;         // panel px per meter (fit at mask arrival)
+  let anchors: DamagePanelAnatomyAnchor[] | null = null; // exact hull/turret centers
+
+  function adoptMasks(entry: TopDownMaskEntry): void {
+    masks = entry;
+    tints = {
+      hullBody: tintCanvas(entry.hull.canvas, HULL_BODY),
+      hullRim: tintCanvas(entry.hull.canvas, RIM_INK),
+      turretRim: tintCanvas(entry.turret.canvas, RIM_INK),
+      turretBody: { ok: tintCanvas(entry.turret.canvas, TURRET_BODY) },
+    };
+    // Fit the armored body. Long gun masks intentionally clip at the stage
+    // edge instead of shrinking every module location around the muzzle.
+    const po = pivotOffM();
+    const turretBodyRadius = Math.min(entry.turret.radiusM, entry.hull.radiusM * 1.05);
+    const reach = Math.max(
+      entry.hull.radiusM,
+      Math.hypot(po[0], po[1]) + turretBodyRadius);
+    scaleS = (Math.min(CW, CH) / 2 - 4) / Math.max(1.5, reach);
+    anchors = null;
+  }
+  function turretBodyTint(st: string): HTMLCanvasElement {
+    if (!tints || !masks) throw new Error('damagePanel.ts: mask tint requested before readiness');
+    if (!tints.turretBody[st]) {
+      tints.turretBody[st] = tintCanvas(masks.turret.canvas, STATE_COLOR[st]);
+    }
+    return tints.turretBody[st];
+  }
+  // --- mask retry (2026-09-25) ------------------------------------------------
+  let maskAttempt = 0;                 // builds requested for the current tank
+  let maskFailureCode: string | null = null; // the last attempt's failure, for the next attempt's source
+  let maskRetryHandle: unknown = null; // pending backoff timer
+  let maskRequestSerial = 0;           // setTank generation: stale callbacks are ignored
+
+  function cancelMaskRetry(): void {
+    if (maskRetryHandle === null) return;
+    cancel(maskRetryHandle);
+    maskRetryHandle = null;
+  }
+
+  // Terminal: one warning for the console, one bounded beacon for the field
+  // (the entry client caps events per session; the panel sends one per tank).
+  function reportMaskFailure(
+    failedSpec: DamagePanelTankSpec,
+    attempts: number,
+    failure: TopDownMaskFailure | null,
+  ): void {
+    const code = failure ? failure.code : 'unknown';
+    const message = failure ? failure.message : 'no failure detail';
+    console.warn(`[damagePanel] top-down mask unavailable for ${failedSpec.id} after ${attempts} attempt(s)`
+      + ` (${code}: ${message}); leaving the schematic blank`);
+    let sink: DamagePanelTelemetrySink | null = null;
+    if (telemetry !== undefined) sink = telemetry;
+    else { try { sink = getEntryTelemetry(); } catch { sink = null; } }
+    if (!sink) return;
+    try {
+      sink.send({
+        // The id carries its schema once a rename has landed (SSOT 2.19): `<id>.s<N>`.
+        kind: 'hud_mask_failed', stage: 'damagePanel', code, reason: telemetryTankId(failedSpec.id),
+        error: { message, frames: [] },
+      });
+    } catch { /* the beacon never breaks the HUD */ }
+  }
+
+  function scheduleMaskRetry(
+    failedSpec: DamagePanelTankSpec,
+    attempt: number,
+    failure: TopDownMaskFailure | null,
+  ): void {
+    const delay = DAMAGE_PANEL_MASK_RETRY.delaysMs[attempt - 1];
+    if (delay === undefined || attempt >= DAMAGE_PANEL_MASK_RETRY.maxAttempts || (failure && !failure.retryable)) {
+      reportMaskFailure(failedSpec, attempt, failure);
+      return;
+    }
+    cancelMaskRetry();
+    const serial = maskRequestSerial;
+    maskRetryHandle = schedule(() => {
+      maskRetryHandle = null;
+      if (serial !== maskRequestSerial || spec !== failedSpec) return;
+      requestMasks();
+    }, delay);
+  }
+
+  function requestMasks(): void {
+    if (!spec) return;
+    const requestSpec = spec;
+    const serial = maskRequestSerial;
+    const attempt = ++maskAttempt;
+    // A later attempt drops the borrowed live visual when that source was
+    // disposed mid-build (the battle-start race), and the last attempt always
+    // does: the factory build path owns every resource it renders.
+    // (battle-spikes-253) Any other failure — a mask pass's links outlasting its
+    // wait under load (top_mask_program_timeout) — retries on the live visual's
+    // clone: the factory build was one 700-1,000 ms task of a whole tank
+    // (decorations, a ghillie suit's raycasts) in a loaded room's last seconds.
+    const keepSource = attempt === 1
+      || (maskFailureCode !== 'top_mask_source_disposed' && attempt < DAMAGE_PANEL_MASK_RETRY.maxAttempts);
+    const source = keepSource ? maskSourceVisual : null;
+    const entry = maskSource.get(requestSpec, (ready, failure) => {
+      if (serial !== maskRequestSerial || spec !== requestSpec) return; // an older tank's build
+      if (!ready) {
+        maskFailureCode = failure?.code ?? null;
+        scheduleMaskRetry(requestSpec, attempt, failure ?? null);
+        return;
+      }
+      // The first-party mask is ready — adopt it for the tank still shown.
+      const built = maskSource.get(requestSpec, null);
+      if (built) { adoptMasks(built); lastDrawSig = null; draw(); }
+    }, source);
+    if (entry) adoptMasks(entry);
+  }
+
+  // hull-space pivot offset from the HULL LAYER's content center (meters)
+  function pivotOffM(): Vec2 {
+    if (!masks) return [0, 0];
+    return [masks.pivot[0] - masks.hull.cx, masks.pivot[1] - masks.hull.cz];
+  }
+
+  // meters -> panel px. Hull space: offset from hull content center rotated
+  // by hullPhi about the panel center. Turret space: offset from the pivot
+  // rotated by gunPhi about the pivot's panel point.
+  function panelPtHull(mx: number, mz: number, out: Vec2 = [0, 0]): Vec2 {
+    const hc = masks ? masks.hull : { cx: 0, cz: 0 };
+    const lx = -(mx - hc.cx) * scaleS;
+    const ly = -(mz - hc.cz) * scaleS;
+    const p = hullPhi();
+    const c = Math.cos(p), s = Math.sin(p);
+    out[0] = cx + lx * c - ly * s;
+    out[1] = cy + lx * s + ly * c;
+    return out;
+  }
+  function panelPtTurret(mx: number, mz: number, out: Vec2 = [0, 0]): Vec2 {
+    // The stand-in turns its turret about the authored pivot, so turret-space
+    // markers use the same point until the mask entry supplies the measured one.
+    const authored = spec && spec.armor && spec.armor.turretPivot;
+    const piv: readonly [number, number] = masks ? masks.pivot : authored ? [authored[0], authored[2]] : [0, 0];
+    const pp = panelPtHull(piv[0], piv[1]);
+    const lx = -mx * scaleS;
+    const ly = -mz * scaleS;
+    const p = gunPhi();
+    const c = Math.cos(p), s = Math.sin(p);
+    out[0] = pp[0] + lx * c - ly * s;
+    out[1] = pp[1] + lx * s + ly * c;
+    return out;
+  }
+
+  // Canvas dirty signature (module_hitbox r1, extended r9): the plan depends
+  // on module/crew states and the (quantized ~0.5°) LAYER rotations — repaint
+  // only when one of them actually changes. null forces a draw.
+  let lastDrawSig: string | null = null;
+  function drawSignature(): string {
+    let s = `${Math.round(hullPhi() / 0.008)}|${Math.round(gunPhi() / 0.008)}|${masks ? 'm' : 'v'}|`;
+    if (combat && combat.modules) {
+      for (const k in combat.modules) {
+        const st = combat.modules[k].state;
+        if (st && st !== 'ok') s += `${k}:${st};`;
+      }
+    }
+    if (combat && combat.crew) {
+      for (const k in combat.crew) {
+        if (combat.crew[k] === false) s += `crew:${k}:red;`;
+      }
+    }
+    return s;
+  }
+
+  function moduleState(name: string): ModuleStateName {
+    if (!combat || !combat.modules || !combat.modules[name]) return 'ok';
+    return combat.modules[name].state || 'ok';
+  }
+
+  function roundRect(
+    c: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    wdt: number,
+    hgt: number,
+    r: number,
+  ): void {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + wdt, y, x + wdt, y + hgt, r);
+    c.arcTo(x + wdt, y + hgt, x, y + hgt, r);
+    c.arcTo(x, y + hgt, x, y, r);
+    c.arcTo(x, y, x + wdt, y, r);
+    c.closePath();
+  }
+
+  function computeAnchors(): void {
+    const modules = (spec && spec.armor && spec.armor.modules) || [];
+    const crew = (spec && spec.armor && spec.armor.crew) || [];
+    anchors = [
+      ...layoutDamagePanelModuleAnchors(modules),
+      ...layoutDamagePanelCrewAnchors(crew),
+    ];
+  }
+
+  function traceModuleCarrier(kind: DamagePanelModuleKind, radius: number): void {
+    ctx.beginPath();
+    if (kind === 'weapon') {
+      ctx.moveTo(0, -radius);
+      ctx.lineTo(radius, 0);
+      ctx.lineTo(0, radius);
+      ctx.lineTo(-radius, 0);
+    } else {
+      const shoulder = radius * 0.58;
+      const height = radius * 0.82;
+      ctx.moveTo(-shoulder, -height);
+      ctx.lineTo(shoulder, -height);
+      ctx.lineTo(radius, 0);
+      ctx.lineTo(shoulder, height);
+      ctx.lineTo(-shoulder, height);
+      ctx.lineTo(-radius, 0);
+    }
+    ctx.closePath();
+  }
+
+  // One module chip. Weapon systems use diamonds; movement systems use broad
+  // hexagons. Damage keeps the established orange/red ramp and stronger glow.
+  function drawPip(name: string, px: number, py: number, st: ModuleStateName): void {
+    const icon = MODULE_ICON[name];
+    if (!icon) return;
+    const kind = DAMAGE_PANEL_MODULE_KIND_BY_ID[name] || 'weapon';
+    const healthy = st === 'ok';
+    const col = healthy ? HEALTHY_MODULE_COLOR : STATE_COLOR[st];
+    const radius = healthy ? 5.8 : 6.6;
+    ctx.save();
+    ctx.translate(px, py);
+    if (!healthy) {
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 5;
+    }
+    traceModuleCarrier(kind, radius);
+    ctx.fillStyle = healthy ? 'rgba(5,18,15,0.72)' : 'rgba(24,12,8,0.92)';
+    ctx.fill();
+    ctx.strokeStyle = healthy ? 'rgba(130,230,160,0.66)' : col;
+    ctx.lineWidth = healthy ? 0.9 : 1.3;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = healthy ? 0.9 : 1;
+    ctx.scale(healthy ? 0.58 : 0.7, healthy ? 0.58 : 0.7);
+    icon(ctx, col);
+    ctx.restore();
+  }
+
+  function drawCrewPip(name: string, px: number, py: number, alive: boolean): void {
+    const icon = CREW_ICON[name];
+    if (!icon) return;
+    const color = alive ? HEALTHY_CREW_COLOR : STATE_COLOR.red;
+    const radius = alive ? 5.6 : 6.5;
+    ctx.save();
+    ctx.translate(px, py);
+    if (!alive) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 5;
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = alive ? 'rgba(5,18,40,0.86)' : 'rgba(35,9,12,0.94)';
+    ctx.fill();
+    ctx.strokeStyle = alive ? 'rgba(90,169,255,0.9)' : color;
+    ctx.lineWidth = alive ? 0.9 : 1.3;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = alive ? 0.94 : 1;
+    ctx.scale(alive ? 0.58 : 0.68, alive ? 0.58 : 0.68);
+    icon(ctx, color);
+    ctx.restore();
+  }
+
+  // Rotated hull-space rect flood (de-tracks + engine/ammo/fuel hit-zones):
+  // drawn INSIDE the hull layer's rotation frame so it rides the hull.
+  function floodHullRect(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    st: ModuleStateName,
+    r = 2.5,
+  ): void {
+    const hc = masks ? masks.hull : { cx: 0, cz: 0 };
+    const ax = -(Math.max(x0, x1) - hc.cx) * scaleS; // x flips: use max first
+    const bx = -(Math.min(x0, x1) - hc.cx) * scaleS;
+    const az = -(Math.max(z0, z1) - hc.cz) * scaleS;
+    const bz = -(Math.min(z0, z1) - hc.cz) * scaleS;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(hullPhi());
+    ctx.fillStyle = STATE_COLOR[st] + '55';
+    ctx.strokeStyle = STATE_COLOR[st];
+    ctx.lineWidth = 1.2;
+    roundRect(ctx, ax, az, bx - ax, bz - az, r);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // --- layer painters ---------------------------------------------------------
+  // Contour ink first (offset passes in SCREEN space for an even rim), then
+  // the tinted body. `about` = panel point the layer rotates around; the
+  // draw origin inside the rotated frame is the mask-space anchor.
+  function drawLayer(
+    body: HTMLCanvasElement,
+    rim: HTMLCanvasElement,
+    aboutX: number,
+    aboutY: number,
+    phi: number,
+    originPx: number,
+    originPy: number,
+    pxPerM: number,
+  ): void {
+    const k = scaleS / pxPerM;
+    const w = body.width * k, h = body.height * k;
+    const dx = -originPx * k, dy = -originPy * k;
+    const paint = (img: HTMLCanvasElement, ox: number, oy: number, alpha: number): void => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(aboutX + ox, aboutY + oy);
+      ctx.rotate(phi);
+      ctx.drawImage(img, dx, dy, w, h);
+      ctx.restore();
+    };
+    ctx.save();
+    // soft spread then crisp ink (r6-2 full-strength contour)
+    for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) paint(rim, ox, oy, 0.35);
+    for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1],
+      [-1, -1], [1, -1], [-1, 1], [1, 1]]) paint(rim, ox, oy, 0.9);
+    paint(body, 0, 0, 1);
+    ctx.restore();
+  }
+
+  function drawHullLayer(): void {
+    if (!masks || !tints) return;
+    const H = masks.hull;
+    const pxPerM = H.canvas.width / (H.halfM * 2);
+    // hull content center in mask px (camera sat at world 0,0)
+    const ox = H.canvas.width / 2 - H.cx * pxPerM;
+    const oy = H.canvas.height / 2 - H.cz * pxPerM;
+    drawLayer(tints.hullBody, tints.hullRim, cx, cy, hullPhi(), ox, oy, pxPerM);
+  }
+
+  function drawTurretLayer(): void {
+    if (!masks || !tints) return;
+    const T = masks.turret;
+    const pxPerM = T.canvas.width / (T.halfM * 2);
+    const pp = panelPtHull(masks.pivot[0], masks.pivot[1]);
+    const ringSt = moduleState('turretRing');
+    const body = ringSt === 'ok' ? tints.turretBody.ok : turretBodyTint(ringSt);
+    drawLayer(body, tints.turretRim, pp[0], pp[1], gunPhi(),
+      T.canvas.width / 2, T.canvas.height / 2, pxPerM);
+    // damaged gun: state-colored run along the REAL barrel on the mask
+    const gunSt = moduleState('gun');
+    if (gunSt !== 'ok') {
+      const reach = Math.max(2, masks.turret.radiusM * scaleS - 2);
+      ctx.save();
+      ctx.translate(pp[0], pp[1]);
+      ctx.rotate(gunPhi());
+      ctx.strokeStyle = STATE_COLOR[gunSt];
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(0, -Math.min(6, reach * 0.2));
+      ctx.lineTo(0, -reach);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  const REGION_MODULES = ['engine', 'transmission', 'ammoRack', 'fuelTank'];
+
+  function drawDamagedRegions(): void {
+    if (!masks || !spec) return;
+    const modules = (spec.armor && spec.armor.modules) || [];
+    for (const module of modules) {
+      if (!module.min || !module.max || module.turretLocal) continue;
+      const isTrack = module.module === 'trackL' || module.module === 'trackR';
+      if (!isTrack && REGION_MODULES.indexOf(module.module) < 0) continue;
+      const state = moduleState(module.module);
+      if (state === 'ok') continue;
+      floodHullRect(
+        module.min[0],
+        module.min[2],
+        module.max[0],
+        module.max[2],
+        state,
+        isTrack ? 3 : 2,
+      );
+    }
+    drawTurretLayer();
+  }
+
+  // Last painted marker points (probe/receipt introspection via debugState);
+  // records are reused across repaints.
+  const lastMarkers: DamagePanelMarkerDebug[] = [];
+  let lastMarkerCount = 0;
+
+  function drawAnatomyAnchors(): void {
+    if (!anchors) computeAnchors();
+    if (!anchors) return;
+    const point: Vec2 = [0, 0];
+    lastMarkerCount = 0;
+    for (const anchor of anchors) {
+      // Owner rule (2026-09-25): the marker sits exactly on its hull-/turret-
+      // space center projected through its layer's rotation; markers may
+      // overlap. drawPip/drawCrewPip only translate to that point, so the icon
+      // is painted upright in panel space and never rotates with the layer.
+      if (anchor.turretLocal) panelPtTurret(anchor.sourceX, anchor.sourceZ, point);
+      else panelPtHull(anchor.sourceX, anchor.sourceZ, point);
+      if (anchor.kind === 'crew') {
+        const alive = !combat || !combat.crew || combat.crew[anchor.name] !== false;
+        drawCrewPip(anchor.name, point[0], point[1], alive);
+      } else {
+        drawPip(anchor.name, point[0], point[1], moduleState(anchor.name));
+      }
+      let record = lastMarkers[lastMarkerCount];
+      if (!record) {
+        record = { kind: anchor.kind, name: anchor.name, x: 0, y: 0 };
+        lastMarkers[lastMarkerCount] = record;
+      }
+      record.kind = anchor.kind;
+      record.name = anchor.name;
+      record.x = point[0];
+      record.y = point[1];
+      lastMarkerCount++;
+    }
+  }
+
+  /** Repaint the plan (now while it is shown, else when its box returns). */
+  function draw(): void {
+    stage.redraw();
+  }
+  function paintPlan(): void {
+    ctx.clearRect(0, 0, CW, CH);
+    lastMarkerCount = 0;
+    if (!spec || !masks || !tints) return;
+    drawHullLayer();
+
+    // De-tracked running gear + damaged module hit-zones flood their REAL
+    // armor-model boxes, stamped in hull space so they ride the hull layer.
+    // Healthy location awareness comes from the precise glyph layer below.
+    drawDamagedRegions();
+
+    // Persistent module and crew chips exactly at their authored vehicle-space
+    // anchors projected through the hull/turret rotation; overlapping markers
+    // are allowed and every icon stays upright (owner rule 2026-09-25).
+    drawAnatomyAnchors();
+  }
+
+  function refreshDom(): void {
+    if (!combat) return;
+    const frac = Math.max(0, Math.min(1, combat.hp / combat.maxHp));
+    const hp = Math.max(0, Math.round(combat.hp)), max = Math.round(combat.maxHp);
+    const txt = `${hp} / ${max}`;
+    if (txt !== lastHpText) {
+      hpNum.textContent = formatNumber(hp);
+      hpMax.textContent = `/ ${formatNumber(max)}`;
+      const lit = frac > 0 ? Math.max(1, Math.ceil(frac * HP_CELLS - 1e-6)) : 0;
+      if (lit !== hpLit) {
+        for (let i = 0; i < HP_CELLS; i++) hpCells[i].className = i < lit ? 'on' : '';
+        hpLit = lit;
+      }
+      const tone = frac <= 0.25 ? 'danger' : frac <= 0.5 ? 'warn' : '';
+      if ((hpTrack.dataset.tone ?? '') !== tone) hpTrack.dataset.tone = tone;
+      lastHpText = txt;
+    }
+  }
+
+  /** Build a fully-healthy CombatState-shaped object for this spec. */
+  function healthyCombat(): DamagePanelCombatState {
+    const modules: Record<string, DamagePanelModuleState> = {};
+    const mods = (spec && spec.armor && spec.armor.modules) || [];
+    for (const m of mods) modules[m.module] = { hp: 1, maxHp: 1, state: 'ok', repairT: 0 };
+    const crew: Record<string, boolean> = {};
+    const crewBoxes = (spec && spec.armor && spec.armor.crew) || [];
+    for (const c of crewBoxes) crew[c.crew] = true;
+    return {
+      hp: spec ? spec.hp : 1, maxHp: spec ? spec.hp : 1, destroyed: false,
+      modules, crew, fire: { burning: false, tickTimer: 0, ticksLeft: 0 },
+    };
+  }
+
+  function applyPoseSample(pose: DamagePanelPoseSample | undefined): void {
+    if (!pose) return;
+    if (pose.hull != null && isFinite(pose.hull)) hullYawW = stagedHullYawW = pose.hull;
+    if (pose.turret != null && isFinite(pose.turret)) turretYawH = stagedTurretYawH = pose.turret;
+    if (pose.cam != null && isFinite(pose.cam)) camYawW = stagedCamYawW = pose.cam;
+  }
+
+  function applyModuleSamples(
+    target: DamagePanelCombatState,
+    modules: DamagePanelStateSample['modules'],
+  ): void {
+    if (!modules) return;
+    for (const name of Object.keys(modules)) {
+      const state = modules[name];
+      target.modules[name] = typeof state === 'string'
+        ? {
+          hp: state === 'ok' ? 1 : state === 'yellow' ? 0.5 : 0,
+          maxHp: 1,
+          state,
+          repairT: 0,
+        }
+        : state;
+    }
+  }
+
+  function combatFromSample(sample: DamagePanelStateSample): DamagePanelCombatState {
+    const next = healthyCombat();
+    if (sample.hpFrac != null) {
+      next.hp = next.maxHp * Math.max(0, Math.min(1, sample.hpFrac));
+    }
+    if (sample.hp != null) next.hp = sample.hp;
+    applyModuleSamples(next, sample.modules);
+    if (sample.crew) {
+      for (const name of Object.keys(sample.crew)) next.crew[name] = sample.crew[name];
+    }
+    if (sample.burning != null) next.fire.burning = sample.burning;
+    return next;
+  }
+
+  function applyStateSample(sample: DamagePanelStateSample | DamagePanelCombatState): void {
+    if ('pose' in sample) applyPoseSample(sample.pose);
+    combat = isFullCombatState(sample) ? sample : combatFromSample(sample);
+    lastHpText = '';
+    lastDrawSig = null;
+    refreshDom();
+    draw();
+  }
+
+  return {
+    root,
+
+    /** Join covered preparation and paint the active tank before reporting ready. */
+    async prepareTankMasks(preparedSpec, sourceVisual = null) {
+      const serial = maskRequestSerial;
+      const entry = await maskSource.prepare(preparedSpec, sourceVisual);
+      if (!entry) return false;
+      // Network preparation may precede setTank; cache-only in that case.
+      // A tank switch during this await owns its own request and drawing.
+      if (serial === maskRequestSerial && spec?.id === preparedSpec.id) {
+        cancelMaskRetry();
+        adoptMasks(entry);
+        lastDrawSig = null;
+        draw();
+      }
+      return true;
+    },
+
+    /**
+     * Set the tank whose plan/modules the panel shows. Kicks the offscreen
+     * top-down mask build for the ACTUAL vehicle (tankThumbs rig); the
+     * covered entry awaits these masks. Outside that cover, an unfinished
+     * schematic stays blank. A pending retry for the previous tank is
+     * cancelled and its late callbacks are ignored.
+     * @param {TankSpec} s
+     * @param {?object} sourceVisual already-built visual to clone for the mask
+     */
+    setTank(s, sourceVisual = null) {
+      spec = s;
+      maskSourceVisual = sourceVisual;
+      combat = healthyCombat();
+      lastHpText = '';
+      masks = null;
+      tints = null;
+      anchors = null;
+      lastDrawSig = null;
+      poseCommitted = false;
+      cancelMaskRetry();
+      maskRequestSerial += 1;
+      maskAttempt = 0;
+      maskFailureCode = null;
+      refreshDom();
+      requestMasks();
+      draw();
+    },
+
+    // (integration review r1) the half of clear() a teardown that keeps the screens needs at once: no retry or late build
+    // for the last battle's tank, and no hold on its visual while the Garage adopts it; the plan stays painted
+    release() {
+      cancelMaskRetry();
+      maskRequestSerial += 1;
+      maskSourceVisual = null;
+    },
+
+    // (2026-11-02 audit, 04-ui-1 item 7) the controller had no teardown: after a battle a pending retry still fired for
+    // the last battle's tank (a mask build the comment above sizes at 700-1,000 ms, in the Garage), and maskSourceVisual
+    // kept that tank's visual until the next battle
+    clear() {
+      cancelMaskRetry();
+      maskRequestSerial += 1;
+      maskAttempt = 0;
+      maskFailureCode = null;
+      maskSourceVisual = null;
+      spec = null;
+      masks = null;
+      tints = null;
+      anchors = null;
+      lastDrawSig = null;
+    },
+
+    /**
+     * Refresh the panel from the live combat state (call every frame).
+     * DOM (HP bar and fire state) refreshes cheaply every call; the canvas
+     * plan repaints only when its dirty signature (module states + quantized
+     * layer rotations) actually changes.
+     * @param {CombatState} c
+     */
+    update(c) {
+      combat = c;
+      commitStagedPose(c.destroyed === true);
+      refreshDom();
+      const sig = drawSignature();
+      if (sig !== lastDrawSig) {
+        lastDrawSig = sig;
+        draw();
+      }
+    },
+
+    /**
+     * Feed the live pose (rad). The panel is CAMERA-UP: the hull layer
+     * rotates with the hull heading relative to the camera bearing and the
+     * turret+gun layer with hull+turret, so the panel gun points where the
+     * real gun points on screen. Staged only; the per-frame update() commits
+     * it while the vehicle lives and draws (hud.update calls this right before
+     * main's damagePanel.update in the same frame) — a wreck holds the pose of
+     * its last live frame.
+     * @param {number} hullYaw world hull yaw
+     * @param {number} turretYaw hull-relative turret yaw
+     * @param {number} camYaw world camera yaw
+     */
+    setPose(hullYaw, turretYaw, camYaw) {
+      if (hullYaw != null && isFinite(hullYaw)) stagedHullYawW = hullYaw;
+      if (turretYaw != null && isFinite(turretYaw)) stagedTurretYawH = turretYaw;
+      if (camYaw != null && isFinite(camYaw)) stagedCamYawW = camYaw;
+    },
+
+    /**
+     * Back-compat shim (pre-r9 callers): live hull-relative turret bearing
+     * only — hull/camera stay wherever the last setPose put them. Staged
+     * like setPose: a wreck's turret holds.
+     * @param {number} yaw
+     */
+    setTurretYaw(yaw) {
+      if (yaw != null && isFinite(yaw)) stagedTurretYawH = yaw;
+    },
+
+    /**
+     * EQUIPMENT SYSTEM: show the mounted loadout (call with the player's
+     * equip ids after setTank; null/[] clears the row and it collapses).
+     * @param {?Array<string>} ids equipment ids (game/equipment.ts catalog)
+     */
+    setEquipment(ids) {
+      let html = '';
+      for (const id of Array.isArray(ids) ? ids : []) {
+        const it = EQUIPMENT_BY_ID.get(id);
+        if (!it) continue;
+        const name = t(`equipment.${id}.name`);
+        const desc = t(`equipment.${id}.desc`);
+        const tooltip = t('damagePanel.equipmentTooltip', { name, desc });
+        html += `<span class="eq" title="${tooltip}">${equipIconSVG(id, 15, 'currentColor')}</span>`;
+      }
+      equipRow.innerHTML = html;
+    },
+
+    /** Probe/tooling introspection (E2E gates): mask readiness, live pose and
+     *  the marker points of the last repaint.
+     *  @returns {{masksReady:boolean,hullPhi:number,gunPhi:number,specId:?string,markers:Array}} */
+    debugState() {
+      return {
+        masksReady: !!(masks && tints),
+        holdsSourceVisual: maskSourceVisual !== null,
+        hullPhi: hullPhi(),
+        gunPhi: gunPhi(),
+        specId: spec ? spec.id : null,
+        markers: lastMarkers.slice(0, lastMarkerCount).map((marker) => ({ ...marker })),
+      };
+    },
+
+    /**
+     * Deterministic screenshot hook: display a sample state. Accepts either a
+     * full CombatState or a compact sample:
+     * { hpFrac?, modules?: {name:'ok'|'yellow'|'red'}, crew?: {name:boolean},
+     *   burning?: boolean, pose?: {hull,turret,cam} }.
+     * @param {object} sample
+     */
+    setState(sample) {
+      if (!sample) return;
+      applyStateSample(sample);
+    },
+  };
+}

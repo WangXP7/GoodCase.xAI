@@ -1,0 +1,1930 @@
+{
+  "schemaVersion": "cs-mint-urban-batch/1",
+  "date": "2026-10-17",
+  "provider": "Mint",
+  "catalogPath": "tools/character-kit/garment/urban-catalog.json",
+  "submissionStatus": "not-submitted-no-credits",
+  "submitted": false,
+  "submittedAt": null,
+  "providerBatchId": null,
+  "costReceipt": {
+    "status": "not-submitted-no-credits",
+    "currency": "USD",
+    "estimatedCost": null,
+    "chargedCost": 0,
+    "creditsSpent": 0,
+    "receiptId": null,
+    "note": "No paid API call was made because Mint credits were unavailable."
+  },
+  "safetyContract": "NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Permission-needed items are excluded from jobs and remain without assets.",
+  "families": [
+    {
+      "geometryFamily": "accessory-bandana",
+      "itemIds": [
+        "street-43-mascara-pano-vizinhanca"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-bandana. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-belt",
+      "itemIds": [
+        "street-39-cinto-fita-tecnica"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-belt. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-bracelet",
+      "itemIds": [
+        "street-41-pulseira-corda-nautica",
+        "tribe-07-bracelete-rebites",
+        "tribe-33-kandi-bracelets"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-bracelet. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-case",
+      "itemIds": [
+        "street-40-oculos-porta"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-case. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-chain",
+      "itemIds": [
+        "street-37-corrente-suspensa",
+        "tribe-10-colar-ankh",
+        "tribe-13-corrente-cubana-chunky",
+        "tribe-26-scarf-clube-ficticio"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-chain. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-earring",
+      "itemIds": [
+        "street-42-brinco-gancho-frio"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-earring. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-modular",
+      "itemIds": [
+        "tribe-08-wallet-cadeia",
+        "tribe-12-face-overlay-palido",
+        "tribe-28-chest-rig-modular",
+        "tribe-32-apito-em-cordao",
+        "tribe-37-luva-dedos-cortados",
+        "tribe-39-bullet-belt",
+        "tribe-40-back-patch-grande",
+        "tribe-50-spray-no-cinturao",
+        "tribe-57-messenger-bag",
+        "tribe-59-luva-grip-palm"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-modular. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "accessory-ring",
+      "itemIds": [
+        "street-38-anel-arame-duplo"
+      ],
+      "promptContract": "Mint 3D wearable family accessory-ring. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-drypack",
+      "itemIds": [
+        "street-04-cais-drypack"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-drypack. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-duffel",
+      "itemIds": [
+        "street-07-zona-norte-duffel"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-duffel. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-modular",
+      "itemIds": [
+        "street-05-gaveta-modular",
+        "tribe-22-mochila-shoe-holder",
+        "tribe-53-mochila-termica-cubo"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-modular. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-rolltop",
+      "itemIds": [
+        "street-01-lastro-rolltop-28l"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-rolltop. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-sling",
+      "itemIds": [
+        "street-03-viaduto-sling"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-sling. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-tote",
+      "itemIds": [
+        "street-06-mala-de-feira"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-tote. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "backpack-triple-pocket",
+      "itemIds": [
+        "street-02-porto-triple-pocket"
+      ],
+      "promptContract": "Mint 3D wearable family backpack-triple-pocket. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "bermuda-shorts",
+      "itemIds": [
+        "private-bermuda-jeans",
+        "private-bermuda-blocos",
+        "private-bermuda-quadra"
+      ],
+      "promptContract": "Mint 3D wearable family bermuda-shorts. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "boot",
+      "itemIds": [
+        "private-bota-combate",
+        "street-11-bota-comandante"
+      ],
+      "promptContract": "Mint 3D wearable family boot. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "boxy-tee",
+      "itemIds": [
+        "street-31-crew-refletivo",
+        "street-33-kimono-urbano",
+        "street-34-polo-termica",
+        "street-36-camiseta-prova-quadro",
+        "polit-01-estrela-chapada",
+        "polit-06-ceifador-sem-logo",
+        "polit-08-mae-cheia-reforma-agraria-popular",
+        "polit-10-perfil-boina-estrela-silhueta",
+        "polit-11-guerrilheiro-latam",
+        "polit-13-22-gigante-urna",
+        "polit-17-coelho-da-sorte-22",
+        "polit-18-estrela-azul",
+        "polit-19-maos-livres",
+        "polit-21-pomba-ufanista-parodia",
+        "polit-22-abelha-social",
+        "polit-26-fantasma-do-faccao-zero",
+        "tribe-11-top-renda-vitoriana"
+      ],
+      "promptContract": "Mint 3D wearable family boxy-tee. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "cargo-pants",
+      "itemIds": [
+        "private-calca-cargo",
+        "private-calca-asfalto",
+        "private-calca-jeans",
+        "tribe-04-calca-baggy-desgaste",
+        "tribe-06-calca-bondage-tartan",
+        "tribe-15-jeans-baggy-oversize",
+        "tribe-29-cargo-modular-straps",
+        "tribe-35-skinny-c-studded-belt",
+        "tribe-58-calca-barra-enrolada"
+      ],
+      "promptContract": "Mint 3D wearable family cargo-pants. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "chunky-runner",
+      "itemIds": [
+        "private-tenis-molas",
+        "private-tenis-onda",
+        "street-08-trilha-urbana-xt-ours",
+        "street-10-concreto-runner",
+        "tribe-19-sneaker-tn-variant",
+        "tribe-21-sneaker-limitado",
+        "tribe-25-sneaker-retro-runner"
+      ],
+      "promptContract": "Mint 3D wearable family chunky-runner. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "eyewear-frame",
+      "itemIds": [
+        "street-21-mascara-clip",
+        "street-22-lote-vintage-ponto"
+      ],
+      "promptContract": "Mint 3D wearable family eyewear-frame. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "eyewear-safety",
+      "itemIds": [
+        "street-23-escudo-lateral"
+      ],
+      "promptContract": "Mint 3D wearable family eyewear-safety. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "eyewear-visor",
+      "itemIds": [
+        "street-24-visor-brasa"
+      ],
+      "promptContract": "Mint 3D wearable family eyewear-visor. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "eyewear-wrap",
+      "itemIds": [
+        "street-20-lente-blindada",
+        "tribe-47-oculos-blade-thin"
+      ],
+      "promptContract": "Mint 3D wearable family eyewear-wrap. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-balaclava",
+      "itemIds": [
+        "street-17-passamontanha-fenda",
+        "tribe-55-balaclava-sob-capacete"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-balaclava. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-beanie",
+      "itemIds": [
+        "street-18-gorro-circulo",
+        "tribe-42-tam-rasta-dreads",
+        "tribe-43-tuque-verde-amarelo-vermelho"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-beanie. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-boina",
+      "itemIds": [
+        "street-16-boina-operaria"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-boina. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-bucket",
+      "itemIds": [
+        "street-19-bucket-duas-aguas",
+        "tribe-31-bucket-hat"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-bucket. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-hair",
+      "itemIds": [
+        "tribe-34-franja-lateral",
+        "tribe-41-cabelo-longo-headbanger"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-hair. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-helmet",
+      "itemIds": [
+        "tribe-54-capacete-stickers"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-helmet. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "headwear-trucker",
+      "itemIds": [
+        "private-bone-brasil",
+        "private-bone-treta",
+        "private-bone-canarinho",
+        "private-bone-respawn",
+        "street-14-divisa-6-paineis",
+        "street-15-quepe-trucker-malha",
+        "polit-03-trabalhador-13",
+        "polit-15-bone-22",
+        "polit-16-aguia-grafica-parodia",
+        "polit-20-martelo-e-espiga-neutro",
+        "polit-23-coroa-bossal-parodia",
+        "polit-28-bone-espiga-da-terra",
+        "tribe-02-trucker-cap-c-stickers-under-brim",
+        "tribe-14-snapback",
+        "tribe-17-du-rag-inner",
+        "tribe-45-bone-cetim-estonado",
+        "tribe-48-cap-peca-tag-pixo",
+        "tribe-49-marker-atraz-orelha",
+        "tribe-56-cycling-cap"
+      ],
+      "promptContract": "Mint 3D wearable family headwear-trucker. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "low-sneaker",
+      "itemIds": [
+        "private-tenis-disco",
+        "street-09-galeiro-low",
+        "street-12-quadra-82",
+        "street-13-pisada-leve",
+        "tribe-01-sneaker-vulc-gasto",
+        "tribe-16-sneaker-shell-toe",
+        "tribe-23-lace-swap-neon"
+      ],
+      "promptContract": "Mint 3D wearable family low-sneaker. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "oversized-tee",
+      "itemIds": [
+        "private-camiseta-nordeste",
+        "private-camiseta-sul",
+        "private-camiseta-centro-oeste",
+        "private-camiseta-norte",
+        "private-camiseta-sudeste",
+        "private-camiseta-brasil",
+        "private-camiseta-respawn",
+        "private-camiseta-treta",
+        "private-camiseta-coro",
+        "private-camiseta-canarinho",
+        "street-32-overprint-manga-longa",
+        "street-35-flanela-xadrez-proprio",
+        "polit-04-sapato-vermelho-parodia",
+        "polit-12-che-parodia-cereal",
+        "polit-24-urna-falante",
+        "tribe-30-tee-smiley-parodia",
+        "tribe-36-band-tee-ficticia",
+        "tribe-44-tee-sound-system-ficticio",
+        "tribe-46-jersey-time-baile"
+      ],
+      "promptContract": "Mint 3D wearable family oversized-tee. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    },
+    {
+      "geometryFamily": "shell-jacket",
+      "itemIds": [
+        "street-25-frentes-paralelas",
+        "street-26-bussola-falsa",
+        "street-27-chore-lona",
+        "street-28-corte-alemao-track",
+        "street-29-anorak-meia-zip",
+        "street-30-bomber-reversible",
+        "tribe-03-hoodie-workwear-gasto",
+        "tribe-05-jaqueta-safety-pins",
+        "tribe-09-trench-couro-longo",
+        "tribe-18-track-jacket-listras",
+        "tribe-20-puffer-vest",
+        "tribe-24-parka-tecnica-c-badge",
+        "tribe-27-hardshell-jacket",
+        "tribe-38-battle-jacket-kutte",
+        "tribe-51-jaqueta-custom-paint",
+        "tribe-52-jacket-termica-reflexiva"
+      ],
+      "promptContract": "Mint 3D wearable family shell-jacket. Parameterize fit per catalog fitStrategy. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics. Produce a GLB only after credits are available and submission is explicitly authorized."
+    }
+  ],
+  "jobs": [
+    {
+      "itemId": "private-bone-brasil",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné O Brasil é dos brasileiros: Bordado branco em duas linhas, bandeira lateral. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bone-treta",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné TRETA$: Medalhão T$ dourado e costuras douradas. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bone-canarinho",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné Canarinho: Patch de pássaro amarelo zangado e aba verde. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bone-respawn",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné Respawn Brasil: Mapa do Brasil com controle e mira bordados. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-nordeste",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Meu país é o Nordeste: Grande ilustração de cordel/xilogravura: chapéu de cangaceiro, sanfona, cactus, sol e paisagem. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-sul",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Meu país é o Sul: Grande ilustração de araucária, cuia, morros e pôr do sol. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-centro-oeste",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Meu país é o Centro-Oeste: Grande ilustração de arara, onça e árvore do Cerrado. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-norte",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Meu país é o Norte: Grande ilustração de tucano, boto, rio e vitória-régia. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-sudeste",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Meu país é o Sudeste: Grande cartaz ilustrado urbano e costeiro; ampliar a diversidade além do Rio na próxima revisão. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-brasil",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Feito no Brasil: Mapa do Brasil preenchido por flores, arara, casas e paisagem. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-respawn",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Respawn Brasil: Controle verde/amarelo, ilha, palmeiras e estrelas. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-treta",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Não é bug, é treta: Besouro com capacete e controle, explosão gráfica e pixels. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-coro",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Coro Solto: Megafone, notas musicais, casas e confetes. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-camiseta-canarinho",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Canarinho de plantão: Pássaro amarelo com colete azul, folhagem e explosão gráfica. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-calca-cargo",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calça Cargo Cerrado: Cargo verde-oliva, bolsos largos, joelhos articulados e folha bordada. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-calca-asfalto",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calça Asfalto: Cargo grafite, bolsos largos, faixa cinza e etiqueta T$. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-calca-jeans",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calça Jeans de Rua: Jeans largo azul com costuras claras e sol bordado. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bermuda-jeans",
+      "geometryFamily": "bermuda-shorts",
+      "prompt": "Mint 3D wearable, geometry family bermuda-shorts. Create Bermuda Jeans: Bermuda jeans clara com grandes bolsos cargo. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bermuda-blocos",
+      "geometryFamily": "bermuda-shorts",
+      "prompt": "Mint 3D wearable, geometry family bermuda-shorts. Create Bermuda Bloco Brasil: Bermuda amarela com painel lateral verde/azul e folhas. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bermuda-quadra",
+      "geometryFamily": "bermuda-shorts",
+      "prompt": "Mint 3D wearable, geometry family bermuda-shorts. Create Bermuda de Quadra: Bermuda de basquete roxa, painel lilás/turquesa e cordão claro. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-bota-combate",
+      "geometryFamily": "boot",
+      "prompt": "Mint 3D wearable, geometry family boot. Create Bota de Combate: Bota alta de combate preta/oliva, cadarço e sola tratorada. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-tenis-molas",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Tênis Molas: Tênis prata/preto com colunas vermelhas de amortecimento no calcanhar; sem logotipo comercial. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-tenis-onda",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Tênis Onda: Tênis preto/violeta com sola ondulada vazada; sem logotipo comercial. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "private-tenis-disco",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Tênis Disco: Tênis preto/lima com disco no peito do pé e cabos; sem logotipo comercial. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-01-lastro-rolltop-28l",
+      "geometryFamily": "backpack-rolltop",
+      "prompt": "Mint 3D wearable, geometry family backpack-rolltop. Create Lastro Rolltop 28L: gorpcore, Cordura 500D reciclada, tubular rolltop, cinza-chumbo+verde-musgo, custo médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-02-porto-triple-pocket",
+      "geometryFamily": "backpack-triple-pocket",
+      "prompt": "Mint 3D wearable, geometry family backpack-triple-pocket. Create Porto Triple-Pocket: streetwear clássico, lona encerada, retangular rígida, bege+preto, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-03-viaduto-sling",
+      "geometryFamily": "backpack-sling",
+      "prompt": "Mint 3D wearable, geometry family backpack-sling. Create Viaduto Sling: skate BR, nylon ripstop, triângulo macio, turquesa+laranja queimado, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-04-cais-drypack",
+      "geometryFamily": "backpack-drypack",
+      "prompt": "Mint 3D wearable, geometry family backpack-drypack. Create Cais Drypack: TPU soldado sem costura, pílula arredondada, amarelo-sinal+grafite, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-05-gaveta-modular",
+      "geometryFamily": "backpack-modular",
+      "prompt": "Mint 3D wearable, geometry family backpack-modular. Create Gaveta Modular: techwear, pouches velcro removíveis LOD separáveis, preto+vermelho sinal, alto, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-06-mala-de-feira",
+      "geometryFamily": "backpack-tote",
+      "prompt": "Mint 3D wearable, geometry family backpack-tote. Create Mala de Feira: tote-mochila híbrida, brim cru + cinta de caminhão, trapezoidal, cru+bordado original, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-07-zona-norte-duffel",
+      "geometryFamily": "backpack-duffel",
+      "prompt": "Mint 3D wearable, geometry family backpack-duffel. Create Zona Norte Duffel: hip-hop nacional, lona 12oz+couro vegetal, cápsula horizontal, marrom+preto, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-08-trilha-urbana-xt-ours",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Trilha Urbana XT-Ours: trail chunky, mesh ripstop+solado tratorado, laço-bota, cinza-geológico+verde-petróleo, alto, category reference, risco médio: não copiar tratorado Speedcross Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-09-galeiro-low",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Galeiro Low: skate vulcanizado, lona dupla+balseiro costurado, preto/branco+sola goma, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-10-concreto-runner",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Concreto Runner: runner retrô, mesh+suede overlays, solado escalonado, cinza-concreto+coral, alto, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-11-bota-comandante",
+      "geometryFamily": "boot",
+      "prompt": "Mint 3D wearable, geometry family boot. Create Bota Comandante: sneaker-boot techwear, Cordura+membrana, cano médio sem cadarço aparente, verde-oliva+preto fosco, alto, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-12-quadra-82",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Quadra 82: court low, couro full-grain perfurado, branco+vinho, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-13-pisada-leve",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Pisada Leve: slip-on recovery, malha elástica+EVA espesso, bege+azul-céu, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-14-divisa-6-paineis",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Divisa 6-Painéis: snapback curvo, sarja+bordado 3D puff ORIGINAL, preto+branco, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-15-quepe-trucker-malha",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Quepe Trucker Malha: espuma+mesh, aba reta painel alto, rosa choque+creme, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-16-boina-operaria",
+      "geometryFamily": "headwear-boina",
+      "prompt": "Mint 3D wearable, geometry family headwear-boina. Create Boina Operária: flat cap lona encerada+forro xadrez original, verde-musgo, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-17-passamontanha-fenda",
+      "geometryFamily": "headwear-balaclava",
+      "prompt": "Mint 3D wearable, geometry family headwear-balaclava. Create Passamontanha Fenda: balaclava fleece+poliamida, segunda-pele visor aberto, cinza-claro, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-18-gorro-circulo",
+      "geometryFamily": "headwear-beanie",
+      "prompt": "Mint 3D wearable, geometry family headwear-beanie. Create Gorro Círculo: beanie fisherman lã ribbed, mostarda, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-19-bucket-duas-aguas",
+      "geometryFamily": "headwear-bucket",
+      "prompt": "Mint 3D wearable, geometry family headwear-bucket. Create Bucket Duas Águas: bucket denim lavado+chainstitch, índigo desbotado, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-20-lente-blindada",
+      "geometryFamily": "eyewear-wrap",
+      "prompt": "Mint 3D wearable, geometry family eyewear-wrap. Create Lente Blindada: wrap single-lens esportivo, policarbonato espelhado, médio, category reference, risco MÉDIO: trade dress category reference proibido Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-21-mascara-clip",
+      "geometryFamily": "eyewear-frame",
+      "prompt": "Mint 3D wearable, geometry family eyewear-frame. Create Máscara Clip: acetato+lente clip magnética, retangular fina, preto translúcido, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-22-lote-vintage-ponto",
+      "geometryFamily": "eyewear-frame",
+      "prompt": "Mint 3D wearable, geometry family eyewear-frame. Create Lote Vintage Ponto: acetato redondo keyhole+rebite, âmbar+verde-oliva, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-23-escudo-lateral",
+      "geometryFamily": "eyewear-safety",
+      "prompt": "Mint 3D wearable, geometry family eyewear-safety. Create Escudo Lateral: safety com side-shields removíveis, grafite+fumê, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-24-visor-brasa",
+      "geometryFamily": "eyewear-visor",
+      "prompt": "Mint 3D wearable, geometry family eyewear-visor. Create Visor Brasa: visor de headband sem haste, lente laranja, médio, category reference, risco MÉDIO: não usar goggle-hood category reference. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-25-frentes-paralelas",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Frentes Paralelas: dual-zip shell 3L semitransparente+reflexivo soldado, capuz casulo oversize, preto+prata, alto, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-26-bussola-falsa",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Bússola Falsa: jaqueta técnica badge velcro genérico, nylon metalizado, boxy capuz escondido, verde-petróleo, médio, category reference, risco ALTO: bússola category reference proibida — patch geométrico original Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-27-chore-lona",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Chore Lona: chore coat duck canvas lavado, boxy 3 bolsos colarinho veludo, bege+azul-ferrugem, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-28-corte-alemao-track",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Corte Alemão Track: track top tricô técnico gola alta, faixas ombro-a-ombro, azul-marinho+branco, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-29-anorak-meia-zip",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Anorak Meia-Zip: pullover ripstop+fleece, bolso canguru grande, violeta+cinza, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-30-bomber-reversible",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Bomber Reversible: MA-1 reversível liso/estampado original, verde-selva/laranja sinal, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-31-crew-refletivo",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Crew Refletivo: tee boxy 220gsm tinta refletiva original, preto+prata, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-32-overprint-manga-longa",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Overprint Manga Longa: L/S serigrafia dupla, 180gsm, branco+roxo, baixo, category reference, risco médio: estilo drop, não logo Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-33-kimono-urbano",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Kimono Urbano: noragi sashiko+botões osso vegetal, índigo, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-34-polo-termica",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Polo Térmica: polo técnica malha seca reciclada, slim punho franzido, verde-futebol+branco, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-35-flanela-xadrez-proprio",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Flanela Xadrez-próprio: flannel overshoot flanela pesada xadrez proprietário, terracota+carvão, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-36-camiseta-prova-quadro",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Camiseta Prova-Quadro: tee com painel de lona no peito p/ grafite aplicável, UV-mapa, cru+natural, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-37-corrente-suspensa",
+      "geometryFamily": "accessory-chain",
+      "prompt": "Mint 3D wearable, geometry family accessory-chain. Create Corrente Suspensa: chunky zamac banhado elos retangulares V, prata+grafite, médio, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-38-anel-arame-duplo",
+      "geometryFamily": "accessory-ring",
+      "prompt": "Mint 3D wearable, geometry family accessory-ring. Create Anel Arame Duplo: band ring prata 925 oxidada, prata escurecida, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-39-cinto-fita-tecnica",
+      "geometryFamily": "accessory-belt",
+      "prompt": "Mint 3D wearable, geometry family accessory-belt. Create Cinto Fita-Técnica: webbing nylon+fivela alumínio usinado, preto+crua, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-40-oculos-porta",
+      "geometryFamily": "accessory-case",
+      "prompt": "Mint 3D wearable, geometry family accessory-case. Create Óculos-Porta: eyewear-case de peito couro vegetal+cordinha, caramelo, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-41-pulseira-corda-nautica",
+      "geometryFamily": "accessory-bracelet",
+      "prompt": "Mint 3D wearable, geometry family accessory-bracelet. Create Pulseira Corda-Náutica: paracord 550 trança cobra, laranja+cinza, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-42-brinco-gancho-frio",
+      "geometryFamily": "accessory-earring",
+      "prompt": "Mint 3D wearable, geometry family accessory-earring. Create Brinco Gancho Frio: argola assimétrica 28/14mm latão banhado, dourado envelhecido, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "street-43-mascara-pano-vizinhanca",
+      "geometryFamily": "accessory-bandana",
+      "prompt": "Mint 3D wearable, geometry family accessory-bandana. Create Máscara-Pano Vizinhança: bandana paisley ORIGINAL redesenhado, vermelho tijolo+creme, baixo, category reference Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-01-estrela-chapada",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Estrela Chapada: estrela vermelha 5 pontas genérica; t-shirt boxy. estrela 5 pontas é símbolo pré-existente de domínio público; sem sigla \"PT\" Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-03-trabalhador-13",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Trabalhador 13: número 13 tipografia de urna; dad-cap 5 painéis. número de legenda é atribuição do TSE, não marca; tipografia própria Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-04-sapato-vermelho-parodia",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Sapato Vermelho (paródia): \"sapato de luta\" arquetipo; oversized. paródia original sem logo Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-06-ceifador-sem-logo",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Ceifador Sem Logo: ceifador/foice genérica; regular fit. foice isolada é símbolo histórico PD; composição distinta do logo oficial Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-08-mae-cheia-reforma-agraria-popular",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Mãe Cheia (reforma agrária popular): mulher com cesta e espigas; fit. composição original sem referência gráfica do MST Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-10-perfil-boina-estrela-silhueta",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Perfil Boina Estrela (silhueta): silhueta própria de combatente com boina de 1 estrela; boxy. silhueta autoral de rosto inexistente — leitura política sem copiar foto Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-11-guerrilheiro-latam",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Guerrilheiro Latam: combatente andino original com poncho; t-shirt. personagem original, motivo histórico genérico Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-12-che-parodia-cereal",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Che Paródia Cereal: \"combatente da fome\"—pacote de cereal com silhueta; oversized. paródia de iconografia, sem foto nem marca real Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-13-22-gigante-urna",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create 22 Gigante Urna: numeral 22 tipografia própria estilo urna eletrônica; t-shirt. número é atribuição TSE, não marca; arte tipográfica própria Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-15-bone-22",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné 22: bordado numeral 22; snapback. idem 13 Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-16-aguia-grafica-parodia",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Águia Gráfica (paródia): águia geométrica original segurando prato de comida; 5 painéis. águia estilizada própria, leitura direita sem logo Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-17-coelho-da-sorte-22",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Coelho da Sorte 22: mascote coelho com número 22; t-shirt. personagem original de sátira Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-18-estrela-azul",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Estrela Azul: estrela 5 pontas azul com cifrão discreto; t-shirt. estrela genérica PD em cor divergente Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-19-maos-livres",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Mãos Livres: mão aberta com engrenagem; regular. composição autoral Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-20-martelo-e-espiga-neutro",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Martelo e Espiga Neutro: martelo+espiga genéricos em bordado minimal; dad-cap. motivo histórico PD, composição minimal própria Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-21-pomba-ufanista-parodia",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Pomba Ufanista (paródia): pomba de boina e monoculo; boxy. sátira do ufanismo ambos os lados Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-22-abelha-social",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Abelha Social: colmeia com braços; t-shirt. arquetipo de coletividade, arte própria Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-23-coroa-bossal-parodia",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Coroa Bossal (paródia): coroa de lata com fita \"democracia\"; 5 painéis. paródia sem brasão oficial da República Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-24-urna-falante",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Urna Falante: urna eletrônica com boca; oversized. máquina estilizada própria, não logo TSE; evita cores oficiais (Lei category reference art. 38) Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-26-fantasma-do-faccao-zero",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Fantasma do Facção Zero: fantasma original com terminal; hoodie. mascote autoral de contracultura digital Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "polit-28-bone-espiga-da-terra",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Boné Espiga da Terra: Boné de sarja terra com espiga autoral minimalista, sem sigla, bandeira, mapa, casal ou desenho oficial do MST. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-01-sneaker-vulc-gasto",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Sneaker vulc gasto: sola flat vulcanizada, toe esfarrapado. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-02-trucker-cap-c-stickers-under-brim",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Trucker cap c/ stickers under-brim: tela mesh, aba curta, adesivos ficticios. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-03-hoodie-workwear-gasto",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Hoodie workwear gasto: ombro frayed, graphic shop ficticio. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-04-calca-baggy-desgaste",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calca baggy desgaste: wide leg, hem rasgado. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-05-jaqueta-safety-pins",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Jaqueta safety pins: pins oversize, remendos. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-06-calca-bondage-tartan",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calca bondage tartan: alcas argolas D, tartan vermelho. Legal/cultural risk note: MEDIO (tartan clan registrado; usar generico). Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-07-bracelete-rebites",
+      "geometryFamily": "accessory-bracelet",
+      "prompt": "Mint 3D wearable, geometry family accessory-bracelet. Create Bracelete rebites: fileiras de studs. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-08-wallet-cadeia",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Wallet cadeia: carteira c/ corrente no cinto. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-09-trench-couro-longo",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Trench couro longo: lapela alta, comprido. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-10-colar-ankh",
+      "geometryFamily": "accessory-chain",
+      "prompt": "Mint 3D wearable, geometry family accessory-chain. Create Colar ankh: medalhao ankh prata. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-11-top-renda-vitoriana",
+      "geometryFamily": "boxy-tee",
+      "prompt": "Mint 3D wearable, geometry family boxy-tee. Create Top renda vitoriana: gola alta, babados. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-12-face-overlay-palido",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Face overlay palido: base branca, olho escuro. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-13-corrente-cubana-chunky",
+      "geometryFamily": "accessory-chain",
+      "prompt": "Mint 3D wearable, geometry family accessory-chain. Create Corrente cubana chunky: elos grossos, pingente ficticio. Legal/cultural risk note: MEDIO (pingente ficticio). Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-14-snapback",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Snapback: aba reta, logo ficticio. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-15-jeans-baggy-oversize",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Jeans baggy oversize: cintura baixa, volume. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-16-sneaker-shell-toe",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Sneaker shell-toe: toe-shell bipartida, listras parodicas (nunca 3-stripes). Legal/cultural risk note: MEDIO (3-stripes trademark). Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-17-du-rag-inner",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Du-rag inner: tecido amarrado c/ cauda. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-18-track-jacket-listras",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Track jacket listras: listras manga, zip. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-19-sneaker-tn-variant",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Sneaker TN-variant: wave overlay, bolha air exagerada. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-20-puffer-vest",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Puffer vest: quilt, gola alta. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-21-sneaker-limitado",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Sneaker limitado: colorway exclusiva, hang tag. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-22-mochila-shoe-holder",
+      "geometryFamily": "backpack-modular",
+      "prompt": "Mint 3D wearable, geometry family backpack-modular. Create Mochila shoe-holder: compartimento rigido lateral exibe sneaker. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-23-lace-swap-neon",
+      "geometryFamily": "low-sneaker",
+      "prompt": "Mint 3D wearable, geometry family low-sneaker. Create Lace swap neon: cadarco neon contrastante, aglet oversize. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-24-parka-tecnica-c-badge",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Parka tecnica c/ badge: badge circular removivel ficticio, mangas tricot. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-25-sneaker-retro-runner",
+      "geometryFamily": "chunky-runner",
+      "prompt": "Mint 3D wearable, geometry family chunky-runner. Create Sneaker retro runner: sole gum, suede. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-26-scarf-clube-ficticio",
+      "geometryFamily": "accessory-chain",
+      "prompt": "Mint 3D wearable, geometry family accessory-chain. Create Scarf clube ficticio: trico, listras clube ficticio. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-27-hardshell-jacket",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Hardshell jacket: storm hood, tapes, cinches. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-28-chest-rig-modular",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Chest rig modular: pouches, buckles frontais. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-29-cargo-modular-straps",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Cargo modular straps: daisy chains, bolsos clip. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-30-tee-smiley-parodia",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Tee smiley parodia: smiley desgastado, tie-dye neon. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-31-bucket-hat",
+      "geometryFamily": "headwear-bucket",
+      "prompt": "Mint 3D wearable, geometry family headwear-bucket. Create Bucket hat: aba curta, estampa glow. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-32-apito-em-cordao",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Apito em cordao: whistle glow-strap. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-33-kandi-bracelets",
+      "geometryFamily": "accessory-bracelet",
+      "prompt": "Mint 3D wearable, geometry family accessory-bracelet. Create Kandi bracelets: stack de contas coloridas. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-34-franja-lateral",
+      "geometryFamily": "headwear-hair",
+      "prompt": "Mint 3D wearable, geometry family headwear-hair. Create Franja lateral: franja cobre um olho, espinhada. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-35-skinny-c-studded-belt",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Skinny c/ studded belt: appena justa, cinto duplo rebites. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-36-band-tee-ficticia",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Band tee ficticia: logo fictional, mescla. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-37-luva-dedos-cortados",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Luva dedos cortados: listrada, meios-dedos. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-38-battle-jacket-kutte",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Battle jacket kutte: colete denim c/ patches. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-39-bullet-belt",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Bullet belt: cartuchos interligados. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-40-back-patch-grande",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Back patch grande: bordado crurio/serpente ficticio. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-41-cabelo-longo-headbanger",
+      "geometryFamily": "headwear-hair",
+      "prompt": "Mint 3D wearable, geometry family headwear-hair. Create Cabelo longo headbanger: mesh volume posterior. Legal/cultural risk note: NAO-AVALIADO-INFERENCIA. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-42-tam-rasta-dreads",
+      "geometryFamily": "headwear-beanie",
+      "prompt": "Mint 3D wearable, geometry family headwear-beanie. Create Tam rasta dreads: tam oversized c/ dreads sinteticos. Legal/cultural risk note: MEDIO cultural. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-43-tuque-verde-amarelo-vermelho",
+      "geometryFamily": "headwear-beanie",
+      "prompt": "Mint 3D wearable, geometry family headwear-beanie. Create Tuque verde-amarelo-vermelho: listras rasta. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-44-tee-sound-system-ficticio",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Tee sound-system ficticio: logo fictional, text DUB PLATE. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-45-bone-cetim-estonado",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Bone cetim estonado: aba reta cetim, bordado strass ficticio. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-46-jersey-time-baile",
+      "geometryFamily": "oversized-tee",
+      "prompt": "Mint 3D wearable, geometry family oversized-tee. Create Jersey time baile: numero/nome fictional, cores vibrantes. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-47-oculos-blade-thin",
+      "geometryFamily": "eyewear-wrap",
+      "prompt": "Mint 3D wearable, geometry family eyewear-wrap. Create Oculos blade thin: lente unica estreita metal. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-48-cap-peca-tag-pixo",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Cap/peca tag pixo: caligrafia marginal fictional vertical. Legal/cultural risk note: MEDIO cultural. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-49-marker-atraz-orelha",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Marker atraz orelha: caneta nankin. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-50-spray-no-cinturao",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Spray no cinturao: lata ressecada, cap velho. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-51-jaqueta-custom-paint",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create Jaqueta custom paint: respingos e drips. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-52-jacket-termica-reflexiva",
+      "geometryFamily": "shell-jacket",
+      "prompt": "Mint 3D wearable, geometry family shell-jacket. Create jacket termica reflexiva: faixas alta-visibilidade, patch entrega. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-53-mochila-termica-cubo",
+      "geometryFamily": "backpack-modular",
+      "prompt": "Mint 3D wearable, geometry family backpack-modular. Create Mochila termica cubo: isolante grande c/ straps. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-54-capacete-stickers",
+      "geometryFamily": "headwear-helmet",
+      "prompt": "Mint 3D wearable, geometry family headwear-helmet. Create Capacete stickers: fechado, visor tinted, adesivos. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-55-balaclava-sob-capacete",
+      "geometryFamily": "headwear-balaclava",
+      "prompt": "Mint 3D wearable, geometry family headwear-balaclava. Create Balaclava sob capacete: mesh inner. Legal/cultural risk note: MEDIO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-56-cycling-cap",
+      "geometryFamily": "headwear-trucker",
+      "prompt": "Mint 3D wearable, geometry family headwear-trucker. Create Cycling cap: aba curta frontal, laterais orelha. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "deferred-headwear-fit",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-57-messenger-bag",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Messenger bag: faixa transversal grande buckle. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-58-calca-barra-enrolada",
+      "geometryFamily": "cargo-pants",
+      "prompt": "Mint 3D wearable, geometry family cargo-pants. Create Calca barra enrolada: cuff no tornozelo. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    },
+    {
+      "itemId": "tribe-59-luva-grip-palm",
+      "geometryFamily": "accessory-modular",
+      "prompt": "Mint 3D wearable, geometry family accessory-modular. Create Luva grip palm: palm reforado, semi-finger. Legal/cultural risk note: BAIXO. Low-poly game-ready fit proxy, neutral A-pose, clean topology, separate editable materials, no body included. NO LOGOS, NO TRADE DRESS, NO PROTECTED EMBLEMS; use only original fictional graphics.",
+      "submissionStatus": "not-submitted-no-credits",
+      "providerJobId": null,
+      "outputAsset": null,
+      "estimatedCost": null,
+      "chargedCost": 0
+    }
+  ],
+  "excluded": [
+    {
+      "itemId": "private-bone-maga",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "private-bone-master",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "private-bone-sus",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "private-bone-gotinha",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "private-camiseta-sus",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "private-camiseta-gotinha",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-02-pt-oficial-estrela-sigla",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-05-bone-terra-vermelha",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-07-bandeira-luta-pela-terra",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-09-korda-retrato-direto",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-14-pl-logo-oficial",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-25-mascara-anonima-neutra",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    },
+    {
+      "itemId": "polit-27-pl-22-oficial-bone",
+      "rightsStatus": "permission-needed",
+      "reason": "written-rights-clearance-required",
+      "asset": null
+    }
+  ],
+  "fitPolicy": {
+    "status": "body-specific-profiles-required",
+    "headwear": "deferred-per-body",
+    "unmeasuredResult": "do-not-submit"
+  }
+}

@@ -1,0 +1,363 @@
+// Layout of the editor: top bar, tool column, view, side column, status bar
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.es-root {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 340px;
+  grid-template-rows: var(--td-h-topbar) minmax(0, 1fr) 30px;
+  grid-template-areas:
+    'top top top'
+    'tools view side'
+    'status status status';
+  width: 100%;
+  height: 100%;
+}
+
+.es-top {
+  grid-area: top;
+  position: relative;
+  z-index: 3;
+}
+
+.es-name {
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-2);
+  max-width: 34vw;
+  min-width: 0;
+}
+
+.es-save {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.es-redo td-icon {
+  transform: scaleX(-1);
+}
+
+.es-file {
+  position: relative;
+}
+
+.es-file-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  width: 260px;
+  padding: var(--td-sp-1);
+}
+
+.es-sym {
+  display: flex;
+  align-items: center;
+  gap: var(--td-sp-2);
+}
+
+.es-spacer {
+  flex: 1 1 auto;
+}
+
+.es-tools {
+  grid-area: tools;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--td-sp-2) var(--td-sp-1);
+  overflow-y: auto;
+  background: var(--td-bg-surface);
+}
+
+.es-tools-head {
+  padding: var(--td-sp-2) 0 2px;
+  text-align: center;
+  font-size: var(--td-fs-micro);
+  opacity: 0.6;
+
+  &:first-child {
+    padding-top: 0;
+  }
+}
+
+// Icon over its name: a tool is found by what it says, not by guessing its picture
+.es-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--td-radius);
+  background: none;
+  color: inherit;
+  opacity: 0.78;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    background: color-mix(in srgb, currentColor 7%, transparent);
+  }
+
+  &[aria-pressed='true'] {
+    opacity: 1;
+    color: var(--td-brass-light);
+    border-color: color-mix(in srgb, var(--td-brass-light) 45%, transparent);
+    background: color-mix(in srgb, var(--td-brass-light) 10%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--td-brass-light);
+    outline-offset: 1px;
+  }
+}
+
+.es-tool-name {
+  font-size: var(--td-fs-small);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.es-view {
+  grid-area: view;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.es-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  cursor: crosshair;
+}
+
+.es-box {
+  position: fixed;
+  z-index: 2;
+  border: 1px dashed var(--td-brass-light);
+  pointer-events: none;
+}
+
+.es-lasso {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+
+  polygon {
+    fill: color-mix(in srgb, var(--td-brass-light) 12%, transparent);
+    stroke: var(--td-brass-light);
+    stroke-dasharray: 4 3;
+  }
+}
+
+.es-minimap {
+  position: absolute;
+  left: var(--td-sp-3);
+  bottom: var(--td-sp-3);
+}
+
+.es-check {
+  position: absolute;
+  top: var(--td-sp-3);
+  left: var(--td-sp-3);
+  width: min(420px, calc(100% - 24px));
+}
+
+.es-flash {
+  position: absolute;
+  top: var(--td-sp-3);
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.es-side {
+  grid-area: side;
+  min-height: 0;
+}
+
+.es-side {
+  display: flex;
+  flex-direction: column;
+}
+
+.es-side-tabs {
+  flex: 0 0 auto;
+  margin: var(--td-sp-2) var(--td-sp-2) 0;
+
+  > button {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.es-help-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.es-help {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  z-index: 21;
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  transform: translateX(-50%);
+}
+
+.es-help-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--td-sp-4) var(--td-sp-5);
+}
+
+.es-help-keys {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--td-sp-1) var(--td-sp-5);
+
+  > .td-section,
+  > .td-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+.es-key {
+  min-width: 44px;
+}
+
+.es-help-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-sp-1);
+}
+
+.es-status {
+  grid-area: status;
+}
+
+// The tour: its card above the status bar, a ring around what the step points at
+.es-tour {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  z-index: 25;
+  width: min(520px, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+.es-tour-ring {
+  position: fixed;
+  z-index: 24;
+  border: 2px solid var(--td-brass-light);
+  border-radius: var(--td-radius);
+  pointer-events: none;
+}
+
+.es-help-tabs {
+  margin-left: auto;
+}
+
+.es-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--td-sp-3) var(--td-sp-5);
+
+  > .td-section {
+    grid-column: 1 / -1;
+  }
+}
+
+.es-guide-topic {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--td-sp-1);
+
+  > h4 {
+    margin: 0;
+  }
+
+  > p {
+    margin: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .es-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.es-error {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  z-index: 26;
+  width: min(720px, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+.es-options .td-side-body {
+  position: relative;
+}
+
+// Off panels stay laid out but unseen, so showing one costs no layout of its own
+.es-panel.is-off {
+  position: absolute;
+  inset: 0 0 auto;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+// Mouse and view keys at hand in the corner of the view (the left button is always the tool)
+.es-legend {
+  position: absolute;
+  right: var(--td-sp-3);
+  bottom: var(--td-sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 26px 8px 10px;
+  font-size: var(--td-fs-small);
+  pointer-events: auto;
+}
+
+.es-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.es-legend-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.es-legend-open {
+  position: absolute;
+  right: var(--td-sp-3);
+  bottom: var(--td-sp-3);
+}

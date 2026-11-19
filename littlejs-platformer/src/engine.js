@@ -1,0 +1,1197 @@
+/**
+ * LittleJS - The Tiny Fast JavaScript Game Engine
+ * MIT License - Copyright 2021 Frank Force
+ *
+ * Engine Features
+ * - Object oriented system with EngineObject base class
+ * - Automatic object lifecycle (update, physics, collision, rendering)
+ * - Engine helper classes: Vector2, Color, Timer, RandomGenerator
+ * - Hybrid rendering with WebGL batching and Canvas2D fallback
+ * - Audio system with wave, mp3, or ZzFX sound effects
+ * - Input system with keyboard, mouse, gamepad, and touch support
+ * - Tile layer rendering and collision detection
+ * - Particle effect system with emitters
+ * - Medal/achievement system with local storage
+ * - Comprehensive debug tools and visualizations
+ * - Fixed 60 FPS timestep with configurable time scale
+ * - Raycast and spatial query utilities
+ * - Plugin system for extending engine functionality
+ * - Start with engineInit() and provide your game callbacks
+ * @namespace Engine
+ */
+
+'use strict';
+
+/** Name of engine
+ *  @type {string}
+ *  @default
+ *  @memberof Engine */
+const engineName = 'LittleJS';
+
+/** Version of engine
+ *  @type {string}
+ *  @default
+ *  @memberof Engine */
+const engineVersion = '1.30.1';
+
+/** Frames per second to update
+ *  @type {number}
+ *  @default
+ *  @memberof Engine */
+const frameRate = 60;
+
+/** How many seconds the update covers: 1/60 with the fixed time step, or with engineVariableStep the time of the
+ *  display frame it runs on, times timeScale; while paused it keeps the last update's
+ *  @type {number}
+ *  @default 1/60
+ *  @memberof Engine */
+let timeDelta = 1/frameRate;
+
+/** Array containing all engine objects
+ *  @type {Array<EngineObject>}
+ *  @memberof Engine */
+let engineObjects = [];
+
+/** Array with only objects set to collide with other objects this frame (for optimization)
+ *  @type {Array<EngineObject>}
+ *  @memberof Engine */
+let engineObjectsCollide = [];
+
+// the same objects with the static ones last, the order 2D physics checks them in
+let engineObjectsCollideStaticLast = [];
+
+/** Current update frame, used to calculate time
+ *  @type {number}
+ *  @memberof Engine */
+let frame = 0;
+
+/** Current engine time since start in seconds
+ *  - Below 20 FPS it falls behind the clock, since a frame catches up at most 50 ms of updates, so a timer in
+ *    real seconds, one that must keep up on a slow device, goes by timeReal
+ *  @type {number}
+ *  @memberof Engine */
+let time = 0;
+
+/** Actual clock time since start in seconds (not affected by pause, timescale, or frame rate clamping; the debug speed keys scale it in debug builds)
+ *  @type {number}
+ *  @memberof Engine */
+let timeReal = 0;
+
+/** Is the game paused? Causes time and objects to not be updated
+ *  @type {boolean}
+ *  @default false
+ *  @memberof Engine */
+let paused = false;
+
+/** Get if game is paused
+ *  @return {boolean}
+ *  @memberof Engine */
+function getPaused() { return paused; }
+
+/** Set if game is paused
+ *  @param {boolean} [isPaused]
+ *  @memberof Engine */
+function setPaused(isPaused=true) { paused = isPaused; }
+
+// the update running now is frozen, paused or at a time scale of 0, so what follows game time holds
+let engineFrozenTick = false;
+
+/** Display frames per second, the browser's animation frames whether or not one drew, smoothed over about a
+ *  third of a second, in release builds too
+ *  @type {number}
+ *  @memberof Engine */
+let averageFPS = 0;
+
+// Engine internal variables
+let frameTimeLastMS = 0, frameTimeBufferMS = 0;
+
+// delta smoothing, after Time Delta Smoothing by Frank Force (2013): a frame is on screen for whole display frames,
+// so each delta is rounded to them and the rest is carried to the next, keeping the total real time; the frame
+// length is estimated from recent frames and kept internal, since the browser does not say what it is
+const frameDeltaHistory = [];
+let frameIntervalMS = 1e3 / 60, frameDeltaCarryMS = 0, frameDeltaCarryAverageMS = 0, frameDeltaSmoothing = true;
+function engineSmoothDelta(deltaMS)
+{
+    if (!(deltaMS > 0)) return 0;
+    if (deltaMS < 250) // a gap from a hidden tab is not a display frame
+    {
+        frameDeltaHistory.push(deltaMS);
+        frameDeltaHistory.length > 64 && frameDeltaHistory.shift();
+
+        // the frames each delta held are counted in the last estimate or in the lower quartile of the last 16,
+        // whichever the deltas fit better: the quartile is one frame even when a busy game misses most of them, and
+        // it takes over when the window moves to a display with another refresh rate, or the estimate went wrong
+        const recent = frameDeltaHistory.slice(-16).sort((a, b)=> a - b);
+        const [lastMS, lastOff] = engineFrameFit(frameIntervalMS);
+        const [quartileMS, quartileOff] = engineFrameFit(recent[recent.length >> 2]);
+        frameIntervalMS = lastOff <= quartileOff ? lastMS : quartileMS;
+
+        // deltas far from whole frames mean the display has no fixed refresh, with a margin so it does not flip
+        frameDeltaSmoothing = min(lastOff, quartileOff) < (frameDeltaSmoothing ? .2 : .12);
+    }
+
+    if (!frameDeltaSmoothing)
+    {
+        // deltas that are not whole frames of one length, like a variable refresh display, are the frame times
+        // as they are, with any carry paid, and smoothing starts over once they fit again
+        const rawMS = deltaMS + frameDeltaCarryMS;
+        frameDeltaCarryMS = min(rawMS, 0);
+        frameDeltaCarryAverageMS = 0;
+        return max(rawMS, 0);
+    }
+
+    // whole frames, 0 for one that came early or 2 after one was missed, the carry stays within half a frame; a
+    // little of its slow average is paid each frame, so jitter can not hold it at half a frame and flip every frame
+    const pullMS = frameDeltaCarryAverageMS / 32;
+    frameDeltaCarryMS += deltaMS;
+    const frames = round((frameDeltaCarryMS - pullMS) / frameIntervalMS);
+    if (frames < 1)
+        return 0; // the carry keeps it
+    const smoothMS = frames * frameIntervalMS + pullMS;
+    frameDeltaCarryMS -= smoothMS;
+    frameDeltaCarryAverageMS += (frameDeltaCarryMS - frameDeltaCarryAverageMS) / 32;
+    return smoothMS;
+}
+
+// fit the delta history as whole frames of about unitMS: the frame length is the least squares slope of time over
+// frames held, so jitter and whole ms timestamps average out, with how far the deltas are from whole frames
+function engineFrameFit(unitMS)
+{
+    let timeMS = 0, frames = 0, offMS = 0, sumF = 0, sumT = 0, sumFF = 0, sumFT = 0;
+    const count = frameDeltaHistory.length;
+    for (const d of frameDeltaHistory)
+    {
+        const held = max(1, round(d / unitMS));
+        timeMS += d;
+        frames += held;
+        offMS += abs(d - held * unitMS);
+        sumF += frames, sumT += timeMS, sumFF += frames * frames, sumFT += frames * timeMS;
+    }
+    const spread = count * sumFF - sumF * sumF;
+    return [spread ? (count * sumFT - sumF * sumT) / spread : unitMS, offMS / count / unitMS];
+}
+
+// where the fixed step's time counts from, moved when the variable step hands back so time goes on from there
+let timeFixedStart = 0, frameFixedStart = 0;
+let windowWidthLast = 0, windowHeightLast = 0, windowPixelRatioLast = 0;
+let engineUpdateInternal; // assigned by engineInit so engineStep can drive it
+let engineFrameScheduled = false; // a frame of the loop is asked for and has not run yet
+let engineFrameErrorLast; // the last error a release build's loop went on past, as text
+
+// the pairs of objects asked about a collision this update, so the other's own physics does not ask again: each
+// asker's others, with true for a pair both said to resolve, and false for one left overlapping, ignored or only
+// nudged apart; a map for each asker so the lookup stays quick when many objects pile up on one spot
+const engineObjectsCollidePairs = new Map;
+function engineObjectsCollidePairAnswer(asker, other)
+{ return engineObjectsCollidePairs.get(asker)?.get(other); }
+function engineObjectsCollidePairAdd(asker, other, resolve=false)
+{
+    let others = engineObjectsCollidePairs.get(asker);
+    others || engineObjectsCollidePairs.set(asker, others = new Map);
+    others.set(other, resolve);
+}
+
+// with this many solids or more, a mover finds what is near it through a grid of cells rather than checking every
+// solid, a big game's cost going from every pair to what is close; it resolves the same contacts in the same order,
+// so a game plays the same either way, and a few solids are quicker checked all
+let engineCollideGridMin = 64;
+// the grid for this update, {list, built}: the list of solids, and the grid made from it the first time a 2D mover
+// walks it, so a frame with no 2D mover, as 3D solids alone, makes none; built is each cell's solids, each solid's
+// cells, and each solid's place in the list, which the contacts are taken in; solids too big for cells are near
+// everything
+let engineCollideGrid;
+
+// true while engineObjectsUpdate runs every object's physics, so a 3D grid made for that pass is not used by an
+// updatePhysics a game calls by hand at another time, with objects moved since
+let engineObjectsPhysicsRunning = false;
+// called with each object once its updatePhysics is done, by a plugin that keeps solids of its own in a grid, as
+// the 3D plugin does, so a solid an override moved after the engine's physics is found where it is
+let engineObjectsPhysicsDone;
+
+// where each object that collides with solids was before this frame's moves, kept only when a one way solid is among
+// them, so a one way test goes by where both were whichever of the two updates first
+let engineObjectsOneWayStart;
+
+// the grid of a list of solids, its cells about twice a typical solid so most are in one to four
+function engineCollideGridBuild(list)
+{
+    let extent = 0;
+    for (const o of list)
+        extent += min(max(abs(o.size.x), abs(o.size.y)), 16) || 0; // a negative size is a mirrored one
+    const index = new Map;
+    const grid = {size: max(2 * extent / list.length, .5), cells: new Map, at: new Map, index, big: new Set,
+        seen: new Map, stamp: 0, byIndex: (a, b)=> index.get(a) - index.get(b)}; // what a query found, and its order
+    list.forEach((o, i)=> { index.set(o, i); engineCollideGridPlace(grid, o); });
+    return grid;
+}
+
+// the cells an object's box covers, first and last along x and y, in one kept array to read at once; a negative size
+// is a mirrored sprite of that size
+const engineCollideGridBox = [0, 0, 0, 0];
+function engineCollideGridCells(grid, o)
+{
+    const s = grid.size, w = abs(o.size.x) / 2, h = abs(o.size.y) / 2, box = engineCollideGridBox;
+    box[0] = floor((o.pos.x - w) / s), box[1] = floor((o.pos.y - h) / s);
+    box[2] = floor((o.pos.x + w) / s), box[3] = floor((o.pos.y + h) / s);
+    return box;
+}
+
+// whether a box is kept in its cells: not over 1024 of them, and within 2^31 cells of the origin, past which a cell
+// loop would not end, as ++ stops changing a number past 2^53, and the keys would not be exact; one with no finite
+// box does not fit either, and is near every mover
+const engineCollideGridFits = (x0, y0, x1, y1)=> (x1 - x0 + 1) * (y1 - y0 + 1) <= 1024 &&
+    abs(x0) < 2**31 && abs(y0) < 2**31 && abs(x1) < 2**31 && abs(y1) < 2**31;
+
+// put a solid in the cells its box covers now, out of those it was in; a box on a cell's edge is in both cells, so
+// solids that touch share one
+function engineCollideGridPlace(grid, o)
+{
+    if (!grid.index.has(o)) return;
+    const [x0, y0, x1, y1] = engineCollideGridCells(grid, o);
+    const big = !engineCollideGridFits(x0, y0, x1, y1);
+    const was = grid.at.get(o);
+    if (was && was[0] === x0 && was[1] === y0 && was[2] === x1 && was[3] === y1 && was[4] === big) return;
+    if (was && !was[4])
+        for (let x = was[0]; x <= was[2]; ++x)
+        for (let y = was[1]; y <= was[3]; ++y)
+        {
+            const cell = grid.cells.get(x * 1048576 + y);
+            cell.splice(cell.indexOf(o), 1);
+        }
+    grid.big.delete(o);
+    if (big)
+        grid.big.add(o);
+    else
+        for (let x = x0; x <= x1; ++x)
+        for (let y = y0; y <= y1; ++y)
+        {
+            const key = x * 1048576 + y;
+            const cell = grid.cells.get(key);
+            cell ? cell.push(o) : grid.cells.set(key, [o]);
+        }
+    grid.at.set(o, [x0, y0, x1, y1, big]);
+}
+
+// the solids a mover is near, after a place in the list, in list order, filled into near; each found once, by the
+// query's stamp
+function engineCollideGridNear(grid, o, after, near)
+{
+    const [x0, y0, x1, y1] = engineCollideGridCells(grid, o);
+    const stamp = ++grid.stamp;
+    near.length = 0;
+    for (const other of grid.big)
+        engineCollideGridAdd(grid, other, after, stamp, near);
+    if (engineCollideGridFits(x0, y0, x1, y1))
+    {
+        for (let x = x0; x <= x1; ++x)
+        for (let y = y0; y <= y1; ++y)
+        {
+            const cell = grid.cells.get(x * 1048576 + y);
+            if (cell)
+                for (const other of cell)
+                    engineCollideGridAdd(grid, other, after, stamp, near);
+        }
+    }
+    else
+        for (const other of grid.index.keys()) // a mover too big for cells is near everything
+            engineCollideGridAdd(grid, other, after, stamp, near);
+    near.sort(grid.byIndex);
+}
+
+// add a solid to what a query found, once, when it is after the place in the list
+function engineCollideGridAdd(grid, other, after, stamp, near)
+{
+    if (grid.seen.get(other) === stamp) return;
+    grid.seen.set(other, stamp);
+    grid.index.get(other) > after && near.push(other);
+}
+
+// the solids a mover checks, as checking every one would reach them: in list order, and found again from where it is
+// whenever its box has moved, as a push does, so a solid it is pushed into later in the list is still checked
+function* engineCollideGridWalk(o)
+{
+    const grid = engineCollideGrid.built ||= engineCollideGridBuild(engineCollideGrid.list);
+    let after = -1, x, y, w, h, k = 0;
+    const near = [];
+    for (;;)
+    {
+        if (o.pos.x !== x || o.pos.y !== y || o.size.x !== w || o.size.y !== h)
+        {
+            x = o.pos.x, y = o.pos.y, w = o.size.x, h = o.size.y;
+            engineCollideGridNear(grid, o, after, near);
+            k = 0;
+        }
+        if (k >= near.length) return;
+        const other = near[k++];
+        after = grid.index.get(other);
+        yield other;
+    }
+}
+let engineInitialized = false; // engineInit ran, with or without a canvas
+let engineInitDone; // the promise the first engineInit hands back, which a second call hands back too
+// the loads startup waits for, each counted for the loading screen, and how many are done; undefined once the game
+// loop starts
+let engineLoads, engineLoadsDone = 0;
+let engineObjectsUpdateCount = 0; // passes of engineObjectsUpdate so far, how a child knows it moved this pass
+const engineChildStack = []; // the children being updated, taken off the live lists so one leaving does not skip the next
+let showEngineVersion = true;
+
+///////////////////////////////////////////////////////////////////////////////
+// plugin hooks
+
+const pluginList = [];
+class EnginePlugin
+{
+    constructor(update, render, glContextLost, glContextRestored, preRender, updatePost)
+    {
+        this.update = update;
+        this.render = render;
+        this.glContextLost = glContextLost;
+        this.glContextRestored = glContextRestored;
+        this.preRender = preRender;
+        this.updatePost = updatePost;
+    }
+}
+
+/**
+ * @callback PluginCallback - Update or render function for a plugin
+ * @return {void}
+ * @memberof Engine
+ */
+
+/** Add a new update function for a plugin
+ *  - update runs on every fixed tick, paused and timeScale 0 included; a plugin that simulates should skip those
+ *  @param {PluginCallback} [update]
+ *  @param {PluginCallback} [render]
+ *  @param {PluginCallback} [glContextLost]
+ *  @param {PluginCallback} [glContextRestored]
+ *  @param {PluginCallback} [preRender] - Called after the canvas is cleared and before gameRender
+ *  @param {PluginCallback} [updatePost] - Called after the objects update each tick, before gameUpdatePost, paused
+ *    included, for what follows an object, like a camera
+ *  @memberof Engine */
+function engineAddPlugin(update, render, glContextLost, glContextRestored, preRender, updatePost)
+{
+    // make sure plugin functions are unique
+    ASSERT(!pluginList.find(p=>
+        p.update === update && p.render === render &&
+        p.glContextLost === glContextLost &&
+        p.glContextRestored === glContextRestored &&
+        p.preRender === preRender && p.updatePost === updatePost), 'engineAddPlugin: this plugin was already added');
+
+    const plugin = new EnginePlugin(update, render, glContextLost, glContextRestored, preRender, updatePost);
+    pluginList.push(plugin);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Main Engine Functions
+
+/** Add something the game loads to what startup waits for: while engineInit and gameInit run, the game loop starts
+ *  once it is done, and the loading screen counts it; images from loadTexture and sounds from files are added on
+ *  their own, and a load that fails counts as done; after startup it does nothing
+ *  @template T
+ *  @param {Promise<T>} promise
+ *  @return {Promise<T>} - The same promise
+ *  @example
+ *  async function gameInit() { level = await engineAddLoad(fetchJSON('level.json')); }
+ *  @memberof Engine */
+function engineAddLoad(promise)
+{
+    if (engineLoads)
+    {
+        engineLoads.push(promise);
+        const done = ()=> { ++engineLoadsDone; };
+        promise.then(done, done);
+    }
+    return promise;
+}
+
+// wait for every load, the ones added while waiting too, drawing the loading screen each frame meanwhile
+async function engineWaitForLoads()
+{
+    let waiting = true;
+    const start = performance.now();
+    const drawFrame = ()=>
+    {
+        if (!waiting) return;
+        engineLoadingScreenDraw((performance.now() - start) / 1e3);
+        setTimeout(drawFrame, 16);
+    };
+    headlessMode || drawFrame();
+    try
+    {
+        for (let count; count !== engineLoads.length;)
+        {
+            count = engineLoads.length;
+            await Promise.allSettled(engineLoads);
+        }
+    }
+    finally { waiting = false; }
+}
+
+// one frame of the loading screen, once loading has taken half a second, so a fast load never shows it; input
+// while it shows is dropped, as it is under the splash
+function engineLoadingScreenDraw(elapsed)
+{
+    if (headlessMode || !loadingScreen || elapsed < .5) return;
+    inputClear();
+    engineUpdateCanvas();
+    loadingScreen(engineLoadsDone / engineLoads.length);
+}
+
+/**
+ * @callback GameInitCallback - Called after the engine starts, can be async
+ * @return {void|Promise<void>}
+ * @memberof Engine
+ */
+/**
+ * @callback LoadingScreenCallback - Draws the loading screen on mainContext, each frame while the game loads
+ * @param {number} progress - The part of the loads done, 0 to 1
+ * @return {void}
+ * @memberof Engine
+ */
+/**
+ * @callback GameCallback - Update or render function for the game
+ * @return {void}
+ * @memberof Engine
+ */
+
+/** Startup LittleJS engine with your callback functions
+ *  @param {GameInitCallback} [gameInit] - Called once after the engine starts up, can be async for loading
+ *  @param {GameCallback} [gameUpdate] - Called every frame before objects are updated (60fps), use for game logic
+ *  @param {GameCallback} [gameUpdatePost] - Called after physics and objects are updated, even when paused, use for UI updates
+ *  @param {GameCallback} [gameRender] - Called before objects are rendered, use for drawing backgrounds/world elements
+ *  @param {GameCallback} [gameRenderPost] - Called after objects are rendered, use for drawing UI/overlays
+ *  @param {Array<string>|string} [imageSources=[]] - List of image file paths to preload (e.g., ['player.png', 'tiles.png']), or one path
+ *  @param {HTMLElement} [rootElement] - Root DOM element to attach canvas to, defaults to document.body; it is
+ *    styled for a game (no scroll bars or selection, touch-action none) where its own inline style does not say
+ *    otherwise, and the canvas centers inside it, but the canvas is still sized from the window, so set
+ *    canvasFixedSize or canvasMaxSize to fit a smaller element
+ *  @example
+ *  // Basic engine startup
+ *  engineInit(
+ *    ()=> { LOG('Game initialized!'); },  // gameInit
+ *    ()=> { updateGameLogic(); },         // gameUpdate
+ *    ()=> { updateUI(); },                // gameUpdatePost
+ *    ()=> { drawBackground(); },          // gameRender
+ *    ()=> { drawHUD(); },                 // gameRenderPost
+ *    ['tiles.png', 'tilesLevel.png']       // images to load
+ *  );
+ *  @memberof Engine
+ *  @return {Promise<void>} - Done when the images have loaded and gameInit has run */
+async function engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, imageSources=[], rootElement)
+{
+    ASSERT(!engineInitialized, 'engine already initialized');
+    // runtime guard so release builds (where the assert is stripped) don't
+    // double-register listeners / double-add canvases on a second call, which is done when the first is
+    if (engineInitialized) return engineInitDone;
+    engineInitialized = true;
+    showEngineVersion && console.log(`${engineName} Engine v${engineVersion}`);
+    engineLoads = [], engineLoadsDone = 0;
+    if (typeof imageSources === 'string')
+        imageSources = [imageSources]; // one image given alone
+    ASSERT(isArray(imageSources), 'pass in images as array');
+
+    // allow passing in empty functions
+    gameInit       ||= ()=>{};
+    gameUpdate     ||= ()=>{};
+    gameUpdatePost ||= ()=>{};
+    gameRender     ||= ()=>{};
+    gameRenderPost ||= ()=>{};
+
+    // Called automatically by engine to setup render system
+    function enginePreRender()
+    {
+        // the level editor's own view while it is open, in debug builds, before the camera goes to WebGL
+        editorPreRender();
+
+        // disable smoothing for pixel art
+        mainContext.imageSmoothingEnabled = !tilesPixelated;
+
+        // setup gl rendering if enabled
+        glPreRender();
+        setShader(); // a shader left set last frame does not carry into this one
+
+        // plugins that draw underneath the 2D layer
+        pluginList.forEach(plugin=>plugin.preRender?.());
+    }
+
+    // internal update loop for engine
+    function engineUpdate(frameTimeMS=0)
+    {
+        const manualStepAtStart = engineManualStep;
+
+        // update time keeping
+        let frameTimeDeltaMS = frameTimeMS - frameTimeLastMS;
+        // skip delta on the very first frame so timeReal doesn't jump
+        // by ~page-load-time when RAF starts handing real timestamps; engineStep's first is a whole frame from 0
+        if (!frameTimeLastMS && !manualStepAtStart) frameTimeDeltaMS = 0;
+        frameTimeLastMS = frameTimeMS;
+        // the first frame's rate seeds the average, so it does not start out climbing from 0; a gap of over a
+        // second, a hidden tab coming back, is not a frame
+        if (frameTimeDeltaMS && frameTimeDeltaMS < 1e3)
+            averageFPS = averageFPS ? lerp(averageFPS, 1e3/frameTimeDeltaMS, .05) : 1e3/frameTimeDeltaMS;
+        // the time the frame will be on screen, in whole display frames; engineStep's steps are exact already
+        if (!manualStepAtStart)
+            frameTimeDeltaMS = engineSmoothDelta(frameTimeDeltaMS);
+        audioUpdateVolume();
+        // the time keys work while the debug overlay is open, or always when debugKeysAlways is set
+        const debugKeys = debug && (debugOverlay || debugKeysAlways);
+        const debugSpeedUp   = debugKeys && keyIsDown('Equal'); // +
+        const debugSpeedDown = debugKeys && keyIsDown('Minus'); // -
+        const debugScale = debugSpeedUp ? 10 : debugSpeedDown ? .1 : 1;
+
+        // apply time deltas
+        const frameTimeDeltaUnscaledMS = frameTimeDeltaMS;
+        timeReal += frameTimeDeltaMS * debugScale / 1e3;
+        const combinedScale = timeScale * debugScale;
+        frameTimeDeltaMS *= combinedScale;
+        let wasUpdated = false;
+        if (engineVariableStep)
+        {
+            // one update for the frame with timeDelta the time it covers, per-frame values are the game's to scale;
+            // engineStep's frames are exactly 1/60, its first too, which has no frame before it to take a delta from
+            if (frameTimeDeltaUnscaledMS > 0 || manualStepAtStart)
+            {
+                // frozen stands still as in the fixed step, and timeDelta keeps the last update's
+                const frozenTick = paused || !combinedScale;
+                if (!frozenTick)
+                {
+                    timeDelta = manualStepAtStart ? combinedScale / frameRate :
+                        min(frameTimeDeltaUnscaledMS, 50) * combinedScale / 1e3; // clamp min framerate
+                    time += timeDelta;
+                    ++frame;
+                }
+                engineTick(frozenTick);
+            }
+        }
+        else
+        {
+            // paused or a time scale of 0 is frozen: it ticks on unscaled time, so the update rate stays fixed instead
+            // of following however fast the display refreshes, and gameUpdatePost and input still run to leave it
+            const frozen = paused || !combinedScale;
+            frameTimeBufferMS += frozen ? frameTimeDeltaUnscaledMS : frameTimeDeltaMS;
+            frameTimeBufferMS = min(frameTimeBufferMS, 50 * (frozen ? 1 : max(1, combinedScale))); // clamp min framerate
+
+            // apply time delta smoothing, improves smoothness of framerate in some browsers; engineStep's frames are
+            // exact and wait for no refresh, held back they would leave a step under a time scale a tick short
+            let deltaSmooth = 0;
+            if (!engineManualStep && frameTimeBufferMS < 0 && frameTimeBufferMS > -9)
+            {
+                // force at least one update each frame since it is waiting for refresh
+                deltaSmooth = frameTimeBufferMS;
+                frameTimeBufferMS = 0;
+            }
+
+            // update multiple frames if necessary in case of slow framerate; a tick that throws still spends its time
+            // and the smoothing still comes back, so a release build going on past an error each tick keeps its rate
+            try
+            {
+                while (frameTimeBufferMS >= 0)
+                {
+                    try
+                    {
+                        // read again each tick, so a pause set by the game stops the rest of this frame's catch-up ticks
+                        const frozenTick = paused || !(timeScale * debugScale);
+
+                        // increment frame and update time, frozen does not advance time
+                        if (!frozenTick)
+                            time = timeFixedStart + (frame++ - frameFixedStart) / frameRate;
+                        engineTick(frozenTick);
+                    }
+                    finally { frameTimeBufferMS -= 1e3 / frameRate; }
+                }
+            }
+            finally
+            {
+                // add the time smoothing back in
+                frameTimeBufferMS += deltaSmooth;
+            }
+        }
+
+        // one tick of the loop: update game and objects, when frozen update everything except them
+        function engineTick(frozenTick)
+        {
+            engineFrozenTick = frozenTick;
+            wasUpdated = true;
+            engineUpdateCanvas();
+            inputUpdate();
+            if (!frozenTick)
+                gameUpdate();
+            pluginList.forEach(plugin=>plugin.update?.());
+            if (frozenTick)
+            {
+                // update object transforms even when paused
+                for (const o of engineObjects)
+                    o.parent || o.updateTransforms();
+
+                // objects made and destroyed while paused, like a menu's effects, still leave the list
+                engineObjects.some(o=>o.destroyed) && (engineObjects = engineObjects.filter(o=>!o.destroyed));
+            }
+            else
+                engineObjectsUpdate();
+            pluginList.forEach(plugin=>plugin.updatePost?.());
+
+            // do post update
+            debugUpdate();
+            gameUpdatePost();
+            cameraShakeUpdate();
+            inputUpdatePost();
+        }
+
+        // manual step turned on by this frame's updates, set the buffer the loop and smoothing just moved again
+        if (engineManualStep && !manualStepAtStart)
+            frameTimeBufferMS = -.5e3 / frameRate;
+
+        // check if the window changed so a resize is picked up even when
+        // the game is not updating, for example when timeScale is 0
+        let windowChanged = false;
+        if (!headlessMode)
+        {
+            const dpr = devicePixelRatio;
+            windowChanged = windowWidthLast !== innerWidth ||
+                windowHeightLast !== innerHeight || windowPixelRatioLast !== dpr;
+            windowWidthLast = innerWidth;
+            windowHeightLast = innerHeight;
+            windowPixelRatioLast = dpr;
+        }
+
+        // render only when something changed, displays that refresh faster
+        // than the fixed update rate would otherwise redraw identical frames
+        if (wasUpdated || windowChanged)
+            renderFrame();
+        engineManualStep || engineScheduleFrame();
+
+        function renderFrame()
+        {
+            if (headlessMode) return;
+
+            // canvas must be updated before rendering
+            if (!wasUpdated)
+                engineUpdateCanvas();
+
+            // render the game and objects, the view shaken for the draw only
+            cameraShakeBegin();
+            try
+            {
+                enginePreRender();
+                gameRender();
+                engineObjectsSort();
+                for (const o of engineObjects)
+                {
+                    if (o.destroyed) continue;
+                    setShader(o.shader); // each object draws with its own shader, or none
+                    o.render();
+                }
+                setShader(); // back to the engine's for gameRenderPost
+
+                // post rendering
+                gameRenderPost();
+                setShader(); // plugin, input and debug draws start from the engine's state
+                setAdditiveBlendMode(false);
+                pluginList.forEach(plugin=>plugin.render?.());
+                editorRenderPost(); // over the plugins, so the light system does not darken the editor
+                inputRender();
+                debugRender();
+                glFlush();
+            }
+            finally { cameraShakeEnd(); } // the game's own camera back, even when a draw throws
+            drawCount = 0;
+            primitiveCount = 0;
+        }
+    }
+
+    // skip setup if headless
+    if (headlessMode) return engineInitDone = startEngine([]);
+
+    // ensure body exists for minimal HTML where the script runs before <body> is parsed
+    if (!document.body)
+        document.documentElement.appendChild(document.createElement('body'));
+    rootElement ||= document.body;
+
+    // setup webgl
+    glInit(rootElement);
+
+    // setup html
+    let styleRoot =
+        'margin:0;' +                 // fill the window
+        'overflow:hidden;' +          // no scroll bars
+        'background:#000;' +          // set background color
+        'user-select:none;' +         // prevent hold to select
+        '-webkit-user-select:none;' + // compatibility for ios
+        'touch-action:none;' +        // prevent mobile pinch to resize
+        '-webkit-touch-callout:none;'; // compatibility for ios
+    // the canvases center on a root element with a height of its own, not the page; one sized only by its
+    // children has none, since the canvases are placed apart from it, and would clip them all away
+    if (rootElement !== document.body && rootElement.clientHeight && getComputedStyle(rootElement).position === 'static')
+        styleRoot += 'position:relative;';
+    rootElement.style.cssText = styleRoot + rootElement.style.cssText; // its own inline styles come after and win
+    mainCanvas = rootElement.appendChild(document.createElement('canvas'));
+    drawContext = mainContext = mainCanvas.getContext('2d');
+
+    // init stuff and start engine
+    inputInit();
+    audioInit();
+    debugInit();
+
+    // setup canvases
+    // transform way is still more reliable than flexbox or grid
+    const styleCanvas = 'position:absolute;'+ // allow canvases to overlap
+        'top:50%;left:50%;transform:translate(-50%,-50%)'; // center on screen
+    mainCanvas.style.cssText = styleCanvas;
+    if (glCanvas)
+        glCanvas.style.cssText = styleCanvas;
+    setCanvasPixelated(canvasPixelated);
+    engineUpdateCanvas();
+    glPreRender();
+
+    // create offscreen canvases for image processing
+    workContext = createCanvasContext(64);
+    workCanvas = workContext.canvas;
+    workReadContext = createCanvasContext(64, 64, true);
+    workReadCanvas = workReadContext.canvas;
+
+    // create promises for loading images
+    /** @type {Array<Promise<any>>} */
+    const promises = imageSources.map((src, i)=> loadTexture(i, src));
+
+    // no images to load
+    if (!imageSources.length)
+        promises.push(loadTexture(0));
+
+    // load engine font image
+    promises.push(imageFontInit());
+
+    if (showSplashScreen)
+    {
+        // draw splash screen
+        /** @type {Promise<void>} */
+        const splash = new Promise(resolve =>
+        {
+            let t = 0;
+            updateSplash();
+            function updateSplash()
+            {
+                inputClear();
+                drawEngineLogo(t+=.01);
+                t>1 ? resolve() : setTimeout(updateSplash, 16);
+            }
+        });
+        promises.push(splash);
+    }
+
+    // kept before anything is awaited, so a second call has it
+    return engineInitDone = startEngine(promises);
+
+    // the splash first, the images load under it, then gameInit runs once they are in, and the game loop starts once
+    // it and everything loaded while it ran are done, the loading screen showing in the meantime; an error in gameInit
+    // reaches the caller
+    async function startEngine(images)
+    {
+        showSplashScreen && !headlessMode && await images[images.length - 1]; // headless has no splash
+        const init = (async ()=> { await Promise.all(images); await gameInit(); })();
+        engineAddLoad(init);
+        await engineWaitForLoads();
+        engineLoads = undefined;
+        await init;
+        engineUpdateInternal = engineUpdate; // engineStep only runs once the game is set up
+        if (engineManualStep) return;
+        if (debug) return engineUpdate(); // a debug build stops at an error, the first frame's as any
+        try { engineUpdate(); }
+        catch (error) { engineFrameFailed(error); } // a release build goes on past it, as on any later frame
+    }
+}
+
+// Resize the canvas to fit the window and prepare it for a new frame
+// Called automatically each frame and by the splash screen before the loop starts
+// mainCanvasSize is css pixels and the backing store is that scaled by the
+// pixel ratio, so the ratio only changes sharpness, never how big things look
+function engineUpdateCanvas()
+{
+    if (headlessMode) return;
+
+    // the backing store is scaled by this, every size below is css pixels
+    const dpr = getCanvasPixelRatio();
+
+    if (canvasFixedSize.x)
+    {
+        // set canvas fixed size
+        mainCanvasSize.set(canvasFixedSize.x, canvasFixedSize.y);
+
+        // fit to window using css width and height
+        const innerAspect = innerWidth / innerHeight;
+        const fixedAspect = canvasFixedSize.x / canvasFixedSize.y;
+        const w = innerAspect < fixedAspect ? '100%' : '';
+        const h = innerAspect < fixedAspect ? '' : '100%';
+        mainCanvas.style.width  = w;
+        mainCanvas.style.height = h;
+        if (glCanvas)
+        {
+            glCanvas.style.width  = w;
+            glCanvas.style.height = h;
+        }
+    }
+    else
+    {
+        // get main canvas size based on window size, in css pixels so
+        // canvasMaxSize caps how big the canvas looks, not its resolution
+        mainCanvasSize.x = min(innerWidth,  canvasMaxSize.x) | 0;
+        mainCanvasSize.y = min(innerHeight, canvasMaxSize.y) | 0;
+
+        // responsive aspect ratio, of the size after canvasMaxSize, which can change its shape
+        const innerAspect = mainCanvasSize.x / mainCanvasSize.y;
+        ASSERT(!canvasMaxAspect || canvasMinAspect <= canvasMaxAspect,
+            'canvasMinAspect must not be above canvasMaxAspect', canvasMinAspect, canvasMaxAspect);
+        if (canvasMaxAspect && innerAspect > canvasMaxAspect)
+        {
+            // full height
+            const w = mainCanvasSize.y * canvasMaxAspect | 0;
+            mainCanvasSize.x = min(w, canvasMaxSize.x);
+        }
+        else if (innerAspect < canvasMinAspect)
+        {
+            // full width
+            const h = mainCanvasSize.x / canvasMinAspect | 0;
+            mainCanvasSize.y = min(h, canvasMaxSize.y);
+        }
+
+        // css size is the canvas size, the backing store is scaled up below
+        mainCanvas.style.width  = mainCanvasSize.x + 'px';
+        mainCanvas.style.height = mainCanvasSize.y + 'px';
+        if (glCanvas)
+        {
+            glCanvas.style.width  = mainCanvasSize.x + 'px';
+            glCanvas.style.height = mainCanvasSize.y + 'px';
+        }
+    }
+
+    // clear main canvas and set size
+    // only set the size when it changes, setting it invalidates the canvas
+    // frame which makes the browser rebuild the display list for the page
+    const bufferSizeX = mainCanvasSize.x * dpr | 0;
+    const bufferSizeY = mainCanvasSize.y * dpr | 0;
+    if (mainCanvas.width !== bufferSizeX || mainCanvas.height !== bufferSizeY)
+    {
+        mainCanvas.width  = bufferSizeX;
+        mainCanvas.height = bufferSizeY;
+    }
+    else
+    {
+        // setting the size also resets the context state, match the parts a game is likely to have left on it
+        mainContext.setTransform(1, 0, 0, 1, 0, 0);
+        mainContext.globalCompositeOperation = 'source-over';
+        mainContext.globalAlpha = 1;
+        mainContext.filter = 'none';
+        mainContext.shadowColor = 'rgba(0,0,0,0)';
+        mainContext.clearRect(0, 0, bufferSizeX, bufferSizeY);
+    }
+
+    // scale the context so 2d drawing is in css pixels
+    mainContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // apply the clear color to main canvas
+    if (canvasClearColor.a > 0 && !glEnable)
+    {
+        mainContext.fillStyle = canvasClearColor.toString();
+        mainContext.fillRect(0, 0, mainCanvasSize.x, mainCanvasSize.y);
+        mainContext.fillStyle = BLACK.toString();
+    }
+
+    // set default line join and cap, round on purpose: it looks better, suits text and keeps sharp corners from
+    // spiking far out; WebGL outlines are square and mitered for speed, the two are not meant to match
+    mainContext.lineJoin = 'round';
+    mainContext.lineCap  = 'round';
+}
+
+// a release build goes on past an error in a frame, a frozen game is the worst a player can get; an error is logged
+// when it is not the last one again, one every frame would flood the console
+function engineFrameFailed(error)
+{
+    const text = String(error);
+    text === engineFrameErrorLast || console.error(error);
+    engineFrameErrorLast = text;
+    // what the frame queued is let go of, and a layer redraw it left open is closed, the innermost first, so the next
+    // frame draws to the screen with its own camera
+    glBatchCount = 0;
+    for (let layer; layer = canvasLayerRedraws.pop();)
+        try { layer.redrawEnd(); } catch (e) {} // the frame's own error is the one that counts
+    // the frame's input is cleared as its tick would have, or a key press that threw would be pressed again
+    inputUpdatePost();
+    engineScheduleFrame();
+}
+
+// ask for the next frame of the loop, once however often it is called before that frame, and skip it if manual
+// step was turned on since, so turning it off and on again within a frame can not start a second loop
+function engineScheduleFrame()
+{
+    if (engineFrameScheduled) return;
+    engineFrameScheduled = true;
+    const next = (frameTimeMS)=>
+    {
+        engineFrameScheduled = false;
+        if (engineManualStep) return;
+        if (debug) return engineUpdateInternal(frameTimeMS); // a debug build stops at an error, where it shows it
+        try { engineUpdateInternal(frameTimeMS); }
+        catch (error) { engineFrameFailed(error); }
+    };
+    if (typeof requestAnimationFrame === 'function')
+        requestAnimationFrame(next);
+    else // a headless server in Node has no display to wait for, a timer keeps the pace
+        setTimeout(()=> next(performance.now()), 1e3 / frameRate);
+}
+
+// max frames engineStep can advance in one call, 10 minutes at 60fps
+// large counts block until they finish, so this catches runaway values
+const engineStepMaxFrames = 36000;
+
+/** Advance the engine by a number of frames
+ *  Requires setEngineManualStep(true), before engineInit or while running; it stops early if an update turns it off
+ *  Respects paused exactly as the normal update loop does
+ *  Does nothing until the promise engineInit returns has resolved, which waits for the images, and the sounds
+ *  gameInit made, to load; a test hook steps from that promise's then
+ *  @param {number} [frames] - frames of 1/60 of a second to advance, max 36000; timeScale sets how many fixed
+ *  updates they run, as in the normal loop, one each at timeScale 1
+ *  @example
+ *  setHeadlessMode(true);
+ *  setEngineManualStep(true);
+ *  await engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+ *  engineStep(600); // 600 updates of 1/60 second; the first is at time 0, so time is then 599/60, with
+ *                   // setEngineVariableStep(true) the first is at 1/60 and time is 600/60
+ *  @memberof Engine */
+function engineStep(frames=1)
+{
+    ASSERT(engineManualStep,
+        'engineStep requires setEngineManualStep(true)');
+    ASSERT(engineUpdateInternal, 'engineStep requires engineInit to complete');
+    // runtime guard so release builds (where the asserts are stripped) can't
+    // start a second requestAnimationFrame chain or call an undefined update
+    if (!engineManualStep || !engineUpdateInternal) return;
+    ASSERT(Number.isInteger(frames) && frames >= 0 && frames <= engineStepMaxFrames,
+        'engineStep requires a whole frame count from 0 to ' + engineStepMaxFrames);
+    frames = min(frames, engineStepMaxFrames); // release has no asserts, don't freeze
+    for (let i = frames; i > 0 && engineManualStep; --i) // an update that turns manual step off hands back the loop
+        engineUpdateInternal(frameTimeLastMS + 1e3 / frameRate);
+}
+
+/** Update each engine object and remove destroyed objects; time and frame are advanced by the engine loop, not here
+ *  - Can be called manually if objects need to be updated outside of main loop
+ *  @memberof Engine */
+function engineObjectsUpdate()
+{
+    ++engineObjectsUpdateCount;
+    engineObjectsCollidePairs.clear();
+    // objects update in render order, which rendering keeps them in, so a headless run or a frame that rendered
+    // nothing updates them the same way
+    engineObjectsSort();
+    // get list of solid objects for physics optimization, in update order, which 3D collision pairs by;
+    // 2D checks the static ones last, so a contact with a moving object can not leave something back inside a static
+    // solid it was already pushed out of
+    const fixed = [];
+    engineObjectsCollide = [];
+    engineObjectsCollideStaticLast = [];
+    // and a pos or angle the game set on a child since the last frame is kept before its parent moves, to move with it
+    for (const o of engineObjects)
+    {
+        o.parent && engineObjectChildKeep(o);
+        o.collideSolidObjects && (engineObjectsCollide.push(o), (o.mass ? engineObjectsCollideStaticLast : fixed).push(o));
+    }
+    for (const o of fixed)
+        engineObjectsCollideStaticLast.push(o);
+    // written only when there is a grid: V8 keeps a variable that is never written as a constant, and writing it
+    // every frame makes this function deoptimize again and again in a game with no grid
+    if (engineObjectsCollideStaticLast.length >= engineCollideGridMin)
+        engineCollideGrid = {list: engineObjectsCollideStaticLast, built: undefined};
+    // written only when there is a one way solid, as the grid is
+    if (engineObjectsCollide.some((o)=> o.oneWay))
+        engineObjectsOneWayStart = new Map(engineObjectsCollide.map((o)=> [o, o.pos.copy()]));
+
+    // update physics before object update, each solid put where it moved to in the grid, for the movers after it;
+    // the grid is let go even when a callback throws, so an updatePhysics called before the next update checks all
+    // a one way solid with no mass moves first, nothing pushes it, so what lands on it or passes up through it sees it
+    // where it is now and where it was, whatever the render order
+    const oneWayFirst = (o)=> o.oneWay && !o.mass;
+    engineObjectsPhysicsRunning = true;
+    try
+    {
+        if (engineObjectsOneWayStart)
+            for (const o of engineObjects)
+                if (!o.parent && !o.destroyed && oneWayFirst(o))
+                {
+                    o.updatePhysics();
+                    engineCollideGrid?.built && engineCollideGridPlace(engineCollideGrid.built, o);
+                    engineObjectsPhysicsDone?.(o);
+                }
+        for (const o of engineObjects)
+            if (!o.parent && !o.destroyed && !(engineObjectsOneWayStart && oneWayFirst(o)))
+            {
+                o.updatePhysics();
+                engineCollideGrid?.built && engineCollideGridPlace(engineCollideGrid.built, o);
+                engineObjectsPhysicsDone?.(o);
+            }
+    }
+    finally
+    {
+        engineObjectsPhysicsRunning = false;
+        engineCollideGrid && (engineCollideGrid = undefined);
+        engineObjectsOneWayStart && (engineObjectsOneWayStart = undefined);
+    }
+
+    // recursive object update: the children are walked from a copy on a shared stack, since a child that
+    // destroys itself leaves its parent's list on the spot and the next child would slide past the loop
+    function updateChildObjects(children)
+    {
+        if (!children.length) return; // most objects have none, and this runs for every one
+        const start = engineChildStack.length;
+        for (const child of children)
+            engineChildStack.push(child);
+        try
+        {
+            for (let i = start; i < engineChildStack.length; ++i)
+                updateChildObject(engineChildStack[i]);
+        }
+        finally { engineChildStack.length = start; } // put back when an update throws too, or it keeps them
+    }
+    const pass = engineObjectsUpdateCount;
+    function updateChildObject(o)
+    {
+        if (o.destroyed || o.updatePass === pass) return;
+
+        // its parent is up to date, so it updates from where it is now, and its children from where it is after
+        o.updatePass = pass;
+        o.updateTransforms(false);
+        o.update();
+        o.children.length && o.updateTransforms(false);
+        updateChildObjects(o.children);
+    }
+    function updateTopObject(o)
+    {
+        if (o.parent || o.destroyed || o.updatePass === pass) return; // a child that let go is not updated twice
+
+        // update top level objects, each child places itself before it updates so it sees this frame's position,
+        // then the whole tree is placed again so what the children changed in their localPos lands before render
+        o.updatePass = pass;
+        o.update();
+        updateChildObjects(o.children);
+        o.updateTransforms();
+    }
+    for (const o of engineObjects)
+        updateTopObject(o);
+
+    // a child let go during the update from a place in the list already walked is on its own now, updated here
+    for (const o of engineObjects)
+        updateTopObject(o);
+
+    // remove destroyed objects
+    engineObjects.some(o=>o.destroyed) && (engineObjects = engineObjects.filter(o=>!o.destroyed));
+}
+
+// sort the objects by render order, keeping the order of equals, only when one is out of order, as they are kept
+// sorted and most frames change none
+function engineObjectsSort()
+{
+    for (let i = engineObjects.length; --i > 0;)
+        if (engineObjects[i].renderOrder < engineObjects[i-1].renderOrder)
+            return void engineObjects.sort((a,b)=> a.renderOrder - b.renderOrder);
+}
+
+/** Destroy and remove all objects
+ *  - This can be used to clear out all objects when restarting a level
+ *  - Objects with the persistent flag set are left alone, for things that outlive a level
+ *  - Objects can override their destroy function to do cleanup or stick around
+ *  @param {boolean} [immediate] - true removes attached effects like particle emitters at once, false lets them finish first
+ *  @memberof Engine */
+function engineObjectsDestroy(immediate=true)
+{
+    for (const o of engineObjects)
+        o.parent || o.persistent || o.destroy(immediate);
+    engineObjects = engineObjects.filter(o=>!o.destroyed);
+    // and the solid lists, so a pause menu that clears the world does not hold what it cleared until play goes on
+    engineObjectsCollide = engineObjectsCollide.filter(o=>!o.destroyed);
+    engineObjectsCollideStaticLast = engineObjectsCollideStaticLast.filter(o=>!o.destroyed);
+}
+
+/** Collects all object within a given area
+ *  - An object is collected when its box overlaps the area, or with testCenters when its center is inside it
+ *  - Objects destroyed this frame are left out, they are only in the list until the frame ends
+ *  @param {Vector2} [pos] - Center of test area, or undefined for all objects
+ *  @param {Vector2|number} [size] - Diameter of a circle if a number, full size of a rectangle if a Vector2,
+ *                                   left out or 0 the objects that overlap the point at pos
+ *  @param {Array<EngineObject>} [objects=engineObjects] - List of objects to check
+ *  @param {boolean} [testCenters] - Test only each object's center, a little faster, and ignores object sizes
+ *  @return {Array<EngineObject>} - List of collected objects
+ *  @memberof Engine */
+function engineObjectsCollect(pos, size, objects=engineObjects, testCenters=false)
+{
+    const collectedObjects = [];
+    if (!pos)
+    {
+        // all objects
+        for (const o of objects)
+            o.destroyed || collectedObjects.push(o);
+    }
+    else if (!size || size instanceof Vector2)
+    {
+        // bounding box test, a point when there is no size or a size of 0
+        const boxSize = size instanceof Vector2 ? size : vec2();
+        for (const o of objects)
+            o.destroyed || (testCenters ? isOverlapping(pos, boxSize, o.pos) : o.isOverlapping(pos, boxSize))
+                && collectedObjects.push(o);
+    }
+    else
+    {
+        // circle test, a diameter like every other size, against the nearest point of each box
+        const radiusSquared = (size/2)**2;
+        for (const o of objects)
+        {
+            if (o.destroyed) continue;
+            const dx = testCenters ? pos.x - o.pos.x : max(abs(pos.x - o.pos.x) - o.size.x/2, 0);
+            const dy = testCenters ? pos.y - o.pos.y : max(abs(pos.y - o.pos.y) - o.size.y/2, 0);
+            dx*dx + dy*dy < radiusSquared && collectedObjects.push(o);
+        }
+    }
+    return collectedObjects;
+}
+
+/**
+ * @callback ObjectCallbackFunction - Function that processes an object
+ * @param {EngineObject} object
+ *  @return {void}
+ *  @memberof Engine
+ */
+
+/** Triggers a callback for each object within a given area, objects destroyed this frame left out
+ *  @param {Vector2} [pos] - Center of test area, or undefined for all objects
+ *  @param {Vector2|number} [size] - Diameter of a circle if a number, full size of a rectangle if a Vector2
+ *  @param {ObjectCallbackFunction} [callbackFunction] - Calls this function on every object that passes the test, needed
+ *                                                     (marked optional only because the area before it is)
+ *  @param {Array<EngineObject>} [objects=engineObjects] - List of objects to check
+ *  @param {boolean} [testCenters] - Test only each object's center, see engineObjectsCollect
+ *  @memberof Engine */
+function engineObjectsCallback(pos, size, callbackFunction, objects=engineObjects, testCenters=false)
+{
+    // an object an earlier callback destroyed is skipped
+    for (const o of engineObjectsCollect(pos, size, objects, testCenters))
+        o.destroyed || callbackFunction(o);
+}
+
+/** Return a list of objects intersecting a ray, objects destroyed this frame left out
+ *  - Only objects with collideRaycast set are hit, which setCollision turns on
+ *  @param {Vector2} start
+ *  @param {Vector2} end
+ *  @param {Array<EngineObject>} [objects=engineObjects] - List of objects to check
+ *  @return {Array<EngineObject>} - List of objects hit
+ *  @memberof Engine */
+function engineObjectsRaycast(start, end, objects=engineObjects)
+{
+    const hitObjects = [];
+    for (const o of objects)
+    {
+        if (o.collideRaycast && !o.destroyed && isIntersecting(start, end, o.pos, o.size))
+        {
+            debugRaycast && debugRect(o.pos, o.size, '#f00', 0, 0, false, false);
+            hitObjects.push(o);
+        }
+    }
+
+    debugRaycast && debugLine(start, end, hitObjects.length ? '#f00' : '#00f', .02, 0, false);
+    return hitObjects;
+}

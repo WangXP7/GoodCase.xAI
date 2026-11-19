@@ -1,0 +1,509 @@
+/* The Field Manual (site/docs.html and the chapter pages topics.ts writes), on the Premiere direction's kit
+   (src/ui/components/components.css, imported here) and its 08-docs page. */
+@import url('../ui/components/components.css');
+@import url('../ui/components/notices.css');
+@import url('../ui/tokens/surface-docs.css');
+/* the manual-start block rides in this sheet: no extra stylesheet on the path to first paint */
+@import url('../presentation/manualStart.css');
+/* the manual printed (Cmd+P, Save as PDF): paper tokens, one column, the chrome off, page breaks; docsPrint.css */
+@import url('./docsPrint.css');
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+/* element resets live in base: in surfaces they outranked every component's colour (the primary button's ink) */
+@layer base{a{color:inherit}button{font:inherit;color:inherit}}
+@layer surfaces{
+/* the shelf grows with its own type (--docs-side-w): its padding (16 px) and a link's (36 px) around fourteen ems of the
+   labels' size, so no label wraps at any width where none wraps at 1280 */
+:root{color-scheme:dark;--docs-banner-h1:clamp(var(--fs-44),3.9vw,var(--fs-60));--docs-h1:clamp(var(--fs-44),5.1vw,var(--fs-76));--docs-h2:clamp(var(--fs-28),3.4vw,var(--fs-52));--docs-fluid-1:clamp(var(--fs-18),1.9vw,var(--fs-24));--docs-fluid-2:clamp(var(--fs-20),2.2vw,var(--fs-28));--font-display:var(--font-ui);--font-body:var(--font-ui);--font-data:var(--font-mono);--docs-side-w:calc(var(--shell-gutter) + 52px + max(var(--fs-floor-12),var(--fs-14)) * 14);--docs-toc-w:260px;--docs-gutter:var(--shell-gutter);--bg:var(--surface-page);--panel:var(--surface-raised);--panel2:var(--surface-menu);--ink:var(--ink-1);--copy:var(--ink-2);--muted:var(--ink-3);--dim:var(--ink-4);--line:var(--line-1);--line2:var(--line-2);--amber:var(--accent);--amber2:var(--accent-hi);--cyan:var(--text-info);--green:var(--text-ok);--red:var(--text-danger);--font:var(--font-ui);--mono:var(--font-mono)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{margin:0;background:radial-gradient(circle at 75% 3%,var(--fill-faint),transparent 24%),var(--bg);color:var(--ink);font:500 var(--fs-14)/1.68 var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a:focus-visible,button:focus-visible,video:focus-visible{outline:2px solid var(--focus-ink);outline-offset:3px}
+.shell{width:min(calc(100% - var(--shell-gutter) * 2),var(--shell-max));margin-inline:auto}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;text-transform:uppercase;letter-spacing:var(--track-label);font-size:max(var(--fs-floor-11),var(--fs-11))}.brand [lang=en]{letter-spacing:var(--track-label)}.brand :is(img,svg){width:31px;height:38px}.brand b{color:var(--amber)}
+.docs-hero{border-bottom:1px solid var(--line);position:relative;overflow:hidden}.docs-hero::after{content:"";position:absolute;right:-12vw;top:-25vw;width:55vw;height:55vw;border:1px solid var(--accent-wash);border-radius:50%;box-shadow:var(--e1);pointer-events:none}.docs-hero .shell{position:relative;z-index:var(--z-lift);padding:64px 0 50px;display:grid;grid-template-columns:minmax(0,1fr) minmax(420px,.82fr);gap:54px;align-items:center}
+.kicker{margin:0 0 14px;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label);text-transform:uppercase}.docs-hero h1{margin:0;max-width:760px;font-size:var(--docs-h1);line-height:.9;letter-spacing:var(--track-title);text-transform:uppercase;text-wrap:balance}.docs-hero h1 span{display:block;color:transparent;-webkit-text-stroke:1px var(--ink-4)}.docs-hero h1 br{display:none}:lang(zh-CN) :is(.docs-hero h1,.topic-hero h1,.docs-chapters h2,.docs-archive-dialog>header h2,.battle-reels-head h3){line-height:1.14}:lang(zh-CN) .docs-hero h1 span{color:var(--ink-1);-webkit-text-stroke:0}
+/* over the hero's footage a secondary action stands on an opaque plate, as the pause control does (a see-through fill
+   ramps with the picture) */
+.docs-hero .cot-c-btn--secondary{background:var(--surface-raised)}
+.docs-evidence{border-bottom:1px solid var(--line);background:var(--surface-page)}.docs-evidence dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0}.docs-evidence dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:15px 18px;border-left:1px solid var(--line)}.docs-evidence dl>div:first-child{border-left:0;padding-left:0}
+.docs-evidence dl>div:last-child{padding-right:0}.docs-evidence dt{color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase}.docs-evidence dd{margin:0;color:var(--ink-2);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700}.docs-evidence dd span{color:var(--ink-3)}
+.docs-layout{display:grid;grid-template-columns:250px minmax(0,870px) minmax(190px,1fr);gap:54px;align-items:start;padding-top:48px;padding-bottom:100px}
+.docs-toc{position:sticky;top:95px;background:var(--surface-page)}.toc-head{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border:1px solid var(--line);color:var(--ink-2);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase}.toc-head button{display:none;border:0;background:transparent;color:var(--ink-2)}.docs-toc nav{border-inline:1px solid var(--line)}.docs-toc a{display:grid;grid-template-columns:25px 1fr;gap:7px;padding:9px 12px;border-bottom:1px solid var(--line-1);color:var(--ink-3);text-decoration:none;font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.3}.docs-toc a span{color:var(--ink-3);font:700 max(var(--fs-floor-11),var(--fs-11))/1.4 var(--mono)}.docs-toc a:hover,.docs-toc a.active{color:var(--ink);background:var(--surface-hover)}.docs-toc a.active{box-shadow:var(--docs-side-on)}.toc-footer{margin:0;padding:14px;color:var(--ink-4);border:1px solid var(--line);border-top:0;font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.55}.toc-footer a{display:inline;padding:0;border:0;color:var(--ink-1)}
+.docs-main{min-width:0}.doc-section{padding:18px 0 50px;border-bottom:1px solid var(--line)}.doc-section:first-child{padding-top:0}.doc-section:last-child{border-bottom:0}.doc-section h2{margin:0 0 18px;font-size:var(--docs-h2);line-height:1.05;letter-spacing:var(--track-title)}.doc-section h3{margin:29px 0 10px;font-size:var(--fs-15);letter-spacing:var(--track-title)}.doc-section>p,.doc-section>div>p{color:var(--copy)}.doc-section strong{color:var(--ink)}.inline-link{color:var(--ink-1);text-decoration-color:var(--ink-3);text-underline-offset:3px}
+.sequence{margin:25px 0;display:grid;gap:0;counter-reset:step}pre{margin:0;padding:17px 18px;overflow:auto;color:var(--ink-2);font:max(var(--fs-floor-11),var(--fs-11))/1.65 var(--mono);tab-size:2}code .comment{color:var(--ink-4)}
+.invariants{display:grid;gap:7px;margin:20px 0}.invariant{display:grid;grid-template-columns:31px 1fr;gap:12px;padding:12px;border:1px solid var(--line);background:var(--surface-raised)}.invariant span{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:var(--fill-faint);color:var(--ink-2);font-weight:700}.invariant strong{display:block;font-size:max(var(--fs-floor-11),var(--fs-11))}.invariant p{margin:3px 0 0;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11))}.aside-card{padding:16px;border:1px solid var(--line);background:var(--panel)}.aside-card+.aside-card{margin-top:10px}.aside-card p:first-child{margin:0;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase}.aside-card strong{display:block;margin:9px 0 6px;font-size:max(var(--fs-floor-12),var(--fs-12))}.aside-card p:last-child{margin:0;color:var(--ink-4);font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.55}.aside-card a{color:var(--ink-1)}
+.aside-card--library{text-decoration:none}
+.aside-card--archive{width:100%;display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:15px;text-align:left;color:inherit;cursor:pointer;transition:border-color var(--dur-fast) ease,background var(--dur-fast) ease,transform var(--dur-fast) ease}.aside-card--archive:hover{border-color:var(--line-3);background:var(--surface-hover);transform:translateY(-1px)}.aside-card--archive:focus-visible{outline:2px solid var(--focus-ink);outline-offset:3px}/* the boxed icon tile, one size wherever it stands (the media cards, the stat strip) */
+.aside-card-icon,.docs-evidence dt [data-doc-icon]{display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid var(--line-3);background:var(--fill-soft)}.aside-card-icon :is(img,svg),.docs-evidence dt .doc-icon svg{display:block;width:27px;height:27px}.aside-card-content{min-width:0}.aside-card-kicker{display:block;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase}.aside-card--archive strong{margin:7px 0 5px;color:var(--ink)}.aside-card-action{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-top:2px;padding-top:10px;border-top:1px solid var(--line);color:var(--ink-1);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label);text-transform:uppercase}.aside-card-action .cot-i{flex:none}
+.docs-archive-dialog{width:min(94vw,1500px);max-width:none;max-height:92dvh;padding:0;overflow:auto;border:1px solid var(--line2);background:var(--surface-page);color:var(--ink);box-shadow:var(--e2)}.docs-archive-dialog::backdrop{background:var(--surface-scene);backdrop-filter:blur(10px)}.docs-archive-dialog>header{position:sticky;z-index:var(--z-shell);top:0;display:flex;align-items:end;justify-content:space-between;gap:28px;padding:25px 28px 20px;border-bottom:1px solid var(--line);background:linear-gradient(120deg,var(--surface-raised),var(--surface-page) 54%,var(--surface-page))}.docs-archive-dialog>header h2{margin:7px 0 4px;font-size:var(--docs-h2);line-height:.95;text-transform:uppercase}.docs-archive-dialog>header p:last-child{margin:0;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11))}.docs-archive-dialog>header>button{flex:none;display:inline-grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);background:transparent;color:var(--ink-1)}.docs-archive-dialog>header>button:hover{border-color:var(--line-3);background:var(--accent-wash)}.docs-motion-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:18px 18px 0;background:var(--surface-page)}.docs-motion-grid video{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--surface-scene)}.docs-motion-item{position:relative;min-width:0;background:var(--surface-scene)}.docs-motion-item video{height:100%}.docs-motion-item>.cot-info-trigger{position:absolute;z-index:var(--z-lift);right:10px;top:10px;background:var(--surface-scene)}.docs-archive-body{padding:18px 18px 24px}
+.docs-footer{border-top:1px solid var(--line);background:var(--surface-page)}.docs-footer .inner{min-height:110px;display:flex;align-items:center;justify-content:space-between}.footer-links{display:flex;align-items:center;gap:18px}.footer-links a{display:inline-flex;align-items:center;color:var(--ink-3);text-decoration:none;font-size:max(var(--fs-floor-11),var(--fs-11));text-transform:uppercase;letter-spacing:var(--track-label)}.footer-stars{display:inline-flex;align-items:center;gap:4px;margin-left:6px}.footer-stars:not(:has([data-github-stars-state='ready'])){display:none}.footer-links a:hover{color:var(--ink-1)}
+/* the row's visible right edge is the content edge: the last label gives back its trailing letter-space (an empty star
+   count stays out of the row until it has a count) */
+.footer-links a:last-child{margin-inline-end:calc(var(--track-label) * -1)}
+@media (width < 1440px){
+.docs-layout{grid-template-columns:220px minmax(0,1fr);gap:40px}
+.aside-card+.aside-card{margin-top:0}
+.docs-hero .shell{grid-template-columns:minmax(0,1fr) minmax(350px,.85fr);gap:38px}
+}
+@media (width < 1100px){
+.shell{width:min(calc(100% - var(--shell-gutter) * 2),var(--shell-max))}
+.docs-hero .shell{padding:50px 0 36px;display:block}
+.docs-hero h1{font-size:var(--fs-52)}
+.docs-evidence dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+.docs-evidence dl>div:nth-child(odd){border-left:0;padding-left:0}
+.docs-evidence dl>div:nth-child(even){padding-right:0}
+.docs-layout{display:block;padding-top:24px}
+.docs-toc{top:70px;z-index:calc(var(--z-shell) - var(--z-lift));margin-bottom:30px}
+.toc-head button{display:block}
+:is(.docs-toc nav,.toc-footer){display:none}
+:is(.docs-toc.open nav,.docs-toc.open .toc-footer){display:block}
+.docs-footer .inner{padding:24px 0;display:block}
+.footer-links{margin:18px 0;flex-wrap:wrap}
+}
+@media (width < 520px){
+:root body .docs-hero h1{font-size:var(--fs-40)}
+:root body .docs-evidence dl>div{display:block;padding:12px}
+:root body .docs-evidence dd{margin-top:3px}
+:root body .docs-archive-dialog{width:calc(100vw - 16px);max-height:94dvh}
+:root body .docs-archive-dialog>header{align-items:start;padding:18px}
+:root body .docs-motion-grid{grid-template-columns:1fr;padding:10px 10px 0}
+:root body .docs-archive-body{padding:10px}
+.docs-archive-failed{margin:var(--s3)}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition-duration:var(--dur-instant)!important}}
+
+/* Public field manual v6 — photographic system reference */
+.docs-hero--visual{min-height:540px;display:flex;align-items:end;background:var(--surface-page)}
+.docs-hero--visual::after{display:none}
+.docs-hero--visual>img,.docs-hero-shade{position:absolute;inset:0;width:100%;height:100%}
+.docs-hero--visual>img{object-fit:cover;object-position:center 50%;filter:saturate(.88) contrast(1.08)}
+/* the LCP banners' inline previews (docs-prerender, tools/hero-lqip.mjs) on their boxes, cropped as their pictures are:
+   the picture fades in over its preview once decoded (docs.ts, topics.ts revealStills), so a slow link never paints it
+   in bands; a chapter card's the same way, under its card (a chapter banner's is in its own .dm-banner rule below) */
+.docs-hero--visual{background-image:var(--docs-hero-lqip,none);background-position:center 50%;background-size:cover;background-repeat:no-repeat}
+.docs-chapter-grid .docs-chapter-media{background-image:var(--card-lqip,none);background-position:center;background-size:cover;background-repeat:no-repeat}
+.docs-hero-shade{background:linear-gradient(90deg,var(--scrim),var(--scrim) 30%,transparent 62%),linear-gradient(0deg,var(--surface-scene),transparent 42%)}
+.docs-hero--visual .shell{width:min(calc(100% - var(--shell-gutter) * 2),var(--shell-max));margin-inline:auto;padding:76px 0 54px;grid-template-columns:minmax(0,1fr) minmax(420px,.82fr)}
+.docs-hero--visual h1{font-size:var(--docs-h1);text-shadow:var(--hollow-shadow)}
+.process-sheet-group{margin:24px 0;border:1px solid var(--line);background:var(--surface-page)}.process-sheet-group>header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line);text-transform:uppercase}.process-sheet-group>header span{color:var(--ink-2);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono);letter-spacing:var(--track-label-s)}.process-sheet-group>header strong{color:var(--ink-4);font-size:max(var(--fs-floor-11),var(--fs-11));letter-spacing:normal}.process-sheet-grid{display:grid;gap:1px;background:var(--line)}.process-sheet-grid a{display:block;background:var(--surface-scene);overflow:hidden}.process-sheet-grid img{display:block;width:100%;aspect-ratio:2400/540;object-fit:cover;object-position:center;transition:transform var(--dur-fast) ease}.process-sheet-grid a:hover img{filter:brightness(1.08);transform:scale(1.003)}
+.docs-main code{color:var(--text-info)}
+.docs-chapters{padding:64px 0 74px;border-bottom:1px solid var(--line);background:var(--surface-page)}.docs-chapters h2{margin:0 0 28px;font-size:var(--docs-h2);line-height:.96;text-transform:uppercase}.docs-chapter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line)}.docs-chapter-grid a{display:grid;grid-template-rows:180px auto auto;min-width:0;padding-bottom:17px;background:var(--surface-raised);text-decoration:none}.docs-chapter-grid img{width:100%;height:100%;object-fit:cover;filter:saturate(.94) contrast(1.04)}.docs-chapter-grid span{padding:15px 15px 0;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase}.docs-chapter-grid strong{padding:6px 12px 0;font-size:max(var(--fs-floor-12),var(--fs-12));line-height:1.35}.docs-chapter-grid a:active{transform:scale(.99)}
+@media(hover:hover) and (pointer:fine){.docs-chapter-grid a:hover{background:var(--surface-menu)}.docs-chapter-grid a:hover img{filter:saturate(1.06) contrast(1.03)}}
+@media (width < 1100px){.docs-chapter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (pointer:coarse){.dm-side a{min-height:var(--cot-control-floor,44px)}}
+@media (width < 520px){.footer-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--s4)}.footer-links a{min-height:var(--btn-h-m)}}
+@media (pointer:coarse){.footer-links a{min-height:var(--cot-control-floor,44px)}}
+@media (width < 768px){
+.docs-chapters{padding:52px 0 58px}
+.docs-chapter-grid{grid-template-columns:1fr}
+.docs-chapter-grid a{grid-template-rows:54vw auto auto}
+}
+@media (width < 1100px){
+.docs-hero--visual{min-height:0}
+.docs-hero--visual .shell{width:min(calc(100% - var(--shell-gutter) * 2),var(--shell-max));padding:66px 0 36px}
+.docs-hero--visual>img{object-position:62% center}
+.docs-hero--visual{background-position:62% center}
+.docs-hero-shade{background:linear-gradient(0deg,var(--surface-scene),var(--scrim) 55%,transparent)}
+.docs-hero--visual h1{font-size:var(--docs-h1)}
+.process-sheet-group>header{align-items:flex-start;gap:5px;flex-direction:column}
+.process-sheet-grid{overflow-x:auto}
+}
+@media (width < 1100px){.process-sheet-grid a,
+.process-sheet-grid img{width:900px}}
+
+/* Field manual landing v7 — icon-led system wayfinding. */
+.doc-icon{display:inline-grid;place-items:center;color:var(--ink-3)}.doc-icon svg{display:block;width:100%;height:100%}.doc-icon.tone-accent{color:var(--ink-3)}.docs-hero--visual{min-height:610px}.docs-hero-copy{max-width:680px}
+.docs-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}.docs-hero-actions a:not(.cot-c-btn){display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:42px;padding:0 15px;border:1px solid var(--line2);background:var(--surface-page);color:var(--ink-2);text-decoration:none;font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:var(--track-label-s);text-transform:uppercase;transition:transform var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out,background-color var(--dur-fast) ease-out}.docs-hero-actions a:not(.cot-c-btn).primary{border-color:var(--accent);background:var(--amber);color:var(--ink-on-accent)}.docs-hero-actions .doc-icon{width:16px;height:16px}.docs-hero-actions .primary .doc-icon{color:var(--ink-on-accent)}.docs-hero-actions a:not(.cot-c-btn):active{transform:scale(.97)}
+.docs-evidence dl>div{align-items:center;padding:var(--s3) var(--s4)}.docs-evidence dt{display:flex;align-items:center;gap:10px}.docs-evidence dt [data-doc-icon]{flex:none}
+.docs-chapters{padding:72px 0 82px;background:linear-gradient(180deg,var(--surface-page),var(--surface-page))}.docs-chapters-heading{display:grid;grid-template-columns:minmax(0,1fr) minmax(310px,.58fr);gap:40px;align-items:end;margin-bottom:30px}.docs-chapters-heading h2{margin:0}.docs-chapters-heading>p{max-width:560px;margin:0 0 2px;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.6}.docs-chapter-grid{grid-template-columns:repeat(12,minmax(0,1fr));gap:9px;background:none}.docs-chapter-grid a{position:relative;grid-column:span 4;grid-template-rows:178px auto auto;padding-bottom:18px;border:1px solid var(--line);overflow:hidden;transition:transform var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out,background-color var(--dur-fast) ease-out}.docs-chapter-grid a:first-child{grid-column:span 8;grid-template-rows:230px auto auto}.docs-chapter-grid a:nth-child(2){grid-template-rows:230px auto auto}.docs-chapter-grid a:nth-child(n+9){grid-column:span 3;grid-template-rows:164px auto auto}.docs-chapter-grid .docs-chapter-media{position:relative;display:block;min-width:0;padding:0;color:inherit;font-size:inherit;letter-spacing:normal;overflow:hidden}.docs-chapter-grid .docs-chapter-media::after{content:"";position:absolute;inset:42% 0 0;background:linear-gradient(0deg,var(--surface-scene),transparent)}.docs-chapter-grid .docs-chapter-media img{display:block;transition:transform var(--dur-base) ease-out,opacity var(--dur-base) var(--ease-enter)}.docs-chapter-grid .docs-chapter-media .doc-icon{display:none}.docs-chapter-grid .docs-chapter-media b{position:absolute;z-index:var(--z-lift);right:13px;top:12px;color:var(--ink-1);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono);letter-spacing:var(--track-label-s);text-shadow:var(--hollow-shadow);padding:4px 6px;border-radius:var(--r1);background:var(--glyph-plate)}.docs-chapter-grid a>span:not(.docs-chapter-media){padding:15px 12px 0;font:600 var(--fs-16)/1.2 var(--font-display);letter-spacing:normal;
+  text-transform:none;color:var(--ink-1)}.docs-chapter-grid a>strong{padding-top:7px;color:var(--ink-2)}.docs-chapter-grid a:active{transform:scale(.985)}
+.docs-toc a{grid-template-columns:20px 19px minmax(0,1fr);gap:7px;align-items:center;padding:8px 11px}.docs-toc a .toc-icon{width:16px;height:16px;padding:0;color:var(--ink-4)}.docs-toc a.active .toc-icon{color:var(--amber)}
+.doc-section h2{display:flex;align-items:center;gap:13px}.doc-section-icon{width:39px;height:39px;flex:0 0 39px;padding:8px;border:1px solid currentColor;background:var(--fill-quiet)}
+@media(hover:hover) and (pointer:fine){.docs-hero-actions a:not(.cot-c-btn):hover{border-color:var(--line-3);background:var(--surface-menu)}.docs-hero-actions a:not(.cot-c-btn).primary:hover{background:var(--amber2);color:var(--ink-on-accent)}.docs-chapter-grid a:hover{border-color:var(--line-3);transform:translateY(-2px)}.docs-chapter-grid a:hover .docs-chapter-media img{transform:scale(1.025);filter:saturate(1.05) contrast(1.04)}}
+@media(hover:none){.aside-card--archive:hover{transform:none;border-color:var(--line);background:var(--panel)}}
+@media (width < 1100px){.docs-hero--visual{min-height:0}}
+@media (width < 1100px){.docs-chapters-heading{display:block}}@media (width < 1100px){.docs-chapters-heading>p{margin-top:14px}}
+@media (width < 1100px){
+.docs-chapter-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3)}
+.docs-chapter-grid a,.docs-chapter-grid a:first-child,.docs-chapter-grid a:nth-child(2),.docs-chapter-grid a:nth-child(n+9){grid-column:auto;grid-template-rows:190px auto auto}
+}
+@media (width < 768px){
+.docs-hero-actions a:not(.cot-c-btn){flex:1 1 190px}
+.docs-chapter-grid{grid-template-columns:1fr}
+.docs-chapter-grid a,.docs-chapter-grid a:first-child,.docs-chapter-grid a:nth-child(2),.docs-chapter-grid a:nth-child(n+9){grid-template-rows:54vw auto auto}
+}
+/* a phone stacks every fact the same way (its label, room for two lines, then its value), so a row shares one line */
+@media (width < 520px){:root body .docs-evidence dl>div{display:grid;grid-template-rows:minmax(2.6em,auto) auto;align-content:start;gap:4px;min-width:0}
+  :root body .docs-evidence dl>div:nth-child(odd){padding-left:0}
+  /* a phone's trail names the manual and the page (the chapter's group is in the rail) */
+  .dm-crumb__step:not(:last-child){display:none}}@media (width < 520px){:root body .docs-evidence dd{margin-top:0}}
+@media (width < 520px){:root body .doc-section h2{align-items:flex-start;gap:10px}}@media (width < 520px){:root body .doc-section-icon{width:34px;height:34px;flex-basis:34px;padding:7px}}
+@media(prefers-reduced-motion:reduce){.docs-chapter-grid a:hover,.docs-chapter-grid a:hover .docs-chapter-media img{transform:none}}
+
+/* The Field Manual chapter (bui01/src/pages/08-docs): the shelf of chapters on the left, the banner with its
+   breadcrumb and two-voice title, the reading column, "on this page" on the right. topics.ts writes the markup.
+   Tokens only; the page's own values are the surface-docs group. */
+.topic-page{background:var(--surface-page)}
+.topic-loading{padding:var(--s10) var(--s6);color:var(--ink-3);text-align:center}
+.dm{display:grid;grid-template-columns:var(--docs-side-w) minmax(0,1fr);max-width:calc(var(--shell-max) + var(--shell-gutter) * 2);margin-inline:auto;align-items:start;min-height:calc(var(--cot-viewport-height,100dvh) - var(--shell-nav-h))}
+.dm-side{position:sticky;top:var(--shell-nav-h);display:flex;flex-direction:column;gap:4px;height:calc(var(--cot-viewport-height,100dvh) - var(--shell-nav-h));overflow:auto;
+  padding:18px 16px var(--s6) var(--shell-gutter);background:var(--side-plate);box-shadow:var(--docs-side-edge);scrollbar-width:thin}
+/* the shelf's one text edge: the index link and the group heads lead with a glyph at the set's small size (16 px, its
+   16-unit master where the sprite draws one: data-doc-size) and one gap, and a chapter's label starts on that edge */
+.dm-side{--dm-glyph:16px;--dm-glyph-gap:9px}
+.dm-home .doc-icon,.dm-grp .doc-icon{width:var(--dm-glyph);height:var(--dm-glyph)}
+.dm-home{display:flex;align-items:center;gap:var(--dm-glyph-gap);height:36px;padding:0;margin-bottom:10px;border-radius:var(--control-radius);color:var(--ink-2);
+  font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);text-decoration:none}
+.dm-home:hover{color:var(--ink-1)}
+.dm-grp{display:flex;align-items:center;gap:var(--dm-glyph-gap);height:34px;margin:6px 0 0;font:600 max(var(--fs-floor-12),var(--fs-14))/1 var(--font-display);color:var(--ink-1)}
+.dm-grp .doc-icon{color:var(--ink-3)}
+.dm-side a:not(.dm-home){display:flex;align-items:center;min-height:30px;padding:4px 10px 4px calc(var(--dm-glyph) + var(--dm-glyph-gap));border-radius:var(--control-radius);color:var(--ink-3);
+  font:400 max(var(--fs-floor-12),var(--fs-14))/1.25 var(--font-body);text-decoration:none}
+.dm-side a:not(.dm-home):hover{color:var(--ink-1)}
+.dm-side a[aria-current=page]{color:var(--ink-1);background:var(--surface-hover);box-shadow:var(--docs-side-on)}
+/* a touch screen wide enough for the shelf (an iPad held wide) keeps its chapters and its search at the touch floor */
+@media (pointer:coarse){.dm-side a:not(.dm-home),.dm-home{min-height:var(--cot-control-floor,44px)}}
+/* the manual's search (08 .side .search, docsSearch.ts): the field leads the shelf; while a query is typed its hits
+   take the shelf's place in the column */
+.dm-search{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+/* both fields (the shelf's and the index's) keep one inline inset on both sides: the magnifier gives back its 2 px side
+   bearing, so its ink starts on the inset as the last key cap's edge ends on it */
+.dm-search__field{display:flex;align-items:center;gap:8px;height:36px;padding:0 var(--s3);border-radius:var(--control-radius);box-shadow:var(--ring-2);color:var(--ink-3);cursor:text}
+.dm-search__field:focus-within{box-shadow:var(--ring-3);color:var(--ink-2)}.dm-search__field:has(input:focus-visible){outline:2px solid var(--focus-ink);outline-offset:2px}.dm-main:focus{outline:none}
+.dm-search__field .doc-icon{width:16px;height:16px;margin-inline-start:-2px}
+/* the touch target after the field's own 36 px (the fleet r3 critic: the iPads' shelf search stayed 36 px) */
+@media (pointer:coarse){.dm-search__field{height:var(--cot-control-floor,44px)}}
+.dm-search input{flex:1;min-width:0;height:100%;padding:0;border:0;background:none;font:400 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);color:var(--ink-1);outline:none}
+.dm-search input::placeholder{color:var(--ink-3)}
+.dm-search input::-webkit-search-cancel-button{display:none}
+.dm-search kbd{flex:none}
+.dm-search__keys{display:inline-flex;flex:none;gap:2px}
+.dm-search__status{margin:0;font:500 max(var(--fs-floor-12),var(--fs-12))/1.3 var(--font-body);color:var(--ink-3)}
+.dm-search__status:empty{display:none}
+.dm-search__hits{display:flex;flex-direction:column;gap:2px}
+.dm-search__hits[hidden]{display:none}
+.dm-side a.dm-hit{flex-direction:column;align-items:stretch;gap:4px;min-height:0;padding:8px 10px;color:var(--ink-3)}
+.dm-hit b{font:600 max(var(--fs-floor-12),var(--fs-14))/1.25 var(--font-display);color:var(--ink-1)}
+.dm-hit small{font:500 max(var(--fs-floor-12),var(--fs-12))/1.2 var(--font-body);color:var(--ink-3)}
+.dm-hit span{font:400 max(var(--fs-floor-12),var(--fs-13))/1.4 var(--font-body)}
+.dm-hit mark{background:none;color:var(--ink-1);font-weight:600;text-decoration:underline;text-decoration-color:var(--ink-3);text-underline-offset:2px}
+.dm-side a.dm-hit:hover,.dm-side a.dm-hit:focus-visible{color:var(--ink-2);background:var(--surface-hover);box-shadow:var(--docs-side-on)}
+.dm-side.is-searching>.dm-grp,.dm-side.is-searching>a:not(.dm-home){display:none}
+.dm-main{min-width:0}
+/* the banner's preview (topics.ts bannerLqip, the LQIPs' rule above) over its tone, cropped as its picture is */
+.dm-banner{position:relative;isolation:isolate;height:clamp(250px,33vh,360px);overflow:hidden;background:var(--dm-banner-lqip,none) 50% 62%/cover no-repeat var(--surface-scene)}
+/* a short landscape phone keeps the chapter's first lines in its first view: the banner is as tall as its trail and title,
+   which stand on the pause control's 16 px top inset in every locale, and the title steps down */
+@media (height < 520px){
+  .dm-banner{height:auto}:root{--docs-banner-h1:var(--fs-36)}
+  .dm-banner .dm-banner__t{position:relative;left:auto;right:auto;bottom:auto;margin:0 var(--docs-gutter);padding:var(--s4) 0 26px}
+}
+.dm-banner>picture,.dm-banner>picture>img,.dm-banner>img,.dm-banner>video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%}
+.dm-banner>video{opacity:0;transition:opacity var(--dur-screen) var(--ease-enter)}
+.dm-banner>video.has-frame{opacity:1}
+.dm-banner::after{content:'';position:absolute;inset:0;z-index:var(--z-lift);pointer-events:none;background:var(--docs-banner-fade)}
+.dm-banner__t{position:absolute;left:var(--docs-gutter);right:var(--docs-gutter);bottom:26px;z-index:var(--docs-banner-z);width:fit-content;max-width:760px}
+/* the title column's own scrim: the banner's fade darkens the picture's left and foot, and the title column can reach past
+   both over a bright picture, so the media scrim sits behind the trail and the title wherever they reach, feathered at its
+   open edges outside the type (large title type keeps 4.5:1 over any picture); the trail and the title are positioned, so
+   they paint over it in order */
+.dm-banner__t>*{position:relative}
+.dm-banner__t::before{content:'';position:absolute;inset:calc(var(--s7) * -1) calc(var(--s8) * -1) calc(var(--s5) * -1) calc(var(--docs-gutter) * -1);
+  background:linear-gradient(0deg,var(--scrim) calc(100% - var(--s7)),transparent);mask-image:linear-gradient(90deg,var(--ink-1) calc(100% - var(--s8)),transparent);pointer-events:none}
+/* the trail sits on a glyph plate, so it holds its contrast over any footage; the plate stands on the title's and the
+   column's edge */
+.dm-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:fit-content;margin:0 0 14px;padding:4px var(--s2);border-radius:var(--r1);background:var(--surface-scene);font:500 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);color:var(--ink-2)}
+.dm-crumb a{display:inline-flex;align-items:center;min-height:24px;color:inherit;text-decoration:none}
+@media (pointer:coarse){.dm-crumb a{min-height:var(--cot-control-floor,44px)}}
+.dm-crumb a:hover{color:var(--ink-1)}
+.dm-crumb i{display:inline-flex;font-style:normal;color:var(--ink-3)}
+/* a vehicle designation (T-90M, 2A7V) never breaks inside: captions wrap before it (src/docs/designations.ts) */
+.dm-nobr{white-space:nowrap}
+/* a step keeps its chevron: a long name wraps to the next line with it, never leaving a chevron dangling */
+.dm-crumb__step{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.dm-banner h1>span{display:block}
+/* a phone sets the title as one run (its two voices inline), balanced over its lines, so no word stands alone */
+@media (width < 520px),(height < 520px){.dm-banner h1>span{display:inline}}
+.dm-banner h1{margin:0;font:700 var(--docs-banner-h1)/.92 var(--font-display);text-transform:uppercase;color:var(--ink-1);text-shadow:var(--hollow-shadow);text-wrap:balance}
+.dm-banner h1 .t-hollow{color:var(--ink-1)}
+:lang(zh-CN) .dm-banner h1 .t-hollow{color:var(--ink-1);-webkit-text-stroke:0}
+/* a Chinese title breaks only between its phrases (topics.ts ZH_TITLE_PHRASES marks them), never inside a word */
+.dm-banner h1 .dm-phrases{word-break:keep-all;line-break:strict;overflow-wrap:break-word}
+.dm-banner__cap{position:absolute;right:20px;bottom:16px;z-index:var(--docs-banner-z);max-width:min(460px,40%);margin:0;padding:7px 10px;border-radius:var(--r1);background:var(--glyph-plate)}
+.dm-banner__cap .doc-icon{width:16px;height:16px;color:var(--ink-3)}
+/* beside the shelf (1100 px and up) the hero ends on the content edge at every width, the header's (Play now) and the
+   contents rail's, a gutter short of the page container's edge. The stacked layout (under 1100 px) keeps the hero a
+   full-bleed band. Its pause control (mediaPlayer.css: the kit's square icon button on its opaque plate) stands inside
+   the picture, one inset (16 px) from its top and right edges at every width. */
+.dm-banner>.cot-media-toggle{z-index:var(--docs-banner-z);top:var(--s4);right:var(--s4);bottom:auto}
+@media (width >= 1100px){
+  .dm-banner{margin-right:var(--docs-gutter)}
+}
+/* one block edge in every chapter: the article takes the width to the contents rail, so its figures, charts, tables and
+   cards end on one edge, and its prose paragraphs keep the reading measure. The two columns align on their first
+   baselines: the contents rail's first entry stands on the first heading's baseline in every chapter and locale, wherever
+   that heading's type and leading put it */
+.dm-body{display:grid;grid-template-columns:minmax(0,1fr) var(--docs-toc-w);align-items:baseline;gap:var(--s7);padding:var(--s3) var(--docs-gutter) var(--s8)}
+.dm-article{min-width:0}
+.dm-meta{display:flex;align-items:center;gap:6px;margin:0 0 var(--s5);font:400 max(var(--fs-floor-12),var(--fs-13))/1 var(--font-body);color:var(--ink-3)}
+.dm-meta .doc-icon{width:16px;height:16px}
+.dm-section{padding-top:var(--s6);scroll-margin-top:calc(var(--shell-nav-h) + var(--s4))}
+.dm-section h2{margin:0 0 var(--s4);font:600 var(--fs-28)/1.08 var(--font-display);color:var(--ink-1)}
+.dm-section p{margin:0 0 var(--s4);font:400 var(--fs-16)/var(--lh-docs) var(--font-body);color:var(--ink-2)}
+.dm-section>p{max-width:var(--measure-docs)}
+/* inline code, in the reading column and its cards: the mono face in the prose's ink and weight, no plate (a plate
+   abutted the words beside it and stood past the column); a token moves to the next line whole and wraps inside only
+   when it is wider than the column */
+.dm-article code{display:inline-block;max-width:100%;overflow-wrap:anywhere;vertical-align:baseline;font-family:var(--font-data);font-size:max(var(--fs-floor-12),var(--fs-14));font-weight:400;color:inherit}
+/* a way-in card's command flows in its sentence as the other chapters' code does, moving to the next line whole only
+   when it does not fit (set as its own block it left the line before it short, r34) */
+.dm-roles--ways p{text-wrap:pretty}
+/* a figure's frame is drawn inside its box, so the figure ends on the block edge with the tables and cards */
+.dm-section .topic-figure{margin:var(--s5) 0 var(--s3);overflow:hidden;border-radius:var(--r1);background:var(--surface-scene);box-shadow:var(--e1-flush)}
+.dm-section .topic-figure img{display:block;width:100%;height:auto}
+.dm-section .topic-figure figcaption{padding:11px 12px;border-top:1px solid var(--line-1);font:500 max(var(--fs-floor-12),var(--fs-13))/1.4 var(--font-body);color:var(--ink-2)}
+.dm-toc{position:sticky;top:calc(var(--shell-nav-h) + var(--s5));display:flex;flex-direction:column;gap:14px;padding-top:var(--s5)}
+.dm-toc nav{display:flex;flex-direction:column;border-left:1px solid var(--line-2)}
+.dm-toc a{padding:7px 0 7px 14px;font:400 max(var(--fs-floor-12),var(--fs-13))/1.3 var(--font-body);color:var(--ink-3);text-decoration:none;text-wrap:pretty}
+.dm-toc a:hover{color:var(--ink-1)}
+.dm-toc a[aria-current=location]{color:var(--ink-1);font-weight:600;box-shadow:var(--docs-toc-on)}
+.dm-pager{display:flex;justify-content:space-between;gap:var(--s4);padding:0 var(--docs-gutter) var(--s8)}
+.dm-pager .doc-icon{flex:none;width:18px;height:18px}
+.dm-pager__next{margin-left:auto}
+/* a long neighbour's name wraps inside its button on a phone instead of pushing the page sideways */
+.dm-pager .cot-c-btn{min-width:0;max-width:100%;height:auto;min-height:var(--btn-h-m);white-space:normal;text-align:start}
+:lang(zh-CN) .dm-banner h1{line-height:1.15}
+@media (width < 1100px){
+  .dm{grid-template-columns:minmax(0,1fr)}
+  /* the topic strip: its first item, the index link (one of its items, not a framed chip), sets its glyph on the page
+     gutter, the logo's and the title's edge (the strip's start padding gives back the item's own), and topics.ts
+     mountShelfRow scrolls an item's start to that gutter (the scroll padding);
+     each end fades, at least 24 px, only while the strip scrolls on past it, the start's fade ending where the leading
+     item's label begins, so no cut label shows at the edge */
+  .dm-side{position:static;flex-direction:row;flex-wrap:nowrap;gap:6px;height:auto;overflow-x:auto;padding:10px var(--docs-gutter) 10px calc(var(--docs-gutter) - var(--s3));scroll-padding-inline:var(--docs-gutter) var(--dm-fade);box-shadow:var(--docs-side-edge);
+    --dm-fade:max(var(--s5),var(--docs-gutter));--dm-fade-clear:0px;--dm-fade-start:0px;--dm-fade-end:max(var(--s7),var(--dm-fade));
+    mask-image:linear-gradient(90deg,transparent var(--dm-fade-clear),var(--ink-1) calc(var(--dm-fade-clear) + var(--dm-fade-start)),var(--ink-1) calc(100% - var(--dm-fade-end)),transparent)}
+  .dm-side[data-scrolled]{--dm-fade-start:var(--dm-fade);--dm-fade-clear:max(0px,calc(var(--docs-gutter) + var(--s3) - var(--dm-fade)))}
+  .dm-side[data-at-end]{--dm-fade-end:0px}
+  .dm-grp{display:none}
+  .dm-search{display:none}
+  /* every item, the index link too, keeps one horizontal padding, so the selected plate has the same gap on both sides,
+     and one type size and leading, so the index link's label stands on the chips' baseline */
+  .dm-side a.dm-home,.dm-side a:not(.dm-home){flex:none;margin:0;padding:4px var(--s3);white-space:nowrap;font-size:max(var(--fs-floor-12),var(--fs-14));line-height:1.25}
+  .dm-home{box-shadow:none}
+  .dm-body{grid-template-columns:minmax(0,1fr)}
+  .dm-toc{display:none}
+}
+@media (width < 768px){
+  .dm-banner{height:300px}
+  .dm-banner h1{font-size:var(--fs-36)}
+  .dm-banner__cap{display:none}
+}
+@media (prefers-reduced-motion:reduce){.dm-banner>video{transition:none}}
+
+/* Scene Studio battle reel library */
+.battle-reels{scroll-margin-top:90px;margin:34px 0 40px;padding-top:30px;border-top:1px solid var(--line)}
+.battle-reels-head{margin-bottom:var(--s5)}.battle-reels-head h3{margin:0;font-size:var(--docs-h2);line-height:.96;text-transform:uppercase}.battle-reels-head p{margin:0;color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.55}
+.battle-reel-stage{margin:0;border:0;background:var(--surface-scene);box-shadow:var(--e2-flush)}.battle-reel-stage video{display:block;width:100%;aspect-ratio:16/9;background:var(--surface-scene);object-fit:cover}.battle-reel-stage figcaption{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:var(--s3) var(--s2);border-top:1px solid var(--line);background:var(--surface-raised)}.battle-reel-stage figcaption>span{display:grid;gap:3px}.battle-reel-stage figcaption strong{font-size:max(var(--fs-floor-12),var(--fs-15))}.battle-reel-stage figcaption small{color:var(--ink-3);font:700 max(var(--fs-floor-11),var(--fs-11))/1.3 var(--mono);letter-spacing:normal;text-transform:uppercase}.battle-reel-stage figcaption>b{color:var(--ink-1);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono);white-space:nowrap}
+/* the takes are the kit's picker (cards, battleReels.ts): four a row under the player, two on a phone */
+.battle-reel-grid{margin-top:var(--s5)}
+/* a card's facts close its card, so a row's facts share one line whatever its names wrap to; a phone's search meets the
+   touch floor */
+:is(.battle-reel-grid,.filming-stage-bar,.filming-take-grid) .cot-c-picker__words{flex:1 1 auto;align-content:space-between}
+/* a player, its picker and the note under it share one text edge: the cards' own 8 px inset */
+:is(.battle-reel-grid,.filming-take-grid) .cot-c-picker__search{padding-inline:var(--s2)}
+/* a picker's search stands with the cards it filters: 24 px under the player, 12 over the cards (no empty chip row, and
+   no scroll fade on a grid that does not scroll) */
+:is(.battle-reel-grid,.filming-stage-bar,.filming-take-grid) .cot-c-picker__bar{row-gap:0}
+:is(.battle-reel-grid,.filming-stage-bar,.filming-take-grid) .cot-c-picker__grid{padding-top:var(--s1);-webkit-mask-image:none;mask-image:none}
+.filming-stage-note{padding-inline:var(--s2)}
+@media (pointer:coarse){:is(.battle-reel-grid,.filming-take-grid) .cot-c-picker__search{height:var(--cot-control-floor,44px)}}
+.battle-reel-grid .cot-c-picker__grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (width < 768px){
+.battle-reels-head{display:block}
+.battle-reels-head h3{margin:11px 0 13px}
+.battle-reel-grid .cot-c-picker__grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* the takes' box holds the picker's height before its cards come (they mount near the screen or once the page is idle: on
+   a slow link that was seconds after a reader reached them, and the growth moved what follows, the loading census: CLS
+   0.113 on a phone): two dozen cards in rows of its columns, each row a 16:9 picture and its words, under a skeleton of
+   their tiles. Measured 320-1024 px, it is within a row of the mounted height; a wide index's column holds its own. */
+@media (scripting:enabled) and (width < 1100px){
+  .battle-reels{container-type:inline-size}
+  .battle-reel-grid:empty{--reel-cols:4;--reel-rows:6;--reel-bar:calc(var(--s6) + var(--s2));
+    --reel-col:calc((100cqw - (var(--reel-cols) - 1) * var(--s3)) / var(--reel-cols));
+    --reel-row:calc((var(--reel-col) - var(--s4)) * 9 / 16 + var(--s8));
+    min-height:calc(var(--reel-bar) + var(--reel-rows) * (var(--reel-row) + var(--s3)));background:var(--fill-soft);
+    -webkit-mask-image:repeating-linear-gradient(180deg,var(--ink-1) 0 var(--reel-row),transparent 0 calc(var(--reel-row) + var(--s3))),
+      repeating-linear-gradient(90deg,var(--ink-1) 0 var(--reel-col),transparent 0 calc(var(--reel-col) + var(--s3)));
+    mask-image:repeating-linear-gradient(180deg,var(--ink-1) 0 var(--reel-row),transparent 0 calc(var(--reel-row) + var(--s3))),
+      repeating-linear-gradient(90deg,var(--ink-1) 0 var(--reel-col),transparent 0 calc(var(--reel-col) + var(--s3)));
+    -webkit-mask-composite:source-in;mask-composite:intersect;
+    mask-position:0 calc(var(--reel-bar) + var(--s3)),0 0;mask-size:100% calc(100% - var(--reel-bar) - var(--s3)),100% 100%;
+    mask-repeat:no-repeat}
+}
+@media (scripting:enabled) and (width < 768px){.battle-reel-grid:empty{--reel-cols:2;--reel-rows:12;--reel-bar:var(--s7)}}
+
+/* Readable, collapsible references keep the complete fleet useful on phones. */
+.manual-search{display:grid;gap:8px;color:var(--ink-2);font-weight:700;margin:24px 0 8px}
+.manual-search input{width:100%;box-sizing:border-box;min-height:44px;padding:12px;border:1px solid var(--ink-4);background:var(--surface-raised);color:var(--ink-1);font:inherit}
+.manual-count{color:var(--ink-3)}
+.manual-record{border:1px solid var(--ink-4);background:var(--surface-menu);margin:10px 0;padding:0 16px}
+.manual-record[hidden]{display:none}
+.manual-record summary{cursor:pointer;min-height:48px;padding:14px 0;line-height:1.5}
+.manual-record summary strong{color:var(--accent-hi);margin-right:12px}.manual-record summary span{color:var(--ink-2);font-size:max(var(--fs-floor-12),var(--fs-12))}
+.manual-record dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px;margin:12px 0 18px}
+.manual-record dt{font-size:max(var(--fs-floor-12),var(--fs-12));color:var(--ink-3)}.manual-record dd{margin:4px 0;color:var(--ink-1)}
+.manual-record :focus-visible{outline:2px solid var(--focus-ink);outline-offset:4px}
+.docs-chapter-grid a.docs-chapter-wide{grid-column:1/-1;grid-template-rows:260px auto auto}
+.docs-chapter-grid a.docs-chapter-wide img{object-position:50% 50%}
+@media (768px <= width < 1100px){.docs-chapter-grid a.docs-chapter-wide{grid-template-rows:230px auto auto}}
+@media (width < 768px){.docs-chapter-grid a.docs-chapter-wide{grid-template-rows:54vw auto auto}}
+.filming-viewer{margin:30px 0 0}
+/* the players draw their frame inside their box, on the column's edges as the cards under them do */
+.filming-screen{margin:0;border:0;background:var(--surface-scene);box-shadow:var(--e2-flush)}
+.filming-screen video{display:block;width:100%;aspect-ratio:16/9;background:var(--surface-scene);object-fit:cover}
+.filming-screen figcaption{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:var(--s3) var(--s2);border-top:1px solid var(--line);background:var(--surface-raised)}
+.filming-screen figcaption span{display:grid;gap:3px}
+/* the players' now-playing titles are one size, over their cards' names (the battle takes' and the Filming viewer's, r38),
+   and on a phone's scaled type never under the names' floor (r40) */
+.filming-screen figcaption strong{font-size:max(var(--fs-floor-12),var(--fs-15))}
+.filming-screen figcaption>b{color:var(--ink-1);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono);white-space:nowrap}
+/* the stages and the takes are the kit's pickers (cards): six stages a row under the screen, four takes a row under the story */
+.filming-stage-bar{margin:var(--s3) 0}
+.filming-stage-bar .cot-c-picker__grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+/* a stage's two facts stack a line each and wrap at whole words: six cards a row left one line a word of each (r33);
+   a take's name breaks at its spaces in zh, never inside a word (纵队) */
+.filming-stage-bar .cot-c-picker__facts{flex-direction:column}
+/* stacked, the facts need no separator between them (a "·" opened the second line, r34); a size stays one value
+   (1920 × 1080 holds no-break spaces in the catalogs) */
+.filming-stage-bar .cot-c-picker__facts span+span::before{content:none}
+.filming-stage-bar .cot-c-picker__facts>span{white-space:normal;overflow:visible;text-wrap:pretty}
+.filming-take-grid .cot-c-picker__name{text-wrap:pretty}
+:lang(zh-CN) :is(.filming-stage-bar .cot-c-picker__facts>span,.filming-take-grid .cot-c-picker__name){word-break:keep-all;overflow-wrap:anywhere}
+.filming-stage-note{min-height:3.3em;max-width:76ch;margin:14px 0 0;color:var(--ink-3);font-size:max(var(--fs-floor-12),var(--fs-12));line-height:1.6}
+.filming-frames{margin:16px 0 0;background:var(--surface-scene);box-shadow:var(--e2-flush)}
+.filming-frame-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s2)}
+/* each frame holds its cell (raised over the strip's scene fill) until the strip's picture arrives */
+.filming-frame{position:relative;display:block;aspect-ratio:16/9;background-color:var(--surface-raised);background-repeat:no-repeat;background-size:400% 100%}
+.filming-frame b{position:absolute;left:6px;bottom:6px;padding:3px 5px;background:var(--surface-scene);color:var(--ink-1);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono)}
+.filming-frames figcaption{padding:var(--s3) var(--s2);border-top:1px solid var(--line);color:var(--ink-2);font-size:max(var(--fs-floor-11),var(--fs-11));font-weight:700;letter-spacing:normal;text-transform:uppercase}
+/* the viewer's words share one edge, 8 px in: the screen's caption, the stages, the note, the frames' caption, the take */
+.filming-take-story{margin:22px 0 0;padding:var(--s4) var(--s2);background:linear-gradient(145deg,var(--surface-menu),var(--surface-page));box-shadow:var(--e2-flush)}
+.filming-take-story h3{margin:0;font-size:var(--docs-fluid-2);line-height:1.1;letter-spacing:var(--track-title)}
+.filming-take-story .filming-take-meta{margin:var(--s2) 0 0;color:var(--ink-3);font:600 max(var(--fs-floor-11),var(--fs-11))/1.3 var(--font-display);letter-spacing:var(--track-label);text-transform:uppercase}
+.filming-take-story p[data-filming-take-story]{max-width:76ch;margin:12px 0 0;color:var(--ink-2);font-size:max(var(--fs-floor-12),var(--fs-13));line-height:1.65}
+.filming-take-scene{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+/* the takes stand 12 px under the take's panel, with the grid's own 4 px: they continue it, as a picker's cards stand under its field */
+.filming-take-grid{margin-top:var(--s2)}
+.filming-take-grid .cot-c-picker__grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.filming-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin:28px 0 0;border:1px solid var(--line);background:var(--line)}
+.filming-numbers div{min-width:0;padding:15px;background:var(--surface-raised)}
+.filming-numbers dt{color:var(--ink);font-size:var(--docs-fluid-1);font-weight:700;line-height:1;letter-spacing:var(--track-title);white-space:nowrap}
+.filming-numbers dd{margin:8px 0 0;color:var(--ink-3);font:600 max(var(--fs-floor-11),var(--fs-11))/1.3 var(--font-display);letter-spacing:var(--track-label);text-transform:uppercase}
+/* the steps stand the manual's 12 px under the figures, on the figures' own plate (14 px and a second fill, r37) */
+.filming-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:var(--s3) 0 0;padding:0;border:1px solid var(--line);background:var(--line);list-style:none}
+/* a cell's content stands 16 px in with the grid's 1 px line, as the archive card's glyph plate does (15/17 px, r39) */
+.filming-steps li{display:grid;grid-template-rows:auto auto auto 1fr;gap:8px;min-width:0;padding:15px;background:var(--surface-raised)}
+/* a step's glyph stands on the manual's one glyph plate (the build facts' and the archive card's) */
+.filming-step-icon{display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid var(--line-3);background:var(--fill-soft)}
+.filming-step-icon svg{display:block;width:27px;height:27px}
+.filming-steps b{color:var(--ink-3);font:600 max(var(--fs-floor-11),var(--fs-11))/1 var(--font-display)}
+.filming-steps strong{font-size:max(var(--fs-floor-12),var(--fs-12));line-height:1.2}
+.filming-steps li>span:last-child{color:var(--ink-3);font-size:max(var(--fs-floor-11),var(--fs-11));line-height:1.5}
+@media (width < 1100px){
+.filming-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (width < 768px){
+.filming-stage-bar .cot-c-picker__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.filming-take-grid .cot-c-picker__grid,.filming-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (width < 520px){.filming-frame-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* A vehicle record's own take (src/docs/reference.ts over src/ui/fleetTakes.ts): muted and decorative, its caption the
+   take's title, its link the take's scene in the Studio. */
+.manual-take{display:grid;gap:9px;max-width:640px;margin:0 0 18px}
+.manual-take-label{color:var(--ink-3);font:700 max(var(--fs-floor-11),var(--fs-11))/1.3 var(--mono);letter-spacing:var(--track-label-s);text-transform:uppercase}
+.manual-take .fleet-take-frame{position:relative;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--line2);background:var(--surface-scene)}
+.manual-take .fleet-take-video{display:block;width:100%;height:100%;object-fit:cover}
+.manual-take .fleet-take-toggle{position:absolute;right:8px;bottom:8px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--line2);background:var(--surface-scene);color:var(--ink);cursor:pointer;transition:border-color var(--dur-fast) ease,color var(--dur-fast) ease}
+.manual-take .fleet-take-toggle svg{display:block;width:16px;height:16px}
+.manual-take .fleet-take-toggle:hover{border-color:var(--line-3);color:var(--ink-1)}
+.manual-take figcaption{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;color:var(--ink-2);font-size:max(var(--fs-floor-12),var(--fs-13));line-height:1.5}
+.manual-take .fleet-take-studio{display:inline-flex;align-items:center;min-height:34px;padding:0 13px;border:1px solid var(--line-3);background:var(--surface-raised);color:var(--ink-1);font:700 max(var(--fs-floor-11),var(--fs-11))/1 var(--mono);letter-spacing:var(--track-label-s);text-decoration:none;text-transform:uppercase;white-space:nowrap}
+.manual-take [hidden]{display:none!important}
+/* No kicker above a heading (owner UI rules 2026-10-17): these lines stay for assistive technology only. */
+.docs-chapters-heading .kicker,.aside-card-kicker{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* The manual's index in the chapter's grammar (08-docs): the title in two voices, kit buttons, the shelf's current
+   line, sentence-case section heads, picture cards. */
+.docs-hero h1{font:700 var(--docs-h1)/.92 var(--font-display);text-transform:uppercase;color:var(--ink-1);text-shadow:var(--hollow-shadow)}
+.docs-hero h1 span{display:block;color:var(--ink-1);-webkit-text-stroke:0}
+.docs-hero h1 .t-hollow{color:var(--ink-1)}
+:lang(zh-CN) .docs-hero h1 .t-hollow{color:var(--ink-1);-webkit-text-stroke:0}
+:lang(zh-CN) .docs-hero h1{line-height:1.15}
+:lang(zh-CN) .docs-chapters h2{line-height:1.15}
+.docs-hero-actions{gap:10px}
+.docs-hero-actions .cot-c-btn{min-height:0}
+.docs-toc{background:var(--side-plate);box-shadow:var(--docs-side-edge)}
+.docs-toc a{border-radius:var(--control-radius);font:400 max(var(--fs-floor-12),var(--fs-14))/1.25 var(--font-body)}
+.doc-section h2{font:600 var(--fs-28)/1.08 var(--font-display);text-transform:none}
+.doc-section>p:not(.lead){font:400 var(--fs-16)/var(--lh-docs) var(--font-body);color:var(--ink-2)}
+
+.docs-chapters h2{font:700 var(--docs-h2)/.94 var(--font-display)}
+.docs-chapter-grid{gap:var(--s3);background:none}
+/* a card's frame is drawn inside its box (one line, which the picture covers as the class and map cards' do), so the
+   cards start on the search field's and the stat strip's edge */
+.docs-chapter-grid a{overflow:hidden;border:0;border-radius:var(--control-radius);box-shadow:var(--e1-flush)}
+@media(hover:hover) and (pointer:fine){.docs-chapter-grid a:hover{box-shadow:var(--ring-3)}}
+/* the manual's index: the search, the two shelves (tools/docs-prerender.mjs shelves the cards), the battle takes and
+   the archive */
+.docs-index{display:grid;gap:var(--s7);padding-top:var(--s6);padding-bottom:var(--s8)}
+.docs-index-search{position:relative;width:min(640px,100%);margin:0}
+/* a wide index sets the search to the stat strip's half (its second divider) */
+@media (width >= 1100px){.docs-index-search{width:50%}}
+@media (width < 1100px){.docs-index-search{width:100%}}
+/* the topic shelf folds its search away under 1100 px; the index keeps its own */
+.docs-index-search.dm-search{display:flex}
+.docs-index-search .dm-search__field{height:48px}
+/* the result count stands on the 8 px step between the field's focus ring and the results panel */
+.docs-index-search.dm-search{gap:var(--s3)}
+.docs-index-search input{font-size:var(--fs-16)}
+/* the results panel drops from the field on its edges: its ring is drawn inside its box, as the field's is */
+.docs-index-search .dm-search__hits{position:absolute;z-index:var(--z-menu);top:calc(100% + var(--s2));left:0;right:0;max-height:min(60vh,480px);overflow:auto;padding:6px;border-radius:var(--control-radius);background:var(--surface-menu);box-shadow:var(--e2-flush)}
+.docs-index-search a.dm-hit{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:var(--r1);color:var(--ink-3);text-decoration:none}
+.docs-index-search a.dm-hit:hover,.docs-index-search a.dm-hit:focus-visible{color:var(--ink-2);background:var(--accent-wash)}
+.docs-shelf{display:grid;gap:var(--s4);scroll-margin-top:calc(var(--shell-nav-h) + var(--s4))}
+.docs-shelf h2{display:flex;align-items:center;gap:10px;margin:0;font:600 var(--fs-28)/1.1 var(--font-display);color:var(--ink-1)}
+.docs-shelf h2 .doc-icon{width:24px;height:24px;color:var(--ink-3)}
+@media (width >= 1100px){.docs-shelf .docs-chapter-grid a:nth-child(n+6):not(.docs-chapter-wide){grid-column:span 3;grid-template-rows:164px auto auto}}
+/* a shelf of ten (Play, since the fleet chapter): the cards after the lead pair go four across, two whole rows, where
+   three then four across left the tenth alone on a row */
+@media (width >= 1100px){.docs-shelf .docs-chapter-grid:has(>a:nth-child(10)) a:nth-child(n+3):not(.docs-chapter-wide){grid-column:span 3;grid-template-rows:164px auto auto}}
+.docs-reels .battle-reels{margin:0;padding-top:0;border-top:0}
+.docs-reels .battle-reels-head h2{margin:0;font:600 var(--fs-28)/1.1 var(--font-display);color:var(--ink-1)}
+/* a wide index sets the takes beside the player, as tall as it and scrolling within (stacked, the player alone filled a
+   1440 x 900 screen, its caption and its takes below the fold) */
+@media (width >= 1100px){
+  .docs-reels .battle-reels{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,26%);column-gap:var(--s5)}
+  .docs-reels .battle-reels-head{grid-column:1/-1}
+  .docs-reels .battle-reel-grid{margin-top:0;contain:size}
+  .docs-reels .battle-reel-grid .cot-c-picker__grid{grid-template-columns:minmax(0,1fr);padding-bottom:var(--s5);
+    mask-image:linear-gradient(180deg,var(--ink-1) calc(100% - var(--s5)),transparent)}
+}
+.docs-more{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:var(--s3)}
+.docs-more>.aside-card{margin:0}
+/* (gauntlet 250) a short landscape screen keeps the chapter title clear of the picture's caption; a zh label breaks between
+   words, not inside one; the index search's results sit over the page's cards and its floating button; touch controls
+   meet 44 px */
+@media (height < 520px){.dm-banner__cap{display:none}}
+:lang(zh) .docs-evidence :is(dt,dd){line-break:strict}
+.dm-keys .cot-c-kbd{vertical-align:middle}
+/* a key cap holds Latin legends only, never Chinese: in a Chinese document, where the label tokens step up to 13 px
+   (tokens.css, src/ui/zhTypeFloor.ts), it keeps the Latin scale on the figure token, which holds in every locale */
+:lang(zh-CN) .cot-c-kbd{--fs-floor-11:var(--battle-fs-fig-11);--fs-11:calc(var(--battle-fs-fig-11) * var(--cot-type-scale))}
+/* a Chinese key cap (空格, 左键) is a word, not a figure: it keeps the zh floor its page sets */
+:lang(zh-CN) .cot-c-kbd[data-cjk]{--fs-floor-11:inherit;--fs-11:inherit}
+.docs-footer .brand .cot-wordmark .wm{width:auto;height:var(--wordmark-h,13px)}
+@media (pointer:coarse){.footer-links a{min-height:var(--btn-h-m)}}
+}

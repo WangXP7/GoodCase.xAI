@@ -1,0 +1,51 @@
+import type { ArmorAimOverlayRuntime } from './armorAimOverlay.ts';
+import { createLazyChunk } from '../app/lazyChunk.ts';
+
+export type {
+  ArmorAimOverlayRuntime,
+  ArmorOverlayModel,
+  ArmorOverlayTarget,
+} from './armorAimOverlay.ts';
+
+interface ArmorAimOverlayModule {
+  createArmorAimOverlay(): ArmorAimOverlayRuntime;
+}
+
+interface ArmorAimOverlayAccess extends ArmorAimOverlayRuntime {
+  preload(): Promise<ArmorAimOverlayRuntime>;
+  isReady(): boolean;
+  readonly current: ArmorAimOverlayRuntime | null;
+}
+
+const loadDefaultOverlay = async (): Promise<ArmorAimOverlayModule> =>
+  await import('./armorAimOverlay.ts') as ArmorAimOverlayModule;
+
+/**
+ * Retryable battle-only owner for the exact plate flashlight. The overlay is
+ * presentation-only, so every forwarding method is deliberately fail-soft:
+ * a delayed or failed optional chunk must never break battle entry or create
+ * a per-frame exception storm. Entry paths still preload it under their
+ * loading veil so the normal visual contract is unchanged.
+ */
+export function createArmorAimOverlayAccess(
+  load: () => Promise<ArmorAimOverlayModule> = loadDefaultOverlay,
+): ArmorAimOverlayAccess {
+  let current: ArmorAimOverlayRuntime | null = null;
+  // (2026-11-02 audit R6, round 2 U35) one app/lazyChunk.ts chunk: a failed transfer is asked again under the one policy
+  // (at once after one failure, then past its backoff; a removed chunk shows the reload action), not at once by every call
+  const chunk = createLazyChunk(() => load().then((module) => (current = module.createArmorAimOverlay())));
+  const preload = (): Promise<ArmorAimOverlayRuntime> => chunk.load();
+
+  return {
+    preload,
+    isReady: () => current !== null,
+    prime: (target) => current?.prime(target) ?? null,
+    bakePanels: (target, pause) => current?.bakePanels(target, pause) ?? Promise.resolve(),
+    warm: () => current?.warm() ?? (() => {}),
+    update: (options) => { current?.update(options); },
+    hide: () => { current?.hide(); },
+    clear: () => { current?.clear(); },
+    dispose: () => { current?.dispose(); },
+    get current() { return current; },
+  };
+}

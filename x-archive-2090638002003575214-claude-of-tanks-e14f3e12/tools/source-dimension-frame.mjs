@@ -1,0 +1,65 @@
+// QA metrology for the second source-study fleet. A candidate never chooses
+// its ruler or the reference's raster bins. Legacy published-dimension and
+// historical-preservation policy are deliberately not changed.
+import * as THREE from 'three';
+import { SUPPLIED_SOURCE_COMPARISON_IDS } from './supplied-source-reference-overrides.mjs';
+import { buildOffsetFor } from './source-world-registration.mjs';
+
+const IDS=new Set(['m1a2_abrams_sepv2','leo2a6','k1a1','amx30b','t62mv1','t72b_1987','t80u',
+  'leclerc_xlr','amx56','chieftain_mk10','t72b3','jpz_e100','type10','type90',
+  'amx40','t72b3m_2016','t72bu','t90','t90a_burlak','t90ms_tagil',
+  'c1_ariete','challenger1_mk3','chieftain5','strv122', 'ares_apc', 'merkava4_trophy', 'merkava4_barak', 'namer_ifv', 'm48a5_patton',
+  // Merkava family 262 (owner 2026-10-27: the supplied Mk 1B-4B models are the target): measured on their source's ruler
+  'merkava1b', 'merkava2b', 'merkava2d', 'merkava3c', 'merkava3_baz', 'merkava4b',
+  // 267 (Main 2026-11-01): the Burlak prototype is measured on the composite it follows (the T-90A X source's hull under
+  // the Burlak X source's turret, source-world-registration.mjs); its gun's declared departure lifts no height
+  't90a_burlak_proto',
+  // 271 (Main on italy-korea-bmp-267): the Chieftain Mk 3 is built on the Mk 5 X castings and measured on their source's
+  // ruler, as chieftain5 is (its old print lay on its nose; the family's real-length reconcile is Main's own item)
+  'chieftain3',
+  ...SUPPLIED_SOURCE_COMPARISON_IDS]);
+
+export function usesSourceDimensionFrame(id,registration) {
+  return IDS.has(id)&&registration?.passed===true&&registration.mode==='canonical-source-world';
+}
+
+export function sourceDimensionCamera(sourceBounds,direction) {
+  const size=sourceBounds.getSize(new THREE.Vector3());
+  if(!size.toArray().every(v=>Number.isFinite(v)&&v>0))throw new Error('Invalid source dimension frame');
+  const center=sourceBounds.getCenter(new THREE.Vector3());
+  const dir=direction.clone().normalize();
+  const nominalUp=Math.abs(dir.y)>.9?new THREE.Vector3(0,0,-1):new THREE.Vector3(0,1,0);
+  const right=new THREE.Vector3().crossVectors(nominalUp,dir).normalize();
+  const up=new THREE.Vector3().crossVectors(dir,right).normalize();
+  const radius=axis=>(Math.abs(axis.x)*size.x+Math.abs(axis.y)*size.y+Math.abs(axis.z)*size.z)/2;
+  const half=Math.max(radius(right),radius(up),.5)*1.08;
+  const camera=new THREE.OrthographicCamera(-half,half,half,-half,.1,200);
+  camera.position.copy(center).addScaledVector(dir,60);
+  camera.up.copy(up);camera.lookAt(center);camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  return camera;
+}
+
+/** `buildOffset` is the build's declared departure from the source's turret datums (source-world-registration.mjs
+ *  SOURCE_WORLD_BUILD_OFFSETS: the T-80U's ring race); its turret's rise is added to the source's heights, nothing else. */
+export function sourceDimensionRows(reference,actual,referenceBounds,actualBounds,buildOffset=[0,0,0]) {
+  const rows=[],lift=buildOffsetFor(buildOffset,'turret')[1];
+  const add=(name,a,r,method)=>{
+    if(![a,r].every(v=>Number.isFinite(v)&&v>0))throw new Error(`Missing positive ${name} source measurement`);
+    rows.push({name,actual:a,published:r,pct:Math.abs(a-r)/r*100,method});
+  };
+  const raised=lift?` (the source raised ${lift} m, the build's declared offset)`:'';
+  for(const name of ['heightM','hullLengthM','overallLengthM','widthM']) {
+    add(name,actual[name],name==='heightM'?reference[name]+lift:reference[name],
+      `paired identical masks in source-only fixed frame${name==='heightM'?raised:''}`);
+  }
+  const r=referenceBounds.getSize(new THREE.Vector3()),a=actualBounds.getSize(new THREE.Vector3());
+  r.y+=lift;
+  for(const [name,key]of [['physicalWidthM','x'],['physicalHeightM','y'],['physicalOverallLengthM','z']]) {
+    // Full 3D bounds deliberately do not inherit raster filtering or camera
+    // clipping. An oversized/missing skirt or barrel still fails. The gate
+    // passes the bodies' bounds: whips, antennas and roof weapons are not
+    // part of either (tools/body-height-parts.mjs, Main's ruling 2026-10-30).
+    add(name,a[key],r[key],`full visible body envelope, no raster filtering${key==='y'?raised:''}`);
+  }
+  return rows;
+}

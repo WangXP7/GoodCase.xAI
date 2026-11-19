@@ -1,0 +1,375 @@
+/**
+ * Druck-Regler: geschlossener Kreis auf den HP-Anteil, den eine Welle kostet.
+ *
+ * Er liefert einen Multiplikator auf das Budget einer Welle
+ * (`sources/budget/`), gemessen an dem HP-Anteil, den die letzten Wellen
+ * gekostet haben. Die Begründungen unten stammen aus der Zeit des adaptiven
+ * Directors, für den der Regler gebaut wurde; sie gelten für das Budget
+ * genauso.
+ *
+ * WARUM NICHT MEHR AUF DIE LECK-QUOTE, gemessen über 360 Könner-Läufe
+ * (docs/DRAMA_CONTROLLER_PLAN.md):
+ *
+ * 1. **Die Leck-Quote hat bei kleinen Wellen keine Auflösung.** Das Zielband
+ *    war 8 bis 16 %. Bei sieben gespawnten Gegnern sind nur 0 %, 14 % und
+ *    29 % darstellbar. Der Regler fuhr sich selbst in den Bereich, in dem er
+ *    nicht mehr messen konnte, und sah dort abwechselnd "viel zu wenig" und
+ *    "viel zu viel".
+ *
+ * 2. **Die Anfangswellen trieben ihn in die Sättigung.** Die Wellen 1 bis 3
+ *    lecken 71, 37 und 10 %, weil der Spieler noch keine Türme hat. Nach zwei
+ *    Wellen stand der Multiplikator auf dem unteren Anschlag und blieb dort:
+ *    über alle Wellen klebte er zu 34,6 % an 0,5.
+ *
+ * 3. **Ein Mittelwert über vier Wellen ist gegen Ausreißer wehrlos.** Die
+ *    Kampagne pinnt Luftwellen auf W7, W8, W12, W16 und W21; gegen eine
+ *    Abwehr ohne Luftziel lecken sie stark. Der Regler las das als "zu
+ *    schwer" und schrumpfte danach auch jede Bodenwelle.
+ *
+ * Ergebnis war ein Oszillator statt eines Reglers: zwölf Wellen am Stück ohne
+ * HP-Verlust, dann ein Überschwingen auf 365 Gegner und eine Wand, an der
+ * 75 % der Läufe starben.
+ *
+ * WARUM DER DRUCK DIE RICHTIGE GRÖSSE IST:
+ *
+ * - Er misst, was Spannung ausmacht. Der Spieler erlebt sinkende HP, keine
+ *   Leck-Quote.
+ * - Er löst auch bei fünf Gegnern auf, weil jeder Gegnertyp anderen
+ *   Leck-Schaden macht. Die Leck-Quote ist dort eine Stufenfunktion.
+ * - **Er überlebt Heilung.** Der Bezug ist der HP-Stand zu Wellenbeginn, nicht
+ *   das Startmaximum und nicht der kumulierte Schaden. Heilt der Spieler
+ *   künftig über Pickups oder Käufe, steigt der Nenner, die Welle darf absolut
+ *   mehr kosten, und der relative Druck bleibt gleich. Geheilte HP sind damit
+ *   echter Fortschritt in Form überlebter Wellen, ohne dass die Kurve
+ *   verflacht. Ein Regler auf den Restbestand oder auf `damagePercent` (gegen
+ *   `startHealth`) würde in dem Moment brechen, in dem Heilung existiert.
+ *
+ * Zustand ist pro Lauf: {@link reset} bei einem neuen Spiel. Ließ man ihn
+ * stehen, wurde der Multiplikator zur Ratsche, und frische Läufe öffneten
+ * gegen Wellen, die für eine längst abgebaute Verteidigung bemessen waren.
+ */
+
+import { directorParams } from './director-params';
+import { DetMath } from '../utils/det-math';
+
+/**
+ * Gewicht der neuesten Welle im geglätteten Druck.
+ *
+ * Ein exponentiell gewichteter Mittelwert statt eines Fensters. Das Fenster
+ * über acht Wellen war zu träge: Wird die Verteidigung ab Welle 14 stark,
+ * braucht ein gleitendes Mittel vier Wellen, bis es das merkt, und gemessen
+ * standen dann neun Wellen am Stück ohne HP-Verlust im Lauf. Der EWMA
+ * gewichtet die letzte Welle sofort mit 35 % und behält trotzdem ein
+ * Gedächtnis von rund drei Wellen, also die Glättung gegen einzelne
+ * Ausreißer (docs/DRAMA_CONTROLLER_PLAN.md).
+ */
+export const PRESSURE_SMOOTHING = 0.35;
+
+/**
+ * Most a single wave counts for, as a multiple of the target (TODO E48).
+ *
+ * One wave that cost 50 % of the HP went into the average whole, and with
+ * the smoothing's memory the loop stayed shut for a dozen waves after it
+ * (W15 to W17 of the Heilbronn coop run, then W18 to W30 cost nothing).
+ * Three times the target still says "far too hard" and closes the loop as
+ * far as one step goes; an outlier just no longer lingers.
+ */
+export const PRESSURE_MEASURE_CAP = 3;
+
+/**
+ * Lauflänge, auf die der Regler zielt, und die HP, die dort noch übrig sein
+ * sollen. Zusammen ergeben sie den Zieldruck; die gewünschte Lauflänge ist
+ * damit ein Design-Parameter und kein Ergebnis von Tuning.
+ */
+export const TARGET_RUN_WAVES = 80;
+export const TARGET_RESIDUAL_HP = 0.05;
+
+/**
+ * Anteil der HP, den eine Welle im Mittel kosten soll.
+ *
+ * Kostet jede Welle den Anteil p, sind nach N Wellen noch (1-p)^N übrig.
+ * Nach TARGET_RESIDUAL_HP aufgelöst sind das 3,67 % bei 80 Wellen.
+ */
+export const BASE_PRESSURE = 1 - DetMath.pow(TARGET_RESIDUAL_HP, 1 / TARGET_RUN_WAVES);
+
+/**
+ * Form der Kurve über den Lauf: die Aufbauphase ist milder, das Endspiel
+ * härter. Der Mittelwert bleibt 1, also bleibt die Lauflänge erhalten.
+ */
+export const PRESSURE_SHAPE_START = 0.5;
+export const PRESSURE_SHAPE_END = 1.5;
+
+/**
+ * Größter Schritt je Welle, als Betrag des Log-Fehlers. 0,7 entspricht
+ * höchstens ×1,42 oder ÷1,42 pro Welle.
+ */
+export const PRESSURE_MAX_STEP = 0.7;
+
+/**
+ * Größter Schritt beim Öffnen, als Betrag des Log-Fehlers: 0,2 entspricht
+ * mit pressureGain 0,5 höchstens ×1,105 pro Welle. Öffnen geht langsamer als Schließen: Nach einer
+ * Reihe billiger Wellen stand der Regler sonst in drei Wellen beim Doppelten,
+ * und die erste Welle, die die Abwehr wirklich forderte, kam mit vollem
+ * Überschuss.
+ */
+export const PRESSURE_MAX_OPEN_STEP = 0.2;
+
+/**
+ * Untergrenze der Messung, damit `ln(target / 0)` nicht divergiert. Eine
+ * Welle, die gar nichts kostet, liest sich als "kostete 0,2 % der HP".
+ */
+export const PRESSURE_FLOOR = 0.002;
+
+/** Toleranzband um den Sollwert, als Faktor nach unten und oben. */
+export const PRESSURE_BAND_LO = 0.5;
+export const PRESSURE_BAND_HI = 1.5;
+
+/**
+ * Der Anteil der HP, den eine Welle kosten soll.
+ *
+ * Eine Funktion der Wellennummer, keine Konstante: dieselbe Zahl steuert den
+ * Sollwert des Reglers und den Leck-Spielraum im Deckel des Budgets
+ * (`sources/budget/budget.ts`).
+ */
+export function targetPressure(waveNumber: number): number {
+  const ramp = Math.max(0, Math.min(1, waveNumber / TARGET_RUN_WAVES));
+  const shape = PRESSURE_SHAPE_START + (PRESSURE_SHAPE_END - PRESSURE_SHAPE_START) * ramp;
+  return BASE_PRESSURE * shape;
+}
+
+/**
+ * Der Anteil des HP-Bestands, den eine Welle gekostet hat.
+ *
+ * `hpAtStart` ist der Stand zu Wellenbeginn, nicht das Startmaximum: das ist
+ * die Stelle, an der der Regler heilungsfest wird.
+ *
+ * null, wenn die Welle keine Aussage trägt (kein HP-Stand, kein Gegner).
+ * null ist nicht 0: eine Welle ohne Daten als "kostete nichts" zu buchen
+ * treibt den Regler auf Beweise, die es nicht gibt.
+ */
+export function wavePressure(
+  hpLost: number,
+  hpAtStart: number,
+  enemiesSpawned: number,
+): number | null {
+  if (!Number.isFinite(hpLost) || !Number.isFinite(hpAtStart)) return null;
+  if (hpAtStart <= 0 || enemiesSpawned <= 0) return null;
+  return Math.max(0, Math.min(1, hpLost / hpAtStart));
+}
+
+/**
+ * Was der Regler mit der letzten Welle gemacht hat. 'held': im Band;
+ * 'blocked': zu billig, aber das Anti-Windup hielt ihn (die Grenze hielt die Welle).
+ */
+export type PressureStep = 'warming-up' | 'opened' | 'closed' | 'held' | 'blocked';
+
+/** Lesender Blick auf den Regler. */
+export interface PressureStatus {
+  multiplier: number;
+  /** Wie viele Wellen der geglättete Wert schon gesehen hat. */
+  samples: number;
+  /** Mittlerer Druck über das Fenster, oder null solange es nicht voll ist. */
+  meanPressure: number | null;
+  /** Sollwert der zuletzt verarbeiteten Welle. */
+  target: number | null;
+  /** Druck der zuletzt verarbeiteten Welle allein, null ohne Aussage. */
+  lastPressure: number | null;
+  lastStep: PressureStep;
+  /** Faktor, um den die letzte Welle den Multiplikator verschoben hat; 1 ohne Schritt. */
+  lastChange: number;
+}
+
+/** Der Zustand des Reglers als einfache Daten, für einen Spielstand (TODO E110). */
+export interface PressureState {
+  smoothed: number | null;
+  samples: number;
+  multiplier: number;
+  lastStep: PressureStep;
+  lastTarget: number | null;
+  lastPressure: number | null;
+  lastChange: number;
+}
+
+/**
+ * Warum überhaupt geglättet und nicht auf die letzte Welle geregelt:
+ *
+ * Der Druck ist bimodal. Eine Welle kostet fast nichts, wenn die Abwehr zum
+ * Template passt, und 20 bis 30 %, wenn nicht. Auf den Einzelwert zu regeln
+ * hieße, bei jeder gepinnten Luftwelle den ganzen Lauf umzustellen.
+ *
+ * Warum ein Mittel und kein Median: Der Median war der erste Versuch und war
+ * zu robust. Er traf verlässlich die harmlose Mitte und meldete "im Band",
+ * während der Lauf im Schnitt 12 % je Welle verlor und nach 22 Wellen vorbei
+ * war. Die Lauflänge hängt am Erwartungswert, denn nach N Wellen sind
+ * (1-p)^N der HP übrig, also ist der Erwartungswert die Größe, die geregelt
+ * werden muss.
+ */
+
+export class PressureController {
+  /**
+   * @param limits Spielraum des Multiplikators; das Budget-Modell halb bis
+   *               doppelt (Entscheidung 2026-09-28).
+   */
+  constructor(
+    private readonly limits: { min: number; max: number },
+    /**
+     * Wellen, die er nicht ansieht, und Messwerte, bevor er stellt. Die
+     * ersten Wellen messen einen Spieler ohne Türme; das Budget-Modell braucht
+     * den Regler trotzdem ab Welle 2 (Bot-Messung 2026-09-28).
+     */
+    private readonly start: { warmupWaves: number; minSamples: number },
+  ) {}
+
+  /** Geglätteter Druck, null bevor die erste Welle gezählt hat. */
+  private smoothed: number | null = null;
+  private sampleCount = 0;
+  private multiplier = 1;
+  private lastStep: PressureStep = 'warming-up';
+  private lastTarget: number | null = null;
+  private lastPressure: number | null = null;
+  private lastChange = 1;
+
+  /** Faktor auf das Budget der nächsten Welle. */
+  get pressureMultiplier(): number {
+    return this.multiplier;
+  }
+
+  get status(): PressureStatus {
+    const ready = this.sampleCount >= this.start.minSamples;
+    return {
+      multiplier: this.multiplier,
+      samples: this.sampleCount,
+      meanPressure: ready ? this.smoothed : null,
+      target: this.lastTarget,
+      lastPressure: this.lastPressure,
+      lastStep: this.lastStep,
+      lastChange: this.lastChange,
+    };
+  }
+
+  /** Der Zustand des Laufs, für einen Spielstand. */
+  saveState(): PressureState {
+    return {
+      smoothed: this.smoothed,
+      samples: this.sampleCount,
+      multiplier: this.multiplier,
+      lastStep: this.lastStep,
+      lastTarget: this.lastTarget,
+      lastPressure: this.lastPressure,
+      lastChange: this.lastChange,
+    };
+  }
+
+  /** Den Zustand eines Spielstands übernehmen; der Regler macht weiter, wo er dort stand. */
+  restoreState(state: PressureState): void {
+    this.smoothed = state.smoothed;
+    this.sampleCount = state.samples;
+    this.multiplier = state.multiplier;
+    this.lastStep = state.lastStep;
+    this.lastTarget = state.lastTarget;
+    this.lastPressure = state.lastPressure;
+    this.lastChange = state.lastChange;
+  }
+
+  /** Zustand des Laufs verwerfen. Gehört an den Start eines neuen Spiels. */
+  reset(): void {
+    this.smoothed = null;
+    this.sampleCount = 0;
+    this.multiplier = 1;
+    this.lastStep = 'warming-up';
+    this.lastTarget = null;
+    this.lastPressure = null;
+    this.lastChange = 1;
+  }
+
+  /**
+   * Eine abgeschlossene Welle in den Regler falten.
+   *
+   * @param pressure   Anteil des HP-Bestands, den die Welle gekostet hat, oder
+   *                   null, wenn die Welle keine Aussage trägt.
+   * @param waveNumber Nummer der Welle, die gerade endete. Sie bestimmt den
+   *                   Sollwert und ob der Warmup noch läuft.
+   * @param capBinding Hatte der Multiplikator auf diese Welle Wirkung? Nicht,
+   *                   wenn der Deckel oder die Grenze je Gegner die Welle
+   *                   hielt; weiter zu öffnen wäre dann Integrieren gegen
+   *                   eine Sättigung (Anti-Windup, siehe unten).
+   */
+  recordWave(pressure: number | null, waveNumber: number, capBinding = true): number {
+    const params = directorParams();
+    const target = targetPressure(waveNumber) * params.pressureTargetScale;
+    this.lastTarget = target;
+    this.lastPressure = pressure !== null && Number.isFinite(pressure) ? pressure : null;
+    this.lastChange = 1;
+
+    // Die Aufbauwellen messen einen Spieler ohne Türme. Sie kommen nicht
+    // einmal ins Fenster, sonst ziehen ihre Verluste den Schnitt über Wellen
+    // hinweg nach oben.
+    if (waveNumber <= this.start.warmupWaves) {
+      this.lastStep = 'warming-up';
+      return this.multiplier;
+    }
+
+    // JEDE Welle zählt, auch die, deren Größe der Deckel nicht bestimmt hat.
+    //
+    // Zwischen dem 2026-09-22 früh und mittag stand hier ein Filter: Eine
+    // billige Welle ohne bindenden Deckel sollte kein Messwert sein, weil der
+    // Multiplikator sie nicht beeinflusst hat. Ein menschlicher Lauf über 66
+    // Wellen hat gezeigt, wie falsch das ist. Bei einer starken Verteidigung
+    // bindet der Deckel fast nie, also waren 14 von 29 Wellen für den Regler
+    // unsichtbar, und zwar genau die billigen. Er hielt den Schnitt für
+    // 5,2 % während er real bei null lag, fuhr nach einer einzigen teuren
+    // Welle von ×5,75 auf ×0,62 herunter und schickte statt 2820 Gegnern noch
+    // 21. Ein Auswahlfehler, der genau in die falsche Richtung wirkt: Der
+    // Filter sollte falsches Öffnen verhindern und erzwang falsches Schließen.
+    //
+    // Gegen falsches Öffnen schützt das Anti-Windup unten, und das greift an
+    // der richtigen Stelle: bei der Stellgröße, nicht bei der Messung.
+    if (pressure !== null && Number.isFinite(pressure)) {
+      const value = Math.max(0, Math.min(1, target * PRESSURE_MEASURE_CAP, pressure));
+      this.smoothed = this.smoothed === null
+        ? value
+        : PRESSURE_SMOOTHING * value + (1 - PRESSURE_SMOOTHING) * this.smoothed;
+      this.sampleCount++;
+    }
+
+    if (this.smoothed === null || this.sampleCount < this.start.minSamples) {
+      this.lastStep = 'warming-up';
+      return this.multiplier;
+    }
+
+    const measured = this.smoothed;
+
+    if (measured >= target * PRESSURE_BAND_LO && measured <= target * PRESSURE_BAND_HI) {
+      // Im Band kostet die Welle etwas und der Spieler lebt: Zielzustand.
+      this.lastStep = 'held';
+      return this.multiplier;
+    }
+
+    // Logarithmischer Fehler, damit "halb so viel" und "doppelt so viel"
+    // gleich schwer wiegen. Der relative Fehler des Vorgängers war nach oben
+    // auf +1 begrenzt und nach unten unbegrenzt, also einseitig hart.
+    const error = DetMath.log(target / Math.max(measured, PRESSURE_FLOOR));
+
+    // Anti-Windup. Band der Deckel nicht, war die Welle schon kleiner als er
+    // erlaubt hätte: Der Multiplikator hat sie nicht begrenzt, also ist der zu
+    // geringe Druck nicht sein Verschulden und weiter zu öffnen wirkungslos.
+    // Gemessen lief er so über sechs Wellen von ×1,04 auf ×8,6 und schickte
+    // dann 673 Gegner in eine Welle. Schließen bleibt erlaubt: Dafür ist der
+    // Deckel immer zuständig.
+    if (!capBinding && error > 0) {
+      this.lastStep = 'blocked';
+      return this.multiplier;
+    }
+
+    const clamped = Math.max(-PRESSURE_MAX_STEP, Math.min(PRESSURE_MAX_OPEN_STEP, error));
+    const step = DetMath.exp(params.pressureGain * clamped);
+    const before = this.multiplier;
+    this.multiplier = Math.max(
+      this.limits.min,
+      Math.min(this.limits.max, this.multiplier * step),
+    );
+    this.lastChange = this.multiplier / before;
+    this.lastStep = measured < target ? 'opened' : 'closed';
+    return this.multiplier;
+  }
+}

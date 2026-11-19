@@ -1,0 +1,253 @@
+import { Injectable, inject } from '@angular/core';
+import { EventSubscription, SubscriptionBag } from '../../game-engine/game-event-bus';
+import { SimClient } from '../../sim/client/sim-client.service';
+import { SimMirror } from '../../sim/client/mirror/sim-mirror';
+import { TowerDefenseStore } from '../../store/tower-defense.store';
+import { ResearchStore } from '../../store/research.store';
+import { RunLogFacade } from '../../run-log/run-log.facade';
+import { runSummary } from '../../run-log/run-summary';
+import { TOWER_TYPES, type TowerTypeId } from '../../configs/tower-types.config';
+import { WaveDebugService } from '../debug/wave-debug.service';
+
+/**
+ * GameStateSyncService — Bridges the simulation's events to the Store.
+ *
+ * The simulation (docs/SIM_WORKER.md) is the authoritative game engine. Its
+ * events reach the main thread's bus (SimClient.bus) as views; this service
+ * listens to them and writes the changes to the Store, making the Store the
+ * single source of truth for ALL state reads.
+ *
+ * Flow:
+ *   Simulation → SimClient.bus (views) → GameStateSyncService → Store (signals)
+ *   Component/Facade reads → Store (only)
+ *
+ * Lifecycle:
+ *   - initialize(eventBus) — subscribes to all relevant events
+ *   - dispose() — cleans up subscriptions
+ *   - Called once per game session from TowerDefenseFacadeService
+ */
+@Injectable({ providedIn: 'root' })
+export class GameStateSyncService {
+  private readonly store = inject(TowerDefenseStore);
+  private readonly researchStore = inject(ResearchStore);
+  private readonly subs = new SubscriptionBag();
+  private readonly sim = inject(SimClient);
+  private readonly mirror = inject(SimMirror);
+  /** The run log the game-over screen reads its numbers from */
+  private readonly runLog = inject(RunLogFacade);
+  /** The sidebar's preview of the running wave (wave panel) */
+  private readonly waveDebug = inject(WaveDebugService);
+
+  /** The player at this client */
+  private localPlayer(): string {
+    return this.mirror.localPlayerId;
+  }
+
+  /** Subscribe to the simulation's events and sync state changes to the Store. */
+  initialize(): void {
+    const eventBus = this.sim.bus;
+    const gameClock = () => this.mirror.scalars.gameTimeMs;
+    // Defensive: clear any prior subscriptions so a future re-init path can't
+    // double-subscribe (consistent with combat-effect/hq-damage/game-state).
+    this.subs.disposeAll();
+    // ── Wave lifecycle ────────────────────────────────────────────
+    this.subs.add(eventBus.onLive('wave:started', (event) => {
+      this.store.phase.set('wave');
+      this.store.waveNumber.set(event.wave);
+      this.store.enemiesAlive.set(0);
+      this.store.waveEnemyTotal.set(event.enemyCount);
+      this.store.waveEnemiesLeft.set(event.enemyCount);
+    }));
+
+    this.subs.add(eventBus.onLive('wave:completed', (_event) => {
+      this.store.phase.set('setup');
+      this.store.enemiesAlive.set(0);
+      this.store.waveEnemyTotal.set(0);
+      this.store.waveEnemiesLeft.set(0);
+    }));
+
+    // The groups of the wave that starts, for the sidebar's wave panel
+    this.subs.add(eventBus.onLive('wave:groups', (event) => {
+      this.waveDebug.setCurrentWaveGroups([...event.groups]);
+    }));
+
+    // The dev jump moves the counter between waves (GameStateManager.jumpToWave):
+    // the last wave counts as played, the wave button shows the next one
+    this.subs.add(eventBus.onLive('wave:jumped', (event) => {
+      this.store.waveNumber.set(event.wave - 1);
+    }));
+
+    // Kill-all also drops the enemies still to spawn (WaveManager.stopSpawning),
+    // so nothing of the wave is left. The deaths it causes clamp at 0.
+    this.subs.add(eventBus.onLive('wave:cleared', () => {
+      this.store.waveEnemiesLeft.set(0);
+    }));
+
+    // ── Game state events ─────────────────────────────────────────
+    this.subs.add(eventBus.onLive('game:over', (_event) => {
+      this.store.phase.set('gameover');
+      // The fatal wave has no wave:completed; the log writes its block here
+      this.runLog.collector.flushOpenWave();
+      this.store.runSummary.set(runSummary(
+        this.runLog.current(),
+        gameClock(),
+        (type) => TOWER_TYPES[type as TowerTypeId]?.name ?? type,
+      ));
+      this.store.showGameOverScreen.set(true);
+    }));
+
+    this.subs.add(eventBus.onLive('game:reset', () => {
+      this.store.resetGameState();
+      this.waveDebug.setCurrentWaveGroups([]);
+    }));
+
+    // After a restore (coop resync, a replay's way back): the state as it
+    // stands, none of the events that led there reached the store
+    this.subs.add(eventBus.onLive('sim:presented', (event) => {
+      this.store.stateJumps.update((n) => n + 1);
+      this.store.phase.set(event.phase);
+      this.store.waveNumber.set(event.wave);
+      this.store.credits.set(event.credits);
+      this.store.baseHealth.set(event.baseHealth);
+      this.store.enemiesAlive.set(event.enemiesAlive);
+      this.store.waveEnemiesLeft.set(event.waveEnemiesLeft);
+      this.store.towerCount.set(event.towers);
+      // The total counts splits as they happened; it is never less than what is left
+      this.store.waveEnemyTotal.update((total) => Math.max(total, event.waveEnemiesLeft));
+    }));
+
+    // ── Credits ───────────────────────────────────────────────────
+    this.subs.add(eventBus.onLive('credits:changed', (event) => {
+      if (event.local) this.store.credits.set(event.credits);
+    }));
+
+    // ── Health ────────────────────────────────────────────────────
+    this.subs.add(eventBus.onLive('health:changed', (event) => {
+      this.store.baseHealth.set(event.health);
+    }));
+
+    // ── Tower lifecycle ───────────────────────────────────────────
+    this.subs.add(eventBus.onLive('tower:placed', (event) => {
+      this.store.towerCount.update(n => n + 1);
+      const type = event.tower.typeConfig;
+      // One per player (COOP_PLAN D11, D20): only this player's own buildings block the card
+      if (type.unique && event.tower.ownerId === this.localPlayer()) {
+        this.store.placedUniqueTypes.update(set => new Set(set).add(type.id));
+      }
+    }));
+
+    this.subs.add(eventBus.onLive('tower:sold', (event) => {
+      this.store.towerCount.update(n => Math.max(0, n - 1));
+      const type = event.tower.typeConfig;
+      if (type.unique && event.tower.ownerId === this.localPlayer()) {
+        this.store.placedUniqueTypes.update(set => {
+          const next = new Set(set);
+          next.delete(type.id);
+          return next;
+        });
+      }
+      // The selection of a sold tower ends with it (TowerSelectionService)
+    }));
+
+    this.subs.add(eventBus.onLive('tower:manned', (event) => {
+      if (event.local) this.store.mannedTowerId.set(event.towerId);
+    }));
+
+    // Tower sind mutable Entities: Kills und Upgrades des gewählten Towers
+    // zählen eine Revision hoch, aus der die Sidebar ihre Anzeige ableitet.
+    const bumpIfSelected = (towerId: string) => {
+      if (towerId === this.store.selectedTowerId()) {
+        this.store.selectedTowerRevision.update(n => n + 1);
+      }
+    };
+    this.subs.add(eventBus.onLive('tower:kill', (event) => bumpIfSelected(event.tower.id)));
+    this.subs.add(eventBus.onLive('tower:upgraded', (event) => bumpIfSelected(event.tower.id)));
+    // Its build ending has no event: the panel's upgrade tiles open with the
+    // shadow tower's next state (TODO E141)
+    this.subs.add(new EventSubscription(this.mirror.onTowerChange((change) => {
+      if (change.kind === 'state') bumpIfSelected(change.tower.id);
+    })));
+
+    // ── Enemy lifecycle ───────────────────────────────────────────
+    this.subs.add(eventBus.onLive('enemy:spawned', (_event) => {
+      this.store.enemiesAlive.update(n => n + 1);
+    }));
+
+    // Killed or through: either way the enemy no longer counts as left
+    this.subs.add(eventBus.onLive('enemy:died', (_event) => {
+      this.store.enemiesAlive.update(n => Math.max(0, n - 1));
+      this.store.waveEnemiesLeft.update(n => Math.max(0, n - 1));
+    }));
+
+    this.subs.add(eventBus.onLive('enemy:reached-base', (_event) => {
+      this.store.enemiesAlive.update(n => Math.max(0, n - 1));
+      this.store.waveEnemiesLeft.update(n => Math.max(0, n - 1));
+    }));
+
+    // A split adds its children to the wave: more left and a larger total,
+    // so the bar still runs out at zero. Outside a wave (debug) there is none.
+    this.subs.add(eventBus.onLive('enemy:split', (event) => {
+      if (this.store.phase() !== 'wave') return;
+      const n = event.children.length;
+      this.store.waveEnemyTotal.update(total => total + n);
+      this.store.waveEnemiesLeft.update(left => left + n);
+    }));
+
+    // A worm is one entry of the wave and one enemy per segment on the route
+    this.subs.add(eventBus.onLive('worm:spawned', (event) => {
+      if (this.store.phase() !== 'wave') return;
+      const n = event.group.size - 1;
+      this.store.waveEnemyTotal.update(total => total + n);
+      this.store.waveEnemiesLeft.update(left => left + n);
+    }));
+
+    // ── Abilities ─────────────────────────────────────────────────
+    // Snapshot after every AbilityManager mutation (unlock, use, impact, recharge)
+    // Only this player's abilities (COOP_PLAN D11)
+    this.subs.add(eventBus.onLive('ability:state-changed', (event) => {
+      if (!event.local) return;
+      this.store.abilities.update((current) => {
+        const next = { ...current };
+        for (const status of event.abilities) next[status.id] = status;
+        return next;
+      });
+    }));
+
+    // ── Hero ──────────────────────────────────────────────────────
+    // Snapshot after every HeroManager change (unlock, hire, order, kill)
+    this.subs.add(eventBus.onLive('hero:state-changed', (event) => {
+      if (event.local) this.store.hero.set(event.hero);
+    }));
+
+    // ── Research lifecycle ────────────────────────────────────────
+    // research:state-changed ist der Single-Source-of-Truth-Sync-Pfad —
+    // ResearchManager emittiert ihn nach jeder State-Mutation.
+    // Only this player's research; a coop partner's is theirs (COOP_PLAN D20)
+    this.subs.add(eventBus.onLive('research:state-changed', (event) => {
+      if (!event.local) return;
+      this.researchStore.activeResearches.set([...event.activeResearches]);
+      this.researchStore.researchElapsed.set(
+        new Map(event.activeResearches.map(a => [a.researchId, a.elapsed])),
+      );
+      this.researchStore.completedResearches.set(event.completedResearches);
+      this.researchStore.queuedResearches.set([...event.queuedResearches]);
+      this.researchStore.centerLevel.set(event.centerLevel);
+      this.researchStore.researchSlots.set(event.maxSlots);
+      this.researchStore.lanes.set(event.lanes);
+    }));
+
+    // Fortschritt zwischen den Snapshots, vom ResearchManager auf 10 Hz gedrosselt
+    this.subs.add(eventBus.onLive('research:progress', (event) => {
+      if (!event.local) return;
+      this.researchStore.researchElapsed.set(event.elapsed);
+    }));
+  }
+
+  /**
+   * Clean up all EventBus subscriptions.
+   * Called on game dispose / location change.
+   */
+  dispose(): void {
+    this.subs.disposeAll();
+  }
+}

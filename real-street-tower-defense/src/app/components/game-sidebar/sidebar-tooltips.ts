@@ -1,0 +1,215 @@
+import { ARMOR_TYPE_UI, DAMAGE_TYPE_UI } from '../../configs/combat/combat-ui.config';
+import { bestDamageTypesAgainst, DAMAGE_MATRIX, EFFECTIVENESS_THRESHOLDS } from '../../configs/combat/damage-matrix.config';
+import { ARMOR_TYPES, ArmorType, DamageType } from '../../configs/combat/combat.types';
+import { ENEMY_TYPES } from '../../configs/enemy-types.config';
+import { TowerTypeConfig } from '../../configs/tower-types.config';
+import { canTargetAirEffective } from '../../entities/tower-targeting.util';
+import type { WaveGroupDisplay } from '../../services/debug/wave-debug.service';
+import { TdTooltipData } from '../tooltip/tooltip-data.types';
+import { TD_THEME } from '../../styles/td-theme';
+
+/**
+ * Tooltip-Aufbereitung der Sidebar: Tower-Karten im BUILD-Panel, Gegnergruppen
+ * im WAVE-Panel. Reine Funktionen; Research-Zustand kommt als Argument, damit
+ * die Komponente ihn aus dem Store liest und OnPush die Abhängigkeit sieht.
+ */
+
+/** Spielzustand, von dem der Tower-Karten-Tooltip abhängt. */
+export interface TowerCardTooltipContext {
+  /** A one-per-map building of the card's type stands already (isPlacedUnique) */
+  alreadyPlaced: boolean;
+  /** The wave the card waits for (towerWaitsForWave), null or absent when it may be built */
+  waitsForWave?: number | null;
+  airTargetingUnlocked: boolean;
+  /** Number key that picks the card, null or absent past the ninth card */
+  hotkey?: string | null;
+}
+
+// The dot colour of each armor type, from the theme. It names the ARMOR
+// TYPE, not the effectiveness; the dim flag (faded row) says "weak matchup".
+export const ARMOR_DOT_COLOR: Readonly<Record<ArmorType, string>> = {
+  'unarmored': TD_THEME.greenDark,
+  'light': TD_THEME.cold,
+  'heavy': TD_THEME.warnOrange,
+  'fortified': TD_THEME.frameLight,
+  'ethereal': TD_THEME.ethereal,
+};
+
+// Complete per damage type, so a new type without an accent does not compile.
+const DAMAGE_ACCENT: Record<DamageType, NonNullable<TdTooltipData['accent']>> = {
+  physical: 'gold',
+  pierce: 'gold',
+  siege: 'gold',
+  magic: 'teal',
+  fire: 'fire',
+  ice: 'cold',
+  poison: 'poison',
+  lightning: 'lightning',
+  chaos: 'chaos',
+};
+
+const ARMOR_ACCENT: Record<ArmorType, TdTooltipData['accent']> = {
+  unarmored: 'neutral',
+  light: 'teal',
+  heavy: 'gold',
+  fortified: 'health',
+  ethereal: 'poison',
+};
+
+/**
+ * Structured tooltip payload for the tower-card rich tooltip.
+ * Matches the design refinement spec, header, stat triple, vs-armor table.
+ */
+export function towerCardTooltip(
+  tower: TowerTypeConfig,
+  ctx: TowerCardTooltipContext,
+): TdTooltipData {
+  // A passive building has no combat stats: what it does, or that it stands
+  if (tower.attackType === 'passive') {
+    return {
+      title: tower.name,
+      category: 'STRUCTURE',
+      hotkey: ctx.hotkey ?? undefined,
+      accent: 'gold',
+      flavor: ctx.alreadyPlaced ? 'Already placed.'
+        : ctx.waitsForWave ? `From wave ${ctx.waitsForWave}: towers for the first wave come first.`
+        : tower.description,
+    };
+  }
+  const dmgUi = DAMAGE_TYPE_UI[tower.damageType];
+  const matrix = DAMAGE_MATRIX[tower.damageType as DamageType];
+  const stats = tower.attackType === 'beam'
+    ? [
+        { label: 'DPS', value: String(tower.damagePerSecond ?? 0) },
+        { label: 'TYPE', value: 'BEAM' },
+        { label: 'RANGE', value: `${tower.range}m` },
+      ]
+    : [
+        { label: 'DMG', value: String(tower.damage) },
+        { label: 'RATE', value: `${tower.fireRate}/s` },
+        { label: 'RANGE', value: `${tower.range}m` },
+      ];
+  const armor = ARMOR_TYPES.map(a => {
+    const mul = matrix[a as ArmorType];
+    const meta = ARMOR_TYPE_UI[a as ArmorType];
+    return {
+      label: meta.label,
+      multiplier: `${mul.toFixed(2)}×`,
+      color: ARMOR_DOT_COLOR[a as ArmorType] ?? 'var(--td-text-muted)',
+      dim: mul < EFFECTIVENESS_THRESHOLDS.weak,
+    };
+  });
+  // Targeting capability, resolved via canTargetAirEffective so the banner
+  // reflects AA-retrofit research (e.g. dual-gatling after aa-retrofit
+  // completes flips from ground-only to air-ground with a "via Research"
+  // note). Single source of truth shared with combat + AI bots.
+  const effectiveAir = canTargetAirEffective(tower.id, ctx.airTargetingUnlocked);
+  const baseAir = tower.canTargetAir === true;
+  const ground = tower.canTargetGround !== false;
+  const targeting: TdTooltipData['targeting'] =
+    effectiveAir && !ground ? { mode: 'air-only' } :
+    effectiveAir && ground  ? { mode: 'air-ground', viaResearch: !baseAir } :
+                              { mode: 'ground-only' };
+  return {
+    title: tower.name,
+    category: dmgUi.label.toUpperCase(),
+    hotkey: ctx.hotkey ?? undefined,
+    accent: DAMAGE_ACCENT[tower.damageType],
+    stats,
+    targeting,
+    armorTitle: 'vs Armor',
+    armor,
+  };
+}
+
+/**
+ * "Fire, Poison, Pierce": the best damage types against these armors,
+ * weighted, see bestDamageTypesAgainst. One armor: `[[armor, 1]]`.
+ */
+export function weakToLabel(weights: readonly (readonly [ArmorType, number])[]): string {
+  return bestDamageTypesAgainst(weights).map((dt) => DAMAGE_TYPE_UI[dt].label).join(', ');
+}
+
+/**
+ * What an enemy type does beyond walking and dying, for the wave panel and
+ * its tooltips: "Splits into 2 minions on death", "Regenerates 1 % of its HP
+ * a second unless burning", "Phasing: cannot be slowed", joined by ". ".
+ * Null for a type with none of them (EnemyTypeConfig.splitOnDeath,
+ * regenPerSecond, immuneToSlow).
+ */
+export function enemyTraitLabel(enemyType: string): string | null {
+  const cfg = ENEMY_TYPES[enemyType];
+  if (!cfg) return null;
+  const traits: string[] = [];
+  const split = cfg.splitOnDeath;
+  if (split) traits.push(`Splits into ${split.count} ${split.count === 1 ? 'minion' : 'minions'} on death`);
+  if (cfg.regenPerSecond) traits.push(`Regenerates ${Math.round(cfg.regenPerSecond * 100)} % of its HP a second unless burning`);
+  if (cfg.immuneToSlow) traits.push('Phasing: cannot be slowed');
+  return traits.length > 0 ? traits.join('. ') : null;
+}
+
+/**
+ * Structured tooltip payload for the enemy-group rich tooltip.
+ * Mirrors the tower-card tooltip layout, header (name + armor category),
+ * 3-column stats (HP / SPEED / COUNT), and a "vs Damage" table sorted by
+ * effectiveness against this enemy's armor. Reuses the armor-row structure
+ * for the damage rows so both tooltips share the same visual language.
+ */
+/** HP a leak costs, whole or with one decimal (a worm segment's share) */
+export function formatLeak(hp: number): string {
+  return Number.isInteger(hp) ? String(hp) : hp.toFixed(1);
+}
+
+/**
+ * What the running wave costs the HQ if all of it gets through, every lane
+ * and every split child (TODO E49)
+ */
+export function waveLeakTotal(groups: readonly WaveGroupDisplay[]): number {
+  return Math.round(groups.reduce((sum, g) => sum + g.count * g.lanes * g.leakMost, 0));
+}
+
+export function enemyGroupTooltip(group: WaveGroupDisplay): TdTooltipData | null {
+  const enemyConfig = ENEMY_TYPES[group.enemyType];
+  if (!enemyConfig) return null;
+
+  const armor = enemyConfig.armorType as ArmorType;
+  const armorMeta = ARMOR_TYPE_UI[armor];
+
+  const stats = [
+    { label: 'HP', value: String(group.actualHp) },
+    { label: 'SPEED', value: `${group.actualSpeed.toFixed(1)}m/s` },
+    { label: 'COUNT', value: group.lanes > 1 ? `×${group.count} on each of ${group.lanes} lanes` : `×${group.count}` },
+    // What one costs the HQ when it gets through (TODO E49)
+    { label: 'HQ', value: `−${formatLeak(group.leak)} each` },
+  ];
+
+  const damageRows = (Object.keys(DAMAGE_MATRIX) as DamageType[])
+    .map((dt) => ({ ui: DAMAGE_TYPE_UI[dt], mul: DAMAGE_MATRIX[dt][armor] }))
+    .sort((a, b) => b.mul - a.mul)
+    .map((row) => ({
+      label: row.ui.label,
+      multiplier: `${row.mul.toFixed(2)}×`,
+      color: row.ui.color,
+      dim: row.mul < EFFECTIVENESS_THRESHOLDS.weak,
+    }));
+
+  // Surface wave-scaling multipliers as flavor when they differ from 1,
+  // so the player can see why HP/speed look inflated mid-run. A split
+  // comes first: it changes what the count means.
+  const flavorParts: string[] = [];
+  if (group.healthMultiplier !== 1) flavorParts.push(`HP ×${group.healthMultiplier.toFixed(1)}`);
+  if (group.speedMultiplier !== 1) flavorParts.push(`Speed ×${group.speedMultiplier.toFixed(2)}`);
+  const scaled = flavorParts.length > 0 ? `Scaled: ${flavorParts.join(' | ')}` : null;
+  const lines = [enemyTraitLabel(group.enemyType), scaled].filter((line): line is string => line !== null);
+  const flavor = lines.length > 0 ? lines.join('. ') : undefined;
+
+  return {
+    title: group.name,
+    category: armorMeta.label.toUpperCase(),
+    accent: ARMOR_ACCENT[armor] ?? 'neutral',
+    stats,
+    armorTitle: 'vs Damage',
+    armor: damageRows,
+    flavor,
+  };
+}

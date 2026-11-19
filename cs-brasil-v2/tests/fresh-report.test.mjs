@@ -1,0 +1,93 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { freshReport } from '../tools/eval/fresh-report.mjs';
+
+test('relatório versionado não mascara auditor interrompido', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'map-audit-fresh-'));
+  const path = join(dir, 'map_check.json');
+  try {
+    writeFileSync(path, JSON.stringify({ mapas: [{ map: 'resultado-antigo' }] }));
+    const interrupted = freshReport(path, () => '__ERRO__ timeout');
+    assert.equal(interrupted.data, null);
+    assert.match(interrupted.error, /timeout/);
+    assert.equal(existsSync(path), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('relatório novo é lido mesmo quando o auditor aponta dívida de mapa', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'map-audit-fresh-'));
+  const path = join(dir, 'map_check.json');
+  try {
+    const result = freshReport(path, () => {
+      writeFileSync(path, JSON.stringify({ mapas: [{ map: 'corrego', piorRotas: 1 }] }));
+      return '__ERRO__ saída 1 por dívida MAP1/MAP6';
+    });
+    assert.equal(result.error, null);
+    assert.equal(result.data.mapas[0].piorRotas, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('relatório novo inválido não vira dado de geometria', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'map-audit-fresh-'));
+  const path = join(dir, 'map_check.json');
+  try {
+    const result = freshReport(path, () => {
+      writeFileSync(path, '{');
+      return '';
+    });
+    assert.equal(result.data, null);
+    assert.match(result.error, /relatório novo inválido/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Auditor assíncrono (as invariantes medem e rodam os auditores fora do fio principal):
+// o relatório velho some ANTES de ele começar e a leitura espera ele terminar.
+test('auditor assíncrono: remove antes de começar e lê depois de terminar', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'map-audit-fresh-'));
+  const path = join(dir, 'map_check.json');
+  try {
+    writeFileSync(path, JSON.stringify({ mapas: [{ map: 'resultado-antigo' }] }));
+    let viuAntigo = null;
+    const pendente = freshReport(path, () => {
+      viuAntigo = existsSync(path);
+      return new Promise((resolve) => setTimeout(() => {
+        writeFileSync(path, JSON.stringify({ mapas: [{ map: 'novo' }] }));
+        resolve('');
+      }, 10));
+    });
+    assert.equal(viuAntigo, false);
+    const result = await pendente;
+    assert.equal(result.error, null);
+    assert.equal(result.data.mapas[0].map, 'novo');
+    const interrompido = await freshReport(path, () => Promise.resolve('__ERRO__ timeout'));
+    assert.equal(interrompido.data, null);
+    assert.match(interrompido.error, /timeout/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Todo relatório versionado que as invariantes regeram passa pelo freshReport (#652).
+const REGERADOS = ['map_check', 'pickup_check', 'char_probe', 'mat_check'];
+const semFreshReport = (src) => REGERADOS.filter((nome) => {
+  const decl = new RegExp(`const (\\w+) = join\\([^)]*'${nome}\\.json'\\)`).exec(src);
+  const uso = decl && new RegExp(`(freshReport|existsSync|readFileSync)\\(${decl[1]}\\b`).exec(src.slice(decl.index + decl[0].length));
+  return uso?.[1] !== 'freshReport';
+});
+
+test('invariantes não leem relatório versionado sem regerar do zero', () => {
+  const src = readFileSync(new URL('../tools/eval/invariants.mjs', import.meta.url), 'utf8');
+  assert.deepEqual(semFreshReport(src), []);
+  const mutante = src.replace(/freshReport\((\w+), \(\) => runNode\('pickup-check\.mjs'\)\)/, 'runNode(\'pickup-check.mjs\')');
+  assert.notEqual(mutante, src, 'mutante não aplicou: o VM14 mudou de forma');
+  assert.deepEqual(semFreshReport(mutante), ['pickup_check']);
+});

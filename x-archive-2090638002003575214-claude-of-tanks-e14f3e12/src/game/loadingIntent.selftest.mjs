@@ -1,0 +1,210 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { stripTypeScriptTypes } from 'node:module';
+import ts from 'typescript-compiler-api';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const main = fs.readFileSync(path.join(here, '..', 'main.ts'), 'utf8');
+const garage = fs.readFileSync(path.join(here, '..', 'ui', 'garage.ts'), 'utf8');
+const pedestalPreloader = fs.readFileSync(
+  path.join(here, 'garagePedestalPreloader.ts'), 'utf8',
+);
+const pedestalRuntime = fs.readFileSync(
+  path.join(here, 'garagePedestalRuntime.ts'), 'utf8',
+);
+const studioAccess = fs.readFileSync(path.join(here, 'studioAccess.ts'), 'utf8');
+const soloLoading = fs.readFileSync(path.join(here, 'soloBattleLoadingRuntime.ts'), 'utf8');
+const soloStartAccess = fs.readFileSync(path.join(here, 'soloBattleStartAccess.ts'), 'utf8');
+const playSurface = fs.readFileSync(path.join(here, 'playSurfaceRuntime.ts'), 'utf8');
+const networkLobbyPreloader = fs.readFileSync(
+  path.join(here, '..', 'mp', 'session', 'lobbyPreloader.ts'), 'utf8',
+);
+const networkCompositionAccess = fs.readFileSync(
+  path.join(here, '..', 'mp', 'session', 'compositionAccess.ts'), 'utf8',
+);
+const lobbyIntent = fs.readFileSync(
+  path.join(here, '..', 'mp', 'session', 'lobbyIntent.ts'), 'utf8',
+);
+const browserComposition = fs.readFileSync(
+  path.join(here, '..', 'mp', 'session', 'browserComposition.ts'), 'utf8',
+);
+const debugBattleEntry = fs.readFileSync(
+  path.join(here, '..', 'dev', 'debugBattleEntryRuntime.ts'), 'utf8',
+);
+
+const neighborWarm = pedestalPreloader.slice(
+  pedestalPreloader.indexOf('const queueNeighbors = () =>'),
+  pedestalPreloader.indexOf('const preloadIntent ='),
+);
+assert.ok(
+  neighborWarm.indexOf('await ensureTankBuilders(ids);') <
+    neighborWarm.indexOf('for (const id of ids)'),
+  'adjacent family chunks must transfer before their texture pre-bakes',
+);
+
+const garageTree = ts.createSourceFile('garage.ts', garage, ts.ScriptTarget.Latest, true);
+const intentNodes = [];
+function findIntent(node) {
+  if (ts.isVariableDeclaration(node) && node.name.getText(garageTree) === 'signalBattleIntent') {
+    intentNodes.push(node.initializer);
+  }
+  ts.forEachChild(node, findIntent);
+}
+findIntent(garageTree);
+assert.equal(intentNodes.length, 1, 'find the actual intent callback independently of its typed signature');
+const battleIntent = intentNodes[0].getText(garageTree);
+assert.match(battleIntent, /battleMode === 'solo'/,
+  'only solo mode may start the solo roster/world warm');
+assert.match(battleIntent, /onPlayModeIntent\?\.\(battleMode\)/,
+  'network modes should warm their own selected path');
+// (d82a48e34e, Proving Ground is a mode) the warm's map is the field the battle will be fought on: a mode with its own
+// battlefield (rulesetBattlefield) warms that one, any other the selected map (garage.ts fieldMapId)
+assert.match(battleIntent, /mapId: fieldMapId\(\)/, 'the solo warm takes the battle\'s field, not the selected map alone');
+// (improve-271 plan 036) and its rules, so a mode that plays a terrain variant warms that variant's world
+assert.match(battleIntent, /gameMode: battleGameMode/, 'the solo warm names the selected rules');
+class IntentNode {}
+for (const [mode, field] of [['solo', 'coastal'], ['solo', 'proving_ground'], ['private', 'coastal'], ['lan', 'coastal']]) {
+  const calls = [], idle = [], multiplayerTarget = new IntentNode();
+  // (click-perf-244) the callback queues its warm for an idle slot, once, however many intents arrive first
+  const intent = new Function('opts', 'battleMode', 'Node', 'multiplayerEntry', 'selectedId', 'fieldMapId',
+    'battleIntentQueued', 'requestIdleCallback', 'battleGameMode', `return ${stripTypeScriptTypes(battleIntent)};`)(
+    { onBattleIntent: value => calls.push(['solo', value]), onPlayModeIntent: value => calls.push(['network', value]) },
+    mode, IntentNode, { contains: target => target === multiplayerTarget }, 'm1a1', () => field, false, (run) => idle.push(run), 'zone_control');
+  intent({ target: multiplayerTarget });
+  assert.deepEqual([calls, idle.length], [[], 0], 'multiplayer configuration must not warm a solo battle');
+  intent({ target: new IntentNode() });
+  intent({ target: new IntentNode() });
+  assert.deepEqual(calls, [], `${mode}: the warm waits for an idle slot, out of the press`);
+  assert.equal(idle.length, 1, `${mode}: one warm however many intents arrive before it runs`);
+  idle.shift()();
+  assert.deepEqual(calls, mode === 'solo'
+    ? [['solo', { specId: 'm1a1', mapId: field, gameMode: 'zone_control' }]] : [['network', mode]],
+  `${mode}: actual callback warms only its selected path (${field})`);
+}
+
+// the strip carries one delegated set of card listeners (perf 249): a pointer crossing into a card starts the dwell warm,
+// a press, touch or focus warms at once
+assert.match(garage,
+  /cardsEl\.addEventListener\('pointerover', \(event\) => \{\s*const card = crossesCard\(event\);\s*if \(card\) signalTankIntent\(card\.dataset\.specId \|\| ''\);[\s\S]{0,700}for \(const type of \['touchstart', 'pointerdown'\] as const\) \{\s*cardsEl\.addEventListener\(type, \(event\) => \{\s*const card = cardFrom\(event\.target\);\s*if \(card\) signalTankIntent\(card\.dataset\.specId \|\| '', true\);/,
+  'vehicle cards must expose deliberate hover and immediate press intent');
+assert.match(garage, /const signalTankIntent = \(specId: string, immediate = false\): void => \{[\s\S]{0,500}tankIntentTimer = setTimeout\(/,
+  'hover intent waits for a dwell; a press does not');
+assert.match(garage, /garage\.roomReminder\.readyCount/,
+  'active-room visible readiness copy must use the locale catalog');
+assert.match(garage, /garage\.roomReminder\.aria/,
+  'active-room assistive copy must use the locale catalog');
+assert.doesNotMatch(garage, /'PRIVATE'\} ROOM|NOT READY'\} ·/,
+  'active-room status must not rebuild English-only fragments');
+assert.match(pedestalPreloader,
+  /const preloadIntent = \(specId: string\)[\s\S]{0,800}Promise\.all\(\[[\s\S]{0,220}ensureTankBuilder\(specId\)[\s\S]{0,300}prebakeSharedTextures/,
+  'tank intent must overlap the exact builder transfer and chunked texture bake');
+assert.match(main, /createGaragePedestalRuntime\(\{/,
+  'main must compose one typed garage-hero lifecycle owner');
+assert.match(pedestalRuntime, /createGaragePedestalPreloader\(\{/,
+  'the lifecycle owner must compose neighbor and pointer-intent warming');
+assert.match(main, /onTankIntent: pedestal\.preloadIntent/,
+  'garage vehicle intent must be wired to the runtime loader');
+assert.match(main, /createSoloBattleStartAccess\(\{/,
+  'main should compose one typed solo activation owner');
+assert.doesNotMatch(main, /function startBattle\(/,
+  'solo activation policy must not return to the composition root');
+assert.match(soloStartAccess,
+  /load = \(\) => import\('\.\/soloBattleStartRuntime\.ts'\)/,
+  'Garage boot must not evaluate solo-round activation policy');
+const activationPreload = soloLoading.indexOf('() => preloadBattleStart()');
+const activationHandoff = soloLoading.indexOf('startBattle(specId, resolved');
+assert.ok(activationPreload >= 0 && activationHandoff > activationPreload,
+  'covered loading must acquire the activation owner before its synchronous handoff');
+
+// Multiplayer (the cutover of 2026-09-29, docs/MULTIPLAYER-V2.md §13.10): the lobby's Garage presence loads with
+// the Play menu and the browser composition loads behind explicit room intent; the solo boot path evaluates
+// nothing under src/mp.
+assert.match(lobbyIntent, /createLobbyPreloader\(preloader\)/,
+  'joined rooms need one typed lobby-intent owner over the room preloader');
+assert.match(networkLobbyPreloader, /for \(const player of state\.players \|\| \[\]\)[\s\S]{0,260}missingBuilders\.push\(specId\)[\s\S]{0,280}ensureTankBuilders\(missingBuilders\)/,
+  'joined rooms should transfer only missing roster builders');
+assert.match(networkLobbyPreloader, /if \(nextMapId\) prefetchWorld\(nextMapId, \{ intent: true \}\);/,
+  'joined-room fixed maps should use explicit-intent background preparation, not passive Garage construction');
+assert.match(main, /import\('\.\/mp\/session\/lobbyIntent\.ts'\)/,
+  'the lobby owner loads with the menu, never on the boot path');
+assert.match(main, /import\('\.\/mp\/session\/browserComposition\.ts'\)/,
+  'the complete multiplayer composition must remain behind explicit network intent');
+assert.doesNotMatch(main, /^import (?!type)[^\n]* from '\.\/mp\/(?!session\/(?:compositionAccess|roundState|intentCover)\.ts')/m,
+  'the solo boot path evaluates only the three small session helpers under src/mp (the lazy access, the round reset, the intent cover)');
+assert.doesNotMatch(main, /import\('\.\/net\/networkBattleComposition\.ts'\)|createNetworkBrowserSessionRuntime|readMultiplayerV2Flag|mp=v2/,
+  'the v1 composition, its session runtime and the opt-in switch left main with the cutover');
+assert.match(main, /createPlaySurfaceRuntime\(\{/,
+  'main should compose one typed play-surface lifecycle owner');
+const playSurfaceComposition = main.slice(
+  main.indexOf('const playSurface = createPlaySurfaceRuntime({'),
+  main.indexOf("bus.on('ui:battleStart'"),
+);
+const commonPlayPreload = playSurfaceComposition.slice(
+  playSurfaceComposition.indexOf('preloadCommon:'),
+  playSurfaceComposition.indexOf('preloadNetworkPresentation:'),
+);
+assert.doesNotMatch(commonPlayPreload, /onlineMatch\.preload|preloadBattleClientRuntime/,
+  'solo intent must never transfer the multiplayer composition or the battle client runtime');
+const networkPlayPreload = playSurfaceComposition.slice(playSurfaceComposition.indexOf('preloadNetworkPresentation:'));
+assert.match(networkPlayPreload, /onlineMatch\.preload\(\)/,
+  'network intent must acquire its isolated orchestration graph');
+assert.match(networkPlayPreload, /preloadBattleClientRuntime\(\)/,
+  'network intent should still overlap the shared battle client transfer');
+assert.doesNotMatch(main, /from '\.\/net\//, 'nothing of the first multiplayer stack remains on the composition root');
+for (const runtime of ['lobbyPreloader', 'activationRuntime', 'browserComposition', 'lobbyIntent']) {
+  assert.doesNotMatch(main, new RegExp(`import \\{[^}]*create[^}]*\\} from './mp/session/${runtime}\\.ts'`),
+    `${runtime} must stay out of the pristine Garage graph`);
+}
+// (round 2 U35) retryable under the one lazy-chunk policy (app/lazyChunk.ts: at once after one failure, then past its
+// backoff), not the memo its failure cleared, asked again at once by every call
+assert.match(networkCompositionAccess, /const chunk = createLazyChunk\(/,
+  'a failed first-visit network composition transfer must remain retryable (one app/lazyChunk.ts chunk)');
+assert.match(networkCompositionAccess, /const preload = \(\): Promise<T> => chunk\.load\(\)/,
+  'every network intent asks through that one chunk');
+assert.doesNotMatch(playSurfaceComposition, /^\s*preloadKillcamModule,$/m,
+  'cold composition must not read the later killcam binding from its temporal dead zone');
+assert.match(playSurfaceComposition, /\(\) => preloadKillcamModule\(\)/,
+  'the later killcam binding stays behind a lazy lifecycle port');
+assert.doesNotMatch(main, /function preloadPlayMode\(/,
+  'mode preload and retry policy must not return to the composition root');
+assert.match(playSurface, /export interface PlaySurfaceRuntime/,
+  'play intent should cross a stable typed interface');
+assert.match(main, /preloadPresentation: \(\) => onlineMatch\.preload\(\)/,
+  'a joined waiting room should keep the composition warm');
+assert.match(browserComposition,
+  /await Promise\.all\(\[\s*load\.loadModules\(\),\s*load\.ensureBattleVisuals\(\),\s*load\.loadWorld\(active\.mapId/,
+  'network entry should join modules, visual initialization and battlefield construction inside one parallel acquisition');
+const networkWorldAdapter = main.slice(main.indexOf('loadWorld: (mapId: string'),
+  main.indexOf('recordTrace: (trace) => { window.__NETWORK_LOAD = trace; }'));
+// batch 27 (2026-09-15): a Frontline Assault room also hands the trench terrain variant through
+// (2026-11-02 audit F2) passed whole, null included: a standard room never inherits a solo sortie's trench variant
+const coveredWorldOptions = /ensureWorld\(mapId, onProgress, \{ precompile: false, atmosphere: 'covered-battle', terrainVariant \}\)/;
+assert.match(networkWorldAdapter, coveredWorldOptions,
+  'network acquisition must defer Garage-light compilation and select covered battle atmosphere');
+assert.doesNotMatch(networkWorldAdapter.replace("atmosphere: 'covered-battle'", "atmosphere: 'garage'"),
+  coveredWorldOptions, 'a Garage-atmosphere regression must fail the loading contract');
+assert.doesNotMatch(networkWorldAdapter.replace('precompile: false', 'precompile: true'),
+  coveredWorldOptions, 'an eager-compilation regression must fail the loading contract');
+assert.match(main,
+  /Promise\.all\(\[[\s\S]{0,500}armorAimOverlay\.preload\(\)\.catch/,
+  'network entry must acquire the optional armor overlay under its loading veil');
+assert.match(main,
+  /async function debugStartBattle[\s\S]{0,240}import\('\.\/dev\/debugBattleEntryRuntime\.ts'\)/,
+  'cold QA entry policy must stay demand-loaded outside the composition root');
+assert.match(debugBattleEntry,
+  /await Promise\.all\(\[[\s\S]{0,420}ports\.preloadSoloAuthority\(\)[\s\S]{0,120}ports\.ensureBattleHud\(\)[\s\S]{0,120}ports\.ensureTouchControls\(\)[\s\S]{0,120}ports\.preloadArmorAim\(\)/,
+  'cold QA entry must acquire every battle-only presentation owner before setup');
+
+assert.match(garage, /\[data-nav="studio"\], \[data-mobile-nav="studio"\]/,
+  'desktop and mobile Studio controls should expose an intent boundary');
+assert.match(main, /function preloadStudioIntent\(\) \{ studioAccess\.preloadIntent\(\); \}/,
+  'main should delegate Studio intent to the typed lazy owner');
+assert.match(studioAccess,
+  /preloadIntent\(\)[\s\S]{0,180}preloadModule\(\)[\s\S]{0,100}preloadFxModule\(\)/,
+  'Studio intent should transfer its route and effect chunks');
+assert.match(studioAccess, /Promise\.all\(\[\s*preloadModule\(\),\s*ensureFxRuntime\(\)/,
+  'Studio entry should reuse the intent-preloaded chunk and construct FX only on entry');
+
+console.log('loadingIntent.selftest: solo, multiplayer, garage-neighbor, and Studio boundaries passed');

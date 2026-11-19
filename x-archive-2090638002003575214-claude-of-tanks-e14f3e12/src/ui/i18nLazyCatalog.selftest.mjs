@@ -1,0 +1,345 @@
+// i18nLazyCatalog.selftest.mjs — every document loads its own catalogs on demand: English documents never load the
+// zh-CN catalog and Chinese ones preload it (FE-P3); no page's static graph holds a catalog, so a public page loads only
+// its generated page catalog (tools/i18n-page-catalogs.selftest.mjs) and the game the full catalogs, less the Scene
+// Studio's strings, which load with its chunk, and the Garage Filter panel's, which load with the panel.
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { importChain, runtimeImportSpecifiers, staticImportClosure } from '../../tools/static-import-closure.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+// 1. No page's static graph holds a catalog: the runtime awaits the document's dictionaries (the game's full catalogs or
+//    a public page's page catalog), and English leaves the shared runtime chunk for the game's own catalog chunk.
+const PAGE_ENTRIES = ['src/main.ts', 'src/ui/localeBootstrap.ts', 'src/presentation/notFound.ts',
+  'src/presentation/publicNav.ts', 'src/presentation/publicPages.ts', 'src/docs/docs.ts', 'src/docs/topics.ts',
+  'src/gallery/gallery.ts'];
+const CATALOG_MODULES = ['src/ui/i18nCatalog.en-US.json', 'src/ui/i18nCatalogEnUS.ts', 'src/ui/i18nCatalog.zh-CN.json',
+  'src/ui/i18nCatalogZhCN.ts', 'src/ui/i18nCatalog.ts'];
+for (const entry of PAGE_ENTRIES) {
+  const closure = staticImportClosure(entry, { root: ROOT });
+  assert.ok(closure.has('src/ui/i18n.ts'), `${entry} reaches the i18n runtime`);
+  for (const forbidden of CATALOG_MODULES) {
+    assert.ok(!closure.has(forbidden), `${entry} statically loads ${forbidden}: ${importChain(closure, forbidden)}`);
+  }
+}
+
+// 2. Browser code reaches the full two-locale catalog through no import, static or dynamic: inside src/ only the
+//    server/build-time localizer imports it, and nothing in src/ imports the localizer.
+const sources = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src/*.ts'],
+  { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter((file) => file && !file.endsWith('.d.ts'));
+const importersOf = (target) => sources.filter((file) => {
+  const text = readFileSync(resolve(ROOT, file), 'utf8');
+  if (!text.includes(target.split('/').pop())) return false;
+  const dynamic = [...text.matchAll(/\bimport\(\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+  return [...runtimeImportSpecifiers(text, file), ...dynamic]
+    .some((specifier) => resolve(ROOT, dirname(file), specifier) === resolve(ROOT, target));
+});
+assert.deepEqual(importersOf('src/ui/i18nCatalog.ts'), ['src/presentation/localizedHtml.ts'],
+  'only the server/build-time localizer imports the full catalog');
+assert.deepEqual(importersOf('src/presentation/localizedHtml.ts'), [],
+  'the localizer runs in the middleware, the Vite config and the page generator, never in the browser');
+
+// The lazy loaders import modules, never the JSON files: Rolldown leaves an attributed dynamic JSON import
+// unrewritten (the browser would request /assets/i18nCatalog.zh-CN.json), and the build plugin refuses it.
+const dictionariesSource = readFileSync(resolve(ROOT, 'src/ui/i18nDictionaries.ts'), 'utf8');
+assert.match(dictionariesSource, /import\('\.\/i18nCatalogZhCN\.ts'\)/);
+assert.match(dictionariesSource, /import\('\.\/i18nCatalogEnUS\.ts'\)/);
+assert.doesNotMatch(dictionariesSource, /import\(\s*['"][^'"]+\.json['"]/, 'no dynamic JSON import in browser code');
+assert.deepEqual(dictionariesSource.match(/^import\b.*$/gm), ["import { importCatalogChunk } from './i18nChunkImport.ts';"],
+  'the registry ships no catalog: its one static import is the chunk importer (src/ui/i18nChunkImport.selftest.mjs)');
+
+// 3. Runtime: an English boot leaves zh-CN unloaded; Chinese text appears only once its dictionary is resident.
+const stored = new Map();
+const defineGlobal = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, value });
+defineGlobal('localStorage', { getItem: (key) => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)) });
+// A worker or server reaches the runtime through shared code (the map catalog): evaluating it never starts a Chinese
+// download, even with a Chinese navigator. Outside Vite (here, Node) the full English catalog stays resident for
+// servers, tools and receipts; a Vite-built module worker (import.meta.env defined, no window) awaits nothing, so it
+// cannot miss its first messages.
+defineGlobal('navigator', { language: 'zh-CN', languages: ['zh-CN'] });
+const dictionaries = await import('./i18nDictionaries.ts');
+const worker = await import('./i18n.ts?context=worker');
+assert.equal(dictionaries.localeDictionary('zh-CN'), undefined, 'a windowless context leaves the Chinese catalog unloaded');
+assert.ok(dictionaries.localeDictionary('en-US'), 'Node keeps the full English catalog resident');
+assert.equal(worker.t('garage.battle'), 'Deploy', 'a windowless Node context translates through English');
+const runtimeSource = readFileSync(resolve(ROOT, 'src/ui/i18n.ts'), 'utf8');
+// (BUI-F8: a dev-server-only pseudo-locale branch may follow the boot await inside the browser block; production builds
+// compile it out because it is gated on import.meta.env.DEV.)
+const bootAwait = /^if \(typeof window !== 'undefined'\) \{\s*await Promise\.all\(\[\s*loadLocaleDictionary\(FALLBACK_LOCALE\),\s*loadLocaleDictionary\(detectLocale\(\)\)\.catch\([\s\S]*?\]\);\s*(?:(?:\/\/[^\n]*\s*)*if \(import\.meta\.env\?\.DEV && [^\n]*\{\n[\s\S]*?\n {2}\}\s*)?\} else if \(!import\.meta\.env\) \{\s*await loadLocaleDictionary\(FALLBACK_LOCALE\);\s*\}\s*$/m;
+assert.match(runtimeSource, bootAwait,
+  'browser documents await English (a failure propagates) and the boot locale (a failure degrades); only Node awaits otherwise');
+assert.equal(runtimeSource.match(/^\s*await /gm)?.length, 2, 'the runtime has no other top-level await');
+
+defineGlobal('navigator', { language: 'en-US', languages: ['en-US'] });
+defineGlobal('document', { documentElement: { lang: '', dir: '', style: { setProperty() {} } } });
+defineGlobal('window', Object.assign(new EventTarget(), { location: { pathname: '/' } }));
+const english = await import('./i18n.ts?boot=en');
+assert.equal(english.getLocale(), 'en-US');
+assert.equal(dictionaries.localeDictionary('zh-CN'), undefined, 'an English boot never loads the Chinese catalog');
+assert.equal(english.t('garage.battle'), 'Deploy');
+assert.equal(dictionaries.catalogText('zh-CN', 'garage.battle'), 'Deploy', 'an absent dictionary falls back to English');
+
+const first = dictionaries.loadLocaleDictionary('zh-CN');
+assert.equal(dictionaries.loadLocaleDictionary('zh-CN'), first, 'concurrent loads share one request');
+const events = [];
+window.addEventListener('cot:locale-changed', (event) => events.push(event.detail));
+const switched = english.setLocale('zh-CN');
+assert.equal(english.t('garage.battle'), 'Deploy', 'until the catalog is resident an in-place switch reads English');
+await switched;
+assert.equal(english.t('garage.battle'), '出战', 'the switch settles once the catalog is resident');
+assert.deepEqual(events, [{ locale: 'zh-CN', previous: 'en-US' }, { locale: 'zh-CN', previous: 'en-US' }],
+  'subscribers re-render again when the catalog arrives');
+assert.equal(dictionaries.catalogText('zh-CN', 'garage.battle'), '出战');
+assert.equal(await dictionaries.loadLocaleDictionary('en-US'), undefined, 'English is always resident');
+
+window.location.pathname = '/cn/';
+const chinese = await import('./i18n.ts?boot=cn');
+assert.equal(chinese.getLocale(), 'zh-CN', 'a /cn/ route boots Chinese');
+assert.equal(chinese.t('garage.battle'), '出战');
+
+// 4. Chinese documents preload the catalog chunk named by the build's meta; English ones never do.
+const { LOCALE_CATALOG_META, localizeHtmlDocument } = await import('../presentation/localizedHtml.ts');
+const { PUBLIC_ROUTE_RECORDS } = await import('./localeRouting.ts');
+const route = PUBLIC_ROUTE_RECORDS.find(({ id }) => id === 'game');
+const href = '/assets/i18nCatalog.zh-CN-abc12345.js';
+const built = '<!doctype html><html lang="en-US"><head><title>x</title>'
+  + '<link rel="canonical" href="https://cot.kevinliu.studio/">'
+  + '<script type="module" crossorigin src="/assets/main-aaaa1111.js"></script>'
+  + '<link rel="modulepreload" crossorigin href="/assets/three-bbbb2222.js">'
+  + `<meta name="${LOCALE_CATALOG_META}" data-locale="zh-CN" content="${href}"></head><body></body></html>`;
+const preload = `<link rel="modulepreload" crossorigin href="${href}">`;
+const zh = localizeHtmlDocument(built, route, 'zh-CN');
+assert.equal(zh.split(preload).length - 1, 1, 'one catalog preload on the Chinese document');
+assert.ok(zh.indexOf(preload) > zh.indexOf('src="/assets/main-aaaa1111.js"')
+  && zh.indexOf(preload) < zh.indexOf('three-bbbb2222.js'), 'the preload sits beside the module entry');
+assert.equal(localizeHtmlDocument(zh, route, 'zh-CN').split(preload).length - 1, 1, 're-localizing is idempotent');
+assert.ok(!localizeHtmlDocument(built, route, 'en-US').includes(preload), 'English documents keep the meta inert');
+assert.ok(!localizeHtmlDocument(built.replace(/<meta name="cot-locale-catalog"[^>]*>/, ''), route, 'zh-CN')
+  .includes('modulepreload" crossorigin href="/assets/i18nCatalog'), 'no meta (the dev server) means no preload');
+
+const viteConfig = readFileSync(resolve(ROOT, 'vite.config.ts'), 'utf8');
+assert.match(viteConfig, /^const pageCatalogs = i18nPageCatalogs\(\);$/m, 'the build creates the page catalog plugin');
+const pluginSource = readFileSync(resolve(ROOT, 'tools/viteI18nPageCatalogs.ts'), 'utf8');
+assert.match(pluginSource, /transformIndexHtml: \{\s*order: 'post',/,
+  'the build names each page\'s catalog chunks after bundling');
+
+// 5. The Scene Studio's strings (src/ui/i18nStudioKeys.ts) load with its chunk: the build serves the game's catalogs
+//    without them and each locale's slice as a module that main.ts loads beside the Studio's chunk.
+const { i18nStudioCatalog, splitStudioCatalog } = await import('../../tools/viteI18nStudioCatalog.ts');
+const fullCatalogs = Object.fromEntries(['en-US', 'zh-CN'].map((locale) =>
+  [locale, JSON.parse(readFileSync(resolve(ROOT, `src/ui/i18nCatalog.${locale}.json`), 'utf8'))]));
+const studioKeys = Object.keys(splitStudioCatalog(fullCatalogs['en-US']).studio).sort();
+assert.ok(studioKeys.length > 100, 'the Studio owns its slice of the catalog');
+assert.deepEqual(Object.keys(splitStudioCatalog(fullCatalogs['zh-CN']).studio).sort(), studioKeys, 'both locales split alike');
+assert.match(viteConfig, /^\s*i18nStudioCatalog\(\{ gameKeys: gameCatalogKeys \}\),\n\s*pageCatalogs,$/m,
+  'the build registers the Studio catalog split, then the page catalogs');
+assert.match(viteConfig, /^const gameCatalogKeys = \(\): readonly string\[\] \| null => pageCatalogs\.api\.gameCatalogKeys\(\);$/m,
+  'the split takes the game\'s keys from the page catalog scan');
+assert.match(viteConfig, /worker: \{ format: 'es', plugins: \(\) => \[i18nStudioCatalog\(\{ gameKeys: gameCatalogKeys \}\)\]/,
+  'the worker builds restrict the game\'s catalogs alike, so both emit the same catalog files'); 
+const studioPlugin = i18nStudioCatalog();
+studioPlugin.configResolved({ root: ROOT });
+const pluginContext = { addWatchFile() {}, error(message) { throw new Error(message); } };
+assert.equal(studioPlugin.enforce, 'pre', 'the split serves the catalog files before Vite reads them');
+// (230: the Garage Filter panel's strings are a second slice, section 6; the split keeps both)
+const fleetKeys = Object.keys(splitStudioCatalog(fullCatalogs['en-US']).fleet).sort();
+// (252: the tech-tree screen's strings are a third slice, section 7)
+const techTreeKeys = Object.keys(splitStudioCatalog(fullCatalogs['en-US']).techTree).sort();
+// (272: the first-game tutorial's strings are a fourth slice, section 8)
+const tutorialKeys = Object.keys(splitStudioCatalog(fullCatalogs['en-US']).tutorial).sort();
+const sliceModule = (plugin, slice, locale) => JSON.parse(plugin.load.call(pluginContext,
+  plugin.resolveId.call(pluginContext, `virtual:cot-i18n-${slice}/${locale}`)).replace(/^export default /, '').replace(/;\s*$/, ''));
+for (const locale of ['en-US', 'zh-CN']) {
+  const game = JSON.parse(studioPlugin.load.call(pluginContext, resolve(ROOT, `src/ui/i18nCatalog.${locale}.json`)));
+  const slice = sliceModule(studioPlugin, 'studio', locale);
+  const fleet = sliceModule(studioPlugin, 'fleet', locale);
+  const techTree = sliceModule(studioPlugin, 'techTree', locale);
+  const tutorial = sliceModule(studioPlugin, 'tutorial', locale);
+  assert.ok(studioKeys.every((key) => !(key in game)), `the game's ${locale} catalog leaves the Studio's strings out`);
+  assert.deepEqual(Object.keys(slice).sort(), studioKeys, `the ${locale} Studio slice holds them`);
+  assert.ok(fleetKeys.every((key) => !(key in game)), `the game's ${locale} catalog leaves the Filter panel's strings out`);
+  assert.deepEqual(Object.keys(fleet).sort(), fleetKeys, `the ${locale} fleet slice holds them`);
+  assert.ok(techTreeKeys.every((key) => !(key in game)), `the game's ${locale} catalog leaves the tech-tree screen's strings out`);
+  assert.deepEqual(Object.keys(techTree).sort(), techTreeKeys, `the ${locale} tech-tree slice holds them`);
+  assert.ok(tutorialKeys.every((key) => !(key in game)), `the game's ${locale} catalog leaves the tutorial's strings out`);
+  assert.deepEqual(Object.keys(tutorial).sort(), tutorialKeys, `the ${locale} tutorial slice holds them`);
+  assert.deepEqual({ ...game, ...slice, ...fleet, ...techTree, ...tutorial }, fullCatalogs[locale], `the ${locale} split loses and changes nothing`);
+}
+assert.throws(() => studioPlugin.resolveId.call(pluginContext, 'virtual:cot-i18n-fleet/fr-FR'), /no fleet catalog for the locale "fr-FR"/,
+  'a slice of an unknown locale fails the build');
+assert.equal(studioPlugin.load.call(pluginContext, resolve(ROOT, 'src/ui/i18n.ts')), null, 'other modules load as written');
+// 2026-10-15: the build restricts the game's catalogs to the keys its graph and workers can show (the page catalog scan's
+// `game` keys, tools/i18n-page-catalogs.mjs); the Studio slice stays whole, and no key set (the dev server) keeps them.
+const shownKeys = ['garage.battle', studioKeys[0], 'no.such.key', Object.keys(fullCatalogs['en-US']).find((key) => key.startsWith('docs.'))];
+const restricted = i18nStudioCatalog({ gameKeys: () => shownKeys });
+restricted.configResolved({ root: ROOT });
+const wholePlugin = i18nStudioCatalog({ gameKeys: () => null });
+wholePlugin.configResolved({ root: ROOT });
+for (const locale of ['en-US', 'zh-CN']) {
+  const file = resolve(ROOT, `src/ui/i18nCatalog.${locale}.json`);
+  const game = JSON.parse(restricted.load.call(pluginContext, file));
+  const expected = Object.fromEntries(Object.entries(fullCatalogs[locale])
+    .filter(([key]) => (key === shownKeys[0] || key === shownKeys[3])));
+  assert.deepEqual(game, expected, `the ${locale} game catalog holds only the shown keys it has, in catalog order, no Studio key`);
+  assert.deepEqual(Object.keys(sliceModule(restricted, 'studio', locale)).sort(), studioKeys, `the ${locale} Studio slice is not restricted`);
+  assert.deepEqual(Object.keys(sliceModule(restricted, 'fleet', locale)).sort(), fleetKeys, `the ${locale} fleet slice is not restricted`);
+  assert.deepEqual(Object.keys(sliceModule(restricted, 'techTree', locale)).sort(), techTreeKeys, `the ${locale} tech-tree slice is not restricted`);
+  assert.deepEqual(Object.keys(sliceModule(restricted, 'tutorial', locale)).sort(), tutorialKeys, `the ${locale} tutorial slice is not restricted`);
+  assert.equal(wholePlugin.load.call(pluginContext, file), studioPlugin.load.call(pluginContext, file),
+    `no key set: the ${locale} game catalog is served whole`);
+}
+// Nothing outside the Studio shows its strings (they would read raw), and the game's static graph holds no Studio module.
+const STUDIO_MODULE = /^src\/(?:ui|game)\/studio[A-Za-z]*\.ts$/;
+const studioFamilies = ['studio.film.', 'studioPanel.picture.', 'studioPanel.light.', 'studioPanel.fxParam.'];
+for (const file of sources) {
+  // (246) the data-built Field Manual chapters run in Node only, at prerender, with both catalogs whole (as below)
+  if (STUDIO_MODULE.test(file) || file === 'src/ui/i18nStudioKeys.ts' || file.startsWith('src/docs/chapters/')) continue;
+  const text = readFileSync(resolve(ROOT, file), 'utf8');
+  const shown = studioKeys.find((key) => ["'", '"', '`'].some((quote) => text.includes(`${quote}${key}${quote}`)))
+    ?? studioFamilies.find((family) => text.includes(`\`${family}\${`));
+  assert.equal(shown, undefined, `${file} shows the Studio string ${shown}, which the game's catalogs leave out`);
+}
+const { BATTLE_TIMES } = await import('../engine/battleWeatherPolicy.ts');
+assert.ok(BATTLE_TIMES.every((time) => !studioKeys.includes(`atmosphere.${time}`)),
+  'the battle time picker (battleTimeChoices.ts) offers no Studio-only time of day');
+const gameClosure = staticImportClosure('src/main.ts', { root: ROOT });
+for (const module of ['src/game/studio.ts', 'src/ui/studioPanel.ts', 'src/ui/studioPicturePanel.ts', 'src/ui/studioStrings.ts']) {
+  assert.ok(!gameClosure.has(module), `the game statically loads ${module}: ${importChain(gameClosure, module)}`);
+}
+assert.match(readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8'),
+  // (247) its panel's sheet loads in the same Promise.all (runtimeStyles: a lazy surface's CSS at its boundary); (2026-11-02
+  // audit R6) held in one opener's lazy chunk, the Studio's loadModule
+  /createLazyChunk\(\(\) => Promise\.all\(\[import\('\.\/game\/studio\.ts'\), import\('\.\/ui\/studioPanel\.css'\),\s*import\('\.\/ui\/studioStrings\.ts'\)\.then\(\(strings\) => strings\.ensureStudioStrings\(\)\)\]\)[^;]*\{ opener: true \}\);[\s\S]*?loadModule: \(\) => studioModule\.load\(\)/,
+  'the Studio opens once its strings are resident');
+// Runtime: the Studio merges each resident locale's slice into its dictionary (here English and, after section 3's
+// switch, Chinese); a failed slice merges nothing.
+const { extendResidentDictionaries } = await import('./i18nSlices.ts');
+await assert.rejects(extendResidentDictionaries(() => Promise.reject(new Error('offline'))), /offline/, 'a failed slice rejects');
+assert.equal(dictionaries.catalogText('en-US', 'studio.film.probe'), 'studio.film.probe', 'and merges nothing');
+const sliceRequests = [];
+await extendResidentDictionaries((locale) => {
+  sliceRequests.push(locale);
+  return Promise.resolve({ default: { 'studio.film.probe': locale === 'zh-CN' ? '影片' : 'Film' } });
+});
+assert.deepEqual(sliceRequests, ['en-US', 'zh-CN'], 'each resident locale loads its slice');
+assert.equal(dictionaries.catalogText('en-US', 'studio.film.probe'), 'Film');
+assert.equal(dictionaries.catalogText('zh-CN', 'studio.film.probe'), '影片');
+assert.equal(dictionaries.catalogText('zh-CN', 'garage.battle'), '出战', 'the merge keeps the game\'s strings');
+
+// 6. The Garage Filter panel's strings (src/ui/i18nFleetKeys.ts, 230) load with the panel: the toggle loads them beside
+//    the panel's module and stylesheet, and the panel mounts once they are resident. Only the panel's own graph shows
+//    them; the toggle's label, which the Garage shows before the panel loads, stays in the boot catalog.
+// (the slice is the whole fleet.* family less the toggle's label: the Gallery's two select defaults ride along, which
+// the game never shows and the Gallery's own page catalog carries)
+assert.ok(fleetKeys.length > 40, 'the Filter panel owns its class, role, status and filter strings');
+assert.ok(fleetKeys.every((key) => !readFileSync(resolve(ROOT, 'index.html'), 'utf8').includes(key)),
+  'the game\'s markup shows no string of the fleet slice');
+assert.deepEqual(Object.keys(splitStudioCatalog(fullCatalogs['zh-CN']).fleet).sort(), fleetKeys, 'both locales split the fleet slice alike');
+assert.ok(fleetKeys.every((key) => key.startsWith('fleet.')) && !fleetKeys.some((key) => studioKeys.includes(key)),
+  'the fleet slice is its own family, apart from the Studio\'s');
+assert.ok(!fleetKeys.includes('fleet.filter.toggleAria') && 'fleet.filter.toggleAria' in splitStudioCatalog(fullCatalogs['en-US']).game,
+  'the Filter toggle\'s label stays in the game\'s boot catalog');
+const PANEL_ENTRY = 'src/ui/garageFacetPanel.ts';
+const panelClosure = staticImportClosure(PANEL_ENTRY, { root: ROOT });
+const fleetFamily = /[`'"]fleet\.(?:class|role|status|filter)\.(?:\$\{|[`'"])/;
+const showsFleet = (text) => fleetKeys.find((key) => ["'", '"', '`'].some((quote) => text.includes(`${quote}${key}${quote}`)))
+  ?? text.match(fleetFamily)?.[0];
+const panelModulesShowingFleet = [];
+for (const file of sources) {
+  if (file === 'src/ui/i18nFleetKeys.ts') continue;
+  const text = readFileSync(resolve(ROOT, file), 'utf8');
+  const shown = showsFleet(text);
+  if (panelClosure.has(file)) {
+    if (shown) panelModulesShowingFleet.push(file);
+    continue;
+  }
+  assert.equal(shown, undefined, `${file} shows the Filter panel string ${shown}, which the game's catalogs leave out`);
+}
+assert.ok(panelModulesShowingFleet.includes(PANEL_ENTRY) && panelModulesShowingFleet.includes('src/vehicles/vehicleFacets.ts'),
+  `the panel and its facet tables show the fleet slice (${panelModulesShowingFleet.join(', ')})`);
+// Outside the panel's graph only the Gallery (a public page: its page catalog holds every key it reaches) imports a module
+// that shows the slice, and the game reaches the panel only through the toggle's import(), which loads the slice too.
+// The Garage's lower third also shows a facet table's class name (brand-ui S2): it imports the facets beside the slice,
+// in one Promise.all, so the name never reads as a raw key.
+const garageSource = readFileSync(new URL('../ui/garage.ts', import.meta.url), 'utf8');
+assert.match(garageSource, /Promise\.all\(\[import\('\.\.\/vehicles\/vehicleFacets\.ts'\),[^\]]*import\('\.\/fleetStrings\.ts'\)/,
+  'the Garage loads the fleet slice with the facet tables it shows');
+for (const module of panelModulesShowingFleet) {
+  // (245) the Field Manual's data-built chapters (src/docs/chapters) run in Node only, at prerender (tools/docs-prerender.mjs):
+  // no page imports them, and their words come from both catalogs whole
+  const importers = importersOf(module).filter((file) => !panelClosure.has(file) && !file.startsWith('src/gallery/') && !file.startsWith('src/docs/chapters/'));
+  // (the stand-alone hero tiles read a vehicle's class for its glyph alone, aria-hidden: no word of the slice; checked below)
+  assert.deepEqual(importers, module === PANEL_ENTRY ? ['src/ui/garage.ts'] : module === 'src/vehicles/vehicleFacets.ts' ? ['src/ui/garage.ts', 'src/ui/heroCard.ts'] : [],
+    `${module} shows the fleet slice; its importers outside the panel load it without the slice: ${importers.join(', ')}`);
+  assert.ok(!gameClosure.has(module), `the game statically loads ${module}: ${importChain(gameClosure, module)}`);
+}
+assert.ok(!gameClosure.has('src/ui/fleetStrings.ts'), 'the game loads the fleet slice only with the panel');
+{
+  const heroCard = readFileSync(resolve(ROOT, 'src/ui/heroCard.ts'), 'utf8');
+  const reads = [...heroCard.matchAll(/\bfacets\.(\w+)/g)].map((match) => match[1]);
+  assert.deepEqual([...new Set(reads)], ['vehicleClassForId'], 'the hero tiles read only a vehicle\'s class from the facet tables (its glyph, no words)');
+}
+assert.match(readFileSync(resolve(ROOT, 'src/ui/garage.ts'), 'utf8'),
+  // (2026-11-02 audit R6) held in an opener's lazy chunk (app/lazyChunk.ts)
+  /facetPanel = createLazyChunk\(\(\): Promise<GarageFacetPanel> => Promise\.all\(\[import\('\.\/garageFacetPanel\.ts'\), import\('\.\/garageFacetPanel\.css'\),\s*import\('\.\/fleetStrings\.ts'\)\.then\(\(strings\) => strings\.ensureFleetStrings\(\)\)\]\)\s*\.then\(\(\[\{ mountGarageFacetPanel \}\]\) => mountGarageFacetPanel\(/,
+  'the Filter panel mounts once its strings are resident');
+
+// 7. The tech-tree screen's strings (src/ui/i18nTechTreeKeys.ts, 252) load with the screen: only its module shows them,
+//    the game's static graph holds neither the screen, its loader nor the tree data, and the Garage opens the screen once
+//    they are resident. The game bar's label, which the Garage shows before the screen loads, stays in the boot catalog.
+assert.ok(techTreeKeys.length >= 15 && techTreeKeys.every((key) => key.startsWith('techTree.')), 'the tech-tree screen owns its slice');
+assert.deepEqual(Object.keys(splitStudioCatalog(fullCatalogs['zh-CN']).techTree).sort(), techTreeKeys,
+  'both locales split the tech-tree slice alike');
+assert.ok(!techTreeKeys.includes('techTree.open') && 'techTree.open' in splitStudioCatalog(fullCatalogs['en-US']).game,
+  'the game bar\'s label stays in the boot catalog');
+for (const file of sources) {
+  if (file === 'src/ui/techTree.ts' || file === 'src/ui/i18nTechTreeKeys.ts') continue;
+  const text = readFileSync(resolve(ROOT, file), 'utf8');
+  const shown = techTreeKeys.find((key) => ["'", '"', '`'].some((quote) => text.includes(`${quote}${key}${quote}`)));
+  assert.equal(shown, undefined, `${file} shows the tech-tree string ${shown}, which the game's catalogs leave out`);
+}
+for (const module of ['src/ui/techTree.ts', 'src/ui/techTreeStrings.ts', 'src/techTree/trees.ts']) {
+  assert.ok(!gameClosure.has(module), `the game statically loads ${module}: ${importChain(gameClosure, module)}`);
+}
+assert.match(readFileSync(resolve(ROOT, 'src/ui/garage.ts'), 'utf8'),
+  // (2026-11-02 audit R6) the hero cards' sheet through the document's one hero card load (heroCardChunk.ts)
+  /import\('\.\/techTree\.ts'\), import\('\.\/techTree\.css'\), heroCardChunk\.load\(\),\s*import\('\.\/techTreeStrings\.ts'\)\.then\(\(strings\) => strings\.ensureTechTreeStrings\(\)\)/,
+  'the tech tree opens once its strings are resident');
+
+// 8. The first-game tutorial's strings (src/ui/i18nTutorialKeys.ts, 272) load with its overlay: only the tutorial's own
+//    modules show them, the game's static graph holds neither the overlay, its steps nor its loader, and a chapter starts
+//    once they are resident. Settings' Replay row and the manual's link keep their own keys in the catalogs they load.
+const TUTORIAL_MODULES = ['src/ui/tutorial/tutorialRunner.ts', 'src/ui/tutorial/tutorialOverlay.ts', 'src/ui/tutorial/tutorialSteps.ts',
+  'src/ui/tutorialStrings.ts'];
+assert.ok(tutorialKeys.length >= 40 && tutorialKeys.every((key) => key.startsWith('tutorial.')), 'the tutorial owns its slice');
+assert.deepEqual(Object.keys(splitStudioCatalog(fullCatalogs['zh-CN']).tutorial).sort(), tutorialKeys,
+  'both locales split the tutorial slice alike');
+for (const file of sources) {
+  if (TUTORIAL_MODULES.includes(file) || file === 'src/ui/i18nTutorialKeys.ts') continue;
+  const text = readFileSync(resolve(ROOT, file), 'utf8');
+  const shown = tutorialKeys.find((key) => ["'", '"', '`'].some((quote) => text.includes(`${quote}${key}${quote}`)));
+  assert.equal(shown, undefined, `${file} shows the tutorial string ${shown}, which the game's catalogs leave out`);
+}
+for (const module of TUTORIAL_MODULES) {
+  assert.ok(!gameClosure.has(module), `the game statically loads ${module}: ${importChain(gameClosure, module)}`);
+}
+assert.match(readFileSync(resolve(ROOT, 'src/app/tutorialAccess.ts'), 'utf8'),
+  /createLazyChunk\(\(\) => importAll\(\[\s*import\('\.\.\/ui\/tutorial\/tutorialRunner\.ts'\),\s*import\('\.\.\/ui\/tutorial\/tutorial\.css'\),\s*import\('\.\.\/ui\/tutorialStrings\.ts'\)\.then\(\(strings\) => strings\.ensureTutorialStrings\(\)\),/,
+  'a tutorial chapter starts once its strings are resident');
+
+// Runtime: outside Vite the loaders resolve at once (the full catalogs are resident); inside, one request per slice.
+const [{ ensureFleetStrings }, { ensureStudioStrings }, { ensureTechTreeStrings }, { ensureTutorialStrings }] = await Promise.all([
+  import('./fleetStrings.ts'), import('./studioStrings.ts'), import('./techTreeStrings.ts'), import('./tutorialStrings.ts')]);
+assert.equal(await ensureFleetStrings(), undefined);
+assert.equal(await ensureStudioStrings(), undefined);
+assert.equal(await ensureTechTreeStrings(), undefined);
+assert.equal(await ensureTutorialStrings(), undefined);
+assert.equal(dictionaries.catalogText('zh-CN', 'fleet.filter.clear'), fullCatalogs['zh-CN']['fleet.filter.clear'],
+  'Node keeps the panel\'s strings resident');
+
+console.log('i18nLazyCatalog.selftest: no page graph holds a catalog; zh-CN loads on demand, English pages never fetch it, '
+  + `/cn/ preloads it; the Studio's ${studioKeys.length} strings per locale load with its chunk and the Filter panel's `
+  + `${fleetKeys.length} with the panel; the tech tree's ${techTreeKeys.length} with the screen; the tutorial's ${tutorialKeys.length} with its overlay`);

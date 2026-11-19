@@ -1,0 +1,102 @@
+// Layout of Damage vs armor: tower column fixed, armor columns even, the head
+// sticks while the body scrolls. Tier colours are data (--tier-color per cell,
+// --td-mark on the damage type); everything else comes from the td-* classes.
+
+/* The width comes from DIALOG_WIDTH (dialog config) */
+.td-dlg {
+  width: 100%;
+}
+
+/* No padding on top: the sticky head would leave a gap under the edge */
+.td-dlg-body {
+  padding-top: 0;
+  scroll-padding-top: 40px;
+}
+
+.dm-matrix {
+  min-width: 600px;
+  table-layout: fixed;
+  border-spacing: 0;
+  font-size: var(--td-fs-body);
+}
+
+.col-tower {
+  width: 160px;
+}
+
+/* Armor names stay in sight while the body scrolls */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 12px;
+  background: var(--td-surface);
+  text-align: center;
+}
+
+thead th.dm-corner,
+tbody th {
+  text-align: left;
+}
+
+.dm-examples > * {
+  vertical-align: top;
+  height: auto;
+  padding-top: 6px;
+  padding-bottom: 8px;
+  text-align: center;
+}
+
+.dm-examples th {
+  text-align: left;
+}
+
+/* A mark in the colour of the damage type (DAMAGE_TYPE_UI) */
+.dm-type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.cell {
+  text-align: center;
+}
+
+/* Weak and normal as text colour only, strong and devastating framed */
+.dm-value {
+  display: inline-block;
+  min-width: 58px;
+  padding: 2px 6px;
+  border-radius: var(--td-radius);
+  color: var(--tier-color);
+}
+
+.cell[data-eff='strong'] .dm-value {
+  outline: 1px solid var(--tier-color);
+  outline-offset: -1px;
+}
+
+.cell[data-eff='devastating'] .dm-value {
+  font-weight: 700;
+  background: color-mix(in srgb, var(--tier-color) 15%, transparent);
+  outline: 1px solid var(--tier-color);
+  outline-offset: -1px;
+}
+
+.dm-locked {
+  margin-top: var(--td-sp-3);
+}
+
+/* The enemies of an armor, one a line; a long name wraps in its column */
+.dm-enemies {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}

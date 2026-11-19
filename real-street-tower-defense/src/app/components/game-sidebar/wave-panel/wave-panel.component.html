@@ -1,0 +1,117 @@
+<!-- WAVE section: no head, the button names the wave -->
+@if (waveActive()) {
+  @if (leakTotal() > 0) {
+    <p class="td-caps wp-leak" matTooltip="HP the HQ loses if every enemy of this wave gets through, split children included"
+       matTooltipPosition="left">Max HQ damage <b>{{ leakTotal() }}</b></p>
+  }
+  <div class="td-rows">
+    @for (group of currentWaveGroups(); track group.enemyType; let i = $index) {
+      <div class="td-row wp-group"
+           [tdRichTooltip]="groupTooltip(group)"
+           tdRichTooltipPosition="left">
+        <canvas #mixedEnemyCanvas class="td-well wp-preview"
+                [attr.data-group-index]="i" width="64" height="64"></canvas>
+        <div class="wp-info">
+          <div class="wp-info-head">
+            <span class="td-name">{{ group.name }}</span>
+            <span class="wp-count td-num">×{{ group.count }}@if (group.lanes > 1) {<span class="td-muted"> per lane</span>}</span>
+          </div>
+          <div class="td-note td-inline wp-stats">
+            <span>HP {{ group.actualHp }}</span>
+            <span>{{ group.actualSpeed.toFixed(1) }} m/s</span>
+            <span class="td-tone-hurt">HQ −{{ formatLeak(group.leak) }}</span>
+          </div>
+          <div class="td-note td-inline wp-stats">
+            <span class="td-inline wp-armor">
+              <td-icon name="shield" [size]="11"></td-icon>
+              {{ getArmorLabel(group.enemyType) }}
+            </span>
+            <span class="td-tone-brass">{{ getArmorWeakTo(group.enemyType) }}</span>
+          </div>
+          @if (enemyTrait(group.enemyType); as trait) {
+            <div class="td-note wp-trait">{{ trait }}</div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}
+@for (alert of waveAlertViews(); track alert.kind) {
+  <div class="td-banner is-error is-row wp-alert" [class.is-ethereal]="alert.kind === 'ethereal'" role="status"
+       [matTooltip]="alert.tooltip" matTooltipPosition="left">
+    <td-icon class="wp-alert-icon" [name]="alert.icon" [size]="16"></td-icon>
+    <span class="td-stack wp-alert-text">
+      <span class="wp-alert-title">{{ alert.title }} <span class="td-muted">{{ alert.when }}</span></span>
+      <span class="td-note" [class.is-warn]="!alert.covered">{{ alert.defense }}</span>
+    </span>
+  </div>
+}
+<!-- Before wave 1 on a map with optional lanes: which are open (TODO E130) -->
+<app-lane-choice />
+<!-- Running, the button waits (is-busy, pressed) and keeps the focus: aria-disabled, not disabled -->
+<button class="td-btn-primary td-wave-btn" [class.td-wave-running]="waveActive()"
+        [class.is-busy]="waveActive()" [class.is-on]="waveButton().pressed || waveActive()"
+        (click)="!waveActive() && !isGameOver() && startWave.emit()"
+        [attr.aria-label]="waveButton().ariaLabel"
+        [attr.aria-pressed]="coopReady() ? waveButton().pressed : null"
+        aria-keyshortcuts="Space"
+        [attr.aria-disabled]="waveActive() || isGameOver() ? true : null">
+  @if (waveActive()) {
+    <span class="td-inline wp-btn-main">
+      <td-icon name="wave" [size]="16"></td-icon>
+      <span>{{ waveButton().label }}</span>
+    </span>
+    @if (waveButton().left; as left) {
+      <span class="td-note td-num">{{ left }}</span>
+      <span class="td-progress is-edge is-teal"><span [style.width.%]="waveButton().barPercent"></span></span>
+    }
+  } @else {
+    <span class="td-inline wp-btn-main">
+      <td-icon [name]="waveButton().pressed ? 'check' : 'play'" [size]="16"></td-icon>
+      <span>{{ waveButton().label }}</span>
+    </span>
+    @if (waveButton().coopReady; as ready) {
+      <span class="td-num wp-countdown">{{ ready }}</span>
+      <span class="td-progress is-edge is-tick"><span [style.width.%]="waveButton().barPercent"></span></span>
+    } @else if (waveButton().countdown; as countdown) {
+      <span class="td-num wp-countdown">{{ countdown }}</span>
+      <span class="td-progress is-edge is-tick"><span [style.width.%]="waveButton().barPercent"></span></span>
+    } @else if (!isGameOver()) {
+      <kbd class="td-kbd" aria-hidden="true">Space</kbd>
+    }
+  }
+</button>
+
+<!-- Right under the button: the auto-start switch, and between waves the
+     replay of the last one -->
+<div class="wp-options">
+  <!-- Coop: no auto-start, the players say when (D15) -->
+  @if (!coopReady()) {
+    <button type="button" class="td-check"
+            [attr.aria-pressed]="autoStart()"
+            [attr.aria-label]="'Auto-start the next wave ' + autoStartSeconds + ' s after a wave'"
+            [matTooltip]="'Starts the next wave by itself ' + autoStartSeconds + ' s after a wave'"
+            matTooltipPosition="left"
+            (click)="toggleAutoStart()">
+      <span class="td-switch" aria-hidden="true"></span>
+      <span>Auto start in {{ autoStartSeconds }} s</span>
+    </button>
+  }
+  @if (replayWave(); as wave) {
+    <button type="button" class="td-link td-note"
+            [attr.aria-label]="'Replay wave ' + wave"
+            [matTooltip]="'Watch wave ' + wave + ' again: free camera, pause, 0.25x to 4x'"
+            matTooltipPosition="left"
+            (click)="replay.enter()">Replay wave {{ wave }}</button>
+  }
+</div>
+@if (replay.fileProblem(); as problem) {
+  <p class="td-note is-warn" role="status">{{ problem }}</p>
+}
+@if (replay.elsewhere(); as there) {
+  <button type="button" class="td-link td-note" [disabled]="replay.goingThere()" (click)="replay.playThere()">Go to {{ there.name }} and play</button>
+}
+
+<!-- NEXT: the coming waves on a timeline, one detail line for one of them;
+     past W30 what is known before the director picks -->
+<app-wave-timeline [peeks]="upcomingWaves()" />

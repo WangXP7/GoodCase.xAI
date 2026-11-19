@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS profiles
+  ALTER COLUMN auth0_id TYPE TEXT USING auth0_id::text;

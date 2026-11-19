@@ -1,0 +1,43 @@
+// Layout of the boss bar under the game speed: name left, HP right, a bar in
+// health red under it; more bosses as thin bars, most HP first. Display
+// only, the map under it stays clickable.
+
+:host {
+  display: block;
+  pointer-events: none;
+}
+
+.boss-bar {
+  box-sizing: border-box;
+  width: min(420px, 56vw);
+  padding: 6px 10px 8px;
+}
+
+.boss-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.boss-track {
+  height: 8px;
+
+  > .boss-fill {
+    background: var(--td-health-red);
+  }
+
+  &.is-small {
+    flex: 1;
+    height: 4px;
+    padding: 0;
+  }
+}
+
+.boss-others {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}

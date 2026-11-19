@@ -1,0 +1,68 @@
+{
+  "name": "three-advanced-techniques",
+  "version": "0.1.0",
+  "description": "Production-ready advanced techniques for three.js",
+  "keywords": [
+    "three",
+    "three.js",
+    "webgpu",
+    "tsl",
+    "rendering",
+    "post-processing",
+    "simulation",
+    "ambient-occlusion",
+    "bloom",
+    "motion-blur",
+    "screen-space-reflections",
+    "soft-shadows",
+    "soft-body"
+  ],
+  "homepage": "https://github.com/marcofugaro/three-advanced-techniques#readme",
+  "bugs": {
+    "url": "https://github.com/marcofugaro/three-advanced-techniques/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marcofugaro/three-advanced-techniques.git"
+  },
+  "license": "MIT",
+  "author": "Marco Fugaro",
+  "type": "module",
+  "main": "./three-advanced-techniques.js",
+  "types": "./three-advanced-techniques.d.ts",
+  "exports": {
+    ".": {
+      "types": "./three-advanced-techniques.d.ts",
+      "default": "./three-advanced-techniques.js"
+    },
+    "./rendering/*": "./rendering/*",
+    "./simulations/*": "./simulations/*"
+  },
+  "files": [
+    "three-advanced-techniques.js",
+    "three-advanced-techniques.d.ts",
+    "rendering/",
+    "simulations/",
+    "!**/*.html",
+    "!**/*.md",
+    "!**/*.webp"
+  ],
+  "scripts": {
+    "dev": "serve --listen 5174 --no-request-logging",
+    "screenshots": "node utils/generate-screenshots.js"
+  },
+  "peerDependencies": {
+    "@types/three": ">=0.187.0",
+    "three": ">=0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "puppeteer": "^25.10.0",
+    "serve": "^14.2.8"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/Kevin-Liu-01/Claude-of-Tanks",
+  "commit": "e5e937cb713fc2b6fc39b2abf4b3c3747996d1ea",
+  "license": "MIT",
+  "scope": "code-only",
+  "files": 3423,
+  "bytes": 61848383
+}

@@ -1,0 +1,963 @@
+/**
+ * LittleJS Object System
+ * - EngineObject is the base class for all game objects
+ * - Handles automatic updating, rendering, physics, and collision
+ * - Supports parent-child hierarchies with transform inheritance
+ * - 2D physics with velocity, acceleration, damping, and gravity
+ * - Collision system with tiles and other objects
+ * - Renders sprites from tile sheets with color and rotation
+ * - Objects sorted by renderOrder for layered rendering
+ */
+
+'use strict';
+
+// a one way solid lets a box at from pass, when it was not wholly on the solid's far side, the way it is passed
+// through; both are where they were before this frame's moves, so it does not matter which updated first
+function engineObjectOneWayPass(solid, solidPos, from, fromSize)
+{
+    const way = solid.oneWay, size = solid.size, epsilon = 1e-3;
+    return way.x > .5 ? from.x - fromSize.x/2 < solidPos.x + size.x/2 - epsilon :
+        way.x < -.5 ? from.x + fromSize.x/2 > solidPos.x - size.x/2 + epsilon :
+        way.y > .5 ? from.y - fromSize.y/2 < solidPos.y + size.y/2 - epsilon :
+        from.y + fromSize.y/2 > solidPos.y - size.y/2 + epsilon;
+}
+
+// where a move from start to end goes into the cell at its corner, the first point of it inside the cell's box, and
+// whether it goes in through a side, x, or the top or bottom, the axis whose slab it enters last; one starting on a
+// face is on that face, as its entry there is 0 and the other's is before it
+function engineObjectRayEntry(start, end, cell)
+{
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const tx = dx ? min((cell.x - start.x) / dx, (cell.x + 1 - start.x) / dx) : -Infinity;
+    const ty = dy ? min((cell.y - start.y) / dy, (cell.y + 1 - start.y) / dy) : -Infinity;
+    const t = clamp(max(tx, ty));
+    return {pos: vec2(start.x + dx*t, start.y + dy*t), side: tx >= ty};
+}
+
+// a bullet's move from one point to another through the tiles: the first tile its collideWithTile takes, nearest
+// first across the solid layers, with where the move goes into it, the face's normal and the layer; undefined for none
+// - the cell it starts in, a hair back along its move so one stopped on a tile's face going into it is outside, is not
+//   tested, so it moves out of a tile it is inside, as a box that starts in one does, and a tile after it still stops it
+// - collideWithTile is asked with the bullet where the move goes into the tile
+// - only the stretches of the move near a solid layer are walked, nearest first and joined where they meet, so a long
+//   move through empty space, or between layers far apart, costs nothing; the layers are whole numbers, so the cells
+//   are the same as over the whole move
+/** @param {EngineObject} object
+ *  @param {Vector2} from
+ *  @param {Vector2} to
+ *  @return {{pos: Vector2, normal: Vector2, layer: TileCollisionLayer}|undefined} */
+function engineObjectBulletSweep(object, from, to)
+{
+    const move = to.subtract(from), length = move.length();
+    if (!length) return;
+    const back = from.subtract(move.scale(1e-6 / length)), startX = floor(back.x), startY = floor(back.y);
+
+    /** @type {{pos: Vector2, normal: Vector2, layer: TileCollisionLayer}|undefined} */
+    let hit;
+    const testCell = (cell)=>
+    {
+        // a bullet its collideWithTile destroyed is asked about nothing more
+        if (cell.x === startX && cell.y === startY || object.destroyed) return false;
+        for (const layer of tileCollisionLayers)
+        {
+            if (!layer.isSolid) continue;
+            const x = cell.x - layer.pos.x, y = cell.y - layer.pos.y;
+            if (x < 0 || y < 0 || x >= layer.size.x || y >= layer.size.y) continue;
+            const data = layer.collisionData[y*layer.size.x + x];
+            if (!data || tileCollisionOneWayPass(layer, x, y, from.x, from.y)) continue;
+            const tilePos = vec2(cell.x, cell.y), entry = engineObjectRayEntry(from, to, tilePos);
+            object.pos = entry.pos;
+            if (!object.collideWithTile(data, tilePos, true))
+            {
+                if (object.destroyed) return false; // nor the other layers' tiles in this cell
+                continue;
+            }
+            const normal = entry.side ? vec2(-sign(move.x), 0) : vec2(0, -sign(move.y));
+            hit = {pos: entry.pos, normal, layer};
+            return true;
+        }
+        return false;
+    };
+
+    const stretches = [];
+    for (const layer of tileCollisionLayers)
+    {
+        if (!layer.isSolid) continue;
+        tileCollisionAssertWhole(layer);
+        let t0 = 0, t1 = 1;
+        for (const [p, d, a, b] of [[from.x, move.x, layer.pos.x - 1, layer.pos.x + layer.size.x + 1],
+            [from.y, move.y, layer.pos.y - 1, layer.pos.y + layer.size.y + 1]])
+        {
+            if (!d)
+            {
+                if (p < a || p > b) t0 = 2;
+                continue;
+            }
+            const u = (a - p) / d, v = (b - p) / d;
+            t0 = max(t0, min(u, v)), t1 = min(t1, max(u, v));
+        }
+        t0 < t1 && stretches.push([t0, t1]);
+    }
+    stretches.sort((a, b)=> a[0] - b[0]);
+    const at = (t)=> t <= 0 ? from : t >= 1 ? to : from.add(move.scale(t));
+    for (let i = 0; i < stretches.length && !hit;)
+    {
+        const [t0] = stretches[i];
+        let t1 = stretches[i][1];
+        while (++i < stretches.length && stretches[i][0] <= t1)
+            t1 = max(t1, stretches[i][1]);
+        lineTest(at(t0), at(t1), testCell);
+    }
+    return hit;
+}
+
+// where an object was before this frame's moves, for a one way test: kept by the update when a one way solid is in
+// it, or where it is when updatePhysics is called on its own
+function engineObjectStartPos(o) { return engineObjectsOneWayStart?.get(o) || o.pos; }
+
+// a pos or angle the game set on a child since its parent last placed it is kept: made its localPos or localAngle,
+// so the child stays where it was put and moves with its parent from there; each is kept alone, so setting the
+// angle leaves localPos exactly as it was; setting one and its local value both is a mistake, the local one is lost
+function engineObjectChildKeep(o)
+{
+    const placed = o.placedTransform, parent = o.parent;
+    if (!placed || !parent) return;
+    const mirror = parent.getMirrorSign();
+    if (o.pos.x !== placed[0] || o.pos.y !== placed[1])
+    {
+        ASSERT(o.localPos.x === placed[3] && o.localPos.y === placed[4],
+            'a child\'s pos and localPos were both set before it was placed again, set one of them', o);
+        const local = parent.worldToLocal(o.pos);
+        o.localPos.set(local.x * mirror, local.y);
+    }
+    if (o.angle !== placed[2])
+    {
+        ASSERT(o.localAngle === placed[5],
+            'a child\'s angle and localAngle were both set before it was placed again, set one of them', o);
+        o.localAngle = mirror * (o.angle - parent.angle);
+    }
+    // kept now, so a later check before it is placed again does not take it from where the parent has moved to
+    engineObjectChildPlaced(o);
+}
+
+// keep where a child is placed, [x, y, angle], to tell what the game set since, and in a debug build the local
+// values it was placed from, [localPos.x, localPos.y, localAngle] after those, for the assert that both were set
+function engineObjectChildPlaced(o)
+{
+    const placed = o.placedTransform || (o.placedTransform = []);
+    placed[0] = o.pos.x, placed[1] = o.pos.y, placed[2] = o.angle;
+    if (debug)
+        placed[3] = o.localPos.x, placed[4] = o.localPos.y, placed[5] = o.localAngle;
+}
+
+/**
+ * LittleJS Object Base Object Class
+ * - Top level object class used by the engine
+ * - Automatically adds self to object list
+ * - Will be updated and rendered each frame
+ * - Renders as a sprite from a tilesheet by default
+ * - Can have color and additive color applied
+ * - 2D Physics and collision system
+ * - Sorted by renderOrder
+ * - Objects can have children attached
+ * - Parents are updated before children, and set child transform
+ * - Call destroy() to get rid of objects
+ *
+ * The physics system used by objects is simple and fast with some caveats...
+ * - Collision uses the axis aligned size, the object's rotation angle is only for rendering
+ * - Objects are guaranteed to not intersect tile collision from physics
+ * - If an object starts or is moved inside tile collision, it will not collide with that tile
+ * - Collision for objects can be set to be solid to block other objects
+ * - Objects may get pushed into overlapping other solid objects, if so they will push away
+ * - A static solid (mass 0) moved by its velocity, like a door or an elevator, pushes objects out of its way
+ * - Solid objects are more performance intensive and should be used sparingly
+ * @memberof Engine
+ * @example
+ * // create an engine object, normally you would first extend the class with your own
+ * const pos = vec2(2,3);
+ * const object = new EngineObject(pos);
+ */
+class EngineObject
+{
+    /** Create an engine object and adds it to the list of objects
+     *  @param {Vector2}  [pos=vec2()] - World space position of the object
+     *  @param {Vector2}  [size=vec2(1)] - World space size of the object
+     *  @param {TileInfo} [tileInfo] - Tile info to render object (undefined is untextured)
+     *  @param {number}   [angle] - Angle the object is rotated by
+     *  @param {Color}    [color=WHITE] - Color to apply to tile when rendered
+     *  @param {number}   [renderOrder] - Objects sorted by renderOrder before being rendered
+     */
+    constructor(pos=vec2(), size=vec2(1), tileInfo, angle=0, color=WHITE, renderOrder=0)
+    {
+        // check passed in params
+        ASSERT(isVector2(pos), 'object pos must be a vec2');
+        ASSERT(isVector2(size), 'object size must be a vec2');
+        ASSERT(!tileInfo || tileInfo instanceof TileInfo, 'object tileInfo should be a TileInfo or undefined');
+        ASSERT(typeof angle === 'number' && isFinite(angle), 'object angle should be a number');
+        ASSERT(isColor(color), 'object color should be a valid rgba color');
+        ASSERT(typeof renderOrder === 'number', 'object renderOrder should be a number');
+
+        /** @property {Vector2} - World space position of the object, on a child too, where setting it moves the
+         *  child there and its localPos follows */
+        this.pos = pos.copy();
+        /** @property {Vector2} - World space width and height of the object */
+        this.size = size.copy();
+        /** @property {Vector2|undefined} - Size of object used for drawing, uses size if not set
+         *  @type {Vector2|undefined} */
+        this.drawSize = undefined;
+        /** @property {TileInfo|undefined} - Tile info to render object (undefined is untextured)
+         *  @type {TileInfo|undefined} */
+        this.tileInfo = tileInfo;
+        /** @property {number} - Angle to rotate the object, in world space on a child too, where setting it turns
+         *  the child and its localAngle follows */
+        this.angle = angle;
+        /** @property {Color} - Color to apply when rendered */
+        this.color = color.copy();
+        /** @property {Color|undefined} - Additive color to apply when rendered
+         *  @type {Color|undefined} */
+        this.additiveColor = undefined;
+        /** @property {Shader|undefined} - Custom shader to render with, undefined for the engine's own
+         *  @type {Shader|undefined} */
+        this.shader = undefined;
+        /** @property {boolean} - Does this object draw into the light system's shadow map; false for a floor layer, a background, a pickup */
+        this.castShadow = true;
+        /** @property {boolean} - Does this object draw into the light system's background map, which a
+         *  DirectionalLight lights only at its edges facing the light; for a background layer, with castShadow false */
+        this.castBackgroundShadow = false;
+        /** @property {number} - With the light system, how much it lights itself: 0 lit only by the lights, 1 full
+         *  brightness in its own colors whatever the lights do, between partly; drawn into the lightmap through
+         *  renderEmissive, as 3D's emissive. Exact for solid pixels; a partly transparent one is self lit by its alpha
+         *  too, so a half alpha pixel shows at a quarter and a fading emissive sprite fades a little faster */
+        this.emissive = 0;
+        /** @property {TextureInfo|undefined} - With the light system's normalMaps on, a normal map the lights shade
+         *  it by: an image laid out like its tile sheet, read at the same place as whatever tile it draws, so an
+         *  animation's frames keep their normals, green up the image as 3D's normalMap has it
+         *  @type {TextureInfo|undefined} */
+        this.normalMap = undefined;
+        /** @property {boolean} - Should the rendered tile flip along the y axis. Affects rendering and the local→world transform of attached children (a mirrored parent flips its children's localPos.x and localAngle). Does not affect this object's own physics, collision, or localToWorld/worldToLocal. */
+        this.mirror = false;
+        /** @property {boolean} - Has object been destroyed? */
+        this.destroyed = false;
+        this.updatePass = 0; // the engine update pass it was last updated in, so nothing updates twice in one
+
+        // physical properties
+        /** @property {number} - How heavy the object is, static if 0: a static object moves by its velocity but does not
+         *  collide on its own, the moving ones collide with it */
+        this.mass = objectDefaultMass;
+        /** @property {number} - Fraction of velocity kept each frame, 1 keeps all of it, 0 stops at once */
+        this.damping = objectDefaultDamping;
+        /** @property {number} - Fraction of angular velocity kept each frame, 1 keeps all of it, 0 stops at once */
+        this.angleDamping = objectDefaultAngleDamping;
+        /** @property {number} - How bouncy the object is when colliding (0-1) */
+        this.restitution = objectDefaultRestitution;
+        /** @property {number} - Fraction of sliding speed kept each frame on the ground, 1 is no friction, 0 stops at
+         *  once, the more slippery of the object and its ground is used */
+        this.friction  = objectDefaultFriction;
+        /** @property {number} - How much to scale gravity by for this object */
+        this.gravityScale = 1;
+        /** @property {number} - Objects are sorted by render order */
+        this.renderOrder = renderOrder;
+        /** @property {Vector2} - Velocity of the object, in world units per frame */
+        this.velocity = vec2();
+        /** @property {number} - Angular velocity of the object, in radians per frame */
+        this.angleVelocity = 0;
+        /** @property {number} - Track when object was created  */
+        this.spawnTime = time;
+        /** @property {Array<EngineObject>} - List of children of this object
+         *  @type {Array<EngineObject>} */
+        this.children = [];
+        /** @property {boolean} - Limit object speed along x and y axis */
+        this.clampSpeed = true;
+        /** @property {boolean} - Move through the tiles as a point along a ray, so it can not pass through one at
+         *  any speed, for small fast things like bullets: its speed is not held to objectMaxSpeed for the tiles,
+         *  collideWithTile is asked with this.pos where the ray goes into the tile, and on a hit it stops at the
+         *  surface, bounces off it by restitution and goes on with the rest of its move, so it slides along a floor
+         *  - Its collision with solid objects is the usual one, so one with a size that collides with them is still held
+         *    to objectMaxSpeed; one of no size is not, it never collides with them
+         *  - this.pos is set for each tile asked about and put where the move ends after, so a change collideWithTile
+         *    makes to it is not kept; move it after the physics, in update
+         *  - Once destroyed, as by its own collideWithTile, it is asked about no more tiles that frame, where an object
+         *    that is not a bullet still is */
+        this.isBullet = false;
+        /** @property {EngineObject|undefined} - Object we are standing on, if any
+         *  @type {EngineObject|undefined} */
+        this.groundObject = undefined;
+        /** @property {Vector2|undefined} - Makes a solid object one way, like a platform jumped up through: up, down,
+         *  left or right, the way others pass through it; it blocks only what was wholly on its far side before it
+         *  moved, or stood on it, and the rest are not stopped or asked through collideWithObject; with no mass it
+         *  moves before the other objects each frame, so a lift works the same at any render order; tiles are made one
+         *  way by the layer's setOneWay
+         *  @type {Vector2|undefined} */
+        this.oneWay = undefined;
+
+        // parent child system
+        /** @property {EngineObject|undefined} - Parent of object if in local space
+         *  @type {EngineObject|undefined} */
+        this.parent = undefined;
+        /** @property {Vector2|undefined} - Position relative to the parent, only while attached to one
+         *  @type {Vector2|undefined} */
+        this.localPos = undefined;
+        /** @property {number} - Angle relative to the parent, only while attached to one */
+        this.localAngle = 0;
+        // where the parent last placed this child, with the local values it was placed from, so a pos or angle the
+        // game sets is kept, see engineObjectChildPlaced
+        /** @type {Array<number>|undefined} */
+        this.placedTransform = undefined;
+
+        // collision flags
+        /** @property {boolean} - Object collides with the level, its tile collision layers
+         *  @type {boolean} */
+        this.collideLevel = false;
+        /** @property {boolean} - Object collides with solid objects */
+        this.collideSolidObjects = false;
+        /** @property {boolean} - Object collides with and blocks other objects */
+        this.isSolid = false;
+        /** @property {boolean} - Object collides with raycasts */
+        this.collideRaycast = false;
+
+        /** @property {boolean} - Object is skipped by engineObjectsDestroy, for things that outlive a level like a camera
+         *  - Calling destroy on it still destroys it, and its children go with it either way */
+        this.persistent = false;
+
+        // add to list of objects
+        engineObjects.push(this);
+    }
+
+    /** Update the object transform, called automatically by engine even when paused
+     *  - A child is placed from its parent, and a pos or angle set on it since is kept first, made its localPos or
+     *    localAngle; the engine does that each frame, call this after setting one to have them right away
+     *  @param {boolean} [updateChildren] - Also update the children's transforms */
+    updateTransforms(updateChildren=true)
+    {
+        const parent = this.parent;
+        if (parent)
+        {
+            // a pos or angle the game set is kept, made the local transform it is placed from
+            engineObjectChildKeep(this);
+
+            // compose with parent transform inline to avoid intermediate vector allocs
+            const mirror = parent.getMirrorSign();
+            const lp = this.localPos, pp = parent.pos;
+            const lx = lp.x*mirror, ly = lp.y, pa = parent.angle;
+            if (pa)
+            {
+                const c = cos(-pa), s = sin(-pa);
+                this.pos.set(lx*c - ly*s + pp.x, lx*s + ly*c + pp.y);
+            }
+            else
+                this.pos.set(lx + pp.x, ly + pp.y);
+            this.angle = mirror*this.localAngle + pa;
+            engineObjectChildPlaced(this);
+        }
+
+        // update children
+        if (updateChildren)
+            for (const child of this.children)
+                child.updateTransforms();
+    }
+
+    /** Update the object physics, called automatically by engine once each frame. Can be overridden to stop or change how physics works for an object
+     *  - With many solids each mover finds those near it through a grid, which follows a solid after its own physics
+     *    update: a solid an override moves for another object, a lift carrying a crate, is found there from the next
+     *    update on */
+    updatePhysics()
+    {
+        // child objects do not have physics
+        ASSERT(!this.parent, 'updatePhysics: a child has no physics of its own, its parent moves it');
+
+        // bail if a collision callback destroyed us mid-frame
+        if (this.destroyed) return;
+
+        // physics sanity checks
+        ASSERT(this.angleDamping >= 0 && this.angleDamping <= 1, 'angleDamping must be 0 to 1, the fraction kept each frame');
+        ASSERT(this.damping >= 0 && this.damping <= 1, 'damping must be 0 to 1, the fraction of velocity kept each frame');
+        ASSERT(this.friction >= 0 && this.friction <= 1, 'friction must be 0 to 1, the fraction of sliding speed kept each frame');
+
+        // apply physics; only collision needs where the object was, so only then is it copied
+        const solve = enablePhysicsSolver && this.mass;
+        const oldPos = solve && (this.collideSolidObjects || this.collideLevel) ? this.pos.copy() : undefined;
+        this.velocity.x *= this.damping;
+        this.velocity.y *= this.damping;
+        if (this.mass)
+        {
+            // apply gravity only if it has mass
+            this.velocity.x += gravity.x * this.gravityScale;
+            this.velocity.y += gravity.y * this.gravityScale;
+        }
+        // limit max speed to prevent missing collisions, after gravity so no move is past it, only for what collides:
+        // with solids, or with tiles while it has a mass, which tile collision needs; anything else moves as fast as
+        // it is told
+        if (this.clampSpeed && enablePhysicsSolver &&
+            (this.collideSolidObjects && this.size.x && this.size.y || this.collideLevel && this.mass && !this.isBullet))
+        {
+            this.velocity.x = clamp(this.velocity.x, -objectMaxSpeed, objectMaxSpeed);
+            this.velocity.y = clamp(this.velocity.y, -objectMaxSpeed, objectMaxSpeed);
+        }
+        this.pos.x += this.velocity.x;
+        this.pos.y += this.velocity.y;
+        this.angle += this.angleVelocity *= this.angleDamping;
+
+        // don't do collision for static objects or if solver disabled
+        if (!solve) return;
+
+        // which way is down for this object, a negative gravityScale falls up and lands on ceilings
+        const gravityY = this.gravityScale < 0 ? -gravity.y : gravity.y;
+        const wasFalling = this.velocity.y < 0 && gravityY < 0 || this.velocity.y > 0 && gravityY > 0;
+        const wasOn = this.groundObject; // a one way solid it stood on still holds it
+        if (this.groundObject)
+        {
+            // apply friction in local space of ground object
+            const friction = max(this.friction, this.groundObject.friction);
+            const groundSpeed = this.groundObject.velocity.x;
+            this.velocity.x = groundSpeed + (this.velocity.x - groundSpeed) * friction;
+            this.groundObject = undefined;
+        }
+
+        // an object with no width or height has no box to push out of, or to be pushed out of
+        if (this.collideSolidObjects && this.size.x && this.size.y)
+        {
+            // check collisions against solid objects
+            const epsilon = .001; // necessary to push slightly outside of the collision
+            // with many solids, only those near it, as a grid finds them, in the same order
+            for (const o of engineCollideGrid ? engineCollideGridWalk(this) : engineObjectsCollideStaticLast)
+            {
+                // skip destroyed, child objects, self collision, or objects with no box
+                if (o.destroyed || o.parent || o === this || !o.size.x || !o.size.y) continue;
+
+                // non solid objects don't collide with each other
+                if (!this.isSolid && !o.isSolid) continue;
+
+                // check collision
+                if (!this.isOverlappingObject(o)) continue;
+
+                // a one way solid lets through what was not wholly on its far side before it moved, either way round
+                if (o.oneWay && wasOn !== o && engineObjectOneWayPass(o, engineObjectStartPos(o), oldPos, this.size))
+                    continue;
+                if (this.oneWay && engineObjectOneWayPass(this, oldPos, engineObjectStartPos(o), o.size)) continue;
+
+                // each moving object checks its own contacts, so a pair the other one already asked about this frame
+                // is not asked twice: left overlapping, ignored or only nudged apart it is skipped, and one both said
+                // to resolve, pushed back together since, is resolved again
+                const answer = engineObjectsCollidePairAnswer(o, this);
+                if (answer === false) continue;
+                if (!answer)
+                {
+                    // notify objects of collision and check if should be resolved
+                    const collide1 = this.collideWithObject(o);
+                    const collide2 = o.collideWithObject(this);
+                    // a callback may have moved either one, the grid follows
+                    engineCollideGrid?.built && engineCollideGridPlace(engineCollideGrid.built, o);
+                    if (!collide1 || !collide2)
+                    {
+                        engineObjectsCollidePairAdd(this, o);
+                        continue;
+                    }
+                }
+
+                const wasOverlapping = isOverlapping(oldPos, this.size, o.pos, o.size);
+                if (wasOverlapping && (!o.mass || o.groundObject))
+                {
+                    // a static solid that moved into it, like a door or an elevator, pushes it out the shortest way
+                    // at once and carries it along, it would only drift out slowly and the solid would pass through;
+                    // an object standing on something counts as fixed too, so a stack on an elevator rides together;
+                    // it bounces off relative to the mover, a paddle moved by setting pos bounces a ball as a wall does
+                    const push = collideBoxBox(this.pos, this.size, o.pos, o.size);
+                    if (push)
+                    {
+                        this.pos.x += push.x + sign(push.x) * epsilon;
+                        this.pos.y += push.y + sign(push.y) * epsilon;
+                        const restitution = max(this.restitution, o.restitution);
+                        if (push.x)
+                        {
+                            const v = this.velocity.x - o.velocity.x;
+                            if (v * push.x < 0) // moving into it
+                                this.velocity.x = o.velocity.x - v * restitution;
+                        }
+                        else
+                        {
+                            const v = this.velocity.y - o.velocity.y;
+                            if (v * push.y < 0) // moving into it
+                                this.velocity.y = o.velocity.y - v * restitution;
+                            if (push.y * gravityY < 0) // pushed up against gravity, it stands on it
+                                this.groundObject = o;
+                        }
+                    }
+                    engineObjectsCollidePairAdd(this, o);
+
+                    debugPhysics && debugOverlap(this.pos, this.size, o.pos, o.size, '#f00', undefined, false);
+                    continue;
+                }
+                if (wasOverlapping)
+                {
+                    // if already was touching, try to push away
+                    const deltaPos = oldPos.subtract(o.pos);
+                    const length = deltaPos.length();
+                    const pushAwayAccel = .001;
+                    const velocity = length < .001 ? vec2(0, pushAwayAccel) : deltaPos.scale(pushAwayAccel/length);
+                    this.velocity = this.velocity.add(velocity);
+                    if (o.mass) // push away other object if not fixed
+                        o.velocity = o.velocity.subtract(velocity);
+                    engineObjectsCollidePairAdd(this, o);
+
+                    debugPhysics && debugOverlap(this.pos, this.size, o.pos, o.size, '#f00', undefined, false);
+                    continue;
+                }
+
+                // check for collision
+                const sizeBoth = this.size.add(o.size);
+                // prefer to push up if small delta, up away from this object's own gravity
+                const smallStepUp = (gravityY > 0 ? o.pos.y - oldPos.y : oldPos.y - o.pos.y)*2 > sizeBoth.y - abs(gravityY);
+                const isBlockedX = abs(oldPos.y - o.pos.y)*2 < sizeBoth.y;
+                const isBlockedY = abs(oldPos.x - o.pos.x)*2 < sizeBoth.x;
+                const restitution = max(this.restitution, o.restitution);
+
+                if (smallStepUp || isBlockedY || !isBlockedX) // resolve y collision
+                {
+                    // push outside object collision
+                    this.pos.y = o.pos.y + (sizeBoth.y/2 + epsilon) * sign(oldPos.y - o.pos.y);
+                    if ((o.groundObject && wasFalling) || !o.mass)
+                    {
+                        // set ground object if landed on something
+                        if (wasFalling)
+                            this.groundObject = o;
+
+                        // bounce if other object is fixed or grounded, relative to it so a rider keeps up with a
+                        // platform moving down instead of landing on it again every few frames
+                        this.velocity.y = o.velocity.y - (this.velocity.y - o.velocity.y) * restitution;
+                    }
+                    else // o has mass here, the other branch already handled the massless case
+                    {
+                        // inelastic collision
+                        const inelastic = (this.mass * this.velocity.y + o.mass * o.velocity.y) / (this.mass + o.mass);
+
+                        // elastic collision
+                        const elastic0 = this.velocity.y * (this.mass - o.mass) / (this.mass + o.mass)
+                            + o.velocity.y * 2 * o.mass / (this.mass + o.mass);
+                        const elastic1 = o.velocity.y * (o.mass - this.mass) / (this.mass + o.mass)
+                            + this.velocity.y * 2 * this.mass / (this.mass + o.mass);
+
+                        // lerp between elastic or inelastic based on restitution
+                        this.velocity.y = lerp(inelastic, elastic0, restitution);
+                        o.velocity.y = lerp(inelastic, elastic1, restitution);
+                    }
+                }
+                if (!smallStepUp && isBlockedX) // resolve x collision
+                {
+                    // push outside collision
+                    this.pos.x = o.pos.x + (sizeBoth.x/2 + epsilon) * sign(oldPos.x - o.pos.x);
+                    if (o.mass)
+                    {
+                        // inelastic collision
+                        const inelastic = (this.mass * this.velocity.x + o.mass * o.velocity.x) / (this.mass + o.mass);
+
+                        // elastic collision
+                        const elastic0 = this.velocity.x * (this.mass - o.mass) / (this.mass + o.mass)
+                            + o.velocity.x * 2 * o.mass / (this.mass + o.mass);
+                        const elastic1 = o.velocity.x * (o.mass - this.mass) / (this.mass + o.mass)
+                            + this.velocity.x * 2 * this.mass / (this.mass + o.mass);
+
+                        // lerp between elastic or inelastic based on restitution
+                        this.velocity.x = lerp(inelastic, elastic0, restitution);
+                        o.velocity.x = lerp(inelastic, elastic1, restitution);
+                    }
+                    else // bounce if other object is fixed, relative to it as a landing is
+                        this.velocity.x = o.velocity.x - (this.velocity.x - o.velocity.x) * restitution;
+                }
+                engineObjectsCollidePairAdd(this, o, true);
+                debugPhysics && debugOverlap(this.pos, this.size, o.pos, o.size, '#f0f', undefined, false);
+            }
+        }
+        if (this.collideLevel)
+        {
+            // check collision against tiles, one way tiles go by where it was; put back after, a callback may throw
+            const fromObject = tileCollisionFromObject, fromPos = tileCollisionFromPos;
+            const hitObject = tileCollisionHitObject;
+            tileCollisionFromObject = this, tileCollisionFromPos = oldPos;
+            try
+            {
+                this.isBullet ? this.updatePhysicsBullet(oldPos, gravityY, wasFalling) :
+                    this.updatePhysicsTiles(oldPos, gravityY, wasFalling);
+            }
+            finally
+            {
+                tileCollisionFromObject = fromObject, tileCollisionFromPos = fromPos;
+                tileCollisionHitObject = hitObject;
+            }
+        }
+    }
+
+    // a bullet's move from oldPos through the tiles, as a point along a ray, called by updatePhysics
+    /** @private */
+    updatePhysicsBullet(oldPos, gravityY, wasFalling)
+    {
+        // up to three legs: the move, then what is left of it after each hit, along the surface or bounced off it as
+        // its velocity is, so one rolling along the floor under gravity keeps going as a box does
+        let from = oldPos, to = this.pos.copy();
+        for (let leg = 0; leg < 3; ++leg)
+        {
+            const hit = engineObjectBulletSweep(this, from, to);
+            if (!hit)
+            {
+                this.pos = to;
+                break;
+            }
+
+            // stop at the surface, a hair off it, more than a one way tile's margin, so going on along a ceiling a
+            // one way tile it rose through lets it on; bounce off it by the more bouncy of it and the layer
+            const {normal, layer} = hit, restitution = max(this.restitution, layer.restitution);
+            const stop = hit.pos.add(normal.scale(2e-3));
+            const into = this.velocity.dot(normal);
+            if (into < 0)
+                this.velocity = this.velocity.subtract(normal.scale(into * (1 + restitution)));
+            if (normal.y * gravityY < 0 && wasFalling) // landed, against its gravity
+                this.groundObject = layer;
+            this.pos = stop;
+
+            // the rest of the move from there, turned the same way; none once its callback destroyed it
+            const rest = to.subtract(hit.pos), restInto = rest.dot(normal);
+            const next = stop.add(restInto < 0 ? rest.subtract(normal.scale(restInto * (1 + restitution))) : rest);
+            if (this.destroyed || next.distanceSquared(stop) < 1e-12) break;
+            from = stop, to = next;
+        }
+        debugPhysics && debugPoint(this.pos, '#f00', undefined, undefined, false);
+    }
+
+    // resolve the tile collision of a move from oldPos, called by updatePhysics
+    /** @private */
+    updatePhysicsTiles(oldPos, gravityY, wasFalling)
+    {
+        // the first test is where the move put it, so the tiles it asks about are hits; the tests after it only try
+        // places to find which side it hit and where it can go
+        tileCollisionHitObject = this;
+        const hitLayer = tileCollisionTest(this.pos, this.size, this);
+        tileCollisionHitObject = undefined;
+        if (hitLayer)
+        {
+            // if already was stuck in collision, don't do anything
+            // this should not happen unless something starts in collision
+            if (!tileCollisionTest(oldPos, this.size, this))
+            {
+                // test which side we bounced off (or both if a corner)
+                const isBlockedX = tileCollisionTest(vec2(this.pos.x, oldPos.y), this.size, this);
+                const isBlockedY = tileCollisionTest(vec2(oldPos.x, this.pos.y), this.size, this);
+                const restitution = max(this.restitution, hitLayer.restitution);
+                if (isBlockedX)
+                {
+                    // a ledge caught less than maxMove below its top lifts the object onto it instead of stopping it,
+                    // down off a ceiling ledge when gravity points up; zero gravity counts as down
+                    const epsilon = 1e-3;
+                    const maxMove = .1;
+                    const y = gravityY > 0 ?
+                        ceil( oldPos.y+this.size.y/2-1) - this.size.y/2 - epsilon :
+                        floor(oldPos.y-this.size.y/2+1) + this.size.y/2 + epsilon;
+                    if (abs(y - this.pos.y) < maxMove && !tileCollisionTest(vec2(this.pos.x, y), this.size, this))
+                    {
+                        this.pos.y = y;
+                        debugPhysics && debugRect(this.pos, this.size, '#ff0', 0, 0, false, false);
+                        return;
+                    }
+
+                    // move against the wall and bounce, its side on the tile edge it moved toward, rounded in the
+                    // layer's space as its collision test is; back to its previous X when that spot is not clear
+                    const snapEpsilon = .0001, layerX = hitLayer.pos.x, offsetX = this.size.x/2 + snapEpsilon;
+                    // never back past where it was: a leading edge already on a grid line would step back by
+                    // the epsilon and take its trailing edge into the tile behind, which nothing tests, since
+                    // only X is blocked; between there and the wall it covers no column it did not cover before
+                    const movingLeft = this.pos.x < oldPos.x;
+                    const snap = layerX + (movingLeft ?
+                        floor(oldPos.x - layerX - this.size.x/2) + offsetX :
+                        ceil( oldPos.x - layerX + this.size.x/2) - offsetX);
+                    const x = movingLeft ? min(snap, oldPos.x) : max(snap, oldPos.x);
+                    this.pos.x = tileCollisionTest(vec2(x, oldPos.y), this.size, this) ? oldPos.x : x;
+                    this.velocity.x *= -restitution;
+                }
+                if (isBlockedY || !isBlockedX)
+                {
+                    // adjust position to slightly away from the nearest tile, the floor or the ceiling it moved
+                    // toward, which prevents a gap between them; rounded in the layer's space as its collision
+                    // test is, or a bottom a hair below a grid line would round to the row under it, inside the
+                    // floor, and fall through; back to its previous Y when that spot is not clear
+                    const epsilon = .0001;
+                    const offset = this.size.y/2 + epsilon;
+                    const layerY = hitLayer.pos.y;
+                    const y = layerY + (this.pos.y < oldPos.y ?
+                        floor(oldPos.y - layerY - this.size.y/2) + offset :
+                        ceil( oldPos.y - layerY + this.size.y/2) - offset);
+                    const isClear = this.pos.y !== oldPos.y && !tileCollisionTest(vec2(this.pos.x, y), this.size, this);
+                    this.pos.y = isClear ? y : oldPos.y;
+
+                    // set ground object for tile collision
+                    this.groundObject = wasFalling ? hitLayer : undefined;
+
+                    // bounce velocity
+                    this.velocity.y *= -restitution;
+                }
+                debugPhysics && debugRect(this.pos, this.size, '#f00', 0, 0, false, false);
+            }
+        }
+    }
+
+    /** Update the object, called automatically by engine once each frame. Does nothing by default */
+    update() {}
+
+    /** Render the object, draws a tile by default, automatically called each frame, sorted by renderOrder */
+    render()
+    {
+        // default object render
+        drawTile(this.pos, this.drawSize || this.size, this.tileInfo, this.color, this.angle, this.mirror, this.additiveColor, glEnable, false);
+    }
+
+    /** Optional hook called during the light system plugin's lightmap pass to draw this object's lightmap contribution. Does nothing by default */
+    renderLight() {}
+
+    /** Draw this object into the light system's shadow map, called during its shadow pass when castShadow is set, and into
+     *  its background map when castBackgroundShadow is set and a DirectionalLight is out.
+     *  Calls render() by default so the object casts its own shape; override to cast a different one, like a blob at a character's feet so its body stays lit;
+     *  screen space WebGL draws in render() are skipped during the pass */
+    renderShadow() { this.render(); }
+
+    /** Draw this object's shape into the light system's lightmap, called during its light pass when emissive is above
+     *  0; what it draws shows in its own colors that much brighter. Calls render() by default so the whole object
+     *  glows; override to glow a part, like a robot's eyes */
+    renderEmissive() { this.render(); }
+
+    /** Draw this object into the light system's normal buffer, called for every object during its normal pass when
+     *  normalMaps is on: with its normalMap in place of its textures, or flat, facing the screen, without one. Calls
+     *  render() by default; screen space WebGL draws in render() are skipped during the pass */
+    renderNormal() { this.render(); }
+
+    /** Destroy this object, destroy its children, detach its parent, and mark it for removal
+     *  @param {boolean} [immediate] - true removes attached effects like particle emitters at once, false lets them finish first */
+    destroy(immediate=false)
+    {
+        if (this.destroyed) return;
+
+        // disconnect from parent and destroy children
+        this.destroyed = true;
+        this.parent?.removeChild(this);
+        for (const child of this.children)
+        {
+            child.parent = undefined;
+            child.destroy(immediate);
+        }
+    }
+
+    /** Convert from local space to world space
+     *  @param {Vector2} pos - local space point
+     *  @return {Vector2} */
+    localToWorld(pos) { return this.pos.add(pos.rotate(this.angle)); }
+
+    /** Convert from world space to local space
+     *  @param {Vector2} pos - world space point
+     *  @return {Vector2} */
+    worldToLocal(pos) { return pos.subtract(this.pos).rotate(-this.angle); }
+
+    /** Convert from local space to world space for a vector (rotation only)
+     *  @param {Vector2} vec - local space vector
+     *  @return {Vector2} */
+    localToWorldVector(vec) { return vec.rotate(this.angle); }
+
+    /** Convert from world space to local space for a vector (rotation only)
+     *  @param {Vector2} vec - world space vector
+     *  @return {Vector2} */
+    worldToLocalVector(vec) { return vec.rotate(-this.angle); }
+
+    /** Called to check if a tile collision should be resolved. Return true for physics to resolve the collision or false to ignore and resolve it manually
+     *  - Called for each solid tile the physics tests, which can be several times a frame for the same tile, and for
+     *    positions it only tries, so keep side effects to the calls where isHit is true
+     *  - isHit is true when the tile is one the object overlaps where its move put it, the physics' first test, or
+     *    one a bullet's ray goes into; a box is asked about the tiles it overlaps until one returns true, so a box
+     *    against two tiles at once is asked about one of them; false for the places the physics only tries after
+     *    that, and for the game's own tests and raycasts
+     *  - this.pos has already moved, so a check on where it came from needs the position saved in update; for a one
+     *    way platform the layer's setOneWay does that, and this is not asked about a one way tile it passes through
+     *  - For the point of impact, like sparks where a bullet hit, set isBullet: this.pos is then where it meets the
+     *    tile, as the platformer's Bullet uses it
+     *  @param {number}  tileData - the value of the tile at the position
+     *  @param {Vector2} pos - the tile's bottom left corner in world space
+     *  @param {boolean} [isHit] - true when it overlaps the tile where it moved to, false for a place only tried
+     *  @return {boolean} - true if the collision should be resolved by modifying it's position and velocity */
+    collideWithTile(tileData, pos, isHit) { return tileData > 0; }
+
+    /** Called by the engine to check if an object collision should be resolved. Return true for physics to resolve the collision or false to ignore and resolve it manually
+     *  - Both objects of a touching pair are asked once a frame, whichever order they update in; an object that
+     *    destroys itself here is gone at the end of the frame and is still asked about the pairs left this frame, so a
+     *    bullet that should hit one thing checks its own destroyed flag first
+     *  - With many solids each mover finds those near it through a grid, which follows the other object after this
+     *    returns; a third object moved here is found where it is now from the next update on
+     *  @param {EngineObject} object - the object to test against
+     *  @param {Vector3} [push] - what it would take to move this object clear, a Vector3 from the 3D plugin, undefined in 2D
+     *  @return {boolean} - true if the collision should be resolved by modifying it's position and velocity
+     */
+    collideWithObject(object, push) { return true; }
+
+    /** Get this object's up vector
+     *  @param {number} [scale] - length of the vector
+     *  @return {Vector2} */
+    getUp(scale=1) { return vec2().setAngle(this.angle, scale); }
+
+    /** Get this object's right vector
+     *  @param {number} [scale] - length of the vector
+     *  @return {Vector2} */
+    getRight(scale=1) { return vec2().setAngle(this.angle+PI/2, scale); }
+
+    /** How long since the object was created
+     *  @return {number} */
+    getAliveTime() { return time - this.spawnTime; }
+
+    /** Get the speed of this object
+     *  @return {number} */
+    getSpeed() { return this.velocity.length(); }
+
+    /** Get the velocity of a point on this object, its velocity and its spin about pos together, per frame like
+     *  velocity, so the tip of a spinning blade moves faster than its middle; its length is the point's speed
+     *  @param {Vector2} pos - the point in world space
+     *  @return {Vector2} */
+    getVelocityAtPoint(pos)
+    {
+        // angleVelocity is clockwise, so a point above pos moves right
+        const w = this.angleVelocity, x = pos.x - this.pos.x, y = pos.y - this.pos.y;
+        return vec2(this.velocity.x + w*y, this.velocity.y - w*x);
+    }
+
+    /** Apply acceleration to this object (adjust velocity, not affected by mass)
+     *  - Does nothing on a static object (mass 0), set its velocity instead
+     *  @param {Vector2} acceleration */
+    applyAcceleration(acceleration)
+    { if (this.mass) this.velocity = this.velocity.add(acceleration); }
+
+    /** Apply angular acceleration to this object
+     *  - Does nothing on a static object (mass 0), set its angleVelocity instead
+     *  @param {number} acceleration */
+    applyAngularAcceleration(acceleration)
+    { if (this.mass) this.angleVelocity += acceleration; }
+
+    /** Apply force to this object (adjust velocity, affected by mass)
+     *  - Does nothing on a static object (mass 0), set its velocity instead
+     *  @param {Vector2} force */
+    applyForce(force)
+    { if (this.mass) this.applyAcceleration(force.scale(1/this.mass)); }
+
+    /** Get the direction of the mirror
+     *  @return {number} -1 if this.mirror is true, or 1 if not mirrored */
+    getMirrorSign() { return this.mirror ? -1 : 1; }
+
+    /** Attaches a child to this with a local transform, returns child for chaining
+     *  @template {EngineObject} T
+     *  @param {T}       child
+     *  @param {Vector2} [localPos=vec2()]
+     *  @param {number}  [localAngle]
+     *  @return {T} The child object added */
+    addChild(child, localPos=vec2(), localAngle=0)
+    {
+        ASSERT(!this.destroyed, 'cannot add child to destroyed object');
+        if (this.destroyed) return child;
+        ASSERT(!child.parent && !this.children.includes(child), 'child already has a parent, removeChild it first or use attach');
+        ASSERT(child instanceof EngineObject, 'child must be an EngineObject');
+        ASSERT(!child.destroyed, 'cannot add a destroyed child');
+        for (let p = /** @type {EngineObject} */ (this); p; p = p.parent)
+        {
+            ASSERT(p !== child, 'cannot add an object as a child of itself or of its own child');
+            if (p === child) return child; // a release build leaves it as it was, a loop would never end
+        }
+        child.parent?.removeChild(child); // and moves one from its old parent, as attach does
+        this.children.push(child);
+        child.parent = this;
+        child.localPos = localPos.copy();
+        child.localAngle = localAngle;
+        child.placedTransform = undefined; // where it is now is not kept, it is placed from the local transform given
+        child.updateTransforms();
+        return child;
+    }
+
+    /** Attaches a child to this without moving it: the local transform is worked out from where the child is now,
+     *  where addChild takes one; a child of something else is moved over, returns child for chaining
+     *  @template {EngineObject} T
+     *  @param {T} child
+     *  @return {T} The child object attached */
+    attach(child)
+    {
+        ASSERT(child instanceof EngineObject, 'child must be an EngineObject');
+        ASSERT(/** @type {EngineObject} */ (child) !== this, 'cannot attach self');
+        child.parent?.removeChild(child);
+        // the local values that updateTransforms turns back into the child's current pos and angle
+        const mirror = this.getMirrorSign(), local = this.worldToLocal(child.pos);
+        local.x *= mirror;
+        return this.addChild(child, local, mirror * (child.angle - this.angle));
+    }
+
+    /** Removes a child from this one, it stays where it is in the world
+     *  @param {EngineObject} child */
+    removeChild(child)
+    {
+        ASSERT(child.parent === this && this.children.includes(child), 'removeChild: that object is not a child of this one',
+            child);
+        const i = this.children.indexOf(child);
+        if (i < 0) return; // not a child of this one, release has no assert
+        this.children.splice(i, 1);
+        child.parent = child.localPos = undefined;
+    }
+
+    /** Check if this object's box overlaps another object's box
+     *  @param {EngineObject} object
+     *  @return {boolean} */
+    isOverlappingObject(object)
+    { return this.isOverlapping(object.pos, object.size); }
+
+    /** Check if overlapping a point or aligned bounding box
+     *  @param {Vector2} pos          - Center of box
+     *  @param {Vector2} [size=vec2()] - Size of box, uses a point if undefined
+     *  @return {boolean} */
+    isOverlapping(pos, size=vec2())
+    { return isOverlapping(this.pos, this.size, pos, size); }
+
+    /** Set how this object collides
+     *  @param {boolean} [collideSolidObjects] - Does it collide with solid objects?
+     *  @param {boolean} [isSolid]             - Does it collide with and block other objects? (expensive in large numbers)
+     *  @param {boolean} [collideLevel]        - Does it collide with the level, its tile collision layers?
+     *  @param {boolean} [collideRaycast]      - Does it collide with raycasts? */
+    setCollision(collideSolidObjects=true, isSolid=true, collideLevel=true, collideRaycast=true)
+    {
+        ASSERT(collideSolidObjects || !isSolid, 'solid objects must be set to collide');
+
+        this.collideSolidObjects = collideSolidObjects;
+        this.isSolid = isSolid;
+        this.collideLevel = collideLevel;
+        this.collideRaycast = collideRaycast;
+    }
+
+    /** Returns string containing info about this object for debugging
+     *  @return {string} */
+    toString()
+    {
+        let text = 'type = ' + this.constructor.name;
+        if (this.pos.x || this.pos.y)
+            text += '\npos = ' + this.pos;
+        if (this.velocity.x || this.velocity.y)
+            text += '\nvelocity = ' + this.velocity;
+        if (this.size.x || this.size.y)
+            text += '\nsize = ' + this.size;
+        if (this.angle)
+            text += '\nangle = ' + this.angle.toFixed(3);
+        text += '\ncolor = ' + this.color;
+        return text;
+    }
+
+    /** Render debug info for this object  */
+    renderDebugInfo()
+    {
+        if (!debug) return;
+
+        // check if there is anything to show
+        const hasPhysics = this.collideLevel || this.collideSolidObjects || this.isSolid;
+        if (!hasPhysics && !this.parent) return;
+
+        // show object info for debugging
+        const size = vec2(max(this.size.x, .2), max(this.size.y, .2));
+        const color = rgb(this.collideLevel?1:0, this.collideSolidObjects?1:0, this.isSolid?1:0, .5);
+        debugRect(this.pos, size, color, 0, hasPhysics ? 0 : this.angle, hasPhysics, false); // collision ignores the angle
+        if (this.parent)
+            debugRect(this.pos, size.scale(.8), rgb(1,1,1,.5), 0, this.angle, false, false);
+        this.parent && debugLine(this.pos, this.parent.pos, rgb(1,1,1,.5), .5, 0, false);
+    }
+}

@@ -1,0 +1,862 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { stripTypeScriptTypes } from 'node:module';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript-compiler-api';
+import {
+  FEATURED_IMAGES,
+  FEATURED_SHOTS,
+  LOADING_SHOTS,
+  TRANSITION_SHOTS,
+  featuredShotForMap,
+  nextFeaturedShot,
+} from './featuredShots.ts';
+import { MAP_HEROES, MAP_THUMBS } from './mapThumbs.ts';
+import { MAP_IDS } from '../world/maps/index.ts';
+import { getLocalizedMapName } from './mapNames.ts';
+
+function webpDimensions(buffer) {
+  assert.equal(buffer.subarray(0, 4).toString(), 'RIFF', 'map image must be RIFF WebP');
+  assert.equal(buffer.subarray(8, 12).toString(), 'WEBP', 'map image must be WebP');
+  for (let offset = 12; offset + 8 <= buffer.length;) {
+    const kind = buffer.subarray(offset, offset + 4).toString();
+    const size = buffer.readUInt32LE(offset + 4);
+    const data = offset + 8;
+    if (kind === 'VP8 ') {
+      return [buffer.readUInt16LE(data + 6) & 0x3fff, buffer.readUInt16LE(data + 8) & 0x3fff];
+    }
+    if (kind === 'VP8L') {
+      const bits = buffer.readUInt32LE(data + 1);
+      return [(bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1];
+    }
+    if (kind === 'VP8X') {
+      return [buffer.readUIntLE(data + 4, 3) + 1, buffer.readUIntLE(data + 7, 3) + 1];
+    }
+    offset = data + size + (size & 1);
+  }
+  throw new Error('map image is missing a WebP dimensions chunk');
+}
+
+assert.deepEqual(Object.keys(MAP_HEROES), Object.keys(MAP_THUMBS),
+  'every map picker image must have a matching high-resolution hero');
+for (const mapId of MAP_IDS) {
+  const hero = await readFile(new URL(`../../public${MAP_HEROES[mapId]}`, import.meta.url));
+  const thumb = await readFile(new URL(`../../public${MAP_THUMBS[mapId]}`, import.meta.url));
+  assert.deepEqual(webpDimensions(hero), [3840, 2160], `${mapId} hero must remain native 4K`);
+  assert.deepEqual(webpDimensions(thumb), [512, 288], `${mapId} picker must remain a crisp 16:9 card asset`);
+  assert.ok(hero.length > thumb.length * 3,
+    `${mapId} picker must remain a materially lighter derivative than its hero`);
+}
+
+const minimapAssets = await Promise.all(MAP_IDS.map(async (mapId) => ({
+  mapId,
+  asset: await stat(new URL(`../../public/minimaps/${mapId}.webp`, import.meta.url)),
+})));
+for (const { mapId, asset } of minimapAssets) {
+  assert.ok(asset.size > 10_000,
+    `${mapId} must ship a non-placeholder supersampled tactical-map asset`);
+}
+
+// Since round 14 (2026-10-12) the Garage gallery's featured stills are the site fifty's (owner: "replace the old media
+// with all my new ones"), picked in tools/media-r5/site-media/picks.json `featured`. Since 2026-11-11 the loading screens
+// rotate the boot pick and then picks.json `loading.stills`, in the owner's order: Garage stills, and stills of his
+// loading-screen gallery (2026-11-04: "for loading screens we need to use these elevated scenes"), each a 1920x1080 webp
+// of the gallery's one collection, public/media/gallery-r1 (tools/media-r5/loading-media.mjs; 272: loading-r1 is
+// retired), with its battlefield and its caption in both catalogs.
+const sitePicks = JSON.parse(await readFile(new URL('../../tools/media-r5/site-media/picks.json', import.meta.url), 'utf8'));
+const siteStills = `/media/${sitePicks.collection}/stills/`;
+// a pick shows its key moment, its close portrait (`still: 'close'`) or, marked fourK, the 4K showcase still; or
+// (2026-11-03) a versus still, whose boot preview is the 1280 rung of its boot opener (bootVersus, else itself)
+const versusItems = new Map(JSON.parse(await readFile(new URL('../../public/media/versus-r1/manifest.json', import.meta.url), 'utf8')).items
+  .map((item) => [item.id, item]));
+const pickImg = (pick) => (pick.versus ? versusItems.get(pick.versus).path
+  : `${siteStills}${pick.id}${pick.fourK ? '-4k' : pick.still === 'close' ? '-close' : ''}.webp`);
+const pickBoot = (pick) => (pick.versus ? versusItems.get(pick.bootVersus ?? pick.versus).rungs.find((rung) => rung.width === 1280).path
+  : `${siteStills}${pick.id}-boot.webp`);
+const bootPicks = sitePicks.featured.filter((pick) => pick.boot);
+assert.equal(bootPicks.length, 1, 'one featured pick opens the boot splash');
+assert.equal(sitePicks.featured[0], bootPicks[0], 'the boot pick leads the Garage gallery');
+assert.equal(FEATURED_SHOTS.length, sitePicks.featured.length, 'every picked still is in the Garage gallery');
+assert.equal(FEATURED_SHOTS.length, 20, 'the Garage gallery shows twenty of the site fifty');
+assert.equal(FEATURED_SHOTS.filter((shot) => shot.bootImg).length, 1, 'one Garage still carries the boot derivative');
+// the loading picks (owner 2026-11-13, on the sheet of the old loop and the gallery: "lets do S C D K L M 17 25 2 6 12 9
+// 18 24 27 26 14 5 13 10 20 8 21 29 28 11 4 16 19 22", then "actualy lets make 4 the first one (K)": the Orchard Valley
+// still is the boot pick): Steinburg and four stills of the old loop, then twenty-four of the gallery; a still he drops
+// leaves picks.json and this count together, and site-media-wire.mjs --only=loading rewires the rotation. (11-18,
+// "the first one of the amx 30b, i want replace with modern tanks but otherwsie same exact scene setup": the boot pick
+// is that scene with Leclercs for the AMX-30Bs and the AMX-40, a versus still, its own 1280 rung on the boot splash)
+assert.equal(bootPicks[0].versus, 's49-orchard-sunset-modern-r14', 'the Orchard Valley still opens the boot splash');
+assert.deepEqual(versusItems.get(bootPicks[0].versus).tanks.map((tank) => tank.id),
+  ['leclerc_xlr', 'leclerc_s2', 'leclerc_sxxi', 't72b3', 't90m'], 'the boot opener shows modern tanks');
+const loadingPicks = sitePicks.loading.stills;
+const garagePicks = new Map(sitePicks.featured.filter((pick) => !pick.boot).map((pick) => [pick.versus ?? pick.id, pick]));
+assert.equal(loadingPicks.length, 29, 'twenty-nine stills follow the boot pick');
+assert.ok(loadingPicks.slice(0, 5).every((id) => garagePicks.has(id)), 'Steinburg and four stills of the old loop open the rotation');
+assert.equal(new Set(loadingPicks).size, loadingPicks.length, 'no loading still is picked twice');
+const loadingDir = new URL(`../../public/media/${sitePicks.gallery.collection}/`, import.meta.url);
+const loadingManifest = JSON.parse(await readFile(new URL('manifest.json', loadingDir), 'utf8'));
+// one collection (272, Main): the loading stills are the gallery's files, and the old loading-r1 folder is gone
+assert.ok(!existsSync(new URL('../../public/media/loading-r1/', import.meta.url)), 'loading-r1 is retired: its stills are the gallery\'s');
+assert.equal(sitePicks.loading.collection, undefined, 'the loading picks are a list on the gallery, not a collection');
+const loadingItems = new Map(loadingManifest.items.map((item) => [item.id, item]));
+assert.ok(loadingPicks.every((id) => loadingItems.has(id) !== garagePicks.has(id)), 'each loading pick is a gallery still or a Garage still');
+const loadingImg = (id) => loadingItems.get(id)?.path ?? pickImg(garagePicks.get(id));
+assert.equal(LOADING_SHOTS.length, loadingPicks.length, 'every loading pick rotates');
+assert.equal(TRANSITION_SHOTS.length, 1 + loadingPicks.length, 'the rotation is the boot pick and the loading picks');
+assert.deepEqual(TRANSITION_SHOTS.slice(1), LOADING_SHOTS, 'the loading stills follow the boot pick');
+assert.deepEqual(FEATURED_IMAGES, TRANSITION_SHOTS.map((shot) => shot.img));
+assert.equal(
+  TRANSITION_SHOTS[0].img,
+  pickImg(bootPicks[0]),
+  'the boot pick must remain the first transition-screen option',
+);
+assert.equal(
+  TRANSITION_SHOTS[0].bootImg,
+  pickBoot(bootPicks[0]),
+  'the featured panel must retain its screen-sized preview derivative',
+);
+const bootHeroAsset = await stat(new URL(`../../public${TRANSITION_SHOTS[0].bootImg}`, import.meta.url));
+const fullHeroAsset = await stat(new URL(`../../public${TRANSITION_SHOTS[0].img}`, import.meta.url));
+assert.ok(bootHeroAsset.size < fullHeroAsset.size * 0.4,
+  'the featured preview must be materially smaller than its gallery source');
+assert.deepEqual(
+  TRANSITION_SHOTS.map((shot) => shot.img),
+  [pickImg(bootPicks[0]), ...loadingPicks.map(loadingImg)],
+  'the transition-screen rotation is the boot pick, then the loading picks in the owner\'s order',
+);
+// a Garage pick rotates as the Garage shows it; a gallery pick is one of the gallery's 1920x1080 webps, its bytes and
+// sha256 in the manifest, rendered on a recorded commit, and rotates with its own battlefield, its focal and its caption
+// in both catalogs
+{
+  const camel = (id) => id.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+  const catalogs = {
+    en: JSON.parse(await readFile(new URL('./i18nCatalog.en-US.json', import.meta.url), 'utf8')),
+    zh: JSON.parse(await readFile(new URL('./i18nCatalog.zh-CN.json', import.meta.url), 'utf8')),
+  };
+  assert.deepEqual(loadingManifest.dimensions, { width: 1920, height: 1080 });
+  const files = new Set(await readdir(loadingDir));
+  const close = new Set(sitePicks.gallery.close);
+  for (const [n, id] of loadingPicks.entries()) {
+    const item = loadingItems.get(id), shot = LOADING_SHOTS[n];
+    if (!item) {
+      // as the Garage shows it, and a versus still with its boot lens on the boot splash
+      const { bootImg, ...garageShot } = shot, pick = garagePicks.get(id);
+      assert.deepEqual(garageShot, FEATURED_SHOTS.find((garage) => garage.img === shot.img), `${id}: as the Garage shows it`);
+      assert.equal(bootImg, pick.bootVersus && pickBoot(pick), `${id}: its boot lens on the boot splash`);
+      continue;
+    }
+    assert.ok(files.has(`${id}.webp`), `${id}: a gallery still`);
+    assert.equal(item.path, `/media/${sitePicks.gallery.collection}/${id}.webp`);
+    assert.ok(item.group === (close.has(id) ? 'close' : 'elevated'), `${id}: its gallery section (${item.group})`);
+    const file = await readFile(new URL(`${id}.webp`, loadingDir));
+    assert.deepEqual(webpDimensions(file), [1920, 1080], `${id}: a 1920x1080 webp`);
+    assert.ok(file.length > 50_000 && file.length <= 600 * 1024, `${id}: ${file.length} B, between 50 KB and 600 KB`);
+    assert.equal(file.length, item.bytes, `${id}: the manifest's bytes`);
+    assert.equal(createHash('sha256').update(file).digest('hex'), item.sha256, `${id}: the manifest's sha256`);
+    assert.match(item.revision, /^[0-9a-f]{40}$/, `${id}: the commit it was rendered on`);
+    assert.ok(MAP_IDS.includes(item.map), `${id}: ${item.map} is a battlefield`);
+    assert.equal(shot.img, item.path);
+    assert.deepEqual(shot.maps, [item.map], `${id}: it rotates as its own battlefield`);
+    assert.equal(shot.focal, item.focal, `${id}: its focal, aimed at its hero tank`);
+    assert.equal(shot.capKey, `media.loading.title.${camel(id)}`, `${id}: its caption key`);
+    for (const [locale, catalog] of Object.entries(catalogs)) {
+      assert.equal(catalog[shot.capKey], item.title[locale], `${id}: its ${locale} caption`);
+      assert.ok(item.title[locale].startsWith(catalog[`map.${item.map}`]), `${id}: its ${locale} caption names its battlefield first`);
+    }
+    assert.ok(item.tanks.some((tank) => tank.role === 'hero' && item.title.en.includes(tank.displayName)), `${id}: its caption names its hero`);
+  }
+  for (const [locale, catalog] of Object.entries(catalogs)) {
+    assert.equal(Object.keys(catalog).filter((key) => key.startsWith('media.loading.title.')).length,
+      loadingPicks.filter((id) => loadingItems.has(id)).length,
+      `the ${locale} catalog holds a caption for each gallery still the rotation names and no other`);
+  }
+}
+const bootHtml = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+const bootSource = await readFile(new URL('./bootScreen.ts', import.meta.url), 'utf8');
+assert.match(bootHtml, /id="cot-boot-hero" data-hero-state="idle"/,
+  'the cold boot must retain its curated in-engine image surface');
+assert.equal((bootHtml.match(/<img class="hly"/g) || []).length, 2,
+  'the boot hero must use two hidden image layers for seamless crossfades');
+assert.match(bootSource, /await preloadImage\(url, \{ priority: 'low', decode: true \}\)/,
+  'boot imagery must decode at low priority before entering a visible layer');
+assert.match(bootSource, /await afterPaint\(\);[\s\S]{0,180}classList\.add\('on'\)/,
+  'decoded boot imagery must commit a hidden frame before fading in');
+assert.match(bootSource, /if \(root && !bootGateSkipped\(\)\)/,
+  'auto-skipped cold-load probes must not fetch decorative splash imagery');
+assert.doesNotMatch(bootHtml, /#cot-boot::after/,
+  'the first-paint boot surface must not restore the requested-removed grid');
+// a stop notice's glyph by the kit's severity: the alert for offline and failure, the clock for slow. Its CSS shows the
+// first or the second, so a third glyph would show beside one of them (253's integration note)
+const bootAlert = bootHtml.match(/<span class="cot-boot-alert" aria-hidden="true">([\s\S]*?)<\/span>/)?.[1] ?? '';
+assert.equal((bootAlert.match(/<svg /g) || []).length, 2, 'the boot stop notice holds exactly its alert and clock glyphs');
+assert.match(bootHtml, /#cot-boot\[data-stop='slow'\] \.cot-boot-alert svg \+ svg \{ display: inline-block; \}/, 'the slow stop shows the clock');
+assert.match(bootHtml,
+  /id="cot-boot" class="cot-boot-enter" data-entrance-state="playing"/,
+  'boot chrome must start its one-shot entrance in the inline first paint');
+assert.match(bootHtml, /#cot-boot\.cot-boot-enter \.cot-boot-mark[\s\S]*?cot-boot-pop/,
+  'the emblem must retain its one-shot entrance');
+assert.match(bootHtml, /#cot-boot\.cot-boot-enter \.cot-boot-load[\s\S]*?cot-boot-rise/,
+  'the progress surface must retain its one-shot entrance');
+assert.match(bootSource,
+  /classList\.remove\('cot-boot-enter'\);[\s\S]{0,100}entranceState = 'complete'/,
+  'the boot controller must permanently retire the entrance class after one play');
+// The faces come from the cot:type marker: every hosted face of the expanded head swaps in.
+const { expandTypeMarkers } = await import('./typeFaces.ts');
+const bootFaces = [...expandTypeMarkers(bootHtml).matchAll(/@font-face\{[^}]*url\([^}]*\}/g)].map(([rule]) => rule);
+assert.ok(bootFaces.length >= 3 && bootFaces.every((rule) => /font-display:swap/.test(rule)),
+  'late inline game fonts must replace the fallback instead of abandoning the brand face');
+assert.doesNotMatch(bootHtml, /cot-boot-pct/, 'the bar alone shows the load: no percentage ticking beside it (owner, 2026-10-26)');
+assert.match(bootHtml, /\.cot-boot-fill \{[^}]*transform: scaleX\(0\);[^}]*will-change: transform;/,
+  'the boot fill moves by its compositor scaleX, so a busy main thread never freezes it');
+assert.match(bootHtml, /<!-- cot:boot-lockup -->\s*<div class="mkl" aria-hidden="true">/,
+  'the boot lockup\'s mark is the compositor-layered living mark (tools/sync-brand-marks.mjs)');
+assert.match(bootHtml, /\.cot-boot-bar \{[^}]*height: 4px;/,
+  'the boot fill\'s track reserves its height in the first paint');
+// (owner, 2026-10-26: "a segmented loading along with the main loading line, like it was before") the main line keeps the
+// whole load; under it one segment per stage, the download's first, then bootScreen's Garage stages in order, written in the
+// page so the first paint holds the row; each segment's fill moves by its compositor scaleX
+{
+  const garage = bootSource.match(/const GARAGE_STAGES[^=]*= \[([\s\S]*?)\] as const;/)?.[1] ?? '';
+  const stageKeys = [...garage.matchAll(/\['(\w+)'/g)].map(([, key]) => key);
+  const row = bootHtml.match(/<div class="cot-boot-segs" id="cot-boot-segs" data-datum="load-stage-progress" aria-hidden="true">([\s\S]*?)<\/div>/)?.[1] ?? '';
+  assert.deepEqual([...row.matchAll(/data-seg="(\w+)"/g)].map(([, key]) => key), ['download', ...stageKeys],
+    'the stage row is the download and then every Garage stage, in order');
+  assert.ok(stageKeys.length >= 8, 'the Garage stage list was read');
+  assert.match(bootHtml, /\.cot-boot-segs b \{[^}]*transform: scaleX\(0\);[^}]*will-change: transform;/, 'a segment fills by its compositor scaleX');
+  assert.match(bootHtml, /data-datum="load-progress"><div class="cot-boot-fill"/, 'the main line is the load-progress datum');
+  assert.match(bootSource, /stepSeg\(segs\.get\(curKey\)/, 'the current segment fills by the stage\'s real steps');
+  assert.doesNotMatch(bootSource, /setInterval\([^)]*[Ss]eg|setTimeout\([^)]*[Ss]eg/, 'no timer moves a segment');
+  // boot r23: every lit segment is tungsten (a done class that changed colour waited on the busy main thread), both bars
+  // run on one track; r24: a stop hides the row in place so the lockup stays still, and a full fill at rest drops its
+  // compositor layer, which snapped a pixel short of the track's painted end
+  assert.match(bootHtml, /\.cot-boot-segs i\.done b \{ transform: scaleX\(1\); will-change: auto; \}/,
+    'a done segment keeps the tungsten fill, painted on its track\'s own pixels');
+  assert.match(bootHtml, /\.cot-boot-fill\.full \{ will-change: auto; \}/, 'the finished main line drops its layer');
+  assert.match(bootSource, /if \(to >= 1\) motion\.onfinish = \(\) => \{ elFill\.style\.transform = 'scaleX\(1\)'; elFill\.classList\.add\('full'\); motion\.cancel\(\); \};/,
+    'the finished main line rests as a style, its motion dropped');
+  assert.match(bootHtml, /\.cot-boot-bar \{[^}]*background: var\(--boot-track\);/, 'the main line runs on the one track');
+  assert.match(bootHtml, /\.cot-boot-segs i \{[^}]*background: var\(--boot-track\);/, 'the stage row runs on the one track');
+  assert.match(bootHtml, /#cot-boot:has\(\.cot-boot-retry\.on\) \.cot-boot-segs \{ visibility: hidden; \}/,
+    'a stop hides the stage row in place: the card does not re-centre');
+  assert.doesNotMatch(bootHtml, /\.cot-boot-retry\.on\) \.cot-boot-(?:segs|bar) \{ display: none; \}/, 'no stop collapses a bar');
+  // the load column is the lockup's ink on a desktop screen, the hull's rear to the stack's right edge
+  // (tools/sync-brand-marks.mjs generates both factors), and the mark box's margin before the hull hangs outside it
+  assert.match(bootHtml, /\.cot-boot-inner\{--boot-lockup-k:\d\.\d{5};--boot-ink-in:0\.\d{5}\}/, 'the lockup-ink factors are generated');
+  assert.match(bootHtml, /\.cot-boot-mark \{[^}]*margin: 0 0 0 calc\(var\(--boot-mark\) \* var\(--boot-ink-in\) \* -1\);/,
+    'the mark box hangs its margin before the hull outside the column');
+  assert.match(bootHtml, /\.cot-boot-inner \{[^}]*width: min\(calc\(var\(--boot-mark\) \* var\(--boot-lockup-k\)\), calc\(100vw - 32px\)\);/,
+    'the load column takes the lockup\'s width');
+  // boot r25: the card's copy wraps greedily (pretty pulled a word short of the edge to spare a one-word last line), set
+  // on each so the game's :where(p) pretty cannot reach it; the credits' quiet action takes the foot's quiet type
+  assert.match(bootHtml, /\.cot-boot-stage \{[^}]*text-wrap: wrap;/, 'the stage line and its stop notice wrap greedily');
+  assert.match(bootHtml, /\.cot-boot-tip span \{ display: inline-block; text-wrap: wrap; \}/, 'the tip wraps greedily');
+  assert.match(bootHtml, /\.cot-credits p\{[^}]*text-wrap:wrap\}/, 'the credits copy wraps greedily');
+  assert.match(bootHtml, /:is\(\.cot-boot-links, \.cot-boot-nav\) > \.cot-boot-link, \.cot-credits-actions \.cot-boot-link:last-child \{[^}]*text-transform: none;/,
+    'one quiet type for the foot and head buttons and the credits\' quiet action');
+  // boot r26: the invitation's balanced wrap split "Commander Alexandrovich" on a phone; the callsign is one word
+  assert.match(bootHtml, /invitationTitle\.replace\(hostName, hostName\.replace\(\/ \/g, '\\u00a0'\)\)/,
+    'the invitation never splits the host\'s callsign');
+  assert.match(bootHtml, /\.cot-boot-invite \{[^}]*text-wrap: balance; overflow-wrap: break-word;/,
+    'an over-long callsign still breaks rather than overflow');
+  // boot r27: under the 2560 card's 1.3 zoom a 4 px gap is 5.2 and snaps to 5 and 6; the zoomed gap is a whole 5 px
+  assert.match(bootHtml, /zoom: 1\.3;[\s\S]{0,400}\.cot-boot-segs \{ gap: calc\(5px \/ 1\.3\); \}/,
+    'the zoomed stage row keeps one gap');
+  // boot r28: centred as a box, the key cap's text sat 1 px off the prompt's baseline (en above, zh below)
+  assert.doesNotMatch(bootHtml, /\.cot-boot-key \{[^}]*vertical-align/, 'the key cap\'s text stands on the prompt\'s baseline');
+  // boot r29: in a line box shorter than its font the label rounded a pixel off the sentence at half the sub-pixel places
+  assert.match(bootHtml, /\.cot-boot-key \{[^}]*height: 22px;[^}]*\/22px var\(--font-data\)/, 'the key cap\'s line is the cap\'s height');
+  // boot r30: the credits' Source code star kept the second ink beside its paper label
+  assert.match(bootHtml, /\.cot-github-stars \{[^}]*color: inherit;/, 'the star takes its button\'s ink wherever it stands');
+  // boot r31: centred on a fraction, the credits title's caps painted a pixel above the portrait on 844x390; r32: a
+  // height rounded to place it put the fraction into the bottom padding, so the open dialog's top margin is rounded
+  assert.match(bootHtml, /dialog\.style\.marginTop = `\$\{Math\.round\(dialog\.getBoundingClientRect\(\)\.top\)\}px`;/,
+    'the credits dialog lays out on a whole pixel');
+  assert.match(bootHtml, /dialog\.showModal\(\); settle\(\);/, 'it settles as it opens');
+  assert.match(bootHtml, /new ResizeObserver\(\(\) => \{ if \(dialog\.open\) settle\(\); \}\)\.observe\(dialog\);/, 'and when its content changes size');
+  assert.match(bootHtml, /addEventListener\('resize', \(\) => \{ if \(dialog\.open\) settle\(\); \}\);/, 'and when the screen changes');
+  assert.doesNotMatch(bootHtml, /\.cot-credits \{[^}]*calc-size/, 'its size is its content\'s');
+}
+assert.match(bootHtml, /#cot-boot-hero \{[^}]*inset: 0;/, 'the boot picture fills the whole screen: no letterbox bars');
+assert.match(bootHtml, /\.cot-boot-tip \{[\s\S]*?height: 84px;[\s\S]*?overflow: hidden;/,
+  'rotating boot tips must not resize the vertically centered splash');
+assert.match(bootHtml,
+  /@media \(width < 768px\) \{\s*\.cot-boot-inner \{[^}]*\}\s*\.cot-boot-load \{[^}]*\}\s*\.cot-boot-tip \{ height: 144px; \}/,
+  'narrow boot tip space follows the centralized width bands (responsiveLayout.ts phone/compact, < 768) at first paint');
+assert.equal(new Set(FEATURED_IMAGES).size, FEATURED_IMAGES.length, 'featured URLs must be unique');
+// (2026-11-03, the owner's boot pick, a published versus still; 2026-11-11, the owner's loading-screen gallery) the
+// rotation is the boot pick, the gallery's stills and (2026-11-13) the Garage's, no other picture
+const versusPaths = new Set([...versusItems.values()].map((item) => item.path));
+const loadingPaths = new Set([...loadingItems.values()].map((item) => item.path));
+const garagePaths = new Set(FEATURED_SHOTS.map((shot) => shot.img));
+assert.ok(FEATURED_IMAGES.every((img) => versusPaths.has(img) || loadingPaths.has(img) || garagePaths.has(img)),
+  'only the published versus stills (the boot pick), the gallery\'s stills and the Garage\'s may enter the loading-screen rotation');
+assert.ok(FEATURED_SHOTS.every((shot) => !loadingPaths.has(shot.img)), 'the Garage gallery keeps its own twenty');
+assert.deepEqual(FEATURED_SHOTS.map((shot) => shot.img), sitePicks.featured.map(pickImg),
+  'the Garage gallery shows the picks, in their order');
+assert.equal(FEATURED_SHOTS.filter((shot) => shot.animated).length, 0,
+  'the image-backed garage gallery must not decode animated GIF assets');
+assert.ok(FEATURED_SHOTS.some((shot) => shot.img.endsWith('-4k.webp')),
+  'the garage gallery keeps a native 4K frame');
+
+for (const shot of FEATURED_SHOTS) {
+  assert.ok(shot.capKey && shot.focal, `missing loading-screen metadata for ${shot.img}`);
+  const asset = fileURLToPath(new URL(`../../public${shot.img}`, import.meta.url));
+  assert.ok((await stat(asset)).size > 50_000, `featured capture is missing or undersized: ${shot.img}`);
+}
+
+assert.ok(TRANSITION_SHOTS.every((shot) => shot.maps?.length),
+  'every transition capture must declare its battlefield coverage');
+
+for (const mapId of Object.keys(MAP_THUMBS)) {
+  const shot = featuredShotForMap(mapId);
+  assert.ok(shot.maps.includes(mapId), `no map-specific loading capture for ${mapId}`);
+  assert.deepEqual(featuredShotForMap(` ${mapId.toUpperCase()} `), shot,
+    `${mapId}: repeated room restaging must keep the same loading art`);
+  assert.equal(shot.img, MAP_HEROES[mapId], `${mapId}: use the current native 4K overview`);
+  assert.equal(shot.capKey, 'garage.featuredShot.battlefieldOverview');
+  assert.deepEqual(shot.capVars, { name: getLocalizedMapName(mapId) });
+  assert.deepEqual(shot.maps, [mapId], 'an overview only depicts its own battlefield');
+}
+
+const cycleSize = TRANSITION_SHOTS.length;
+const rotation = Array.from({ length: cycleSize * 2 }, () => nextFeaturedShot().img);
+for (let i = 1; i < rotation.length; i++) {
+  assert.notEqual(rotation[i], rotation[i - 1], 'curated rotation must not repeat immediately');
+}
+assert.equal(new Set(rotation.slice(0, cycleSize)).size, cycleSize,
+  'each rotation cycle visits every capture');
+assert.equal(new Set(rotation.slice(cycleSize)).size, cycleSize,
+  'refilled rotation visits every capture');
+assert.ok(TRANSITION_SHOTS.includes(featuredShotForMap('unknown-map')),
+  'unknown map IDs retain the existing curated transition rotation');
+
+
+const mainSource = await readFile(new URL('../main.ts', import.meta.url), 'utf8');
+const mainBattleHudRuntimeSource = await readFile(
+  new URL('../app/mainBattleHudRuntime.ts', import.meta.url), 'utf8',
+);
+const mainFrameSource = await readFile(
+  new URL('../app/mainFrameRuntime.ts', import.meta.url), 'utf8');
+const combatWarmCompositionSource = await readFile(
+  new URL('../app/combatWarmComposition.ts', import.meta.url), 'utf8');
+const intentCoverSource = await readFile(
+  new URL('../mp/session/intentCover.ts', import.meta.url), 'utf8');
+const battlePresentationSource = await readFile(
+  new URL('../game/battlePresentationRuntime.ts', import.meta.url), 'utf8',
+);
+const battleWarmSource = await readFile(
+  new URL('../game/battleWarmRuntime.ts', import.meta.url), 'utf8',
+);
+const deploymentShadowWarmSource = await readFile(
+  new URL('../engine/deploymentShadowWarm.ts', import.meta.url), 'utf8',
+);
+const soloDeploymentSource = await readFile(
+  new URL('../game/soloBattleDeploymentRuntime.ts', import.meta.url), 'utf8',
+);
+const soloLoadingSource = await readFile(
+  new URL('../game/soloBattleLoadingRuntime.ts', import.meta.url), 'utf8',
+);
+const battleVisualStreamerSource = await readFile(
+  new URL('../game/battleVisualStreamer.ts', import.meta.url), 'utf8',
+);
+const deferredWarmSource = await readFile(
+  new URL('../game/deferredCombatWarmRuntime.ts', import.meta.url), 'utf8',
+);
+const pedestalRuntimeSource = await readFile(
+  new URL('../game/garagePedestalRuntime.ts', import.meta.url), 'utf8',
+);
+const studioSource = await readFile(new URL('../game/studio.ts', import.meta.url), 'utf8');
+const hudSource = await readFile(new URL('./hud.ts', import.meta.url), 'utf8');
+const minimapRuntimeSource = await readFile(
+  new URL('./minimapAssetRuntime.ts', import.meta.url), 'utf8',
+);
+const worldActivationSource = await readFile(
+  new URL('../world/worldActivationRuntime.ts', import.meta.url), 'utf8',
+);
+const playerFrameInputSource = await readFile(
+  new URL('../game/playerFrameInput.ts', import.meta.url), 'utf8',
+);
+const battleFrameRuntimeSource = await readFile(
+  new URL('../game/battleFrameRuntime.ts', import.meta.url), 'utf8',
+);
+const garageReturnRuntimeSource = await readFile(
+  new URL('../game/garageReturnRuntime.ts', import.meta.url), 'utf8',
+);
+const garagePhasePresentationSource = await readFile(
+  new URL('../game/garagePhasePresentationRuntime.ts', import.meta.url), 'utf8',
+);
+const battleEntryLifecycleSource = await readFile(
+  new URL('../game/battleEntryLifecycle.ts', import.meta.url), 'utf8',
+);
+const battleRolloutSource = await readFile(
+  new URL('../game/battleRolloutRuntime.ts', import.meta.url), 'utf8',
+);
+const soloBattleEntrySource = await readFile(
+  new URL('../game/soloBattleEntryRuntime.ts', import.meta.url), 'utf8',
+);
+assert.match(mainSource,
+  /bus\.on\('ui:battleStart', \(\) => \{[\s\S]{0,200}playSurface\.hideForBattle\(\)/,
+  'every battle entry must dismiss the play modal without closing a retained room');
+assert.match(combatWarmCompositionSource,
+  /const warmStudioPipeline[\s\S]{0,600}battleWarm\.warmStudioEffects\(/,
+  'Studio entry must delegate FX preparation to the lazy typed warm owner');
+assert.match(mainSource, /createCombatWarmComposition\(\{/,
+  'main must compose one renderer-lifetime combat warm owner');
+assert.match(battleWarmSource,
+  /function warmStudioEffects[\s\S]{0,1400}createOpaqueLoadingYielder\(10, 64\)[\s\S]{0,1400}warmTexturesChunked\(yieldForLoad\)/,
+  'direct Studio entry must prepare full-quality FX through the opaque frame-budget scheduler');
+// (2026-11-02 audit F9: the build takes its session's token first, 600 for the line)
+assert.match(studioSource,
+  /async function replaceLoadActors\([\s\S]{0,600}await yieldForFrameBudget\(\)[\s\S]{0,300}for \(const cfg of json\.actors \|\| \[\]\)[\s\S]{0,120}addActor\(cfg\);[\s\S]{0,100}await yieldForFrameBudget\(\)/,
+  'Studio actor replacement must yield before and between full-quality procedural actors');
+// Validate the scheduler binding and awaited call in the actual load function.
+// Input validation and comments may grow without changing the scheduling contract.
+const studioLoadAst = ts.createSourceFile('studio.ts', studioSource, ts.ScriptTarget.Latest, true);
+const studioLoadFunctions = [];
+function visitStudioLoad(node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'load') studioLoadFunctions.push(node);
+  ts.forEachChild(node, visitStudioLoad);
+}
+visitStudioLoad(studioLoadAst);
+assert.equal(studioLoadFunctions.length, 1, 'Studio must expose one scene JSON load owner');
+const schedulerBindings = [], replacementCalls = [];
+function visitStudioLoadBody(node) {
+  if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
+    && ts.isIdentifier(node.initializer.expression) && node.initializer.expression.text === 'createFrameBudgetYielder') {
+    schedulerBindings.push(node);
+  }
+  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'replaceLoadActors') {
+    replacementCalls.push(node);
+  }
+  ts.forEachChild(node, visitStudioLoadBody);
+}
+visitStudioLoadBody(studioLoadFunctions[0].body);
+assert.equal(schedulerBindings.length, 1, 'each scene load owns one frame-budget scheduler');
+assert.equal(replacementCalls.length, 1, 'scene loading has one batched actor replacement');
+const schedulerBinding = schedulerBindings[0], replacementCall = replacementCalls[0];
+assert.ok(ts.isIdentifier(schedulerBinding.name));
+assert.equal(schedulerBinding.initializer.arguments.length, 1);
+assert.equal(schedulerBinding.initializer.arguments[0].getText(studioLoadAst), '10',
+  'Studio loading retains its 10 ms per-frame work budget');
+assert.equal(replacementCall.arguments[0].getText(studioLoadAst), studioLoadFunctions[0].parameters[0].name.getText(studioLoadAst));
+assert.equal(replacementCall.arguments[1].getText(studioLoadAst), schedulerBinding.name.text,
+  'actor replacement receives the scheduler created by this scene load');
+assert.ok(ts.isAwaitExpression(replacementCall.parent),
+  'scene loading waits for actor replacement and its cooperative yields');
+assert.ok(schedulerBinding.pos < replacementCall.pos,
+  'the frame-budget scheduler is created before actor replacement');
+assert.match(studioSource, /hud\?\.setMode\?\.\('hidden'\)/,
+  'a pristine direct Studio visit must not require the battle-only HUD runtime');
+assert.match(mainSource,
+  /clearBattle: \([^)]*\) => \{[\s\S]{0,500}currentHud\(\)\?\.setMode\?\.\('hidden'\)/, // 242: clearBattle({ keepScreens })
+  'direct Studio exit cleanup must not require the battle-only HUD runtime');
+assert.match(mainSource,
+  /function veilHud\(on(?::\s*boolean)?\)[\s\S]{0,180}battleHudRuntime\?\.veil\(on\)/,
+  'shared presentation cleanup must delegate to the optional battle HUD owner');
+assert.match(mainBattleHudRuntimeSource,
+  /const veil = \(hidden: boolean\)[\s\S]{0,500}hud\?\.root[\s\S]{0,500}damagePanel\?\.root/,
+  'the battle HUD owner must atomically veil both optional presentation surfaces');
+assert.match(garageReturnRuntimeSource, /ui\.hideHud\(\)/,
+  'the Garage return owner must hide the optional battle HUD');
+assert.match(mainSource, /hideHud: \(\) => currentHud\(\)\?\.setMode\?\.\('hidden'\)/,
+  'returning from pristine Studio must reach the garage without a battle HUD');
+assert.match(studioSource,
+  /actors\.push\(a\);[\s\S]{0,260}if \(!sceneLoad\.held\) bindStoryboardTracks\(\)/, // (round 2 U36) the load's session holder
+  'Studio batch loads must not rebuild timeline bindings for every intermediate actor');
+assert.match(mainSource,
+  /if \(!STUDIO_BOOT_INTENT\) lighting\.setFarCascadeDormant\(true\);/,
+  'cold garage boot must request long-range shadow dormancy after native-map priming');
+assert.match(garagePhasePresentationSource,
+  /const setActive = \(active: boolean\)[\s\S]{0,180}if \(!active\) lighting\.setFarCascadeDormant\(false\);/,
+  'battle lighting must wake full-range shadows inside the covered entry');
+assert.match(garageReturnRuntimeSource, /world\.setFarCascadeDormant\(true\)/,
+  'the Garage return owner must request long-range shadow dormancy');
+assert.match(mainSource,
+  /setFarCascadeDormant: \(dormant(?::\s*boolean)?\) => lighting\.setFarCascadeDormant\(dormant\)/,
+  'returning to the enclosed garage must suspend long-range shadow redraws');
+const pedestalWarmBody = pedestalRuntimeSource.slice(
+  pedestalRuntimeSource.indexOf('const warmPrograms = async'),
+  pedestalRuntimeSource.indexOf('const set = ('),
+);
+const pedestalWarmCode = pedestalWarmBody.replace(/\/\/.*$/gm, '');
+assert.doesNotMatch(pedestalWarmBody, /renderer\.compileAsync/,
+  'cold garage switches must not enter ANGLE completion polling');
+assert.doesNotMatch(pedestalWarmCode, /(?:\.getUniforms|getProgramParameter)\s*\(/,
+  'cold garage switches must not force ANGLE program-completion queries');
+assert.match(pedestalWarmBody, /compilePrograms\(visual\.root\)/,
+  'cold garage switches submit exact production-target programs before reveal');
+const openingWarmBody = battleWarmSource.slice(
+  battleWarmSource.indexOf('export function* createCombatOpeningWarmSteps('),
+  battleWarmSource.indexOf('function* warmCombatDestructionEffectSteps('),
+);
+const openingWarmCode = openingWarmBody.replace(/\/\/.*$/gm, '');
+assert.doesNotMatch(openingWarmCode, /(?:\.getUniforms|getProgramParameter)\s*\(/,
+  'opening combat warm must not force ANGLE program-completion queries');
+assert.match(openingWarmBody, /createIsolatedForwardWarmBatches\(\{[\s\S]*root: fx\.group/,
+  'fallback opening warm must still bind FX through real isolated renders');
+const coveredSubmissionStart = soloDeploymentSource.indexOf(
+  'async function warmDeploymentFx(',
+);
+const coveredSubmissionEnd = soloDeploymentSource.indexOf(
+  'trace.deploymentCompileMs', coveredSubmissionStart,
+);
+assert.ok(coveredSubmissionStart >= 0 && coveredSubmissionEnd > coveredSubmissionStart,
+  'covered submission source boundaries must exist in execution order');
+const coveredSubmissionBody = soloDeploymentSource.slice(
+  coveredSubmissionStart, coveredSubmissionEnd,
+);
+assert.match(coveredSubmissionBody,
+  /const fx = options\.getFx\(\), root = fx\.group, warmRender = options\.getWarmRender\(\);[\s\S]*await options\.battleWarm\.stageCombatFxProgramSubmission\([\s\S]*options\.forwardProgramWarm\.compileSceneSteps\(\{\s*sliceMs: 8,[\s\S]*await yieldCovered\(true\);\s*assertFxCurrent\(\);[\s\S]*createIsolatedForwardWarmBatches\(\{\s*scene: options\.scene, root, warmRender,/,
+  'player battle entry must stage exact scene programs before binding FX against the gameplay target');
+assert.doesNotMatch(coveredSubmissionBody, /forwardProgramWarm\.compile\(scene\)/,
+  'covered entry must not restore one atomic whole-scene program submission');
+assert.match(coveredSubmissionBody.replace(/\/\/.*$/gm, ''),
+  /\}\s*await yieldCovered\(true\);\s*assertFxCurrent\(\);\s*programAndDrawStartedAt = now\(\);\s*trace\.deploymentFxPrograms = await prepareDeploymentFxPrograms\(\{\s*root, camera: options\.camera, warmRender, assertCurrent: assertFxCurrent,[\s\S]*?\}\);\s*assertFxCurrent\(\);\s*root\.visible = false;/,
+  'the final compiler batch must yield and revalidate, then prepare visible FX with the same warmer and revalidate before first binding');
+const worldReadyAt = soloLoadingSource.indexOf("battleLoad.progress(0.555, 'Battlefield ready')");
+const rosterAssemblyAt = soloLoadingSource.indexOf(
+  "battleLoad.progress(0.56, 'Assembling rosters')", worldReadyAt,
+);
+const preRosterBattleLoad = soloLoadingSource.slice(
+  soloLoadingSource.indexOf('async begin(specId'), rosterAssemblyAt,
+);
+assert.ok(worldReadyAt >= 0 && rosterAssemblyAt > worldReadyAt,
+  'battlefield completion must paint before roster construction begins');
+assert.doesNotMatch(preRosterBattleLoad, /renderer\.compile\(world\.group, camera, scene\)/,
+  'the world must not compile against the garage spotlight program family before battle mode');
+assert.match(preRosterBattleLoad,
+  /battleLoad\.progress\(0\.55, 'Uploading battlefield textures'\)[\s\S]{0,280}battleVisuals\.stageRootTextureUploads\([\s\S]{0,80}getWorld\(\)\.group,[\s\S]{0,80}loadYield/,
+  'battle entry must stage current world textures before the first full deployment frame');
+assert.match(preRosterBattleLoad,
+  /const plannedRoster = planRoster[\s\S]{0,1200}const rosterTexture = battleIntent\.prepareRoster\(\{[\s\S]{0,300}rosterIds: plannedRoster[\s\S]{0,3000}acquisition\.acquireSolo\(\[[\s\S]{0,900}\(\) => rosterTexture/,
+  'exact cold roster camouflage and texture preparation must overlap battlefield construction');
+assert.match(preRosterBattleLoad,
+  /const fxTexture = ensureFx\(\)\.then[\s\S]{0,500}live\.preloadTextures[\s\S]{0,180}live\.warmTextures[\s\S]{0,260}battleVisuals\.stageRootTextureUploads\(live\.group, fxUploadYield\)[\s\S]{0,1200}\(\) => fxTexture/,
+  'exact combat atlases must install and upload alongside the independent world build');
+const stageRevealBody = battleVisualStreamerSource;
+assert.match(stageRevealBody, /forwardProgramWarm\.compile\(root\)[\s\S]{0,1400}await yieldForBudget\(true\)/,
+  'each streamed vehicle must submit its production-target shaders before yielding');
+assert.match(stageRevealBody,
+  /forwardProgramWarm\.compile\(root\)[\s\S]*if \(initiallyHidden\)[\s\S]*visual\.setVisible\?\.\(false\)[\s\S]*root\.removeFromParent\(\)[\s\S]*battleVisibilityDetached = true[\s\S]*await yieldForBudget\(true\)/,
+  'countdown-streamed opponents must compile exactly, then detach before the next painted frame');
+assert.match(battlePresentationSource,
+  /const setVisualResident = \(visual: TankVisual, resident: boolean\)[\s\S]{0,500}battleVisibilityDetached && !root\.parent\)[\s\S]{0,80}scene\.add\(root\)[\s\S]{0,500}if \(root\.parent === scene\)[\s\S]{0,100}root\.removeFromParent\(\)/,
+  'fully hidden opponents must leave the scene hierarchy and only the visibility owner may restore them');
+assert.match(battlePresentationSource,
+  /const updateActorVisibility = \([\s\S]*actorVisible = entity\._spotFade > 0\.02;[\s\S]{0,180}setVisualResident\(visual, actorVisible\)[\s\S]{0,120}visual\.setVisible\(actorVisible\)[\s\S]{0,80}return actorVisible/,
+  'spotting must restore scene residency before reporting the actor visible');
+assert.match(battlePresentationSource,
+  /const updateTank = \([\s\S]*if \(!updateActorVisibility\([\s\S]{0,240}return;[\s\S]{0,100}presentationStateFor/,
+  'spotting must restore scene residency before the first visible pose sync');
+const deferredEnemyAt = deferredWarmSource.indexOf('getBattleVisuals().stream(');
+const deferredOpeningAt = deferredWarmSource.indexOf(
+  'combatWarm.warmOpeningChunked(6, guardedYield)',
+);
+const deferredNavigationAt = deferredWarmSource.indexOf(
+  'const consumed = prepareNextOpeningRoute();',
+);
+const deferredTerrainAt = deferredWarmSource.indexOf(
+  'await warmBattleTerrainTiles(guardedYield)',
+);
+const deferredRareAt = deferredWarmSource.indexOf(
+  'combatWarm.warmRareChunked(6, guardedYield)',
+);
+assert.ok(deferredEnemyAt >= 0
+  && deferredOpeningAt > deferredEnemyAt
+  && deferredNavigationAt > deferredOpeningAt
+  && deferredTerrainAt > deferredNavigationAt
+  && deferredRareAt > deferredTerrainAt,
+'opponent receipts and fallback opening/rare work must retain countdown order');
+assert.match(combatWarmCompositionSource,
+  /warmBattleTerrainTiles:\s*\(yieldForBudget\)\s*=>\s*battleWarm\.warmBattleTerrainTiles\(\{[\s\S]{0,220}primePresentation:\s*false/,
+  'the composition adapter must retain non-presenting terrain warm semantics');
+const coveredHelperEnd = soloDeploymentSource.indexOf(
+  'export function createSoloBattleDeploymentRuntime(', coveredSubmissionEnd,
+);
+const coveredFxStart = soloDeploymentSource.indexOf(
+  'const fxWarm = await warmDeploymentFx(', coveredHelperEnd,
+);
+const coveredFxEnd = soloDeploymentSource.indexOf(
+  "battleLoad.progress(0.969, 'Priming deployment shadows')", coveredFxStart,
+);
+assert.ok(coveredHelperEnd > coveredSubmissionEnd && coveredFxStart > coveredHelperEnd
+  && coveredFxEnd > coveredFxStart, 'covered FX helper and caller precede shadow priming');
+const coveredHelperBody = soloDeploymentSource.slice(coveredSubmissionStart, coveredHelperEnd);
+const coveredFxBody = soloDeploymentSource.slice(coveredFxStart, coveredFxEnd);
+function assertCompletedFxRetirement(helper, caller) {
+  assert.match(helper,
+    /return \{ receipt, completed: cohortsCompleted && submission\?\.staged === true,\s*assertCurrent: assertFxCurrent \};/,
+    'all covered FX cohorts and staged submission must complete before retirement');
+  assert.match(caller,
+    /await warmDeploymentFx\(options, trace, guardedCoveredYield,\s*\(\) => requireCurrent\(generation\), now\);[\s\S]*fxWarm\.assertCurrent\(\);\s*const fxReceipt = fxWarm\.receipt;\s*fxReceipt\.completed = fxWarm\.completed;/,
+    'the caller must revalidate the full FX lease after the async handoff before publishing completion');
+  assert.match(caller,
+    /if \(fxReceipt\.completed\) \{\s*combatWarm\.markOpeningReady\(\);\s*setDestructionWarmed\(true\);/,
+    'only successful covered FX binding may prevent duplicate countdown staging');
+}
+assertCompletedFxRetirement(coveredHelperBody, coveredFxBody);
+assert.throws(() => assertCompletedFxRetirement(coveredHelperBody.replace(
+  'cohortsCompleted && submission?.staged === true', 'true',
+), coveredFxBody), assert.AssertionError, 'unconditional completion must fail');
+assert.throws(() => assertCompletedFxRetirement(coveredHelperBody, coveredFxBody.replace(
+  'if (fxReceipt.completed)', 'if (true)',
+)), assert.AssertionError, 'unconditional retirement must fail');
+assert.throws(() => assertCompletedFxRetirement(coveredHelperBody, coveredFxBody.replace(
+  'fxWarm.assertCurrent();', '',
+)), assert.AssertionError, 'omitting the post-await FX lease assertion must fail');
+// Execute the actual owner block: callback names may change when lifetime
+// guards are added, but shadow/world/post/scene-health completion must still
+// precede reveal. The runtime's separate test covers optional-warm failures;
+// this oracle executes its actual successful warm tail and mandatory helpers.
+const revealStart = soloDeploymentSource.indexOf("battleLoad.progress(0.969, 'Priming deployment shadows')");
+const warmEnd = soloDeploymentSource.indexOf('optionalWarmCompleted = true;', revealStart);
+const healthStart = soloDeploymentSource.indexOf('await runRequiredSceneWatchdog(', warmEnd);
+const revealEnd = soloDeploymentSource.indexOf("battleLoad.progress(0.975, 'Combat effects ready')", healthStart);
+assert.ok(revealStart >= 0 && warmEnd > revealStart && healthStart > warmEnd && revealEnd > healthStart,
+  'the actual deployment warm and mandatory reveal blocks are present');
+const deploymentAst = ts.createSourceFile('deployment.ts', soloDeploymentSource, ts.ScriptTarget.Latest, true);
+const revealHelpers = ['runRequiredSceneWatchdog', 'primeCoveredReveal'].map(name => {
+  const declarations = deploymentAst.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+  assert.equal(declarations.length, 1, `one actual ${name} helper`);
+  return declarations[0].getText(deploymentAst);
+}).join('\n');
+const revealWarmBody = `${revealHelpers}\n${soloDeploymentSource.slice(revealStart,
+  warmEnd + 'optionalWarmCompleted = true;'.length)}\n${soloDeploymentSource.slice(healthStart, revealEnd)}`;
+
+function deferredWarmStep() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function verifyDeploymentWarmOrder(body) {
+  const events = [], shadow = deferredWarmStep(), world = deferredWarmStep(), post = deferredWarmStep();
+  const health = deferredWarmStep(), reveal = deferredWarmStep();
+  const shadowReceipt = { cascades: 4 }, postReceipt = { passes: 3 }, trace = {};
+  const options = { runSceneWatchdog: async assertCurrent => {
+    events.push('health'); await health.promise; assertCurrent();
+    events.push('healthDone'); return { failed: false };
+  } };
+  const yieldForBudget = async () => { events.push('yield'); };
+  const ports = {
+    trace, options, generation: 7, scene: {}, lighting: {}, game: {},
+    STALE_DEPLOYMENT: Symbol('stale'), stillCurrent: value => value === 7,
+    battleLoad: { progress() {} }, requireCurrent: value => assert.equal(value, 7),
+    mark() {}, getWorld: () => null, getWarmRender: () => {}, now: () => 0,
+    createDeploymentForwardWarmBatches: function* () {},
+    prepareWorldPrograms: async (owner, receipt, yieldBefore, requireCurrent) => {
+      assert.strictEqual(owner, options); assert.strictEqual(receipt, trace);
+      events.push('world'); await yieldBefore(true); await world.promise;
+      requireCurrent(); events.push('worldDone');
+    },
+    coveredYield: yieldForBudget, guardedCoveredYield: yieldForBudget,
+    getDeploymentShadowWarm: () => ({ prime: async yieldBeforeCascade => {
+      events.push('shadow'); await yieldBeforeCascade(true); await shadow.promise;
+      events.push('shadowDone'); return shadowReceipt;
+    } }),
+    post: { warmFirstFrame: async yieldBeforePass => {
+      events.push('post'); await yieldBeforePass(true); await post.promise;
+      events.push('postDone'); return postReceipt;
+    } },
+    assertRevealReady: () => events.push('ready'),
+    getEntryLifecycle: () => ({
+      primeReveal: async () => { events.push('reveal'); await reveal.promise; events.push('revealDone'); },
+      coverRendering: () => events.push('cover'),
+    }),
+  };
+  // Only tracked local source (and the explicit mutations below) is evaluated.
+  const pending = runInNewContext(stripTypeScriptTypes(`(async () => { let revealPrimed = false, optionalWarmCompleted = false;
+    ${body}\nreturn revealPrimed; })()`), ports);
+  const settled = pending.then(value => ({ value }), error => ({ error }));
+  try {
+    assert.equal(events.includes('shadow'), true, 'shadow preparation is submitted');
+    assert.equal(events.includes('post'), false, 'post cannot start while shadows are pending');
+    assert.equal(events.includes('reveal'), false, 'pending shadows cannot reveal');
+    shadow.resolve();
+    for (let step = 0; step < 30 && !events.includes('world'); step++) await Promise.resolve();
+    assert.equal(events.includes('world'), true, 'world programs follow completed shadows');
+    assert.equal(events.includes('post'), false, 'post cannot start while world programs are pending');
+    assert.equal(events.includes('reveal'), false, 'pending world programs cannot reveal');
+    world.resolve();
+    for (let step = 0; step < 30 && !events.includes('post'); step++) await Promise.resolve();
+    assert.equal(events.includes('post'), true, 'post preparation follows completed shadows');
+    assert.equal(events.includes('reveal'), false, 'pending post passes cannot reveal');
+    post.resolve();
+    for (let step = 0; step < 30 && !events.includes('health'); step++) await Promise.resolve();
+    assert.equal(events.includes('health'), true, 'scene health follows completed post passes');
+    assert.equal(events.includes('reveal'), false, 'pending scene health cannot reveal');
+    health.resolve();
+    for (let step = 0; step < 30 && !events.includes('reveal'); step++) await Promise.resolve();
+    assert.equal(events.includes('reveal'), true, 'a healthy scene may prime reveal');
+    assert.equal(events.includes('cover'), false, 'reveal priming must complete before covered rendering');
+    reveal.resolve();
+    const result = await settled;
+    if (result.error) throw result.error;
+    assert.equal(result.value, true, 'the actual owner publishes a primed reveal');
+    assert.deepEqual(events, ['shadow', 'yield', 'shadowDone', 'world', 'yield', 'worldDone',
+      'post', 'yield', 'postDone', 'ready', 'health', 'healthDone', 'ready', 'reveal',
+      'revealDone', 'cover', 'ready']);
+    assert.strictEqual(trace.deploymentShadowWarm, shadowReceipt);
+    assert.strictEqual(trace.deploymentPostWarm, postReceipt);
+  } finally {
+    shadow.resolve(); world.resolve(); post.resolve(); health.resolve(); reveal.resolve(); await settled;
+  }
+}
+
+await verifyDeploymentWarmOrder(revealWarmBody);
+for (const [pattern, replacement] of [
+  [/await (?=getDeploymentShadowWarm\(\)\.prime\()/, ''],
+  [/await (?=post\.warmFirstFrame\()/, ''],
+  [/await (?=prepareWorldPrograms\()/, ''],
+  [/await prepareWorldPrograms\([^;]+\);/, ''],
+  [/trace\.deploymentShadowWarm = await getDeploymentShadowWarm\(\)\.prime\([^;]+\);/, ''],
+  [/trace\.deploymentPostWarm = await post\.warmFirstFrame\([^;]+\);/, ''],
+  [/await entryLifecycle\.primeReveal\(\);/, ''],
+  [/await (?=entryLifecycle\.primeReveal\()/, ''],
+  [/await (?=runRequiredSceneWatchdog\()/, ''],
+  [/await (?=primeCoveredReveal\()/, ''],
+  [/await runRequiredSceneWatchdog\([^;]+\);/, ''],
+  [/trace\.deploymentPostWarm =/, 'await getEntryLifecycle().primeReveal();\ntrace.deploymentPostWarm ='],
+]) {
+  const mutant = revealWarmBody.replace(pattern, replacement);
+  assert.notEqual(mutant, revealWarmBody, 'each negative control changes the actual owner block');
+  await assert.rejects(verifyDeploymentWarmOrder(mutant),
+    'missing, unawaited, or premature warm/reveal steps must fail the ordering oracle');
+}
+function verifyCoveredWorldOptions(source) {
+  const parsed = ts.createSourceFile('soloLoading.ts', source, ts.ScriptTarget.Latest, true);
+  const calls = [];
+  function visit(node) {
+    if (ts.isCallExpression(node) && node.expression.getText(parsed) === 'ensureWorld') calls.push(node);
+    ts.forEachChild(node, visit);
+  }
+  visit(parsed);
+  assert.equal(calls.length, 1, 'one canonical covered world acquisition');
+  let captured;
+  runInNewContext(calls[0].getText(parsed), {
+    resolved: 'chosen-map', battleLoad: { progress() {} },
+    ensureWorld(mapId, _progress, options) { captured = { mapId, ...options }; },
+  });
+  assert.equal(captured.mapId, 'chosen-map');
+  assert.equal(captured.precompile, false, 'world acquisition defers program compilation');
+  assert.equal(captured.services, false, 'world acquisition defers synchronous battle services');
+  assert.equal(captured.atmosphere, 'covered-battle', 'covered battle owns its final lighting');
+  return calls[0].getText(parsed);
+}
+const coveredWorldCall = verifyCoveredWorldOptions(soloLoadingSource);
+for (const [from, to] of [
+  ['precompile: false', 'precompile: true'],
+  ['services: false', 'services: true'],
+  ["atmosphere: 'covered-battle'", "atmosphere: 'garage'"],
+]) {
+  const mutant = coveredWorldCall.replace(from, to);
+  assert.notEqual(mutant, coveredWorldCall, 'mutate the executed call, not an earlier TypeScript port declaration');
+  assert.throws(() => verifyCoveredWorldOptions(mutant));
+}
+assert.match(soloLoadingSource,
+  /startBattle\(specId, resolved,[\s\S]{0,500}prepareBattleWorldServices\(getWorld\(\)\)/,
+  'solo entry must defer battle-only services until the real battle light set is active');
+assert.match(worldActivationSource,
+  /const prepareBattleServices[\s\S]{0,700}servicesMapId = world\.mapId[\s\S]{0,120}queueMinimap\(world\)/,
+  'battle entry must queue the preloaded exact map without resampling the heightfield');
+assert.match(worldActivationSource,
+  /createMinimapAssetRuntime<World>\(\{[\s\S]{0,700}loadAsset: options\.loadMinimapAsset/,
+  'the typed world owner must route exact minimap loading through its injected adapter');
+assert.match(mainSource,
+  /loadMinimapAsset: \(next, url\) => \([\s\S]{0,120}currentHud\(\)\?\.buildMinimapFromAsset\(next\.heightField, url\) \?\? false/,
+  'main composition must connect the HUD asset loader to the typed world owner');
+assert.match(minimapRuntimeSource,
+  /const isCurrent[\s\S]{0,1100}await loadAsset[\s\S]{0,700}buildFallback\(world\)/,
+  'the exact map must be a lazy static asset with procedural cartography only as its error fallback');
+assert.match(hudSource,
+  /function installMinimapAsset[\s\S]{0,900}mmBg = image;[\s\S]{0,120}drawMinimapBackground\(\)/,
+  'the pre-baked minimap must retain its decoded image instead of duplicating a purge-prone iPad canvas');
+assert.match(deploymentShadowWarmSource,
+  /const prime = async[\s\S]{0,6500}preservePrimedCascadesForNextFrame\(\)/,
+  'covered cascade slices must hand their exact maps to the first full frame');
+// (integration, engine-gpu's audit R4 castShadow holds: their note and hold loop sit between the signature and the batch's
+// render, 1,321 characters where the base had 1,004)
+assert.match(deploymentShadowWarmSource,
+  /async function warmCasterBatches\([\s\S]{0,1600}observeRender\('caster-batch', batchTimes\.length, firstLight\)[\s\S]{0,500}await yieldCovered\(yieldForBudget\)/,
+  'deployment shadows must upload caster resources in bounded depth-only batches');
+assert.match(deploymentShadowWarmSource,
+  /const observeRender: ObserveShadowWarm = \(phase, index, light, render = shadowOnlyWarm\)/,
+  'observed caster/cascade renders must retain the exact offscreen shadow renderer');
+assert.match(deploymentShadowWarmSource,
+  /casterState = createCasterBatches\(scene, camera\);[\s\S]{0,220}await warmCasterBatches\(casterState, lights\[0\], yieldForBudget, observeRender\);[\s\S]{0,160}await warmCascades\(lights, yieldForBudget, observeRender\)/,
+  'deployment shadows must bind caster resources in bounded depth-only batches before full cascade renders');
+assert.match(deploymentShadowWarmSource,
+  /scene\.overrideMaterial = uploadMaterial;[\s\S]{0,160}observeRender\('geometry-upload', index\+\+, light, warmRender\)[\s\S]{0,180}scene\.overrideMaterial = priorOverrideMaterial/,
+  'deployment geometry must upload through one shared shader and always restore production materials');
+// (integration: since engine-gpu's audit R4 the casters come back through their named holds, castShadowHolds.ts
+// releaseCastShadowHold, which restores what the warm's holds wrote)
+assert.match(deploymentShadowWarmSource,
+  /function restoreCasterState\([\s\S]{0,400}(?:object\.castShadow = true;|releaseCastShadowHold\(object, state\);)[\s\S]{0,220}object\.autoUpdate = autoUpdate/,
+  'deployment shadow warming must restore every caster and pinned LOD state');
+assert.match(deploymentShadowWarmSource,
+  /preservePrimedCascadesForNextFrame\(\);[\s\S]{0,100}restoreCasterState\(casterState\);[\s\S]{0,60}primed = true/,
+  'all shadow casters must be restored before the primed warm transaction completes');
+assert.match(deploymentShadowWarmSource,
+  /casterState = createCasterBatches\(scene, camera\);[\s\S]{0,400}await warmCascades\(lights, yieldForBudget, observeRender\);[\s\S]{0,160}restoreCasterState\(casterState\)/,
+  'shadow-only full cascades must keep live-camera LODs pinned until every exact map is rendered');
+assert.match(soloLoadingSource,
+  /const resolved = battleIntent\.consumeMap\(specId, requestedMapId\)/,
+  'the Battle click must consume the exact Random world chosen during intent');
+assert.match(mainSource,
+  /onBattleIntent: \(options\) => \{[\s\S]{0,240}if \(!multiplayerLobby\?\.prepareLobby\(\)\) battleIntent\.preload\(options\);/,
+  'explicit Solo intent must yield to an existing room preparation');
+const soloLoaderBody = soloLoadingSource.slice(soloLoadingSource.indexOf('async begin(specId'));
+const loaderShowAt = soloLoaderBody.indexOf('battleLoad.show({');
+const visualStreamerAwaitAt = soloLoaderBody.indexOf('await ensureBattleVisuals();');
+const loadingSoundAt = soloLoaderBody.indexOf('await audio.startLoadingAfterPaint();', loaderShowAt);
+const firstYieldAt = loadingSoundAt;
+const loadingStopAt = soloLoaderBody.indexOf('audio.loadingOn(false);', loadingSoundAt);
+const ambienceAt = soloLoaderBody.indexOf('audio.ambientOn(true);', loadingStopAt);
+assert.ok(loaderShowAt >= 0 && loadingSoundAt > loaderShowAt,
+  'solo loading must show its cover before awaiting the gesture-aware audio owner');
+assert.ok(visualStreamerAwaitAt > firstYieldAt,
+  'solo battle entry must show and paint its boot-critical veil before a lazy presentation import');
+assert.ok(loadingStopAt > loadingSoundAt && ambienceAt > loadingStopAt,
+  'loader audio must crossfade into battlefield ambience before reveal');
+// The independently registered soloBattleLoadingRuntime suite exercises the
+// real loading/audio composition: sticky activation, deferred acquisition,
+// cancellation, and recovery. Do not nest registered self-tests here.
+const cameraPrepareAt = soloLoaderBody.indexOf('prepareRevealCamera();');
+const revealPrimeAt = soloLoaderBody.indexOf('await lifecycle.primeReveal();');
+const loaderFadeAt = soloLoaderBody.indexOf('await battleLoad.hide();', revealPrimeAt);
+const battleOpenAt = soloLoaderBody.indexOf('openBattle(visiblePreBattleSeconds);', loaderFadeAt);
+assert.ok(cameraPrepareAt >= 0 && revealPrimeAt > cameraPrepareAt &&
+  loaderFadeAt > revealPrimeAt && battleOpenAt > loaderFadeAt,
+  'solo battle entry must lock the chase camera and paint it before the roster loader fades');
+assert.match(mainFrameSource,
+  /post\.render\(dtSeconds,\s*frameWallDtSeconds\);[\s\S]{0,320}if \(game\.phase === 'garage'\) clearGaragePresentationDirty\(\);\s*if \(frame\.inBattle\) battleEntryLifecycle\.noteBattleFrame\(\);/,
+  'the reveal barrier must advance only after a real battle frame is rendered');
+assert.match(battleEntryLifecycleSource,
+  /noteBattleFrame\(\) \{ presentedBattleFrameSerial \+= 1; \}[\s\S]*firstRequiredSerial = presentedBattleFrameSerial \+ 1/,
+  'the typed reveal owner must wait for a newer presented battle frame');
+assert.match(mainFrameSource,
+  /battleFrame\.advance\([\s\S]{0,180}game\.phase === 'battle' && isBattleLoadCovering\(\),/,
+  'camera input must stay locked through the complete loader fade');
+assert.match(battleFrameRuntimeSource,
+  /inputSample\.cameraLocked = cameraLocked;[\s\S]{0,180}input\.poll\(inputSample\);/,
+  'the render loop must pass the complete loader fade lock to the frame-input owner');
+assert.match(playerFrameInputSource,
+  /input\.consumeMouseDelta\(mouse,[\s\S]{0,180}camera\.mouseDX = paused \|\| cameraLocked \? 0 : mouse\.x;/,
+  'queued mouse input must be drained without moving the covered battle camera');
+assert.doesNotMatch(battleRolloutSource, /snapArcade/,
+  'openBattle must never visibly re-snap the camera after the loader fade');
+assert.match(soloBattleEntrySource,
+  // (2026-11-02 audit F3 review) a recovery return that failed has no Garage to paint; a restored one still paints first
+  /await enterGarage\(\);\s*returned = true;[\s\S]{0,240}lifecycle\.uncoverRendering\(\);\s*if \(returned\) await nextFrame\(\);\s*await battleLoad\.hide\?\.\(\);/,
+  'battle-entry failures must paint the restored Garage before fading the loader');
+// A room start mounts its opaque cover synchronously (the intent cover) before the composition chunk's first await.
+assert.match(intentCoverSource, /coverRendering\(\);\s*resetRoundState\(game\);\s*battleLoad\.show\(\{/,
+  'the intent cover presents the boot-critical veil synchronously');
+const roomStartBody = mainSource.slice(mainSource.indexOf('function beginMultiplayerV2Battle('), mainSource.indexOf('function loadMultiplayerV2Composition('));
+assert.ok(roomStartBody.indexOf('networkBattleIntentCover.show(request);') >= 0 &&
+  roomStartBody.indexOf('networkBattleIntentCover.show(request);') < roomStartBody.indexOf('onlineMatch.preload()'),
+  'a room start shows its boot-critical veil before its first lazy import');
+console.log('loading screen featured-capture selftest: PASS');

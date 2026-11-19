@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+/* Deixa o manifest de áudio CONSUMÍVEL: todo mapa tem ambiência que existe.
+ *
+ * Contrato medido (lei 2 — procedência, não opinião). Até o `audio-pack-v8`, a
+ * release pública que o `AUDIO_PACK_URL` default aponta tinha 218.660.617 bytes,
+ * 445 entradas e NENHUMA pasta `ambiente/`; o `manifest.json` de dentro dela
+ * (16.426 bytes) não tinha a chave `mapSoundscapes`. Medido em 04/10/2026 lendo o
+ * diretório central do zip por HTTP Range e descomprimindo só aquela entrada — o
+ * pacote não foi baixado inteiro.
+ *
+ * O v9 trouxe as 17 faixas de ambiência e o `ambiente-mapas.mjs` escreve os
+ * overrides com caminhos resolvidos ANTES deste script — que aqui vira GUARDA:
+ * com cobertura completa ele não altera nada, e continua reprovar pacote PARCIAL
+ * (algum mapa coberto e outro não é empacotador esquecendo um mapa, ou pack de
+ * outra linha do jogo). Pack privado nunca passa por aqui nem pelo
+ * `ambiente-mapas.mjs`, pelo mesmo motivo de sempre.
+ *
+ * O que o jogo faz com um manifest SEM overrides (`game.js`,
+ * `this.sfx.pack?.mapSoundscapes?.[this._mapId] || this.world.sound`): cai nos
+ * caminhos `audio/ambiente/*` que `soundscape.js` nomeia, e cada um vira um 404
+ * com warn (`soundscape.js:59`). É o mapa mudo, e é por isso que `assert:assets`
+ * reprova um manifest assim em vez de deixar passar.
+ *
+ * O único conserto que não redistribui asset nenhum é o hum SINTETIZADO pelo
+ * jogo. Ele não exige credencial, não copia WAV privado e não muda o que já está
+ * curado. Override PARCIAL também reprova, pelo mesmo motivo.
+ */
+import { existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { carregarMapIds } from './map-ids.mjs';
+
+const MAP_IDS = carregarMapIds();
+
+const arg = (nome) => (process.argv.find((item) => item.startsWith(`--${nome}=`))?.split('=')[1]) || '';
+const publico = arg('raiz') || 'public';
+const caminho = join(publico, 'audio', 'manifest.json');
+
+if (!existsSync(caminho)) {
+  console.error(`AUDIO: manifest ausente em ${caminho}`);
+  process.exit(1);
+}
+
+const manifest = JSON.parse(readFileSync(caminho, 'utf8'));
+const atuais = Object.keys(manifest.mapSoundscapes || {});
+if (atuais.length && MAP_IDS.some((id) => !manifest.mapSoundscapes[id])) {
+  console.error(`AUDIO: mapSoundscapes parcial (${atuais.length}/${MAP_IDS.length}) —`
+    + ' um pacote com SOME dos mapas cobertos não pode virar hum no resto:'
+    + ' ou o empacotador esqueceu um mapa, ou o pack é de outra linha do jogo.');
+  process.exit(1);
+}
+
+if (!atuais.length) {
+  manifest.mapSoundscapes = Object.fromEntries(MAP_IDS.map((id) => [id, {
+    synth: { kind: 'indoor-hum', vol: 0.012 },
+  }]));
+  writeFileSync(caminho, JSON.stringify(manifest, null, 1) + '\n');
+  console.log(`AUDIO: fallback sintético instalado em ${MAP_IDS.length}/${MAP_IDS.length} mapas`);
+} else {
+  console.log(`AUDIO: pack já cobre ${atuais.length}/${MAP_IDS.length} mapas; nada alterado`);
+}

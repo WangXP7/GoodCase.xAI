@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+
+    <title>Starfall — a Homeworld-style universe-scale space RTS, built in Three.js</title>
+    <meta name="description" content="Starfall is a browser real-time strategy game set in space: fleet command at universe scale, thirteen ship classes, fully procedural hulls, planets and effects, and no image files anywhere in the build. A tribute to Homeworld, written in TypeScript and Three.js by Claude Opus 5, directed by Mike Luan." />
+    <link rel="canonical" href="https://e01.ai/starfall/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="Mike Luan" />
+    <meta name="theme-color" content="#070c14" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Open Graph / Twitter. The card image is a real frame from the game, not
+         a mock-up: the whole point of the project is what it actually renders. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="e01.ai" />
+    <meta property="og:url" content="https://e01.ai/starfall/" />
+    <meta property="og:title" content="Starfall — a Homeworld-style space RTS in the browser" />
+    <meta property="og:description" content="Universe-scale fleet command in Three.js. Thirteen ship classes, procedural hulls and planets, instanced rendering, no image assets. Written by Claude Opus 5 from a single prompt. A tribute to Homeworld." />
+    <meta property="og:image" content="https://e01.ai/starfall/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A fleet engagement in Starfall: capital ships, ion beams and drive plumes over a blue planet." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:creator" content="@mikeluan123" />
+    <meta name="twitter:title" content="Starfall — a Homeworld-style space RTS in the browser" />
+    <meta name="twitter:description" content="Universe-scale fleet command in Three.js. Procedural everything, no image assets. Written by Claude Opus 5 from a single prompt. A tribute to Homeworld." />
+    <meta name="twitter:image" content="https://e01.ai/starfall/og.jpg" />
+
+    <link rel="icon" href="./favicon.ico" sizes="32x32" />
+    <link rel="icon" href="./icon-512.png" type="image/png" sizes="512x512" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "Starfall",
+      "url": "https://e01.ai/starfall/",
+      "image": "https://e01.ai/starfall/og.jpg",
+      "description": "A Homeworld-style universe-scale real-time strategy game that runs in a browser. Fully procedural hulls, planets, textures and effects; instanced rendering; thirteen ship classes; skirmish play.",
+      "genre": ["Real-time strategy", "Space simulation"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any (WebGL 2)",
+      "inLanguage": "en",
+      "isAccessibleForFree": true,
+      "codeRepository": "https://github.com/e01-ai/starfall",
+      "author": {
+        "@type": "Person",
+        "name": "Mike Luan",
+        "url": "https://x.com/mikeluan123"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "e01.ai",
+        "url": "https://e01.ai/"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <canvas id="viewport"></canvas>
+    <div id="ui"></div>
+    <div id="boot">
+      <!-- Background is three drifting star layers over a planet limb. All of
+           it is CSS: the boot screen has to be up before the WebGL context
+           exists, so it cannot borrow anything the renderer makes. -->
+      <div class="boot-sky" aria-hidden="true">
+        <span class="boot-stars s1"></span>
+        <span class="boot-stars s2"></span>
+        <span class="boot-stars s3"></span>
+        <span class="boot-limb"></span>
+        <span class="boot-scan"></span>
+      </div>
+      <div class="boot-plate">
+        <div class="boot-eyebrow">e01.ai experiment</div>
+        <div class="boot-mark">STARFALL</div>
+        <div class="boot-rule"><i></i></div>
+        <div class="boot-tagline">Universe-scale fleet command</div>
+        <div class="boot-tribute">in tribute to <b>Homeworld</b></div>
+        <div class="boot-bar"><i></i></div>
+        <div class="boot-status">initialising</div>
+      </div>
+      <div class="boot-by">
+        <a href="https://e01.ai/" class="boot-link">e01.ai</a>
+        <span aria-hidden="true">&middot;</span>
+        Mike Luan
+        <span aria-hidden="true">&middot;</span>
+        <a href="https://x.com/mikeluan123" class="boot-link" rel="noreferrer noopener" target="_blank">@mikeluan123</a>
+      </div>
+    </div>
+
+    <!--
+      CRAWLER + NO-JAVASCRIPT CONTENT.
+
+      The game is one canvas, so without this the page is empty to anything that
+      does not run WebGL — which is every search crawler and every reader that
+      has scripting off. This is not SEO stuffing: it is the honest text version
+      of what the canvas would have shown, and the brief below is the actual
+      prompt the project was built from, reproduced verbatim.
+    -->
+    <noscript>
+      <!-- With scripting off the boot overlay never gets dismissed, so it sat
+           behind the fallback text and bled its wordmark through it. A style
+           block inside noscript is the one place CSS can answer "is JavaScript
+           running" without any script to ask. -->
+      <style>
+        #boot { display: none !important; }
+      </style>
+      <div id="fallback">
+        <h1>Starfall</h1>
+        <p class="lede">
+          A Homeworld-style, universe-scale real-time strategy game that runs in
+          a browser. This page needs JavaScript and WebGL&nbsp;2 to play.
+        </p>
+
+        <h2>What it is</h2>
+        <p>
+          Starfall is a skirmish space RTS built in TypeScript and
+          <a href="https://threejs.org">Three.js</a>. Every hull, texture,
+          planet, star field and effect is generated at runtime from code —
+          there is not a single image file in the build. Ships are drawn with
+          instanced meshes and impostor billboards so a fleet of hundreds holds
+          frame rate; the simulation runs at a fixed 60&nbsp;Hz over a pooled
+          entity store and a spatial hash, decoupled from rendering.
+        </p>
+
+        <h2>Features</h2>
+        <ul>
+          <li>Thirteen ship classes, from scouts to a two-kilometre mothership</li>
+          <li>Three-dimensional movement with the Homeworld move disc</li>
+          <li>Formations, stances, control groups and a fleet roster bar</li>
+          <li>Production, research and resource harvesting</li>
+          <li>Procedural hull plating, faction paint, damage and battle wear</li>
+          <li>Drive plumes with shock diamonds, curved wakes and ion lances</li>
+          <li>A streamed score that follows the intensity of the fight</li>
+        </ul>
+
+        <h2>How it was built</h2>
+        <p>
+          Starfall was written by Claude Opus&nbsp;5 driving a multi-agent
+          workflow, from the single prompt below. The first run cost roughly
+          <strong>&#36;633</strong>: 68.6k input tokens, 4.6M output, 837.2M
+          cache read and 13.6M cache write. Every model, texture and effect is
+          generated by code; no visual asset was imported.
+        </p>
+
+        <h2>The brief</h2>
+        <p>
+          The prompt is a modified version of
+          <a href="https://x.com/mattshumer_" rel="noreferrer noopener">Matt Shumer</a>'s
+          one-shot AAA prompt, reproduced here in full:
+        </p>
+        <blockquote>
+          <p>
+            I want you to build a homeworld style universe scale RTS at the
+            level of most recent space RTS games. It should be utterly perfect,
+            visually beautiful, stunning in detail, with every single thing done
+            at AAA quality — from textures to physics to anything you could
+            think of, with the sense of massiveness and scale.
+          </p>
+          <p>
+            Fan out sub-agents and have sub-agents tackle each one individually
+            so that the game is utterly perfect. You should /loop on each item
+            and have a separate sub-agent check it visually to ensure it looks
+            triple A. That separate sub-agent should be a really harsh critic,
+            and if it doesn't look triple A, it should keep going.
+          </p>
+          <p>
+            Don't stop until each sub-agent is utterly wowed with the quality
+            when compared with the actual homeworld game. It should literally
+            compare them side by side blind and say which one looks better. Do
+            this in ThreeJS. /loop until it's utterly perfect. Fan out
+            sub-agents and ultracode.
+          </p>
+          <p>
+            Only need random mode, not mission, create multiple ship types,
+            great UI, HUD, and game mechanics, and fluent control, max quality.
+          </p>
+          <p>
+            For ship models, and effects, AAA, max detail needed, use shaders,
+            generative textures, and instancing to ensure best performance.
+          </p>
+        </blockquote>
+
+        <h2>Credits</h2>
+        <p>
+          In tribute to <strong>Homeworld</strong> (Relic Entertainment, 1999).
+          Starfall is an independent homage and uses none of its art, audio,
+          code or trademarks. Music and sound effects are CC0 (public domain)
+          from <a href="https://opengameart.org">OpenGameArt</a> and
+          <a href="https://kenney.nl">Kenney</a>; the full list is in the
+          in-game credits.
+        </p>
+        <p>
+          Built by <a href="https://x.com/mikeluan123">Mike Luan</a> at
+          <a href="https://e01.ai/">e01.ai</a>. Source on
+          <a href="https://github.com/e01-ai/starfall" rel="noreferrer noopener">GitHub</a>;
+          write-up in
+          <a href="https://x.com/mikeluan123/status/2081716631986983093" rel="noreferrer noopener">the build thread</a>.
+        </p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

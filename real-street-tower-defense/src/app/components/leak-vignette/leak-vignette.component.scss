@@ -1,0 +1,18 @@
+// Layout of the leak flash: over the canvas, under the HUD (attribution,
+// hints and panels sit at 5+), never in the way of a click. Red at the edges,
+// clear in the middle (--td-leak-vignette); invisible until a leak fades it in
+// and out, see the component.
+
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.leak-edge {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: var(--td-leak-vignette);
+}

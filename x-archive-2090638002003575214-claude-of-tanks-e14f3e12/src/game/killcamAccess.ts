@@ -1,0 +1,170 @@
+import type {
+  KillcamEntity,
+  KillcamGame,
+  KillcamHitEvent,
+  PlaybackPhase,
+  ReplayKind,
+  ReplaySnapshot,
+} from './killcam.ts';
+import { createLazyChunk } from '../app/lazyChunk.ts';
+
+type MaybePromise<T> = T | PromiseLike<T>;
+
+type KillcamResult = 'victory' | 'defeat' | 'draw';
+type KillcamCapturePhase = 'xray' | 'firing' | 'collision';
+
+interface KillcamReplayInfo {
+  phase: PlaybackPhase;
+  replayKind: ReplayKind;
+  attackerId: string | null;
+  attackerPose: number[] | null;
+  attackerRenderedPos: number[] | null;
+  barrelDot: number | null;
+  muzzle: number[] | null;
+  pathStart: number[] | null;
+  projectile: number[] | null;
+  impact: number[] | null;
+  flightElapsedS: number;
+  flightDurationS: number;
+  flightDistM: number;
+  flightTotalM: number;
+  contactElapsedS: number;
+  shotFired: boolean;
+  collisionContact: boolean;
+  targetPrePose: number[];
+  targetImpactPose: number[];
+}
+
+interface KillcamPlayOptions {
+  freshKill?: boolean;
+  /** Battle endings: ask for the battle-deciding kill whoever fired it (killcamSelection.ts). */
+  finalKill?: boolean;
+  /** False once the player's own death already replayed mid-battle. */
+  ownDeath?: boolean;
+}
+
+interface KillcamSpectateAccess {
+  readonly active: boolean;
+  readonly targetId: string | null;
+  startObserver(): boolean;
+  stop(emitEnd?: boolean): void;
+  cycle?(direction?: number): void;
+  maybeStart?(): boolean;
+}
+
+export interface KillcamRuntime {
+  readonly fxTimeScale: number;
+  readonly lastBeginWallMs: number;
+  readonly spectate: KillcamSpectateAccess;
+  readonly phase: PlaybackPhase | null;
+  readonly replayInfo: KillcamReplayInfo | null;
+  isActive(): boolean;
+  cancel(): void;
+  update(deltaSeconds: number): void;
+  playForResult(
+    result: KillcamResult,
+    timeS: number,
+    onDone: () => void,
+    options?: KillcamPlayOptions,
+  ): boolean;
+  stageReplayShot(
+    snapshot: ReplaySnapshot,
+    phase?: KillcamCapturePhase,
+  ): KillcamReplayInfo | null;
+  stageXrayShot(snapshot: ReplaySnapshot): KillcamReplayInfo | null;
+  recordSimStep(game: KillcamGame): void;
+  onShellHit(event: KillcamHitEvent, target: KillcamEntity | null): void;
+  onRam(
+    event: KillcamHitEvent,
+    first: KillcamEntity | null,
+    second: KillcamEntity | null,
+  ): void;
+}
+
+interface KillcamAccessOptions<TModule, TRuntime extends KillcamRuntime> {
+  loadModule(): MaybePromise<TModule>;
+  initialize(module: TModule): MaybePromise<TRuntime>;
+}
+
+interface KillcamAccess<TModule, TRuntime extends KillcamRuntime> {
+  readonly current: TRuntime | null;
+  readonly presentation: KillcamRuntime;
+  preloadModule(): Promise<TModule>;
+  ensureRuntime(): Promise<TRuntime>;
+}
+
+const DORMANT_SPECTATE: KillcamSpectateAccess = Object.freeze({
+  active: false,
+  targetId: null,
+  startObserver: () => false,
+  stop() {},
+  cycle() {},
+  maybeStart: () => false,
+});
+
+/** Retryable lazy ownership for the replay chunk and its live presentation. */
+export function createKillcamAccess<TModule, TRuntime extends KillcamRuntime>({
+  loadModule,
+  initialize,
+}: KillcamAccessOptions<TModule, TRuntime>): KillcamAccess<TModule, TRuntime> {
+  if (typeof loadModule !== 'function' || typeof initialize !== 'function') {
+    throw new TypeError('killcam access requires module and initializer ports');
+  }
+
+  let runtime: TRuntime | null = null;
+  let runtimePromise: Promise<TRuntime> | null = null;
+
+  // (2026-11-02 audit R6, round 2 U35) the replay module is one app/lazyChunk.ts chunk: a failed one is asked again under the
+  // one policy (at once after one failure, then past its backoff; a removed chunk shows the reload action), not at once by
+  // every call. The runtime below is an initialization over the loaded module, not a chunk: a failed one is made again.
+  const moduleChunk = createLazyChunk(() => Promise.resolve().then(loadModule));
+  const preloadModule = (): Promise<TModule> => moduleChunk.load();
+
+  const ensureRuntime = (): Promise<TRuntime> => {
+    if (runtime) return Promise.resolve(runtime);
+    if (runtimePromise) return runtimePromise;
+    const request = preloadModule()
+      .then(initialize)
+      .then((live) => {
+        if (!live || typeof live.isActive !== 'function'
+            || typeof live.update !== 'function') {
+          throw new TypeError('killcam initializer did not return a runtime');
+        }
+        runtime = live;
+        return live;
+      });
+    runtimePromise = request;
+    request.catch(() => {
+      if (runtimePromise === request) runtimePromise = null;
+    });
+    return request;
+  };
+
+  // Main and debug hooks keep one identity while the heavy implementation is
+  // absent from garage boot. Simulation receives the live runtime after the
+  // composition root installs it, so fixed-step capture does not pay this
+  // forwarding layer during battle.
+  const presentation: KillcamRuntime = {
+    get fxTimeScale() { return runtime?.fxTimeScale ?? 1; },
+    get lastBeginWallMs() { return runtime?.lastBeginWallMs ?? 0; },
+    get spectate() { return runtime?.spectate ?? DORMANT_SPECTATE; },
+    get phase() { return runtime?.phase ?? null; },
+    get replayInfo() { return runtime?.replayInfo ?? null; },
+    isActive: () => runtime?.isActive() ?? false,
+    cancel: () => { runtime?.cancel(); },
+    update: (deltaSeconds) => { runtime?.update(deltaSeconds); },
+    playForResult: (...args) => runtime?.playForResult(...args) ?? false,
+    stageReplayShot: (...args) => runtime?.stageReplayShot(...args) ?? null,
+    stageXrayShot: (...args) => runtime?.stageXrayShot(...args) ?? null,
+    recordSimStep: (...args) => { runtime?.recordSimStep(...args); },
+    onShellHit: (...args) => { runtime?.onShellHit(...args); },
+    onRam: (...args) => { runtime?.onRam(...args); },
+  };
+
+  return {
+    get current() { return runtime; },
+    presentation,
+    preloadModule,
+    ensureRuntime,
+  };
+}

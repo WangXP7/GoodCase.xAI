@@ -1,0 +1,489 @@
+import { CAMO_PAINT_BONUS } from '../../src/sim/spotting.ts';
+import { botCamoRoll, camoSelectionBonus } from '../../src/sim/camoPaint.ts';
+import { stockCamoPatternIdFor } from '../../src/vehicles/camoPolicy.ts';
+import assert from 'node:assert/strict';
+import { MOVEMENT_CHECKPOINT_VERSION } from '../../src/mp/match/movementCheckpoint.ts';
+import {
+  CLOSE_REASON, CONTROL_FLAGS, MESSAGE_TYPE, NO_ENTITY, NO_TICK, PHASE, PROTOCOL_VERSION, TEAM, VERDICT,
+} from '../../src/mp/wire/constants.ts';
+import { applySnapshotPacket, decodeMessage, encodeMessage } from '../../src/mp/wire/codec.ts';
+import { quantizeAimDistance, quantizeAngle } from '../../src/mp/wire/quantize.ts';
+import { createLoopbackLink } from './link.ts';
+import { KEYFRAME_INTERVAL_TICKS, keyframeSlotFor } from './publisher.ts';
+import { ENTRY_BACKPRESSURE_GRACE_MS, ENTRY_BACKPRESSURE_HARD_BYTES, ENTRY_BACKPRESSURE_SUSTAINED_MS, SNAPSHOT_SKIP_BYTES, createMatchActor } from './matchActor.ts';
+import { ensureAuthorityFleet } from '../../src/vehicles/authorityFleet.ts';
+import * as camoPaint from '../../src/sim/camoPaint.ts';
+import { createAuthoritativeMatch } from '../../src/sim/authoritativeMatch.ts';
+import { createRoom, joinRoom, setPlayerConnected } from '../../src/mp/room/roomPolicy.ts';
+import { planFromRoom } from '../../src/mp/host/hostPlan.ts';
+
+// The actor reads finalized combat anatomy; production hosts load their roster's groups first (Node: all).
+await ensureAuthorityFleet();
+
+const TICK_MS = 1000 / 60;
+let nowMs = 10_000;
+const now = () => nowMs;
+const schedule = () => () => {};
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+/** A headless client over the loopback: decodes everything, keeps frames by tick, records closes. */
+function createHeadlessClient(actor, seat, playerId, { ackDelayMs = 0 } = {}) {
+  const link = createLoopbackLink(playerId);
+  const client = {
+    playerId, seat, link, welcome: null, frames: [], packets: [], events: [], errors: [], pongs: [],
+    closed: null, missingBaselines: 0, history: new Map(), pendingAcks: [],
+    latestTick: NO_TICK,
+    send(message) { link.client.send(encodeMessage(message)); },
+    /** The newest tick this client has assembled, delayed by ackDelayMs to emulate a real path. */
+    ackTick() {
+      while (client.pendingAcks.length && client.pendingAcks[0].at <= nowMs) client.latestTick = client.pendingAcks.shift().tick;
+      return client.latestTick;
+    },
+  };
+  link.client.onMessage((bytes) => {
+    const decoded = decodeMessage(bytes, { resolveBaseline: (tick) => client.history.get(tick) ?? null });
+    assert.ok(decoded.ok, `client ${playerId} decodes every server frame (${decoded.ok ? '' : decoded.error.code})`);
+    const message = decoded.message;
+    switch (message.type) {
+      case MESSAGE_TYPE.WELCOME: client.welcome = message; break;
+      case MESSAGE_TYPE.SNAPSHOT: {
+        client.packets.push(message);
+        let frame;
+        try {
+          frame = applySnapshotPacket(message, message.keyframe ? null : client.history.get(message.baseTick) ?? null);
+        } catch (error) {
+          if (error?.code === 'missing_baseline') { client.missingBaselines++; return; }
+          throw error;
+        }
+        client.frames.push(frame);
+        client.history.set(frame.tick, frame);
+        if (client.history.size > 64) client.history.delete(client.history.keys().next().value);
+        client.pendingAcks.push({ tick: frame.tick, at: nowMs + ackDelayMs });
+        break;
+      }
+      case MESSAGE_TYPE.EVENT: client.events.push(...message.events.map((event) => ({ ...event, tick: message.tick }))); break;
+      case MESSAGE_TYPE.ERROR: client.errors.push(message); break;
+      case MESSAGE_TYPE.PONG: client.pongs.push(message); break;
+      case MESSAGE_TYPE.CLOSE: client.closed = message; break;
+      default: assert.fail(`unexpected server message type ${message.type}`);
+    }
+  });
+  link.client.onClose((reason, detail) => { client.closed ??= { reason, detail }; });
+  const hello = { type: MESSAGE_TYPE.HELLO, protocolVersion: PROTOCOL_VERSION, capabilities: 1, token: 'issued-elsewhere', clientBuild: 'selftest' };
+  const claims = { v: 1, roomId: actor.roomId, seat, playerId, name: playerId, team: 'alpha', specId: 'm1a1_abrams_hc', iat: 0, exp: 1 };
+  client.attached = actor.attach(link.server, hello, claims);
+  return client;
+}
+
+const control = (overrides = {}) => ({
+  throttle: 0, steer: 0, flags: 0, aimYaw: quantizeAngle(0), aimPitch: 0, aimDistance: quantizeAimDistance(500),
+  shellSlot: 0, fireSeq: 0, actionSeq: 0, actionBits: 0, ...overrides,
+});
+
+async function advanceTicks(actor, ticks, perTick = null) {
+  for (let n = 0; n < ticks; n++) {
+    nowMs += TICK_MS;
+    if (perTick) perTick(actor.tick + 1);
+    actor.advance(nowMs);
+    await flush();
+  }
+}
+
+// ---------------------------------------------------------------- the room
+const verdicts = [];
+// This receipt's cadence arithmetic (90 snapshots in 3 s, 15 skipped in 30 ticks) is written at 30 Hz: the rate is the
+// actor's option (P3b; the default is SNAPSHOT_HZ = 20, covered by snapshotRate.selftest).
+// (2026-10-10) the room's clients re-attach seconds before the backpressure case: no entry grace here, the steady rule
+// alone (the grace has its own section below)
+const actor = createMatchActor({
+  roomId: 'room-actor-test', mapId: 'verdant', seed: 4242, countdownS: 0.5, world: 'terrain', now, schedule, snapshotHz: 30,
+  entryBackpressureGraceMs: 0,
+  seats: [
+    { seat: 0, playerId: 'p1', name: 'One', team: 'alpha', specId: 'm1a1_abrams_hc', camo: 'auto' },
+    { seat: 1, playerId: 'p2', name: 'Two', team: 'alpha', specId: 'm1a1_abrams_hc' },
+    { seat: 2, playerId: 'p3', name: 'Three', team: 'bravo', specId: 't90am', camo: 'summer' },
+    { seat: 3, playerId: 'p4', name: 'Four', team: 'bravo', specId: 't90am', camo: 'winter' },
+    { seat: 9, playerId: 's1', name: 'Watcher', team: 'spectator', specId: '' },
+  ],
+  bots: [
+    { playerId: 'bot-a', name: 'Bot A', team: 'alpha', specId: 'leo2_improved' },
+    { playerId: 'bot-b', name: 'Bot B', team: 'bravo', specId: 'leo2_improved' },
+  ],
+  onVerdict: (verdict) => verdicts.push(verdict),
+});
+assert.equal(actor.authority.entities.length, 6);
+assert.equal(actor.loop.running, true);
+
+const p1 = createHeadlessClient(actor, 0, 'p1', { ackDelayMs: 100 });
+const p2 = createHeadlessClient(actor, 1, 'p2');
+const p3 = createHeadlessClient(actor, 2, 'p3');
+const p4 = createHeadlessClient(actor, 3, 'p4');
+const s1 = createHeadlessClient(actor, 9, 's1');
+await flush();
+for (const client of [p1, p2, p3, p4, s1]) {
+  assert.equal(client.attached, true);
+  assert.ok(client.welcome, `${client.playerId} welcomed`);
+  assert.equal(client.welcome.roster.length, 6, 'the roster lists every entity: four seats and two bots');
+  assert.equal(client.welcome.seat, client.seat);
+  assert.equal(client.welcome.mapId, 'verdant');
+  assert.equal(JSON.parse(client.welcome.rulesetJson).mode, 'standard');
+}
+assert.equal(p1.welcome.entityId, 1);
+assert.equal(p3.welcome.team, TEAM.BRAVO);
+assert.equal(s1.welcome.entityId, NO_ENTITY);
+assert.equal(s1.welcome.team, TEAM.SPECTATOR);
+assert.deepEqual(p1.welcome.roster.filter((row) => row.bot).map((row) => row.playerId), ['bot-a', 'bot-b']);
+assert.ok(p2.events.some((event) => event.kind === 'roster' && event.payload.playerId === 'p3' && event.payload.connected === true), 'roster events announce joins');
+// (268) each seat's chosen camouflage is its spotting bonus on the map, the rule the solo battle stamps (sim/camoPaint.ts):
+// AUTO always, a verdant scheme on Verdant, a winter scheme never, factory by the vehicle's stock scheme
+{
+  const bonus = (id) => actor.authority.entityById.get(id).camoBonus;
+  assert.deepEqual([bonus('p1'), bonus('p3'), bonus('p4')], [CAMO_PAINT_BONUS, CAMO_PAINT_BONUS, 0], 'auto, summer and winter on Verdant');
+  assert.equal(bonus('p2'), camoSelectionBonus('factory', stockCamoPatternIdFor('m1a1_abrams_hc'), 'verdant'), 'no camo is factory paint');
+  // (268, item 6) a bot's paint is the authority's roll at its roster index (the four seated hulls first: 4 and 5), its
+  // bonus follows it, and every client's roster names it; a seat's roster row carries none (the room carries its camo)
+  const rolled = [botCamoRoll(4242, 4, 'verdant'), botCamoRoll(4242, 5, 'verdant')];
+  assert.deepEqual(['bot-a', 'bot-b'].map((id) => actor.authority.entityById.get(id).camo), rolled, 'the authority rolled each bot at its index');
+  assert.deepEqual(['bot-a', 'bot-b'].map(bonus), rolled.map((camo) => camoSelectionBonus(camo, stockCamoPatternIdFor('leo2_improved'), 'verdant')),
+    'each bot\'s bonus follows its paint');
+  for (const client of [p1, p2, p3, p4, s1]) {
+    assert.deepEqual(client.welcome.roster.map((row) => row.camo ?? null), [null, null, null, null, ...rolled], `${client.playerId}'s roster names each bot's paint, no seat's`);
+  }
+}
+console.log('matchActor.selftest: five clients welcomed with the full roster, seats, teams and ruleset; each seat\'s camo its spotting bonus; each bot\'s rolled paint in every roster');
+
+// ---------------------------------------------------------------- inputs, cadence, deltas, interest
+let fireSeq = 0;
+const driveP1 = (tick) => {
+  const frames = [control({ throttle: 127, fireSeq }), control({ throttle: 127, fireSeq }), control({ throttle: 127, fireSeq })];
+  p1.send({ type: MESSAGE_TYPE.INPUT, clientTick: tick + 2, snapshotAckTick: p1.ackTick(), interpDelayMs: 100, controls: frames });
+  for (const other of [p2, p3, p4]) {
+    if (other.closed) continue;
+    other.send({ type: MESSAGE_TYPE.INPUT, clientTick: tick + 2, snapshotAckTick: other.ackTick(), interpDelayMs: 67, controls: [control({ flags: CONTROL_FLAGS.BRAKE })] });
+  }
+  // the spectator acknowledges as the shipped client does (matchClient maintainAcks); one that never does draws
+  // forced keyframes from a bucket (2026-10-23, NV-11: forcedKeyframes.selftest)
+  if (!s1.closed && s1.ackTick() !== NO_TICK) s1.send({ type: MESSAGE_TYPE.SNAPSHOT_ACK, tick: s1.ackTick() });
+};
+await advanceTicks(actor, 180, driveP1);
+const p1Entity = actor.authority.entityById.get('p1');
+assert.ok(p1Entity.state.speed > 1, `p1 drives under its own input (${p1Entity.state.speed.toFixed(2)} m/s)`);
+assert.equal(actor.authority.entityById.get('p2').state.speed < 0.2, true, 'a braking client stays put');
+for (const client of [p1, p2, p3, p4, s1]) {
+  const expected = 90;
+  assert.ok(Math.abs(client.frames.length - expected) <= 2, `${client.playerId}: ${client.frames.length} snapshots in 3 s (30 Hz)`);
+  assert.equal(client.missingBaselines, 0, `${client.playerId} never needed a missing baseline`);
+  assert.equal(client.packets[0].keyframe, true, 'the first snapshot is a keyframe');
+}
+const keyframes = p1.packets.filter((packet) => packet.keyframe).length;
+// every snapshot before the first (100 ms late) acknowledgement is a keyframe; after it, keyframes fall on the viewer's
+// own slot of the cycle and nowhere else (publisher.ts keyframeSlotFor, mp-scale-251; a snapshot every 2 ticks at 30 Hz)
+const onSlot = (seat, tick) => (tick + KEYFRAME_INTERVAL_TICKS - keyframeSlotFor(seat)) % KEYFRAME_INTERVAL_TICKS < 2;
+const settled = p1.packets.slice(8);
+assert.ok(keyframes >= 1 && keyframes <= 6, `keyframes until the first ack (${keyframes} in 3 s)`);
+assert.equal(settled.filter((packet) => packet.keyframe).length, settled.filter((packet) => onSlot(0, packet.tick)).length,
+  'after the first ack, keyframes come on the viewer\'s slot alone');
+assert.ok(p1.packets.filter((packet) => !packet.keyframe).length >= 80, 'the rest are deltas against the acknowledged baseline');
+assert.equal(p2.packets.filter((packet) => packet.keyframe).length, 1 + p2.packets.slice(1).filter((packet) => onSlot(1, packet.tick)).length,
+  'an immediately acknowledging client sees its first keyframe, then its slot\'s');
+const latest = p1.frames.at(-1);
+assert.ok(latest.ackedInputTick !== NO_TICK && latest.ackedInputTick >= actor.tick - 4, `input acknowledged (${latest.ackedInputTick} vs ${actor.tick})`);
+assert.ok(latest.inputMarginTicks >= 0 && latest.inputMarginTicks <= 3, `input margin reported (${latest.inputMarginTicks})`);
+assert.ok(latest.viewer && latest.viewer.entityId === 1 && latest.viewer.movementVersion === MOVEMENT_CHECKPOINT_VERSION, 'the seated viewer gets its prediction section');
+assert.equal(s1.frames.at(-1).viewer, null, 'a spectator gets none');
+assert.equal(latest.meta.phase, PHASE.PLAYING);
+const ownRow = latest.entities.find((row) => row.entityId === 1);
+assert.ok(ownRow && ownRow.speed > 100, 'own row carries the live speed');
+assert.ok(latest.entities.some((row) => row.entityId === 2) && latest.entities.some((row) => row.entityId === 5), 'teammates and the allied bot are always present');
+// interest management: the wire carries exactly the authority's visibility set for the viewer
+{
+  const oracle = actor.authority.snapshot({ tick: actor.tick, serverTimeMs: 0, viewerId: 'p1', ackInputSeq: null });
+  const oracleIds = new Set(oracle.entities.map((row) => p1.welcome.roster.find((entry) => entry.playerId === row.id).entityId));
+  assert.deepEqual(new Set(latest.entities.map((row) => row.entityId)), oracleIds, 'hidden enemies are absent from the wire');
+  assert.equal(s1.frames.at(-1).entities.length, 6, 'a spectator sees both teams');
+}
+// server-measured latency feeds the rewind budget: p1 acks 100 ms late and interpolates at 100 ms -> ~9 ticks
+const p1Stats = actor.clientStats().find((entry) => entry.playerId === 'p1');
+assert.ok(p1Stats.rttMs >= 90 && p1Stats.rttMs <= 140, `server measured p1's round trip (${p1Stats.rttMs.toFixed(1)} ms)`);
+assert.ok(p1Stats.rewindTicks >= 8 && p1Stats.rewindTicks <= 10, `rewind budget from owd + interpolation (${p1Stats.rewindTicks} ticks)`);
+// the authority's reveal rules: phase changes reach seated viewers through snapshot meta, spectators see every event
+assert.ok(s1.events.some((event) => event.kind === 'match_started'), 'reliable events reach the spectator');
+assert.ok(p1.events.some((event) => event.kind === 'roster' && event.payload.playerId === 'p4'), 'reliable events reach the seated client');
+assert.ok(p1.frames.some((frame) => frame.meta.phase === PHASE.COUNTDOWN) && latest.meta.phase === PHASE.PLAYING, 'the phase rides the snapshot meta');
+console.log(`matchActor.selftest: 30 Hz cadence, ${keyframes} keyframes / ${p1.packets.length - keyframes} deltas, acks, margin ${latest.inputMarginTicks}, rewind ${p1Stats.rewindTicks} ticks`);
+
+// ---------------------------------------------------------------- keyframe request: a NO_TICK acknowledgement drops the baseline
+{
+  const packetsBefore = p2.packets.length;
+  p2.send({ type: MESSAGE_TYPE.SNAPSHOT_ACK, tick: NO_TICK });
+  await flush();
+  // p2 keeps acknowledging its held frames in its INPUT stream: the latched request still wins
+  await advanceTicks(actor, 2, driveP1);
+  const fresh = p2.packets.slice(packetsBefore);
+  assert.ok(fresh.length >= 1 && fresh[0].keyframe, 'the next snapshot after a NO_TICK ack is a keyframe');
+  await advanceTicks(actor, 4, driveP1);
+  assert.ok(p2.packets.slice(packetsBefore + 1).every((packet) => !packet.keyframe), 'then deltas resume against the new baseline');
+  assert.equal(p2.missingBaselines, 0);
+  console.log('matchActor.selftest: a NO_TICK acknowledgement requests a keyframe at once');
+}
+
+// ---------------------------------------------------------------- fire: an edge fires once and shells appear on the wire
+fireSeq = 1;
+await advanceTicks(actor, 30, driveP1);
+const fired = p1.events.filter((event) => event.kind === 'shell_fired' && event.payload.shooterId === 'p1');
+assert.equal(fired.length, 1, `one trigger press fires exactly one shell (${fired.length})`);
+assert.ok(p1.frames.slice(-30).some((frame) => frame.shells.some((shell) => shell.shooterEntityId === 1)), 'the shell rides the snapshot');
+assert.equal(p1.frames.at(-1).ackedFireSeq, 1);
+console.log('matchActor.selftest: a fire edge fires once, acknowledged by sequence, shells on the wire');
+
+// ---------------------------------------------------------------- chat, malformed, rejected input classes
+p1.send({ type: MESSAGE_TYPE.CHAT, text: '  push ​ left  ' });
+await flush();
+for (const client of [p2, p3, s1]) {
+  const chat = client.events.find((event) => event.kind === 'chat');
+  assert.ok(chat && chat.payload.text === 'push left' && chat.payload.playerId === 'p1', `${client.playerId} receives normalized chat`);
+}
+p1.send({ type: MESSAGE_TYPE.CHAT, text: 'again' });
+await flush();
+assert.ok(p1.errors.some((error) => error.reason === CLOSE_REASON.CHAT_REJECTED), 'chat cooldown rejects the immediate repeat');
+p1.link.client.send(new Uint8Array([1, 2, 3]));
+await flush();
+assert.ok(p1.errors.some((error) => error.reason === CLOSE_REASON.MALFORMED), 'malformed frames answer with a typed error');
+s1.send({ type: MESSAGE_TYPE.INPUT, clientTick: actor.tick, snapshotAckTick: NO_TICK, interpDelayMs: 0, controls: [control()] });
+await flush();
+assert.ok(s1.errors.some((error) => error.reason === CLOSE_REASON.NOT_SEATED), 'spectator input is refused');
+p2.send({ type: MESSAGE_TYPE.INPUT, clientTick: actor.tick + 1000, snapshotAckTick: NO_TICK, interpDelayMs: 0, controls: [control()] });
+await flush();
+assert.ok(p2.errors.some((error) => error.reason === CLOSE_REASON.INPUT_TOO_FAR_AHEAD), 'far-ahead input is rejected');
+p2.send({ type: MESSAGE_TYPE.PING, clientTimeMs: 1234, snapshotAckTick: p2.ackTick() });
+await flush();
+assert.ok(p2.pongs.some((pong) => pong.clientTimeMs === 1234 && pong.serverTick === actor.tick), 'ping is answered with the server tick');
+assert.ok(!p1.closed && !p2.closed && !s1.closed, 'rejections never close the link');
+console.log('matchActor.selftest: chat normalized and rate-limited; malformed, spectator and far-ahead inputs rejected without closing');
+
+// ---------------------------------------------------------------- the message-rate bucket (P3b): a stalled host's backlog passes, a flood trips
+{
+  // a browser host's main thread stalled three seconds: 200 queued input frames land in one instant — honest traffic, admitted
+  const before = p4.errors.length;
+  for (let n = 0; n < 200; n++) p4.send({ type: MESSAGE_TYPE.INPUT, clientTick: actor.tick + 2, snapshotAckTick: p4.ackTick(), interpDelayMs: 67, controls: [control({ flags: CONTROL_FLAGS.BRAKE })] });
+  await flush();
+  assert.ok(!p4.closed, 'a backlog of a few seconds never closes the link');
+  assert.equal(p4.errors.length, before, 'and answers no error');
+  // a flood: 400 messages a second for four seconds trips the bucket (900 tokens refilled at 150/s) inside three seconds
+  const flood = async () => { for (let n = 0; n < 4 * 60 && !p4.closed; n++) { nowMs += TICK_MS; for (let m = 0; m < 7; m++) p4.send({ type: MESSAGE_TYPE.PING, clientTimeMs: n * 7 + m, snapshotAckTick: p4.ackTick() }); actor.advance(nowMs); await flush(); } };
+  const floodStarted = nowMs;
+  await flood();
+  assert.ok(p4.closed && p4.closed.reason === CLOSE_REASON.RATE_LIMITED, `a sustained flood is closed as RATE_LIMITED (${p4.closed?.reason})`);
+  assert.ok(nowMs - floodStarted < 3500, `within a few seconds (${Math.round(nowMs - floodStarted)} ms)`);
+  console.log(`matchActor.selftest: a 200-frame backlog passed the message bucket, a 420/s flood was closed after ${Math.round(nowMs - floodStarted)} ms`);
+}
+const p4b = createHeadlessClient(actor, 3, 'p4');
+await flush();
+assert.ok(p4b.welcome, 'p4 re-attached after the flood');
+
+// ---------------------------------------------------------------- per-peer rate adaptation (P3b): a slow peer's snapshot is skipped, never delayed; the others flow; it resumes on deltas
+{
+  const skipped = actor.clientStats().find((entry) => entry.playerId === 'p2').droppedSnapshots;
+  p2.link.client.pressure = SNAPSHOT_SKIP_BYTES + 1;
+  const p2Before = p2.frames.length;
+  const p3Before = p3.frames.length;
+  await advanceTicks(actor, 30, driveP1);
+  assert.equal(p2.frames.length, p2Before, 'a peer over the skip bound receives no snapshot');
+  assert.equal(actor.clientStats().find((entry) => entry.playerId === 'p2').droppedSnapshots - skipped, 15, 'every skipped snapshot is counted');
+  assert.ok(p3.frames.length - p3Before >= 14, `the other peers keep their cadence (${p3.frames.length - p3Before} in 30 ticks)`);
+  // (2026-11-02 audit S1) a transient skip; a viewer starved past SNAPSHOT_STARVED_CLOSE_MS is closed (skipStarvation.selftest)
+  assert.ok(!p2.closed, 'a transient skip never closes the link');
+  p2.link.client.pressure = 0;
+  await advanceTicks(actor, 4, driveP1);
+  const resumed = p2.packets.at(-1);
+  assert.ok(p2.frames.length > p2Before && !resumed.keyframe, 'the drained peer resumes on a delta against its acknowledged baseline');
+  assert.equal(p2.missingBaselines, 0);
+  console.log('matchActor.selftest: a peer over the skip bound is skipped and counted, the others unaffected, deltas resume when it drains');
+}
+
+// ---------------------------------------------------------------- backpressure: drop the stale snapshot, then close when sustained
+p4b.link.client.pressure = 100 * 1024;
+const p4Before = p4b.frames.length;
+await advanceTicks(actor, 30, driveP1);
+assert.equal(p4b.frames.length, p4Before, 'a congested client receives no queued-behind snapshots');
+assert.ok(actor.clientStats().find((entry) => entry.playerId === 'p4').droppedSnapshots >= 10, 'dropped snapshots are counted');
+assert.ok(p3.frames.length > p4b.frames.length, 'other clients are unaffected');
+await advanceTicks(actor, 150, driveP1);
+assert.ok(p4b.closed && p4b.closed.reason === CLOSE_REASON.BACKPRESSURE, `sustained pressure closes with a typed reason (${p4b.closed?.reason})`);
+// (still in its entry grace: its hard bound is ENTRY_BACKPRESSURE_HARD_BYTES; the steady 512 KB one is tested past the grace below)
+p3.link.client.pressure = ENTRY_BACKPRESSURE_HARD_BYTES + 1024;
+await advanceTicks(actor, 4, driveP1);
+assert.ok(p3.closed && p3.closed.reason === CLOSE_REASON.BACKPRESSURE, 'the hard bound closes immediately');
+assert.equal(actor.stats().backpressureCloses, 2);
+assert.ok(p2.events.some((event) => event.kind === 'roster' && event.payload.playerId === 'p4' && event.payload.connected === false), 'departures are announced');
+console.log('matchActor.selftest: backpressure drops stale snapshots, then closes sustained or hard-bound clients');
+
+// ---------------------------------------------------------------- seat replacement and leave; the match keeps running
+const p2b = createHeadlessClient(actor, 1, 'p2');
+await flush();
+assert.ok(p2.closed && p2.closed.reason === CLOSE_REASON.REPLACED, 'a reconnecting seat replaces the old link');
+assert.ok(p2b.welcome && p2b.welcome.entityId === 2);
+// the replacement acknowledges as a seated client does (a silent one draws forced keyframes from a bucket, NV-11)
+await advanceTicks(actor, 30, (tick) => {
+  driveP1(tick);
+  if (!p2b.closed && p2b.ackTick() !== NO_TICK) p2b.send({ type: MESSAGE_TYPE.SNAPSHOT_ACK, tick: p2b.ackTick() });
+});
+assert.ok(p2b.frames.length >= 13, 'the replacement receives snapshots');
+p2b.send({ type: MESSAGE_TYPE.LEAVE, reason: CLOSE_REASON.CLIENT_LEAVE });
+await flush();
+assert.ok(p2b.closed && p2b.closed.reason === CLOSE_REASON.CLIENT_LEAVE);
+const tickBefore = actor.tick;
+await advanceTicks(actor, 60, driveP1);
+assert.equal(actor.tick, tickBefore + 60, 'departures never stall the tick');
+assert.equal(actor.authority.entityById.get('p2').input.brake, true, 'a departed seat goes neutral');
+assert.ok(p1.frames.at(-1).tick > tickBefore, 'remaining clients keep receiving');
+const stats = actor.stats();
+assert.equal(stats.clients, 2);
+assert.equal(stats.tickMs.count, actor.tick);
+assert.ok(stats.lagComp.rewoundShots >= 1, `lag compensation wrapped the fired shell (${stats.lagComp.rewoundShots})`);
+console.log(`matchActor.selftest: replace + leave handled, match continues (tick ${actor.tick}); rewound shots ${stats.lagComp.rewoundShots}, mismatch mean ${stats.lagComp.mismatchMeanM.toFixed(2)} m`);
+actor.stop();
+await flush();
+assert.equal(actor.stopped, true);
+assert.ok(p1.closed && p1.closed.reason === CLOSE_REASON.ROOM_CLOSED, 'stop closes the remaining clients with ROOM_CLOSED');
+
+// ---------------------------------------------------------------- 2026-10-10: a client still in its covered entry is busy, not dead
+// An ABBA under load ~110 dropped the host's own loopback seat and a peer during their first entry (BACKPRESSURE
+// "sustained" after 2 s): the entry's synchronous steps ran for seconds and the links could not drain meanwhile. For the
+// entry grace after its WELCOME a client's soft pressure closes only after the long continuous limit; the stale snapshot
+// is still dropped and the hard bound still closes at once; after the grace the steady 2 s rule is back.
+{
+  assert.equal(ENTRY_BACKPRESSURE_GRACE_MS, 120_000, 'a client is in its entry grace for 120 s after its WELCOME');
+  assert.equal(ENTRY_BACKPRESSURE_SUSTAINED_MS, 60_000, 'where only 60 s of continuous pressure closes it');
+  const base = { roomId: 'room-entry-grace', mapId: 'verdant', seed: 11, countdownS: 0, world: 'terrain', now, schedule, snapshotHz: 30,
+    seats: [
+      { seat: 0, playerId: 'g1', name: 'G1', team: 'alpha', specId: 'm1a1_abrams_hc' },
+      { seat: 1, playerId: 'g2', name: 'G2', team: 'alpha', specId: 'm1a1_abrams_hc' },
+      { seat: 2, playerId: 'g3', name: 'G3', team: 'bravo', specId: 't90am' },
+      { seat: 3, playerId: 'g4', name: 'G4', team: 'bravo', specId: 't90am' },
+    ] };
+  assert.throws(() => createMatchActor({ ...base, entryBackpressureSustainedMs: 1000 }), /entry backpressure/,
+    'the entry limit is never shorter than the steady one');
+  // short limits keep the receipt fast: a 10 s grace, 5 s of continuous pressure
+  const graceActor = createMatchActor({ ...base, entryBackpressureGraceMs: 10_000, entryBackpressureSustainedMs: 5_000 });
+  const [busy, dead, hard, late] = ['g1', 'g2', 'g3', 'g4'].map((id, seat) => createHeadlessClient(graceActor, seat, id));
+  await flush();
+  for (const client of [busy, dead, hard, late]) assert.ok(client.welcome, `${client.playerId} welcomed`);
+  const dropped = (id) => graceActor.clientStats().find((entry) => entry.playerId === id)?.droppedSnapshots ?? 0;
+  // a loading client: pressure for 4 s (its synchronous steps), drains for a tick, then 4 s more — busy, never dead
+  busy.link.client.pressure = 100 * 1024;
+  dead.link.client.pressure = 100 * 1024;
+  await advanceTicks(graceActor, 240);
+  assert.ok(!busy.closed && !dead.closed, 'four seconds of pressure in the entry grace closes no one (the steady rule closed at 2 s)');
+  assert.ok(dropped('g1') >= 100, `stale snapshots are still dropped, never queued (${dropped('g1')})`);
+  busy.link.client.pressure = 0;
+  await advanceTicks(graceActor, 2);
+  busy.link.client.pressure = 100 * 1024;
+  // (battle-spikes-253) a burst past the steady hard bound in the grace — the host page's own blocked entry forwarding its
+  // backlog at once — is dropped, not closed; the entry hard bound still closes at once
+  hard.link.client.pressure = 600 * 1024;
+  await advanceTicks(graceActor, 2);
+  assert.ok(!hard.closed, 'a 600 KB burst in the entry grace is not a dead link');
+  hard.link.client.pressure = ENTRY_BACKPRESSURE_HARD_BYTES + 1024;
+  await advanceTicks(graceActor, 2);
+  assert.ok(hard.closed && hard.closed.reason === CLOSE_REASON.BACKPRESSURE, 'the entry hard bound closes at once');
+  await advanceTicks(graceActor, 90);
+  assert.ok(dead.closed && dead.closed.reason === CLOSE_REASON.BACKPRESSURE, `a link that never drains still closes in the grace (${dead.closed?.detail})`);
+  assert.equal(dead.closed.detail, 'sustained');
+  await advanceTicks(graceActor, 150);
+  assert.ok(!busy.closed, 'a client that drained between its steps is busy, not dead: its pressure clock restarted');
+  busy.link.client.pressure = 0;
+  // past the grace the steady rule is back: 2 s of pressure closes
+  await advanceTicks(graceActor, 240);
+  assert.ok(!late.closed);
+  late.link.client.pressure = 100 * 1024;
+  await advanceTicks(graceActor, 150);
+  assert.ok(late.closed && late.closed.reason === CLOSE_REASON.BACKPRESSURE && late.closed.detail === 'sustained', 'after the grace, 2.5 s of pressure closes as before');
+  assert.ok(!busy.closed, 'the drained client stays');
+  busy.link.client.pressure = 600 * 1024;
+  await advanceTicks(graceActor, 2);
+  assert.ok(busy.closed && busy.closed.reason === CLOSE_REASON.BACKPRESSURE && /bytes buffered/.test(busy.closed.detail),
+    'after the grace the steady hard bound closes at once');
+  assert.equal(graceActor.stats().backpressureCloses, 4);
+  graceActor.stop();
+  await flush();
+  console.log('matchActor.selftest: in the entry grace soft pressure is a loading client (stale snapshots dropped, 4 s busy runs kept, a never-draining link closed at the long limit, a burst dropped and the entry hard bound at once); after it the steady 2 s rule and hard bound');
+}
+
+// ---------------------------------------------------------------- one bot paint rule (round 8 Y1 s4-06)
+// The paint a client guesses for each bot before the WELCOME (session/browserComposition.ts, its roster prebuild) and the
+// paint the actor stamps are one rule, sim/camoPaint.ts planBotPaints: every seated hull, then the bots in plan order, each
+// rolled at its index, as the authority's own roll would. A room planned as the host plans it (host/hostPlan.ts
+// planFromRoom: a spectator, a seat without a vehicle), and its rejoin after a seated human dropped (the bots' ids keep
+// their places, their vehicles move): each match's WELCOME names, and its authority wears, the helper's paints, which equal
+// the authority's own roll for that roster (no stamp) and the index rule written out here.
+{
+  const { planBotPaints } = camoPaint;
+  assert.equal(typeof planBotPaints, 'function', 'sim/camoPaint.ts plans every bot\'s paint');
+  const room = createRoom({ roomCode: 'PAINT1', mode: 'private', creator: { id: 'alice', name: 'Alice' }, selection: { specId: 'm1a1_abrams_hc' },
+    settings: { teamSize: 4, mapId: 'verdant' }, now: 1000 });
+  joinRoom(room, { player: { id: 'bob', name: 'Bob' }, selection: { specId: 't90am' }, team: null, now: 1001 });
+  joinRoom(room, { player: { id: 'carol', name: 'Carol' }, selection: { specId: 'leo2_improved' }, team: 'alpha', now: 1002 });
+  joinRoom(room, { player: { id: 'dave', name: 'Dave' }, selection: null, team: null, now: 1003 });
+  joinRoom(room, { player: { id: 'spec', name: 'Spec' }, selection: null, team: 'spectator', now: 1004 });
+  for (const player of room.players) player.ready = true;
+  const rejoin = structuredClone(room);
+  setPlayerConnected(rejoin, 'carol', false, 1005);
+  const seed = 31;
+  const ids = [];
+  for (const [label, snapshot] of [['the start', room], ['a rejoin with Carol gone', rejoin]]) {
+    const plan = planFromRoom(snapshot, { seed });
+    const seated = plan.seats.filter((seat) => seat.team !== 'spectator').length;
+    assert.ok(plan.seats.some((seat) => seat.team === 'spectator') && plan.bots.length >= 2, `${label}: a spectator and bots`);
+    const paints = planBotPaints(plan.seats, plan.bots, seed, 'verdant');
+    assert.deepEqual(paints, plan.bots.map((_bot, ordinal) => botCamoRoll(seed, seated + ordinal, 'verdant')),
+      `${label}: every seated hull first, then the bots in plan order`);
+    assert.ok(new Set(paints).size === 2, `${label}: the roll varies on Verdant (${paints})`);
+    const own = createAuthoritativeMatch({ mapId: 'verdant', seed, countdownS: 0, players: [
+      ...plan.seats.filter((seat) => seat.team !== 'spectator').map((seat) => ({ id: seat.playerId, specId: seat.specId, team: seat.team })),
+      ...plan.bots.map((bot) => ({ id: bot.playerId, specId: bot.specId, team: bot.team, bot: true })),
+    ] });
+    assert.deepEqual(plan.bots.map((bot) => own.entityById.get(bot.playerId).camo), paints, `${label}: the authority's own roll, unstamped`);
+    const paintActor = createMatchActor({ roomId: `room-paint-${ids.length}`, mapId: 'verdant', seed, countdownS: 0.5, world: 'terrain', now, schedule,
+      seats: plan.seats, bots: plan.bots });
+    const host = plan.seats.find((seat) => seat.team !== 'spectator');
+    const client = createHeadlessClient(paintActor, host.seat, host.playerId);
+    await flush();
+    assert.deepEqual(client.welcome.roster.filter((row) => row.bot).map((row) => [row.playerId, row.camo]),
+      plan.bots.map((bot, ordinal) => [bot.playerId, paints[ordinal]]), `${label}: the WELCOME names the planned paints`);
+    assert.deepEqual(plan.bots.map((bot) => paintActor.authority.entityById.get(bot.playerId).camo), paints, `${label}: the authority wears them`);
+    paintActor.stop();
+    ids.push(plan.bots.map((bot) => bot.playerId));
+  }
+  // a resumed bot keeps the paint its roster carried
+  assert.deepEqual(planBotPaints([{ team: 'alpha' }], [{ camo: 'factory' }, { camo: null }], seed, 'verdant'),
+    ['factory', botCamoRoll(seed, 2, 'verdant')], 'a carried paint stands; the rest roll at their index');
+  assert.deepEqual(planBotPaints([], [{}], seed, 'winter'), ['auto'], 'Winter rolls auto');
+  console.log(`matchActor.selftest: one bot paint rule: the planned room and its rejoin (${ids.map((list) => list.length).join(' and ')} bots) `
+    + 'paint as the authority rolls, in every WELCOME');
+}
+
+// ---------------------------------------------------------------- verdict: the clock ends the match, the callback fires, the actor lingers then stops
+{
+  const verdictActor = createMatchActor({
+    roomId: 'room-verdict', mapId: 'verdant', seed: 7, countdownS: 0, battleLimitS: 1, world: 'terrain', now, schedule,
+    endedLingerTicks: 30,
+    seats: [{ seat: 0, playerId: 'v1', name: 'V', team: 'alpha', specId: 'm1a1_abrams_hc' }],
+    bots: [{ playerId: 'vb', name: 'VB', team: 'bravo', specId: 't90am' }],
+    onVerdict: (verdict) => verdicts.push(verdict),
+  });
+  const v1 = createHeadlessClient(verdictActor, 0, 'v1');
+  await flush();
+  await advanceTicks(verdictActor, 75);
+  assert.equal(verdicts.length, 1, 'the verdict callback fired once');
+  assert.equal(verdicts[0].roomId, 'room-verdict');
+  assert.equal(verdicts[0].reason, 'time_limit');
+  assert.ok(['alpha', 'bravo', 'draw'].includes(verdicts[0].result));
+  assert.equal(verdicts[0].entities.length, 2);
+  const endedFrame = v1.frames.find((frame) => frame.meta.verdict !== VERDICT.NONE);
+  assert.ok(endedFrame && endedFrame.meta.phase === PHASE.ENDED && endedFrame.meta.verdictReason === 'time_limit', 'snapshots mirror the verdict');
+  await advanceTicks(verdictActor, 40);
+  assert.equal(verdictActor.stopped, true, 'the actor stops after the linger window');
+  assert.ok(v1.closed && v1.closed.reason === CLOSE_REASON.MATCH_ENDED, 'clients are closed with MATCH_ENDED');
+  console.log(`matchActor.selftest: verdict ${verdicts[0].result} by ${verdicts[0].reason} at tick ${verdicts[0].tick}, actor lingered then stopped`);
+}

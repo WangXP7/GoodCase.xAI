@@ -1,0 +1,1257 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Group, Vector3 } from 'three';
+
+// Zellen-Stub, pro Test steuerbar: `ready` = Grid initialisiert, `cellY` = Zellhöhe,
+// `column` = die eingefrorene Säule an einem lokalen Punkt, aus der das Band gebaut wird.
+// DevWorld, pro Test umschaltbar: die Straßen-Darstellung der Welt des Engines.
+const world = vi.hoisted(() => ({ devWorld: false }));
+const grid = vi.hoisted(() => ({
+  ready: false,
+  cellY: (_x: number, _z: number): number | null => null,
+  column: (_x: number, _z: number): { groundY: number; topY: number; tileDepth: number; tileGeometricError: number } | null => null,
+  band: null as unknown,
+}));
+
+// inject() liefert pro Service-Klasse einen Stub. PathAndRouteService braucht
+// nur wenige Felder davon; OsmStreetService speichert seinen Cache-Service nur.
+vi.mock('@angular/core', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@angular/core');
+  const stubs: Record<string, unknown> = {
+    UIStore: {
+      routesVisible: () => false,
+      // The banner as warnUnroutedSpawns sets it
+      notice: { value: null as unknown, set(value: unknown) { this.value = value; } },
+    },
+    GlobalRouteGridService: {
+      isInitialized: () => grid.ready,
+      getGroundLocalYAt: (x: number, z: number) => grid.cellY(x, z),
+      getGrid: () => ({
+        getCellSize: () => 2,
+        columnNear: (x: number, z: number) => grid.column(x, z),
+        setBand: (stationAt: unknown) => { grid.band = stationAt; },
+      }),
+    },
+  };
+  return {
+    ...actual,
+    inject: (token: { name?: string }) => stubs[token?.name ?? ''] ?? {},
+  };
+});
+
+import { PathAndRouteService, unroutedSpawnsText } from './path-route.service';
+import { UIStore } from '../../store/ui.store';
+import { inject } from '@angular/core';
+import { TILES_STREET_STYLE } from '../../world/tiles/tiles-world';
+import { DEV_WORLD_STREET_STYLE } from '../../devworld/dev-world-provider';
+import { OsmStreetService, StreetNetwork, StreetNode } from '../location/osm-street.service';
+import { SpawnPoint } from './marker-visualization.service';
+import { METERS_PER_DEGREE_LAT, DEG_TO_RAD } from '../../utils/geo-utils';
+import type { ThreeTilesEngine } from '../../three-engine';
+import type { StationProbe } from '../../utils/route-corridor';
+import { GlobalRouteGrid } from '../../utils/global-route-grid';
+import type { ColumnSample } from '../../three-engine/column-sample';
+import type { RouteWaypoint } from '../../models/game.types';
+import { corridorTrace } from '../../utils/corridor-trace';
+
+const ORIGIN = { lat: 48.0, lon: 9.0 };
+const M_PER_DEG_LON = METERS_PER_DEGREE_LAT * Math.cos(ORIGIN.lat * DEG_TO_RAD);
+
+/** Lokale Meter-Koordinaten (x Ost, z Nord) um ORIGIN. */
+function toMeters(p: { lat: number; lon: number }): { x: number; z: number } {
+  return { x: (p.lon - ORIGIN.lon) * M_PER_DEG_LON, z: (p.lat - ORIGIN.lat) * METERS_PER_DEGREE_LAT };
+}
+
+function distToSegmentM(
+  p: { lat: number; lon: number },
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+): number {
+  const P = toMeters(p);
+  const A = toMeters(a);
+  const B = toMeters(b);
+  const dx = B.x - A.x;
+  const dz = B.z - A.z;
+  const lenSq = dx * dx + dz * dz;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((P.x - A.x) * dx + (P.z - A.z) * dz) / lenSq));
+  return Math.hypot(P.x - (A.x + t * dx), P.z - (A.z + t * dz));
+}
+
+/** True, wenn beide Punkte auf derselben Kante (zwei aufeinanderfolgende Nodes) eines Ways liegen. */
+function liesOnWayEdge(network: StreetNetwork, a: { lat: number; lon: number }, b: { lat: number; lon: number }): boolean {
+  for (const street of network.streets) {
+    for (let i = 0; i < street.nodes.length - 1; i++) {
+      const u = street.nodes[i];
+      const v = street.nodes[i + 1];
+      if (distToSegmentM(a, u, v) < 0.05 && distToSegmentM(b, u, v) < 0.05) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Freiraum links und rechts der Fahrtrichtung, den der Engine-Ersatz meldet,
+ * pro Test steuerbar: lokale x/z der Messstation, `max` = Suchweite. Eine
+ * Zahl gilt für beide Seiten und alle Strahlhöhen, ein Array je Strahlhöhe
+ * (unten, oben), `null` = kein feines Tile, `'no tile'` = gar kein Tile unter
+ * der Station (eine Naht zwischen zwei Tile-Meshes).
+ */
+type Hits = number | number[];
+type Clearance = number | { left: Hits; right: Hits; shiftM?: number; lowRise?: { left: number; right: number } } | null | 'no tile';
+let clearanceAt: (x: number, z: number, max: number) => Clearance = (_x, _z, max) => max;
+
+/** Jede Messstation, die der Engine-Ersatz beantwortet hat: Ort, Richtung, Strahlhöhen, Länge, Deck, Zufahrt, gegangene Höhen. */
+const probeCalls: unknown[][] = [];
+
+/** Minimaler Engine-Ersatz: flaches Gelände, Geo→Lokal als Plattkarte um ORIGIN. */
+function makeEngine(): ThreeTilesEngine {
+  const overlay = new Group();
+  return {
+    getOverlayGroup: () => overlay,
+    getTerrainHeightAtGeo: () => 0,
+    terrain: {
+      // Höhe des gelben Overlays: flaches Gelände.
+      getStreetHeightEstimate: () => 0,
+      measureStreetClearance: (
+        x: number, z: number, ax: number, az: number, heights: readonly number[], max: number, onDeck = false,
+        onApproach: { path: readonly { x: number; z: number }[]; m: number } | null = null,
+        walked: number[] = [],
+      ): StationProbe => {
+        probeCalls.push([x, z, ax, az, [...heights], max, onDeck, onApproach, walked]);
+        const free = clearanceAt(x, z, max);
+        if (free === null) return { unmeasured: 'coarse tile', tileError: 20, left: [], right: [] };
+        if (free === 'no tile') return { unmeasured: 'no tile', tileError: Infinity, left: [], right: [] };
+        const perHeight = (hits: Hits) => (typeof hits === 'number' ? heights.map(() => hits) : hits);
+        const sides = typeof free === 'number' ? { left: free, right: free } : free;
+        const shifted = typeof free === 'object' && free.shiftM !== undefined ? { shiftM: free.shiftM } : {};
+        const lowRise = typeof free === 'object' && free.lowRise !== undefined ? { lowRise: free.lowRise } : {};
+        return { unmeasured: null, tileError: 2, left: perHeight(sides.left), right: perHeight(sides.right), ...shifted, ...lowRise };
+      },
+    },
+    sync: {
+      getOrigin: () => ({ ...ORIGIN, height: 0 }),
+      geoToLocalSimple: (lat: number, lon: number, h: number) => {
+        const m = toMeters({ lat, lon });
+        return new Vector3(m.x, h, -m.z);
+      },
+    },
+    world: {
+      get streetStyle() {
+        return world.devWorld ? DEV_WORLD_STREET_STYLE : TILES_STREET_STYLE;
+      },
+    },
+  } as unknown as ThreeTilesEngine;
+}
+
+function makeNetwork(
+  streets: {
+    id: number;
+    type?: string;
+    width?: number;
+    lanes?: number;
+    bridge?: string;
+    tunnel?: string;
+    covered?: string;
+    layer?: number;
+    nodes: StreetNode[];
+  }[],
+): StreetNetwork {
+  const nodes = new Map<number, StreetNode>();
+  for (const s of streets) for (const n of s.nodes) nodes.set(n.id, n);
+  return {
+    streets: streets.map((s) => ({ ...s, name: `Way ${s.id}`, type: s.type ?? 'residential' })),
+    nodes,
+    bounds: { minLat: 47.99, maxLat: 48.01, minLon: 8.99, maxLon: 9.01 },
+  };
+}
+
+function buildRoute(network: StreetNetwork, spawn: { lat: number; lon: number }, hq: { lat: number; lon: number }) {
+  return buildRouteService(network, spawn, hq).getCachedPath('s1')!;
+}
+
+function buildRouteService(network: StreetNetwork, spawn: { lat: number; lon: number }, hq: { lat: number; lon: number }) {
+  const service = new PathAndRouteService();
+  service.initialize(
+    makeEngine(),
+    network,
+    { lat: hq.lat, lon: hq.lon },
+    (() => false) as never,
+    new OsmStreetService(),
+    null,
+  );
+  service.showPathFromSpawn(spawnPointAt(spawn));
+  return service;
+}
+
+function spawnPointAt(spawn: { lat: number; lon: number }): SpawnPoint {
+  return { id: 's1', name: 'Spawn', color: 0xff0000, lat: spawn.lat, lon: spawn.lon };
+}
+
+/** Measure every station in one go: a run with an unlimited budget, committed. */
+function measure(service: PathAndRouteService): boolean {
+  const run = service.beginClearanceMeasurement();
+  run.step(Infinity);
+  return run.commit();
+}
+
+describe('PathAndRouteService route geometry', () => {
+  // L-förmiger Way mit reinem Shape-Node an der Ecke (id 2), Kreuzungen nur
+  // an den Enden (Node 1 zu Way 100, Node 3 zu Way 300).
+  const n10 = { id: 10, lat: 47.999, lon: 9.0 };
+  const n1 = { id: 1, lat: 48.0, lon: 9.0 };
+  const n2 = { id: 2, lat: 48.001, lon: 9.0 };
+  const n3 = { id: 3, lat: 48.001, lon: 9.0015 };
+  const n30 = { id: 30, lat: 48.001, lon: 9.003 };
+  /** Metres a waypoint between n1 and n2 lies off the street's line there (0 elsewhere) */
+  const offStreetLine = (p: { lat: number; lon: number }) =>
+    p.lat > n1.lat && p.lat < n2.lat ? Math.abs(p.lon - n1.lon) * M_PER_DEG_LON : 0;
+  let network: StreetNetwork;
+
+  beforeEach(() => {
+    grid.ready = false;
+    grid.cellY = () => null;
+    grid.column = () => null;
+    clearanceAt = (_x, _z, max) => max;
+    network = makeNetwork([
+      { id: 100, nodes: [n10, n1] },
+      { id: 200, nodes: [n1, n2, n3] },
+      { id: 300, nodes: [n3, n30] },
+    ]);
+  });
+
+  it('hands the spawn portal the very route the enemies spawn on, starting on the street', () => {
+    // EnemyManager.spawn starts every enemy on path[0] of the cached route;
+    // the portal stands on route[0] of the route it is handed
+    const onRouteBuilt = vi.fn();
+    const service = new PathAndRouteService();
+    service.initialize(
+      makeEngine(), network, { lat: 48.0011, lon: 9.0025 }, (() => false) as never, new OsmStreetService(), onRouteBuilt,
+    );
+    // 7 m east of Way 100, 33 m north of its first node
+    const spawn = { lat: 47.9993, lon: 9.0001 };
+    service.showPathFromSpawn(spawnPointAt(spawn));
+
+    const route = service.getCachedPath('s1')!;
+    expect(onRouteBuilt).toHaveBeenCalledTimes(1);
+    expect(onRouteBuilt.mock.calls[0][0]).toBe('s1');
+    expect(onRouteBuilt.mock.calls[0][1]).toBe(route);
+    // The route starts at the spawn's foot on the street, not on a node of it
+    expect(distToSegmentM(route[0], n10, n1)).toBeLessThan(0.05);
+    expect(distToSegmentM(spawn, route[0], route[0])).toBeCloseTo(distToSegmentM(spawn, n10, n1), 2);
+    expect(distToSegmentM(route[0], n10, n10)).toBeGreaterThan(30);
+  });
+
+  it('says whether a route is cached (hasRoutes, gates the recent-locations list)', () => {
+    const service = new PathAndRouteService();
+    service.initialize(
+      makeEngine(), network, { lat: 48.0011, lon: 9.0025 }, (() => false) as never, new OsmStreetService(), null,
+    );
+    expect(service.hasRoutes()).toBe(false);
+    service.showPathFromSpawn(spawnPointAt({ lat: 47.9993, lon: 9.0 }));
+    expect(service.hasRoutes()).toBe(true);
+    service.clearCache();
+    expect(service.hasRoutes()).toBe(false);
+  });
+
+  it('keeps the corner shape node in the cached route', () => {
+    // HQ gut 10 m nördlich von Way 300.
+    const route = buildRoute(network, { lat: 47.9995, lon: 9.0 }, { lat: 48.0011, lon: 9.0025 });
+    expect(route.some((p) => p.lat === n2.lat && p.lon === n2.lon)).toBe(true);
+  });
+
+  it('runs on OSM way edges everywhere except the final leg to the HQ', () => {
+    const hq = { lat: 48.0011, lon: 9.0025 };
+    const route = buildRoute(network, { lat: 47.9995, lon: 9.0 }, hq);
+
+    expect(route[route.length - 1]).toMatchObject(hq);
+    for (let i = 0; i < route.length - 2; i++) {
+      expect(liesOnWayEdge(network, route[i], route[i + 1]), `segment ${i}`).toBe(true);
+    }
+  });
+
+  it('flags the leg to the HQ, and measures its stations from the height carried on from the street', () => {
+    const hq = { lat: 48.0011, lon: 9.0025 };
+    const service = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq);
+    const route = service.getCachedPath('s1')!;
+    expect(route.slice(0, -2).every((p) => p.offStreet === undefined)).toBe(true);
+    expect(route[route.length - 2].offStreet).toBe(true);
+
+    probeCalls.length = 0;
+    measure(service);
+    // No bridge on the route: the stations on an approach are those of the leg, carried from where it leaves the street.
+    const start = toMeters(route[route.length - 2]);
+    const onLeg = probeCalls.filter((call) => call[7] !== null);
+    expect(onLeg.length).toBeGreaterThan(2);
+    for (const call of onLeg) {
+      const point = call[7] as { path: { x: number; z: number }[]; m: number; start: string };
+      expect(point.start).toBe('street');
+      expect(point.path[0].x).toBeCloseTo(start.x, 3);
+      expect(point.path[0].z).toBeCloseTo(-start.z, 3);
+    }
+    expect(onLeg.length).toBeLessThan(probeCalls.length);
+    // One walk along the leg for its stations in a slice, and one in each slice of a run cut into slices.
+    expect(new Set(onLeg.map((call) => call[8])).size).toBe(1);
+    const sliced = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq);
+    probeCalls.length = 0;
+    const run = sliced.beginClearanceMeasurement();
+    for (let done = false; !done;) done = run.step(0);
+    run.commit();
+    const slicedLeg = probeCalls.filter((call) => call[7] !== null);
+    expect(slicedLeg).toHaveLength(onLeg.length);
+    expect(new Set(slicedLeg.map((call) => call[8])).size).toBe(slicedLeg.length);
+  });
+
+  it('flags no leg in DevWorld, whose columns see no building on its steep terrain', () => {
+    world.devWorld = true;
+    try {
+      const route = buildRoute(network, { lat: 47.9995, lon: 9.0 }, { lat: 48.0011, lon: 9.0025 });
+      expect(route.length).toBeGreaterThan(3);
+      expect(route.every((p) => p.offStreet === undefined)).toBe(true);
+    } finally {
+      world.devWorld = false;
+    }
+  });
+
+  describe('describeRoutes', () => {
+    const hq = { lat: 48.0011, lon: 9.0025 };
+
+    it('splits the route into the OSM ways it runs over', () => {
+      const service = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq);
+      const rows = service.describeRoutes();
+
+      // Way 300 bis zum Abzweig, danach das Stück neben dem Netz zum HQ.
+      expect(rows.map((r) => r.way)).toEqual([100, 200, 300, null]);
+      expect(rows[1]).toMatchObject({ route: 's1', fromIndex: 1, toIndex: 3, type: 'residential' });
+      expect(rows[1].lengthM).toBeGreaterThan(200);
+      expect(rows.every((r) => r.maxCellAboveStreetM === null)).toBe(true);
+    });
+
+    it('reports where the cells sit above the street overlay', () => {
+      const service = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq);
+      // Die Zelle an der Ecke (Node 2) liegt 8 m hoch, etwa auf einem Dach.
+      // Unter 1 m, damit nur der Abtastpunkt genau auf der Ecke sie trifft.
+      const corner = toMeters(n2);
+      grid.ready = true;
+      grid.cellY = (x, z) => (Math.hypot(x - corner.x, -z - corner.z) < 1 ? 8 : 0);
+
+      const rows = service.describeRoutes();
+      expect(rows[1]).toMatchObject({ way: 200, maxCellAboveStreetM: 8, at: '48.001000,9.000000' });
+      expect(rows[0].maxCellAboveStreetM).toBe(0);
+    });
+
+    it('lists the tags that explain a hidden shortcut', () => {
+      network.streets[1] = { ...network.streets[1], type: 'footway', tunnel: 'building_passage', width: 2 };
+      const rows = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq).describeRoutes();
+      expect(rows[1]).toMatchObject({ type: 'footway', tags: 'width=2 tunnel=building_passage' });
+    });
+
+    it('shows the street width, where it came from and the corridor it gave', () => {
+      network.streets[1] = { ...network.streets[1], type: 'primary', lanes: 3 };
+      const rows = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq).describeRoutes();
+      expect(rows[0]).toMatchObject({ way: 100, widthM: 5.5, widthSource: 'highway', corridorM: '5.5' });
+      expect(rows[1]).toMatchObject({ way: 200, widthM: 10, widthSource: 'lanes', corridorM: '10.0' });
+      expect(rows[3]).toMatchObject({ way: null, widthM: null, widthSource: 'inherited', corridorM: '5.5' });
+    });
+  });
+
+  describe('corridor width', () => {
+    const hq = { lat: 48.0011, lon: 9.0025 };
+
+    it('gives each segment the half width of the street it runs over', () => {
+      network = makeNetwork([
+        { id: 100, nodes: [n10, n1] },
+        { id: 200, type: 'primary', width: 12, nodes: [n1, n2, n3] },
+        { id: 300, type: 'footway', nodes: [n3, n30] },
+      ]);
+      const route = buildRoute(network, { lat: 47.9995, lon: 9.0 }, hq);
+
+      // n10, n1, n2, n3, turn-off on way 300, HQ. Residential 5.5 m, the
+      // 12 m width tag, a 2 m footway, one cell wide, the leg to the HQ
+      // keeps the footway's, the HQ ends the route. Nothing is measured yet,
+      // so both sides have the street's half width.
+      expect(route.map((p) => p.corridorLeft)).toEqual([2.75, 6, 6, 1, 1, undefined]);
+      expect(route.map((p) => p.corridorRight)).toEqual([2.75, 6, 6, 1, 1, undefined]);
+    });
+
+    it('marks the segments that run over a bridge', () => {
+      network = makeNetwork([
+        { id: 100, nodes: [n10, n1] },
+        { id: 200, bridge: 'yes', nodes: [n1, n2, n3] },
+        { id: 300, nodes: [n3, n30] },
+      ]);
+      const route = buildRoute(network, { lat: 47.9995, lon: 9.0 }, hq);
+      expect(route.map((p) => p.onBridge === true)).toEqual([false, true, true, false, false, false]);
+    });
+
+    it('widens a short narrow stretch between wider ones', () => {
+      // A 3.3 m footway link (1 m half width) between two residential ways.
+      const n1b = { id: 5, lat: 48.00003, lon: 9.0 };
+      network = makeNetwork([
+        { id: 100, nodes: [n10, n1] },
+        { id: 150, type: 'footway', nodes: [n1, n1b] },
+        { id: 200, nodes: [n1b, n2, n3] },
+        { id: 300, nodes: [n3, n30] },
+      ]);
+      const service = buildRouteService(network, { lat: 47.9995, lon: 9.0 }, hq);
+      expect(service.getCachedPath('s1')!.map((p) => p.corridorLeft)).toEqual([2.75, 2.75, 2.75, 2.75, 2.75, 2.75, undefined]);
+
+      const n1Local = toMeters(n1);
+      const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 1.5))!;
+      expect(why).toMatchObject({ way: 150, unmeasured: 'not measured yet' });
+      expect(why.sides[0]).toMatchObject({
+        streetHalfWidthM: 1, halfWidthM: 2.75, inUseM: 2.75, rule: 'not measured yet: street width, short narrowing closed',
+      });
+    });
+
+    describe('fitted to the tiles', () => {
+      const spawn = { lat: 47.9995, lon: 9.0 };
+      /** Metres north of n1 at a local position (local z points south). */
+      const northOfN1 = (z: number) => -z - toMeters(n1).z;
+
+      beforeEach(() => {
+        network = makeNetwork([
+          { id: 100, nodes: [n10, n1] },
+          { id: 200, type: 'primary', width: 12, nodes: [n1, n2, n3] },
+          { id: 300, nodes: [n3, n30] },
+        ]);
+      });
+
+      it('widens or narrows the corridor to the free space the tiles show', () => {
+        // Facades 5.2 m off everywhere, 4.5 m after the wall margin: more
+        // room than the 5.5 m residential ways get from OSM, less than the
+        // 12 m of way 200.
+        clearanceAt = () => 5.2;
+        const service = buildRouteService(network, spawn, hq);
+
+        expect(measure(service)).toBe(true);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        const route = service.getCachedPath('s1')!;
+
+        // The leg to the HQ runs off the network and keeps the width it inherited.
+        expect(route.map((p) => p.corridorLeft)).toEqual([4.5, 4.5, 4.5, 4.5, 2.75, undefined]);
+        expect(route.map((p) => p.corridorRight)).toEqual([4.5, 4.5, 4.5, 4.5, 2.75, undefined]);
+        expect(service.describeRoutes()[1]).toMatchObject({ way: 200, corridorM: '9.0', leftM: '4.5', rightM: '4.5' });
+      });
+
+      it('gives each side the free space on that side', () => {
+        // From 40 to 80 m north of n1 a wall stands 2.6 m to the right; on
+        // the left the rays run past front gardens without a hit.
+        clearanceAt = (x, z, max) =>
+          Math.abs(x) < 1 && northOfN1(z) > 40 && northOfN1(z) < 80 ? { left: max, right: 2.6 } : max;
+        const service = buildRouteService(network, spawn, hq);
+
+        expect(measure(service)).toBe(true);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        const route = service.getCachedPath('s1')!;
+
+        // 2.6 m to the wall, 2.0 m after the wall margin.
+        const narrow = route.filter((p) => p.corridorRight === 2);
+        expect(narrow).toHaveLength(1);
+        expect(narrow[0].corridorLeft).toBe(7);
+        const start = northOfN1(-toMeters(narrow[0]).z);
+        expect(start).toBeGreaterThan(38);
+        expect(start).toBeLessThan(42);
+        expect(service.describeRoutes()[1]).toMatchObject({
+          way: 200,
+          corridorM: '9.0-14.0',
+          leftM: '7.0',
+          rightM: '2.0-7.0',
+        });
+      });
+
+      it('ignores something narrow that stands in the way for a single station', () => {
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 1 ? 1 : max);
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        expect(service.getCachedPath('s1')!.map((p) => p.corridorLeft)).toEqual([7, 7, 7, 7, 2.75, undefined]);
+      });
+
+      it('lays the enemies\' line in the band the columns leave beside a van on the street', () => {
+        // Open on both sides; the frozen columns show a van 3 m right of the
+        // street's line, 50 m north of n1 (local z points south), 1.5 m over it.
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        const n1Local = toMeters(n1);
+        grid.ready = true;
+        grid.column = (x, z) => {
+          const onVan = Math.abs(x - (n1Local.x + 3)) <= 1 && Math.abs(-z - (n1Local.z + 50)) <= 2.5;
+          const y = onVan ? 1.5 : 0;
+          return { groundY: y, topY: y, tileDepth: 20, tileGeometricError: 2 };
+        };
+        try {
+          expect(service.buildBands()).toMatchObject({ routes: 1, passages: 0 });
+          service.showPathFromSpawn(spawnPointAt(spawn));
+
+          // The band beside the van ends before it, and the enemies' line runs in its middle, left of the street's line.
+          const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+          expect(why.bandKind).toBe('band');
+          expect(why.bandRightM).toBeLessThanOrEqual(2);
+          expect(why.backboneM).toBeLessThanOrEqual(0);
+          expect(why.detourM).toBeLessThan(0);
+          expect(service.corridorState().routes[0].band.length).toBeGreaterThan(0);
+          // The waypoints there run off the street's line, and their corridor keeps off the van.
+          expect(service.getCachedPath('s1')!.some((p) => offStreetLine(p) > 0.5)).toBe(true);
+        } finally {
+          grid.ready = false;
+          grid.column = () => null;
+        }
+      });
+
+      it('forgets the bands with the measurements: the line runs on the street again', () => {
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        grid.ready = true;
+        grid.column = () => ({ groundY: 0, topY: 0, tileDepth: 20, tileGeometricError: 2 });
+        try {
+          service.buildBands();
+          expect(service.corridorState().routes[0].band.length).toBeGreaterThan(0);
+
+          service.clearCorridorMeasurements();
+          measure(service);
+          service.showPathFromSpawn(spawnPointAt(spawn));
+          expect(service.corridorState().routes[0].band).toEqual([]);
+          expect(service.getCachedPath('s1')!.every((p) => offStreetLine(p) < 0.01)).toBe(true);
+        } finally {
+          grid.ready = false;
+          grid.column = () => null;
+        }
+      });
+
+      it('builds no band without a grid: the route keeps the street line and the rays\' widths', () => {
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        expect(service.buildBands()).toMatchObject({ routes: 0, stations: 0 });
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        expect(service.getCachedPath('s1')!.every((p) => offStreetLine(p) < 0.01)).toBe(true);
+      });
+
+      it('traces each slice against its budget: a slow station runs past it, as in Berlin', () => {
+        // 10 ms a station (Berlin, playtest 2026-09-15): a slice takes at least one, whatever the 4 ms budget.
+        let clock = 0;
+        vi.spyOn(performance, 'now').mockImplementation(() => clock);
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        clearanceAt = (_x, _z, max) => {
+          clock += 10;
+          return max;
+        };
+        const service = buildRouteService(network, spawn, hq);
+        corridorTrace.setEnabled(true);
+        const lines: string[] = [];
+        let slices = 1;
+        try {
+          const run = service.beginClearanceMeasurement();
+          while (!run.step(4)) slices++;
+          run.commit();
+        } finally {
+          lines.push(...log.mock.calls.map(([line]) => String(line)).filter((line) => line.includes(' clearance.commit ')));
+          corridorTrace.setEnabled(false);
+          vi.restoreAllMocks();
+        }
+
+        expect(slices).toBeGreaterThan(10);
+        expect(lines[0]).toMatch(new RegExp(` slices=${slices} budgetMs=4 overBudget=${slices} maxSliceMs=10 meanSliceMs=10 msPerStation=10 `));
+      });
+
+      it('traces each route line rebuild with the chain that asked for it', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const service = buildRouteService(network, spawn, hq);
+        corridorTrace.setEnabled(true);
+        const lines: string[] = [];
+        try {
+          corridorTrace.within('rebuild', () => corridorTrace.within('lines', () => service.refreshRouteLines([spawnPointAt(spawn)])));
+        } finally {
+          lines.push(...log.mock.calls.map(([line]) => String(line)).filter((line) => line.startsWith('[CorridorTrace]')));
+          corridorTrace.setEnabled(false);
+          vi.restoreAllMocks();
+        }
+        expect(lines).toEqual([expect.stringMatching(/ routes\.refresh spawns=1 waypoints=\d+ ms=[\d.]+ \| rebuild -> lines$/)]);
+      });
+
+      it('gives a station without a tile between measured ones their width, not the street width', () => {
+        // Playtest 2026-09-13: a residential street (2.75 m from OSM), open
+        // on both sides, and a seam between two tile meshes under one station.
+        network = makeNetwork([
+          { id: 100, nodes: [n10, n1] },
+          { id: 200, nodes: [n1, n2, n3] },
+          { id: 300, nodes: [n3, n30] },
+        ]);
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 1 ? 'no tile' : max);
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        expect(service.getCachedPath('s1')!.map((p) => p.corridorLeft)).toEqual([7, 7, 7, 7, 2.75, undefined]);
+
+        const n1Local = toMeters(n1);
+        const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+        expect(why).toMatchObject({ way: 200, streetWidthM: 5.5, unmeasured: 'no tile' });
+        expect(why.sides[0]).toMatchObject({
+          freeM: null, smoothedM: 7, halfWidthM: 7, rule: 'unmeasured: from neighbours, no wall within the maximum',
+        });
+        const here = why.nearby.find((s) => s.here)!;
+        expect(here).toMatchObject({ leftFreeM: null, leftM: 7, rightM: 7, unmeasured: 'no tile' });
+      });
+
+      it('says when a station was measured beside a seam', () => {
+        clearanceAt = (x, z, max) =>
+          Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 1 ? { left: max, right: max, shiftM: 0.5 } : max;
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+
+        const n1Local = toMeters(n1);
+        expect(service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))).toMatchObject({ unmeasured: null, shiftM: 0.5 });
+        expect(service.explainCorridorAt(n1Local.x, -(n1Local.z + 30))).toMatchObject({ unmeasured: null, shiftM: null });
+      });
+
+      it('names in the log where stations found no tile', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 1 ? 'no tile' : max);
+        measure(buildRouteService(network, spawn, hq));
+        const line = log.mock.calls.map(([l]) => String(l)).find((l) => l.startsWith('[Corridor] clearance:'))!;
+        log.mockRestore();
+
+        const at = / unmeasured=1 \(coarse tile 0\) .* noTile=(-?[\d.]+),(-?[\d.]+)$/.exec(line)!;
+        expect(Number(at[1])).toBeCloseTo(toMeters(n1).x, 0);
+        expect(Math.abs(northOfN1(Number(at[2])) - 50)).toBeLessThan(1.1);
+      });
+
+      it('keeps the street width where no fine tile is loaded, and tries again later', () => {
+        clearanceAt = () => null;
+        const service = buildRouteService(network, spawn, hq);
+        expect(measure(service)).toBe(false);
+
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && northOfN1(z) > 40 && northOfN1(z) < 80 ? 2.6 : max);
+        expect(measure(service)).toBe(true);
+      });
+
+      it('measures the stations again that had no fine tile, and only those', () => {
+        // Facades 2.6 m off from 40 to 80 m north of n1, on way 200. The first
+        // run has fine tiles only up to 60 m.
+        const facades = (x: number, z: number, max: number) =>
+          Math.abs(x) < 1 && northOfN1(z) > 40 && northOfN1(z) < 80 ? 2.6 : max;
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && northOfN1(z) > 60 && northOfN1(z) < 110 ? null : facades(x, z, max));
+        const service = buildRouteService(network, spawn, hq);
+        expect(measure(service)).toBe(true);
+
+        const remeasured: number[] = [];
+        clearanceAt = (x, z, max) => {
+          if (Math.abs(x) < 1) remeasured.push(northOfN1(z));
+          return facades(x, z, max);
+        };
+        expect(measure(service)).toBe(true);
+        expect(remeasured.length).toBeGreaterThan(0);
+        expect(Math.min(...remeasured)).toBeGreaterThan(60);
+
+        // The narrow stretch now runs to 80 m instead of ending at 60.
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        const route = service.getCachedPath('s1')!;
+        const k = route.findIndex((p) => p.corridorLeft === 2);
+        expect(northOfN1(-toMeters(route[k]).z)).toBeGreaterThan(38);
+        expect(northOfN1(-toMeters(route[k]).z)).toBeLessThan(42);
+        expect(northOfN1(-toMeters(route[k + 1]).z)).toBeGreaterThan(78);
+        expect(northOfN1(-toMeters(route[k + 1]).z)).toBeLessThan(82);
+      });
+
+      it('measures a segment once', () => {
+        let calls = 0;
+        clearanceAt = (_x, _z, max) => {
+          calls++;
+          return max;
+        };
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        expect(calls).toBeGreaterThan(100);
+
+        calls = 0;
+        measure(service);
+        expect(calls).toBe(0);
+      });
+
+      it('explains the width at the station nearest to a point', () => {
+        // On way 200 from 20 to 80 m north of n1: a van 2 m to the right in
+        // front of a facade at 6 m; on the left the rays hit nothing.
+        clearanceAt = (x, z, max) =>
+          Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 30 ? { left: max, right: [2, 6] } : max;
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+
+        const n1Local = toMeters(n1);
+        const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+        expect(why).toMatchObject({
+          route: 's1', way: 200, tags: 'width=12', streetWidthM: 12, widthSource: 'width', onStreet: true, unmeasured: null,
+        });
+        expect(why.distanceM).toBeLessThan(1.5);
+        expect(why.sides[0]).toMatchObject({
+          side: 'left', lowHitM: 7, highHitM: 7, wall: false, halfWidthM: 7, inUseM: 7, rule: 'no wall within the maximum',
+        });
+        // The van stops only the low ray, and no raised ground behind it was
+        // reported (no lowRise): the wall is the facade at 6 m, less the margin.
+        expect(why.sides[1]).toMatchObject({
+          side: 'right', lowHitM: 2, highHitM: 6, wall: true, freeM: 6, halfWidthM: 5.5, inUseM: 5.5, rule: 'wall less margin',
+        });
+        expect(why.nearby.filter((s) => s.here)).toHaveLength(1);
+        expect(why.nearby.length).toBe(9);
+      });
+
+      it('narrows the corridor at a car the low ray found with its roof behind the hit, however short', () => {
+        // Playtest 2026-09-14, Rothenburg: a car on two stations 50 m north of
+        // n1, its side 3.2 m right of the centre line, nothing over it; the
+        // column 1 m behind the hit is its roof, 1.2 m up.
+        const car = (rise: number) => (x: number, z: number, max: number): Clearance =>
+          Math.abs(x) < 1 && Math.abs(northOfN1(z) - 50) < 2 ? { left: max, right: [3.2, max], lowRise: { left: NaN, right: rise } } : max;
+        clearanceAt = car(1.2);
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+
+        const narrow = service.getCachedPath('s1')!.filter((p) => p.corridorRight === 2.5);
+        expect(narrow).toHaveLength(1);
+        expect(narrow[0].corridorLeft).toBe(7);
+        const n1Local = toMeters(n1);
+        const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+        expect(why.sides[1]).toMatchObject({
+          side: 'right', lowHitM: 3.2, highHitM: 7, lowRiseM: 1.2, wall: true, freeM: 3.2, halfWidthM: 2.5,
+          rule: 'low obstacle, raised behind, wall less margin',
+        });
+        expect(why.sides[0]).toMatchObject({ side: 'left', lowRiseM: null, wall: false });
+
+        // A fence with the pavement 0.15 m up behind it narrows nothing: the
+        // corridor of open space, the leg to the HQ at its inherited width.
+        clearanceAt = car(0.15);
+        const fence = buildRouteService(network, spawn, hq);
+        measure(fence);
+        fence.showPathFromSpawn(spawnPointAt(spawn));
+        expect(fence.getCachedPath('s1')!.map((p) => p.corridorRight)).toEqual([7, 7, 7, 7, 2.75, undefined]);
+        expect(fence.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!.sides[1])
+          .toMatchObject({ lowRiseM: 0.2, wall: false, freeM: 7, rule: 'no wall within the maximum' });
+      });
+
+      it('judges no low wall on a bridge and on the stretch off its end, which measures against the deck at that end', () => {
+        // Way 200 is a bridge; way 100 runs on from its end at n1, so its
+        // last DECK_APPROACH_M (60 m) follow the height carried from there.
+        network = makeNetwork([
+          { id: 100, nodes: [n10, n1] },
+          { id: 200, type: 'primary', width: 12, bridge: 'yes', nodes: [n1, n2, n3] },
+          { id: 300, nodes: [n3, n30] },
+        ]);
+        // The spawn 100 m south of n1, so way 100 reaches past the stretch.
+        const service = buildRouteService(network, { lat: 47.9991, lon: 9.0 }, hq);
+        probeCalls.length = 0;
+        measure(service);
+
+        const onWay100 = probeCalls.filter(([x, z]) => Math.abs(x as number) < 1 && northOfN1(z as number) < -1);
+        const near = onWay100.filter(([, z]) => northOfN1(z as number) > -59);
+        const far = onWay100.filter(([, z]) => northOfN1(z as number) < -61);
+        expect(near.length).toBeGreaterThan(10);
+        // The bridge end of these stations is n1, where way 200 starts.
+        const atN1 = (deck: unknown) => {
+          const end = deck === null ? null : (deck as { path: { x: number; z: number }[] }).path[0];
+          return end !== null && Math.abs(end.x) < 1 && Math.abs(northOfN1(end.z)) < 1;
+        };
+        expect(near.every((call) => call[6] === false && atN1(call[7]))).toBe(true);
+        expect(far.length).toBeGreaterThan(3);
+        expect(far.every((call) => call[7] === null)).toBe(true);
+        const onDeck = probeCalls.filter((call) => call[6] === true);
+        expect(onDeck.length).toBeGreaterThan(0);
+        expect(onDeck.every((call) => call[7] === null)).toBe(true);
+      });
+
+      it('measures a segment two routes share off a bridge only where both come off it, whichever is first', () => {
+        // Way 250 bridges n1 to nm, way 260 runs straight on north to n2 and
+        // n3; way 270 comes in from the west and turns north at nm.
+        const nm = { id: 4, lat: 48.0005, lon: 9.0 };
+        const nw = { id: 5, lat: 48.0005, lon: 8.9993 };
+        network = makeNetwork([
+          { id: 100, nodes: [n10, n1] },
+          { id: 250, bridge: 'yes', nodes: [n1, nm] },
+          { id: 260, nodes: [nm, n2, n3] },
+          { id: 270, nodes: [nw, nm] },
+          { id: 300, nodes: [n3, n30] },
+        ]);
+        const south = spawnPointAt(spawn);
+        const west: SpawnPoint = { id: 's2', name: 'West', color: 0x00ff00, lat: 48.0005, lon: 8.9995 };
+        /** The bridge ends of the stations from 57 to 90 m north of n1, with the routes shown in this order. */
+        const deckEnds = (...spawns: SpawnPoint[]): unknown[] => {
+          const service = new PathAndRouteService();
+          service.initialize(makeEngine(), network, hq, (() => false) as never, new OsmStreetService(), null);
+          for (const s of spawns) service.showPathFromSpawn(s);
+          probeCalls.length = 0;
+          measure(service);
+          return probeCalls
+            .filter(([x, z]) => Math.abs(x as number) < 1 && northOfN1(z as number) > 57 && northOfN1(z as number) < 90)
+            .map((call) => call[7]);
+        };
+
+        // The route off the bridge alone: they measure against its end.
+        const alone = deckEnds(south);
+        expect(alone.length).toBeGreaterThan(5);
+        expect(alone.every((end) => end !== null)).toBe(true);
+        // With the route from the west the cells there take the ground, and so do the stations.
+        const shared = deckEnds(south, west);
+        expect(shared).toHaveLength(alone.length);
+        expect(shared.every((end) => end === null)).toBe(true);
+        expect(deckEnds(west, south)).toEqual(shared);
+      });
+
+      it('says why a station has no measurement', () => {
+        clearanceAt = () => null;
+        const service = buildRouteService(network, spawn, hq);
+        measure(service);
+
+        const n1Local = toMeters(n1);
+        const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+        expect(why).toMatchObject({ way: 200, unmeasured: 'coarse tile', tileError: 20 });
+        expect(why.sides[0]).toMatchObject({ lowHitM: null, wall: null, freeM: null, halfWidthM: 6, rule: 'unmeasured: street width' });
+      });
+
+      it('counts the stations the measurement could not take, which a run on the fallback level measures', () => {
+        // Way 200 from 60 to 110 m north of n1 has no usable tile.
+        clearanceAt = (x, z, max) => (Math.abs(x) < 1 && northOfN1(z) > 60 && northOfN1(z) < 110 ? null : max);
+        const service = buildRouteService(network, spawn, hq);
+        expect(service.unmeasuredStations()).toBe(0);
+        measure(service);
+        const missing = service.unmeasuredStations();
+        // 50 m at a station every 2 m
+        expect(missing).toBeGreaterThanOrEqual(24);
+        expect(missing).toBeLessThanOrEqual(26);
+
+        // The fallback level has them: only those stations are measured again, and they widen the corridor there.
+        clearanceAt = (_x, _z, max) => max;
+        probeCalls.length = 0;
+        expect(measure(service)).toBe(true);
+        expect(probeCalls).toHaveLength(missing);
+        expect(service.unmeasuredStations()).toBe(0);
+      });
+
+      it('does not measure a tunnel or covered passage and keeps its street width there', () => {
+        network = makeNetwork([
+          { id: 100, nodes: [n10, n1] },
+          { id: 200, type: 'primary', width: 12, tunnel: 'yes', nodes: [n1, n2, n3] },
+          { id: 300, covered: 'yes', nodes: [n3, n30] },
+        ]);
+        // Facades 5.2 m off everywhere; inside a tunnel the rays would hit its walls.
+        const probedOn200: number[] = [];
+        clearanceAt = (x, z) => {
+          if (Math.abs(x) < 1 && northOfN1(z) > 1) probedOn200.push(northOfN1(z));
+          return 5.2;
+        };
+        const service = buildRouteService(network, spawn, hq);
+        expect(measure(service)).toBe(true);
+        service.showPathFromSpawn(spawnPointAt(spawn));
+        const route = service.getCachedPath('s1')!;
+
+        expect(probedOn200).toEqual([]);
+        // n10, n1, n2, n3, turn-off on way 300, HQ: way 100 measured, 200
+        // and 300 at their street width, the leg to the HQ inherits it.
+        expect(route.map((p) => p.inTunnel === true)).toEqual([false, true, true, true, false, false]);
+        expect(route.map((p) => p.corridorLeft)).toEqual([4.5, 6, 6, 2.75, 2.75, undefined]);
+
+        const n1Local = toMeters(n1);
+        const why = service.explainCorridorAt(n1Local.x, -(n1Local.z + 50))!;
+        expect(why).toMatchObject({
+          way: 200, tags: 'width=12 tunnel=yes', inTunnel: true, unmeasured: 'tunnel or covered: not measured',
+        });
+        expect(why.sides[0]).toMatchObject({ halfWidthM: 6, rule: 'tunnel or covered: street width' });
+      });
+
+      describe('in slices', () => {
+        /** Facades 2.6 m off to the right from 40 to 80 m north of n1, nothing on the left. */
+        const facades = (x: number, z: number, max: number): Clearance =>
+          Math.abs(x) < 1 && northOfN1(z) > 40 && northOfN1(z) < 80 ? { left: max, right: 2.6 } : max;
+
+        afterEach(() => vi.restoreAllMocks());
+
+        it('casts the same rays in the same order and gives the same corridor as one go', () => {
+          const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+          clearanceAt = facades;
+          const oneGo = buildRouteService(network, spawn, hq);
+          probeCalls.length = 0;
+          expect(measure(oneGo)).toBe(true);
+          const oneGoProbes = [...probeCalls];
+
+          // Each station costs 1.7 ms on a fake clock, as in the city-centre playtest.
+          let clock = 0;
+          vi.spyOn(performance, 'now').mockImplementation(() => clock);
+          clearanceAt = (x, z, max) => {
+            clock += 1.7;
+            return facades(x, z, max);
+          };
+          const sliced = buildRouteService(network, spawn, hq);
+          probeCalls.length = 0;
+          const run = sliced.beginClearanceMeasurement();
+          let slices = 1;
+          while (!run.step(4)) slices++;
+          expect(run.commit()).toBe(true);
+
+          expect(probeCalls).toEqual(oneGoProbes);
+          // Two stations fit into 4 ms.
+          expect(slices).toBe(Math.ceil(oneGoProbes.length / 2));
+          oneGo.showPathFromSpawn(spawnPointAt(spawn));
+          sliced.showPathFromSpawn(spawnPointAt(spawn));
+          expect(sliced.getCachedPath('s1')).toEqual(oneGo.getCachedPath('s1'));
+          expect(sliced.describeRoutes()).toEqual(oneGo.describeRoutes());
+
+          // The log keeps its fields; the sliced run adds how it was cut up.
+          const [oneGoLog, slicedLog] = log.mock.calls
+            .map(([line]) => String(line))
+            .filter((line) => line.startsWith('[Corridor] clearance:'));
+          expect(slicedLog.split(' in ')[0]).toBe(oneGoLog.split(' in ')[0]);
+          expect(slicedLog).toMatch(new RegExp(`slices=${slices} wall=`));
+          expect(oneGoLog).toMatch(/slices=1 wall=/);
+        });
+
+        it('keeps the corridor in use until the run is committed', () => {
+          clearanceAt = () => 5.2;
+          const service = buildRouteService(network, spawn, hq);
+          const widths = () => service.getCachedPath('s1')!.map((p) => p.corridorLeft);
+          const before = widths();
+
+          const run = service.beginClearanceMeasurement();
+          // A budget of 0 takes one station a step.
+          expect(run.step(0)).toBe(false);
+          expect(run.step(0)).toBe(false);
+          // A route build in between, as after a settled tile batch.
+          service.showPathFromSpawn(spawnPointAt(spawn));
+          expect(widths()).toEqual(before);
+
+          run.step(Infinity);
+          expect(run.commit()).toBe(true);
+          service.showPathFromSpawn(spawnPointAt(spawn));
+          expect(widths()).toEqual([4.5, 4.5, 4.5, 4.5, 2.75, undefined]);
+        });
+
+        it('tells how far a run is: stations tried and stations it set out to measure', () => {
+          vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+          clearanceAt = () => 5.2;
+          const service = buildRouteService(network, spawn, hq);
+
+          const run = service.beginClearanceMeasurement();
+          const total = run.progress.total;
+          expect(total).toBeGreaterThan(2);
+          expect(run.progress).toEqual({ done: 0, total });
+          run.step(0);
+          run.step(0);
+          expect(run.progress).toEqual({ done: 2, total });
+          run.step(Infinity);
+          expect(run.progress).toEqual({ done: total, total });
+        });
+
+        it('bumps the routes epoch when the routes are replaced, not when they are built again', () => {
+          const service = buildRouteService(network, spawn, hq);
+          const epoch = service.routesEpoch();
+          service.refreshRouteLines([spawnPointAt(spawn)]);
+          expect(service.routesEpoch()).toBe(epoch);
+
+          // The spawn moved: the routes are replaced
+          service.clearCache();
+          expect(service.routesEpoch()).toBe(epoch + 1);
+          service.initialize(makeEngine(), network, hq, (() => false) as never, new OsmStreetService(), null);
+          expect(service.routesEpoch()).toBe(epoch + 2);
+        });
+
+        /** `__corridor.probeLod()` times a pass over every station on tiles the corridor does not use. */
+        it('measures every station once more into a list of its own, stores nothing and leaves an open run alone', () => {
+          vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+          clearanceAt = () => 5.2;
+          const service = buildRouteService(network, spawn, hq);
+          expect(measure(service)).toBe(true);
+          const before = service.corridorState();
+          const stations = before.stations.reduce((sum, segment) => sum + segment.left.length, 0);
+          expect(stations).toBeGreaterThan(2);
+          expect(before.stations.flatMap((segment) => segment.tileError)).toEqual(new Array(stations).fill(2));
+
+          // Finer tiles that would narrow the corridor
+          clearanceAt = () => 1.5;
+          const run = service.beginClearanceMeasurement();
+          probeCalls.length = 0;
+          const probes = service.measureAllStations()!;
+
+          expect(probes).toHaveLength(stations);
+          expect(probeCalls).toHaveLength(stations);
+          expect(probes.every((probe) => probe?.left[0] === 1.5)).toBe(true);
+          expect(service.corridorState()).toEqual(before);
+          expect(run.open).toBe(true);
+          expect(run.commit()).toBe(false);
+        });
+
+        it('stores nothing of a cancelled run, the next one measures every station', () => {
+          vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+          clearanceAt = () => 5.2;
+          const service = buildRouteService(network, spawn, hq);
+          const run = service.beginClearanceMeasurement();
+          run.step(0);
+          run.cancel('a tower');
+
+          expect(run.open).toBe(false);
+          expect(run.step(4)).toBe(true);
+          expect(run.commit()).toBe(false);
+          expect(service.unmeasuredStations()).toBe(0);
+          probeCalls.length = 0;
+          expect(measure(service)).toBe(true);
+          expect(probeCalls.length).toBeGreaterThan(100);
+        });
+
+        it('is cancelled when the routes or the measurements are replaced, or another run starts', () => {
+          const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+          const replacements: [string, (service: PathAndRouteService) => void][] = [
+            ['routes replaced', (service) => service.clearCache()],
+            ['measurements cleared', (service) => service.clearCorridorMeasurements()],
+            ['location changed', (service) =>
+              service.initialize(makeEngine(), network, hq, (() => false) as never, new OsmStreetService(), null)],
+            ['disposed', (service) => service.dispose()],
+            ['superseded', (service) => service.beginClearanceMeasurement()],
+          ];
+          for (const [reason, replace] of replacements) {
+            const service = buildRouteService(network, spawn, hq);
+            const run = service.beginClearanceMeasurement();
+            run.step(0);
+            replace(service);
+
+            expect(run.open, reason).toBe(false);
+            expect(run.commit(), reason).toBe(false);
+            expect(String(log.mock.calls.at(-1)?.[0]), reason).toMatch(
+              new RegExp(`^\\[Corridor\\] clearance cancelled \\(${reason}\\): stations=1 of \\d+ `),
+            );
+          }
+        });
+      });
+
+      describe('after the routes were replaced', () => {
+        // A spawn moved in place (LocationFacadeService.applySpawnInPlace):
+        // the cache is cleared and the route built again from the new spawn.
+
+        it('measures the new route only, and only its stations count as waiting', () => {
+          // Way 400 runs on east of n30; the new spawn stands at its end.
+          const n40 = { id: 40, lat: 48.001, lon: 9.0045 };
+          network = makeNetwork([
+            { id: 100, nodes: [n10, n1] },
+            { id: 200, type: 'primary', width: 12, nodes: [n1, n2, n3] },
+            { id: 300, nodes: [n3, n30] },
+            { id: 400, nodes: [n30, n40] },
+          ]);
+          // Way 200 from 60 to 110 m north of n1 is still on coarse tiles.
+          clearanceAt = (x, z, max) => (Math.abs(x) < 1 && northOfN1(z) > 60 && northOfN1(z) < 110 ? null : max);
+          const service = buildRouteService(network, spawn, hq);
+          measure(service);
+          expect(service.unmeasuredStations()).toBeGreaterThan(0);
+
+          service.clearCache();
+          service.showPathFromSpawn(spawnPointAt({ lat: n40.lat, lon: n40.lon }));
+          // The stations still waiting belong to the route that is gone.
+          expect(service.unmeasuredStations()).toBe(0);
+
+          probeCalls.length = 0;
+          expect(measure(service)).toBe(true);
+          // The new route runs east of way 200 (x up to 112 m) all the way.
+          expect(probeCalls.length).toBeGreaterThan(0);
+          expect(probeCalls.every(([x]) => (x as number) > 150)).toBe(true);
+        });
+
+        it('keeps what was measured for the segments a new route shares', () => {
+          const service = buildRouteService(network, spawn, hq);
+          measure(service);
+
+          service.clearCache();
+          service.showPathFromSpawn(spawnPointAt(spawn));
+          probeCalls.length = 0;
+          expect(measure(service)).toBe(false);
+          expect(probeCalls).toEqual([]);
+        });
+      });
+    });
+  });
+
+  it('leaves a diagonal street at the point closest to the HQ', () => {
+    // Diagonale Straße A→B (149 m Ost, 111 m Nord). Die Länge muss in Metern
+    // projiziert werden, sonst wandert der Abzweig einige Meter die Straße entlang.
+    const s = { id: 1, lat: 47.999, lon: 9.0 };
+    const a = { id: 2, lat: 48.0, lon: 9.0 };
+    const b = { id: 3, lat: 48.001, lon: 9.002 };
+    const c = { id: 4, lat: 48.002, lon: 9.002 };
+    const diagonal = makeNetwork([
+      { id: 100, nodes: [s, a] },
+      { id: 200, nodes: [a, b] },
+      { id: 300, nodes: [b, c] },
+    ]);
+    // 20 m senkrecht neben der Mitte von A→B.
+    const hq = { lat: 48.000644, lon: 9.000841 };
+
+    const route = buildRoute(diagonal, { lat: 47.9995, lon: 9.0 }, hq);
+    const turnOff = route[route.length - 2];
+
+    const shortest = distToSegmentM(hq, a, b);
+    expect(shortest).toBeGreaterThan(19);
+    expect(distToSegmentM(turnOff, a, b)).toBeLessThan(0.05);
+    expect(Math.hypot(toMeters(turnOff).x - toMeters(hq).x, toMeters(turnOff).z - toMeters(hq).z))
+      .toBeCloseTo(shortest, 1);
+  });
+});
+
+/**
+ * Playtest 2026-09-15, Erlenbach (D2): the route on Weinsberger Straße runs
+ * under the A6, a bridge that is no way of the route. The photogrammetry is
+ * filled under most of the deck; cells, red line and enemies stood on it.
+ */
+describe('PathAndRouteService under a bridge of no route way', () => {
+  const n10 = { id: 10, lat: 47.999, lon: 9.0 };
+  const n1 = { id: 1, lat: 48.0, lon: 9.0 };
+  const n2 = { id: 2, lat: 48.001, lon: 9.0 };
+  const n3 = { id: 3, lat: 48.001, lon: 9.0015 };
+  const n30 = { id: 30, lat: 48.001, lon: 9.003 };
+  /** The ends of a motorway bridge across way 200, 44.7 m long. */
+  const west = { id: 901, lat: 48.0005, lon: 8.9997 };
+  const east = { id: 902, lat: 48.0005, lon: 9.0003 };
+  const spawn = { lat: 47.9995, lon: 9.0 };
+  const hq = { lat: 48.0011, lon: 9.0025 };
+  /** How far north of n1 the bridge crosses way 200, and where that lies in local z (south). */
+  const bridgeN = toMeters(west).z - toMeters(n1).z;
+  const deckZ = -toMeters(west).z;
+  const north = (p: { lat: number; lon: number }) => toMeters(p).z - toMeters(n1).z;
+  let network: StreetNetwork;
+
+  const column = (groundY: number, topY = groundY): ColumnSample => ({ groundY, topY, tileDepth: 20, tileGeometricError: 2 });
+  /**
+   * The deck `top` over the street, 16 m wide across local z = deckZ and
+   * filled down to the street but for 1.5 m at each edge; the street at
+   * `street(d)`, `d` metres across the deck.
+   */
+  const deck = (top: number, street: (d: number) => number) => (_x: number, z: number): ColumnSample => {
+    const d = Math.abs(z - deckZ);
+    return d < 6.5 ? column(top) : d < 8 ? column(street(d), top) : column(street(d));
+  };
+
+  function cellsOf(route: RouteWaypoint[], columns: (x: number, z: number) => ColumnSample): GlobalRouteGrid {
+    const cells = new GlobalRouteGrid();
+    cells.initialize(columns as never, makeEngine().sync as never);
+    cells.generateFromRoutes([route]);
+    return cells;
+  }
+
+  beforeEach(() => {
+    grid.ready = false;
+    grid.cellY = () => null;
+    grid.column = () => null;
+    clearanceAt = (_x, _z, max) => max;
+    network = makeNetwork([
+      { id: 100, nodes: [n10, n1] },
+      { id: 200, type: 'secondary', lanes: 2, nodes: [n1, n2, n3] },
+      { id: 300, nodes: [n3, n30] },
+      { id: 900, type: 'motorway', lanes: 3, bridge: 'yes', layer: 1, nodes: [west, east] },
+    ]);
+  });
+
+  it('runs under the bridge like a short tunnel: not measured, at the street width, and says so', () => {
+    const probedUnder: number[] = [];
+    clearanceAt = (x, z, max) => {
+      const n = -z - toMeters(n1).z;
+      if (Math.abs(x) < 1 && Math.abs(n - bridgeN) < 9) probedUnder.push(n);
+      return max;
+    };
+    const service = buildRouteService(network, spawn, hq);
+    expect(measure(service)).toBe(true);
+    service.showPathFromSpawn(spawnPointAt(spawn));
+    const route = service.getCachedPath('s1')!;
+
+    // 9 m either side of the bridge: half its 10 m (3 lanes) and 4 m for the edges of the deck.
+    const under = route.filter((p) => p.inTunnel);
+    expect(under).toHaveLength(1);
+    const i = route.indexOf(under[0]);
+    expect(north(route[i])).toBeCloseTo(bridgeN - 9, 1);
+    expect(north(route[i + 1])).toBeCloseTo(bridgeN + 9, 1);
+    // Secondary with 2 lanes, 7 m; the rest measured at 7 m either side.
+    expect(route[i]).toMatchObject({ corridorLeft: 3.5, corridorRight: 3.5 });
+    expect(route[i - 1]).toMatchObject({ corridorLeft: 7, corridorRight: 7 });
+    expect(probedUnder).toEqual([]);
+
+    const why = service.explainCorridorAt(0, deckZ)!;
+    expect(why).toMatchObject({ way: 200, inTunnel: true, underWay: 900, unmeasured: 'under way 900: not measured' });
+    expect(why.sides[0]).toMatchObject({ halfWidthM: 3.5, rule: 'under way 900: street width' });
+  });
+
+  it('puts the cells under a filled deck on the street, not on the deck', () => {
+    const route = buildRoute(network, spawn, hq);
+    const cells = cellsOf(route, deck(6, () => 0));
+    // Cell centres 0.7 to 6.7 m from the middle of the deck.
+    for (let z = -61; z <= -49; z += 2) {
+      for (const x of [-1, 1]) {
+        expect(cells.getCellAt(x, z), `${x}, ${z}`).toMatchObject({ surface: 'tunnel' });
+        expect(cells.getCellAt(x, z)!.terrainHeight, `${x}, ${z}`).toBeCloseTo(0, 6);
+      }
+    }
+    // The red line takes its heights at the waypoints, the enemies from the cells.
+    for (const p of route.filter((w) => Math.abs(north(w) - bridgeN) < 10)) {
+      expect(cells.getGroundLocalYAt(toMeters(p).x, -toMeters(p).z)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('follows a street lowered under the deck where columns at its edges show it', () => {
+    // 1.5 m lower under the deck, back up 9 to 13 m across; the portals 11 m across at -0.75 m.
+    const street = (d: number) => (d <= 9 ? -1.5 : d >= 13 ? 0 : -1.5 + ((d - 9) / 4) * 1.5);
+    const cells = cellsOf(buildRoute(network, spawn, hq), deck(4.5, street));
+    for (let z = -61; z <= -49; z += 2) expect(cells.getCellAt(1, z)!.terrainHeight, `${z}`).toBeCloseTo(-1.5, 6);
+  });
+
+  it('keeps a route over the bridge on its deck', () => {
+    // The bridge as a way of the route, ways 800 and 850 on and off it; way 200 runs under it.
+    const w0 = { id: 801, lat: 48.0005, lon: 8.999 };
+    const w3 = { id: 851, lat: 48.0005, lon: 9.001 };
+    const overIt = makeNetwork([
+      { id: 800, nodes: [w0, west] },
+      { id: 900, type: 'motorway', lanes: 3, bridge: 'yes', layer: 1, nodes: [west, east] },
+      { id: 850, nodes: [east, w3] },
+      { id: 200, type: 'secondary', lanes: 2, nodes: [n1, n2] },
+    ]);
+    const route = buildRoute(overIt, { lat: 48.0005, lon: 8.9991 }, { lat: 48.0006, lon: 9.0011 });
+    expect(route.some((p) => p.onBridge)).toBe(true);
+    expect(route.some((p) => p.inTunnel)).toBe(false);
+
+    const cells = cellsOf(route, deck(6, () => 0));
+    for (const x of [-15, -1, 1, 15]) {
+      expect(cells.getCellAt(x, deckZ), `${x}`).toMatchObject({ surface: 'deck', terrainHeight: 6 });
+    }
+  });
+});
+
+describe('PathAndRouteService: spawns without a route (TODO E232)', () => {
+  const route = (lat: number): RouteWaypoint[] => [{ lat, lon: 9 }, { lat: 48, lon: 9 }];
+  const spawns = [{ id: 's1', name: 'North' }, { id: 's2', name: 'Harbour' }, { id: 's3', name: 'Station' }];
+  const banner = () => (inject(UIStore) as unknown as { notice: { value: { text: string; tone?: string } | null } }).notice;
+
+  beforeEach(() => {
+    banner().value = null;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the spawns without one in the banner, warns and keeps it up through the load', () => {
+    const service = new PathAndRouteService();
+    service.adoptPaths(new Map([['s1', route(48.01)]]));
+    service.warnUnroutedSpawns(spawns);
+    expect(banner().value).toEqual({ text: unroutedSpawnsText(['Harbour', 'Station']), tone: 'warn' });
+    expect(banner().value!.text).toContain('Harbour and Station');
+  });
+
+  it('says nothing when every spawn has one, nor when none has (the load blocks then)', () => {
+    const service = new PathAndRouteService();
+    service.adoptPaths(new Map(spawns.map((spawn, i) => [spawn.id, route(48.01 + i * 0.001)])));
+    service.warnUnroutedSpawns(spawns);
+    expect(banner().value).toBeNull();
+    service.adoptPaths(new Map());
+    service.warnUnroutedSpawns(spawns);
+    expect(banner().value).toBeNull();
+    expect(service.hasRoutes()).toBe(false);
+  });
+
+  it('counts a route of a single point as none', () => {
+    const service = new PathAndRouteService();
+    service.adoptPaths(new Map([['s1', route(48.01)], ['s2', [{ lat: 48.02, lon: 9 }]]]));
+    service.warnUnroutedSpawns(spawns.slice(0, 2));
+    expect(banner().value!.text).toBe(unroutedSpawnsText(['Harbour']));
+  });
+
+  it('reads one spawn and several apart', () => {
+    expect(unroutedSpawnsText(['Harbour'])).toMatch(/^No street leads from Harbour to the HQ: it sends/);
+    expect(unroutedSpawnsText(['A', 'B', 'C'])).toMatch(/^No street leads from A, B and C to the HQ: they send/);
+  });
+});

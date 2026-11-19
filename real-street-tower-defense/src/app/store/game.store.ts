@@ -1,0 +1,222 @@
+import { Injectable, computed, signal } from '@angular/core';
+import { GAME_BALANCE, closeCallHp } from '../configs/game-balance.config';
+import { Tower } from '../entities/tower.entity';
+import type { TowerTypeId } from '../configs/tower-types.config';
+import { GamePhase } from './tower-defense.store.types';
+import type { DecisionExplanation } from '../director/wave-explanation';
+import type { RunSummary } from '../run-log/run-summary';
+import {
+  ABILITY_IDS,
+  AbilityId,
+  AbilityStatus,
+  lockedAbilityStatus,
+} from '../configs/abilities.config';
+import { HeroStatus, initialHeroStatus } from '../configs/hero.config';
+
+/** Every ability locked, as at the start of a run. */
+function lockedAbilities(): Record<AbilityId, AbilityStatus> {
+  return Object.fromEntries(
+    ABILITY_IDS.map((id) => [id, lockedAbilityStatus(id)]),
+  ) as Record<AbilityId, AbilityStatus>;
+}
+
+@Injectable({ providedIn: 'root' })
+export class GameStore {
+  /** Player credits (gold) */
+  readonly credits = signal<number>(GAME_BALANCE.player.startCredits);
+
+  /** Base health points */
+  readonly baseHealth = signal<number>(GAME_BALANCE.player.startHealth);
+
+  /** The run's HQ maximum: the game's, or the world's (RunRules.hqHealth), set when the world opens */
+  readonly maxHealth = signal<number>(GAME_BALANCE.player.startHealth);
+
+  /** Current game phase */
+  readonly phase = signal<GamePhase>('setup');
+
+  /** Current wave number (0 = no wave started yet) */
+  readonly waveNumber = signal<number>(0);
+
+  /** Number of enemies currently alive */
+  readonly enemiesAlive = signal<number>(0);
+
+  /**
+   * Enemies the running wave brings in total, as announced by wave:started.
+   * 0 outside a wave and for manual debug waves, which announce no count.
+   */
+  readonly waveEnemyTotal = signal<number>(0);
+
+  /**
+   * Enemies of the running wave not yet killed or through to the HQ: the
+   * living ones plus those still to spawn. Drives the "N left" bar on the
+   * wave button.
+   */
+  readonly waveEnemiesLeft = signal<number>(0);
+
+  /**
+   * Player abilities by id: unlocked, charges, recharge progress, strike on
+   * its way. Written from the AbilityManager's `ability:state-changed`.
+   */
+  readonly abilities = signal<Record<AbilityId, AbilityStatus>>(lockedAbilities());
+
+  /**
+   * The hero: unlocked, hired, level, kills, ammo. Written from the
+   * HeroManager's `hero:state-changed`.
+   */
+  readonly hero = signal<HeroStatus>(initialHeroStatus());
+
+  /** Currently selected tower (for info panel / upgrades) */
+  readonly selectedTower = signal<Tower | null>(null);
+
+  /** Selected tower ID shortcut */
+  readonly selectedTowerId = computed(() => this.selectedTower()?.id ?? null);
+
+  /**
+   * The tower the player sits in and aims by hand (docs/TOWER_CONTROL.md),
+   * null when none. Written from the TowerLifecycle's `tower:manned`.
+   */
+  readonly mannedTowerId = signal<string | null>(null);
+
+  /**
+   * Zählt hoch, wenn der gewählte Tower einen Kill bekommt oder aufgewertet
+   * wird. Tower sind mutable Entities ohne Signale; die Sidebar leitet Kills
+   * und Stats aus dieser Revision ab.
+   */
+  readonly selectedTowerRevision = signal<number>(0);
+
+
+  /** Total placed tower count */
+  readonly towerCount = signal<number>(0);
+
+  /**
+   * The one-per-map buildings standing on the map (TowerTypeConfig.unique),
+   * written from `tower:placed` and `tower:sold` like the tower count.
+   */
+  readonly placedUniqueTypes = signal<ReadonlySet<TowerTypeId>>(new Set());
+
+  /** Show game over overlay screen */
+  readonly showGameOverScreen = signal<boolean>(false);
+
+  /** Numbers of the run that just ended, set on game:over, null otherwise */
+  readonly runSummary = signal<RunSummary | null>(null);
+
+  /**
+   * Counts up whenever credits and HQ health are set without play: a new
+   * run (restart, a new place) or a restored state (a load, a coop resync, a
+   * replay's seek). The header shows such figures at once, without the
+   * rising change, the counting or the hit flash.
+   */
+  readonly stateJumps = signal<number>(0);
+
+  /** Training mode timescale (1.0 = normal, up to 75x); the game loop hands it to the simulation each frame */
+  readonly gameSpeed = signal<number>(1.0);
+
+  /** The timescale, held within 0.1 and 75 (the bots' and the bot debugger's) */
+  setGameSpeed(scale: number): void {
+    this.gameSpeed.set(Math.max(0.1, Math.min(75, scale)));
+  }
+
+  /**
+   * Game time stands still: no sub-steps, so no spawns, combat, projectiles
+   * or research. Rendering, camera and UI keep running. Separate from the
+   * timescale, whose floor is 0.1, so resuming returns to the chosen speed.
+   */
+  readonly paused = signal<boolean>(false);
+
+  /**
+   * The pause leaves the sound loops running: the boss intro pauses the game
+   * to show the boss, whose walk and voice loops should be heard meanwhile.
+   * Set only by BossIntroService, together with `paused`.
+   */
+  readonly pauseKeepsLoops = signal<boolean>(false);
+
+  /**
+   * Whole seconds of game time until the auto-started next wave, null while
+   * nothing counts down. Written by GameLoopFacadeService.
+   */
+  readonly autoWaveSecondsLeft = signal<number | null>(null);
+
+  /**
+   * Phase 5.14: Skip 3D rendering to free CPU/GPU for more parallel training
+   * clients. Gameplay simulation still runs (sub-step loop is decoupled from
+   * render loop), but `renderer.render()` + `tilesRenderer.update()` + all
+   * per-frame visual updates are no-ops. Angular UI continues to update.
+   */
+  readonly renderingEnabled = signal<boolean>(true);
+
+  // NOTE: botEnabled, botSkillLevel, botAutoMode are owned by BotClientService
+  // (the writer). Component reads them directly from that service.
+
+  /** AI Wave Director enabled */
+  /**
+   * On by default: the rule-based wave director needs no model and no network,
+   * so there is no startup window in which it is unavailable.
+   */
+  readonly directorEnabled = signal<boolean>(true);
+
+  /**
+   * Why the director planned the current wave, shown as "Why this wave" in the
+   * wave debug window. Null when the wave did not come from the director.
+   */
+  readonly waveExplanation = signal<DecisionExplanation | null>(null);
+
+  /** The world rolls itself anew in place (capabilities.regenerate, DevWorld) */
+  readonly worldRegenerating = signal<boolean>(false);
+
+  /** Whether a wave is currently active */
+  readonly waveActive = computed(() => this.phase() === 'wave');
+
+  /** Whether the game is over */
+  readonly isGameOver = computed(() => this.phase() === 'gameover');
+
+  /** Whether the game has started (at least one wave played) */
+  readonly gameStarted = computed(() => this.waveNumber() > 0 || this.phase() !== 'setup');
+
+  /** Health percentage (0..100) */
+  readonly healthPercent = computed(() =>
+    Math.round((this.baseHealth() / this.maxHealth()) * 100)
+  );
+
+  /** Health is critical — same threshold the close-call bonus uses */
+  readonly healthCritical = computed(
+    () => this.baseHealth() <= closeCallHp(this.maxHealth())
+  );
+
+  /**
+   * Reset game state to initial values.
+   * Called on game restart.
+   */
+  resetGameState(): void {
+    this.stateJumps.update((n) => n + 1);
+    this.credits.set(GAME_BALANCE.player.startCredits);
+    this.baseHealth.set(this.maxHealth());
+    this.phase.set('setup');
+    this.waveNumber.set(0);
+    this.enemiesAlive.set(0);
+    this.waveEnemyTotal.set(0);
+    this.waveEnemiesLeft.set(0);
+    this.abilities.set(lockedAbilities());
+    this.hero.set(initialHeroStatus());
+    this.selectedTower.set(null);
+    this.mannedTowerId.set(null);
+    this.towerCount.set(0);
+    this.placedUniqueTypes.set(new Set());
+    this.showGameOverScreen.set(false);
+    this.runSummary.set(null);
+    this.waveExplanation.set(null);
+    this.paused.set(false);
+    this.pauseKeepsLoops.set(false);
+    this.autoWaveSecondsLeft.set(null);
+  }
+
+  /**
+   * Full reset including UI state.
+   * Used for complete teardown.
+   */
+  resetAll(): void {
+    this.resetGameState();
+    this.gameSpeed.set(1.0);
+    this.directorEnabled.set(true);
+    this.worldRegenerating.set(false);
+  }
+}

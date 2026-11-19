@@ -1,0 +1,124 @@
+// Assets do jogo permanecem estáticos; a entrada usa o mesmo renderer Astro do site.
+// Usage: node tools/eval/serve.mjs [port]
+import http from 'node:http';
+import net from 'node:net';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
+import { dev } from 'astro';
+import { moduleCacheManifest } from '../../scripts/module-cache.mjs';
+import { serveStudioPack } from '../../scripts/studio-pack-serving.mjs';
+import { rotaDoCaminho } from '../../public/js/rotas.js';
+import { criarPasseMock } from './passe-mock.mjs';
+
+const PORT = parseInt(process.argv[2] || '8123', 10);
+// PASSE_MOCK=conta|visitante: /api/passe sai do mock (passe-mock.mjs) até o backend do passe publicar.
+// PASSE_MOCK_XP=16750 PASSE_MOCK_CLAIMED= (lista vazia ou "1,2"): conta no nível 10 com 10 resgates, como
+// depois da migration 096. POST /__passe-mock {xp, progresso} muda o servidor falso no meio da sessão
+// (XP de partida, missão concluída) para as capturas do pós-partida e da celebração.
+const passeMock = process.env.PASSE_MOCK ? criarPasseMock({
+  autenticado: process.env.PASSE_MOCK !== 'visitante',
+  ...(process.env.PASSE_MOCK_XP ? { xp: Number(process.env.PASSE_MOCK_XP) } : {}),
+  ...('PASSE_MOCK_CLAIMED' in process.env ? { claimed: process.env.PASSE_MOCK_CLAIMED.split(',').filter(Boolean).map(Number) } : {}),
+}) : null;
+const ROOT = 'public';
+const ASTRO = 'src/pages/index.astro';
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.wasm': 'application/wasm', '.txt': 'text/plain' };
+
+const CHARACTER_EVAL_SHELL = `<!doctype html>
+<meta charset="utf-8">
+<title>character eval shell</title>
+<script type="importmap">
+{"imports":{"three":"/vendor/three.module.js","three/addons/":"/vendor/addons/"}}
+</script>`;
+
+// PR807: o parser parcial não executa componentes. Não simular HTML ou autenticação.
+const startAstro = async manifest => {
+  const reservation = net.createServer();
+  await new Promise((resolve, reject) => { reservation.once('error', reject); reservation.listen(0, '127.0.0.1', resolve); });
+  const port = reservation.address().port;
+  await new Promise((resolve, reject) => reservation.close(error => error ? reject(error) : resolve()));
+  return dev({ server: { host: '127.0.0.1', port }, logLevel: 'error', vite: {
+    cacheDir: '.astro/eval-vite', define: { __MANIFESTO_JS__: JSON.stringify(manifest) },
+    server: { strictPort: true, ws: { host: '127.0.0.1', clientPort: port } },
+  } });
+};
+const completeModuleManifest = () => {
+  const main = moduleCacheManifest();
+  const vendor = moduleCacheManifest('public/vendor');
+  return { ...main, vendorModules: vendor.modules, vendorRevision: vendor.revision };
+};
+const initial = completeModuleManifest();
+let revision = `${initial.revision}:${initial.vendorRevision}`;
+let astro = await startAstro(initial);
+let refresh = null;
+async function currentRenderer() {
+  if (refresh) await refresh;
+  const manifest = completeModuleManifest();
+  const nextRevision = `${manifest.revision}:${manifest.vendorRevision}`;
+  if (nextRevision !== revision) {
+    refresh = (async () => {
+      await astro.stop();
+      astro = await startAstro(manifest);
+      revision = nextRevision;
+    })();
+    try { await refresh; } finally { refresh = null; }
+  }
+  return astro;
+}
+const server = http.createServer(async (req, res) => {
+  try {
+    /* Pacotes do Studio (STUDIO_PACK_ROOT, fora de public/): o handler recebe o caminho
+       CRU (sem normalizar `..` nem decodificar) e decide sozinho: canônico, contido,
+       no-store. Sem raiz → 404. Mesmo handler do dev server do Astro. */
+    const rawPath = String(req.url).split(/[?#]/, 1)[0];
+    if (rawPath.startsWith('/packs/')) return await serveStudioPack(req, res, { rawPath: rawPath.slice('/packs'.length) });
+    const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (passeMock && p === '/__passe-mock' && req.method === 'POST') {
+      let texto = '';
+      for await (const parte of req) texto += parte;
+      passeMock.definir(JSON.parse(texto || '{}'));
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(passeMock.status()));
+      return;
+    }
+    if (passeMock && p === '/api/passe') {
+      let texto = '';
+      for await (const parte of req) texto += parte;
+      const { status, body } = passeMock.handle(req.method, texto);
+      res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(body));
+      return;
+    }
+    // Rotas fixas do hub (/loja, /jogar/multiplayer...) saem do mesmo renderer, como no build (ADR 0008).
+    if (p === '/' || rotaDoCaminho(p) || /^\/(?:api\/|private-assets\/|@|src\/|node_modules\/|\.astro\/)/.test(p)) {
+      const renderer = await currentRenderer();
+      renderer.handle(req, res);
+      return;
+    }
+    if (p === '/eval-character.html') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(CHARACTER_EVAL_SHELL);
+    }
+    const file = normalize(join(ROOT, p));
+    if (!file.startsWith(ROOT)) throw new Error('path');
+    const data = await readFile(file);
+    res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
+    res.end(data);
+  } catch (error) {
+    console.error('[serve]', req.url, '->', error?.message || error);
+    if (!res.headersSent) res.writeHead(404);
+    res.end('404');
+  }
+});
+server.listen(PORT, '127.0.0.1', () => console.log(`eval server -> http://localhost:${PORT}`));
+let stopping = false;
+async function stop() {
+  if (stopping) return;
+  stopping = true;
+  server.close();
+  if (refresh) await refresh.catch(() => {});
+  await astro.stop();
+  process.exit(0);
+}
+process.on('SIGTERM', stop);
+process.on('SIGINT', stop);

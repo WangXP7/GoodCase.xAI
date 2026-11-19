@@ -1,0 +1,219 @@
+/**
+ * Vehicle audio identity: which powertrain, running gear, turret drive and
+ * crew language a fleet row sounds like (a mount's loader is weaponAudio.ts's).
+ *
+ * Pure and boot-light: it reads only the plain spec fields every fleet row
+ * already carries (id, nation, era, role, mass, power) and never imports
+ * the fleet builders. The families follow the real installations — an Abrams
+ * whines because the AGT1500 is a gas turbine, a T-64 howls because the 5TDF
+ * is a two-stroke opposed-piston diesel, an M60 hisses through the cooling
+ * fans of its air-cooled AVDS-1790.
+ */
+
+import { countryOfVehicle, type CountryId } from '../sim/countries.ts';
+import { tankSeedId } from '../vehicles/tankIdAliases.ts';
+
+type EngineFamilyId =
+  | 'turbine_agt'
+  | 'turbine_gtd'
+  | 'diesel_v12_soviet'
+  | 'diesel_two_stroke'
+  | 'diesel_v12_modern'
+  | 'diesel_v12_coldwar'
+  | 'diesel_aircooled'
+  | 'diesel_ifv'
+  | 'gasoline_v12';
+
+export const ENGINE_FAMILY_IDS: readonly EngineFamilyId[] = Object.freeze([
+  'turbine_agt', 'turbine_gtd', 'diesel_v12_soviet', 'diesel_two_stroke',
+  'diesel_v12_modern', 'diesel_v12_coldwar', 'diesel_aircooled', 'diesel_ifv', 'gasoline_v12',
+]);
+
+/** The packs the game's countries speak (COUNTRY_CREW). */
+export type NationalCrewLanguage =
+  | 'en-US' | 'en-GB' | 'de' | 'ru' | 'uk' | 'zh' | 'fr'
+  | 'sv' | 'ja' | 'ko' | 'it' | 'pl' | 'he'
+  | 'da' | 'pt-BR' | 'en-AU' | 'af';
+
+/**
+ * Packs for languages with no country in the game (crew-languages-270): no hull speaks one by default; a player chooses
+ * it in Settings. Each speaks as one real army's armoured crews (docs/AUDIO.md). Indonesian is `id-ID` because `id` is
+ * the crew script's line-id key.
+ */
+export type WorldCrewLanguage =
+  | 'es-ES' | 'es-419' | 'pt-PT' | 'nl' | 'no' | 'fi' | 'el' | 'cs' | 'hu' | 'ro' | 'tr'
+  | 'ar' | 'fa' | 'hi' | 'ur' | 'bn' | 'id-ID' | 'ms' | 'vi' | 'th' | 'fil';
+
+export type CrewLanguage = NationalCrewLanguage | WorldCrewLanguage;
+
+export const WORLD_CREW_LANGUAGES: readonly WorldCrewLanguage[] = Object.freeze([
+  'es-ES', 'es-419', 'pt-PT', 'nl', 'no', 'fi', 'el', 'cs', 'hu', 'ro', 'tr',
+  'ar', 'fa', 'hi', 'ur', 'bn', 'id-ID', 'ms', 'vi', 'th', 'fil',
+]);
+
+export const CREW_LANGUAGES: readonly CrewLanguage[] = Object.freeze([
+  'en-US', 'en-GB', 'de', 'ru', 'uk', 'zh', 'fr', 'sv', 'ja', 'ko', 'it', 'pl', 'he',
+  'da', 'pt-BR', 'en-AU', 'af',
+  ...WORLD_CREW_LANGUAGES,
+]);
+
+export type TrackClass = 'light' | 'heavy';
+export type TurretDrive = 'electric' | 'hydraulic';
+export type ShiftStyle = 'manual' | 'automatic' | 'none';
+
+/** Powertrain behaviour the RPM model and the layer mixer read. */
+export interface EngineFamilyProfile {
+  readonly id: EngineFamilyId;
+  /** Engine is a gas turbine: no gears, slow spool, whine follows N2. */
+  readonly turbine: boolean;
+  readonly idleRpm: number;
+  readonly maxRpm: number;
+  /** Forward gears simulated for audible shifts (0 = continuous). */
+  readonly gears: number;
+  readonly shift: ShiftStyle;
+  /** Time constants for RPM rise and fall (seconds). */
+  readonly spoolUpS: number;
+  readonly spoolDownS: number;
+  /** Procedural overlays mixed on top of the sampled bank. */
+  readonly whine: number;
+  readonly fan: number;
+}
+
+export const ENGINE_FAMILIES: Readonly<Record<EngineFamilyId, EngineFamilyProfile>> = Object.freeze({
+  turbine_agt: Object.freeze({ id: 'turbine_agt', turbine: true, idleRpm: 0.35, maxRpm: 1, gears: 0, shift: 'none', spoolUpS: 1.25, spoolDownS: 2.4, whine: 0.9, fan: 0 }),
+  turbine_gtd: Object.freeze({ id: 'turbine_gtd', turbine: true, idleRpm: 0.32, maxRpm: 1, gears: 0, shift: 'none', spoolUpS: 1.6, spoolDownS: 2.8, whine: 0.75, fan: 0 }),
+  diesel_v12_soviet: Object.freeze({ id: 'diesel_v12_soviet', turbine: false, idleRpm: 0.3, maxRpm: 1, gears: 6, shift: 'manual', spoolUpS: 0.32, spoolDownS: 0.55, whine: 0.1, fan: 0.12 }),
+  diesel_two_stroke: Object.freeze({ id: 'diesel_two_stroke', turbine: false, idleRpm: 0.34, maxRpm: 1, gears: 6, shift: 'manual', spoolUpS: 0.26, spoolDownS: 0.42, whine: 0.18, fan: 0.1 }),
+  diesel_v12_modern: Object.freeze({ id: 'diesel_v12_modern', turbine: false, idleRpm: 0.28, maxRpm: 1, gears: 4, shift: 'automatic', spoolUpS: 0.36, spoolDownS: 0.6, whine: 0.22, fan: 0.16 }),
+  // Leopard 1, AMX-30, Challenger 1: no turbo lag to speak of, a planetary or semi-automatic box shifting less smoothly
+  diesel_v12_coldwar: Object.freeze({ id: 'diesel_v12_coldwar', turbine: false, idleRpm: 0.3, maxRpm: 1, gears: 4, shift: 'automatic', spoolUpS: 0.3, spoolDownS: 0.5, whine: 0.16, fan: 0.14 }),
+  diesel_aircooled: Object.freeze({ id: 'diesel_aircooled', turbine: false, idleRpm: 0.3, maxRpm: 1, gears: 2, shift: 'automatic', spoolUpS: 0.4, spoolDownS: 0.7, whine: 0.12, fan: 0.55 }),
+  diesel_ifv: Object.freeze({ id: 'diesel_ifv', turbine: false, idleRpm: 0.3, maxRpm: 1, gears: 5, shift: 'automatic', spoolUpS: 0.22, spoolDownS: 0.4, whine: 0.28, fan: 0.08 }),
+  gasoline_v12: Object.freeze({ id: 'gasoline_v12', turbine: false, idleRpm: 0.26, maxRpm: 1, gears: 5, shift: 'manual', spoolUpS: 0.28, spoolDownS: 0.5, whine: 0.08, fan: 0.1 }),
+});
+
+export interface VehicleAudioIdentity {
+  readonly engine: EngineFamilyId;
+  /** Playback-rate trim of the whole engine bank (heavier = lower). */
+  readonly enginePitch: number;
+  /** Extra procedural layers for installations the bank doesn't cover. */
+  readonly turboWhistle: number;
+  readonly turbineAux: number;
+  readonly electricDrive: number;
+  readonly tracks: TrackClass;
+  readonly turretDrive: TurretDrive;
+  readonly hydropneumatic: boolean;
+  readonly crew: CrewLanguage;
+  /** 0 (light IFV) .. 1 (130 t superheavy): scales impacts, landings, rams. */
+  readonly mass: number;
+}
+
+/** The plain spec fields this module reads; every fleet row satisfies it. */
+interface VehicleAudioSpecInput {
+  readonly id?: unknown;
+  readonly nation?: unknown;
+  readonly era?: unknown;
+  readonly role?: unknown;
+  readonly weightTons?: unknown;
+  readonly enginePowerHp?: unknown;
+  readonly hydropneumaticAim?: unknown;
+}
+
+/**
+ * The crew each country's hulls carry: the operating army's own (crew voices 269). Exhaustive, so a new CountryId fails
+ * typecheck until it names a crew. Canada has no pack of its own yet: its crews speak American English.
+ */
+const COUNTRY_CREW: Readonly<Record<CountryId, NationalCrewLanguage>> = Object.freeze({
+  usa: 'en-US', uk: 'en-GB', germany: 'de', russia: 'ru', ukraine: 'uk', china: 'zh', france: 'fr', sweden: 'sv',
+  japan: 'ja', south_korea: 'ko', italy: 'it', poland: 'pl', israel: 'he',
+  canada: 'en-US', denmark: 'da', brazil: 'pt-BR', australia: 'en-AU', south_africa: 'af',
+});
+
+/**
+ * The language a vehicle's crew speaks: its operator's (countries.ts countryOfVehicle, so the Leopard 2A4M CAN's crew is
+ * Canadian although its spec names its German design). A hull with no country (dev, community) keeps American English.
+ */
+export function crewLanguageForVehicle(id: unknown, nation: unknown): CrewLanguage {
+  const country = countryOfVehicle(typeof id === 'string' ? id : null, typeof nation === 'string' ? nation : null);
+  return country ? COUNTRY_CREW[country] : 'en-US';
+}
+
+/** The schema-1 spelling (tankIdAliases.ts): an id rename never changes how a vehicle sounds. */
+function idOf(spec: VehicleAudioSpecInput): string {
+  return tankSeedId(String(spec.id ?? '')).toLowerCase();
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Powertrain family by installation. Patterns are anchored on the fleet's own
+ * id vocabulary; anything unrecognised falls back on role, era and mass.
+ *
+ * (world-sfx-269, 2026-11-03) The petrol pattern is anchored: /e100/ matched "type100", so the Type 100 ran a Second
+ * World War petrol V12. The Strv 81 is a Swedish Centurion (Meteor petrol). A cold-war Western hull with no other
+ * match runs the cold-war diesel bank (Leopard 1's MB 838, AMX-30's HS-110, Challenger 1's CV12) instead of sharing
+ * the MTU 873/883 bank with 101 hulls; the Leopard 2 lineage keeps the MTU from its first prototype.
+ */
+export function resolveEngineFamily(spec: VehicleAudioSpecInput): EngineFamilyId {
+  const id = idOf(spec);
+  const role = String(spec.role ?? '').toLowerCase();
+  const era = String(spec.era ?? '').toLowerCase();
+  const mass = numberOr(spec.weightTons, 45);
+  if (/^(ua_)?m1a\d|^m1a3/.test(id)) return 'turbine_agt';
+  if (id === 'abramsx') return 'diesel_v12_modern';
+  if (/t80|type96_80/.test(id)) return 'turbine_gtd';
+  if (/strv103|t64|t84|oplot|chieftain|vickers|type74|type90|stb1|m551|aft10|sheridan/.test(id)) return 'diesel_two_stroke';
+  // the Magachs (M48/M60) and the Sho't Kal (a Centurion re-engined with it) run the AVDS-1790 too
+  if (/^m48|^m60|^m46|^m47|^magach|^shot_kal|merkava[123]|sabra|mbt70/.test(id)) return 'diesel_aircooled';
+  if (/^centurion|^strv81|^jpz_e100/.test(id)) return 'gasoline_v12';
+  if (/kv2/.test(id)) return 'diesel_v12_soviet';
+  if (/namer|bmpt|tos1a/.test(id)) return /namer/.test(id) ? 'diesel_v12_modern' : 'diesel_v12_soviet';
+  // 268: the GM-352 pair's V-46 is the T-72 family's V12; the Gepard runs the Leopard 1's MTU MB 838
+  if (/tunguska|pantsir/.test(id)) return 'diesel_v12_soviet';
+  if (/gepard/.test(id)) return 'diesel_v12_modern';
+  // 269: the second air-defence round sounds like its base hulls: the Type 87 the Type 74's two-stroke 10ZF, the ItPsv 90
+  // the T-55's V-55 V12, the Loara the PT-91's S-12U, the ItPsv Leopard 2 the Leopard 2's MTU MB 873 (the Lvkv 9040's
+  // Scania and the K30's D2840L fall to the IFV family below)
+  if (/type87/.test(id)) return 'diesel_two_stroke';
+  if (/marksman_t55|loara/.test(id)) return 'diesel_v12_soviet';
+  if (/itpsv_leopard2/.test(id)) return 'diesel_v12_modern';
+  if (role === 'ifv' || role === 'light' || mass < 30) return 'diesel_ifv';
+  if (/t72|t90|t62|t55|t14|type59|ztz85|type96_72|pt91|jaguar|t72_rys|zubr/.test(id)) return 'diesel_v12_soviet';
+  if (era === 'ww2') return 'gasoline_v12';
+  if (era === 'cold-war' && !/^leo2|^leopard2/.test(id)) return 'diesel_v12_coldwar';
+  return 'diesel_v12_modern';
+}
+
+/** Mass in [0, 1] from 12 t (light IFV) to 130 t (superheavy). */
+export function massClass(weightTons: unknown): number {
+  const t = numberOr(weightTons, 45);
+  return Math.max(0, Math.min(1, (t - 12) / 118));
+}
+
+export function resolveVehicleAudioIdentity(spec: VehicleAudioSpecInput | null | undefined): VehicleAudioIdentity {
+  const safe: VehicleAudioSpecInput = spec || {};
+  const id = idOf(safe);
+  const engine = resolveEngineFamily(safe);
+  const tons = numberOr(safe.weightTons, 45);
+  const power = numberOr(safe.enginePowerHp, 900);
+  // Heavier hulls run slightly lower; high specific power slightly higher.
+  const specificPower = power / Math.max(10, tons);
+  const enginePitch = Math.max(0.86, Math.min(1.14, 1 + (specificPower - 22) * 0.006 - (tons - 50) * 0.0018));
+  const soviet = engine === 'diesel_v12_soviet' || engine === 'turbine_gtd' || engine === 'diesel_two_stroke';
+  const legacy = String(safe.era ?? '').toLowerCase() === 'cold-war' || String(safe.era ?? '').toLowerCase() === 'ww2';
+  return Object.freeze({
+    engine,
+    enginePitch,
+    turboWhistle: /leclerc|amx56/.test(id) ? 0.8 : engine === 'diesel_v12_modern' ? 0.18 : 0,
+    turbineAux: /strv103/.test(id) ? 0.55 : 0,
+    electricDrive: id === 'abramsx' ? 0.85 : /m1a3|kf51|pl01/.test(id) ? 0.25 : 0,
+    tracks: tons < 33 ? 'light' : 'heavy',
+    turretDrive: soviet || (legacy && !/m1a|leo2/.test(id)) ? 'hydraulic' : 'electric',
+    hydropneumatic: !!safe.hydropneumaticAim || /k2|type10|type90|type74|strv103/.test(id),
+    crew: crewLanguageForVehicle(safe.id, safe.nation),
+    mass: massClass(tons),
+  });
+}

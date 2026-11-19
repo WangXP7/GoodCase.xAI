@@ -1,0 +1,49 @@
+// Layout of the compass at the top right of the map: a round td-overlay
+// plate with the rose, the needle turning with the camera, a reset button on
+// its edge once it turned.
+
+:host {
+  display: block;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+}
+
+.td-compass-wrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+}
+
+.td-compass {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.td-compass__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.td-compass__letters {
+  font-family: inherit;
+}
+
+.td-compass__needle {
+  transition: transform var(--td-dur-mid) var(--td-ease-out);
+}
+
+.td-compass__reset {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}

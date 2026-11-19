@@ -1,0 +1,649 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { AbilityManager, type AbilityWorld } from './ability.manager';
+import { GameEventBus, type GameEvent } from '../game-engine/game-event-bus';
+import { ABILITIES } from '../configs/abilities.config';
+import { ENEMY_TYPES } from '../configs/enemy-types.config';
+import type { Enemy } from '../entities/enemy.entity';
+import type { GamePhase, GeoPosition } from '../models/game.types';
+import { routeSweepToward, type RouteSweep } from '../utils/route-sweep';
+import { METERS_PER_DEGREE_LAT, geoDistanceFast } from '../utils/geo-utils';
+import { GameClock } from './game-state/game-clock';
+import { stepsOf } from '../integration/test-helpers';
+
+/** The length of one gameplay sub-step. */
+const STEP_MS = GameClock.FIXED_STEP_MS;
+const NUKE = ABILITIES['nuclear-strike'];
+/** The nuclear strike's 6500 ms of warning in sub-steps */
+const NUKE_STEPS = stepsOf(6500);
+/** The 500 ms of warning of the frost bomb and the EMP, the orbital laser's 1000 ms */
+const SHORT_STEPS = stepsOf(500);
+const LASER_STEPS = stepsOf(1000);
+const FROST = ABILITIES['frost-bomb'];
+const EMP = ABILITIES['emp'];
+const LASER = ABILITIES['orbital-laser'];
+const TARGET: GeoPosition = { lat: 48.1, lon: 9.1, height: 0 };
+/** The missile silo the nuclear strike launches from */
+const SILO = { towerId: 'tower-7', position: { lat: 48.09, lon: 9.08, height: 12 } };
+
+function enemyOf(id: string, type: string): Enemy {
+  return { id, typeConfig: ENEMY_TYPES[type] } as unknown as Enemy;
+}
+
+describe('AbilityManager', () => {
+  let bus: GameEventBus;
+  let manager: AbilityManager;
+  let phase: GamePhase;
+  let routeInReach: boolean;
+  let inRadius: Enemy[];
+  let strikes: { ids: string[]; fractions: number[] }[];
+  let halts: { ids: string[]; status: string; durations: number[]; sourceId: string }[];
+  let sweep: RouteSweep | null;
+  let strikeKills: number;
+  let numbers: { id: string; fraction: number; damageType: string | null }[];
+  /** The building standing of each type, as the tower list has it */
+  let sites: Partial<Record<string, typeof SILO>>;
+  let world: AbilityWorld;
+
+  const unlock = (perkId: string = NUKE.perkId) =>
+    bus.emit({
+      type: 'research:completed', playerId: 'local', local: true,
+      researchId: 'nuclear-strike',
+      effects: [{ kind: 'global-perk', perkId, description: '' }],
+    });
+  const completeWave = () =>
+    bus.emit({ type: 'wave:completed', wave: 1, credits: 0, perfect: false, closeCall: false, hpLost: 0 });
+  const tick = (steps: number) => {
+    for (let i = 0; i < steps; i++) manager.update(STEP_MS);
+  };
+
+  beforeEach(() => {
+    bus = new GameEventBus();
+    phase = 'wave';
+    routeInReach = true;
+    inRadius = [];
+    strikes = [];
+    halts = [];
+    sweep = null;
+    strikeKills = 0;
+    numbers = [];
+    sites = { 'missile-silo': SILO };
+    world = {
+      launchSite: vi.fn((typeId: string) => sites[typeId] ?? null),
+      snapToRoute: vi.fn((target: GeoPosition) => (routeInReach ? { ...target, height: 5 } : null)),
+      enemiesInRadius: vi.fn((_center: GeoPosition, _radius: number, out: Enemy[]) => {
+        out.length = 0;
+        out.push(...inRadius);
+        return out;
+      }),
+      strike: vi.fn((targets: readonly Enemy[], fractionOf: (enemy: Enemy) => number) => {
+        strikes.push({ ids: targets.map((t) => t.id), fractions: targets.map(fractionOf) });
+        return strikeKills;
+      }),
+      halt: vi.fn((targets: readonly Enemy[], status: string, durationOf: (enemy: Enemy) => number, sourceId: string) => {
+        halts.push({ ids: targets.map((t) => t.id), status, durations: targets.map(durationOf), sourceId });
+      }),
+      routeSweep: vi.fn(() => sweep),
+      showDamage: vi.fn((enemy: Enemy, fraction: number, damageType: string | null) => {
+        numbers.push({ id: enemy.id, fraction, damageType });
+      }),
+    };
+    manager = new AbilityManager(bus, world);
+    manager.setPhaseProvider(() => phase);
+  });
+
+  describe('unlocking', () => {
+    it('is locked until its research completes', () => {
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+      expect(manager.use('nuclear-strike', TARGET)).toEqual({ ok: false, reason: 'locked' });
+    });
+
+    it('gets its first charge from the research', () => {
+      unlock();
+      expect(manager.getStatus('nuclear-strike')).toEqual({
+        id: 'nuclear-strike',
+        unlocked: true,
+        charges: 1,
+        maxCharges: 1,
+        wavesUntilCharge: 0,
+        pending: false,
+        launchSite: true,
+      });
+    });
+
+    it('ignores other perks', () => {
+      unlock('some-other-perk');
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+  });
+
+  describe('using', () => {
+    beforeEach(() => unlock());
+
+    it('fires only during a wave and keeps the charge otherwise', () => {
+      phase = 'setup';
+      expect(manager.use('nuclear-strike', TARGET)).toEqual({ ok: false, reason: 'no-wave' });
+      expect(manager.getStatus('nuclear-strike').charges).toBe(1);
+    });
+
+    it('rejects a target with no route cell in reach and keeps the charge', () => {
+      routeInReach = false;
+      expect(manager.use('nuclear-strike', TARGET)).toEqual({ ok: false, reason: 'no-route' });
+      expect(manager.getStatus('nuclear-strike').charges).toBe(1);
+      expect(world.snapToRoute).toHaveBeenCalledWith(TARGET, NUKE.snapRadiusM);
+    });
+
+    it('spends the charge and aims at the snapped point', () => {
+      const result = manager.use('nuclear-strike', TARGET);
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.strike.target).toEqual({ ...TARGET, height: 5 });
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 0, pending: true });
+      expect(manager.use('nuclear-strike', TARGET)).toEqual({ ok: false, reason: 'no-charge' });
+    });
+
+    it('lands after 6.5 s of game time, not a sub-step earlier', () => {
+      expect(NUKE.warningMs).toBe(6500);
+      inRadius = [enemyOf('z1', 'zombie')];
+      manager.use('nuclear-strike', TARGET);
+
+      tick(NUKE_STEPS - 1);
+      expect(world.strike).not.toHaveBeenCalled();
+
+      tick(1);
+      expect(world.strike).toHaveBeenCalledTimes(1);
+      expect(world.enemiesInRadius).toHaveBeenCalledWith({ ...TARGET, height: 5 }, NUKE.radiusM, expect.any(Array));
+      expect(manager.getStatus('nuclear-strike').pending).toBe(false);
+
+      tick(200);
+      expect(world.strike).toHaveBeenCalledTimes(1);
+    });
+
+    it('takes 60% from everyone and 20% from bosses, ground and air alike', () => {
+      expect(ENEMY_TYPES['bat'].isAirUnit).toBe(true);
+      inRadius = [enemyOf('z1', 'zombie'), enemyOf('boss', 'herbert'), enemyOf('bat1', 'bat')];
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS);
+      expect(strikes).toEqual([{ ids: ['z1', 'boss', 'bat1'], fractions: [0.6, 0.2, 0.6] }]);
+    });
+
+    it('shows every target its share as a damage number past the matrix, the killed ones included', () => {
+      inRadius = [enemyOf('z1', 'zombie'), enemyOf('boss', 'herbert')];
+      strikeKills = 1;
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS - 1);
+      expect(numbers).toEqual([]);
+      tick(1);
+      expect(numbers).toEqual([
+        { id: 'z1', fraction: 0.6, damageType: null },
+        { id: 'boss', fraction: 0.2, damageType: null },
+      ]);
+    });
+
+    it('reports a strike as pending from the command until it lands', () => {
+      expect(manager.hasPendingStrikes()).toBe(false);
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS - 1);
+      expect(manager.hasPendingStrikes()).toBe(true);
+      tick(1);
+      expect(manager.hasPendingStrikes()).toBe(false);
+    });
+
+    it('spends the charge even when the strike finds nobody', () => {
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS);
+      expect(world.strike).not.toHaveBeenCalled();
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 0, pending: false });
+    });
+  });
+
+  describe('launch site', () => {
+    beforeEach(() => unlock());
+
+    it('refuses without a missile silo before charge and wave, and keeps the charge', () => {
+      sites = {};
+      expect(NUKE.launchFrom).toBe('missile-silo');
+      expect(manager.checkUse('nuclear-strike')).toBe('no-launch-site');
+      phase = 'setup';
+      expect(manager.use('nuclear-strike', TARGET)).toEqual({ ok: false, reason: 'no-launch-site' });
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 1, launchSite: false });
+      expect(world.snapToRoute).not.toHaveBeenCalled();
+
+      sites = { 'missile-silo': SILO };
+      phase = 'wave';
+      expect(manager.use('nuclear-strike', TARGET).ok).toBe(true);
+    });
+
+    it('keeps recharging while no silo stands', () => {
+      manager.use('nuclear-strike', TARGET);
+      sites = {};
+      completeWave();
+      completeWave();
+      completeWave();
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 1, launchSite: false });
+      sites = { 'missile-silo': SILO };
+      expect(manager.checkUse('nuclear-strike')).toBeNull();
+    });
+
+    it('needs no building for an ability without launchFrom', () => {
+      sites = {};
+      unlock(FROST.perkId);
+      expect(FROST.launchFrom).toBeUndefined();
+      expect(manager.getStatus('frost-bomb').launchSite).toBe(true);
+      expect(manager.checkUse('frost-bomb')).toBeNull();
+    });
+
+    it('announces the silo it leaves from with the use, as a copy', () => {
+      const used: GameEvent[] = [];
+      bus.on('ability:used', (e) => used.push(e));
+      const result = manager.use('nuclear-strike', TARGET);
+      expect(result.ok && result.strike.launch).toEqual(SILO);
+      expect(used).toMatchObject([{ launch: SILO }]);
+      expect((used[0] as Extract<GameEvent, { type: 'ability:used' }>).launch!.position).not.toBe(SILO.position);
+      expect(world.launchSite).toHaveBeenCalledWith('missile-silo');
+
+      unlock(FROST.perkId);
+      manager.use('frost-bomb', TARGET);
+      expect(used[1]).not.toHaveProperty('launch');
+    });
+
+    it('lands a strike on its way when the silo is sold meanwhile', () => {
+      inRadius = [enemyOf('z1', 'zombie')];
+      manager.use('nuclear-strike', TARGET);
+      sites = {};
+      manager.buildingChanged('missile-silo');
+      tick(NUKE_STEPS);
+      expect(world.strike).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends a snapshot when a silo is built or sold, none for another building', () => {
+      const snapshots: boolean[] = [];
+      bus.on('ability:state-changed', (e) => snapshots.push(e.abilities.find((a) => a.id === 'nuclear-strike')!.launchSite));
+      sites = {};
+      manager.buildingChanged('missile-silo');
+      manager.buildingChanged('research-center');
+      manager.buildingChanged('archer');
+      sites = { 'missile-silo': SILO };
+      manager.buildingChanged('missile-silo');
+      expect(snapshots).toEqual([false, true]);
+    });
+  });
+
+  describe('frost bomb', () => {
+    beforeEach(() => unlock(FROST.perkId));
+
+    it('freezes everyone in the radius after 500 ms: 3 s, bosses 1 s, ground and air', () => {
+      inRadius = [enemyOf('z1', 'zombie'), enemyOf('boss', 'herbert'), enemyOf('bat1', 'bat')];
+      expect(manager.use('frost-bomb', TARGET).ok).toBe(true);
+
+      tick(SHORT_STEPS - 1);
+      expect(world.halt).not.toHaveBeenCalled();
+      tick(1);
+      expect(world.enemiesInRadius).toHaveBeenCalledWith({ ...TARGET, height: 5 }, FROST.radiusM, expect.any(Array));
+      expect(halts).toEqual([{
+        ids: ['z1', 'boss', 'bat1'],
+        status: 'freeze',
+        durations: [3000, 1000, 3000],
+        sourceId: 'ability:frost-bomb',
+      }]);
+      expect(world.strike).not.toHaveBeenCalled();
+    });
+
+    it('reports the frozen as hits and no kills', () => {
+      const resolved: GameEvent[] = [];
+      bus.on('ability:resolved', (e) => resolved.push(e));
+      inRadius = [enemyOf('z1', 'zombie'), enemyOf('z2', 'zombie')];
+      manager.use('frost-bomb', TARGET);
+      tick(SHORT_STEPS);
+      expect(resolved).toEqual([{ type: 'ability:resolved', playerId: 'local', local: true, abilityId: 'frost-bomb', strikeId: 1, hits: 2, kills: 0 }]);
+    });
+
+    it('keeps its charge apart from the nuclear strike', () => {
+      manager.use('frost-bomb', TARGET);
+      expect(manager.getStatus('frost-bomb')).toMatchObject({ charges: 0, wavesUntilCharge: 3 });
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+  });
+
+  describe('EMP', () => {
+    beforeEach(() => unlock(EMP.perkId));
+
+    it('stuns everyone in the radius after 500 ms: machines 6 s, others 1.5 s, bosses 0.75 s', () => {
+      inRadius = [enemyOf('t1', 'tank'), enemyOf('z1', 'zombie'), enemyOf('m1', 'mech'), enemyOf('boss', 'herbert')];
+      expect(manager.use('emp', TARGET).ok).toBe(true);
+
+      tick(SHORT_STEPS - 1);
+      expect(world.halt).not.toHaveBeenCalled();
+      tick(1);
+      expect(world.enemiesInRadius).toHaveBeenCalledWith({ ...TARGET, height: 5 }, EMP.radiusM, expect.any(Array));
+      expect(halts).toEqual([{
+        ids: ['t1', 'z1', 'm1', 'boss'],
+        status: 'stun',
+        durations: [6000, 1500, 6000, 750],
+        sourceId: 'ability:emp',
+      }]);
+      expect(world.strike).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('orbital laser', () => {
+    /** 100 m of route straight north from the target: the whole 72 m of reach fit */
+    const ROUTE = [{ lat: TARGET.lat + 100 / METERS_PER_DEGREE_LAT, lon: TARGET.lon }, { ...TARGET, height: 5 }];
+    /** An enemy the beam can burn: alive, with its armor */
+    const beamEnemy = (id: string, type: string) =>
+      ({ id, typeConfig: ENEMY_TYPES[type], alive: true, getEffectiveArmorType: () => ENEMY_TYPES[type].armorType }) as unknown as Enemy;
+    /** Sub-steps in the 4 s burn */
+    const BURN_STEPS = stepsOf(4000);
+    /** Sub-steps of burn that bring an unarmored enemy to its cap: 1.5 x 100 % a second up to 60 % */
+    const CAP_STEPS = stepsOf(400);
+
+    beforeEach(() => {
+      unlock(LASER.perkId);
+      sweep = routeSweepToward([ROUTE], TARGET, LASER.snapRadiusM, 72);
+    });
+
+    it('aims at the route stretch from the target toward the spawn', () => {
+      expect(manager.previewSweep('orbital-laser', TARGET)).toBe(sweep);
+      expect(world.routeSweep).toHaveBeenCalledWith(TARGET, 30, 72);
+      expect(manager.resolveTarget('orbital-laser', TARGET)).toBe(sweep!.points[0]);
+      expect(manager.previewSweep('nuclear-strike', TARGET)).toBeNull();
+    });
+
+    it('previews a longer stretch on request, the beam itself keeps its reach', () => {
+      manager.previewSweep('orbital-laser', TARGET, 110);
+      expect(world.routeSweep).toHaveBeenLastCalledWith(TARGET, 30, 110);
+      manager.use('orbital-laser', TARGET);
+      expect(world.routeSweep).toHaveBeenLastCalledWith(TARGET, 30, 72);
+    });
+
+    it('refuses where no route is in reach and keeps the charge', () => {
+      sweep = null;
+      expect(manager.use('orbital-laser', TARGET)).toEqual({ ok: false, reason: 'no-route' });
+      expect(manager.getStatus('orbital-laser').charges).toBe(1);
+    });
+
+    it('announces the sweep with the use and the impact', () => {
+      const events: GameEvent[] = [];
+      bus.onAny((e) => events.push(e));
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS);
+      const used = events.find((e) => e.type === 'ability:used') as Extract<GameEvent, { type: 'ability:used' }>;
+      const impact = events.find((e) => e.type === 'ability:impact') as Extract<GameEvent, { type: 'ability:impact' }>;
+      expect(used.path).toBe(sweep!.points);
+      expect(used.radiusM).toBe(5);
+      expect(used.warningMs).toBe(1000);
+      expect(impact.path).toBe(sweep!.points);
+    });
+
+    it('lands after 1 s and then runs 18 m/s along the stretch, one tick per sub-step', () => {
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS - 1);
+      expect(world.enemiesInRadius).not.toHaveBeenCalled();
+      tick(1);
+      const centres = () => (world.enemiesInRadius as ReturnType<typeof vi.fn>).mock.calls.map(([c]) => ({ ...c }));
+      expect(centres()).toHaveLength(1);
+      expect(geoDistanceFast(centres()[0], TARGET)).toBeLessThan(0.01);
+
+      tick(100);
+      const walked = geoDistanceFast(centres()[100], TARGET);
+      expect(walked).toBeCloseTo(18 * 100 * STEP_MS / 1000, 1);
+      expect(world.enemiesInRadius).toHaveBeenLastCalledWith(expect.anything(), LASER.radiusM, expect.any(Array));
+    });
+
+    it('burns every enemy under it by its fire share, up to the cap, and resolves after 4 s', () => {
+      const resolved: GameEvent[] = [];
+      bus.on('ability:resolved', (e) => resolved.push(e));
+      inRadius = [beamEnemy('z1', 'zombie'), beamEnemy('t1', 'tank'), beamEnemy('boss', 'herbert')];
+      strikeKills = 0;
+      manager.use('orbital-laser', TARGET);
+      // The landing sub-step burns the first tick: the last comes BURN_STEPS - 1 after it
+      tick(LASER_STEPS + BURN_STEPS - 2);
+      expect(resolved).toEqual([]);
+      expect(manager.hasPendingStrikes()).toBe(true);
+      expect(manager.getStatus('orbital-laser').pending).toBe(true);
+      tick(1);
+      expect(resolved).toEqual([{ type: 'ability:resolved', playerId: 'local', local: true, abilityId: 'orbital-laser', strikeId: 1, hits: 3, kills: 0 }]);
+      expect(manager.hasPendingStrikes()).toBe(false);
+
+      const total = (id: string) => strikes.reduce((sum, s) => sum + (s.fractions[s.ids.indexOf(id)] ?? 0), 0);
+      // Unarmored: 1.5 x 100 % per second, at the cap after 0.4 s
+      expect(total('z1')).toBeCloseTo(0.6, 6);
+      expect(strikes.filter((s) => s.ids.includes('z1'))).toHaveLength(CAP_STEPS);
+      // Heavy: 0.6 x 100 % per second, at the cap as well
+      expect(total('t1')).toBeCloseTo(0.6, 6);
+      // Fortified boss: 0.25 x 30 % per second for 4 s = 0.3, capped at 0.2
+      expect(total('boss')).toBeCloseTo(0.2, 6);
+      expect(strikes.every((s) => s.fractions.every((f) => f > 0))).toBe(true);
+    });
+
+    it('adds up the kills of every tick', () => {
+      const resolved: GameEvent[] = [];
+      bus.on('ability:resolved', (e) => resolved.push(e));
+      inRadius = [beamEnemy('z1', 'zombie')];
+      strikeKills = 1; // what the damage path reports for each tick with a target
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS + BURN_STEPS);
+      expect(resolved).toEqual([expect.objectContaining({ hits: 1, kills: CAP_STEPS })]);
+    });
+
+    it('shows an enemy the sum of its ticks as one number in the sub-step the beam has moved on', () => {
+      inRadius = [beamEnemy('z1', 'zombie')];
+      manager.use('orbital-laser', TARGET);
+      // The landing sub-step and the ones up to 1/6 s of burn: 25 % on it (fire 1.5 against unarmored)
+      tick(LASER_STEPS + stepsOf(160) - 1);
+      expect(numbers).toEqual([]);
+      inRadius = [];
+      tick(1);
+      expect(numbers).toEqual([{ id: 'z1', fraction: expect.closeTo(0.25, 4), damageType: 'fire' }]);
+      tick(BURN_STEPS);
+      expect(numbers).toHaveLength(1);
+    });
+
+    it('shows a number once an enemy has its cap, and every second on one it stays on', () => {
+      inRadius = [beamEnemy('z1', 'zombie'), beamEnemy('boss', 'herbert')];
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS + BURN_STEPS);
+      const of = (id: string) => numbers.filter((n) => n.id === id).map((n) => n.fraction);
+      // At the cap after 0.4 s: one number with all of it, in the tick after
+      expect(of('z1')).toEqual([expect.closeTo(0.6, 4)]);
+      // Fortified boss: 0.25 x 30 % per second, a number after 1 s and 2 s, the rest at its cap (2.67 s)
+      expect(of('boss')).toEqual([expect.closeTo(0.075, 4), expect.closeTo(0.075, 4), expect.closeTo(0.05, 4)]);
+      expect(numbers.every((n) => n.damageType === 'fire')).toBe(true);
+    });
+
+    it('shows what is left when the beam is over', () => {
+      sweep = routeSweepToward([ROUTE], TARGET, LASER.snapRadiusM, 9); // 0.5 s of burn
+      inRadius = [beamEnemy('t1', 'tank')];
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS + stepsOf(500) - 2);
+      expect(numbers).toEqual([]);
+      tick(1);
+      // Heavy: 60 % a second for all of the 0.5 s, below its cap and under a second
+      expect(numbers.map((n) => n.fraction)).toEqual([expect.closeTo(0.3, 4)]);
+      expect(manager.hasPendingStrikes()).toBe(false);
+    });
+
+    it('ends where the stretch ends before its time is up', () => {
+      sweep = routeSweepToward([ROUTE], TARGET, LASER.snapRadiusM, 36); // 2 s of burn
+      manager.use('orbital-laser', TARGET);
+      tick(LASER_STEPS + stepsOf(2000));
+      expect(manager.hasPendingStrikes()).toBe(false);
+      expect(world.enemiesInRadius).toHaveBeenCalledTimes(stepsOf(2000));
+    });
+  });
+
+  describe('recharging', () => {
+    beforeEach(() => unlock());
+
+    it('gets the charge back after three completed waves, the wave of the use counted', () => {
+      manager.use('nuclear-strike', TARGET);
+      expect(manager.getStatus('nuclear-strike').wavesUntilCharge).toBe(3);
+
+      completeWave();
+      completeWave();
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 0, wavesUntilCharge: 1 });
+
+      completeWave();
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 1, wavesUntilCharge: 0 });
+    });
+
+    it('banks nothing while the charge is full', () => {
+      for (let i = 0; i < 5; i++) completeWave();
+      manager.use('nuclear-strike', TARGET);
+      completeWave();
+      completeWave();
+      expect(manager.getStatus('nuclear-strike').charges).toBe(0);
+    });
+
+    it('counts the waves a dev jump skips like completed waves, up to full', () => {
+      manager.use('nuclear-strike', TARGET);
+      manager.advanceWaves(NUKE.rechargeWaves - 1);
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 0, wavesUntilCharge: 1 });
+
+      manager.advanceWaves(10 * NUKE.rechargeWaves);
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({
+        charges: NUKE.maxCharges,
+        wavesUntilCharge: 0,
+      });
+    });
+
+    it('a jump leaves a locked ability locked', () => {
+      manager.reset();
+      manager.advanceWaves(20);
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+  });
+
+  describe('debug refill (Nuke ready)', () => {
+    it('does nothing while the ability is locked', () => {
+      manager.refillCharges('nuclear-strike');
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+
+    it('gives every charge back and restarts the count toward the next', () => {
+      unlock();
+      manager.use('nuclear-strike', TARGET);
+      completeWave();
+      manager.refillCharges('nuclear-strike');
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: NUKE.maxCharges, wavesUntilCharge: 0 });
+
+      manager.use('nuclear-strike', TARGET);
+      expect(manager.getStatus('nuclear-strike')).toMatchObject({ charges: 0, wavesUntilCharge: NUKE.rechargeWaves });
+    });
+  });
+
+  describe('announcements', () => {
+    let events: GameEvent[];
+    const ofType = <T extends GameEvent['type']>(type: T) =>
+      events.filter((e): e is Extract<GameEvent, { type: T }> => e.type === type);
+
+    beforeEach(() => {
+      events = [];
+      bus.onAny((e) => events.push(e));
+    });
+
+    it('announces a use with the snapped target, radius and warning', () => {
+      unlock();
+      manager.use('nuclear-strike', TARGET);
+      expect(ofType('ability:used')).toEqual([{
+        type: 'ability:used', playerId: 'local', local: true,
+        abilityId: 'nuclear-strike',
+        strikeId: 1,
+        target: { ...TARGET, height: 5 },
+        radiusM: 25,
+        warningMs: 6500,
+        launch: SILO,
+      }]);
+    });
+
+    it('announces a refusal with its reason', () => {
+      unlock();
+      phase = 'setup';
+      manager.use('nuclear-strike', TARGET);
+      expect(ofType('ability:rejected')).toEqual([
+        { type: 'ability:rejected', playerId: 'local', local: true, abilityId: 'nuclear-strike', reason: 'no-wave' },
+      ]);
+      expect(ofType('ability:used')).toEqual([]);
+    });
+
+    it('announces the impact, then the hits and kills, in the sub-step it lands', () => {
+      unlock();
+      inRadius = [enemyOf('a', 'zombie'), enemyOf('b', 'zombie'), enemyOf('c', 'herbert')];
+      strikeKills = 2;
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS - 1);
+      expect(ofType('ability:impact')).toEqual([]);
+      tick(1);
+      expect(ofType('ability:impact')).toEqual([{
+        type: 'ability:impact', playerId: 'local', local: true,
+        abilityId: 'nuclear-strike',
+        strikeId: 1,
+        target: { ...TARGET, height: 5 },
+        radiusM: 25,
+      }]);
+      expect(ofType('ability:resolved')).toEqual([{
+        type: 'ability:resolved', playerId: 'local', local: true,
+        abilityId: 'nuclear-strike',
+        strikeId: 1,
+        hits: 3,
+        kills: 2,
+      }]);
+      const order = events.map((e) => e.type).filter((t) => t === 'ability:impact' || t === 'ability:resolved');
+      expect(order).toEqual(['ability:impact', 'ability:resolved']);
+    });
+
+    it('sends a snapshot after unlock, use, impact and every wave toward a charge', () => {
+      const charges = () =>
+        ofType('ability:state-changed').map((e) => e.abilities[0]).map((s) => [s.charges, s.wavesUntilCharge, s.pending]);
+      unlock();
+      manager.use('nuclear-strike', TARGET);
+      tick(NUKE_STEPS);
+      completeWave();
+      completeWave();
+      completeWave();
+      completeWave(); // full again: nothing to report
+      expect(charges()).toEqual([
+        [1, 0, false], // unlocked
+        [0, 3, true],  // used
+        [0, 3, false], // landed
+        [0, 2, false],
+        [0, 1, false],
+        [1, 0, false], // recharged
+      ]);
+    });
+  });
+
+  describe('lifecycle', () => {
+    it('reset locks every ability and drops pending strikes', () => {
+      unlock();
+      inRadius = [enemyOf('z1', 'zombie')];
+      manager.use('nuclear-strike', TARGET);
+      manager.reset();
+
+      tick(NUKE_STEPS);
+      expect(world.strike).not.toHaveBeenCalled();
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+
+    it('destroy stops listening to research and waves', () => {
+      manager.destroy();
+      unlock();
+      expect(manager.getStatus('nuclear-strike').unlocked).toBe(false);
+    });
+  });
+  describe('snapshot', () => {
+    it('puts charges and the waves toward the next one back after restoreState', () => {
+      unlock();
+      expect(manager.use('nuclear-strike', TARGET).ok).toBe(true);
+      tick(NUKE_STEPS + 1);
+      completeWave();
+      const state = manager.getState();
+      const before = manager.getStatus('nuclear-strike');
+
+      const other = new AbilityManager(new GameEventBus(), world);
+      other.setPhaseProvider(() => phase);
+      other.restoreState(JSON.parse(JSON.stringify(state)));
+
+      expect(other.getStatus('nuclear-strike')).toEqual(before);
+      expect(other.getState()).toEqual(state);
+    });
+  });
+});

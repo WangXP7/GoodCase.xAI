@@ -1,0 +1,926 @@
+import assert from 'node:assert/strict';
+import { Vector3 } from 'three';
+import { createTankState } from '../../sim/movement.ts';
+import { hullBodyMode } from '../../sim/hullBodyMode.ts';
+import { getSpec } from '../../vehicles/specs.ts';
+import { ENTITY_FLAGS, NO_ENTITY, PHASE, TEAM, VERDICT, eraPlateNames, quantizePosition, quantizeReloadS, zeroEntityRow } from '../wire/index.ts';
+import { createEntitySample } from '../match/interpolation.ts';
+import { RecordingPresentation, createBattlePresentation } from './index.ts';
+import { prebuildRosterVisuals, prewarmRosterVisuals } from './battlePresentation.ts';
+import { battleStaticDrawMerge } from '../../vehicles/fleetFactory.ts';
+import { withheldObstacleFall } from '../../sim/obstacleFall.ts';
+import { setToppleAxis, settledToppleAngle } from '../../world/topple.ts';
+
+// ------------------------------------------------------------ fixtures
+const visuals = [];
+const visualOptions = [];
+const textureWarms = [];
+const destructionOrder = [];
+const busEvents = [];
+let nowMs = 1000;
+const scene = { add() {} };
+const game = {
+  tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [],
+  timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'winter',
+};
+function fakeVisual(_specId, _engineCtx, opts) {
+  assert.equal(opts.eraVisualBindingReceipt, false, 'actors keep live ERA state without rebuilding the authoring audit');
+  visualOptions.push(opts);
+  const visual = {
+    root: { position: new Vector3(), userData: {} },
+    visible: true, syncs: 0, revealedBeforePose: false, kicks: 0,
+    setVisible(next) { if (next && this.syncs === 0) this.revealedBeforePose = true; this.visible = next; },
+    syncFromState(state) { this.syncs++; this.root.position.copy(state.pos); },
+    recoilKick() { this.kicks++; return 1; },
+    gunMuzzleWorld(out, muzzleIndex) { return out.set(20 + muzzleIndex, 3, -8); },
+    gunDirWorld(out) { return out.set(0, 0, 1); },
+    strippedEra: [], eraResets: 0,
+    stripEra(name) { this.strippedEra.push(name); },
+    resetEra() { this.eraResets++; },
+    setDestroyed(options) { destructionOrder.push([`wreck:${visuals.indexOf(this)}`, options.pop]); },
+    resetDestroyed() { destructionOrder.push([`revive:${visuals.indexOf(this)}`, null]); },
+    disposed: false,
+    dispose() { this.disposed = true; },
+  };
+  visuals.push(visual);
+  return visual;
+}
+const obstacles = [
+  { min: [10, 0, 10], max: [12, 3, 12], crushed: false, crushable: false, shape2: null },
+  { min: [-5, 0, 30], max: [-3, 1, 32], crushed: false, crushable: true, crushMin: 2.8, shape2: null },
+];
+const crushed = [];
+const worldCollision = {
+  heightField: { getHeightAt: () => 0, getHeightAtFast: () => 0, getGroundType: () => 'hard' },
+  getObstacles: () => obstacles,
+  crushObstacle(obstacle, dx, dz, speed) { crushed.push([obstacles.indexOf(obstacle), dx, dz, speed]); },
+};
+const presentation = createBattlePresentation({
+  engineCtx: { scene, anisotropy: 1 },
+  game,
+  bus: { emit(type, payload) { busEvents.push({ type, payload }); } },
+  worldCollision,
+  createTankVisual: fakeVisual,
+  prepareVisualTextures: async (...args) => { textureWarms.push(args); },
+  clearVehicleDecals: (visual) => { destructionOrder.push([`decals:${visuals.indexOf(visual)}`, null]); },
+  camoFor: (entry) => (entry.team === TEAM.ALPHA ? 'summer' : 'winter'),
+  clock: () => nowMs,
+  verdictGraceMs: 500,
+});
+
+const roster = [
+  { entityId: 1, seat: 0, team: TEAM.ALPHA, bot: false, connected: true, playerId: 'me', name: 'Me', specId: 'm1a1_abrams_hc' },
+  { entityId: 2, seat: 1, team: TEAM.BRAVO, bot: false, connected: true, playerId: 'foe', name: 'Foe', specId: 'm1a1_abrams_hc' },
+  { entityId: 3, seat: 255, team: TEAM.ALPHA, bot: true, connected: true, playerId: 'bot-3', name: 'Bot 3', specId: 'm1a1_abrams_hc' },
+];
+const context = { ownEntityId: 1, ownPlayerId: 'me', roomId: 'r', mapId: 'winter', mode: 'standard', rulesetJson: '{}' };
+await presentation.applyRoster(roster, context);
+assert.deepEqual(visualOptions.map((opts) => opts.camoPattern), ['summer', 'winter', 'summer'], 'paint comes from the camo policy');
+assert.deepEqual(visualOptions.map((opts) => opts.quality), ['high', 'ai', 'ai'], 'the viewer paints in high quality, others in ai');
+assert.deepEqual(textureWarms.map((args) => [args[4], args[2]]), [['summer', 'high'], ['winter', 'ai'], ['summer', 'ai']],
+  'each vehicle/paint/quality variant is warmed once');
+assert.ok(visuals.every((visual) => !visual.visible), 'prepared visuals stay hidden at the staging origin');
+assert.equal(presentation.actors.size, 3);
+assert.equal(presentation.ownActor.id, 'me');
+assert.equal(presentation.ownActor.contactGeom, null, 'movement uses the spec-derived contact footprint');
+assert.equal(game.player, null, 'the game state is untouched until the first frame');
+await presentation.applyRoster(roster, context);
+assert.equal(visuals.length, 3, 'applyRoster is idempotent');
+
+// ------------------------------------------------------------ frames
+const spec = getSpec('m1a1_abrams_hc');
+const ownState = createTankState(spec, new Vector3(142, 1.2, -73), 0.4);
+function sample(entityId, x, z, extra = {}) {
+  const out = createEntitySample(entityId);
+  Object.assign(out, { x, y: 1.2, z, yaw: 0.4, pitch: 0.03, roll: -0.02, turretYaw: 0.2, gunPitch: -0.04, hp: 1500, maxHp: 2000,
+    reloadS: 1.5, reloadTotalS: 6, reloadKind: 'shell', gunReloadS: 1.5, gunReloadTotalS: 6, gunReloadKind: 'shell',
+    ammo0: 20, ammo1: 4, ammo2: 2, flags: 0, snapped: false, eraSpent: [] }, extra);
+  return out;
+}
+function ownRow(overrides = {}) {
+  return { ...zeroEntityRow(1), x: quantizePosition(142), y: 1200, z: quantizePosition(-73), hp: 1800, maxHp: 2000, reload: 0, reloadTotal: 3000,
+    magazineRounds: 0, magazineCapacity: 0, ammo0: 12, ammo1: 6, ammo2: 0, flags: 0, ...overrides };
+}
+const viewerState = { entityId: 1, modules: [0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], crewBits: 2, equipment: [1100, 1150, 900, 900], modeSpeedMultiplier: 1850, modeGravityScale: 1000, movementVersion: 0, movementFlags: 0, movementValues: [] };
+function frame(overrides = {}) {
+  return {
+    tick: 120, renderTimeMs: 2000, entities: [sample(2, -91, 64), sample(3, 10, 10)], shells: [],
+    meta: { phase: PHASE.PLAYING, countdownMs: 0, battleTimeMs: 12_500, verdict: VERDICT.NONE, verdictReason: '', destructibleRevision: 0 },
+    modeStateJson: null, destroyed: [], destructibleRevision: 0,
+    viewer: { entityId: 1, playerId: 'me', state: ownState, row: ownRow(), viewer: viewerState, authorityTick: 118, authorityReceivedAtMs: 990, predictedShot: null },
+    events: [], ownShots: [], extrapolatedMs: 0, phase: 'live',
+    ...overrides,
+  };
+}
+presentation.applyFrame(frame());
+assert.equal(game.player, presentation.ownActor, 'the first frame mounts the presentation');
+assert.equal(game.player.state, ownState, 'the viewer renders the client\'s predicted state object');
+assert.equal(game.tankById, presentation.actors);
+assert.deepEqual(game.tanks.map((actor) => actor.id), ['me', 'foe', 'bot-3']);
+const completeRoster = game.rosterTanks;
+assert.deepEqual(completeRoster.map(actor => actor.id), ['me', 'foe', 'bot-3']);
+assert.deepEqual(game.tanks.map((actor) => actor.team), ['player', 'enemy', 'player'], 'teams classify against the viewer');
+assert.equal(visuals.some((visual) => visual.revealedBeforePose), false, 'nobody is visible before a pose');
+assert.deepEqual(visuals.map((visual) => visual.syncs), [1, 1, 1], 'one hidden initialization sync each; the render loop owns the rest');
+assert.deepEqual(visuals.map((visual) => [visual.root.position.x, visual.root.position.z]), [[142, -73], [-91, 64], [10, 10]]);
+assert.equal(game.spotting.isSpotted('foe'), true);
+assert.equal(game.timeS, 12.5);
+assert.equal(game.preBattleS, 0);
+assert.equal(game.gameMode, 'standard');
+// the own tank's requested round is the player's (owner 2026-10-28: "why is atgm labeled Q? E does it for me"): a row
+// holding the authority's old round leaves a pick still on its way; the pick follows the authority when its slot moves
+{
+  const own = presentation.ownActor;
+  assert.equal(own.input.shellSlot, 0, 'the first row seats the authority\'s round');
+  own.input.shellSlot = 1; // Q or the 2 key: the ATGM's slot, sent with the next control sample
+  presentation.applyFrame(frame({ tick: 121 }));
+  assert.equal(own.input.shellSlot, 1, 'a row on the old round does not undo the pick on its way');
+  assert.equal(own.combat.shellSlot, 0, 'the tray shows the authority\'s round until it takes the pick');
+  presentation.applyFrame(frame({ tick: 122, viewer: { ...frame().viewer, row: ownRow({ shellSlot: 1 }) } }));
+  assert.equal(own.input.shellSlot, 1);
+  assert.equal(own.combat.shellSlot, 1, 'the authority took it');
+  presentation.applyFrame(frame({ tick: 123, viewer: { ...frame().viewer, row: ownRow({ shellSlot: 2 }) } }));
+  assert.equal(own.input.shellSlot, 2, 'the authority\'s own switch (an empty round) becomes the pick');
+  presentation.applyFrame(frame({ tick: 124 }));
+  assert.equal(own.input.shellSlot, 0, 'and back');
+}
+const foe = presentation.actors.get('foe');
+assert.equal(foe.combat.hp, 1500);
+assert.equal(foe.combat.reload.t, 1.5);
+assert.equal(foe.combat.reload.totalS, 6);
+assert.equal(foe.combat.reload.kind, 'shell');
+assert.deepEqual(foe.combat.ammo.slice(0, 3), [20, 4, 2]);
+assert.equal(foe.state.speed, 0);
+assert.ok(Math.abs(foe.state.yaw - 0.4) < 1e-9);
+const me = presentation.ownActor;
+assert.equal(me.combat.hp, 1800, 'own combat comes from the newest authority row');
+assert.deepEqual(me.combat.ammo.slice(0, 3), [12, 6, 0]);
+assert.equal(me.combat.modules.trackL.state, 'red', 'the viewer section carries module damage');
+assert.equal(me.combat.modules.turretRing.state, 'yellow');
+assert.equal(me.combat.crew.driver, false);
+assert.equal(me.combat.crew.gunner, true);
+assert.ok(Math.abs(me.combat.equipMults.turret - 1.15) < 1e-9);
+assert.ok(Math.abs(me.modeSpeedMultiplier - 1.85) < 1e-9);
+assert.equal(presentation.actors.get('bot-3').combat.modules.trackL.state, 'ok', 'private mobility details never modify remote actors');
+
+// Track scroll follows observed motion; a hidden enemy leaves the visible roster and the spotting facade.
+presentation.applyFrame(frame({ tick: 122, entities: [sample(3, 10.5, 10)] }));
+assert.equal(game.spotting.isSpotted('foe'), false);
+assert.equal(visuals[1].visible, false, 'an entity absent from the frame is hidden');
+assert.deepEqual(game.tanks.map((actor) => actor.id), ['me', 'bot-3']);
+assert.equal(game.rosterTanks, completeRoster, 'unspotting retains the announced roster object');
+assert.deepEqual(game.rosterTanks.map(actor => actor.id), ['me', 'foe', 'bot-3'], 'an unseen opponent stays listed');
+assert.equal(game.rosterTanks[1], foe, 'identity and last observed state are retained without revealing the actor');
+const bot = presentation.actors.get('bot-3');
+assert.ok(Math.abs(bot.state.trackScroll.l - 0.5 * Math.sin(0.4)) < 1e-9, 'track scroll integrates the observed travel');
+presentation.setVisibility(2, true);
+assert.equal(visuals[1].visible, true);
+
+// ERA cassettes travel as spec-order indices; the visual strips by name and resets on an empty set.
+const eraNames = eraPlateNames(spec.armor);
+assert.ok(eraNames.length > 0, 'm1a1_abrams_hc carries ERA in its authored armor');
+presentation.applyFrame(frame({ tick: 124, entities: [sample(2, -91, 64, { eraSpent: [0] }), sample(3, 10.5, 10)] }));
+assert.deepEqual(visuals[1].strippedEra, [eraNames[0]], 'snapshot state depletes ERA by index → plate name');
+presentation.applyFrame(frame({ tick: 126, entities: [sample(2, -91, 64, { eraSpent: [] }), sample(3, 10.5, 10)] }));
+assert.equal(visuals[1].eraResets, 1, 'an empty set restores the cassettes');
+
+// Destruction: the cause arrives as an event before the row flips; scars detach before the wreck traversal.
+presentation.applyEvent({ kind: 'tank_destroyed', payload: { id: 'foe', killerId: 'me', cause: 'ammo_rack' } }, { own: false, feedbackPredicted: false });
+assert.equal(busEvents.at(-1).type, 'tank:destroyed');
+assert.equal(busEvents.at(-1).payload.cause, 'ammorack');
+assert.deepEqual(busEvents.at(-1).payload.pos, [-91, 1.2, 64]);
+// (ac130-fx-228) a tank's own kill carries no source; the authority's AC-130 / drone source rides through, never a forged one
+assert.equal('source' in busEvents.at(-1).payload, false);
+{
+  const before = busEvents.length;
+  presentation.applyEvent({ kind: 'shell_hit', payload: { shellId: 9, shooterId: 'me', targetId: 'foe', attackerSource: 'ac130', kind: 'he_splash',
+    damage: 40, pos: [0, 0, 0], normal: [0, 1, 0], caliberMm: 152 } }, { own: false, feedbackPredicted: false });
+  const hit = busEvents.slice(before).find((e) => e.type === 'shell:hit');
+  assert.equal(hit?.payload.attackerSource, 'ac130', "the lethal hit's AC-130 source reaches the client");
+  assert.equal(hit?.payload.attackerId, 'me', 'the pilot stays the attacker');
+}
+// (r2) a forged hit source never reaches the client's bus (only the authority's two values ride)
+for (const [source, expected] of [['drone', 'drone'], ['vehicle', undefined], ['__proto__', undefined], ['<img>', undefined]]) {
+  const before = busEvents.length;
+  presentation.applyEvent({ kind: 'shell_hit', payload: { shellId: 10, shooterId: 'me', targetId: 'foe', attackerSource: source, kind: 'pen',
+    damage: 5, pos: [0, 0, 0], normal: [0, 1, 0], caliberMm: 90 } }, { own: false, feedbackPredicted: false });
+  const hit = busEvents.slice(before).find((e) => e.type === 'shell:hit');
+  assert.equal(hit?.payload.attackerSource, expected, `the ${source} hit source as the authority's values allow`);
+  if (expected === undefined) assert.equal('attackerSource' in (hit?.payload ?? {}), false, `a ${source} hit source is dropped`);
+}
+for (const [source, expected] of [['ac130', 'ac130'], ['drone', 'drone'], ['vehicle', undefined], ['<img>', undefined]]) {
+  presentation.applyEvent({ kind: 'tank_destroyed', payload: { id: `src-${source}`, killerId: 'me', cause: 'shot', source, x: 1, y: 0, z: 1 } },
+    { own: false, feedbackPredicted: false });
+  assert.equal(busEvents.at(-1).payload.source, expected, `the ${source} source passes through as the authority stamped it`);
+  assert.equal(busEvents.at(-1).payload.killerId, 'me');
+}
+presentation.applyFrame(frame({ tick: 128, entities: [sample(2, -91, 64, { hp: 0, flags: ENTITY_FLAGS.DESTROYED }), sample(3, 10.5, 10)] }));
+assert.deepEqual(destructionOrder, [['decals:1', null], ['wreck:1', true]], 'decals clear first, then the wreck pops its turret');
+assert.equal(foe.combat.destroyed, true);
+assert.deepEqual(game.tanks.map((actor) => actor.id), ['me', 'foe', 'bot-3'], 'wrecks stay in the roster');
+presentation.applyFrame(frame({ tick: 130, entities: [sample(2, -91, 64), sample(3, 10.5, 10)] }));
+assert.deepEqual(destructionOrder.at(-1), ['revive:1', null], 'a live row after a wreck restores the visual');
+
+// Events: remote shots kick the visual and read the muzzle tip; own confirmed shots after a predicted flash do not kick twice.
+presentation.applyEvent({ kind: 'shell_fired', payload: { shellId: 77, shooterId: 'foe', shellType: 'APFSDS', shellName: 'M829A3', caliberMm: 120, velocityMps: 1650, x: 142, y: 2, z: -73, dx: 0, dy: 0, dz: 1 } }, { own: false, feedbackPredicted: false });
+let fired = busEvents.at(-1);
+assert.equal(fired.type, 'shell:fired');
+assert.equal(fired.payload.muzzleIndex, 1, 'audio receives the same muzzle index as recoil and flash');
+assert.deepEqual(fired.payload.muzzlePos, [21, 3, -8]);
+assert.equal(fired.payload.isPlayer, false);
+assert.equal(visuals[1].kicks, 1);
+presentation.applyFrame(frame({ tick: 132, viewer: { ...frame().viewer, predictedShot: { fireSeq: 5, shellSlot: 0, confirmed: false } } }));
+const predicted = busEvents.at(-1);
+assert.equal(predicted.type, 'weapon:predicted', 'a fire edge flashes before the authority confirms it');
+assert.equal(predicted.payload.fireIntentSeq, 5);
+assert.equal(visuals[0].kicks, 1);
+presentation.applyFrame(frame({ tick: 134, viewer: { ...frame().viewer, predictedShot: { fireSeq: 5, shellSlot: 0, confirmed: false } } }));
+assert.equal(busEvents.at(-1).type, 'weapon:predicted', 'the same edge is not flashed twice');
+assert.equal(busEvents.filter((event) => event.type === 'weapon:predicted').length, 1);
+presentation.applyEvent({ kind: 'shell_fired', payload: { shellId: 78, shooterId: 'me', fireIntentSeq: 5, shellSlot: 0, shellType: 'APFSDS', shellName: 'M829A3', muzzleIndex: -1, caliberMm: 120, velocityMps: 1650, x: 142, y: 2, z: -73, dx: 0, dy: 0, dz: 1 } }, { own: true, feedbackPredicted: true });
+fired = busEvents.at(-1);
+assert.equal(fired.type, 'shell:fired');
+assert.equal(fired.payload.feedbackPredicted, true);
+assert.equal(fired.payload.isPlayer, true);
+assert.equal(visuals[0].kicks, 1, 'a predicted shot does not recoil again on confirmation');
+
+// Local-player events map to the HUD vocabulary and ignore other ids.
+presentation.applyEvent({ kind: 'magazine_reload_denied', payload: { id: 'me', reason: 'MAGAZINE_RELOADING' } }, { own: false, feedbackPredicted: false });
+assert.equal(busEvents.at(-1).type, 'ui:magazineReloadDenied');
+assert.equal(busEvents.at(-1).payload.reason, 'MAGAZINE_RELOADING');
+presentation.applyEvent({ kind: 'ammo_selection_denied', payload: { id: 'me', slot: 1, reason: 'AMMO_EMPTY', guided: true } }, { own: false, feedbackPredicted: false });
+assert.deepEqual(busEvents.at(-1).payload, { type: 'ammo_selection_denied', id: 'me', slot: 1, reason: 'AMMO_EMPTY', guided: true });
+const before = busEvents.length;
+presentation.applyEvent({ kind: 'consumable_used', payload: { id: 'foe', slot: 0, cooldownS: 30, readyAt: 1 } }, { own: false, feedbackPredicted: false });
+assert.equal(busEvents.length, before, 'another player\'s consumable is not our HUD feedback');
+presentation.applyEvent({ kind: 'shell_impact', payload: { shellId: 78, shooterId: 'foe', kind: 'prop', surfaceKind: 'building', x: 3, y: 2, z: 9, nx: 0, ny: 0.2, nz: -0.98, shellType: 'APFSDS', caliberMm: 120 } }, { own: false, feedbackPredicted: false });
+const expired = busEvents.at(-1);
+assert.equal(expired.type, 'shell:expired');
+assert.equal(expired.payload.hitKind, 'prop');
+assert.deepEqual(expired.payload.normal, [0, 0.2, -0.98]);
+assert.equal(expired.payload.impactAngleDeg, undefined, 'an older host names no incidence');
+// (impact-materials-269) the authority's incidence reaches the audio: a solid round skipping off the ground
+presentation.applyEvent({ kind: 'shell_impact', payload: { shellId: 79, shooterId: 'foe', kind: 'terrain', surfaceKind: 'terrain', x: 3, y: 0, z: 9, nx: 0, ny: 1, nz: 0, impactAngleDeg: 86, shellType: 'APFSDS', caliberMm: 120 } }, { own: false, feedbackPredicted: false });
+assert.equal(busEvents.at(-1).type, 'shell:expired');
+assert.equal(busEvents.at(-1).payload.impactAngleDeg, 86, 'the round\'s incidence reaches shell:expired');
+presentation.applyEvent({ kind: 'module_state', payload: { id: 'foe', module: 'gun', state: 'red', source: 'hit' } }, { own: false, feedbackPredicted: false });
+assert.equal(busEvents.at(-1).type, 'module:state');
+// (crew-lines-269) a roof gun's counter-drone strike reaches the bus as solo raises it: the crew calls the drone it cost
+presentation.applyEvent({ kind: 'drone_down', payload: { id: 'me', killerId: 'foe' } }, { own: false, feedbackPredicted: false });
+assert.deepEqual(busEvents.at(-1), { type: 'drone:down', payload: { id: 'me', killerId: 'foe' } });
+
+// Spotting, rolling back onto the tracks and our reload reach the bus in solo play's shapes (2026-10-04): the crew's
+// spot calls, the sixth sense, the self-right and the loading machinery work in a network battle too.
+{
+  const since = busEvents.length;
+  presentation.applyEvent({ kind: 'tank_spotted', payload: { id: 'foe', team: 'alpha', timeS: 12.4, spotterId: 'me' } }, { own: false, feedbackPredicted: false });
+  presentation.applyEvent({ kind: 'tank_spotted', payload: { id: 'me', team: 'bravo', timeS: 12.5, spotterId: 'foe' } }, { own: false, feedbackPredicted: false });
+  presentation.applyEvent({ kind: 'tank_spotted', payload: { id: 'bot-3', team: 'bravo', timeS: 12.5, spotterId: 'foe' } }, { own: false, feedbackPredicted: false });
+  presentation.applyEvent({ kind: 'tank_autoflip', payload: { id: 'bot-3' } }, { own: false, feedbackPredicted: false });
+  const out = busEvents.slice(since).map(({ type, payload }) => [type, payload]);
+  assert.deepEqual(out, [
+    ['tank:spotted', { id: 'foe', team: 'player', timeS: 12.4, spotterId: 'me' }],
+    ['tank:spotted', { id: 'me', team: 'enemy', timeS: 12.5, spotterId: 'foe' }],
+    ['player:spotted', { timeS: game.timeS }],
+    ['tank:spotted', { id: 'bot-3', team: 'enemy', timeS: 12.5, spotterId: 'foe' }],
+    ['tank:autoflip', { id: 'bot-3', specId: 'm1a1_abrams_hc' }],
+  ], 'spots read as the viewer\'s side, our own exposure lights the sixth sense once, and an autoflip passes through');
+  // (the event object is reused per step, as in solo play: read it when it is emitted)
+  const steps = [];
+  const row = (reloadS) => ownRow({ reload: quantizeReloadS(reloadS), reloadTotal: quantizeReloadS(6), reloadKind: 1 });
+  const step = (tick, viewerRow) => {
+    const mark = busEvents.length;
+    presentation.applyFrame(frame({ tick, viewer: { ...frame().viewer, row: viewerRow } }));
+    for (const event of busEvents.slice(mark)) if (event.type === 'player:reload') steps.push({ ...event.payload });
+  };
+  step(135, row(4));
+  step(135, row(4));
+  step(136, row(1.5));
+  step(137, ownRow({ reload: 0, reloadTotal: 0, reloadKind: 0 }));
+  step(138, ownRow({ reload: 0, reloadTotal: 0, reloadKind: 0 }));
+  assert.equal(steps.length, 3, `one event per new reload step, none for a repeated row or a gun at rest (${JSON.stringify(steps)})`);
+  assert.deepEqual(steps.map((e) => [e.done, e.kind, e.total]), [[false, 'shell', 6], [false, 'shell', 6], [true, 'shell', 6]],
+    'the finished step keeps the reload\'s own kind and length');
+  assert.ok(Math.abs(steps[0].progress - 1 / 3) < 0.02 && Math.abs(steps[1].progress - 0.75) < 0.02 && steps[2].progress === 1, 'progress runs to 1');
+  assert.ok(steps.every((e) => e.caliberMm === spec.gun.shells[0].caliberMm), 'with the loaded round\'s bore');
+}
+// a prop this viewer's world does not have (lane mp/ui-sync-check, 2026-09-30): nothing crushed, nothing emitted, no throw —
+// a `pos: null` prop:crushed threw in the feedback runtime inside the frame pump on the mobile tier's lighter world
+{
+  const before = busEvents.length;
+  presentation.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 99, kind: 'fence', cause: 'ram', directionX: 1, directionZ: 0, speedMps: 8 } }, { own: false, feedbackPredicted: false });
+  assert.equal(busEvents.length, before, 'an unknown obstacle index emits nothing');
+  assert.equal(crushed.length, 0, 'and crushes nothing');
+}
+presentation.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 1, kind: 'fence', cause: 'ram', directionX: 1, directionZ: 0, speedMps: 8 } }, { own: false, feedbackPredicted: false });
+assert.deepEqual(crushed, [[1, 1, 0, 8]], 'a destroyed prop crushes the world obstacle');
+assert.equal(busEvents.at(-1).type, 'prop:crushed');
+assert.deepEqual(busEvents.at(-1).payload.pos, [-4, 0, 31]);
+
+// Shells and persistent destroyed props ride the frame.
+presentation.applyFrame(frame({ tick: 136, shells: [{ id: 9, shooterEntityId: 2, x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 900, shellType: 'APFSDS', guided: false }], destroyed: [0, 1], destructibleRevision: 3 }));
+assert.equal(game.shells.length, 1);
+assert.equal(game.shells[0].shooterId, 'foe');
+assert.equal(game.shells[0].spec.tracer, 'APFSDS');
+assert.equal(obstacles[0].crushed, true, 'persistent destroyed indices crush obstacles the events never reached');
+assert.equal(crushed.length, 2, 'an already-crushed obstacle is not crushed again');
+presentation.applyFrame(frame({ tick: 138, shells: [], destroyed: [0, 1], destructibleRevision: 3 }));
+assert.equal(game.shells.length, 0, 'a vanished shell is retired');
+
+// The verdict: from meta after the grace when no event arrived, or at once from the event.
+presentation.applyFrame(frame({ tick: 140, meta: { ...frame().meta, verdict: VERDICT.ALPHA, verdictReason: 'elimination' } }));
+assert.equal(game.result, null, 'a fresh verdict waits for its event');
+nowMs += 600;
+presentation.applyFrame(frame({ tick: 142, meta: { ...frame().meta, verdict: VERDICT.ALPHA, verdictReason: 'elimination' } }));
+assert.equal(game.result, 'victory', 'after the grace the persistent verdict presents');
+assert.equal(game.resultReason, 'elimination');
+const ended = busEvents.at(-1);
+assert.equal(ended.type, 'battle:ended');
+assert.equal(ended.payload.network, true);
+assert.deepEqual(ended.payload.roster.map((entry) => [entry.id, entry.team, entry.isPlayer]), [['me', 'ally', true], ['foe', 'enemy', false], ['bot-3', 'ally', false]]);
+presentation.applyEvent({ kind: 'match_ended', payload: { result: 'bravo', reason: 'time' } }, { own: false, feedbackPredicted: false });
+assert.equal(game.result, 'victory', 'a second verdict never overrides the first');
+
+presentation.dispose();
+assert.ok(visuals.every((visual) => visual.disposed));
+assert.equal(game.player, null, 'dispose restores the game state');
+assert.deepEqual(game.tanks, []);
+assert.equal(game.rosterTanks, undefined, 'dispose restores the solo roster fallback');
+
+// The killcam's step capture, as state.ts takes it in a page battle: once a step of presented time, each pose the last
+// before the frame and its hits.
+{
+  const killcamLog = [];
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, result: null };
+  // the killcam's two capture hooks, as state.ts calls them in a page battle: the step capture, then the hits
+  state.killcam = {
+    recordSimStep(game) { killcamLog.push(['step', game.tanks.find((actor) => actor.id === 'foe')?.state.pos.x ?? null]); },
+    onShellHit(ev) { killcamLog.push(['hit', ev.shellId]); },
+  };
+  const events = [];
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit(type, payload) { events.push({ type, payload }); } },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  p.applyFrame(frame());
+  assert.deepEqual(killcamLog, [], 'nothing is captured before the presentation mounts');
+  p.applyFrame(frame({ tick: 121, renderTimeMs: 2016.7, entities: [sample(2, -90, 64), sample(3, 10, 10)] }));
+  p.applyFrame(frame({ tick: 121, renderTimeMs: 2020, entities: [sample(2, -89, 64), sample(3, 10, 10)] }));
+  p.applyFrame(frame({ tick: 122, renderTimeMs: 2033.4, entities: [sample(2, -88, 64), sample(3, 10, 10)] }));
+  p.applyEvent({ kind: 'shell_hit', payload: { shellId: 11, shooterId: 'foe', targetId: 'me', kind: 'pen', damage: 300,
+    pos: [0, 0, 0], normal: [0, 1, 0], caliberMm: 120 } }, { own: false, feedbackPredicted: false });
+  assert.deepEqual(killcamLog, [['step', -91], ['step', -89], ['hit', 11]],
+    'the killcam captures once a step of presented time, each pose the last before the frame and its hits');
+  p.applyEvent({ kind: 'match_ended', payload: { result: 'bravo', reason: 'elimination' } }, { own: false, feedbackPredicted: false });
+  assert.equal(events.find((e) => e.type === 'battle:ended')?.payload.network, true, "a room's end is a network battle's");
+  p.dispose();
+}
+{
+  const before = busEvents.length;
+  const networkLog = [];
+  const networkGame = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, result: null,
+    killcam: { recordSimStep() { networkLog.push('step'); }, onShellHit() { networkLog.push('hit'); } } };
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: networkGame, bus: { emit(type, payload) { busEvents.push({ type, payload }); } },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  p.applyFrame(frame());
+  p.applyEvent({ kind: 'shell_hit', payload: { shellId: 12, shooterId: 'foe', targetId: 'me', kind: 'pen', damage: 300,
+    pos: [0, 0, 0], normal: [0, 1, 0], caliberMm: 120 } }, { own: false, feedbackPredicted: false });
+  const hit = busEvents.slice(before).find((e) => e.type === 'shell:hit');
+  assert.equal('attackerName' in (hit?.payload ?? {}), false, 'a room battle keeps the wire hit as it came');
+  p.applyFrame(frame({ tick: 122, renderTimeMs: 2033.4 }));
+  assert.deepEqual(networkLog, ['hit', 'step'], "a room battle's killcam gets its hits and the step capture (traces, poses, the warm-up rig retired)");
+  p.dispose();
+}
+
+// The session's verdict (the newest snapshot's meta, or the room's match status) lands ahead of the presented kill. While
+// frames flow it waits for the `match_ended` event in tick order, or the grace, so the final-kill replay has its kill;
+// with no frames flowing it presents at once.
+{
+  const order = [];
+  const room = async () => {
+    const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, result: null };
+    state.killcam = { recordSimStep() {}, onShellHit(ev) { order.push(['hit', ev.shellId]); } };
+    const p = createBattlePresentation({
+      engineCtx: { scene, anisotropy: 1 }, game: state, verdictGraceMs: 500,
+      bus: { emit(type, payload) { if (type === 'battle:ended') order.push(['ended', payload.result]); } },
+      createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+    });
+    await p.applyRoster(roster, context);
+    p.applyFrame(frame());
+    return { p, state };
+  };
+  const kill = { kind: 'shell_hit', payload: { shellId: 21, shooterId: 'foe', targetId: 'me', kind: 'pen', damage: 900, destroyed: true,
+    pos: [0, 0, 0], normal: [0, 1, 0], caliberMm: 120 } };
+  const eventContext = { own: false, feedbackPredicted: false };
+
+  const first = await room();
+  first.p.settleVerdict(VERDICT.BRAVO, 'elimination');
+  assert.equal(first.state.result, null, 'the session\'s verdict waits while frames flow');
+  first.p.applyEvent(kill, eventContext);
+  first.p.applyEvent({ kind: 'match_ended', payload: { result: 'bravo', reason: 'elimination' } }, eventContext);
+  assert.deepEqual(order, [['hit', 21], ['ended', 'defeat']], 'the kill reaches the killcam before the verdict presents');
+  first.p.dispose();
+
+  const second = await room();
+  second.p.settleVerdict(VERDICT.ALPHA, 'elimination');
+  nowMs += 600;
+  second.p.applyFrame(frame({ tick: 141 }));
+  assert.equal(second.state.result, 'victory', 'without its event, the session\'s verdict presents after the grace');
+  second.p.dispose();
+
+  const third = await room();
+  nowMs += 600;
+  third.p.settleVerdict(VERDICT.ALPHA, 'host_ended');
+  assert.equal(third.state.result, 'victory', 'with no frames flowing, the session\'s verdict presents at once');
+  third.p.dispose();
+}
+
+// Announced opponents are listed even before their first spotted snapshot.
+{
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null };
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit() {} },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  p.applyFrame(frame({ entities: [sample(3, 10, 10)] }));
+  assert.deepEqual(state.rosterTanks.map(actor => [actor.displayName, actor.team]),
+    [['Me', 'player'], ['Foe', 'enemy'], ['Bot 3', 'player']]);
+  assert.deepEqual(state.tanks.map(actor => actor.id), ['me', 'bot-3']);
+  assert.equal(state.spotting.isSpotted('foe'), false);
+  assert.equal(p.actors.get('foe').visual.visible, false);
+  p.dispose();
+}
+
+// ------------------------------------------------------------ the event path, a disconnect and a spectator
+{
+  const events = [];
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'oasis' };
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit(type, payload) { events.push({ type, payload }); } },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  p.applyFrame(frame());
+  p.applyEvent({ kind: 'match_ended', payload: { result: 'bravo', reason: 'time_limit' } }, { own: false, feedbackPredicted: false });
+  assert.equal(state.result, 'defeat', 'the event path resolves at once against the viewer\'s team');
+  assert.equal(state.resultReason, 'time_limit');
+  p.dispose();
+
+  const dropped = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, timeS: 0, preBattleS: 0, result: null, resultReason: null };
+  const droppedEvents = [];
+  const q = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: dropped, bus: { emit(type, payload) { droppedEvents.push({ type, payload }); } },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await q.applyRoster(roster, context);
+  q.applyFrame(frame());
+  q.applyFrame(frame({ phase: 'failed' }));
+  assert.equal(dropped.result, 'draw');
+  assert.equal(dropped.resultReason, 'network_disconnect');
+  assert.equal(q.endDisconnected(), false, 'disconnect resolution is idempotent');
+  q.dispose();
+
+  const watching = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, timeS: 0, preBattleS: 0, result: null, resultReason: null };
+  const s = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: watching, bus: { emit() {} }, spectator: true,
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await s.applyRoster(roster, { ...context, ownEntityId: NO_ENTITY, ownPlayerId: '' });
+  s.applyFrame(frame({ entities: [sample(1, 142, -73), sample(2, -91, 64), sample(3, 10, 10)], viewer: { ...frame().viewer, entityId: NO_ENTITY, playerId: '', state: null, row: null, viewer: null } }));
+  assert.equal(watching.player, null, 'a spectator owns no tank');
+  assert.equal(watching.tanks.length, 3);
+  assert.equal(s.predictionWorld(), null, 'no prediction world without a viewer');
+  assert.equal(s.setPerspective(2), true);
+  assert.deepEqual(watching.tanks.map((actor) => actor.team), ['enemy', 'player', 'enemy'], 'the perspective team reads as allies');
+  s.dispose();
+}
+
+// ------------------------------------------------------------ the prediction world mirrors the authority's contacts
+{
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, timeS: 0, preBattleS: 0, result: null, resultReason: null };
+  const obstacleWall = [{ min: [0, 0, 30], max: [40, 3, 32], crushed: false, crushable: false, shape2: null }];
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit() {} },
+    worldCollision: { heightField: worldCollision.heightField, getObstacles: () => obstacleWall, crushObstacle() {} },
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  p.applyFrame(frame({ entities: [sample(2, 20, 12), sample(3, -50, -50)] }));
+  const world = p.predictionWorld();
+  // The prediction world rides the authority's structure support field over the shared terrain (physics lane,
+  // 2026-10-03; it used to hand movement the bare height field, so a predicted hull fell through a roof the authority
+  // stood it on): the terrain is the same function, the wall's top a floor only for a hull above it.
+  assert.ok(world && typeof world.heightField.beginHull === 'function' && typeof world.beginStep === 'function');
+  for (const [x, z] of [[20, -20], [-60, 40], [5, 5]]) {
+    assert.equal(world.heightField.getHeightAt(x, z), worldCollision.heightField.getHeightAt(x, z), 'the same terrain away from parts');
+  }
+  assert.equal(p.predictionWorld(), world, 'the world is built once per viewer spec');
+  const push = new Vector3();
+  assert.equal(world.collide(new Vector3(20, 0, -20), 4, push), false, 'open ground pushes nothing');
+  assert.equal(world.collide(new Vector3(20, 0, 28), 4, push), true, 'the wall pushes the hull back');
+  assert.ok(push.z < 0);
+  assert.equal(world.collide(new Vector3(20, 0, 14), 4, push), true, 'a disclosed hull pushes');
+  assert.ok(Math.hypot(push.x, push.z) > 0);
+  // A rewind to an authority pose inside the presented hull (one interpolation delay old; the authority resolved that
+  // contact) seats the hull against the pose: the pose is clear, the hull stays solid one step further in, and a rewind
+  // that is clear presents it where it is again. A penetration within the wire's quantization is left as presented.
+  const depth = Math.hypot(push.x, push.z);
+  const nx = push.x / depth, nz = push.z / depth;
+  world.anchor({ pos: new Vector3(20, 0, 14), yaw: ownState.yaw });
+  assert.equal(world.collide(new Vector3(20, 0, 14), 4, push), false, 'the authority pose is clear of the seated hull');
+  assert.equal(world.collide(new Vector3(20 - nx * 0.3, 0, 14 - nz * 0.3), 4, push), true, 'the seated hull is still solid');
+  assert.ok(Math.abs(Math.hypot(push.x, push.z) - 0.3) < 0.01, `pushed back by the 0.3 m it was driven in (${Math.hypot(push.x, push.z)})`);
+  world.anchor({ pos: new Vector3(20, 0, -20), yaw: ownState.yaw });
+  assert.equal(world.collide(new Vector3(20, 0, 14), 4, push), true, 'a clear rewind presents the hull where it is');
+  assert.ok(Math.abs(Math.hypot(push.x, push.z) - depth) < 1e-9);
+  const graze = new Vector3(20 + nx * (depth - 0.02), 0, 14 + nz * (depth - 0.02));
+  world.anchor({ pos: graze, yaw: ownState.yaw });
+  assert.equal(world.collide(graze, 4, push), true, 'a 2 cm overlap at the rewind is contact, not a stale hull');
+  assert.ok(Math.abs(Math.hypot(push.x, push.z) - 0.02) < 0.005);
+  p.applyFrame(frame({ entities: [sample(3, -50, -50)] }));
+  assert.equal(world.collide(new Vector3(20, 0, 14), 4, push), false, 'a hidden hull never pushes (its coordinates are stale)');
+  p.dispose();
+}
+
+// ------------------------------------------------------------ a remote row's body bits at the real call site (round 2, Q7)
+// applySamplePose restores ground contact, the body mode and the support from the row (wire 10, hullBodyRow.ts) onto the
+// copy the prediction world's tank contacts read. hullBodyRow.selftest drives the owner through its own replica of the
+// pose writes; this drives the presentation itself, so the call site cannot go back to the old projection
+// (tumbling = overturned || autoRighting, the support cache left at the copy's origin) with every receipt green.
+{
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, timeS: 0, preBattleS: 0, result: null, resultReason: null };
+  const p = createBattlePresentation({
+    engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit() {} }, worldCollision,
+    createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs,
+  });
+  await p.applyRoster(roster, context);
+  const foeCopy = () => p.actors.get('foe').state;
+  const botCopy = () => p.actors.get('bot-3').state;
+  // the stacked hull 2.5 m up and the tumbling one on the ground: neither copy was ever stepped or given a support cache
+  p.applyFrame(frame({ tick: 900, entities: [
+    sample(2, 20, 12, { y: 3.7, flags: ENTITY_FLAGS.TUMBLING | ENTITY_FLAGS.STACKED }),
+    sample(3, -50, -50, { flags: ENTITY_FLAGS.TUMBLING }),
+  ] }));
+  assert.equal(hullBodyMode(foeCopy()), 'tumbling', 'a stacked tumbling row is a tumbling copy');
+  assert.equal(foeCopy()._body.dynamicSupport, true, 'STACKED is the copy\'s support flag');
+  assert.equal(foeCopy()._sup.top, Infinity, 'the copy\'s support cache is not its own: never elevated');
+  assert.equal(hullBodyMode(botCopy()), 'tumbling', 'a plain tumble (TUMBLING alone) is the rigid phase on the copy');
+  assert.equal(botCopy().overturned, false, 'neither overturned');
+  assert.equal(botCopy()._body.autoRighting, false, 'nor righting');
+  assert.equal(botCopy()._body.dynamicSupport, false, 'and on its own support');
+  assert.equal(botCopy().grounded, true);
+  p.applyFrame(frame({ tick: 902, entities: [
+    sample(2, 20, 12, { y: 3.7, flags: ENTITY_FLAGS.AIRBORNE }),
+    sample(3, -50, -50, { flags: ENTITY_FLAGS.TUMBLING | ENTITY_FLAGS.OVERTURNED | ENTITY_FLAGS.AUTO_RIGHTING }),
+  ] }));
+  assert.equal(foeCopy().grounded, false, 'AIRBORNE: both ground copies');
+  assert.equal(foeCopy()._ride.grounded, false);
+  assert.equal(hullBodyMode(foeCopy()), 'supported', 'a row without a rigid bit is a supported hull');
+  assert.equal(foeCopy()._body.dynamicSupport, false, 'a row without STACKED clears the support');
+  assert.equal(hullBodyMode(botCopy()), 'righting', 'the righting sub-state');
+  assert.equal(botCopy().overturned, true);
+  p.dispose();
+}
+
+// ------------------------------------------------------------ the recording adapter (headless soaks)
+{
+  const recorder = new RecordingPresentation(4);
+  recorder.applyRoster(roster, context);
+  for (let n = 0; n < 6; n++) recorder.applyFrame(frame({ tick: 200 + n, entities: [sample(3, n, n)] }));
+  assert.equal(recorder.frames.length, 4, 'the log is bounded');
+  assert.deepEqual([...recorder.hidden], [2], 'an entity absent from the frame is hidden; the viewer never is');
+  recorder.applyEvent({ kind: 'match_ended', payload: { result: 'draw', reason: 'time' } }, { own: false, feedbackPredicted: false });
+  assert.deepEqual(recorder.verdict, { verdict: VERDICT.DRAW, reason: 'time' });
+  recorder.dispose();
+  assert.equal(recorder.disposed, true);
+}
+
+// ------------------------------------------------------------ the authority's ruleset reaches the game state (lane mp/ui-sync-check, 2026-09-30)
+{
+  const { matchRulesetFor } = await import('../../sim/matchRuleset.ts');
+  assert.equal(game.ruleset?.mode, 'standard', 'a placeholder rulesetJson leaves the mode\'s own table');
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'winter' };
+  const q = createBattlePresentation({ engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit() {} }, worldCollision, createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clearVehicleDecals: () => {}, camoFor: () => 'summer', clock: () => nowMs });
+  const arranged = matchRulesetFor('zone_control', null, { allies: null, enemies: null, waveSize: null, enemyNation: null, scoreTarget: 100 });
+  await q.applyRoster(roster, { ...context, mode: 'zone_control', rulesetJson: JSON.stringify(arranged) });
+  assert.equal(state.gameMode, 'zone_control');
+  assert.equal(state.ruleset?.scoreTarget, 100, 'the WELCOME\'s ruleset (the room\'s arrangement) is what the HUD reads');
+  assert.equal(state.ruleset?.respawnS, 6);
+  await q.applyRoster(roster, { ...context, mode: 'zone_control', rulesetJson: JSON.stringify({ mode: 'standard', scoreTarget: 1 }) });
+  assert.equal(state.ruleset?.mode, 'zone_control', 'a table naming another mode is refused: the mode\'s own');
+  assert.equal(state.ruleset?.scoreTarget, undefined, 'the mode\'s own table names no target (the controller scores to 750)');
+  await q.applyRoster(roster, { ...context, mode: 'zone_control', rulesetJson: 'not json' });
+  assert.equal(state.ruleset?.scoreTarget, undefined, 'unparseable: the mode\'s own');
+  q.dispose();
+}
+
+// ------------------------------------------------------------ destroyed props: settled state vs live events (world state audit, 2026-10-01)
+// The persistent destroyed list reaches the presentation one interpolation delay ahead of the presented world. Before this
+// lane it felled every listed prop on arrival — early, toward +Z, at speed 0 — and the `world_prop_destroyed` event found
+// nothing left to fell; a late joiner watched every earlier fall replay; a host migration's re-sends crunched twice.
+// (round 2 of the 2026-11-02 audit, U27) A listed prop lies as it fell: the list's falls (wire 11) give the cause and the
+// direction; a none, or a list without them (an older frame, a migration's restored entries), lays it as the withheld live
+// event does: as a ram along the prop's own heading (sim/obstacleFall.ts withheldObstacleFall). Before, every settled prop
+// lay as a ram toward +Z (0, 1): this receipt pinned it. Until the round 2 review a none was direction (0, 0), which the
+// world's hinge (world/topple.ts) lays exactly as (0, 1): so the lays below are judged through topple.ts, not by arguments.
+{
+  const propObstacles = Array.from({ length: 7 }, (_, index) => ({ min: [index * 4, 0, 40], max: [index * 4 + 1, 2, 41], crushed: false, crushable: true, crushMin: 0, shape2: null }));
+  const propCalls = [];
+  const propFx = [];
+  const propWorld = {
+    heightField: worldCollision.heightField,
+    getObstacles: () => propObstacles,
+    crushObstacle(obstacle, dx, dz, speed, cause, options) { propCalls.push([propObstacles.indexOf(obstacle), dx, dz, speed, cause ?? null, options?.settled === true]); },
+  };
+  const propGame = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'winter' };
+  const props = createBattlePresentation({ engineCtx: { scene, anisotropy: 1 }, game: propGame, bus: { emit(type, payload) { propFx.push({ type, payload }); } }, worldCollision: propWorld, createTankVisual: fakeVisual, prepareVisualTextures: async () => {}, clock: () => nowMs });
+  await props.applyRoster(roster, context);
+  const owed = new Set([2]);
+  const crushFx = () => propFx.filter((event) => event.type === 'prop:crushed').length;
+  const propFrame = (overrides) => frame({ destroyedPending: (index) => owed.has(index), ...overrides });
+  // a late joiner's first frame: the list is settled state — final pose, no fall, no sound; the prop whose event is owed waits for it
+  // prop 0 a ram toward -X, prop 4 a shell toward -Z (codes: cause << 6 | heading in 64ths of a turn, sim/obstacleFall.ts)
+  props.applyFrame(propFrame({ tick: 500, destroyed: [0, 2, 4], destroyedFalls: [(1 << 6) | 48, (1 << 6) | 16, (2 << 6) | 32], destructibleRevision: 3 }));
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  // the lay the world's hinge makes of a crush's direction: its axis and its settled angle on a slope
+  const slope = { getHeightAt: (x, z) => 0.35 * z + 0.12 * x };
+  const lay = (dx, dz) => {
+    const axis = setToppleAxis(new Vector3(), dx, dz);
+    return [axis.x, axis.y, axis.z, settledToppleAngle(slope, 0, 0, 0, dx, dz, 6, 0.2)].map((v) => Math.round(v * 1e6) / 1e6 + 0);
+  };
+  const layOf = (call) => lay(call[1], call[2]);
+  const ownLay = (index) => { const own = withheldObstacleFall(index, { cause: 'ram', dx: 0, dz: 0 }); return lay(own.dx, own.dz); };
+  const PLUS_Z_LAY = lay(0, 1);
+  assert.equal(propCalls.length, 2, 'what predates the view lands settled; the owed prop is left to its event');
+  assert.ok(propCalls[0][0] === 0 && near(propCalls[0][1], -1) && near(propCalls[0][2], 0) && propCalls[0][4] === 'ram' && propCalls[0][5] === true,
+    `a settled prop lies as it fell: a ram toward -X (${propCalls[0]})`);
+  assert.ok(propCalls[1][0] === 4 && near(propCalls[1][1], 0) && near(propCalls[1][2], -1) && propCalls[1][4] === 'shell' && propCalls[1][5] === true,
+    `a shell's fall keeps its cause and its direction (${propCalls[1]})`);
+  assert.equal(crushFx(), 0, 'settled state makes no sound');
+  assert.equal(propObstacles[2].crushed, false);
+  // the owed event arrives: a live fall with the authority\'s direction and speed, and the crunch
+  props.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 2, kind: 'tree', cause: 'ram', directionX: 0.6, directionZ: -0.8, speedMps: 7 } }, { own: false, feedbackPredicted: false });
+  assert.deepEqual(propCalls.at(-1), [2, 0.6, -0.8, 7, 'ram', false], 'the event fells the prop live, in its direction, at its speed');
+  assert.equal(crushFx(), 1);
+  assert.deepEqual(propFx.at(-1).payload.dir, [0.6, 0, -0.8]);
+  owed.delete(2);
+  // the same list again, the owed prop released meanwhile: nothing more to lay down
+  props.applyFrame(propFrame({ tick: 503, destroyed: [0, 2, 4], destructibleRevision: 3 }));
+  assert.equal(propCalls.length, 3);
+  // a duplicate send (a host migration re-destroying what already fell here): no second fall, no second crunch
+  props.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 2, kind: 'tree', cause: 'ram', directionX: 1, directionZ: 0, speedMps: 9 } }, { own: false, feedbackPredicted: false });
+  assert.equal(propCalls.length, 3, 'a prop falls once');
+  assert.equal(crushFx(), 1, 'and crunches once');
+  // a shell-felled prop carries its cause
+  props.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 3, kind: 'fence', cause: 'shell', directionX: 0, directionZ: 1, speedMps: 900 } }, { own: false, feedbackPredicted: false });
+  assert.deepEqual(propCalls.at(-1), [3, 0, 1, 900, 'shell', false]);
+  // the new host\'s list reads lower for a moment (a revision regression across a migration) yet names a prop this view
+  // has not laid down: the content decides, not the number
+  // (its fall withheld from this viewer: none, a ram along the prop's own heading)
+  props.applyFrame(propFrame({ tick: 600, destroyed: [0, 1], destroyedFalls: [(1 << 6) | 48, 0], destructibleRevision: 2 }));
+  assert.deepEqual([propCalls.at(-1)[0], propCalls.at(-1)[3], propCalls.at(-1)[4], propCalls.at(-1)[5]], [1, 0, 'ram', true]);
+  assert.deepEqual(layOf(propCalls.at(-1)), ownLay(1), 'a fall this viewer may not read lies along the prop\'s own heading');
+  assert.notDeepEqual(layOf(propCalls.at(-1)), PLUS_Z_LAY, 'not as the old ram toward +Z');
+  // a frame without the owed-prop predicate or the falls (a recorder, an older frame) still settles its list, each prop
+  // along its own heading (not the +Z lay for these props: one prop in 64 hashes to heading 0, toward +Z)
+  props.applyFrame(frame({ tick: 700, destroyed: [0, 1, 5], destructibleRevision: 4 }));
+  assert.deepEqual([propCalls.at(-1)[0], propCalls.at(-1)[3], propCalls.at(-1)[4], propCalls.at(-1)[5]], [5, 0, 'ram', true]);
+  assert.deepEqual(layOf(propCalls.at(-1)), ownLay(5));
+  assert.notDeepEqual(layOf(propCalls.at(-1)), PLUS_Z_LAY);
+  assert.notDeepEqual(ownLay(1), ownLay(5), 'two props, two headings');
+  assert.equal(crushFx(), 2, 'only the two live events sounded');
+  // a live fall withheld from this viewer (no cause, direction or speed: its source hidden) lies as a settled none would:
+  // along the prop's own heading, and its splinters fly that way
+  const before = propCalls.length;
+  props.applyEvent({ kind: 'world_prop_destroyed', payload: { obstacleIndex: 6, kind: 'tree' } }, { own: false, feedbackPredicted: false });
+  assert.equal(propCalls.length, before + 1);
+  assert.deepEqual([propCalls.at(-1)[0], propCalls.at(-1)[3], propCalls.at(-1)[4], propCalls.at(-1)[5]], [6, 0, 'ram', false], 'it falls live, as a ram');
+  assert.deepEqual(layOf(propCalls.at(-1)), ownLay(6), 'a withheld live fall lies along the prop\'s own heading');
+  assert.notDeepEqual(layOf(propCalls.at(-1)), PLUS_Z_LAY, 'not toward +Z');
+  assert.ok(near(propFx.at(-1).payload.dir[0], propCalls.at(-1)[1]) && near(propFx.at(-1).payload.dir[2], propCalls.at(-1)[2]),
+    'its splinters fly along that heading');
+  assert.equal(crushFx(), 3);
+  props.dispose();
+}
+
+// ------------------------------------------------------------ the authority's detonations as munition:blast (destruction §11, 2026-10-07)
+// A world impact raises one blast before the round expires (its structure mapped to this world's, open water by this
+// world's mask); a round bursting on a hull raises one from its direct hit's event before the hit, none from splash; a
+// cook-off and a fuel fire raise theirs before the death — the solo step's order.
+{
+  const { setCompoundShape, setObbShape } = await import('../../world/collision.ts');
+  const blastBus = [];
+  const houseObstacles = [setObbShape({ min: [0, 0, 0], max: [0, 1.8, 0], kind: 'structure', structureIdx: 0 }, 40, 40, 6, 4, 0)];
+  const houseColliders = [setCompoundShape({ min: [0, 0, 0], max: [0, 6, 0], kind: 'structure', structureIdx: 0 },
+    [{ kind: 'obb', cx: 40, cz: 40, hw: 6, hl: 4, yaw: 0 }])];
+  const blastWorld = {
+    heightField: { getHeightAt: () => 0, getHeightAtFast: () => 0, getContactHeightAt: () => 0, getGroundType: () => 'hard',
+      getWaterMaskAt: (x) => (x < -100 ? 1 : 0) },
+    getObstacles: () => houseObstacles, getColliders: () => houseColliders, crushObstacle() {},
+  };
+  const blastGame = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, preBattleS: 0,
+    result: null, resultReason: null, mapId: 'winter' };
+  const p = createBattlePresentation({ engineCtx: { scene, anisotropy: 1 }, game: blastGame,
+    bus: { emit(type, payload) { blastBus.push({ type, payload }); } }, worldCollision: blastWorld, createTankVisual: fakeVisual,
+    prepareVisualTextures: async () => {}, clock: () => nowMs });
+  const quiet = { own: false, feedbackPredicted: false };
+  const types = () => blastBus.map((event) => event.type);
+  p.applyEvent({ kind: 'shell_impact', payload: { munition: 'he', chargeKg: 3.5, structureId: 0, shellId: 900, shooterId: 'foe',
+    kind: 'prop', surfaceKind: 'structure', x: 40, y: 2, z: 36, nx: 0, ny: 0, nz: -1, shellType: 'HE', caliberMm: 125 } }, quiet);
+  assert.deepEqual(types(), ['munition:blast', 'shell:expired'], 'the blast before the round expires');
+  assert.deepEqual(blastBus[0].payload, { munition: 'he', chargeKg: 3.5, x: 40, y: 2, z: 36, nx: 0, ny: 0, nz: -1,
+    surface: 'structure', structureId: 0 }, 'the struck structure is this world\'s');
+  blastBus.length = 0;
+  p.applyEvent({ kind: 'shell_impact', payload: { munition: 'howitzer', chargeKg: 6.8, shellId: 901, kind: 'terrain', surfaceKind: 'terrain',
+    x: -150, y: 0, z: 0, nx: 0, ny: 1, nz: 0, craterId: 3 } }, quiet);
+  assert.equal(blastBus[0].payload.surface, 'water', 'open water by this world\'s mask');
+  assert.equal(blastBus[0].payload.craterId, 3, 'the crater it dug rides the blast');
+  assert.equal('structureId' in blastBus[0].payload, false);
+  blastBus.length = 0;
+  p.applyEvent({ kind: 'shell_impact', payload: { munition: 'kinetic', chargeKg: 0, shellId: 902, kind: 'terrain', x: 0, y: 0, z: 0 } }, quiet);
+  assert.deepEqual(types(), ['shell:expired'], 'a penetrator raises no blast');
+  blastBus.length = 0;
+  const hitBase = { shellId: 903, shooterId: 'foe', attackerId: 'foe', targetId: 'me', pos: [1, 1, 1], normal: [0, 1, 0], munition: 'heat', chargeKg: 1.6 };
+  p.applyEvent({ kind: 'shell_hit', payload: { ...hitBase, kind: 'he_pen', blast: [5, 1.5, 6, 1, 0, 0] } }, quiet);
+  p.applyEvent({ kind: 'shell_hit', payload: { ...hitBase, kind: 'he_splash', targetId: 'bot-3', pos: [9, 1, 9] } }, quiet);
+  assert.deepEqual(types(), ['munition:blast', 'shell:hit', 'shell:hit'], 'one blast, from the direct hit, before it');
+  assert.deepEqual(blastBus[0].payload, { munition: 'heat', chargeKg: 1.6, x: 5, y: 1.5, z: 6, nx: 1, ny: 0, nz: 0, surface: 'tank' });
+  blastBus.length = 0;
+  p.applyEvent({ kind: 'tank_destroyed', payload: { id: 'ghost', killerId: 'foe', cause: 'fire', x: 3, y: 0.5, z: 4 } }, quiet);
+  assert.deepEqual(types(), ['munition:blast', 'tank:destroyed'], 'a fuel fire bursts before the death');
+  assert.deepEqual(blastBus[0].payload, { munition: 'fuel', chargeKg: 4, x: 3, y: 1.5, z: 4, nx: 0, ny: 1, nz: 0, surface: 'tank' });
+  blastBus.length = 0;
+  p.applyEvent({ kind: 'tank_destroyed', payload: { id: 'ghost-2', killerId: 'foe', cause: 'shot', x: 3, y: 0.5, z: 4 } }, quiet);
+  assert.deepEqual(types(), ['tank:destroyed'], 'a plain kill raises no blast');
+  p.dispose();
+}
+
+console.log('mp battle presentation: roster → hidden visuals, frames → game state/visuals/combat/ERA/wrecks/shells/props, events → bus vocabulary, predicted own shots, settled destroyed lists vs live prop falls, verdicts (the session verdict after its kill), killcam step capture and end, disconnect, spectator perspective, prediction world, the authority\'s detonations as munition:blast pass');
+
+{
+ const state={tanks:[],tankById:new Map(),player:null,shells:[],spotting:null,allTanks:[],timeS:0};
+ const built=[],painted=[];
+ const p=createBattlePresentation({engineCtx:{scene,anisotropy:1},game:state,bus:{emit(){}},
+  createTankVisual:(id,...rest)=>{built.push(id);return fakeVisual(id,...rest);},
+  prepareVisualTextures:async spec=>{painted.push(spec.id);},clock:()=>nowMs});
+ await p.applyRoster([
+  {...roster[0],bot:false,team:TEAM.ALPHA},
+  {...roster[1],bot:true,team:TEAM.ALPHA},
+ ],{...context,mode:'ac130'});
+ assert.equal(p.actors.get('me').visual.root.userData.aircraftOnly,true);
+ assert.deepEqual(built,[roster[1].specId],'only the ground escort constructs a tank');
+ assert.deepEqual(painted,[roster[1].specId],'only the ground escort prepares camouflage');
+ p.dispose();
+}
+
+// ---- the roster prewarm (2026-10-15, the MP stream): the seats the room names warm their builders and textures before
+// the WELCOME — once per vehicle, paint and quality, this viewer's at its own quality; a failure never escapes; an
+// aborted round stops warming
+{
+  const built = [], baked = [];
+  const ensureBuilder = async (specId) => { built.push(specId); };
+  const prepareVisualTextures = async (spec, anisotropy, quality, tick, camo) => {
+    baked.push(`${spec.id}:${camo}:${quality}:${anisotropy}`);
+    if (camo === 'broken') throw new Error('a bake that fails');
+  };
+  const specA = 'm1a1_abrams_hc', specB = getSpec('t90am') ? 't90am' : 'm1a1_abrams_hc';
+  const warmed = await prewarmRosterVisuals([
+    { specId: specA, camo: 'summer', isViewer: true },
+    { specId: specB, camo: 'winter', isViewer: false },
+    { specId: specB, camo: 'winter', isViewer: false },
+    { specId: specA, camo: 'broken', isViewer: false },
+  ], { anisotropy: 8, ensureBuilder, prepareVisualTextures });
+  assert.equal(warmed, 3, 'one warm per vehicle, paint and quality');
+  assert.deepEqual(baked, [`${specA}:summer:high:8`, `${specB}:winter:ai:8`, `${specA}:broken:ai:8`], 'this viewer\'s vehicle at its own quality; the failing bake did not escape');
+  const abort = new AbortController();
+  const stopped = [];
+  await prewarmRosterVisuals([{ specId: specA, camo: 'a', isViewer: false }, { specId: specB, camo: 'b', isViewer: false }], {
+    ensureBuilder: async (specId) => { stopped.push(specId); abort.abort(); }, prepareVisualTextures, signal: abort.signal,
+  });
+  assert.deepEqual(stopped, [specA], 'an aborted round stops warming');
+}
+
+// ---- the roster prebuild (2026-10-23, item/mp-rejoin-levers-242): the seats the room names are built beside the world,
+// one build per vehicle, paint and build tier (the viewer's seat the source where it shares one), the others copied from
+// it, the burnt bake after it; the roster takes every one with its own options and builds none; a seat the WELCOME does
+// not name is disposed; an abort stops the prebuild and disposes what it made. perf-252: every seat is the battle
+// roster's build (static batches, the vehicle's battle merge), the viewer's at its device's geometry (here a desktop:
+// high, so it builds alone) and every other seat's at low geometry with the battle detail hand-offs.
+{
+  const quick = { yieldFrame: () => Promise.resolve(), yieldTask: () => Promise.resolve() };
+  const built = [], copied = [], baked = [], burnt = [], builds = [];
+  const steps = function* (specId, _engineCtx, opts) { built.push(`${specId}:${opts.quality}`); builds.push(opts); yield; yield; return fakeVisual(specId, null, opts); };
+  const deps = {
+    engineCtx: { scene, anisotropy: 1 }, scheduling: quick,
+    createTankVisualSteps: steps,
+    cloneTankVisual: (source, _engineCtx, opts) => { copied.push(opts.quality); builds.push(opts); return fakeVisual('m1a1_abrams_hc', null, opts); },
+    prepareVisualTextures: async (spec, _aniso, quality, _tick, camo) => { baked.push(`${spec.id}:${camo}:${quality}`); },
+    ensureBuilder: async () => {},
+    prebakeBurnt: function* (specId, _aniso, selection) { burnt.push(`${specId}:${selection}`); yield; },
+  };
+  const spec = roster[0].specId;
+  const prebuilt = prebuildRosterVisuals([
+    { playerId: 'bot-3', specId: spec, camo: 'summer', isViewer: false },
+    { playerId: 'me', specId: spec, camo: 'summer', isViewer: true },
+    { playerId: 'foe', specId: spec, camo: 'winter', isViewer: false },
+    { playerId: 'bot-9', specId: spec, camo: 'winter', isViewer: false },
+  ], deps);
+  await prebuilt.settled;
+  assert.deepEqual(built, [`${spec}:ai`, `${spec}:high`, `${spec}:ai`], 'one build per vehicle, paint and build tier: the viewer\'s own (high geometry on a desktop) builds alone');
+  assert.deepEqual(copied, ['ai'], 'the other seats of a build are copies');
+  for (const opts of builds) {
+    assert.equal(opts.batchStatic, true, 'a seat is a battle-batched build');
+    assert.equal(opts.staticDrawMerge, battleStaticDrawMerge(spec), 'with its vehicle\'s battle merge');
+    assert.deepEqual([opts.geometryQuality, opts.battleDetailLod], opts.quality === 'high' ? ['high', false] : ['low', true],
+      'the viewer\'s own at its device\'s geometry, every other seat at low geometry with the battle detail hand-offs');
+  }
+  assert.deepEqual(burnt, [`${spec}:summer`, `${spec}:winter`], 'the burnt bake follows each group\'s build');
+  const state = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0 };
+  const rosterBuilds = [];
+  const p = createBattlePresentation({ engineCtx: { scene, anisotropy: 1 }, game: state, bus: { emit() {} }, prebuilt,
+    createTankVisual: (id, ...rest) => { rosterBuilds.push(id); return fakeVisual(id, ...rest); },
+    camoFor: (entry) => (entry.team === TEAM.ALPHA ? 'summer' : 'winter'), prepareVisualTextures: async () => {}, clock: () => nowMs });
+  const bot9 = prebuilt.has('bot-9');
+  await p.applyRoster(roster, context);
+  assert.equal(bot9, true);
+  assert.deepEqual(rosterBuilds, [], 'the roster built none of the seats the prebuild held');
+  assert.equal(prebuilt.has('bot-9'), false, 'a seat the WELCOME does not name is let go once the roster is done');
+  p.dispose();
+  // an abort stops the prebuild and disposes what it made
+  const abort = new AbortController();
+  const made = [];
+  const stopping = prebuildRosterVisuals([
+    { playerId: 'a', specId: spec, camo: 'summer', isViewer: false },
+    { playerId: 'b', specId: spec, camo: 'winter', isViewer: false },
+  ], { ...deps, signal: abort.signal,
+    createTankVisualSteps: function* (specId, _engineCtx, opts) { const visual = fakeVisual(specId, null, opts); made.push(visual); abort.abort(); yield; return visual; } });
+  await stopping.settled;
+  assert.equal(stopping.has('a') || stopping.has('b'), false, 'an aborted prebuild holds nothing');
+
+  // (268, Main item 6) a wrong guess never draws: the client's prebuild warms each bot's vehicle in the paint the
+  // authority's roll will name (session/browserComposition.ts), but the WELCOME roster's paint decides. A bot prebuilt in
+  // 'factory' whose roster row names 'auto' is warmed and built by the roster in 'auto'; the guessed vehicle is disposed
+  // without ever joining the scene; the first battle frame shows the bot in the roster's paint, and no frame the guess
+  {
+    const guesses = [];
+    const guessing = prebuildRosterVisuals([{ playerId: 'bot-3', specId: spec, camo: 'factory', isViewer: false }], { ...deps,
+      createTankVisualSteps: function* (specId, _engineCtx, opts) { yield; const visual = fakeVisual(specId, null, opts); visual.paint = opts.camoPattern; visual.opts = opts; guesses.push(visual); return visual; } });
+    await guessing.settled;
+    assert.equal(guesses.length, 1, 'the guess was built');
+    const built = guesses[0].opts;
+    assert.deepEqual([guessing.has('bot-3'), guessing.has('bot-3', { specId: spec, options: built }),
+      guessing.has('bot-3', { specId: spec, options: { ...built, camoPattern: 'auto' } })], [true, true, false],
+      'the prebuild holds the bot as it was guessed only (take()\'s own rule)');
+    const added = [];
+    const field = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'verdant' };
+    const rosterPaints = [], warmedPaints = [];
+    const q = createBattlePresentation({ engineCtx: { scene: { add(object) { added.push(object); } }, anisotropy: 1 }, game: field, bus: { emit() {} }, prebuilt: guessing,
+      createTankVisual: (id, engineCtx, opts) => { rosterPaints.push(opts.camoPattern); const visual = fakeVisual(id, engineCtx, opts); visual.paint = opts.camoPattern; return visual; },
+      // the client's rule (browserComposition camoFor): a bot wears the roster's paint, a seat its room camo
+      camoFor: (entry) => (entry.bot ? entry.camo : 'summer') ?? 'factory',
+      prepareVisualTextures: async (warmSpec, _aniso, quality, _tick, camo) => { warmedPaints.push(`${camo}:${quality}`); }, clock: () => nowMs });
+    await q.applyRoster([roster[0], { ...roster[2], camo: 'auto' }], context);
+    q.applyFrame(frame({ entities: [sample(3, 10, 10)] }));
+    const bot = q.actors.get('bot-3');
+    assert.equal(bot.camo, 'auto', 'the bot wears the roster\'s paint');
+    assert.equal(bot.visual.paint, 'auto', 'its vehicle is the roster\'s build in that paint');
+    assert.deepEqual(rosterPaints.sort(), ['auto', 'summer'], 'the roster built the seat in its camo and the bot in the roster\'s paint, nothing in the guess');
+    assert.ok(warmedPaints.includes('auto:ai') && !warmedPaints.some((paint) => paint.startsWith('factory')), `its textures warmed in the roster's paint, never the guess (${warmedPaints})`);
+    assert.equal(guesses[0].disposed, true, 'the guessed vehicle is disposed');
+    assert.ok(!added.includes(guesses[0].root), 'and never joined the scene: no frame draws the guess');
+    assert.ok(added.includes(bot.visual.root) && bot.visual.visible && bot.visual.syncs > 0, 'the first battle frame shows the bot in the roster\'s paint');
+    q.dispose();
+  }
+
+  // (round 8 Y1 s4-06) a guess with the roster's paint and another vehicle (a rejoin after a human left: the bots' ids hold
+  // their roll index while their vehicles move, room/roomBots.ts) is no held seat either: has() and take() share one rule,
+  // so the roster warms and builds the bot's real vehicle with the others (never a cold build after the warm), and the
+  // guess is disposed without joining the scene
+  {
+    const other = ['t90am', 'leo2_improved', 'leo2a4'].find((id) => getSpec(id) && getSpec(id).id !== getSpec(spec).id);
+    assert.ok(other, 'a second vehicle for the roster row');
+    const guesses = [];
+    const guessing = prebuildRosterVisuals([{ playerId: 'bot-3', specId: spec, camo: 'auto', isViewer: false }], { ...deps,
+      createTankVisualSteps: function* (specId, _engineCtx, opts) { yield; const visual = fakeVisual(specId, null, opts); visual.specId = specId; guesses.push(visual); return visual; } });
+    await guessing.settled;
+    const added = [], warmedSeats = [], rosterBuilds = [];
+    const field = { tanks: [], tankById: new Map(), player: null, shells: [], spotting: null, allTanks: [], timeS: 0, preBattleS: 0, result: null, resultReason: null, mapId: 'verdant' };
+    const q = createBattlePresentation({ engineCtx: { scene: { add(object) { added.push(object); } }, anisotropy: 1 }, game: field, bus: { emit() {} }, prebuilt: guessing,
+      createTankVisual: (id, engineCtx, opts) => { rosterBuilds.push(`${id}:${opts.camoPattern}`); const visual = fakeVisual(id, engineCtx, opts); visual.specId = id; return visual; },
+      camoFor: (entry) => (entry.bot ? entry.camo : 'summer') ?? 'factory',
+      prepareVisualTextures: async (warmSpec, _aniso, quality, _tick, camo) => { warmedSeats.push(`${warmSpec.id}:${camo}:${quality}`); }, clock: () => nowMs });
+    await q.applyRoster([roster[0], { ...roster[2], specId: other, camo: 'auto' }], context);
+    assert.ok(warmedSeats.includes(`${getSpec(other).id}:auto:ai`),
+      `the bot's real vehicle is warmed with the roster, its guess in the right paint notwithstanding (${warmedSeats})`);
+    assert.ok(rosterBuilds.includes(`${other}:auto`), 'and built by the roster');
+    assert.equal(q.actors.get('bot-3').visual.specId, other, 'the bot drives its real vehicle');
+    assert.equal(guesses[0].disposed, true, 'the guessed vehicle is disposed');
+    assert.ok(!added.includes(guesses[0].root), 'and never joined the scene');
+    q.dispose();
+  }
+}

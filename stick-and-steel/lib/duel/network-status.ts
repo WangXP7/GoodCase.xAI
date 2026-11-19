@@ -1,0 +1,2 @@
+export type NetworkStatus = { mode: 'offline' | 'connecting' | 'queue' | 'countdown' | 'playing' | 'waiting' | 'error'; label: string; localPlayer: number; names: string[]; host: boolean; players: number; countdown: number; botIn: number | null; fallbackBot: boolean };
+export const OFFLINE_STATUS: NetworkStatus = { mode: 'offline', label: 'Solo duel', localPlayer: 0, names: ['You', 'The challenger'], host: false, players: 1, countdown: 0, botIn: null, fallbackBot: false };

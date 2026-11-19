@@ -1,0 +1,48 @@
+// Layout of the address search: the field with its icon and clear button,
+// a status line under it, the results as a popup list. A place chosen shows
+// its pin in green.
+
+.autocomplete-container {
+  position: relative;
+  width: 100%;
+}
+
+.input-wrapper.has-value td-icon {
+  color: var(--td-green);
+}
+
+.clear-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.status-bar {
+  padding: 4px 2px 0;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 220px;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.result-item {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.result-icon {
+  flex-shrink: 0;
+  color: var(--td-teal);
+}

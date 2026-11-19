@@ -1,0 +1,46 @@
+// Layout of the lane lengths, top right of the map under the compass: the
+// corner is free while a spawn is placed (the hint sits at the bottom). Never
+// in the way of the click that places it. Lane colours are data.
+
+:host {
+  position: absolute;
+  top: 112px;
+  right: 12px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.ll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 260px;
+  padding: 8px 12px 10px;
+}
+
+.ll-row {
+  display: grid;
+  grid-template-columns: 8px 52px 1fr 48px;
+  align-items: center;
+  gap: 6px;
+
+  &.edited {
+    color: var(--td-text-primary);
+  }
+}
+
+.ll-bar {
+  height: 6px;
+}
+
+.ll-fill {
+  opacity: 0.7;
+}
+
+.ll-row.edited .ll-fill {
+  opacity: 1;
+}
+
+.ll-m {
+  text-align: right;
+}

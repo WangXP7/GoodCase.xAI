@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#07050e" />
+
+  <!-- ── SEO ── -->
+  <title>Infinity Castle 無限城 — fly through an endless procedural Japanese castle</title>
+  <meta name="description" content="An infinite, self-assembling Japanese castle in your browser. Fly as a crow through endless procedurally generated wards, lantern seas and shifting architecture — zero art assets, pure Three.js. Inspired by Demon Slayer's Infinity Castle." />
+  <meta name="keywords" content="infinity castle, mugen jo, demon slayer castle, procedural generation, three.js game, webgl game, infinite world, japanese castle, browser game, crow flight, kimetsu no yaiba, procedural architecture" />
+  <meta name="author" content="Thre4dripper" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="%SITE_URL%" />
+  <!-- Google shows favicons in mobile results — hand-drawn SVG, no binary asset -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Infinity Castle 無限城" />
+  <meta property="og:title" content="Infinity Castle 無限城 — an endless procedural descent" />
+  <meta property="og:description" content="Fly as a crow through an infinite, self-assembling Japanese castle. Procedural architecture, weather, and sound — zero art assets, pure Three.js." />
+  <meta property="og:url" content="%SITE_URL%" />
+  <meta property="og:image" content="%SITE_URL%og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="A glowing infinite Japanese castle of lanterns and timber, seen mid-flight" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Infinity Castle 無限城 — an endless procedural descent" />
+  <meta name="twitter:description" content="Fly as a crow through an infinite, self-assembling Japanese castle — zero assets, pure Three.js." />
+  <meta name="twitter:image" content="%SITE_URL%og.jpg" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "Infinity Castle 無限城",
+    "alternateName": "Mugen-jō",
+    "description": "An infinite, self-assembling Japanese castle in the browser. Fly as a crow through endless procedurally generated architecture — zero art assets, pure Three.js.",
+    "url": "%SITE_URL%",
+    "image": "%SITE_URL%og.jpg",
+    "genre": ["Exploration", "Flying", "Procedural"],
+    "gamePlatform": "Web Browser",
+    "applicationCategory": "Game",
+    "operatingSystem": "Any (WebGL 2)",
+    "isAccessibleForFree": true,
+    "author": { "@type": "Person", "name": "Thre4dripper", "url": "https://github.com/Thre4dripper" },
+    "sameAs": ["https://github.com/Thre4dripper/Infinity-Castle-ThreeJs"]
+  }
+  </script>
+  <style>
+    :root {
+      --gold: #c9a227;
+      --gold-dim: #8a7020;
+      --ink: #e8ddc8;
+      --ink-dim: #9a8f78;
+      --panel: rgba(10, 7, 20, 0.82);
+      --line: rgba(201, 162, 39, 0.35);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #07050e;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif;
+      color: var(--ink);
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    canvas { display: block; }
+    #app { position: fixed; inset: 0; }
+    #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+    #ui > * { pointer-events: auto; }
+
+    /* ---------- intro ---------- */
+    #intro {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 40%, rgba(20,12,40,0.25), rgba(5,3,10,0.88) 75%);
+      transition: opacity 0.9s ease; z-index: 30;
+    }
+    #intro.hidden { opacity: 0; pointer-events: none !important; }
+    .title-kanji {
+      font-size: clamp(64px, 14vw, 150px);
+      letter-spacing: 0.08em;
+      color: var(--ink);
+      text-shadow: 0 0 28px rgba(160, 40, 40, 0.55), 0 0 90px rgba(120, 30, 60, 0.35);
+      font-weight: 400;
+    }
+    .title-en {
+      margin-top: 6px;
+      font-size: clamp(13px, 2.4vw, 20px);
+      letter-spacing: 0.85em; text-indent: 0.85em;
+      color: var(--gold);
+      text-transform: uppercase;
+    }
+    .title-sub {
+      margin-top: 14px; font-style: italic; font-size: 14px; color: var(--ink-dim);
+      letter-spacing: 0.12em;
+    }
+    #start-btn {
+      margin-top: 44px;
+      padding: 14px 58px;
+      font-family: inherit; font-size: 17px; letter-spacing: 0.45em; text-indent: 0.45em;
+      color: var(--ink); background: rgba(120, 25, 25, 0.22);
+      border: 1px solid var(--line); cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    #start-btn:hover {
+      background: rgba(150, 32, 32, 0.42);
+      border-color: var(--gold);
+      box-shadow: 0 0 24px rgba(180, 60, 40, 0.35);
+    }
+    .controls-hint {
+      margin-top: 38px; display: flex; gap: 26px; flex-wrap: wrap; justify-content: center;
+      font-size: 12.5px; color: var(--ink-dim); letter-spacing: 0.08em;
+      padding: 0 20px; max-width: 720px;
+    }
+    .controls-hint b { color: var(--gold); font-weight: 400; }
+    .seed-line { margin-top: 26px; font-size: 11px; color: #56506a; letter-spacing: 0.2em; }
+
+    /* ---------- HUD ---------- */
+    /* the HUD is pure display — clicks must fall through to the canvas so
+       clicking the castle re-captures the mouse after ESC */
+    #hud { position: absolute; inset: 0; display: none; pointer-events: none; }
+    #hud.on { display: block; }
+    .hud-tl, .hud-tr {
+      position: absolute; top: max(12px, env(safe-area-inset-top)); font-size: 12px; letter-spacing: 0.14em;
+      color: var(--ink-dim); line-height: 1.75; text-shadow: 0 1px 3px #000;
+    }
+    .hud-tl { left: 16px; }
+    .hud-tr { right: 16px; text-align: right; }
+    .hud-tl b, .hud-tr b { color: var(--ink); font-weight: 400; }
+    #hint {
+      position: absolute; bottom: 7%; width: 100%; text-align: center;
+      font-size: 13px; font-style: italic; color: var(--ink-dim); letter-spacing: 0.2em;
+      opacity: 0; transition: opacity 1.2s ease; text-shadow: 0 1px 4px #000;
+      pointer-events: none;
+    }
+    #hint.show { opacity: 0.9; }
+    #place {
+      position: absolute; bottom: 13%; width: 100%; text-align: center;
+      pointer-events: none; opacity: 0;
+    }
+    #place.show { animation: placeIn 6s ease forwards; }
+    @keyframes placeIn {
+      0% { opacity: 0; letter-spacing: 0.5em; }
+      12% { opacity: 1; letter-spacing: 0.34em; }
+      70% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    #h-district {
+      font-size: 19px; color: var(--ink); letter-spacing: 0.34em;
+      text-shadow: 0 0 18px rgba(255,140,60,0.5), 0 2px 6px #000;
+    }
+    #h-chapter {
+      margin-top: 5px; font-size: 11px; font-style: italic; color: var(--gold);
+      letter-spacing: 0.28em; text-shadow: 0 1px 4px #000;
+    }
+    #beat-flash {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 55%, rgba(255,120,50,0.10), transparent 60%);
+      opacity: 0; transition: opacity 0.2s ease;
+    }
+
+    /* ---------- settings ---------- */
+    #gear {
+      position: absolute; top: max(10px, env(safe-area-inset-top)); right: 50%; transform: translateX(50%);
+      height: 32px; padding: 0 12px; display: none; align-items: center; justify-content: center; gap: 7px;
+      color: var(--gold-dim); border: 1px solid rgba(200,160,90,0.3); cursor: pointer; font-size: 16px;
+      background: rgba(12,7,20,0.5); backdrop-filter: blur(4px);
+      transition: all 0.25s;
+    }
+    #gear span { font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; }
+    #hud.on ~ #gear, #gear.on { display: flex; }
+    #gear:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+    /* ---------- first-flight tour ---------- */
+    #tour {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 45%, rgba(30,12,8,0.72), rgba(5,3,10,0.9));
+      backdrop-filter: blur(3px); z-index: 50; /* above the pause shrine */
+    }
+    #tour.open { display: flex; }
+    #tour-card {
+      width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
+      background: var(--panel); border: 1px solid var(--line);
+      padding: 26px 30px; letter-spacing: 0.05em;
+    }
+    #tour-card h3 {
+      font-weight: 400; letter-spacing: 0.42em; font-size: 13px; color: var(--gold);
+      border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 16px;
+    }
+    .tour-row {
+      display: flex; gap: 14px; align-items: baseline; margin: 12px 0;
+      font-size: 13px; line-height: 1.55; color: var(--ink-dim);
+    }
+    .tour-row b {
+      flex: 0 0 108px; color: var(--gold-dim); font-weight: 400;
+      letter-spacing: 0.18em; font-size: 11px; text-align: right;
+    }
+    #tour-go {
+      display: block; margin: 20px auto 2px; padding: 10px 26px;
+      background: rgba(120,25,25,0.3); color: var(--ink); border: 1px solid var(--line);
+      font-family: inherit; font-size: 12px; letter-spacing: 0.32em; cursor: pointer;
+      transition: all 0.25s;
+    }
+    #tour-go:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* ---------- pause menu — the shrine ---------- */
+    #settings {
+      position: absolute; inset: 0; z-index: 45;
+      display: none; align-items: center; justify-content: center;
+      background:
+        radial-gradient(ellipse at 50% 40%, rgba(40,14,10,0.55), rgba(4,3,9,0.88));
+      backdrop-filter: blur(4px) saturate(0.85);
+    }
+    #settings.open { display: flex; }
+    #pause-card {
+      display: flex; width: min(660px, 94vw); max-height: 88vh;
+      background:
+        linear-gradient(160deg, rgba(26,16,30,0.96), rgba(14,9,20,0.96));
+      border: 1px solid var(--line);
+      box-shadow: 0 0 0 4px rgba(10,6,16,0.6), 0 0 60px rgba(200,120,40,0.12);
+    }
+    .pause-side {
+      flex: 0 0 58px; display: flex; align-items: center; justify-content: center;
+      writing-mode: vertical-rl; font-size: 30px; letter-spacing: 0.6em; color: var(--gold);
+      background:
+        linear-gradient(rgba(140,30,20,0.32), rgba(90,18,14,0.32));
+      border-right: 1px solid var(--line); text-shadow: 0 2px 12px rgba(255,150,60,0.35);
+      user-select: none;
+    }
+    .pause-body {
+      flex: 1; overflow-y: auto; padding: 22px 28px 20px;
+      font-size: 13px; letter-spacing: 0.06em;
+      scrollbar-width: thin; scrollbar-color: var(--gold-dim) transparent;
+    }
+    .pause-body h3 {
+      font-weight: 400; letter-spacing: 0.42em; font-size: 13px; color: var(--gold);
+      padding-bottom: 10px; margin-bottom: 4px;
+      border-bottom: 1px solid var(--line);
+    }
+    .pause-body h3 span { color: #c04a28; margin-right: 8px; }
+    .set-grp {
+      margin: 16px 0 4px; font-size: 11px; letter-spacing: 0.3em; color: #b0552e;
+      display: flex; align-items: center; gap: 10px; text-transform: uppercase;
+    }
+    .set-grp::after { content: ''; flex: 1; height: 1px;
+      background: linear-gradient(90deg, rgba(176,85,46,0.5), transparent); }
+    .set-row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; gap: 12px; }
+    .set-row label { color: var(--ink-dim); }
+    .set-row select, .set-row input[type="text"] {
+      background: rgba(8,5,14,0.8); color: var(--ink); border: 1px solid var(--line);
+      font-family: inherit; font-size: 12px; padding: 4px 8px; max-width: 170px;
+    }
+    .set-row select:focus, .set-row input[type="text"]:focus { outline: 1px solid var(--gold-dim); }
+    /* sliders: a thin brushline with a go-stone thumb */
+    .set-row input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 170px; height: 18px;
+      background: transparent; cursor: pointer;
+    }
+    .set-row input[type="range"]::-webkit-slider-runnable-track {
+      height: 2px; background: linear-gradient(90deg, rgba(176,85,46,0.7), rgba(201,162,39,0.55));
+    }
+    .set-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px;
+      border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f4d788, #b8892a 65%, #6e5117);
+      border: 1px solid rgba(0,0,0,0.55); box-shadow: 0 0 8px rgba(244,196,96,0.45);
+    }
+    .set-row input[type="range"]::-moz-range-track {
+      height: 2px; background: linear-gradient(90deg, rgba(176,85,46,0.7), rgba(201,162,39,0.55));
+    }
+    .set-row input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #f4d788, #b8892a 65%, #6e5117);
+      border: 1px solid rgba(0,0,0,0.55); box-shadow: 0 0 8px rgba(244,196,96,0.45);
+    }
+    /* checkboxes: a hanko seal that stamps on */
+    .set-row input[type="checkbox"] {
+      -webkit-appearance: none; appearance: none; width: 18px; height: 18px; cursor: pointer;
+      border: 1px solid var(--line); background: rgba(8,5,14,0.8);
+      display: grid; place-content: center; transition: all 0.2s;
+    }
+    .set-row input[type="checkbox"]::before {
+      content: '印'; font-size: 11px; color: transparent; transition: all 0.2s;
+      transform: scale(1.6) rotate(-14deg);
+    }
+    .set-row input[type="checkbox"]:checked {
+      border-color: #c04a28; background: rgba(150,40,26,0.3);
+      box-shadow: 0 0 10px rgba(220,90,50,0.35);
+    }
+    .set-row input[type="checkbox"]:checked::before {
+      color: #e86a3c; transform: scale(1) rotate(-8deg);
+    }
+    .set-btns { justify-content: flex-start; gap: 8px; }
+    .set-btn {
+      background: rgba(120,25,25,0.25); color: var(--ink); border: 1px solid var(--line);
+      font-family: inherit; font-size: 11px; letter-spacing: 0.2em; padding: 6px 14px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .set-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .pause-actions {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .pause-actions button {
+      flex: 1; padding: 12px 10px; cursor: pointer; font-family: inherit;
+      font-size: 12px; letter-spacing: 0.18em; transition: all 0.25s; white-space: nowrap;
+    }
+    /* the share button (hunt only) takes its own full row so RESUME and QUIT
+       never get squeezed into wrapping */
+    #p-share { flex: 1 1 100%; }
+    #p-resume {
+      background: linear-gradient(180deg, rgba(150,40,26,0.5), rgba(110,26,18,0.5));
+      color: var(--ink); border: 1px solid rgba(220,110,60,0.5);
+    }
+    #p-resume:hover { border-color: var(--gold); color: #ffe9c2; box-shadow: 0 0 18px rgba(230,120,60,0.3); }
+    #p-quit {
+      background: transparent; color: var(--ink-dim); border: 1px solid var(--line);
+    }
+    #p-quit:hover { border-color: #c04a28; color: #e86a3c; }
+    #p-share {
+      background: rgba(20,60,40,0.35); color: #9fd8b4; border: 1px solid rgba(110,220,160,0.35);
+    }
+    #p-share:hover { border-color: #7de8a8; color: #d2ffdf; }
+
+    /* ---------- gate modes ---------- */
+    #mode-row { display: flex; gap: 10px; margin-top: 12px; justify-content: center; }
+    #hunt-btn, #daily-btn {
+      padding: 9px 18px; cursor: pointer; font-family: inherit;
+      font-size: 11px; letter-spacing: 0.26em; transition: all 0.25s;
+      background: rgba(20,60,40,0.30); color: #9fd8b4;
+      border: 1px solid rgba(110,220,160,0.35); white-space: nowrap;
+    }
+    #hunt-btn:hover, #daily-btn:hover {
+      border-color: #7de8a8; color: #d2ffdf; box-shadow: 0 0 16px rgba(90,220,150,0.25);
+    }
+    #daily-btn { background: rgba(14,40,30,0.28); color: #7fbf98; }
+    #mode-note {
+      margin-top: 9px; font-size: 10px; letter-spacing: 0.14em;
+      color: var(--ink-dim); opacity: 0.85;
+    }
+
+    /* ---------- hunt score ---------- */
+    #score-row {
+      position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%;
+      transform: translateX(-50%) translateY(40px);
+      display: none; flex-direction: column; align-items: center; gap: 3px;
+      pointer-events: none; text-align: center;
+    }
+    #score-row.on { display: flex; }
+    #h-score {
+      font-size: 26px; letter-spacing: 0.14em; color: #d2ffdf;
+      text-shadow: 0 0 14px rgba(90,220,150,0.5), 0 2px 4px #000;
+    }
+    #h-combo {
+      font-size: 15px; color: #7de8a8; letter-spacing: 0.2em; min-height: 18px;
+      text-shadow: 0 0 10px rgba(90,220,150,0.6);
+    }
+    #combo-bar {
+      width: 90px; height: 2px; background: rgba(110,220,160,0.15); overflow: hidden;
+    }
+    #combo-bar i {
+      display: block; height: 100%; width: 0;
+      background: linear-gradient(90deg, #7de8a8, #d2ffdf);
+      transition: width 0.15s linear;
+    }
+    #h-best { font-size: 10px; letter-spacing: 0.22em; color: var(--ink-dim); }
+
+    /* homepage github link — bright enough to actually be found */
+    #gh-link {
+      display: inline-block; margin-top: 18px; padding: 8px 18px;
+      font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: #ffd98a; text-decoration: none;
+      background: rgba(60,38,10,0.45); border: 1px solid rgba(255,200,110,0.45);
+      text-shadow: 0 0 12px rgba(255,190,90,0.5);
+      transition: all 0.25s; animation: star-breathe 3.2s ease-in-out infinite;
+    }
+    #gh-link:hover {
+      color: #fff3d0; border-color: var(--gold);
+      box-shadow: 0 0 22px rgba(255,190,90,0.35); animation-play-state: paused;
+    }
+    @keyframes star-breathe {
+      0%, 100% { box-shadow: 0 0 6px rgba(255,190,90,0.12); }
+      50% { box-shadow: 0 0 18px rgba(255,190,90,0.35); }
+    }
+    /* the shrine's ask — same lantern-glow treatment as the gate */
+    #p-star {
+      display: block; margin-top: 16px; padding: 10px 16px; text-align: center;
+      font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: #ffd98a; text-decoration: none;
+      background: rgba(60,38,10,0.45); border: 1px solid rgba(255,200,110,0.45);
+      text-shadow: 0 0 12px rgba(255,190,90,0.5);
+      transition: all 0.25s; animation: star-breathe 3.2s ease-in-out infinite;
+    }
+    #p-star:hover {
+      color: #fff3d0; border-color: var(--gold);
+      box-shadow: 0 0 22px rgba(255,190,90,0.35); animation-play-state: paused;
+    }
+
+    /* ---------- touch controls ---------- */
+    #touch-ui { position: absolute; inset: 0; display: none; }
+    #touch-ui.on { display: block; }
+    #stick-zone {
+      /* the whole left half is the stick's home — it spawns under the thumb */
+      position: absolute; left: 0; top: 56px; bottom: 0; width: 50%;
+    }
+    #stick-base {
+      position: absolute; width: 110px; height: 110px; border-radius: 50%;
+      border: 1px solid var(--line); background: rgba(20,14,36,0.30);
+      display: none; transform: translate(-50%, -50%);
+    }
+    #stick-nub {
+      position: absolute; width: 46px; height: 46px; border-radius: 50%;
+      background: rgba(201,162,39,0.28); border: 1px solid var(--gold-dim);
+      transform: translate(-50%, -50%); left: 50%; top: 50%;
+    }
+    .tbtn {
+      position: absolute; right: 20px; width: 78px; height: 78px; border-radius: 50%;
+      border: 1px solid var(--line); background: rgba(20,14,36,0.35);
+      color: var(--ink-dim); font-size: 11px; letter-spacing: 0.2em;
+      display: flex; align-items: center; justify-content: center;
+      text-shadow: 0 1px 3px #000;
+    }
+    .tbtn.pressed { background: rgba(150,40,30,0.4); color: var(--ink); border-color: var(--gold); }
+    #btn-flap { bottom: calc(24px + env(safe-area-inset-bottom)); }
+    #btn-brake { bottom: calc(120px + env(safe-area-inset-bottom)); right: 106px; width: 64px; height: 64px; }
+
+    #rotate-hint {
+      position: fixed; inset: 0; z-index: 50; display: none;
+      align-items: center; justify-content: center; text-align: center;
+      background: rgba(5,3,10,0.92); font-size: 15px; letter-spacing: 0.2em; color: var(--ink-dim);
+      padding: 30px;
+    }
+    @media (orientation: portrait) and (pointer: coarse) {
+      #rotate-hint.armed { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="ui"></div>
+  <div id="rotate-hint">回転<br/><br/>rotate your device sideways<br/>the castle is wide</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

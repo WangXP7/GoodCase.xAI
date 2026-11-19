@@ -1,0 +1,23 @@
+// Layout of the sidebar: one plaster panel (td-side) the height of the game,
+// its sections stacked, the footer at the foot.
+
+.td-sidebar {
+  width: var(--td-sidebar-width);
+  height: 100%;
+  max-height: 100%;
+}
+
+/* Footer: Menu, Tips and the version in one row; a hairline over it */
+.sb-foot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 4px 6px;
+}
+
+/* The menu is the way to everything that is not playing: its gear in brass */
+.sb-menu td-icon {
+  color: var(--td-brass);
+}

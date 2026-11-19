@@ -1,0 +1,7529 @@
+{
+ "gerado": "2026-09-12T14:47:27.078Z",
+ "renderer": {
+  "toneMappingInicial": "ACESFilmicToneMapping",
+  "toneMappingExposureInicial": 1.25,
+  "outputColorSpace": "SRGBColorSpace (default do three r160, não setado)",
+  "comComposer": "NoToneMapping"
+ },
+ "cromatico": null,
+ "looks": {
+  "praca_poderes": {
+   "exposure": 2.4,
+   "floor": 0.0042,
+   "expAces": 2.61
+  },
+  "piscina_treta": {
+   "exposure": 1.92,
+   "floor": 0.0039,
+   "expAces": 1.91
+  },
+  "loja_h": {
+   "exposure": 1.5,
+   "floor": 0.006,
+   "expAces": 1.59
+  },
+  "ferro_velho": {
+   "exposure": 1.66,
+   "floor": 0.0041,
+   "expAces": 1.76
+  },
+  "quebrada": {
+   "exposure": 1.58,
+   "floor": 0.0046,
+   "expAces": 1.68
+  },
+  "escadao": {
+   "exposure": 1.52,
+   "floor": 0.0048,
+   "expAces": 1.62
+  },
+  "lajes": {
+   "exposure": 1.55,
+   "floor": 0.0047,
+   "expAces": 1.65
+  }
+ },
+ "sat": 1.12,
+ "glb": [
+  {
+   "arma": "ak",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "akm",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "awp",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "carbine",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "deagle",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    },
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": false
+    },
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": false
+    }
+   ]
+  },
+  {
+   "arma": "famas",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "g3",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "g3sg1",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "knife",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "lmg",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "m4",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "m400",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "m92",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "md97",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "mosin",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "mosquete",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "mp5",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "p90",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "pistol",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "rem700",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "revolver38",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    },
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": false
+    },
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": false
+    },
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": false
+    }
+   ]
+  },
+  {
+   "arma": "scar",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "shotgun",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "sks",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "svd",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "tavor",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  },
+  {
+   "arma": "uzi",
+   "materiais": [
+    {
+     "metallicFactor": 1,
+     "roughnessFactor": 1,
+     "temMapaMR": true,
+     "temMapaAlbedo": true
+    }
+   ]
+  }
+ ],
+ "caminhos": {
+  "vm": {
+   "linha": 1476,
+   "fonte": "(obj) => obj.traverse((o) => { if (!o.isMesh || !o.material) return; if (!VM_MAT_LEGACY && temEnv) return; // MAT1: mesmo GLB, mesmo material, nos 3 caminhos o.material = o.material.clone(); if ('meta",
+   "metalFactor": 1,
+   "roughFactor": 1,
+   "envMapIntensity": 1
+  },
+  "chao_pickup": {
+   "linha": 671,
+   "mutacoes": []
+  },
+  "chao_drop": {
+   "erro": "âncora ausente em game.js: const mesh = weaponModel(weapon) || buil"
+  },
+  "tp_mount": {
+   "erro": "âncora ausente em glbchars.js: const gun = weaponModel(opts.weaponId ||"
+  }
+ },
+ "maps": [
+  {
+   "map": "mansao",
+   "sun": {
+    "pos": [
+     15,
+     30,
+     -15
+    ],
+    "color": "#ffefd8",
+    "intensity": 1.8
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "PointLight",
+      "intensity": 1.25,
+      "color": "#ffe0b5",
+      "pos": [
+       -8,
+       3.15,
+       -9
+      ],
+      "distance": 14
+     },
+     {
+      "type": "PointLight",
+      "intensity": 1.25,
+      "color": "#ffe0b5",
+      "pos": [
+       3,
+       3.15,
+       1
+      ],
+      "distance": 14
+     },
+     {
+      "type": "PointLight",
+      "intensity": 1.25,
+      "color": "#ffe0b5",
+      "pos": [
+       9,
+       3.15,
+       -10
+      ],
+      "distance": 14
+     },
+     {
+      "type": "PointLight",
+      "intensity": 1.25,
+      "color": "#ffe0b5",
+      "pos": [
+       -5,
+       3.15,
+       4
+      ],
+      "distance": 14
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.02,
+      "color": "#f6f3ea",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#665c50"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.8,
+      "color": "#ffefd8",
+      "pos": [
+       15,
+       30,
+       -15
+      ]
+     }
+    ],
+    "dir": 1.8,
+    "hemi": 1.02,
+    "amb": 0,
+    "pontual": 5,
+    "global": 2.82
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.187,
+      "color": "#f6eac5",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.3,
+      "color": "#97c5ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.094,
+      "color": "#a1c9ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.594,
+      "color": "#f6d9a9",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.315,
+      "color": "#f6ba7b",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.337,
+      "color": "#89b7ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#34312a"
+     }
+    ],
+    "dir": 2.49,
+    "hemi": 0.337,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.827
+   },
+   "razaoVmMapa": 1,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#e9c58c",
+    "densidade": 0.0068,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#6f6350",
+     "lum": 0.13,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 4450,
+     "pos": [
+      0,
+      -2,
+      -58
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#ac996f",
+     "lum": 0.33,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 1802.3,
+     "pos": [
+      45,
+      -2,
+      -295
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9c8e66",
+     "lum": 0.27,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 1064.8,
+     "pos": [
+      -96,
+      -2,
+      -240
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8c825e",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 712.4,
+     "pos": [
+      151,
+      -2,
+      -162
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#909088",
+     "lum": 0.28,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 345,
+     "pos": [
+      0,
+      0,
+      -4
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#717152",
+     "lum": 0.16,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 328.5,
+     "pos": [
+      -143,
+      -2,
+      -96
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#6a6b4f",
+     "lum": 0.14,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 261,
+     "pos": [
+      147,
+      -2,
+      -59
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#c5b69a",
+     "lum": 0.48,
+     "mat": "MeshStandardMaterial",
+     "geo": "CircleGeometry",
+     "maiorTri": 92,
+     "pos": [
+      67,
+      -1,
+      -109
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#646b4e",
+     "lum": 0.14,
+     "mat": "MeshStandardMaterial",
+     "geo": "IcosahedronGeometry",
+     "maiorTri": 55.7,
+     "pos": [
+      67,
+      -2,
+      -109
+     ],
+     "claro": false
+    },
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": "ShaderMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 54.3,
+     "pos": [
+      0,
+      -1,
+      -276
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 54,
+     "pos": [
+      -16,
+      4,
+      -3
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 52.3,
+     "pos": [
+      -11,
+      4,
+      3
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 52.3,
+     "pos": [
+      11,
+      4,
+      3
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#a0a098",
+     "lum": 0.35,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 48.1,
+     "pos": [
+      5,
+      5,
+      -12
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 43.3,
+     "pos": [
+      16,
+      4,
+      -2
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.7,
+     "pos": [
+      -8,
+      9,
+      -11
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.7,
+     "pos": [
+      8,
+      9,
+      -11
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#a0a098",
+     "lum": 0.35,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 27.1,
+     "pos": [
+      -8,
+      5,
+      -12
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 23.4,
+     "pos": [
+      0,
+      4,
+      6
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#163f4b",
+     "lum": 0.04,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 22.8,
+     "pos": [
+      -4,
+      0,
+      25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#0f3a4c",
+     "lum": 0.04,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 17.4,
+     "pos": [
+      0,
+      0,
+      -34
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#f5f1e6",
+     "lum": 0.88,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 16.8,
+     "pos": [
+      0,
+      4,
+      0
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#1d5a74",
+     "lum": 0.09,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      0,
+      -1,
+      -28
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#14313d",
+     "lum": 0.03,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 12,
+     "pos": [
+      -8,
+      0,
+      25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#123f54",
+     "lum": 0.04,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 9.6,
+     "pos": [
+      0,
+      -2,
+      -32
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9a744f",
+     "lum": 0.2,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 9.5,
+     "pos": [
+      3,
+      0,
+      2
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#256d84",
+     "lum": 0.13,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 8.4,
+     "pos": [
+      0,
+      -1,
+      -26
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#256d84",
+     "lum": 0.13,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 8.4,
+     "pos": [
+      0,
+      -1,
+      -33
+     ],
+     "claro": false
+    },
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": "ShaderMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 8.1,
+     "pos": [
+      0,
+      -1,
+      -46
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#805f49",
+     "lum": 0.13,
+     "mat": "MeshStandardMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 6.9,
+     "pos": [
+      3,
+      0,
+      2
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#cdad7b",
+    "opacidadeSprite": 0.997,
+    "escalaSprite": [
+     3,
+     5.04
+    ],
+    "spritesCobrindoCentro": 11,
+    "alfaAcumuladoCentro": 0.995,
+    "maiorAlfaSprite": 0.641,
+    "radianciaFumaca": 0.4436,
+    "radianciaCeu": 0.5915,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(mansao) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0068,
+    "cor": "#e9c58c",
+    "radianciaNevoa": 0.5915,
+    "radianciaNevoaContraluz": 0.9769,
+    "fogFactor": {
+     "m50": 0.109,
+     "m100": 0.37,
+     "m200": 0.843
+    }
+   }
+  },
+  {
+   "map": "amazonia",
+   "sun": {
+    "pos": [
+     12,
+     38,
+     10
+    ],
+    "color": "#fff2dc",
+    "intensity": 1.45
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.05,
+      "color": "#dfe8e4",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#3d4a33"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.45,
+      "color": "#fff2dc",
+      "pos": [
+       12,
+       38,
+       10
+      ]
+     }
+    ],
+    "dir": 1.45,
+    "hemi": 1.05,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.5
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.053,
+      "color": "#f0ebc7",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.273,
+      "color": "#92c4ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.085,
+      "color": "#9bc8ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.526,
+      "color": "#f0daab",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.28,
+      "color": "#f0bb7c",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.308,
+      "color": "#84b6ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#31302a"
+     }
+    ],
+    "dir": 2.217,
+    "hemi": 0.308,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.525
+   },
+   "razaoVmMapa": 1.01,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#c9d0cd",
+    "densidade": 0.0112,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#b1b7b4",
+    "opacidadeSprite": 0.99,
+    "escalaSprite": [
+     3.04,
+     5.2
+    ],
+    "spritesCobrindoCentro": 9,
+    "alfaAcumuladoCentro": 0.9981,
+    "maiorAlfaSprite": 0.696,
+    "radianciaFumaca": 0.4645,
+    "radianciaCeu": 0.6194,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(amazonia) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0112,
+    "cor": "#c9d0cd",
+    "radianciaNevoa": 0.6194,
+    "radianciaNevoaContraluz": 0.9521,
+    "fogFactor": {
+     "m50": 0.269,
+     "m100": 0.715,
+     "m200": 0.993
+    }
+   }
+  },
+  {
+   "map": "escadao",
+   "sun": {
+    "pos": [
+     25,
+     40,
+     20
+    ],
+    "color": "#ffd9a8",
+    "intensity": 1.65
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.9,
+      "color": "#dfe6ee",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#54483c"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.65,
+      "color": "#ffd9a8",
+      "pos": [
+       25,
+       40,
+       20
+      ]
+     }
+    ],
+    "dir": 1.65,
+    "hemi": 0.9,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.55
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.128,
+      "color": "#ffe3b0",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.268,
+      "color": "#a2c4eb",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.084,
+      "color": "#acc8eb",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.564,
+      "color": "#ffd397",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.3,
+      "color": "#ffb46d",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.302,
+      "color": "#92b6eb",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#373026"
+     }
+    ],
+    "dir": 2.344,
+    "hemi": 0.302,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.646
+   },
+   "razaoVmMapa": 1.04,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#b9977f",
+    "densidade": 0.008,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 1.52,
+    "floor": 0.0048,
+    "expAces": 1.62,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#ffffff",
+     "lum": 1,
+     "mat": "MeshStandardMaterial",
+     "geo": "BufferGeometry",
+     "maiorTri": 31.4,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": true
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 21.1,
+     "pos": [
+      -45,
+      3,
+      64
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 21.1,
+     "pos": [
+      84,
+      2,
+      44
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 21.1,
+     "pos": [
+      29,
+      2,
+      -77
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 21.1,
+     "pos": [
+      -96,
+      3,
+      -22
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 20.3,
+     "pos": [
+      -85,
+      2,
+      -15
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 20.3,
+     "pos": [
+      -3,
+      3,
+      73
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 20.3,
+     "pos": [
+      90,
+      3,
+      -7
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 20.3,
+     "pos": [
+      -17,
+      2,
+      -77
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#909088",
+     "lum": 0.28,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.7,
+     "pos": [
+      -5,
+      2,
+      8
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#909088",
+     "lum": 0.28,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.7,
+     "pos": [
+      5,
+      2,
+      8
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.1,
+     "pos": [
+      71,
+      1,
+      26
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.1,
+     "pos": [
+      20,
+      2,
+      -91
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.1,
+     "pos": [
+      -82,
+      2,
+      -8
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 18.1,
+     "pos": [
+      4,
+      2,
+      99
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 17.4,
+     "pos": [
+      71,
+      2,
+      -16
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 17.4,
+     "pos": [
+      -30,
+      1,
+      -85
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 17.4,
+     "pos": [
+      -69,
+      2,
+      35
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 17.4,
+     "pos": [
+      53,
+      2,
+      77
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 16.2,
+     "pos": [
+      -75,
+      2,
+      31
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 16.2,
+     "pos": [
+      35,
+      2,
+      61
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 16.2,
+     "pos": [
+      69,
+      3,
+      -53
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 16.2,
+     "pos": [
+      -52,
+      3,
+      -53
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.1,
+     "pos": [
+      7,
+      1,
+      -76
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.1,
+     "pos": [
+      -93,
+      1,
+      4
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.1,
+     "pos": [
+      14,
+      1,
+      79
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.1,
+     "pos": [
+      93,
+      2,
+      -29
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.1,
+     "pos": [
+      -36,
+      1,
+      -78
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 14.5,
+     "pos": [
+      -33,
+      2,
+      -63
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 14.5,
+     "pos": [
+      -72,
+      1,
+      50
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 14.5,
+     "pos": [
+      52,
+      1,
+      57
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 14.5,
+     "pos": [
+      61,
+      1,
+      -72
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      49,
+      2,
+      64
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      48,
+      2,
+      -48
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      -67,
+      2,
+      -52
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      -37,
+      1,
+      64
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 13.9,
+     "pos": [
+      84,
+      2,
+      36
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 12.1,
+     "pos": [
+      27,
+      1,
+      87
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 12.1,
+     "pos": [
+      73,
+      1,
+      -34
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 12.1,
+     "pos": [
+      -52,
+      1,
+      -82
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 12.1,
+     "pos": [
+      -65,
+      0,
+      54
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      -52,
+      1,
+      48
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      -59,
+      1,
+      -34
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      67,
+      0,
+      57
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      -33,
+      2,
+      78
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      41,
+      1,
+      -63
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      69,
+      1,
+      19
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      -83,
+      1,
+      -39
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      12,
+      1,
+      -88
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.6,
+     "pos": [
+      -25,
+      1,
+      77
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#909088",
+     "lum": 0.28,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.5,
+     "pos": [
+      0,
+      5,
+      1
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.5,
+     "pos": [
+      36,
+      0,
+      -78
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.5,
+     "pos": [
+      -71,
+      0,
+      -23
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.5,
+     "pos": [
+      -16,
+      0,
+      91
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.5,
+     "pos": [
+      79,
+      1,
+      4
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.6,
+     "pos": [
+      -12,
+      11,
+      -26
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.6,
+     "pos": [
+      12,
+      11,
+      -27
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.3,
+     "pos": [
+      -17,
+      1,
+      64
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.3,
+     "pos": [
+      82,
+      1,
+      11
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.3,
+     "pos": [
+      0,
+      0,
+      -72
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.3,
+     "pos": [
+      -88,
+      1,
+      11
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#909088",
+     "lum": 0.28,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.2,
+     "pos": [
+      0,
+      2,
+      9
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.1,
+     "pos": [
+      77,
+      0,
+      -49
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.1,
+     "pos": [
+      -50,
+      0,
+      -60
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.1,
+     "pos": [
+      -65,
+      1,
+      70
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.1,
+     "pos": [
+      68,
+      0,
+      49
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7,
+     "pos": [
+      66,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a89776",
+     "lum": 0.32,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7,
+     "pos": [
+      -11,
+      1,
+      -82
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#758574",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7,
+     "pos": [
+      -68,
+      0,
+      18
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8f8773",
+     "lum": 0.24,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7,
+     "pos": [
+      33,
+      0,
+      81
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a57862",
+     "lum": 0.22,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7,
+     "pos": [
+      66,
+      0,
+      -37
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      -6,
+      6,
+      22
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      -4,
+      6,
+      22
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      4,
+      6,
+      22
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      6,
+      6,
+      22
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      11,
+      11,
+      -33
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#777a76",
+     "lum": 0.19,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.5,
+     "pos": [
+      13,
+      11,
+      -33
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#a3846f",
+    "opacidadeSprite": 0.991,
+    "escalaSprite": [
+     3.04,
+     5.12
+    ],
+    "spritesCobrindoCentro": 13,
+    "alfaAcumuladoCentro": 0.9988,
+    "maiorAlfaSprite": 0.641,
+    "radianciaFumaca": 0.2548,
+    "radianciaCeu": 0.3398,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(escadao) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.008,
+    "cor": "#b9977f",
+    "radianciaNevoa": 0.3398,
+    "radianciaNevoaContraluz": 0.5728,
+    "fogFactor": {
+     "m50": 0.148,
+     "m100": 0.473,
+     "m200": 0.923
+    }
+   }
+  },
+  {
+   "map": "praca_poderes",
+   "sun": {
+    "pos": [
+     90,
+     62,
+     -40
+    ],
+    "color": "#fff4e2",
+    "intensity": 3.1
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.3,
+      "color": "#bdd8f5",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#a08a5c"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 3.1,
+      "color": "#fff4e2",
+      "pos": [
+       90,
+       62,
+       -40
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.2,
+      "color": "#c9b98f",
+      "pos": [
+       -32,
+       22,
+       28
+      ]
+     }
+    ],
+    "dir": 3.3,
+    "hemi": 0.3,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.6
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.516,
+      "color": "#f3ebc7",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.394,
+      "color": "#94c3ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.123,
+      "color": "#9dc7ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.758,
+      "color": "#f3daab",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.403,
+      "color": "#f3ba7c",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.443,
+      "color": "#86b5ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#32302a"
+     }
+    ],
+    "dir": 3.194,
+    "hemi": 0.443,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.637
+   },
+   "razaoVmMapa": 1.01,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#7d9cbb",
+    "densidade": 0.0066,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.981,
+    "escalaSprite": [
+     3.18,
+     5.04
+    ],
+    "spritesCobrindoCentro": 13,
+    "alfaAcumuladoCentro": 0.9995,
+    "maiorAlfaSprite": 0.679,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(praca_poderes) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0066,
+    "cor": "#7d9cbb",
+    "radianciaNevoa": 0.3172,
+    "radianciaNevoaContraluz": 0.4728,
+    "fogFactor": {
+     "m50": 0.103,
+     "m100": 0.353,
+     "m200": 0.825
+    }
+   }
+  },
+  {
+   "map": "piscina_treta",
+   "sun": {
+    "pos": [
+     10,
+     45,
+     -6
+    ],
+    "color": "#ffffff",
+    "intensity": 1.4
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.3,
+      "color": "#f2fbff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#b9c6d0"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.4,
+      "color": "#ffffff",
+      "pos": [
+       10,
+       45,
+       -6
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.55,
+      "color": "#dfeeff",
+      "pos": [
+       -15,
+       35,
+       15
+      ]
+     }
+    ],
+    "dir": 1.95,
+    "hemi": 1.3,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.25
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.368,
+      "color": "#e4ecdd",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.447,
+      "color": "#7cb1ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.14,
+      "color": "#84b4ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.684,
+      "color": "#e4dabe",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.363,
+      "color": "#e4bb8a",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.503,
+      "color": "#70a4ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#292a2a"
+     }
+    ],
+    "dir": 3.003,
+    "hemi": 0.503,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.507
+   },
+   "razaoVmMapa": 1.08,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": null,
+   "look": {
+    "exposure": 1.92,
+    "floor": 0.0039,
+    "expAces": 1.91,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.6,
+     "pos": [
+      -17,
+      2,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 15.6,
+     "pos": [
+      17,
+      2,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.8,
+     "pos": [
+      0,
+      2,
+      -25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 10.8,
+     "pos": [
+      0,
+      2,
+      25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": 1009,
+     "geo": "PlaneGeometry",
+     "maiorTri": 9.6,
+     "pos": [
+      0,
+      4,
+      25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": 1009,
+     "geo": "PlaneGeometry",
+     "maiorTri": 9.6,
+     "pos": [
+      0,
+      4,
+      -25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": 1009,
+     "geo": "PlaneGeometry",
+     "maiorTri": 6.6,
+     "pos": [
+      6,
+      4,
+      25
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.2,
+     "pos": [
+      10,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#24407a",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 6.2,
+     "pos": [
+      -10,
+      0,
+      0
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#81a3c4",
+    "opacidadeSprite": 0.998,
+    "escalaSprite": [
+     3.1,
+     5.14
+    ],
+    "spritesCobrindoCentro": 13,
+    "alfaAcumuladoCentro": 0.9996,
+    "maiorAlfaSprite": 0.657,
+    "radianciaFumaca": 0.3467,
+    "radianciaCeu": 0.4623,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(piscina_treta) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": null
+  },
+  {
+   "map": "loja_h",
+   "sun": {
+    "pos": [
+     18,
+     55,
+     20
+    ],
+    "color": "#fff0d2",
+    "intensity": 2.02
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "PointLight",
+      "intensity": 54,
+      "color": "#cfe0ff",
+      "pos": [
+       0,
+       5.4,
+       -14
+      ],
+      "distance": 34
+     },
+     {
+      "type": "PointLight",
+      "intensity": 54,
+      "color": "#cfe0ff",
+      "pos": [
+       0,
+       5.4,
+       -24
+      ],
+      "distance": 34
+     },
+     {
+      "type": "PointLight",
+      "intensity": 54,
+      "color": "#cfe0ff",
+      "pos": [
+       0,
+       5.4,
+       -34
+      ],
+      "distance": 34
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.82,
+      "color": "#cfe0f5",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#6d6455"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 2.02,
+      "color": "#fff0d2",
+      "pos": [
+       18,
+       55,
+       20
+      ]
+     }
+    ],
+    "dir": 2.02,
+    "hemi": 0.82,
+    "amb": 0,
+    "pontual": 162,
+    "global": 2.84
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.196,
+      "color": "#f4ebc4",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.299,
+      "color": "#97c7ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.093,
+      "color": "#a0cbff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.598,
+      "color": "#f4daa8",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.318,
+      "color": "#f4ba7a",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.336,
+      "color": "#88b8ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#33312a"
+     }
+    ],
+    "dir": 2.504,
+    "hemi": 0.336,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.84
+   },
+   "razaoVmMapa": 1,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#a3c4e5",
+    "densidade": 0.0088,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 1.5,
+    "floor": 0.006,
+    "expAces": 1.59,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#b0b6be",
+     "lum": 0.46,
+     "mat": "MeshBasicMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 145.6,
+     "pos": [
+      0,
+      3,
+      -36
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#2f3a8c",
+     "lum": 0.06,
+     "mat": "MeshStandardMaterial",
+     "geo": "BufferGeometry",
+     "maiorTri": 41.4,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#b9c0c8",
+     "lum": 0.52,
+     "mat": "MeshStandardMaterial",
+     "geo": "BufferGeometry",
+     "maiorTri": 8.5,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#8facca",
+    "opacidadeSprite": 0.978,
+    "escalaSprite": [
+     3.08,
+     5.1
+    ],
+    "spritesCobrindoCentro": 10,
+    "alfaAcumuladoCentro": 0.9975,
+    "maiorAlfaSprite": 0.683,
+    "radianciaFumaca": 0.3969,
+    "radianciaCeu": 0.5292,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(loja_h) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0088,
+    "cor": "#a3c4e5",
+    "radianciaNevoa": 0.5292,
+    "radianciaNevoaContraluz": 0.7785,
+    "fogFactor": {
+     "m50": 0.176,
+     "m100": 0.539,
+     "m200": 0.955
+    }
+   }
+  },
+  {
+   "map": "ferro_velho",
+   "sun": {
+    "pos": [
+     -52,
+     14,
+     36
+    ],
+    "color": "#ffc07a",
+    "intensity": 1.65
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.95,
+      "color": "#ffdfb0",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#5a4530"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.65,
+      "color": "#ffc07a",
+      "pos": [
+       -52,
+       14,
+       36
+      ]
+     }
+    ],
+    "dir": 1.65,
+    "hemi": 0.95,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.6
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.445,
+      "color": "#ffc97e",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.274,
+      "color": "#b3c0bb",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.086,
+      "color": "#bec4bb",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.722,
+      "color": "#ffba6b",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.384,
+      "color": "#ff9f4d",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.308,
+      "color": "#a2b2bb",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#3e2f1c"
+     }
+    ],
+    "dir": 2.91,
+    "hemi": 0.308,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.218
+   },
+   "razaoVmMapa": 1.24,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#a5c5e5",
+    "densidade": 0.0112,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 1.66,
+    "floor": 0.0041,
+    "expAces": 1.76,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#91adca",
+    "opacidadeSprite": 0.996,
+    "escalaSprite": [
+     3.04,
+     4.9
+    ],
+    "spritesCobrindoCentro": 12,
+    "alfaAcumuladoCentro": 0.9946,
+    "maiorAlfaSprite": 0.657,
+    "radianciaFumaca": 0.4019,
+    "radianciaCeu": 0.5359,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(ferro_velho) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0112,
+    "cor": "#a5c5e5",
+    "radianciaNevoa": 0.5359,
+    "radianciaNevoaContraluz": 0.7895,
+    "fogFactor": {
+     "m50": 0.269,
+     "m100": 0.715,
+     "m200": 0.993
+    }
+   }
+  },
+  {
+   "map": "quebrada",
+   "sun": {
+    "pos": [
+     38,
+     30,
+     -22
+    ],
+    "color": "#ffd9a8",
+    "intensity": 1.5
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.9,
+      "color": "#dfe6ee",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#54483c"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.5,
+      "color": "#ffd9a8",
+      "pos": [
+       38,
+       30,
+       -22
+      ]
+     }
+    ],
+    "dir": 1.5,
+    "hemi": 0.9,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.4
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.055,
+      "color": "#ffe4b2",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.253,
+      "color": "#a1c4ec",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.079,
+      "color": "#abc8ec",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.528,
+      "color": "#ffd398",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.28,
+      "color": "#ffb56e",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.284,
+      "color": "#92b6ec",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#373026"
+     }
+    ],
+    "dir": 2.195,
+    "hemi": 0.284,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.479
+   },
+   "razaoVmMapa": 1.03,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#b58f78",
+    "densidade": 0.0084,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 1.58,
+    "floor": 0.0046,
+    "expAces": 1.68,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#2f6f8a",
+     "lum": 0.14,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 14.7,
+     "pos": [
+      -10,
+      2,
+      -6
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#3f6f8f",
+     "lum": 0.14,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 8.1,
+     "pos": [
+      17,
+      3,
+      11
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#9f7d69",
+    "opacidadeSprite": 0.978,
+    "escalaSprite": [
+     3.1,
+     5.14
+    ],
+    "spritesCobrindoCentro": 11,
+    "alfaAcumuladoCentro": 0.9982,
+    "maiorAlfaSprite": 0.622,
+    "radianciaFumaca": 0.2312,
+    "radianciaCeu": 0.3082,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(quebrada) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0084,
+    "cor": "#b58f78",
+    "radianciaNevoa": 0.3082,
+    "radianciaNevoaContraluz": 0.5267,
+    "fogFactor": {
+     "m50": 0.162,
+     "m100": 0.506,
+     "m200": 0.941
+    }
+   }
+  },
+  {
+   "map": "corrego",
+   "sun": {
+    "pos": [
+     20,
+     35,
+     15
+    ],
+    "color": "#ffc888",
+    "intensity": 1.7
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.85,
+      "color": "#d8b89a",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#4a3830"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.7,
+      "color": "#ffc888",
+      "pos": [
+       20,
+       35,
+       15
+      ]
+     }
+    ],
+    "dir": 1.7,
+    "hemi": 0.85,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.55
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.377,
+      "color": "#ffcc85",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.268,
+      "color": "#b1c1c3",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.084,
+      "color": "#bcc5c3",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.688,
+      "color": "#ffbd72",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.366,
+      "color": "#ffa251",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.302,
+      "color": "#a0b3c3",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#3d2f1e"
+     }
+    ],
+    "dir": 2.783,
+    "hemi": 0.302,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.085
+   },
+   "razaoVmMapa": 1.21,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#d6dad9",
+    "densidade": 0.0102,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#8a6a4e",
+     "lum": 0.16,
+     "mat": "MeshStandardMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.5,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#bcc0bf",
+    "opacidadeSprite": 0.989,
+    "escalaSprite": [
+     3.04,
+     4.9
+    ],
+    "spritesCobrindoCentro": 12,
+    "alfaAcumuladoCentro": 0.9997,
+    "maiorAlfaSprite": 0.76,
+    "radianciaFumaca": 0.5209,
+    "radianciaCeu": 0.6945,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(corrego) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0102,
+    "cor": "#d6dad9",
+    "radianciaNevoa": 0.6945,
+    "radianciaNevoaContraluz": 1.0675,
+    "fogFactor": {
+     "m50": 0.229,
+     "m100": 0.647,
+     "m200": 0.984
+    }
+   }
+  },
+  {
+   "map": "lajes",
+   "sun": {
+    "pos": [
+     25,
+     45,
+     15
+    ],
+    "color": "#ffe7ca",
+    "intensity": 1.9
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.05,
+      "color": "#d5e5ed",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#756654"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.9,
+      "color": "#ffe7ca",
+      "pos": [
+       25,
+       45,
+       15
+      ]
+     }
+    ],
+    "dir": 1.9,
+    "hemi": 1.05,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.95
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.242,
+      "color": "#f9eac3",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.311,
+      "color": "#9ac6fd",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.097,
+      "color": "#a4cafd",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.621,
+      "color": "#f9d9a7",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.33,
+      "color": "#f9b979",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.349,
+      "color": "#8bb7fd",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#34302a"
+     }
+    ],
+    "dir": 2.601,
+    "hemi": 0.349,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.95
+   },
+   "razaoVmMapa": 1,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#b7c4cb",
+    "densidade": 0.0045,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 1.55,
+    "floor": 0.0047,
+    "expAces": 1.65,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "-",
+     "lum": 0,
+     "mat": "ShaderMaterial",
+     "geo": "SphereGeometry",
+     "maiorTri": 1674.9,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#ffffff",
+     "lum": 1,
+     "mat": "MeshStandardMaterial",
+     "geo": "BufferGeometry",
+     "maiorTri": 61.5,
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "claro": true
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#9b7d6a",
+    "opacidadeSprite": 0.998,
+    "escalaSprite": [
+     3.1,
+     5
+    ],
+    "spritesCobrindoCentro": 13,
+    "alfaAcumuladoCentro": 0.9992,
+    "maiorAlfaSprite": 0.667,
+    "radianciaFumaca": 0.2278,
+    "radianciaCeu": 0.3037,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(lajes) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0045,
+    "cor": "#b7c4cb",
+    "radianciaNevoa": 0.5386,
+    "radianciaNevoaContraluz": 0.8213,
+    "fogFactor": {
+     "m50": 0.049,
+     "m100": 0.183,
+     "m200": 0.555
+    }
+   }
+  },
+  {
+   "map": "posto_treta",
+   "sun": {
+    "pos": [
+     -38,
+     26,
+     14
+    ],
+    "color": "#ffd39a",
+    "intensity": 1.6
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1,
+      "color": "#ffe0b0",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#40352a"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.6,
+      "color": "#ffd39a",
+      "pos": [
+       -38,
+       26,
+       14
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.35,
+      "color": "#bcd0ff",
+      "pos": [
+       20,
+       30,
+       -10
+      ]
+     }
+    ],
+    "dir": 1.95,
+    "hemi": 1,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.95
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.361,
+      "color": "#ffdea9",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.311,
+      "color": "#a5c3e6",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.097,
+      "color": "#afc7e6",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.681,
+      "color": "#ffce91",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.362,
+      "color": "#ffb069",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.349,
+      "color": "#95b5e6",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#393025"
+     }
+    ],
+    "dir": 2.811,
+    "hemi": 0.349,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.16
+   },
+   "razaoVmMapa": 1.07,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "Fog",
+    "cor": "#e6a35a",
+    "densidade": null,
+    "near": 60,
+    "far": 150
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#596b39",
+     "lum": 0.13,
+     "mat": "MeshLambertMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 216,
+     "pos": [
+      -25,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#596b39",
+     "lum": 0.13,
+     "mat": "MeshLambertMaterial",
+     "geo": "PlaneGeometry",
+     "maiorTri": 216,
+     "pos": [
+      25,
+      0,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#c0392b",
+     "lum": 0.14,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 107.5,
+     "pos": [
+      -21,
+      5,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8a9096",
+     "lum": 0.28,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 50.4,
+     "pos": [
+      28,
+      1,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#1b1d21",
+     "lum": 0.01,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 12.8,
+     "pos": [
+      24,
+      8,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#8a9096",
+     "lum": 0.28,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.4,
+     "pos": [
+      27,
+      6,
+      -18
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#e03c3c",
+     "lum": 0.19,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.9,
+     "pos": [
+      -6,
+      6,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#e03c3c",
+     "lum": 0.19,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9.9,
+     "pos": [
+      14,
+      6,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#e03c3c",
+     "lum": 0.19,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9,
+     "pos": [
+      4,
+      6,
+      -11
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#e03c3c",
+     "lum": 0.19,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 9,
+     "pos": [
+      4,
+      6,
+      11
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.998,
+    "escalaSprite": [
+     3.08,
+     5.16
+    ],
+    "spritesCobrindoCentro": 11,
+    "alfaAcumuladoCentro": 0.9914,
+    "maiorAlfaSprite": 0.892,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(posto_treta) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "cor": "#e6a35a",
+    "radianciaNevoa": 0.4376,
+    "radianciaNevoaContraluz": 0.7716,
+    "fogFactor": {
+     "m50": null,
+     "m100": null,
+     "m200": null
+    }
+   }
+  },
+  {
+   "map": "upa_24h",
+   "sun": {
+    "pos": [
+     6,
+     30,
+     -8
+    ],
+    "color": "#ffffff",
+    "intensity": 0.95
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -24,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -16,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       -8,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       8,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       16,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       -30
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       -22
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       -14
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       -6
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       2
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       10
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       18
+      ],
+      "distance": 16
+     },
+     {
+      "type": "PointLight",
+      "intensity": 0.22,
+      "color": "#f4f8ff",
+      "pos": [
+       24,
+       3.8,
+       26
+      ],
+      "distance": 16
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.45,
+      "color": "#f4f8ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#b8c0c8"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.95,
+      "color": "#ffffff",
+      "pos": [
+       6,
+       30,
+       -8
+      ]
+     }
+    ],
+    "dir": 0.95,
+    "hemi": 1.45,
+    "amb": 0,
+    "pontual": 12.32,
+    "global": 2.4
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.011,
+      "color": "#e6ebdb",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.326,
+      "color": "#7fb1ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.102,
+      "color": "#87b5ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.505,
+      "color": "#e6dabc",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.268,
+      "color": "#e6bb89",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.366,
+      "color": "#72a5ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#2a2b2a"
+     }
+    ],
+    "dir": 2.212,
+    "hemi": 0.366,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.578
+   },
+   "razaoVmMapa": 1.07,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": null,
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#798089",
+     "lum": 0.21,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 2160,
+     "pos": [
+      0,
+      4,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#776f66",
+     "lum": 0.16,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.3,
+     "pos": [
+      -4,
+      3,
+      -29
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#776f66",
+     "lum": 0.16,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 11.3,
+     "pos": [
+      4,
+      3,
+      -29
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.992,
+    "escalaSprite": [
+     3,
+     4.8
+    ],
+    "spritesCobrindoCentro": 8,
+    "alfaAcumuladoCentro": 0.9826,
+    "maiorAlfaSprite": 0.757,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(upa_24h) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": null
+  },
+  {
+   "map": "obras_prefeitura",
+   "sun": {
+    "pos": [
+     24,
+     40,
+     -14
+    ],
+    "color": "#fff0d0",
+    "intensity": 1.5
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.05,
+      "color": "#fff0d8",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#4a4030"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.5,
+      "color": "#fff0d0",
+      "pos": [
+       24,
+       40,
+       -14
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.4,
+      "color": "#dfeeff",
+      "pos": [
+       -18,
+       30,
+       12
+      ]
+     }
+    ],
+    "dir": 1.9,
+    "hemi": 1.05,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.95
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.242,
+      "color": "#f4ebc4",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.311,
+      "color": "#97c7ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.097,
+      "color": "#a0cbff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.621,
+      "color": "#f4daa8",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.33,
+      "color": "#f4ba7a",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.349,
+      "color": "#88b8ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#33312a"
+     }
+    ],
+    "dir": 2.601,
+    "hemi": 0.349,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.95
+   },
+   "razaoVmMapa": 1,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "Fog",
+    "cor": "#c7bfa8",
+    "densidade": null,
+    "near": 70,
+    "far": 160
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#2f5fa8",
+     "lum": 0.12,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 91,
+     "pos": [
+      -28,
+      1,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#2f5fa8",
+     "lum": 0.12,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 91,
+     "pos": [
+      28,
+      1,
+      0
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#2f5fa8",
+     "lum": 0.12,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 72.8,
+     "pos": [
+      0,
+      1,
+      -35
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#2f5fa8",
+     "lum": 0.12,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 72.8,
+     "pos": [
+      0,
+      1,
+      35
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#b3ab97",
+     "lum": 0.41,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 72,
+     "pos": [
+      0,
+      4,
+      -8
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 55.3,
+     "pos": [
+      -3,
+      9,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 52,
+     "pos": [
+      -30,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 52,
+     "pos": [
+      6,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 48.8,
+     "pos": [
+      -30,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 45.5,
+     "pos": [
+      -12,
+      7,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.3,
+     "pos": [
+      6,
+      7,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.3,
+     "pos": [
+      15,
+      7,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 39,
+     "pos": [
+      15,
+      6,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 35.8,
+     "pos": [
+      -21,
+      6,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 35.8,
+     "pos": [
+      -3,
+      6,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 35.8,
+     "pos": [
+      24,
+      6,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 32.5,
+     "pos": [
+      -12,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 32.5,
+     "pos": [
+      24,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 29.3,
+     "pos": [
+      -21,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      12,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      15,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      10,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -30,
+      12,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -21,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      12,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -12,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      12,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      15,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -3,
+      10,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      12,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      15,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      10,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      6,
+      12,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      10,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      12,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      15,
+      10,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      3,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      5,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      8,
+      -47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      3,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      5,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      8,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      24,
+      10,
+      47
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9c7b4a",
+     "lum": 0.22,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.5,
+     "pos": [
+      9,
+      2,
+      2
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.989,
+    "escalaSprite": [
+     3,
+     4.98
+    ],
+    "spritesCobrindoCentro": 8,
+    "alfaAcumuladoCentro": 0.9627,
+    "maiorAlfaSprite": 0.63,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(obras_prefeitura) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "cor": "#c7bfa8",
+    "radianciaNevoa": 0.5223,
+    "radianciaNevoaContraluz": 0.8284,
+    "fogFactor": {
+     "m50": null,
+     "m100": null,
+     "m200": null
+    }
+   }
+  },
+  {
+   "map": "atacadao_treta",
+   "sun": {
+    "pos": [
+     -12,
+     42,
+     -20
+    ],
+    "color": "#ffffff",
+    "intensity": 1.15
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.25,
+      "color": "#f2f7fb",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#c0c6cc"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.15,
+      "color": "#ffffff",
+      "pos": [
+       -12,
+       42,
+       -20
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.5,
+      "color": "#dfeeff",
+      "pos": [
+       14,
+       30,
+       20
+      ]
+     }
+    ],
+    "dir": 1.65,
+    "hemi": 1.25,
+    "amb": 0,
+    "pontual": 0,
+    "global": 2.9
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.221,
+      "color": "#e5ebdc",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.397,
+      "color": "#7db1ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.124,
+      "color": "#85b4ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.611,
+      "color": "#e5dabd",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.324,
+      "color": "#e5bb8a",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.447,
+      "color": "#71a4ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#292a2a"
+     }
+    ],
+    "dir": 2.677,
+    "hemi": 0.447,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.123
+   },
+   "razaoVmMapa": 1.08,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": null,
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 1014,
+     "pos": [
+      0,
+      8,
+      14
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 55.3,
+     "pos": [
+      -34,
+      9,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 55.3,
+     "pos": [
+      34,
+      9,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 50.4,
+     "pos": [
+      -9,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 50.4,
+     "pos": [
+      9,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.3,
+     "pos": [
+      -17,
+      7,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 42.3,
+     "pos": [
+      17,
+      7,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 34.1,
+     "pos": [
+      -26,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 34.1,
+     "pos": [
+      26,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#a7a29a",
+     "lum": 0.36,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 29.3,
+     "pos": [
+      0,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -34,
+      15,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -26,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -26,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -26,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -26,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -17,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -17,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -17,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -17,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -17,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      -9,
+      15,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      0,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      0,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      0,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      9,
+      15,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      17,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      17,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      17,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      17,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      17,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      26,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      26,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      26,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      26,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      3,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      5,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      8,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      10,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      12,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#35404e",
+     "lum": 0.05,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 19.9,
+     "pos": [
+      34,
+      15,
+      -69
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      -3
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      3
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      9
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      15
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      21
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      27
+     ],
+     "claro": false
+    },
+    {
+     "cor": "#9aa0a6",
+     "lum": 0.35,
+     "mat": "MeshLambertMaterial",
+     "geo": "BoxGeometry",
+     "maiorTri": 7.8,
+     "pos": [
+      0,
+      8,
+      33
+     ],
+     "claro": false
+    }
+   ],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.989,
+    "escalaSprite": [
+     3,
+     5.16
+    ],
+    "spritesCobrindoCentro": 7,
+    "alfaAcumuladoCentro": 0.9943,
+    "maiorAlfaSprite": 0.719,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(atacadao_treta) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": null
+  },
+  {
+   "map": "parque_treta",
+   "sun": {
+    "pos": [
+     -24,
+     44,
+     -18
+    ],
+    "color": "#fff3d2",
+    "intensity": 1.35
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.35,
+      "color": "#daf5ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#71a95b"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.35,
+      "color": "#fff3d2",
+      "pos": [
+       -24,
+       44,
+       -18
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.45,
+      "color": "#bde7ff",
+      "pos": [
+       30,
+       22,
+       28
+      ]
+     }
+    ],
+    "dir": 1.8,
+    "hemi": 1.35,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.15
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.326,
+      "color": "#e0efcb",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.358,
+      "color": "#86c3ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.112,
+      "color": "#8ec7ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.663,
+      "color": "#e0ddae",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.352,
+      "color": "#e0bd7e",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.403,
+      "color": "#79b5ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#2c302a"
+     }
+    ],
+    "dir": 2.811,
+    "hemi": 0.403,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.214
+   },
+   "razaoVmMapa": 1.02,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "Fog",
+    "cor": "#92d9ef",
+    "densidade": null,
+    "near": 76,
+    "far": 155
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.997,
+    "escalaSprite": [
+     3.02,
+     5.14
+    ],
+    "spritesCobrindoCentro": 12,
+    "alfaAcumuladoCentro": 0.9913,
+    "maiorAlfaSprite": 0.616,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(parque_treta) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "cor": "#92d9ef",
+    "radianciaNevoa": 0.6197,
+    "radianciaNevoaContraluz": 0.8811,
+    "fogFactor": {
+     "m50": null,
+     "m100": null,
+     "m200": null
+    }
+   }
+  },
+  {
+   "map": "velho_oeste",
+   "sun": {
+    "pos": [
+     -30,
+     14,
+     -18
+    ],
+    "color": "#ffd0a0",
+    "intensity": 1.9
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.16,
+      "color": "#f0d0b2",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#73523a"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.9,
+      "color": "#ffd0a0",
+      "pos": [
+       -30,
+       14,
+       -18
+      ]
+     }
+    ],
+    "dir": 1.9,
+    "hemi": 1.16,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.06
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.543,
+      "color": "#ffd499",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.322,
+      "color": "#abc2d8",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.101,
+      "color": "#b6c6d8",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.772,
+      "color": "#ffc482",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.41,
+      "color": "#ffa85e",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.362,
+      "color": "#9bb4d8",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#3b2f22"
+     }
+    ],
+    "dir": 3.148,
+    "hemi": 0.362,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.51
+   },
+   "razaoVmMapa": 1.15,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "FogExp2",
+    "cor": "#d7a477",
+    "densidade": 0.0056,
+    "near": null,
+    "far": null
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#bd9068",
+    "opacidadeSprite": 0.999,
+    "escalaSprite": [
+     3.24,
+     5.2
+    ],
+    "spritesCobrindoCentro": 13,
+    "alfaAcumuladoCentro": 0.9946,
+    "maiorAlfaSprite": 0.698,
+    "radianciaFumaca": 0.3175,
+    "radianciaCeu": 0.4233,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(velho_oeste) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "densidade": 0.0056,
+    "cor": "#d7a477",
+    "radianciaNevoa": 0.4233,
+    "radianciaNevoaContraluz": 0.726,
+    "fogFactor": {
+     "m50": 0.075,
+     "m100": 0.269,
+     "m200": 0.715
+    }
+   }
+  },
+  {
+   "map": "penitenciaria",
+   "sun": {
+    "pos": [
+     -35,
+     52,
+     -22
+    ],
+    "color": "#ffe7c7",
+    "intensity": 1.85
+   },
+   "mapa": {
+    "lights": [
+     {
+      "type": "HemisphereLight",
+      "intensity": 1.35,
+      "color": "#dbe8eb",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#343a36"
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.85,
+      "color": "#ffe7c7",
+      "pos": [
+       -35,
+       52,
+       -22
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.38,
+      "color": "#7897ba",
+      "pos": [
+       28,
+       24,
+       35
+      ]
+     }
+    ],
+    "dir": 2.23,
+    "hemi": 1.35,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.58
+   },
+   "vm": {
+    "lights": [
+     {
+      "type": "DirectionalLight",
+      "intensity": 1.507,
+      "color": "#f4eac7",
+      "pos": [
+       -0.45,
+       0.75,
+       0.55
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.391,
+      "color": "#95c3ff",
+      "pos": [
+       0.6,
+       -0.15,
+       0.5
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.122,
+      "color": "#9ec7ff",
+      "pos": [
+       0.55,
+       0.35,
+       0.75
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.754,
+      "color": "#f4d9ab",
+      "pos": [
+       0.2,
+       0.35,
+       -0.9
+      ]
+     },
+     {
+      "type": "DirectionalLight",
+      "intensity": 0.4,
+      "color": "#f4ba7c",
+      "pos": [
+       -0.2,
+       -0.86,
+       0.47
+      ]
+     },
+     {
+      "type": "HemisphereLight",
+      "intensity": 0.44,
+      "color": "#86b5ff",
+      "pos": [
+       0,
+       1,
+       0
+      ],
+      "ground": "#32302a"
+     }
+    ],
+    "dir": 3.174,
+    "hemi": 0.44,
+    "amb": 0,
+    "pontual": 0,
+    "global": 3.614
+   },
+   "razaoVmMapa": 1.01,
+   "env": {
+    "cena": true,
+    "vm": true,
+    "mesmaTextura": true
+   },
+   "fog": {
+    "tipo": "Fog",
+    "cor": "#9aa7a8",
+    "densidade": null,
+    "near": 82,
+    "far": 165
+   },
+   "look": {
+    "exposure": 2.4,
+    "floor": 0.0042,
+    "expAces": 2.61,
+    "sat": 1.12
+   },
+   "superficies": [],
+   "fumaca": {
+    "sprites": 18,
+    "raio": 4,
+    "duracao": 13,
+    "corSprite": "#6d89a4",
+    "opacidadeSprite": 0.992,
+    "escalaSprite": [
+     3.3,
+     5.12
+    ],
+    "spritesCobrindoCentro": 12,
+    "alfaAcumuladoCentro": 0.9984,
+    "maiorAlfaSprite": 0.731,
+    "radianciaFumaca": 0.2379,
+    "radianciaCeu": 0.3172,
+    "razaoFumacaCeu": 0.75,
+    "fonteCeu": "bloom.js skyRadiance(penitenciaria) — AERIAL, medida por r3_fog.py"
+   },
+   "nevoa": {
+    "cor": "#9aa7a8",
+    "radianciaNevoa": 0.3733,
+    "radianciaNevoaContraluz": 0.5772,
+    "fogFactor": {
+     "m50": null,
+     "m100": null,
+     "m200": null
+    }
+   }
+  }
+ ],
+ "shade": null,
+ "shadeErr": "mat_shade: numpy indisponível — usando mat_shade.json committed (CHR11/TEX no baseline).",
+ "criterios": {
+  "TEX1_AREA": 6,
+  "TEX1_LUM": 0.55
+ }
+}

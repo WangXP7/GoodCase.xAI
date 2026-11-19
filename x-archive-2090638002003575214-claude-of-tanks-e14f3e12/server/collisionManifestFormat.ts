@@ -1,0 +1,213 @@
+import type { RuntimeValue } from '../src/runtimeTypes.ts';
+import { isMapId } from '../src/world/maps/mapIds.ts';
+import type { CollisionManifest, PackedCollisionRecord, PackedSimpleShape } from '../src/world/headlessCollisionWorld.ts';
+
+export interface CollisionManifestCounts {
+  obstacles: number;
+  colliders: number;
+  concealers: number;
+}
+
+interface CollisionManifestEntry extends CollisionManifestCounts {
+  bytes: number;
+  sha256: string;
+}
+
+interface CollisionManifestIndex {
+  version: 2;
+  terrainSeed: number;
+  propsSeed: number;
+  vegetationSeed: number;
+  maps: Record<string, CollisionManifestEntry>;
+  /**
+   * A mode's battlefield variant per map (destruction core lane, 2026-10-08: Frontline Assault's 'assault-trenches'),
+   * each its own manifest `<map>@<variant>.json` built from the variant's config, so the authority plays exactly what
+   * the clients build. Absent in an index captured before the variants.
+   */
+  variants?: Record<string, Record<string, CollisionManifestEntry>>;
+}
+
+/** The battlefield variants a manifest index may carry (sim/matchRuleset.ts TERRAIN_VARIANTS). */
+const MANIFEST_VARIANTS: ReadonlySet<string> = new Set(['assault-trenches']);
+
+/** A map's manifest file name for a variant (null: the base map). IDs are whitelisted before forming it. */
+export function collisionManifestShardName(id: string, variant: string | null = null): string {
+  if (!isMapId(id) || (variant !== null && !MANIFEST_VARIANTS.has(variant))) throw new Error(`invalid collision manifest ${id}@${variant}`);
+  return variant ? `${id}@${variant}` : id;
+}
+
+const MAX_COLLISION_SHARD_BYTES = 16 * 1024 * 1024;
+
+function isRecord(value: RuntimeValue): value is Record<string, RuntimeValue> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isFiniteTuple(value: RuntimeValue, length: number): value is number[] {
+  return Array.isArray(value) && value.length === length &&
+    value.every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+}
+
+export function isSimpleShape(value: RuntimeValue): value is PackedSimpleShape {
+  if (!Array.isArray(value)) return false;
+  // 2026-09-19: parts may append a vertical extent (o/c: two trailing numbers; 'w': a convex polygon led by it)
+  if (value[0] === 'o') return isFiniteTuple(value.slice(1), 5) || isFiniteTuple(value.slice(1), 7);
+  if (value[0] === 'c') return isFiniteTuple(value.slice(1), 3) || isFiniteTuple(value.slice(1), 5);
+  if (value[0] === 'w') {
+    return value.length >= 9 && value.length <= 131 && value.length % 2 === 1 &&
+      value.slice(1).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+  }
+  // 2026-10-13: a convex part with a drawn top ('p': y0, y1, the planes' origin, their count k <= 64, k planes of three
+  // numbers, then 3-64 corners)
+  if (value[0] === 'p') {
+    const k = value[5];
+    if (typeof k !== 'number' || !Number.isInteger(k) || k < 1 || k > 64) return false;
+    const corners = value.length - 6 - 3 * k;
+    return corners >= 6 && corners <= 128 && corners % 2 === 0 &&
+      value.slice(1).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+  }
+  return value[0] === 'v' && value.length >= 7 && value.length <= 129 &&
+    value.length % 2 === 1 &&
+    value.slice(1).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+}
+
+/** The most parts a compound record may carry (physics stream, 2026-10-16: 64 -> 256, the pillboxes' embrasures on their
+ * structure bands; a format change takes its own manifest route, docs/MULTIPLAYER-V2.md "Manifest routes"). */
+export const COLLISION_COMPOUND_MAX_PARTS = 256;
+
+function isPackedShape(value: RuntimeValue): boolean {
+  if (!Array.isArray(value)) return false;
+  return value[0] === 'm'
+    ? value.length >= 2 && value.length <= COLLISION_COMPOUND_MAX_PARTS + 1 && value.slice(1).every(isSimpleShape)
+    : isSimpleShape(value);
+}
+
+function isNullableNumber(value: RuntimeValue): boolean {
+  return value == null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+/** Validate non-shape fields independently so decoded primitives are checked only once. */
+export function isPackedCollisionMetadata(
+  value: RuntimeValue,
+): value is Omit<PackedCollisionRecord, 's'> & Record<string, RuntimeValue> {
+  if (!isRecord(value) || !isFiniteTuple(value.b, 6)) return false;
+  if (value.q !== undefined && typeof value.q !== 'boolean' && value.q !== 0 && value.q !== 1) return false;
+  return isNullableNumber(value.m) && isNullableNumber(value.e) &&
+    (value.k == null || typeof value.k === 'string') &&
+    isNullableNumber(value.t) && isNullableNumber(value.p) &&
+    // destruction (2026-10-07): the structure group, a non-negative integer, and its role 1 or 2
+    (value.g == null || (Number.isSafeInteger(value.g) && (value.g as number) >= 0)) &&
+    (value.gr == null || value.gr === 1 || value.gr === 2);
+}
+
+function isPackedCollisionRecord(value: RuntimeValue): value is PackedCollisionRecord {
+  return isPackedCollisionMetadata(value) && (value.s === undefined || isPackedShape(value.s));
+}
+
+export function readCollisionConcealers(value: RuntimeValue): CollisionManifest['concealers'] {
+  if (value !== undefined && (!Array.isArray(value) ||
+      !value.every((entry) => isFiniteTuple(entry, 4)))) {
+    throw new TypeError('world collision concealment is invalid');
+  }
+  return value as CollisionManifest['concealers'];
+}
+
+/** DST-04 (2026-10-15): the map's pre-placed craters, [x, z, radius, depth, rim, deforms 0|1] each (world/mapCraters.ts). */
+export function readCollisionCraters(value: RuntimeValue): CollisionManifest['craters'] {
+  if (value !== undefined && (!Array.isArray(value) || value.length > 512 ||
+      !value.every((entry) => isFiniteTuple(entry, 6) && (entry[5] === 0 || entry[5] === 1) && entry[2] > 0))) {
+    throw new TypeError('world collision craters are invalid');
+  }
+  return value as CollisionManifest['craters'];
+}
+
+export function readCollisionManifest(value: RuntimeValue): CollisionManifest {
+  if (!isRecord(value) || !Array.isArray(value.obstacles) ||
+      !value.obstacles.every(isPackedCollisionRecord) || !Array.isArray(value.colliders) ||
+      !value.colliders.every(isPackedCollisionRecord)) {
+    throw new TypeError('world collision manifest is invalid');
+  }
+  return {
+    obstacles: value.obstacles,
+    colliders: value.colliders,
+    concealers: readCollisionConcealers(value.concealers),
+    ...(value.craters !== undefined ? { craters: readCollisionCraters(value.craters) } : {}),
+  };
+}
+
+export function collisionManifestCounts(manifest: CollisionManifest): CollisionManifestCounts {
+  const packedTrees = new Set<number>();
+  for (const record of manifest.colliders) {
+    if (record.t != null) packedTrees.add(record.t);
+  }
+  let sharedTrees = 0;
+  for (const record of manifest.obstacles) {
+    if (record.t != null && !packedTrees.has(record.t)) sharedTrees++;
+  }
+  return {
+    obstacles: manifest.obstacles.length,
+    colliders: manifest.colliders.length + sharedTrees,
+    concealers: manifest.concealers?.length || 0,
+  };
+}
+
+function isCount(value: RuntimeValue): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isIndexEntry(value: RuntimeValue): value is CollisionManifestEntry {
+  return isRecord(value) && isCount(value.bytes) && value.bytes > 0 &&
+    value.bytes <= MAX_COLLISION_SHARD_BYTES && typeof value.sha256 === 'string' &&
+    /^[a-f0-9]{64}$/.test(value.sha256) && isCount(value.obstacles) &&
+    isCount(value.colliders) && isCount(value.concealers);
+}
+
+export function readCollisionManifestIndex(value: RuntimeValue): CollisionManifestIndex {
+  if (!isRecord(value) || value.version !== 2 || value.terrainSeed !== 1337 ||
+      value.propsSeed !== 2002 || value.vegetationSeed !== 2001 || !isRecord(value.maps)) {
+    throw new TypeError('world collision manifest index is invalid');
+  }
+  const maps: Record<string, CollisionManifestEntry> = {};
+  const entries = Object.entries(value.maps);
+  if (!entries.length) throw new TypeError('world collision manifest index contains no maps');
+  for (const [id, entry] of entries) {
+    if (!isMapId(id) || !isIndexEntry(entry)) {
+      throw new TypeError('world collision manifest index contains an invalid map');
+    }
+    maps[id] = entry;
+  }
+  if (value.variants === undefined) return { version: 2, terrainSeed: 1337, propsSeed: 2002, vegetationSeed: 2001, maps };
+  const variants: Record<string, Record<string, CollisionManifestEntry>> = {};
+  {
+    if (!isRecord(value.variants)) throw new TypeError('world collision manifest index has invalid variants');
+    for (const [variant, list] of Object.entries(value.variants)) {
+      if (!MANIFEST_VARIANTS.has(variant) || !isRecord(list)) throw new TypeError('world collision manifest index has an invalid variant');
+      const entriesOf: Record<string, CollisionManifestEntry> = {};
+      for (const [id, entry] of Object.entries(list)) {
+        if (!isMapId(id) || !isIndexEntry(entry)) throw new TypeError('world collision manifest index contains an invalid variant map');
+        entriesOf[id] = entry;
+      }
+      variants[variant] = entriesOf;
+    }
+  }
+  return { version: 2, terrainSeed: 1337, propsSeed: 2002, vegetationSeed: 2001, maps, variants };
+}
+
+/** IDs are whitelisted before forming a path; never use getMapConfig's fallback. A variant reads its own list. */
+export function collisionManifestEntry(index: CollisionManifestIndex, id: string, variant: string | null = null): CollisionManifestEntry {
+  const list = variant === null ? index.maps : index.variants?.[variant];
+  if (!isMapId(id) || !list || !Object.hasOwn(list, id)) {
+    throw new Error(`missing compatible collision manifest for ${variant ? `${id}@${variant}` : id}`);
+  }
+  return list[id];
+}
+
+export function validateCollisionManifestCounts(
+  manifest: CollisionManifest,
+  entry: CollisionManifestEntry,
+): void {
+  const counts = collisionManifestCounts(manifest);
+  if (counts.obstacles !== entry.obstacles || counts.colliders !== entry.colliders ||
+      counts.concealers !== entry.concealers) {
+    throw new Error('world collision manifest census mismatch');
+  }
+}

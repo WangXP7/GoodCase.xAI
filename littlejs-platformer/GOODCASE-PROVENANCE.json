@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/KilledByAPixel/LittleJS",
+  "commit": "42619bd28010fb50e400686dcd475eccbd053256",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 769,
+  "bytes": 22907092
+}

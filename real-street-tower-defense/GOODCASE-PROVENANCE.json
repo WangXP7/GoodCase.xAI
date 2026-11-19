@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/ingel81/3dtd",
+  "commit": "2a092a2b8d9f21c4826e3377acbcdbf64fe6923c",
+  "license": "AGPL-3.0",
+  "scope": "code-only",
+  "files": 2112,
+  "bytes": 17888356
+}

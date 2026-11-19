@@ -1,0 +1,274 @@
+<div class="mb-page td-backdrop" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
+  <section class="mb-panel td-panel" aria-labelledby="mb-title" [class.is-drop]="dragging()">
+    <header class="mb-head td-line-bottom">
+      <h1 class="td-dlg-title" id="mb-title">Map editor</h1>
+      <div class="td-actions">
+        <button class="td-btn-ghost" type="button" (click)="backToGame()">Back to the game</button>
+        @if (worlds.mapFolder) {
+          <button class="td-btn-ghost" type="button" (click)="worlds.revealMapFolder()"
+                  matTooltip="Your maps as .3dtdmap files in Documents/3DTD/Maps; put files there to add them" data-test="map-folder">Map folder</button>
+        }
+        <label class="td-btn-secondary" matTooltip="A 3DTD map (.3dtdmap) or a Warcraft 3 map (.w3x, beta)">
+          Import file
+          <input class="td-sr-only" type="file" accept=".3dtdmap,.w3x,.w3m" multiple (change)="onPick($event)" data-test="import-input" />
+        </label>
+        <button class="td-btn-primary" type="button" (click)="startNew()" data-test="new-map">
+          <td-icon name="plus" [size]="16" /> New map
+        </button>
+      </div>
+    </header>
+
+    @if (problem(); as problem) {
+      <p class="td-banner is-warn" role="alert">{{ problem }}</p>
+    }
+    @if (session.error(); as error) {
+      <p class="td-banner is-error is-row" role="alert">
+        <span>{{ error }}</span>
+        <button class="td-btn-ghost td-btn-sm" type="button" (click)="session.error.set(null)">Dismiss</button>
+      </p>
+    }
+    @if (session.importState(); as imp) {
+      <div class="mb-import td-banner td-stack" [class.is-error]="!!imp.error" [class.is-ok]="imp.phase === 'done'" role="status" data-test="import-panel">
+        <div class="td-inline mb-import-head">
+          <strong class="td-trunc">{{ imp.file }}</strong>
+          <span class="td-tag" matTooltip="Warcraft maps vary a lot: scripted waves, maze maps and custom terrain may come over only in part. Check the report and the map before playing" data-test="w3x-beta">Beta</span>
+          @if (imp.phase === 'running' && !imp.error) {
+            <span class="td-note"><span class="td-spin" aria-hidden="true"></span> {{ imp.step }}</span>
+          }
+          <button class="td-btn-ghost td-btn-sm" type="button" (click)="closeImport()">{{ imp.phase === 'options' || (imp.phase === 'running' && !imp.error) ? 'Cancel' : 'Close' }}</button>
+        </div>
+        @if (imp.phase === 'options' || (imp.error && imp.phase === 'running')) {
+          <div class="mb-w3x">
+            <label class="td-field">
+              <span class="td-label" matTooltip="One Warcraft tile (128 units) becomes this many metres; heights scale the same">Metres per tile</span>
+              <input class="td-input is-sm" type="number" min="1" max="16" step="0.5" [value]="imp.options.metresPerTile" #mpt />
+            </label>
+            <label class="td-field">
+              <span class="td-label" matTooltip="Thin out evenly beyond this many doodads">Most objects</span>
+              <input class="td-input is-sm" type="number" min="0" max="20000" step="500" [value]="imp.options.maxObjects" #maxo />
+            </label>
+            <label class="td-check" matTooltip="Leave out the black border around the playable area">
+              <input class="td-switch" type="checkbox" [checked]="imp.options.cropToPlayable" #crop />
+              Playable area only
+            </label>
+            <label class="td-check" matTooltip="Repaint the ground by its role in play: meadows, paving with gravel rims, forest rims with extra trees. Off keeps the tiles as they are">
+              <input class="td-switch" type="checkbox" [checked]="imp.options.style === 'enhanced'" #enh data-test="w3x-enhance" />
+              Enhance ground
+            </label>
+            <label class="td-check" matTooltip="Take the Warcraft map's waves over as this map's own wave list (unit, HP, count, our enemy type, bosses)">
+              <input class="td-switch" type="checkbox" [checked]="imp.options.waves" #waves data-test="w3x-waves" />
+              Take the map's waves
+            </label>
+            <button class="td-btn-primary td-btn-sm" type="button" data-test="w3x-import"
+                    (click)="startW3x(+mpt.value, +maxo.value, crop.checked, enh.checked, waves.checked)">Import</button>
+          </div>
+        }
+        @if (imp.error) {
+          <p>{{ imp.error }}</p>
+        } @else if (imp.report) {
+          @if (imp.report.mapped.length) {
+            <ul class="td-legend">
+              @for (line of imp.report.mapped; track $index) { <li>{{ line }}</li> }
+            </ul>
+          }
+          @if (imp.report.warnings.length) {
+            <h3 class="td-section">Warnings</h3>
+            <ul class="td-legend">
+              @for (line of imp.report.warnings; track $index) { <li class="td-note is-warn">{{ line }}</li> }
+            </ul>
+          }
+          @if (imp.mapId) {
+            <div class="td-actions is-start">
+              <button class="td-btn-primary td-btn-sm" type="button" (click)="open.emit(imp.mapId)" data-test="open-imported">Open the map</button>
+            </div>
+          }
+        }
+      </div>
+    }
+
+    <div class="mb-body">
+      <div class="mb-list td-well" role="listbox" aria-label="Maps">
+        <h2 class="td-head">Your maps</h2>
+        @for (m of own(); track m.id) {
+          <button class="td-row mb-row" type="button" role="option" [attr.aria-selected]="chosen()?.id === m.id && chosen()?.origin === 'own'"
+                  (click)="choose(m)" (dblclick)="open.emit(m.id)" [attr.data-map]="m.id">
+            @if (preview(m); as src) {
+              <img class="mb-thumb" [src]="src" alt="" />
+            } @else {
+              <span class="mb-thumb td-well" aria-hidden="true"></span>
+            }
+            <span class="mb-text">
+              <span class="td-name">{{ m.name }}</span>
+              <span class="td-sub">{{ line(m) }}</span>
+            </span>
+          </button>
+        } @empty {
+          <p class="td-note mb-empty">No maps yet. Start a new one, duplicate a shipped map or import a file.</p>
+        }
+
+        @if (shared().length) {
+          <h2 class="td-head mb-gap">From coop hosts</h2>
+          @for (m of shared(); track m.id) {
+            <button class="td-row mb-row" type="button" role="option" [attr.aria-selected]="chosen()?.id === m.id && chosen()?.origin === 'shared'"
+                    (click)="choose(m)" [attr.data-map]="m.id" data-origin="shared">
+              @if (preview(m); as src) {
+                <img class="mb-thumb" [src]="src" alt="" />
+              } @else {
+                <span class="mb-thumb td-well" aria-hidden="true"></span>
+              }
+              <span class="mb-text">
+                <span class="td-name">{{ m.name }}</span>
+                <span class="td-sub">{{ line(m) }}</span>
+              </span>
+              <span class="td-tag is-caps" matTooltip="A coop host's map: the host's next version replaces it">Host's</span>
+            </button>
+          }
+        }
+
+        <h2 class="td-head mb-gap">Shipped maps <span class="td-note">open as a copy of your own</span></h2>
+        @for (m of shipped(); track m.id) {
+          <button class="td-row mb-row" type="button" role="option" [attr.aria-selected]="chosen()?.id === m.id && chosen()?.origin === 'shipped'"
+                  (click)="choose(m)" [attr.data-map]="m.id">
+            @if (preview(m); as src) {
+              <img class="mb-thumb" [src]="src" alt="" />
+            } @else {
+              <span class="mb-thumb td-well" aria-hidden="true"></span>
+            }
+            <span class="mb-text">
+              <span class="td-name">{{ m.name }}</span>
+              <span class="td-sub">{{ line(m) }}</span>
+            </span>
+          </button>
+        } @empty {
+          <p class="td-note mb-empty">This build ships no maps.</p>
+        }
+      </div>
+
+      <aside class="mb-detail td-stack is-loose">
+        @if (mode() === 'new') {
+          <h2 class="td-section">New map</h2>
+          <label class="td-field">
+            <span class="td-label">Name</span>
+            <input class="td-input" type="text" maxlength="60" [value]="newName()" (input)="newName.set(asValue($event))" data-test="new-name" />
+          </label>
+          <label class="td-field">
+            <span class="td-label">Author</span>
+            <input class="td-input" type="text" maxlength="60" placeholder="Optional" [value]="newAuthor()" (input)="newAuthor.set(asValue($event))" />
+          </label>
+          <div class="td-field">
+            <span class="td-label" id="mb-size">Size</span>
+            <div class="td-seg is-stacked" role="radiogroup" aria-labelledby="mb-size">
+              @for (p of presets; track p.id) {
+                <button type="button" role="radio" [attr.aria-checked]="newSize() === p.id" (click)="newSize.set(p.id)">
+                  {{ p.label }}<small>{{ p.width }} x {{ p.depth }} m</small>
+                </button>
+              }
+            </div>
+          </div>
+          <div class="td-field">
+            <span class="td-label" id="mb-template">Start from <span class="td-note">a landscape with a road, a spawn and the HQ, ready to play</span></span>
+            <div class="mb-templates" role="radiogroup" aria-labelledby="mb-template">
+              @for (t of templates; track t.id) {
+                <button class="td-card mb-material" type="button" role="radio" [attr.aria-checked]="newTemplate() === t.id" [attr.aria-pressed]="newTemplate() === t.id"
+                        [matTooltip]="t.hint" matTooltipPosition="above" (click)="newTemplate.set(t.id)" [attr.data-template]="t.id">
+                  <img [src]="templatePicture(t)" alt="" />
+                  <span class="td-trunc">{{ t.label }}</span>
+                </button>
+              }
+              <button class="td-card mb-material" type="button" role="radio" [attr.aria-checked]="newTemplate() === ''" [attr.aria-pressed]="newTemplate() === ''"
+                      matTooltip="Start from bare ground of your choice" (click)="newTemplate.set('')" data-template="">
+                <span class="mb-blank" aria-hidden="true"></span>
+                <span class="td-trunc">Empty</span>
+              </button>
+            </div>
+          </div>
+          @if (!newTemplate()) {
+          <div class="td-field">
+            <span class="td-label" id="mb-ground">Ground</span>
+            <div class="td-seg is-sm mb-presets" role="radiogroup" aria-labelledby="mb-ground">
+              @for (p of presets2; track p.id) {
+                <button type="button" role="radio" [attr.aria-checked]="newPreset() === p.id" [matTooltip]="p.hint" (click)="newPreset.set(p.id)" [attr.data-preset]="p.id">{{ p.label }}</button>
+              }
+            </div>
+          </div>
+          @if (newPreset() !== 'flat') {
+            <div class="mb-gen">
+              <label class="td-field">
+                <span class="td-label">Seed</span>
+                <input class="td-input is-sm" type="number" min="0" [value]="newSeed()" (input)="newSeed.set(+asValue($event))" />
+              </label>
+              <button class="td-btn-secondary td-btn-sm" type="button" (click)="rollSeed()">Roll</button>
+              <label class="td-field mb-strength">
+                <span class="td-label">Strength {{ newStrength() }} %</span>
+                <input class="td-slider" type="range" min="10" max="100" [value]="newStrength()" (input)="newStrength.set(+asValue($event))" aria-label="Strength" />
+              </label>
+            </div>
+          }
+          <div class="td-field">
+            <span class="td-label">Base material</span>
+            <div class="mb-materials">
+              @for (mat of materials(); track mat.id) {
+                <button class="td-card mb-material" type="button" [attr.aria-pressed]="newMaterial() === mat.id" (click)="newMaterial.set(mat.id)" [matTooltip]="mat.name">
+                  <img [src]="thumb(mat)" alt="" />
+                  <span class="td-trunc">{{ mat.name }}</span>
+                </button>
+              }
+            </div>
+          </div>
+          }
+          @if (progress() !== null) {
+            <p class="td-note"><span class="td-spin" aria-hidden="true"></span> Painting the land {{ percent() }} %</p>
+          }
+          <div class="td-actions mb-new-actions">
+            <button class="td-btn-secondary" type="button" (click)="mode.set('details')">Cancel</button>
+            <button class="td-btn-primary" type="button" [disabled]="busy()" (click)="createMap()" data-test="create-map">Create map</button>
+          </div>
+        } @else if (chosen(); as m) {
+          @if (preview(m); as src) {
+            <img class="mb-preview" [src]="src" alt="Top view of {{ m.name }}" />
+          } @else {
+            <div class="mb-preview td-well" aria-hidden="true"></div>
+          }
+          <div>
+            <h2 class="td-dlg-title">{{ m.name }}</h2>
+            <span class="td-sub">{{ line(m) }}@if (m.author) { | by {{ m.author }} }</span>
+          </div>
+          @if (m.description) {
+            <p class="td-text">{{ m.description }}</p>
+          }
+          @if (m.importedFrom) {
+            <p class="td-note">Imported from {{ m.importedFrom }}</p>
+          }
+          @if (confirmDelete() === m.id) {
+            <div class="td-banner is-warn td-stack" role="group">
+              <p>Delete {{ m.name }}? This cannot be undone.</p>
+              <div class="td-actions is-start">
+                <button class="td-btn-danger" type="button" (click)="remove(m)">Delete</button>
+                <button class="td-btn-secondary" type="button" (click)="confirmDelete.set(null)">Keep it</button>
+              </div>
+            </div>
+          }
+          <div class="td-actions is-split">
+            <div class="td-inline">
+              @if (m.origin === 'own') {
+                <!-- A shipped or received map is copied by its main button already -->
+                <button class="td-btn-secondary td-btn-sm" type="button" [disabled]="busy()" (click)="duplicate(m)">Duplicate</button>
+              }
+              <button class="td-btn-secondary td-btn-sm" type="button" (click)="downloadMap(m)">Download</button>
+              @if (m.origin !== 'shipped') {
+                <button class="td-btn-danger td-btn-sm" type="button" (click)="remove(m)">Delete</button>
+              }
+            </div>
+            <button class="td-btn-primary" type="button" [disabled]="busy()" (click)="openChosen()" data-test="open-map">
+              {{ m.origin === 'own' ? 'Open' : 'Copy and edit' }}
+            </button>
+          </div>
+        } @else {
+          <p class="td-note">Choose a map, or start a new one.</p>
+        }
+      </aside>
+    </div>
+
+    <p class="td-note mb-foot">Drop .3dtdmap or .w3x files anywhere here to import them.</p>
+  </section>
+</div>

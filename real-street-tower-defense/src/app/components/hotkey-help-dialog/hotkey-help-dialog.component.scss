@@ -1,0 +1,49 @@
+// Layout of the shortcuts: keys left, what they do right; alternatives
+// parted by a slash, a range by a dash.
+
+.td-dlg {
+  width: 520px;
+}
+
+dl {
+  margin: 0;
+}
+
+.hk-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  padding-block: 6px;
+}
+
+dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+dt .td-kbd + .td-kbd {
+  position: relative;
+  margin-left: 14px;
+
+  &::before {
+    content: '/';
+    position: absolute;
+    left: -12px;
+    width: 10px;
+    text-align: center;
+    color: var(--td-text-muted);
+  }
+}
+
+dt.range .td-kbd + .td-kbd::before {
+  content: '–';
+}
+
+dd {
+  margin: 0;
+}
+
+.hk-hint {
+  margin-right: auto;
+}

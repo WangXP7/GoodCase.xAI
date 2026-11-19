@@ -1,0 +1,455 @@
+const clampAudio = value => Math.max(0, Math.min(1, Number(value) || 0));
+const MANEUVER_ONE_SHORT = Object.freeze([Object.freeze([0.9, 0, 1])]);
+const MANEUVER_TWO_SHORT = Object.freeze([Object.freeze([0.9, 0, 1]), Object.freeze([0.9, 1.9, 1])]);
+const MANEUVER_DANGER = Object.freeze([
+  Object.freeze([0.45, 0, 1]), Object.freeze([0.45, 0.68, 1]), Object.freeze([0.45, 1.36, 1]),
+  Object.freeze([0.45, 2.04, 1]), Object.freeze([0.45, 2.72, 1]),
+]);
+const CLOSE_WARNING = Object.freeze([Object.freeze([0.55, 0, 1])]);
+const FOG_POWER = Object.freeze([Object.freeze([4.5, 0, 1])]);
+const FOG_FISHING = Object.freeze([Object.freeze([4.5, 0, 1]), Object.freeze([1, 5.5, 0.9]), Object.freeze([1, 7.5, 0.9])]);
+
+// Convert a world-space emitter into camera-relative stereo. Keeping this as plain arithmetic makes listener
+// updates allocation-free and lets the audio system degrade cleanly on browsers without StereoPannerNode.
+export function cameraRelativePan(listenerX, listenerZ, forwardX, forwardZ, sourceX, sourceZ, width = 1) {
+  const lx = Number(listenerX), lz = Number(listenerZ), fx = Number(forwardX), fz = Number(forwardZ), sx = Number(sourceX), sz = Number(sourceZ);
+  if (!Number.isFinite(lx) || !Number.isFinite(lz) || !Number.isFinite(fx) || !Number.isFinite(fz) || !Number.isFinite(sx) || !Number.isFinite(sz)) return 0;
+  const forwardLength = Math.hypot(fx, fz), dx = sx - lx, dz = sz - lz, distance = Math.hypot(dx, dz);
+  if (forwardLength < 0.0001 || distance < 0.0001) return 0;
+  const rightX = -fz / forwardLength, rightZ = fx / forwardLength;
+  return Math.max(-1, Math.min(1, ((dx / distance) * rightX + (dz / distance) * rightZ) * Math.max(0, Number(width) || 0)));
+}
+
+// Every boat director publishes one already-distance-scaled motor candidate. Keep a single retained voice on the
+// loudest source, with a little hysteresis so two crossing boats do not make the stereo image chatter between them.
+export function selectOutboardSource(candidates, out = {}, hysteresis = 0.82) {
+  const previousId = String(out.id || ''); let best = null, held = null, bestLevel = 0, heldLevel = 0;
+  for (const candidate of candidates || []) {
+    const source = candidate?.source, level = clampAudio(source?.obLevel), x = Number(source?.obX), z = Number(source?.obZ);
+    if (level <= 0.001 || !Number.isFinite(x) || !Number.isFinite(z)) continue;
+    if (level > bestLevel) { best = candidate; bestLevel = level; }
+    if (String(candidate.id) === previousId) { held = candidate; heldLevel = level; }
+  }
+  const keep = held && heldLevel >= bestLevel * Math.max(0, Math.min(1, Number(hysteresis) || 0));
+  const selected = keep ? held : best, source = selected?.source;
+  if (!selected || !source) { out.id = ''; out.level = 0; out.pitch = 1; out.x = 0; out.z = 0; return out; }
+  out.id = String(selected.id); out.level = clampAudio(source.obLevel);
+  out.pitch = Number.isFinite(Number(source.obPitch)) ? Math.max(0.5, Math.min(1.8, Number(source.obPitch))) : 1;
+  out.x = Number(source.obX); out.z = Number(source.obZ); return out;
+}
+
+export class EngineAudio {
+  constructor() {
+    this.ctx = null; this.windLevel = 0; this.rainLevel = 0; this.nightLevel = 0; this.stormLevel = 0; this.nightLifeLevel = 0;
+    this.listenerX = 0; this.listenerZ = 0; this.listenerForwardX = 0; this.listenerForwardZ = -1;
+    this.transientSpatialNodes = 0; this.activeTransientSpatialNodes = 0; this.persistentSpatialNodes = 0; this.transientDestinations = new WeakSet();
+  }
+  setListener(x, z, forwardX, forwardZ) {
+    const nextX = Number(x), nextZ = Number(z), fx = Number(forwardX), fz = Number(forwardZ), length = Math.hypot(fx, fz);
+    if (Number.isFinite(nextX) && Number.isFinite(nextZ)) { this.listenerX = nextX; this.listenerZ = nextZ; }
+    if (Number.isFinite(length) && length > 0.0001) { this.listenerForwardX = fx / length; this.listenerForwardZ = fz / length; }
+  }
+  panAt(x, z, width = 1) { return cameraRelativePan(this.listenerX, this.listenerZ, this.listenerForwardX, this.listenerForwardZ, x, z, width); }
+  spatialDestination(x, z, width = 1) {
+    if (!this.ctx || !this.sfx || typeof this.ctx.createStereoPanner !== 'function' || !Number.isFinite(Number(x)) || !Number.isFinite(Number(z))) return this.sfx;
+    const panner = this.ctx.createStereoPanner(), pan = this.panAt(x, z, width);
+    if (panner.pan?.setValueAtTime) panner.pan.setValueAtTime(pan, this.ctx.currentTime); else if (panner.pan) panner.pan.value = pan;
+    panner.connect(this.sfx); this.transientDestinations.add(panner); this.transientSpatialNodes++; this.activeTransientSpatialNodes++; return panner;
+  }
+  releaseSpatialDestination(destination, tail) {
+    if (!tail || !this.transientDestinations.has(destination)) return;
+    const release = () => {
+      if (!this.transientDestinations.delete(destination)) return;
+      destination.disconnect(); this.activeTransientSpatialNodes = Math.max(0, this.activeTransientSpatialNodes - 1);
+    };
+    if (typeof tail.addEventListener === 'function') tail.addEventListener('ended', release, { once: true }); else tail.onended = release;
+  }
+  persistentSpatialOutput() {
+    if (!this.ctx || !this.sfx || typeof this.ctx.createStereoPanner !== 'function') return null;
+    const panner = this.ctx.createStereoPanner(); panner.connect(this.sfx); this.persistentSpatialNodes++; return panner;
+  }
+  setPersistentPan(panner, x, z, width = 1) {
+    if (!panner?.pan || !Number.isFinite(Number(x)) || !Number.isFinite(Number(z))) return;
+    const pan = this.panAt(x, z, width);
+    if (panner.pan.setTargetAtTime) panner.pan.setTargetAtTime(pan, this.ctx.currentTime, 0.045); else panner.pan.value = pan;
+  }
+  spatialStats() {
+    return {
+      supported: !!this.ctx && typeof this.ctx.createStereoPanner === 'function', transientActive: this.activeTransientSpatialNodes, transientCreated: this.transientSpatialNodes, persistentNodes: this.persistentSpatialNodes,
+      listener: { x: this.listenerX, z: this.listenerZ, forwardX: this.listenerForwardX, forwardZ: this.listenerForwardZ },
+    };
+  }
+  start() {
+    if (this.ctx) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.ctx = ctx;
+    const master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination); this.master = master;
+    // engine: two detuned saws through a lowpass
+    this.osc1 = ctx.createOscillator(); this.osc1.type = 'sawtooth'; this.osc1.frequency.value = 40;
+    this.osc2 = ctx.createOscillator(); this.osc2.type = 'square'; this.osc2.frequency.value = 80.5;
+    this.engGain = ctx.createGain(); this.engGain.gain.value = 0.0;
+    this.engLP = ctx.createBiquadFilter(); this.engLP.type = 'lowpass'; this.engLP.frequency.value = 300; this.engLP.Q.value = 2;
+    this.osc1.connect(this.engLP); this.osc2.connect(this.engLP); this.engLP.connect(this.engGain); this.engGain.connect(master);
+    this.osc1.start(); this.osc2.start();
+    // prop wash: filtered noise
+    const len = ctx.sampleRate * 2; const buf = ctx.createBuffer(1, len, ctx.sampleRate); const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    this.noise = ctx.createBufferSource(); this.noise.buffer = buf; this.noise.loop = true;
+    this.noiseBP = ctx.createBiquadFilter(); this.noiseBP.type = 'bandpass'; this.noiseBP.frequency.value = 900; this.noiseBP.Q.value = 0.6;
+    this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0.0;
+    this.noise.connect(this.noiseBP); this.noiseBP.connect(this.noiseGain); this.noiseGain.connect(master); this.noise.start();
+    // ambient: soft wind/insects
+    this.amb = ctx.createBufferSource(); this.amb.buffer = buf; this.amb.loop = true;
+    const ambLP = ctx.createBiquadFilter(); ambLP.type = 'lowpass'; ambLP.frequency.value = 400;
+    const ambGain = ctx.createGain(); ambGain.gain.value = 0.035; this.ambGain = ambGain;
+    this.amb.connect(ambLP); ambLP.connect(ambGain); ambGain.connect(master); this.amb.start();
+    // cicada-ish high shimmer
+    const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 5200; hp.Q.value = 8;
+    const hg = ctx.createGain(); hg.gain.value = 0.012; this.amb.connect(hp); hp.connect(hg); hg.connect(master);
+    this.hg = hg;
+    // The same long noise bed feeds two independent weather bands. They stay phase-coherent but read as
+    // wind pressure and rain hiss because their filters and gain envelopes move separately.
+    const windBP = ctx.createBiquadFilter(); windBP.type = 'bandpass'; windBP.frequency.value = 420; windBP.Q.value = 0.45;
+    const windGain = ctx.createGain(); windGain.gain.value = 0; this.amb.connect(windBP); windBP.connect(windGain); windGain.connect(master);
+    const rainHP = ctx.createBiquadFilter(); rainHP.type = 'highpass'; rainHP.frequency.value = 2400;
+    const rainGain = ctx.createGain(); rainGain.gain.value = 0; this.amb.connect(rainHP); rainHP.connect(rainGain); rainGain.connect(master);
+    this.windBP = windBP; this.windGain = windGain; this.rainHP = rainHP; this.rainGain = rainGain;
+    this.noiseBuf = buf;
+    // sfx bus
+    this.sfx = ctx.createGain(); this.sfx.gain.value = 0.9; this.sfx.connect(master);
+  }
+  async suspend() {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed' || ctx.state === 'suspended' || typeof ctx.suspend !== 'function') return false;
+    try { await ctx.suspend(); return true; } catch (error) { return false; }
+  }
+  async resume() {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed' || ctx.state !== 'suspended' || typeof ctx.resume !== 'function') return false;
+    try { await ctx.resume(); return true; } catch (error) { return false; }
+  }
+  // ---- one-shot effects ----
+  splash(intensity = 1, heavy = false) {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime;
+    // weight: a sub thump under the hiss, bigger when the hull slams or stuffs
+    { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(heavy ? 70 : 55, now); o.frequency.exponentialRampToValueAtTime(26, now + 0.35);
+      const g = ctx.createGain(); g.gain.setValueAtTime(Math.min(1, 0.25 + intensity * 0.3 + (heavy ? 0.3 : 0)), now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+      o.connect(g); g.connect(this.sfx); o.start(now); o.stop(now + 0.5); }
+    if (heavy) { const src2 = ctx.createBufferSource(); src2.buffer = this.noiseBuf; const bp = ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.setValueAtTime(900, now); bp.frequency.exponentialRampToValueAtTime(120, now + 1.4);
+      const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.0001, now); g2.gain.exponentialRampToValueAtTime(0.5, now + 0.08); g2.gain.exponentialRampToValueAtTime(0.0001, now + 1.5); src2.connect(bp); bp.connect(g2); g2.connect(this.sfx); src2.start(now); src2.stop(now + 1.6); }
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2200 + intensity * 900, now); lp.frequency.exponentialRampToValueAtTime(220, now + 0.5 + intensity * 0.2);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(Math.min(0.9, 0.25 + intensity * 0.3), now + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6 + intensity * 0.3);
+    src.connect(lp); lp.connect(g); g.connect(this.sfx); src.start(now); src.stop(now + 1.2);
+  }
+  thud(intensity = 1) {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(90, now); o.frequency.exponentialRampToValueAtTime(32, now + 0.25);
+    const g = ctx.createGain(); g.gain.setValueAtTime(Math.min(1, 0.4 + intensity * 0.25), now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    o.connect(g); g.connect(this.sfx); o.start(now); o.stop(now + 0.35);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 600; bp.Q.value = 0.8;
+    const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.3 * intensity, now); g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    src.connect(bp); bp.connect(g2); g2.connect(this.sfx); src.start(now); src.stop(now + 0.25);
+  }
+  tone(freq, dur = 0.12, vol = 0.25, type = 'triangle', when = 0) {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime + when;
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g); g.connect(this.sfx); o.start(now); o.stop(now + dur + 0.05);
+  }
+  checkpoint() { this.tone(880, 0.14, 0.22); this.tone(1320, 0.22, 0.2, 'triangle', 0.09); }
+  trick(mult = 1) { this.tone(660 + mult * 90, 0.09, 0.12, 'square'); }
+  bank() { this.tone(523, 0.1, 0.16); this.tone(659, 0.1, 0.16, 'triangle', 0.08); this.tone(784, 0.25, 0.18, 'triangle', 0.16); }
+  complete() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.35, 0.2, 'triangle', i * 0.13)); this.tone(1319, 0.7, 0.16, 'triangle', 0.55); }
+  fail() { this.tone(330, 0.3, 0.2, 'sawtooth'); this.tone(247, 0.6, 0.2, 'sawtooth', 0.25); }
+  countdown(final = false) { this.tone(final ? 1046 : 660, final ? 0.5 : 0.15, 0.22, 'square'); }
+  pickup() { this.tone(988, 0.08, 0.16, 'square'); this.tone(1480, 0.16, 0.14, 'square', 0.06); }
+  warn() { this.tone(440, 0.12, 0.2, 'square'); this.tone(440, 0.12, 0.2, 'square', 0.18); }
+  // Thunder reuses the engine's two-second noise buffer. BufferSource nodes are one-shot Web Audio objects, but
+  // looping the retained sample avoids building and filling a new multi-second AudioBuffer for every lightning strike.
+  thunder(strength = 1, x, z) {
+    if (!this.ctx || !this.noiseBuf) return; const ctx = this.ctx, now = ctx.currentTime, dur = 2.8;
+    const destination = this.spatialDestination(x, z, 0.86);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const low = ctx.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 210; low.Q.value = 0.7;
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0.0001, now); gain.gain.exponentialRampToValueAtTime(0.32 * clampAudio(strength), now + 0.05); gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(low); low.connect(gain); gain.connect(destination); this.releaseSpatialDestination(destination, src); src.start(now, Math.random() * 1.6); src.stop(now + dur);
+  }
+  // One reel bed is created on the first hooked fish and then reused. Holding the reel changes AudioParams only;
+  // releasing the key fades the same graph instead of starting another source every frame.
+  fishingReel(level = 0, tension = 0) {
+    if (!this.ctx || (!this.fishingReelGraph && level <= 0.001)) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.fishingReelGraph) {
+      const ratchet = ctx.createOscillator(); ratchet.type = 'square'; ratchet.frequency.value = 82;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 980; bp.Q.value = 0.8;
+      const gain = ctx.createGain(); gain.gain.value = 0; ratchet.connect(bp); bp.connect(gain); gain.connect(this.sfx); ratchet.start();
+      this.fishingReelGraph = { ratchet, bp, gain };
+    }
+    const reel = this.fishingReelGraph, active = clampAudio(level), strain = clampAudio(tension);
+    reel.gain.gain.setTargetAtTime(active * (0.022 + strain * 0.026), now, active ? 0.035 : 0.09);
+    reel.ratchet.frequency.setTargetAtTime(72 + strain * 76, now, 0.045); reel.bp.frequency.setTargetAtTime(760 + strain * 720, now, 0.08);
+  }
+  // A mature funnel reuses the engine's retained ambient noise source. The two filters and their spatial output are
+  // created only when a waterspout first comes within earshot, then faded and reused for every later event.
+  waterspout(level = 0, x, z) {
+    if (!this.ctx || (!this.spoutAudio && level <= 0.001)) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.spoutAudio) {
+      const panner = this.persistentSpatialOutput(), destination = panner || this.sfx;
+      const roar = ctx.createBiquadFilter(); roar.type = 'bandpass'; roar.frequency.value = 185; roar.Q.value = 0.52;
+      const spray = ctx.createBiquadFilter(); spray.type = 'bandpass'; spray.frequency.value = 1380; spray.Q.value = 0.4;
+      const roarGain = ctx.createGain(); roarGain.gain.value = 0; const sprayGain = ctx.createGain(); sprayGain.gain.value = 0;
+      this.amb.connect(roar); this.amb.connect(spray); roar.connect(roarGain); spray.connect(sprayGain); roarGain.connect(destination); sprayGain.connect(destination);
+      this.spoutAudio = { panner, roar, spray, roarGain, sprayGain };
+    }
+    const graph = this.spoutAudio, audible = clampAudio(level);
+    graph.roarGain.gain.setTargetAtTime(audible * 0.19, now, audible ? 0.14 : 0.4); graph.sprayGain.gain.setTargetAtTime(audible * 0.12, now, audible ? 0.11 : 0.34);
+    graph.roar.frequency.setTargetAtTime(155 + audible * 105, now, 0.22); graph.spray.frequency.setTargetAtTime(1120 + audible * 760, now, 0.18);
+    this.setPersistentPan(graph.panner, x, z, 0.96);
+  }
+  // One retained spatial bed serves both a grass fire and the bank-water pump used to fight it. The ambient noise
+  // source already exists, so a long containment attempt only moves AudioParams instead of allocating one-shot nodes.
+  marshFire(level = 0, pump = 0, x, z) {
+    if (!this.ctx || (!this.marshFireAudio && level <= 0.001 && pump <= 0.001)) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.marshFireAudio) {
+      const panner = this.persistentSpatialOutput(), destination = panner || this.sfx;
+      const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 420; body.Q.value = 0.46;
+      const crackle = ctx.createBiquadFilter(); crackle.type = 'bandpass'; crackle.frequency.value = 1960; crackle.Q.value = 0.38;
+      const water = ctx.createBiquadFilter(); water.type = 'bandpass'; water.frequency.value = 1320; water.Q.value = 0.44;
+      const bodyGain = ctx.createGain(); bodyGain.gain.value = 0; const crackleGain = ctx.createGain(); crackleGain.gain.value = 0; const waterGain = ctx.createGain(); waterGain.gain.value = 0;
+      this.amb.connect(body); this.amb.connect(crackle); this.amb.connect(water);
+      body.connect(bodyGain); crackle.connect(crackleGain); water.connect(waterGain);
+      bodyGain.connect(destination); crackleGain.connect(destination); waterGain.connect(destination);
+      this.marshFireAudio = { panner, body, crackle, water, bodyGain, crackleGain, waterGain };
+    }
+    const graph = this.marshFireAudio, flame = clampAudio(level), stream = clampAudio(pump);
+    graph.bodyGain.gain.setTargetAtTime(flame * 0.11, now, flame ? 0.12 : 0.38);
+    graph.crackleGain.gain.setTargetAtTime(flame * (0.035 + flame * 0.035), now, flame ? 0.08 : 0.3);
+    graph.waterGain.gain.setTargetAtTime(stream * 0.105, now, stream ? 0.055 : 0.16);
+    graph.body.frequency.setTargetAtTime(340 + flame * 190, now, 0.22);
+    graph.crackle.frequency.setTargetAtTime(1580 + flame * 780, now, 0.16);
+    graph.water.frequency.setTargetAtTime(1120 + stream * 520, now, 0.12);
+    this.setPersistentPan(graph.panner, x, z, 0.94);
+  }
+  // A VHF carrier opening or dropping: filtered static and the small relay click from the set in the boat.
+  // Dialogue stays legible as captions; this cue makes it feel like radio traffic without synthetic speech.
+  radio(open = true, priority = 1) {
+    if (!this.ctx || !this.noiseBuf) return; const ctx = this.ctx, now = ctx.currentTime, dur = open ? 0.24 : 0.11;
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 520;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = open ? 1850 : 1450; bp.Q.value = 0.55;
+    const g = ctx.createGain(); const level = Math.min(0.16, 0.075 + priority * 0.017);
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(level, now + 0.012); g.gain.setValueAtTime(level * 0.68, now + dur * 0.55); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(this.sfx); src.start(now, Math.random() * 1.5); src.stop(now + dur + 0.02);
+    const click = ctx.createOscillator(); click.type = 'square'; click.frequency.setValueAtTime(open ? 920 : 620, now); click.frequency.exponentialRampToValueAtTime(open ? 310 : 240, now + 0.035);
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.045, now); cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.045); click.connect(cg); cg.connect(this.sfx); click.start(now); click.stop(now + 0.05);
+  }
+  frog(vol = 0.12) { this.tone(86, 0.16, vol, 'sine'); this.tone(72, 0.22, vol * 0.8, 'sine', 0.12); }
+  weather(wind = 0, rain = 0, night = 0, storm = 0) { this.windLevel = wind; this.rainLevel = rain; this.nightLevel = night; this.stormLevel = storm; }
+  nightLife(level = 0) { this.nightLifeLevel = clampAudio(level); }
+  // ---- the bayou's own voices ----
+  // a mullet hitting the water: a short bright slap
+  plip(vol = 0.4, x, z) {
+    if (!this.ctx || vol < 0.02) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 2400; hp.Q.value = 0.9;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol * 0.5, now + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    src.connect(hp); hp.connect(g); g.connect(destination); this.releaseSpatialDestination(destination, src); src.start(now); src.stop(now + 0.2);
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(520, now); o.frequency.exponentialRampToValueAtTime(180, now + 0.09);
+    const g2 = ctx.createGain(); g2.gain.setValueAtTime(vol * 0.25, now); g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.1); o.connect(g2); g2.connect(destination); o.start(now); o.stop(now + 0.12);
+  }
+  // An ultrasonic animal tag is heard through the boat's receiver as a short electronic double ping. Distance drives
+  // both the volume and the small pitch rise, so the player can search the cut without an arcade waypoint.
+  tagPing(vol = 0.18, closeness = 0) {
+    const near = Math.max(0, Math.min(1, Number(closeness) || 0));
+    this.tone(910 + near * 260, 0.045, vol, 'sine');
+    this.tone(1040 + near * 330, 0.035, vol * 0.72, 'sine', 0.085);
+  }
+  // bull gator: a chesty rumble with a rasp on top
+  bellow(vol = 0.5, x, z) {
+    if (!this.ctx || vol < 0.02) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z, 0.88);
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(44, now); o.frequency.linearRampToValueAtTime(52, now + 0.5); o.frequency.linearRampToValueAtTime(38, now + 1.4);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 11; const lg = ctx.createGain(); lg.gain.value = 6; lfo.connect(lg); lg.connect(o.frequency);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 3;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
+    o.connect(lp); lp.connect(g); g.connect(destination); o.start(now); lfo.start(now); o.stop(now + 1.6); lfo.stop(now + 1.6);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 180; bp.Q.value = 1.5;
+    const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.0001, now); g2.gain.exponentialRampToValueAtTime(vol * 0.6, now + 0.3); g2.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+    src.connect(bp); bp.connect(g2); g2.connect(destination); this.releaseSpatialDestination(destination, o); src.start(now); src.stop(now + 1.5);
+  }
+  // a gator sliding off the bank: hiss and a slap
+  hiss(vol = 0.35, x, z) {
+    if (!this.ctx || vol < 0.02) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z, 0.94);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3600; bp.Q.value = 0.7;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
+    src.connect(bp); bp.connect(g); g.connect(destination); this.releaseSpatialDestination(destination, src); src.start(now); src.stop(now + 0.8);
+  }
+  hornBlast(vol, duration, when = 0, destination = this.sfx) {
+    if (!this.ctx || vol < 0.02) return null; const ctx = this.ctx, now = ctx.currentTime + when; let tail = null;
+    for (const f of [311, 392]) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+      const release = Math.min(0.4, duration * 0.28), hold = duration - release;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol * 0.5, now + 0.03); g.gain.setValueAtTime(vol * 0.5, now + hold); g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      o.connect(lp); lp.connect(g); g.connect(destination || this.sfx); o.start(now); o.stop(now + duration + 0.05); tail = o; }
+    return tail;
+  }
+  hornPattern(blasts, vol, x, z) {
+    if (!this.ctx || vol < 0.02) return null;
+    const destination = this.spatialDestination(x, z, 0.92); let tail = null;
+    for (const blast of blasts) tail = this.hornBlast(vol * blast[2], blast[0], blast[1], destination) || tail;
+    this.releaseSpatialDestination(destination, tail); return tail;
+  }
+  // another boat's close-quarters warning: two-tone, a touch flat
+  horn(vol = 0.3, x, z) { return this.hornPattern(CLOSE_WARNING, vol, x, z); }
+  // Inland Rule 34: one/two short passing-intent blasts, or at least five rapid blasts for danger or doubt.
+  // The fixed patterns are shared by every boat, so only the Web Audio voices for an audible signal are transient.
+  maneuverHorn(blasts = 1, vol = 0.3, x, z) {
+    const pattern = blasts >= 5 ? MANEUVER_DANGER : blasts >= 2 ? MANEUVER_TWO_SHORT : MANEUVER_ONE_SHORT;
+    return this.hornPattern(pattern, vol, x, z);
+  }
+  // Rule 32 prolonged blast: held inside the four-to-six-second window.
+  fogHorn(vol = 0.3, x, z) { return this.hornPattern(FOG_POWER, vol, x, z); }
+  // Rule 35(c): a vessel engaged in fishing sounds one prolonged followed by two short blasts.
+  fogHornFishing(vol = 0.3, x, z) { return this.hornPattern(FOG_FISHING, vol, x, z); }
+  // osprey: a run of thin descending whistles
+  osprey(vol = 0.18, x, z) {
+    if (!this.ctx || vol < 0.02) return; const ctx = this.ctx;
+    const destination = this.spatialDestination(x, z, 0.9);
+    let tail;
+    for (let i = 0; i < 5; i++) { const now = ctx.currentTime + i * 0.17; const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(2900, now); o.frequency.exponentialRampToValueAtTime(2200, now + 0.11);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12); o.connect(g); g.connect(destination); o.start(now); o.stop(now + 0.14); tail = o; }
+    this.releaseSpatialDestination(destination, tail);
+  }
+  // heron / egret flushed off the flat: a harsh croak
+  squawk(vol = 0.25, x, z) {
+    if (!this.ctx || vol < 0.02) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z, 0.96);
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(420, now); o.frequency.exponentialRampToValueAtTime(230, now + 0.28);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = 4;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    o.connect(lp); lp.connect(g); g.connect(destination); this.releaseSpatialDestination(destination, o); o.start(now); o.stop(now + 0.32);
+  }
+  // A close liquid-fuel fire: turbulent hiss with irregular low crackles, kept as a short one-shot so silent scenes allocate nothing.
+  fire(vol = 0.24, x, z) {
+    if (!this.ctx || !this.noiseBuf || vol < 0.01) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z, 0.9);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1150 + Math.random() * 520; bp.Q.value = 0.48;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.035); g.gain.setValueAtTime(vol * 0.72, now + 0.34); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+    src.connect(bp); bp.connect(g); g.connect(destination); this.releaseSpatialDestination(destination, src); src.start(now, Math.random() * 1.2); src.stop(now + 0.66);
+    for (let i = 0; i < 2; i++) {
+      const at = now + 0.08 + i * 0.21 + Math.random() * 0.08, o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(150 + Math.random() * 90, at); o.frequency.exponentialRampToValueAtTime(70, at + 0.055);
+      const pop = ctx.createGain(); pop.gain.setValueAtTime(vol * (0.18 + Math.random() * 0.16), at); pop.gain.exponentialRampToValueAtTime(0.0001, at + 0.065); o.connect(pop); pop.connect(destination); o.start(at); o.stop(at + 0.075);
+    }
+  }
+  // wood on aluminium: a deadhead under the hull
+  knock(vol = 0.6) {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(160, now); o.frequency.exponentialRampToValueAtTime(70, now + 0.12);
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22); o.connect(g); g.connect(this.sfx); o.start(now); o.stop(now + 0.25);
+    this.thud(vol * 0.8);
+  }
+  // a shotgun somewhere off in the marsh: a crack, then the low roll of it across the water
+  shot(vol = 0.3, x, z) {
+    if (!this.ctx || vol < 0.01) return; const ctx = this.ctx, now = ctx.currentTime;
+    const destination = this.spatialDestination(x, z);
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, now); lp.frequency.exponentialRampToValueAtTime(140, now + 0.7);
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(vol * 0.25, now + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+    src.connect(lp); lp.connect(g); g.connect(destination); this.releaseSpatialDestination(destination, src); src.start(now); src.stop(now + 1.5);
+  }
+  // One nearby-motor graph follows the selected source instead of layering a node tree for every streamed boat.
+  // Distance is already folded into level; position supplies the stereo bearing and relative range supplies a mild,
+  // physically bounded Doppler shift. A source handoff resets Doppler so a far-away replacement cannot pitch-snap.
+  outboard(level, pitch = 1, x, z, sourceId = '') {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime, audible = clampAudio(level);
+    if (!this.ob && audible <= 0.001) return;
+    if (!this.ob) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 95;
+      const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 190;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 1.5;
+      const g = ctx.createGain(); g.gain.value = 0;
+      const panner = this.persistentSpatialOutput(), destination = panner || this.sfx;
+      o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(destination); o.start(); o2.start();
+      this.ob = { o, o2, g, lp, panner, sourceId: '', lastDistance: NaN, lastTime: now, doppler: 1, x: 0, z: 0 };
+    }
+    const b = this.ob, sx = Number(x), sz = Number(z), id = String(sourceId || ''); let doppler = 1;
+    if (Number.isFinite(sx) && Number.isFinite(sz)) {
+      const distance = Math.hypot(sx - this.listenerX, sz - this.listenerZ), sampleDt = now - b.lastTime;
+      if (id && id === b.sourceId && Number.isFinite(b.lastDistance) && sampleDt >= 0.008 && sampleDt <= 0.25) {
+        const closing = Math.max(-32, Math.min(32, (b.lastDistance - distance) / sampleDt));
+        doppler = Math.max(0.91, Math.min(1.11, 343 / (343 - closing)));
+      }
+      b.lastDistance = distance; b.lastTime = now; b.x = sx; b.z = sz; this.setPersistentPan(b.panner, sx, sz, 0.9);
+    } else { b.lastDistance = NaN; b.lastTime = now; }
+    b.sourceId = id; b.doppler = doppler;
+    const basePitch = Number.isFinite(Number(pitch)) ? Math.max(0.5, Math.min(1.8, Number(pitch))) : 1;
+    b.g.gain.setTargetAtTime(Math.min(0.12, audible * 0.12), now, 0.15);
+    b.lp.frequency.setTargetAtTime(380 + audible * 820, now, 0.22);
+    b.o.frequency.setTargetAtTime(95 * basePitch * doppler, now, 0.2); b.o2.frequency.setTargetAtTime(191 * basePitch * doppler, now, 0.2);
+  }
+  // One pooled rotor bed is created only when an aircraft is actually heard. Distance drives its gain;
+  // blade loading nudges the pulse rate during an approach or hover without allocating per-frame audio nodes.
+  helicopter(level = 0, load = 1, x, z) {
+    if (!this.ctx || (!this.heli && level <= 0.001)) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.heli) {
+      const beat = ctx.createOscillator(); beat.type = 'sawtooth'; beat.frequency.value = 18.5;
+      const harmonic = ctx.createOscillator(); harmonic.type = 'square'; harmonic.frequency.value = 37;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 1.4;
+      const panner = this.persistentSpatialOutput(), destination = panner || this.sfx;
+      const beatGain = ctx.createGain(); beatGain.gain.value = 0; beat.connect(lp); harmonic.connect(lp); lp.connect(beatGain); beatGain.connect(destination);
+      const wash = ctx.createBiquadFilter(); wash.type = 'bandpass'; wash.frequency.value = 210; wash.Q.value = 0.5;
+      const washGain = ctx.createGain(); washGain.gain.value = 0; this.amb.connect(wash); wash.connect(washGain); washGain.connect(destination);
+      beat.start(); harmonic.start(); this.heli = { beat, harmonic, lp, beatGain, wash, washGain, panner };
+    }
+    const h = this.heli, audible = Math.min(1, Math.max(0, level)), pitch = Math.max(0.82, Math.min(1.22, load));
+    h.beatGain.gain.setTargetAtTime(audible * 0.16, now, 0.18); h.washGain.gain.setTargetAtTime(audible * 0.12, now, 0.22);
+    h.beat.frequency.setTargetAtTime(18.5 * pitch, now, 0.16); h.harmonic.frequency.setTargetAtTime(37.2 * pitch, now, 0.16);
+    h.lp.frequency.setTargetAtTime(210 + audible * 180, now, 0.24); h.wash.frequency.setTargetAtTime(170 + audible * 160, now, 0.24);
+    this.setPersistentPan(h.panner, x, z, 0.9);
+  }
+  // A single marine-patrol siren bed follows the closest active unit. It is created on first audible pursuit and then
+  // reused, so a long chase changes AudioParams rather than creating oscillators every frame.
+  patrolSiren(level = 0, heat = 1, x, z) {
+    if (!this.ctx || (!this.siren && level <= 0.001)) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.siren) {
+      const low = ctx.createOscillator(); low.type = 'sawtooth'; low.frequency.value = 610;
+      const high = ctx.createOscillator(); high.type = 'triangle'; high.frequency.value = 940;
+      const sweep = ctx.createOscillator(); sweep.type = 'sine'; sweep.frequency.value = 0.58;
+      const sweepDepth = ctx.createGain(); sweepDepth.gain.value = 185; sweep.connect(sweepDepth); sweepDepth.connect(low.frequency); sweepDepth.connect(high.frequency);
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 880; bp.Q.value = 0.72;
+      const panner = this.persistentSpatialOutput(), gain = ctx.createGain(); gain.gain.value = 0; low.connect(bp); high.connect(bp); bp.connect(gain); gain.connect(panner || this.sfx);
+      low.start(); high.start(); sweep.start(); this.siren = { low, high, sweep, sweepDepth, bp, gain, panner };
+    }
+    const s = this.siren, audible = Math.max(0, Math.min(1, Number(level) || 0)), wanted = Math.max(1, Math.min(5, Number(heat) || 1));
+    s.gain.gain.setTargetAtTime(audible * 0.095, now, audible > 0 ? 0.12 : 0.28);
+    s.low.frequency.setTargetAtTime(585 + wanted * 9, now, 0.3); s.high.frequency.setTargetAtTime(910 + wanted * 12, now, 0.3);
+    s.sweep.frequency.setTargetAtTime(0.52 + wanted * 0.035, now, 0.45); s.sweepDepth.gain.setTargetAtTime(165 + wanted * 9, now, 0.45);
+    s.bp.frequency.setTargetAtTime(760 + audible * 250, now, 0.25);
+    this.setPersistentPan(s.panner, x, z, 0.95);
+  }
+  // a diesel pickup idling and pulling on a ramp
+  truck(level) {
+    if (!this.ctx) return; const ctx = this.ctx, now = ctx.currentTime;
+    if (!this.tk) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 27; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 160; const g = ctx.createGain(); g.gain.value = 0; o.connect(lp); lp.connect(g); g.connect(this.sfx); o.start(); this.tk = { o, g }; }
+    this.tk.g.gain.setTargetAtTime(Math.min(0.2, level * 0.2), now, 0.2); this.tk.o.frequency.setTargetAtTime(27 + level * 6, now, 0.3);
+  }
+  update(rpm, throttle, speed, t) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const f = 28 + rpm * 62;
+    this.osc1.frequency.setTargetAtTime(f, now, 0.05);
+    this.osc2.frequency.setTargetAtTime(f * 2.01, now, 0.05);
+    this.engLP.frequency.setTargetAtTime(180 + rpm * 900, now, 0.05);
+    this.engGain.gain.setTargetAtTime(rpm > 0.01 ? 0.04 + rpm * 0.18 : 0, now, 0.05);
+    this.noiseGain.gain.setTargetAtTime(rpm * rpm * 0.35, now, 0.08);
+    this.noiseBP.frequency.setTargetAtTime(500 + rpm * 1400, now, 0.08);
+    const rain = this.rainLevel || 0, storm = this.stormLevel || 0, night = this.nightLevel || 0, wind = this.windLevel || 0, nightLife = this.nightLifeLevel || 0;
+    this.ambGain.gain.setTargetAtTime((0.018 + night * 0.022) * (1 - rain * 0.75), now, 0.8);
+    this.hg.gain.setTargetAtTime((0.006 + night * 0.009 + nightLife * 0.017 + 0.004 * Math.sin(t * 0.7)) * (1 - rain * 0.9), now, 0.5);
+    this.windGain.gain.setTargetAtTime(Math.min(0.28, Math.pow(Math.max(0, wind) / 36, 0.78) * 0.26), now, 0.35);
+    this.windBP.frequency.setTargetAtTime(260 + Math.min(900, wind * 22), now, 0.6);
+    this.rainGain.gain.setTargetAtTime(Math.min(0.24, rain * (0.08 + storm * 0.16)), now, 0.25);
+    this.rainHP.frequency.setTargetAtTime(2900 - storm * 900, now, 0.6);
+  }
+}

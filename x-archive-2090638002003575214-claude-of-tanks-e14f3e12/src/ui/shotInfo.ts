@@ -1,0 +1,2152 @@
+import { isRapidFireHit, weaponHitKind } from '../game/weaponHitKind.ts';
+import { hullPointsRemoved } from '../game/hullPointsRemoved.ts';
+import { shouldShowShotReadout, keepMissileDirectHit, MissileBlastLedger } from './shotReadoutPolicy.ts';
+import { BattleKillLedger, FiredRoundLedger } from '../game/battleEventStats.ts';
+import type { RuntimeValue } from '../runtimeTypes.ts';
+// src/ui/shotInfo.ts — combat-intelligence panels (WoT damage-log/armor-info
+// mod class). Everything rendered here traces 1:1 to RESOLVED sim events on
+// the bus (shell:hit / shell:fired / tank:destroyed / battle:ended) — no
+// number is ever recomputed in the UI:
+//   1. SHOT CARD  — after every player shot that connects: result badge and
+//      the hull points it took off, shell, impact angle, nominal vs effective
+//      armor, pen roll, and a mini armor
+//      diagram (top + side silhouette renders from public/icons/ with the
+//      hull-local hit point + shell-path arrow from the event payload).
+//   2. SHOT LOG   — collapsible last-6-shots + per-battle received-damage log
+//      (toggled by the rebindable 'shotLog' action → bus 'ui:shotLog').
+//   3. INCOMING   — mirrored compact toasts for hits the player receives.
+//   4. SESSION STATS — end-of-battle report (bus 'battle:ended').
+// Mounted by the clearly-marked SHOT-INFO section in src/ui/hud.ts.
+
+import { MAX_BATTLE_NOTIFICATIONS } from './battleHudLayout.ts';
+import { FONT_STACK, FONT_COND, ensureFonts } from './fonts.ts';
+import { createElement as el, escapeHtml, markDatum } from './dom.ts';
+import { NoticeQueue } from './components/notice.ts';
+import { battleInputOwnerFor } from './battleInputOwner.ts';
+import { createBattleReportGate } from './battleReportGate.ts';
+import { ensureStyle } from './styleLayers.ts';
+import {
+  damageFigureMarkup, hitOutcomeFor, nominalPenFor, shellDisplayName, zoneLabel,
+  type HitEventPresentation,
+  type HitOutcomePresentation,
+} from './hitEventFormat.ts';
+import { uiIconSVG } from './uiIcons.ts';
+import { maskIcon, iconUrl } from './icons.ts';
+import { schematicUrl as prepareSchematicUrl } from './shotSchematicClient.ts';
+import { moduleName } from './moduleRegistry.ts';
+import { createBattleBeatLog, type BattleSide } from './battleBeats.ts';
+import {
+  createShotDiagramProjection,
+  impactForShotDiagram,
+  type ShotDiagramEvent,
+  type ShotDiagramSpec,
+} from './shotDiagramProjection.ts';
+import { getSpec } from '../vehicles/specs.ts';
+import {
+  presentationAnchorFor,
+  presentationProjectionFor,
+} from '../vehicles/presentationAnchors.generated.ts';
+import { getMapConfig } from '../world/maps/index.ts';
+import { isMapId } from '../world/maps/catalog.ts';
+import { getLocalizedMapName } from './mapNames.ts';
+// END SCREEN (killcam_endscreen r1): the full-screen battle report is now the
+// cinematic end screen in src/ui/endScreen.ts — this module keeps ALL the
+// bookkeeping (resolved-event sums, REPORT GATE) and hands a summary over.
+import {
+  createEndScreen,
+  type EndScreenResult,
+  type EndScreenSummary,
+  type EndScreenTeamRow,
+} from './endScreen.ts';
+import type { EventBus } from '../game/stateCore.ts';
+import { formatNumber, t } from './i18n.ts';
+import { campaignDebrief, type CampaignDebrief } from '../game/campaignDebrief.ts';
+import { getLastBattleAwards } from '../game/serviceRecord.ts';
+import { resolveFinalBlow, type FinalBlow, type FinalBlowDestroyed, type FinalBlowLethal } from './finalBlow.ts';
+import { attackerLabel, killSourceIdentity } from './killSourceIdentity.ts';
+import { matchRulesetFor } from '../sim/matchRuleset.ts';
+import type { GameModeId } from '../sim/matchModes.ts';
+
+type EntityId = string;
+type TeamSide = 'ally' | 'enemy' | null;
+type TimerHandle = ReturnType<typeof setTimeout>;
+
+interface ModuleHit {
+  readonly module: string;
+  readonly newState: string;
+}
+
+interface ShotHitEvent extends HitEventPresentation, ShotDiagramEvent {
+  readonly shellId?: number;
+  readonly kind: string;
+  readonly attackerId?: EntityId | null;
+  readonly attackerName?: string | null;
+  readonly attackerSpecId?: string | null;
+  /** (ac130-fx-228) the attacker's platform when not its vehicle (the authority's sim/aerialCombat.ts killSourceOf) */
+  readonly attackerSource?: string | null;
+  readonly targetId: EntityId;
+  readonly targetName?: string | null;
+  readonly targetSpecId?: string | null;
+  readonly damage: number;
+  readonly dmgRoll?: number;
+  readonly effectiveMm?: number;
+  readonly physicalMm?: number;
+  readonly nominalMm?: number;
+  readonly penRollFreshMm?: number;
+  readonly penRollMm?: number;
+  readonly flightDistM?: number;
+  readonly impactAngleDeg?: number;
+  readonly timeS?: number;
+  readonly targetHpAfter?: number;
+  readonly destroyed?: boolean;
+  readonly eraPlate?: string | null;
+  readonly fireStarted?: boolean;
+  readonly modulesHit?: readonly ModuleHit[];
+  readonly crewHit?: readonly string[];
+  readonly shellType: string;
+}
+
+interface ShellFiredEvent {
+  readonly shellId?: number;
+  readonly isPlayer?: boolean;
+  readonly shooterId?: EntityId | null;
+  readonly shellType?: string;
+}
+
+interface TankSpottedEvent {
+  readonly id?: EntityId | null;
+  readonly team?: string;
+  readonly spotterId?: EntityId | null;
+  readonly timeS?: number;
+}
+
+interface TankDestroyedEvent {
+  readonly id: EntityId;
+  readonly killerId?: EntityId | null;
+  readonly specId: string;
+  readonly cause?: string | null;
+  readonly source?: string | null;
+}
+
+interface EndRosterRow {
+  readonly id: EntityId;
+  readonly vehicle?: string | null;
+  readonly name?: string | null;
+  readonly specId?: string | null;
+  /** (ac130-fx-228) the combatant flew the AC-130: its vehicle reads as the aircraft (its icon, no tank silhouette) */
+  readonly aircraft?: boolean;
+  readonly team?: string;
+  readonly alive?: boolean;
+  readonly isPlayer?: boolean;
+}
+
+interface BattleEndedEvent {
+  readonly roster?: readonly EndRosterRow[];
+  readonly timeS?: number;
+  readonly map?: string | null;
+  readonly mapId?: string | null;
+  readonly reason?: string | null;
+  readonly result?: EndScreenResult;
+  // batch 19: the campaign debrief reads the mode, the operation, the line, the clock and the losses
+  readonly gameMode?: string;
+  readonly campaignOperationId?: string | null;
+  readonly line?: RuntimeValue;
+  readonly durationS?: number;
+  readonly timeLimitS?: number | null;
+  readonly alliesLost?: number;
+  /** battle endings (2026-09-25): the Horde wave the last stand fell on */
+  readonly hordeWave?: number | null;
+  /** Jev commander (2026-09-25): who commanded each side's bots */
+  readonly brains?: { readonly enemy?: string; readonly allies?: string } | null;
+  /** A watched battle (watch-mode-243): no human side, the report is the battle's. */
+  readonly watch?: boolean;
+  /** A watched battle's mode score by side (absent where the score is the kills). */
+  readonly score?: { readonly alpha: number; readonly bravo: number } | null;
+}
+
+interface Combatant {
+  name: string | null;
+  specId: string | null;
+  /** (ac130-fx-228) flew the AC-130 (an attacker whose hits the authority stamped 'ac130') */
+  aircraft?: boolean;
+  dmg: number;
+  kills: number;
+  /** Deaths this battle — a stat, not a state: a revive keeps the count and clears `dead`. */
+  deaths: number;
+  /** Destroyed right now (at the end: dead when the battle ended). */
+  dead: boolean;
+}
+
+interface TeamGraphNode {
+  p: EntityId;
+  r: number;
+}
+
+interface ShellStats {
+  fired: number;
+  hits: number;
+  pens: number;
+  dmg: number;
+}
+
+interface TargetStats {
+  name: string | null | undefined;
+  specId: string | null | undefined;
+  dmg: number;
+  hits: number;
+  pens: number;
+  killed: boolean;
+  lastZone: string | null;
+  hpLeft: number | null;
+}
+
+interface BattleStats {
+  fired: number;
+  hits: number;
+  pens: number;
+  dealt: number;
+  received: number;
+  blocked: number;
+  assist: number;
+  modulesDestroyed: number;
+  perTarget: Map<EntityId, TargetStats>;
+  perShell: Map<string, ShellStats>;
+  timeline: Array<{ t: number; d: number }>;
+}
+
+interface ShotEntry {
+  readonly ev: ShotHitEvent;
+  readonly cls: HitOutcomePresentation;
+}
+
+interface ReceivedEntry {
+  readonly t: number;
+  readonly dmg: number;
+  readonly kind: string;
+  readonly aid?: EntityId | null;
+  readonly attacker: string;
+  readonly shellType: string;
+  readonly mods: string;
+  readonly outcome: HitOutcomePresentation;
+  readonly zone: string;
+}
+
+interface IncomingHitGroup {
+  attackerId: string | null;
+  lastAtMs: number;
+  count: number;
+  damage: number;
+  outcome: HitOutcomePresentation | null;
+  outcomes: Map<string, { label: string; count: number }>;
+}
+const INCOMING_FADE_MS = 4600;
+/** A hit row's whole time in the lane (it fades from INCOMING_FADE_MS). */
+const INCOMING_HOLD_MS = 5500;
+
+/** Only the latest still-visible run can merge; names/specs are not identities. */
+export function appendIncomingHit(
+  previous: IncomingHitGroup | null,
+  attackerId: string | null | undefined,
+  damage: number,
+  outcome: HitOutcomePresentation,
+  nowMs: number,
+): IncomingHitGroup {
+  const same = !!attackerId && previous?.attackerId === attackerId &&
+    nowMs >= previous.lastAtMs && nowMs - previous.lastAtMs < INCOMING_FADE_MS;
+  const group = same ? previous : {
+    attackerId: attackerId || null, lastAtMs: nowMs, count: 0, damage: 0,
+    outcome, outcomes: new Map<string, { label: string; count: number }>(),
+  };
+  group.lastAtMs = nowMs;
+  group.count += 1;
+  group.damage += Number.isFinite(damage) ? Math.max(0, damage) : 0;
+  if (group.outcome?.id !== outcome.id) group.outcome = null;
+  const detail = group.outcomes.get(outcome.id);
+  if (detail) detail.count += 1;
+  else group.outcomes.set(outcome.id, { label: outcome.label, count: 1 });
+  return group;
+}
+
+interface EndInfo {
+  readonly timeS?: number;
+  readonly map: string | null;
+  readonly mapId?: string | null;
+  readonly reason: string | null;
+  readonly campaign: CampaignDebrief | null;
+  readonly hordeWave: number | null;
+  readonly brains: { readonly enemy: string; readonly allies: string } | null;
+  readonly watch: boolean;
+  readonly score: { readonly alpha: number; readonly bravo: number } | null;
+  /** The battle's mode id (the report's mode chip). */
+  readonly gameMode: string | null;
+}
+
+interface SummaryTeamRow extends EndScreenTeamRow {
+  side: TeamSide;
+}
+
+interface PresentationTankSpec extends ShotDiagramSpec {
+  readonly name: string;
+  readonly dims: {
+    readonly widthM: number;
+    readonly hullLengthM: number;
+    readonly overallLengthM: number;
+    readonly heightM: number;
+  };
+}
+
+export interface ShotInfoRuntime {
+  readonly root: HTMLDivElement;
+  readonly statsRoot: HTMLDivElement;
+  warmSchematics(specIds: readonly string[]): void;
+  toggleLog(): void;
+  setPlayer(id: EntityId | null, timeS?: number, perspective?: string): void;
+  setTeamResolver(resolve: (id: EntityId) => string | undefined): void;
+  hideStats(): void;
+  reset(): void;
+}
+
+function eventPayload<Payload>(payload: RuntimeValue): Payload {
+  return payload as Payload;
+}
+
+function presentationSpec(id: string): PresentationTankSpec {
+  return getSpec(id) as PresentationTankSpec;
+}
+
+
+
+// every use is a CSS value (the sheet, inline colours): the battle surface's status and ink tokens
+/** The log's cue under its last whole row (fitLog). */
+const LOG_CUE_H = 18;
+
+const COL = {
+  green: 'var(--ok)',
+  // (a shot that goes through in the sight's own green, tokens.json battle-pen: a mint value under the green ring read as
+  // two greens, gauntlet r5)
+  pen: 'var(--battle-pen)',
+  red: 'var(--danger)',
+  yellow: 'var(--warn)',
+  text: 'var(--ink-1)',
+  dim: 'var(--ink-3)',
+};
+
+
+// Module names come from ui/moduleRegistry.ts moduleName() (the glossary-bound catalog; single source —
+// this file's local copy had already drifted to 'Fuel' vs the killcam's
+// 'Fuel Tank').
+
+// Crisp 12px module/crew glyphs (currentColor) — same visual language as the
+// damage panel's canvas icons, redrawn as inline SVG for DOM cards.
+const GLYPH: Record<string, string> = {
+  shell: uiIconSVG('shell', 10),
+  target: uiIconSVG('autoAim', 10),
+  angle: uiIconSVG('scope', 10),
+  armor: uiIconSVG('shield', 10),
+  damage: uiIconSVG('damage', 10),
+  pen: uiIconSVG('penetration', 10),
+  trackL: uiIconSVG('track', 12),
+  engine: uiIconSVG('engine', 12),
+  fuelTank: uiIconSVG('fuelTank', 12),
+  ammoRack: uiIconSVG('ammoRack', 12),
+  gun: uiIconSVG('gun', 12),
+  radio: uiIconSVG('radio', 12),
+  optics: uiIconSVG('optics', 12),
+  turretRing: uiIconSVG('turretRing', 12),
+  gunMount: uiIconSVG('gunMount', 12),
+  transmission: uiIconSVG('transmission', 12),
+  autoloader: uiIconSVG('autoloader', 12),
+  feedSystem: uiIconSVG('feedSystem', 12),
+  roofGun: uiIconSVG('roofGun', 12),
+  missileRack: uiIconSVG('missileRack', 12),
+  crew: uiIconSVG('crew', 12),
+};
+GLYPH.trackR = GLYPH.trackL;
+// commendation-ribbon glyphs (same 12px currentColor language)
+GLYPH.star = uiIconSVG('star', 12);
+GLYPH.shield = uiIconSVG('shield', 12);
+GLYPH.skull = uiIconSVG('skull', 12);
+
+const SI_CSS = `
+.cot-si{position:absolute;z-index:var(--hud-layer-status,18);inset:0;pointer-events:none;font-family:${FONT_STACK};color:${COL.text};}
+.cot-si *{box-sizing:border-box;margin:0;padding:0;}
+.cot-si-cardhost{position:absolute;right:16px;top:var(--cot-si-card-top,var(--cot-si-roster-bottom,272px));width:320px;display:flex;
+  flex-direction:column;gap:6px;align-items:stretch;contain:layout style;}
+.cot-si-card{position:relative;min-height:0;overflow:hidden;contain:layout paint style;
+  background:var(--hud-plate);border:1px solid transparent;border-radius:var(--r1);
+  box-shadow:var(--battle-plate-shadow);
+  padding:0 0 var(--s1);transition:opacity var(--dur-stage) ease;}
+.cot-si-card.out{opacity:0;}
+
+/* (every line of the card is one line by construction, its value whole and a label whole or out of view: a long
+   locale's line wrapped, owner 2026-11-01 "china goes to twolines in some text"; tools/shot-card-fit.browser.mjs) */
+.cot-si-missile-blast{flex:0 0 30px;min-height:30px;padding:5px 9px!important;font-size:var(--battle-fs-11);color:var(--warn);overflow:hidden;line-height:1.3;
+  white-space:nowrap;text-overflow:ellipsis;}
+.cot-si-hd{flex:none;min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);
+  padding:var(--s1) 9px 3px;border-bottom:1px solid var(--line-1);}
+.cot-si-state{display:flex;min-width:0;}
+.cot-si-badge{font-family:${FONT_COND};font-weight:700;
+  font-size:var(--battle-fs-13);line-height:1.15;letter-spacing:.1em;
+  display:flex;align-items:center;gap:5px;}
+.cot-si-badge svg{width:12px;height:12px;flex:0 0 auto;}
+/* a card the right lane narrows beside the sight (560-640 px windows): the outcome keeps its row beside the damage */
+.cot-si-card{container:si-card/inline-size;}
+/* (a longer outcome ends in an ellipsis beside the figure, which keeps its width: the narrow card's PENETRATION alone lost
+   its glyph at 900x700, gauntlet r8) */
+@container si-card (max-width:209px){.cot-si-badge{letter-spacing:.03em;}
+  /* (the pen row's fresh roll gives way to the roll that reached the plate and its chip: zh's "480 › 300 mm 反应装甲" ran
+     159 px in a 156 px row; the row's title keeps the fresh roll) */
+  .cot-si-kv.pen b .fresh{display:none;}}
+.cot-si-badge{min-width:0;}.cot-si-badge>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* the hull points the shot took off, beside the outcome (owner 2026-10-31, "make the -xxxxx number be colored"): the
+   damage dealt's one colour, as the float and the log carry it; yellow beside the outcome's orange (an amber figure by an
+   orange title read as two oranges in one row, gauntlet r7) */
+.cot-si-dmg{flex:0 0 auto;font-family:${FONT_COND};font-weight:700;font-size:var(--battle-fs-20);line-height:1;
+  letter-spacing:0;color:var(--battle-damage-dealt);white-space:nowrap;}
+.cot-si-sub{flex:none;height:21px;padding:3px 9px;font-size:var(--battle-fs-11);color:var(--ink-2);letter-spacing:0em;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(80px,1fr);align-items:center;gap:var(--s2);}
+.cot-si-sub>span{min-width:0;display:flex;align-items:center;gap:var(--s1);overflow:hidden;white-space:nowrap;}
+.cot-si-sub>span:last-child{text-align:right;color:var(--ink-1);font-weight:700;}
+.cot-si-sub>span:last-child{justify-content:flex-end;}
+.cot-si-sub svg{width:9px;height:9px;flex:0 0 auto;color:var(--ink-3);}
+.cot-si-sub .cot-si-subtext{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.cot-si-sub .ty{font-weight:700;font-size:var(--battle-fs-11);letter-spacing:.02em;color:var(--accent-hi);
+  font-family:${FONT_COND};display:inline-flex;align-items:center;gap:3px;}
+.cot-si-sub .ty svg{color:inherit;}
+.cot-si-body{display:flex;flex-direction:column;gap:3px;padding:var(--s1) 9px 0;}
+.cot-si-rows{padding:0;display:grid;grid-template-columns:1fr;gap:1px;}
+/* (one rhythm: every row 2 px over and under a hairline, the subtitle's included; the pen row's own gap and the armor row's
+   own rules read as one-offs, gauntlet r3) */
+.cot-si-kv{min-width:0;display:grid;grid-template-columns:minmax(12px,1fr) auto;gap:7px;padding:2px 0;border-top:1px solid var(--line-1);
+  align-items:center;font-size:var(--battle-fs-12);line-height:14px;color:var(--ink-3);letter-spacing:0em;}
+/* (one 14 px line in both scripts: zh's 13 px rows ran a pixel a row taller than en's 12 px, and a dock that held four en
+   rows held three in zh, gauntlet r11) */
+/* (the value takes its width first, the row's 12 px glyph always stays, and the label shows whole or wraps out of its
+   one-line box, the glyph naming the row: at the card's 176 px the label kept its width and the value lost its tail,
+   "220 → 350 mm …" and the pen's chip, in zh and the pseudo-locale; a label cut to "穿…" names nothing) */
+.cot-si-kv .cot-si-k{min-width:0;height:14px;overflow:hidden;display:flex;flex-wrap:wrap;align-items:center;column-gap:var(--s1);}
+.cot-si-kv .cot-si-k>span{white-space:nowrap;}
+/* (the row's glyph at 12 px in the label's ink: at 9 px in ink-3 it read as a speck, gauntlet r5; its 1 px margins make its
+   line the label's 14 px with or without the label, so a label wrapped out starts under the box: on a 12 px line its top
+   2 px showed under the glyph) */
+.cot-si-kv .cot-si-k svg{width:12px;height:12px;flex:0 0 auto;margin-block:1px;color:var(--ink-2);}
+.cot-si-kv b{min-width:0;text-align:right;color:var(--ink-1);font-weight:700;font-family:${FONT_COND};
+  letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* r8: the pen row spans the card on ONE line (the 'Pen roll' label broke
+   across two lines and the value wrapped, r7 critic); the ERA/screens
+   qualifier is an unbreakable suffix chip and a dim caption legends the
+   'fresh → after screens / nominal' format once. */
+.cot-si-kv.w{grid-column:1/-1;}
+.cot-si-kv.pen b{white-space:nowrap;}
+.cot-si-kv b .q{display:inline-flex;align-items:center;min-height:16px;box-sizing:border-box;margin-left:5px;padding:1px 5px;
+  /* (the kit's chip, in sentence case, its ink the qualifier's: an outlined capitals chip beside the ribbon's sentence-case
+     one read as two chip styles, gauntlet r4) */
+  border:0;border-radius:var(--chip-radius);box-shadow:inset 0 0 0 1px currentColor;font-size:var(--battle-fs-11);letter-spacing:0;
+  text-transform:none;vertical-align:middle;line-height:1;font-weight:700;}
+/* (centred in its chip by the box, not the line: the label sat 2 px under its top edge and 5 over its foot, gauntlet r5) */
+/* (zh's chip a line taller: its 13 px glyphs fill their em box and touched the ring, gauntlet r9) */
+/* (Chinese's taller glyphs 2 px off its rule at the row's own 18 px: at 1 px 间隙 met it, gauntlet r19; a 20 px chip grew
+   the row, and a tight card cut one more row) */
+:lang(zh-CN) .cot-si-kv b .q{min-height:18px;padding-block:2px;}
+/* (a damage row's Latin callsign and its figure at the Latin size in Chinese, as the kill feed's rows: zh's damage rows
+   ran 17 % wider than its kill rows, gauntlet r10) */
+:lang(zh-CN) body .cot-si-toast .l1 .lat,:lang(zh-CN) body .cot-si-toast:not(.deflected) .l1 b{font-size:var(--battle-fs-fig-11);}
+.cot-si-kv.result b{color:var(--accent-hi);letter-spacing:var(--battle-track-status);}
+.si-cut{display:inline-block;margin:0 3px;vertical-align:-1px}
+.cot-si-pencap{grid-column:1/-1;font-size:var(--battle-fs-11);color:var(--ink-3);letter-spacing:0em;
+  text-align:right;margin-top:-2px;text-transform:uppercase;}
+.cot-si-diag{display:grid;grid-template-columns:90px 172px;gap:9px;align-items:center;
+  justify-content:center;width:100%;margin:0;padding:var(--s1) 5px;border:1px solid var(--line-1);border-radius:var(--r1);}
+.cot-si-diag .box{position:relative;flex:0 0 auto;}
+.cot-si-diag .box:first-child{width:90px!important;height:90px!important;}
+.cot-si-diag .box:nth-child(2){width:172px!important;height:86px!important;}
+.cot-si-diag .sil{position:absolute;inset:0;}
+/* shaded per-tank plan-form render (icons pipeline <id>_top/_side.png)
+   layered over the silhouette base: a canvas-baked NEUTRAL-GRAY schematic
+   (luminance-normalized, see schematicUrl) carries the turret/barrel/fender
+   read the flat mask lacked (r7: top view parsed as a generic rounded box).
+   r2: full grayscale(1) fallback while the bake lands — grayscale(.85)+
+   brightness(2) left bright camo a fuzzy yellow-green blob at compact sizes. The
+   layer is slightly translucent so the zone glow now drawn UNDER it tints
+   through without burying the plan shape. */
+.cot-si-diag .pf{position:absolute;inset:0;background-size:contain;
+  background-position:center;background-repeat:no-repeat;opacity:.86;
+  filter:grayscale(1) brightness(1.5) contrast(1.4);}
+.cot-si-diag svg.ov{position:absolute;inset:0;overflow:visible;}
+.cot-si-diag svg.ov .wdg{animation:cotSiWedge calc(var(--dur-stage) * 2.3) ease-in-out infinite;}
+@keyframes cotSiWedge{0%,100%{opacity:.5;}50%{opacity:1;}}
+.cot-si-zone{min-width:0;font-size:var(--battle-fs-11);color:var(--accent-hi);font-weight:700;letter-spacing:0em;
+  text-transform:uppercase;font-family:${FONT_COND};text-align:right;line-height:1.3;}
+.cot-si-zone .cap{display:block;color:var(--ink-3);font-weight:700;letter-spacing:.05em;font-size:var(--battle-fs-11);}
+.cot-si-mods{display:flex;flex-wrap:wrap;gap:var(--s1);padding:5px 10px 0;}
+.cot-si-mod{display:flex;align-items:center;gap:3px;font-size:var(--battle-fs-11);font-weight:700;
+  letter-spacing:0em;font-family:${FONT_COND};text-transform:uppercase;
+  border:1px solid currentColor;padding:1.5px var(--s1) 1.5px 3px;line-height:1;}
+.cot-si-mod svg{width:11px;height:11px;display:block;}
+.cot-si-log{position:absolute;right:16px;top:clamp(272px,30vh,336px);width:340px;display:none;
+  pointer-events:auto;background:var(--hud-plate-strong);border:1px solid transparent;border-radius:var(--r1);
+  box-shadow:var(--battle-plate-shadow);
+  max-height:calc(var(--cot-viewport-height,100dvh) - 560px);min-height:120px;overflow-y:auto;}
+.cot-si-log.open{display:block;}
+.cot-si-log.open.starved{visibility:hidden;}
+/* (a chevron on the plate under the last whole row while more lies below, the plate's own edge kept: a mask erased it,
+   a fade lay across a sliced row; its band runs from that row's foot to the plate's, opaque and taking no flow (fitLog
+   --si-cue-h): an 18 px cue over a stale cap let the next row's first line show through it, gauntlet r5) */
+.cot-si-log .more-cue{display:none}
+.cot-si-log.more .more-cue{position:sticky;bottom:0;display:flex;align-items:center;justify-content:center;
+  height:18px;box-sizing:border-box;
+  border-top:1px solid var(--line-2);background:linear-gradient(var(--hud-plate-strong),var(--hud-plate-strong)),var(--hud-plate-strong);
+  color:var(--ink-2);pointer-events:none}
+/* (the plate twice, so the band is opaque over the rows it covers: once, the 96 % plate let them ghost through, gauntlet r6) */
+.cot-si-log .sec{font-size:var(--battle-fs-11);font-weight:700;letter-spacing:.1em;color:var(--ink-3);
+  font-family:${FONT_COND};text-transform:uppercase;
+  padding:6px 9px 3px;display:flex;justify-content:space-between;
+  border-bottom:1px solid var(--line-1);}
+.cot-si-lrow{display:flex;align-items:baseline;gap:6px;padding:3px 9px;font-size:var(--battle-fs-11);
+  color:var(--ink-2);border-bottom:1px solid var(--line-1);}
+.cot-si-lrow .b{font-family:${FONT_COND};font-weight:700;
+  font-size:var(--battle-fs-11);letter-spacing:0em;width:92px;flex:0 0 auto;white-space:nowrap;}
+.cot-si-lrow .d{font-weight:700;color:var(--battle-damage-taken);width:36px;flex:0 0 auto;text-align:right;
+  font-family:${FONT_COND};letter-spacing:0;}
+/* (a shot's own figure in the damage dealt's colour, the card's and the float's; the received rows the damage taken's; every
+   figure untracked, as the card's: at -.01em the true minus touched a 4, critic r2) */
+.cot-si-lrow .d.dealt{color:var(--battle-damage-dealt);}
+/* the damage figure's minus a hair off its number (damageFigureMarkup; the float's too, hud.ts: this sheet is the page's) */
+.cot-minus{margin-right:max(1px,.07em);}
+.cot-si-lrow .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cot-si-lrow .z{color:var(--ink-3);font-size:var(--battle-fs-11);flex:0 0 auto;}
+.cot-si-toasthost{position:absolute;left:0;bottom:452px;width:240px;min-height:84px;
+  display:flex;flex-direction:column;justify-content:flex-end;gap:3px;contain:layout style;}
+.cot-si-toast{height:26px;overflow:hidden;contain:layout paint style;
+  /* (no plate: a row of the left column as the kill rows over it are, its figure in the danger ink; a wash flush with the
+     screen's edge was the column's one plate off its 10 px line, gauntlet r3) */
+  background:none;border:0;padding:var(--s1) 6px;
+  transition:opacity var(--dur-stage) ease;text-shadow:var(--battle-text-halo);}
+.cot-si-toast.out{opacity:0;}
+/* (the damage follows its attacker, and the name stands on the rosters' line: a silhouette as wide as theirs, gauntlet r4
+   read "−2520 ×6" 70 px adrift on a phone and the name 6 px off the rosters') */
+.cot-si-toast .l1{height:100%;display:flex;justify-content:flex-start;align-items:center;gap:5px;
+  font-size:var(--battle-fs-11);font-weight:700;color:var(--ink-1);}
+.cot-si-toast .l1 span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cot-si-toast .l1 .attacker{flex:0 1 auto;}
+.cot-si-toast .l1 .si{display:inline-block;width:29px;height:12px;flex:0 0 29px;}
+/* (on touch, with no roster column to line up with, the silhouette's ink on the lane's 12 px edge: its image's own
+   margin set it 4.5 px in from the "You" rows and the map, gauntlet r15) */
+body.cot-touch-layout .cot-si-toast .l1 .si{margin-left:-4px;}
+.cot-si-toast .l1 b{flex:0 0 auto;color:var(--danger);font-family:${FONT_COND};letter-spacing:-.01em;
+  font-size:var(--battle-fs-11);display:flex;align-items:center;gap:var(--s1);
+  white-space:nowrap;}
+.cot-si-toast .l1 b .hit-count{font-size:var(--battle-fs-11);color:var(--ink-1);flex-shrink:0;}
+.cot-si-toast .l1 b svg{width:11px;height:11px;flex:0 0 auto;}
+.cot-si-stats{position:fixed;inset:0;z-index:71;display:none;pointer-events:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  padding:2vh 0 4vh;overflow:hidden;
+  font-family:${FONT_STACK};color:${COL.text};
+  background:linear-gradient(180deg,var(--hud-plate),var(--battle-tip-plate) 42%,var(--hud-plate));}
+.cot-si-stats.show{display:flex;}
+.cot-si-stats *{box-sizing:border-box;margin:0;padding:0;}
+/* While the battle report is up, the integration end-overlay underneath
+   (endOverlayRuntime.ts .cot-end, z-index 70) must not stack a second verdict banner
+   mid-screen — the report renders its own. Its RETURN TO GARAGE button is
+   kept and pinned as the report footer, directly under the last panel
+   (--cot-si-endpad is measured in pinFooter(); the r6 report left the button
+   floating in an empty black bottom half). The earnings line is hidden too:
+   the econ strip above renders the same payout with its formula caption. */
+body.cot-si-report .cot-end>div:first-child{display:none;}
+body.cot-si-report .cot-end>div:nth-child(2){display:none;}
+body.cot-si-report .cot-end{align-items:center !important;
+  justify-content:flex-end !important;
+  padding-bottom:var(--cot-si-endpad,3.2vh) !important;
+  z-index:72 !important;background:transparent !important;}
+/* Clean cinematic results screen: no battle-HUD chrome may bleed through the
+   report backdrop (r6: kill-feed rows and dimmed team panels overlapped the
+   VICTORY banner). Hidden only while body.cot-si-report is set — hideStats()
+   and reset() restore everything for the next battle. */
+body.cot-si-report .cot-killfeed,body.cot-si-report .cot-ear,
+body.cot-si-report .cot-top,
+body.cot-si-report .cot-alert,
+body.cot-si-report .cot-sixth,body.cot-si-report .cot-tgt,
+body.cot-si-report .cot-net,body.cot-si-report .cot-camoind,
+body.cot-si-report .cot-shells,body.cot-si-report .cot-minimap,
+body.cot-si-report .cot-hpbars,body.cot-si-report .cot-dmglayer,
+body.cot-si-report .cot-dp,body.cot-si-report .cot-si-log,
+body.cot-si-report .cot-ret-text,body.cot-si-report .cot-ret,body.cot-si-report .cot-hitmark{display:none !important;}
+.cot-si-ban{font-family:${FONT_COND};font-weight:700;font-size:56px;
+  letter-spacing:.34em;text-indent:.34em;line-height:1;text-shadow:0 2px 22px oklch(from var(--surface-scene) l c h / .85);}
+.cot-si-ban.v{color:var(--ok);}.cot-si-ban.d{color:var(--danger);}.cot-si-ban.n{color:var(--ink-2);}
+.cot-si-bansub{font-size:var(--battle-fs-11);letter-spacing:.24em;color:${COL.dim};margin:7px 0 2.6vh;
+  text-transform:uppercase;font-family:${FONT_COND};font-weight:700;}
+.cot-si-hdr{font-size:var(--battle-fs-11);letter-spacing:.16em;color:var(--ink-2);margin:0 0 2.2vh;
+  text-transform:uppercase;font-family:${FONT_COND};font-weight:700;
+  }
+.cot-si-hdr b{color:var(--ink-1);font-weight:700;}
+.cot-si-cols{display:flex;gap:var(--s4);width:1120px;max-width:94vw;align-items:stretch;
+  min-height:220px;}
+.cot-si-panel{background:linear-gradient(180deg,var(--hud-plate),var(--hud-plate-strong));
+  border:1px solid var(--line-3);box-shadow:0 10px 40px oklch(from var(--surface-scene) l c h / .5);
+  padding:14px 20px var(--s4);min-height:0;overflow:hidden;}
+.cot-si-panel .ph{font-size:var(--battle-fs-11);font-weight:700;letter-spacing:.14em;color:${COL.dim};
+  text-transform:uppercase;font-family:${FONT_COND};
+  padding-bottom:6px;border-bottom:1px solid var(--line-3);margin-bottom:7px;
+  display:flex;justify-content:space-between;}
+.cot-si-pl{flex:1.15;}
+.cot-si-pr{flex:1;}
+.cot-si-you{display:flex;align-items:center;gap:var(--s2);font-size:var(--battle-fs-11);padding:3px 0 6px;
+  border-bottom:1px solid var(--line-2);
+  margin-bottom:5px;}
+.cot-si-you .si{width:62px;height:24px;flex:0 0 auto;}
+.cot-si-you .n{flex:1;color:var(--ink-1);font-weight:700;font-family:${FONT_COND};
+  letter-spacing:.1em;}
+.cot-si-meta{margin-top:var(--s3);font-size:var(--battle-fs-11);letter-spacing:var(--track-label);color:${COL.dim};
+  text-transform:uppercase;font-family:${FONT_COND};
+  font-weight:700;text-align:center;}
+.cot-si-you .s{color:${COL.dim};font-size:var(--battle-fs-11);}
+.cot-si-you .dm{color:var(--accent-hi);font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  width:60px;text-align:right;}
+.cot-si-ribbons{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;}
+.cot-si-rib{border:1px solid oklch(from var(--accent) l c h / .75);color:var(--accent-hi);font-family:${FONT_COND};
+  font-weight:700;font-size:var(--battle-fs-11);letter-spacing:var(--battle-track-status);
+  padding:3px var(--s2);text-transform:uppercase;background:oklch(from var(--accent-lo) .49 .092 h / .16);
+  display:inline-flex;align-items:center;gap:5px;}
+.cot-si-rib svg{width:12px;height:12px;display:block;flex:0 0 auto;}
+.cot-si-tlwrap{width:1120px;max-width:94vw;margin-top:14px;}
+.cot-si-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px var(--s4);margin-bottom:var(--s3);}
+.cot-si-grid.c5{grid-template-columns:repeat(5,1fr);}
+.cot-si-stat{text-align:center;}
+.cot-si-stat .v{font-size:var(--battle-fs-28);font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  color:var(--ink-1);line-height:1.1;}
+.cot-si-econ{display:flex;gap:var(--s4);width:1120px;max-width:94vw;margin-bottom:14px;}
+.cot-si-ecoitem{flex:1;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--hud-plate),var(--hud-plate-strong));
+  border:1px solid var(--line-3);box-shadow:0 10px 40px oklch(from var(--surface-scene) l c h / .5);
+  padding:10px var(--s4) 11px;}
+.cot-si-ecoitem .et{display:flex;align-items:baseline;justify-content:center;gap:10px;}
+.cot-si-ecoitem .ek{font-size:var(--battle-fs-11);font-weight:700;letter-spacing:.14em;color:${COL.dim};
+  text-transform:uppercase;font-family:${FONT_COND};}
+.cot-si-ecoitem .ev{font-size:30px;font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  line-height:1;}
+.cot-si-ecoitem.cr .ev{color:var(--accent-hi);}
+.cot-si-ecoitem.xp .ev{color:var(--info);}
+.cot-si-ecoitem .eb{font-size:var(--battle-fs-11);color:${COL.dim};letter-spacing:0em;
+  }
+/* itemized earnings receipt (r4, WoT detailed-results depth): one line item
+   per source, each printing its exact inputs x rate — the strip total above
+   MUST reconcile with the visible rows (rounding stated on the total row) */
+.cot-si-erows{margin-top:7px;border-top:1px solid var(--line-2);
+  padding-top:5px;display:flex;flex-direction:column;gap:1px;}
+.cot-si-erows>div{display:flex;justify-content:space-between;font-size:var(--battle-fs-11);
+  color:${COL.dim};letter-spacing:0em;}
+.cot-si-erows b{color:var(--ink-2);font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  }
+.cot-si-erows .tot{border-top:1px solid var(--line-3);margin-top:3px;
+  padding-top:3px;}
+.cot-si-ecoitem.cr .tot b{color:var(--accent-hi);}
+.cot-si-ecoitem.xp .tot b{color:var(--info);}
+/* expandable enemy rows (r4): click reveals the per-shot exchange ledger —
+   the same resolved events the floating cards / toasts already showed */
+.cot-si-kill.x{pointer-events:auto;cursor:pointer;}
+.cot-si-kill.x:hover{background:oklch(from var(--ink-3) l c h / .07);}
+.cot-si-kill .ex{color:${COL.dim};font-size:var(--battle-fs-11);width:10px;flex:0 0 auto;
+  transition:transform var(--dur-fast) ease;}
+.cot-si-kill.open .ex{transform:rotate(90deg);}
+.cot-si-xd{display:none;background:var(--battle-veil);
+  border-bottom:1px solid var(--line-1);
+  padding:3px 6px var(--s1) var(--s5);max-height:96px;overflow-y:auto;pointer-events:auto;}
+.cot-si-xd.open{display:block;}
+.cot-si-xd .xr{display:flex;gap:7px;align-items:baseline;font-size:var(--battle-fs-11);
+  color:var(--ink-2);padding:1px 0;}
+.cot-si-xd .xr .t{color:${COL.dim};width:30px;flex:0 0 auto;}
+.cot-si-xd .xr .w{font-family:${FONT_COND};font-weight:700;
+  font-size:var(--battle-fs-11);letter-spacing:.02em;width:52px;flex:0 0 auto;}
+.cot-si-xd .xr .d{color:var(--accent-hi);font-weight:700;width:34px;text-align:right;
+  flex:0 0 auto;font-family:${FONT_COND};letter-spacing:-.01em;}
+.cot-si-xd .xr .z{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--ink-3);}
+/* roster clicks must reach the report — the transparent integration overlay
+   (.cot-end, z 72) sits above it solely to host its RETURN button */
+body.cot-si-report .cot-end{pointer-events:none !important;}
+body.cot-si-report .cot-end button{pointer-events:auto !important;}
+.cot-si-stat .k{font-size:var(--battle-fs-11);font-weight:700;letter-spacing:.07em;color:${COL.dim};
+  text-transform:uppercase;font-family:${FONT_COND};}
+.cot-si-shell{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:var(--s2);
+  font-size:var(--battle-fs-11);color:${COL.dim};letter-spacing:0em;}
+.cot-si-shell b{color:var(--ink-1);font-family:${FONT_COND};letter-spacing:-.01em;font-weight:700;}
+.cot-si-shell .ty{font-weight:700;font-family:${FONT_COND};
+  letter-spacing:.02em;font-size:var(--battle-fs-11);}
+.cot-si-tl{margin-bottom:9px;}
+.cot-si-tl svg{display:block;width:100%;height:58px;}
+.cot-si-tl .cap{font-size:var(--battle-fs-11);letter-spacing:.05em;color:${COL.dim};text-transform:uppercase;
+  font-family:${FONT_COND};font-weight:700;text-align:center;margin-top:2px;}
+.cot-si-kills{padding-top:2px;margin-bottom:6px;}
+.cot-si-kill{display:flex;align-items:center;gap:var(--s2);font-size:11.5px;padding:3px 0;
+  border-bottom:1px solid var(--line-1);}
+.cot-si-kill .si{width:34px;height:14px;flex:0 0 auto;}
+.cot-si-kill .n{flex:1;color:var(--ink-1);font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.cot-si-kill .n .you{color:var(--accent-hi);font-family:${FONT_COND};
+  font-weight:700;font-size:var(--battle-fs-11);letter-spacing:.05em;border:1px solid oklch(from var(--accent-hi) l c h / .6);
+  padding:0 var(--s1) 1px;margin-right:var(--s1);vertical-align:1px;}
+.cot-si-kill .kd{color:${COL.red};font-weight:700;font-size:var(--battle-fs-11);letter-spacing:.05em;
+  font-family:${FONT_COND};width:38px;text-align:right;flex:0 0 auto;}
+.cot-si-kill .al{color:${COL.green};font-weight:700;font-size:var(--battle-fs-11);letter-spacing:.05em;
+  font-family:${FONT_COND};width:38px;text-align:right;flex:0 0 auto;
+  opacity:.75;}
+.cot-si-kill .s{color:${COL.dim};font-size:var(--battle-fs-11);}
+.cot-si-kill .k{color:var(--ink-1);font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  width:30px;text-align:right;font-size:var(--battle-fs-11);flex:0 0 auto;}
+.cot-si-kill .dm{color:var(--accent-hi);font-weight:700;font-family:${FONT_COND};letter-spacing:-.01em;
+  width:48px;text-align:right;flex:0 0 auto;}
+/* roster column micro-captions (r6): the right-hand figure is the
+   combatant's TOTAL battle damage output — un-headed it read as damage
+   done to you next to 'no engagement with you' */
+.cot-si-kill.cap{padding:0 0 1px;border-bottom:none;}
+.cot-si-kill.cap span{color:${COL.dim} !important;font-size:var(--battle-fs-11);font-weight:700;
+  letter-spacing:.03em;text-transform:uppercase;font-family:${FONT_COND};
+  }
+/* The game owns an explicit touch-layout state; do not make battle UI depend
+   on browser pointer heuristics alone (desktop emulation and hybrid tablets
+   can report a fine pointer while touch controls are active). */
+/* Touch battles already show a reticle hit-confirm and resolved damage number.
+   The desktop analysis dossier duplicates that feedback while obscuring a
+   third of a phone battlefield, so it is intentionally desktop-only. */
+body.cot-touch-layout .cot-si-cardhost,
+body.cot-touch-layout .cot-si-log{display:none!important;}
+/* Incoming fire remains actionable, but as one compact reading below the
+   minimap—not a stack over the ammo tray or the steering/aim controls. */
+body.cot-touch-layout .cot-si-toasthost{top:calc(max(8px,env(safe-area-inset-top)) + 108px);
+  bottom:auto;left:max(8px,env(safe-area-inset-left));right:auto;width:min(200px,48vw);min-height:26px;}
+body.cot-touch-layout .cot-si-toast{height:26px;padding:var(--s1) 6px;}
+body.cot-touch-layout .cot-si-toast .l1{font-size:var(--battle-fs-11);}
+body.cot-touch-layout .cot-si-toast .l1 b{font-size:var(--battle-fs-11);}
+@media (prefers-reduced-motion:reduce){
+  .cot-si-card,.cot-si-toast,.cot-si-diag svg.ov .wdg{animation:none;transition:none;}
+}
+`;
+
+/** A name in Latin type alone (the damage rows' .lat: Chinese's lifted label sizes are for Chinese text). */
+const LATIN_NAME = /^[\x20-\x7e\u00a0-\u024f]+$/;
+const fmtTime = (s: number): string => {
+  const t = Math.max(0, Math.floor(s || 0));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
+
+// ---------------------------------------------------------------------------
+// Plan-form schematic bake (r2 minor): the raw icons-pipeline top render is a
+// CAMO paint job — a CSS grayscale(.85)+brightness(2) declutter left bright
+// winter/NATO schemes as a fuzzy yellow-green blob at compact sizes (Leopard 2A4
+// evidence). Bake a NEUTRAL-GRAY schematic once per icon: full luminance
+// desaturation, then normalization around the sprite's own mean luminance so
+// every tank lands at the same light-gray tone whatever its paint, with the
+// local contrast (turret ring, barrel, fenders, engine deck) stretched back
+// in. Cached per id/view; async — callers show the raw icon under the CSS
+// fallback filter and swap in the bake when it lands (same-origin PNG, so
+// canvas readback is always allowed; any failure keeps the fallback).
+// Card box sizes (shared with warmSchematics so the pre-warm hits the exact
+// cache keys the live cards request).
+const CARD_TOP_S = 96;
+const CARD_SIDE_W = 184, CARD_SIDE_H = 92;
+
+function schematicUrl(id: string, view: string, width: number, height: number): Promise<string | null> {
+  return prepareSchematicUrl(`${id}|${view}|${width}x${height}`, { url: iconUrl(id, view), width, height });
+}
+
+/** Plan-form layer: raw icon + CSS fallback now, baked schematic on arrival. */
+function planForm(
+  parent: HTMLElement,
+  specId: string,
+  view: string,
+  boxW: number,
+  boxH: number,
+): HTMLDivElement {
+  const pf = el('div', 'pf', parent);
+  pf.style.backgroundImage = `url(${iconUrl(specId, view)})`;
+  schematicUrl(specId, view, boxW * 2, boxH * 2).then((u) => {
+    if (u && pf.isConnected !== false) {
+      pf.style.backgroundImage = `url(${u})`;
+      pf.style.filter = 'none';
+    }
+  });
+  return pf;
+}
+
+interface PenetrationPresentation {
+  readonly html: string;
+  readonly qualifier: string;
+  readonly legend: string;
+}
+
+function setShotCardTrace(
+  card: HTMLDivElement,
+  ev: ShotHitEvent,
+  cls: HitOutcomePresentation,
+): void {
+  card.dataset.weapon = weaponHitKind(ev);
+  card.dataset.kind = ev.kind;
+  card.dataset.damage = String(Math.round(ev.damage || 0));
+  card.dataset.removed = String(Math.round(hullPointsRemoved(ev)));
+  card.dataset.dmgroll = String(Math.round(ev.dmgRoll || 0));
+  card.dataset.eff = String(Math.round(ev.effectiveMm || 0));
+  card.dataset.pen = String(Math.round(ev.penRollMm || 0));
+  card.dataset.nominal = String(Math.round(ev.nominalMm || 0));
+  card.dataset.dist = String(Math.round(ev.flightDistM || 0));
+  card.dataset.angle = String(Math.round(ev.impactAngleDeg || 0));
+  card.dataset.zone = ev.zone || '';
+  card.dataset.outcome = cls.id;
+  // (the outcome's ink is its title's and glyph's: the card keeps its ring all round, no coloured edge, owner 2026-10-25)
+}
+
+function appendShotCardHeader(
+  card: HTMLDivElement,
+  ev: ShotHitEvent,
+  cls: HitOutcomePresentation,
+): void {
+  // The outcome heads the card and the weapon reads on the row under it (a missile by its rack); the card's name is its
+  // label, not an eyebrow over the outcome (it wrapped in a narrow window's card).
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', t(weaponHitKind(ev) === 'missile' ? 'shotInfo.missileImpact' : 'killcam.ballisticAnalysis'));
+  const header = el('div', 'cot-si-hd', card);
+  const state = el('div', 'cot-si-state', header);
+  const badge = el('span', 'cot-si-badge', state);
+  badge.innerHTML = `${uiIconSVG(cls.icon, 11)}<span>${cls.label}</span>`;
+  badge.style.color = cls.color;
+}
+
+/** The round's type chip classes: a missile's chip carries its own class (class names, not copy). */
+const shellTypeClass = (missile: boolean): string => (missile ? 'ty missile' : 'ty');
+
+function appendShotCardSubtitle(card: HTMLDivElement, ev: ShotHitEvent): void {
+  const subtitle = el('div', 'cot-si-sub', card);
+  const missile = weaponHitKind(ev) === 'missile';
+  subtitle.innerHTML =
+    `<span><span class="${shellTypeClass(missile)}">${missile ? uiIconSVG('missileRack', 10) : GLYPH.shell}${escapeHtml(ev.shellType)}</span>` +
+    `<span class="cot-si-subtext">${escapeHtml(shellDisplayName(ev))}</span></span>` +
+    `<span>${GLYPH.target}<span class="cot-si-subtext">${escapeHtml(ev.targetName || '')}</span></span>`;
+}
+
+function armorPresentation(ev: ShotHitEvent): string {
+  if (ev.kind === 'screen_pierce') {
+    return ev.physicalMm && ev.physicalMm > 0
+      ? t('shotInfo.screenMm', { mm: Math.round(ev.physicalMm) })
+      : t('shotInfo.screen');
+  }
+  // a glance off the face tests no thickness: the plate and the angle it glanced at, not "→ 0 mm eff."
+  if (ev.kind === 'ricochet' && (ev.nominalMm || ev.physicalMm || 0) > 0) {
+    return t('shotInfo.armorRicochet', {
+      mm: Math.round(ev.nominalMm || ev.physicalMm || 0), angle: Math.round(ev.impactAngleDeg || 0),
+    });
+  }
+  const hasArmor = (ev.nominalMm || 0) > 0 || (ev.effectiveMm || 0) > 0;
+  if (hasArmor) {
+    return t('shotInfo.armorEffective', { nominal: Math.round(ev.nominalMm || 0), effective: Math.round(ev.effectiveMm || 0) });
+  }
+  const external = !!ev.zone
+    && ['optics', 'gun', 'gun_barrel', 'trackL', 'trackR'].includes(ev.zone);
+  return external ? t('killcam.externalNoArmor') : '–';
+}
+
+function penetrationQualifier(
+  ev: ShotHitEvent,
+  nominal: number,
+  roll: number,
+  fresh: number,
+): '' | 'era' | 'screens' {
+  if (ev.eraPlate) return 'era';
+  const cut = fresh > roll + 1;
+  return roll > 0 && (cut || (nominal > 0 && roll < nominal * 0.75 - 2))
+    ? 'screens'
+    : '';
+}
+
+function penetrationPresentation(
+  card: HTMLDivElement,
+  ev: ShotHitEvent,
+): PenetrationPresentation {
+  if (ev.kind === 'screen_pierce') {
+    return { html: t('shotInfo.passedThrough'), qualifier: '', legend: '' };
+  }
+  const nominal = nominalPenFor(ev);
+  const roll = Math.round(ev.penRollMm || 0);
+  const fresh = Math.round(ev.penRollFreshMm || 0);
+  card.dataset.pennom = String(nominal);
+  card.dataset.penfresh = String(fresh);
+  const cut = fresh > roll + 1;
+  const qualifier = penetrationQualifier(ev, nominal, roll, fresh);
+  // the fresh roll, the sprite's chevron, then what reached the plate (the card's html)
+  const arrow = cut ? `<span class="fresh">${fresh}${uiIconSVG('chevronRight', 10, 'currentColor', 'si-cut')}</span>` : '';
+  const legend = cut
+    ? t('killcam.legend.fresh', { tag: t(qualifier === 'era' ? 'killcam.era' : 'killcam.screens') })
+    : roll > 0 && nominal > 0 ? t('killcam.legend.roll') : '';
+  if (roll <= 0 || nominal <= 0) {
+    return {
+      html: roll > 0 ? `${arrow}${roll} mm` : '–',
+      qualifier,
+      legend,
+    };
+  }
+  // the roll beside the armour it met (the Armor row): green where it went through, red where it did not; the round's
+  // average at this range stays in the row's title (the roll is within 25 % of it), not as a second figure
+  const effective = Math.round(ev.effectiveMm || 0);
+  const through = ev.kind === 'pen' || ev.kind === 'he_pen';
+  const verdict = ev.kind === 'ricochet' ? '#9fb0bf' : effective > 0 ? (through ? COL.pen : COL.red)
+    : (cut ? fresh : roll) >= nominal ? COL.pen : COL.red;
+  return {
+    html: `<span style="color:${verdict}">${arrow}${roll}</span> mm`,
+    qualifier,
+    legend: cut ? legend : t('shotInfo.penLegend', { roll, nominal }),
+  };
+}
+
+function addDiagramZoneTint(
+  parent: HTMLElement,
+  specId: string,
+  view: string,
+  x: number,
+  y: number,
+  radius: number,
+  color: string,
+): void {
+  const tint = el('div', 'sil', parent);
+  maskIcon(tint, specId, view, 'transparent');
+  tint.style.background =
+    `radial-gradient(circle ${radius}px at ${(x / (view === 'top_silhouette' ? CARD_TOP_S : CARD_SIDE_W) * 100).toFixed(2)}% ${(y / (view === 'top_silhouette' ? CARD_TOP_S : CARD_SIDE_H) * 100).toFixed(2)}%,` +
+    `${color}ff 0%,${color}c0 55%,${color}00 100%)`;
+}
+
+function diagramImpactWedge(
+  direction: readonly number[] | null,
+  hitX: number,
+  hitY: number,
+  color: string,
+): string {
+  if (!direction) return '';
+  const length = Math.hypot(direction[0], direction[2]);
+  if (length <= 1e-4) return '';
+  const x = direction[0] / length;
+  const y = direction[2] / length;
+  const radius = 17;
+  const rotate = (vx: number, vy: number, angle: number): [number, number] => [
+    vx * Math.cos(angle) - vy * Math.sin(angle),
+    vx * Math.sin(angle) + vy * Math.cos(angle),
+  ];
+  const [x1, y1] = rotate(x, y, 0.46);
+  const [x2, y2] = rotate(x, y, -0.46);
+  return `<path class="wdg" d="M${hitX.toFixed(1)} ${hitY.toFixed(1)}` +
+    ` L${(hitX + x1 * radius).toFixed(1)} ${(hitY + y1 * radius).toFixed(1)}` +
+    ` L${(hitX + x * radius * 1.12).toFixed(1)} ${(hitY + y * radius * 1.12).toFixed(1)}` +
+    ` L${(hitX + x2 * radius).toFixed(1)} ${(hitY + y2 * radius).toFixed(1)} Z"` +
+    ` fill="${color}" fill-opacity="0.5" stroke="${color}" stroke-width="0.8"/>`;
+}
+
+function clampDiagramArrowTail(
+  hitX: number,
+  hitY: number,
+  tailX: number,
+  tailY: number,
+  size: number,
+): readonly [number, number] {
+  const padding = 2;
+  const dx = tailX - hitX;
+  const dy = tailY - hitY;
+  let scale = 1;
+  if (dx > 0) scale = Math.min(scale, (size - padding - hitX) / dx);
+  else if (dx < 0) scale = Math.min(scale, (padding - hitX) / dx);
+  if (dy > 0) scale = Math.min(scale, (size - padding - hitY) / dy);
+  else if (dy < 0) scale = Math.min(scale, (padding - hitY) / dy);
+  scale = Math.max(0, scale);
+  return [hitX + dx * scale, hitY + dy * scale];
+}
+
+function diagramImpactArrow(
+  direction: readonly number[] | null,
+  point: readonly number[],
+  hitX: number,
+  hitY: number,
+  topPoint: (x: number, z: number) => number[],
+  size: number,
+): string {
+  if (!direction) return '';
+  const tail = topPoint(point[0] - direction[0] * 2.2, point[2] - direction[2] * 2.2);
+  const [x, y] = clampDiagramArrowTail(hitX, hitY, tail[0], tail[1], size);
+  return `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" ` +
+    `x2="${hitX.toFixed(1)}" y2="${hitY.toFixed(1)}" ` +
+    'stroke="#ff8a5c" stroke-width="2.2" marker-end="url(#cotsiarw)"/>';
+}
+
+function diagramFacingCue(
+  armor: PresentationTankSpec['armor'] | null,
+  dims: PresentationTankSpec['dims'],
+  topPoint: (x: number, z: number) => number[],
+  topScale: number,
+): string {
+  if (!armor?.turretPivot) return '';
+  const [centerX, centerY] = topPoint(armor.turretPivot[0], armor.turretPivot[2]);
+  const ringRadius = Math.min(dims.widthM * 0.3, 1.05) * topScale;
+  const barrelLength = armor.gunBarrel?.lengthM || dims.overallLengthM * 0.45;
+  const [gunX, gunY] = topPoint(
+    armor.turretPivot[0],
+    armor.turretPivot[2] + barrelLength,
+  );
+  return `<circle cx="${centerX.toFixed(1)}" cy="${centerY.toFixed(1)}" ` +
+    `r="${ringRadius.toFixed(1)}" fill="none" stroke="rgba(232,242,252,0.8)" ` +
+    'stroke-width="1.6"/>' +
+    `<line x1="${centerX.toFixed(1)}" y1="${centerY.toFixed(1)}" ` +
+    `x2="${gunX.toFixed(1)}" y2="${gunY.toFixed(1)}" ` +
+    'stroke="rgba(232,242,252,0.8)" stroke-width="2.5" stroke-linecap="round"/>';
+}
+
+// --- roster ledger helpers (owner 2026-09-21: "in respawn modes youre registered as dead even if you
+// respawned at end, and your first death si always categorized as that death") ---------------------------
+// `dead` is a combatant's STATE (destroyed now; at the end: dead when the battle ended) and `deaths` the
+// COUNT every destruction adds to. A mode:respawn edge clears the state and keeps the count, so a revived
+// player alive at the verdict reads "survived · 1 death" instead of "destroyed". Exported for the receipt.
+
+/** One `tank:destroyed` edge: the combatant is dead until a revive, and the death counts. */
+export function recordCombatantDestroyed(c: { dead: boolean; deaths: number }): void {
+  c.dead = true;
+  c.deaths += 1;
+}
+
+/** One `mode:respawn` edge: the combatant is back on the field; the death stays a stat. */
+export function recordCombatantRevived(c: { dead: boolean }): void {
+  c.dead = false;
+}
+
+/** Whether a mode id's ruleset revives destroyed vehicles (an unknown id reads as Standard: never). */
+export function rulesetRevives(gameMode: string | null | undefined): boolean {
+  return !!gameMode && matchRulesetFor(gameMode as GameModeId).respawnS != null;
+}
+
+/**
+ * Fold one authoritative `battle:ended` roster row into the summary rows. `alive` is the sim's own statement
+ * of who stands when the battle ends: false always marks the row dead; true clears the event-derived flag
+ * only when the mode revives — a non-reviving battle keeps the event ledger exactly as before.
+ */
+export function mergeEndRosterRow(
+  rows: Map<EntityId, SummaryTeamRow>,
+  rosterRow: EndRosterRow,
+  revives: boolean,
+): void {
+  let row = rows.get(rosterRow.id);
+  if (!row) {
+    row = {
+      id: rosterRow.id,
+      name: null,
+      specId: null,
+      dmg: 0,
+      kills: 0,
+      deaths: 0,
+      dead: false,
+      side: null,
+      isPlayer: false,
+    };
+    rows.set(rosterRow.id, row);
+  }
+  if (!row.name && (rosterRow.vehicle || rosterRow.name)) {
+    row.name = rosterRow.vehicle || rosterRow.name || null;
+  }
+  if (!row.specId && rosterRow.specId) row.specId = rosterRow.specId;
+  // (ac130-fx-228) a gunship pilot's row names the AC-130, whatever tank the pilot's garage held
+  if (rosterRow.aircraft) { row.aircraft = true; row.name = killSourceIdentity('ac130')?.label ?? row.name; }
+  if (rosterRow.team) row.side = rosterRow.team === 'enemy' ? 'enemy' : 'ally';
+  if (rosterRow.alive === false) row.dead = true;
+  else if (revives && rosterRow.alive === true) row.dead = false;
+  if (rosterRow.isPlayer) row.isPlayer = true;
+}
+
+/**
+ * Create the combat-intelligence UI bundle. All data arrives via bus events;
+ * hud.ts mounts `root` and forwards player identity / lifecycle.
+ * @param {{on:Function,emit:Function}} bus event bus (§1.5)
+ * @returns {{root:HTMLElement,statsRoot:HTMLElement,setPlayer:Function,reset:Function,hideStats:Function,toggleLog:Function}}
+ */
+/** `mount`: where the end screen's root goes (the HUD's own document's body: a split-screen pane's, hud.ts HudView). */
+export function createShotInfo(bus: EventBus, mount: HTMLElement = document.body): ShotInfoRuntime {
+  ensureFonts();
+  ensureStyle('cot-si-style', SI_CSS, 'surfaces');
+
+  const root = el('div', 'cot-si');
+  const cardHost = el('div', 'cot-si-cardhost', root);
+  cardHost.setAttribute('role', 'status');
+  cardHost.setAttribute('aria-live', 'polite');
+  const logPanel = el('div', 'cot-si-log', root);
+  /** The log shows its cue at its foot while rows lie under it: measured as it scrolls (gauntlet r3: set once on the
+   *  first fill, the fade stayed on six rows that fit at 1920 and off the bottom). */
+  const markLogMore = (): void => {
+    logPanel.classList.toggle('more', logPanel.scrollTop + logPanel.clientHeight < logPanel.scrollHeight - 1);
+  };
+  /** A log taller than its dock shows whole rows, its cue's band from the last whole row's foot to its own (--si-cue-h:
+   *  gauntlet r4 found a row sliced through its glyphs at 1280, 1024 and 900 wide); measured as it fills, as the planner
+   *  resizes its dock and as its rows change size (a face landing), never on a scroll. */
+  const fitLog = (): void => {
+    logPanel.classList.remove('more', 'starved');
+    logPanel.style.removeProperty('--si-log-fit');
+    const room = logPanel.clientHeight;
+    if (logPanel.scrollHeight - room <= 1) return;
+    const top = logPanel.getBoundingClientRect().top - logPanel.scrollTop;
+    let fit = 0, rows = 0;
+    for (const part of logPanel.querySelectorAll<HTMLElement>('.sec,.cot-si-lrow')) {
+      const bottom = part.getBoundingClientRect().bottom - top;
+      if (bottom <= room - LOG_CUE_H && bottom > fit) { fit = bottom; if (part.classList.contains('cot-si-lrow')) rows++; }
+    }
+    // (a dock that holds no whole row shows no log: its header's count over an empty body read as a cut log, gauntlet r7)
+    if (!rows) { logPanel.classList.add('starved'); return; }
+    // (capped at its last whole row, the cue under it: a band of empty plate down to the dock's foot read as a clipped row,
+    // r7; the log is one column, with no other column's foot to keep level)
+    logPanel.style.setProperty('--si-log-fit', `${Math.ceil(fit + LOG_CUE_H)}px`);
+    markLogMore();
+  };
+  logPanel.addEventListener('scroll', markLogMore, { passive: true });
+  const logObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(fitLog) : null;
+  logObserver?.observe(logPanel);
+  logPanel.tabIndex = 0;
+  // (one place for the hits the player takes, however many rows are in flight: surfaceRegistry.ts hits)
+  const toastHost = markDatum(el('div', 'cot-si-toasthost', root), 'hits');
+  toastHost.setAttribute('role', 'status');
+  toastHost.setAttribute('aria-live', 'polite');
+  const statsRoot = el('div', 'cot-si-stats');
+  mount.appendChild(statsRoot);
+  // END SCREEN renders into statsRoot so the integration seams keep holding:
+  // main.ts veilHud() toggles this exact element around the kill-cam, and
+  // the kill-cam parity veil CSS addresses `.cot-si-stats`.
+  const endScreen = createEndScreen(bus, statsRoot);
+
+  let playerId: EntityId | null = null;
+  let logOpen = false;
+  let schematicWarmRevision = 0;
+  let schematicWarmFrame: number | null = null;
+  const cancelSchematicWarm = (): void => {
+    schematicWarmRevision += 1;
+    if (schematicWarmFrame !== null) cancelAnimationFrame(schematicWarmFrame);
+    schematicWarmFrame = null;
+  };
+  const missileBlasts = new MissileBlastLedger();
+  let currentPrimary: ShotHitEvent | null = null;
+  let primaryFadeTimer: TimerHandle | undefined;
+  let primaryRemoveTimer: TimerHandle | undefined;
+  const shotLog: ShotEntry[] = [];      // last 6 outgoing summaries {ev, cls}
+  const allShots: ShotEntry[] = [];     // EVERY outgoing hit this battle {ev, cls} — the
+                           // report's expandable per-enemy exchange ledger (r4)
+  const receivedLog: ReceivedEntry[] = [];  // per-battle incoming entries (full battle)
+  const stats = newStats();
+  const firedRounds = new FiredRoundLedger();
+  const killLedger = new BattleKillLedger();
+  const beatLog = createBattleBeatLog(); // the end screen's timeline (battleBeats.ts)
+  let teamOf: (id: EntityId) => string | undefined = () => undefined;
+  let endInfo: EndInfo | null = null;      // battle:ended report header
+  // battle endings (2026-09-25): the final blow — the last lethal shell:hit on any pair and the last
+  // tank:destroyed — resolved into the report's hero line by finalBlow.ts, never recomputed
+  let lastLethalHit: FinalBlowLethal | null = null;
+  let lastDestroyedRow: FinalBlowDestroyed | null = null;
+
+  const isTouchBattleLayout = () =>
+    document.body.classList.contains('cot-touch-layout');
+
+  // --- spotting assist (r3) --------------------------------------------------
+  // Driven purely by the sim's tank:spotted events. When the payload carries
+  // spotterId (additive spotting.ts enrichment, see docs/SYSTEMS.md), a rising
+  // edge with spotterId === player marks the target "lit by you"; ally
+  // (non-player) damage on that target within ASSIST_WINDOW_S then counts as
+  // spotting-assist damage — WoT's 'damage upon your spotting'. The window is
+  // a fixed convention (falling edges are not broadcast), and the whole stat
+  // row only renders once an enriched event has been SEEN (spotAttributed) —
+  // a zero from missing data must never masquerade as a real zero.
+  const ASSIST_WINDOW_S = 12;
+  const spotWindow = new Map<EntityId, number>(); // enemyId -> timeS of last player-spot edge
+  const spottedSet = new Set<EntityId>(); // distinct enemies the player lit
+  let spotAttributed = false;   // saw a spotterId-carrying event this battle
+
+  // --- team-wide roster bookkeeping (battle report) -------------------------
+  // Every combatant seen in ANY bus event (shell:hit fires for AI-vs-AI hits
+  // too, enriched with names/specIds by state.ts) — dmg/kills/dead are pure
+  // event sums, never re-simulated. Team split: every shell:hit /
+  // tank:destroyed edge asserts attacker and target are on OPPOSING teams
+  // (symmetric-teams charter: no friendly targeting), so a parity union-find
+  // anchored at the player resolves ally/enemy for the whole battle graph.
+  // A `battle:ended` payload roster (additive state.ts enrichment, see
+  // docs/SYSTEMS.md) overrides with authoritative teams when present.
+  const combatants = new Map<EntityId, Combatant>();
+  let endRoster: readonly EndRosterRow[] | null = null;
+  // owner 2026-09-21: the battle revives destroyed vehicles — read from the ended payload's mode ruleset, or
+  // from a mode:respawn edge when a payload carries no mode. Rows then read `dead` as the state at the end
+  // and show their death counts.
+  let revives = false;
+  const tg = new Map<EntityId, TeamGraphNode>();
+
+  function combatant(
+    id: EntityId,
+    name: string | null | undefined = null,
+    specId: string | null | undefined = null,
+  ): Combatant {
+    let c = combatants.get(id);
+    if (!c) {
+      c = { name: null, specId: null, dmg: 0, kills: 0, deaths: 0, dead: false };
+      combatants.set(id, c);
+    }
+    if (name && !c.name) c.name = name;
+    if (specId && !c.specId) {
+      c.specId = specId;
+      if (!c.name) { try { c.name = presentationSpec(specId).name; } catch (_) { /* raw id */ } }
+    }
+    return c;
+  }
+
+  function tgFind(x: EntityId): { root: EntityId; r: number } {
+    let e = tg.get(x);
+    if (!e) { e = { p: x, r: 0 }; tg.set(x, e); }
+    if (e.p === x) return { root: x, r: 0 };
+    const f = tgFind(e.p);
+    e.p = f.root;
+    e.r = (e.r + f.r) & 1;
+    return { root: e.p, r: e.r };
+  }
+
+  /** Record that a and b fought — therefore sit on opposing teams. */
+  function linkOpposed(a: EntityId | null | undefined, b: EntityId | null | undefined): void {
+    if (a == null || b == null || a === b) return;
+    if (teamOf(a) != null && teamOf(a) === teamOf(b)) return;
+    const fa = tgFind(a);
+    const fb = tgFind(b);
+    if (fa.root === fb.root) return;
+    const ra = tg.get(fa.root);
+    if (!ra) return;
+    ra.p = fb.root;
+    ra.r = (fa.r + fb.r + 1) & 1;
+  }
+
+  /** 'ally' | 'enemy' | null (combatant not connected to the player yet). */
+  function sideOf(id: EntityId): TeamSide {
+    if (playerId == null) return null;
+    if (id === playerId) return 'ally';
+    const playerTeam = teamOf(playerId), entityTeam = teamOf(id);
+    if (playerTeam != null && entityTeam != null) return playerTeam === entityTeam ? 'ally' : 'enemy';
+    if (!tg.has(id)) return null;
+    const fp = tgFind(playerId);
+    const fi = tgFind(id);
+    if (fi.root !== fp.root) return null;
+    return fi.r === fp.r ? 'ally' : 'enemy';
+  }
+
+  function newStats(): BattleStats {
+    return {
+      fired: 0, hits: 0, pens: 0, dealt: 0, received: 0, blocked: 0, assist: 0,
+      modulesDestroyed: 0, perTarget: new Map<EntityId, TargetStats>(),
+      perShell: new Map<string, ShellStats>(),   // shellType -> {fired,hits,pens,dmg}
+      timeline: [],          // dealt-damage events [{t, d}] (battle report strip)
+    };
+  }
+
+  function perShell(type: string): ShellStats {
+    let s = stats.perShell.get(type);
+    if (!s) {
+      s = { fired: 0, hits: 0, pens: 0, dmg: 0 };
+      stats.perShell.set(type, s);
+    }
+    return s;
+  }
+
+  // ---------- armor mini-diagram ----------
+  // Icon framing (tools/icons-page.html): bbox-normalized ortho renders with
+  // MARGIN 1.07. Hull-local extent approximated from spec.dims exactly like
+  // damagePanel.ts: z in [-hullL/2, overallL - hullL/2] -> center (overall-hull)/2.
+  function diagramFor(
+    ev: ShotHitEvent,
+    cls: HitOutcomePresentation,
+  ): HTMLDivElement | null {
+    const specId = ev.targetSpecId || ev.targetId;
+    let dims = null;
+    let arm = null;
+    try {
+      const spec = specId ? presentationSpec(specId) : null;
+      dims = spec ? spec.dims : null;
+      arm = spec ? spec.armor : null;
+    } catch (_) { dims = null; }
+    const wrap = el('div', 'cot-si-diag');
+    const diagramImpact = impactForShotDiagram(ev, arm || {});
+    if (!dims || !diagramImpact) {
+      wrap.remove();
+      return null;
+    }
+    const lp = diagramImpact.point;
+    const ld = diagramImpact.direction;
+    const projection = createShotDiagramProjection({ dims, armor: arm || undefined }, {
+      topSize: CARD_TOP_S,
+      sideWidth: CARD_SIDE_W,
+      sideHeight: CARD_SIDE_H,
+      presentationAnchor: presentationAnchorFor(specId) || undefined,
+      presentationProjection: presentationProjectionFor(specId) || undefined,
+    });
+    const badgeCol = (cls && cls.color) || '#ff8a5c';
+    // silhouette contrast (r4: the 0.34-alpha mask read as a gray pill):
+    // brighter fill + a drop-shadow outline pass that traces the mask edge
+    const SIL_FILL = 'rgba(206,222,236,0.55)';
+    const SIL_OUTLINE =
+      'drop-shadow(0 0 1px rgba(232,242,250,0.9)) drop-shadow(0 0 1px rgba(150,175,195,0.5))';
+
+    // --- top view (96x96; icon: forward = up, screen right = -X world) ---
+    const TS = CARD_TOP_S;
+    const top = el('div', 'box', wrap);
+    top.dataset.view = 'Top';
+    top.style.width = `${TS}px`; top.style.height = `${TS}px`;
+    const topSil = el('div', 'sil', top);
+    maskIcon(topSil, specId, 'top_silhouette', SIL_FILL);
+    topSil.style.filter = SIL_OUTLINE;
+    const sT = projection.topScale;
+    const topPx = projection.topPoint;
+    const [hx, hy] = topPx(lp[0], lp[2]);
+    // zone glow UNDER the plan-form (r2: painted over it, the orange radial
+    // muddied the schematic into a blob); the translucent plan layer lets
+    // the tint breathe through while the plan shape stays crisp
+    addDiagramZoneTint(top, specId, 'top_silhouette', hx, hy, 24, badgeCol);
+    // per-tank plan-form over glow + mask (r7: the flat silhouette read as a
+    // generic rounded box) — neutral-gray baked schematic, see schematicUrl
+    planForm(top, specId, 'top', TS, TS);
+    // hit-sector flash (r3, WoT-mod style): a pulsing wedge opening from the
+    // hit point back toward where the shell came FROM (event localDir) — the
+    // zone reads from geometry before the text label is even parsed
+    const wedge = diagramImpactWedge(ld, hx, hy, badgeCol);
+    const arrow = diagramImpactArrow(ld, lp, hx, hy, topPx, TS);
+    // facing cues over the (turretless-reading) baked mask: turret ring +
+    // gun-barrel line so the top view communicates orientation at a glance
+    const facing = diagramFacingCue(arm, dims, topPx, sT);
+    const ovT = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ovT.setAttribute('class', 'ov');
+    ovT.setAttribute('viewBox', `0 0 ${TS} ${TS}`);
+    ovT.innerHTML =
+      `<defs><marker id="cotsiarw" viewBox="0 0 8 8" refX="6.5" refY="4" markerWidth="5"
+        markerHeight="5" orient="auto"><path d="M0 0L8 4L0 8z" fill="#ff8a5c"/></marker></defs>` +
+      wedge +
+      facing +
+      arrow +
+      `<circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="6.2" fill="none" stroke="#fff" stroke-width="1.6"/>` +
+      `<circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="3.2" fill="#ff8a5c"/>`;
+    top.appendChild(ovT);
+
+    // --- side view (aspect 2:1; icon: front = right, up = +Y) ---
+    const SW = CARD_SIDE_W, SH = CARD_SIDE_H;
+    const side = el('div', 'box', wrap);
+    side.dataset.view = 'Side';
+    side.style.width = `${SW}px`; side.style.height = `${SH}px`;
+    const sideSil = el('div', 'sil', side);
+    maskIcon(sideSil, specId, 'side_silhouette', SIL_FILL);
+    sideSil.style.filter = SIL_OUTLINE;
+    const [sx, sy] = projection.sidePoint(lp[1], lp[2]);
+    addDiagramZoneTint(side, specId, 'side_silhouette', sx, sy, 20, badgeCol);
+    planForm(side, specId, 'side', SW, SH);
+    const ovS = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ovS.setAttribute('class', 'ov');
+    ovS.setAttribute('viewBox', `0 0 ${SW} ${SH}`);
+    ovS.innerHTML =
+      `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5.6" fill="none" stroke="#fff" stroke-width="1.6"/>` +
+      `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="3" fill="#ff8a5c"/>`;
+    side.appendChild(ovS);
+    return wrap;
+  }
+
+  // ---------- 1. outgoing shot card ----------
+  function buildCard(ev: ShotHitEvent, cls: HitOutcomePresentation): HTMLDivElement {
+    const card = el('div', 'cot-si-card');
+    setShotCardTrace(card, ev, cls);
+    appendShotCardHeader(card, ev, cls);
+    appendShotCardSubtitle(card, ev);
+
+    const body = el('div', 'cot-si-body', card);
+    const rows = el('div', 'cot-si-rows', body);
+    // A row's glyph comes from its code name, its label from the catalog (BUI-F8: no English labels in zh).
+    const kv = (glyph: string, label: string, v: string, cls = ''): HTMLDivElement => {
+      const r = el('div', `cot-si-kv${cls ? ` ${cls}` : ''}`, rows);
+      r.innerHTML = `<span class="cot-si-k">${GLYPH[glyph] || ''}<span>${label}</span></span><b>${v}</b>`;
+      return r;
+    };
+    const missileSplash = weaponHitKind(ev) === 'missile' && ev.kind === 'he_splash';
+    if (!missileSplash) kv('angle', t('shotInfo.angle'), `${Math.round(ev.impactAngleDeg || 0)}°`, 'w');
+    if (!missileSplash) kv('armor', t('killcam.stat.armor'), armorPresentation(ev), 'w armor');
+    const penetration = penetrationPresentation(card, ev);
+    // (no damage row: the hull points taken off stand beside the outcome, paintShotDamage; the roll stays on
+    // card.dataset.dmgroll for traces)
+    if (weaponHitKind(ev) === 'missile') kv('range', t('shotInfo.range'), `${Math.round(ev.flightDistM || 0)} m`, 'w');
+    if (!missileSplash) {
+      const r = kv('pen', t('killcam.stat.pen'), penetration.html + (penetration.qualifier
+        ? `<span class="q" style="color:${penetration.qualifier === 'era' ? COL.yellow : 'var(--ink-2)'}">${
+          t(penetration.qualifier === 'era' ? 'killcam.era' : 'killcam.screens')}</span>`
+        : ''), 'w pen');
+      r.dataset.tip = penetration.legend
+        ? t('killcam.penTitle', { legend: penetration.legend })
+        : t('killcam.penTitleRoll');
+    }
+    const diag = diagramFor(ev, cls);
+    if (diag) {
+      body.appendChild(diag);
+    }
+    return card;
+  }
+
+  // (272, the owner: "debounce ... anywhere debouncing makes sense") a fast gun's penetrations on one target repaint the
+  // card at most once a CARD_BURST_GAP_MS: the burst's first at once, its latest when the window ends (an air-defence
+  // gun's burst rebuilt the card, its schematic and its damage figure twenty times a second). A main gun's card, and a
+  // fast gun's first on a new target, paint as before.
+  const CARD_BURST_GAP_MS = 150;
+  const lastBurstCard = { attackerId: null as string | null | undefined, targetId: null as string | null | undefined, at: -Infinity };
+  let burstCard: { ev: ShotHitEvent; cls: HitOutcomePresentation } | null = null;
+  let burstCardTimer: ReturnType<typeof setTimeout> | null = null;
+  function clearCardTimers(): void {
+    clearTimeout(primaryFadeTimer); clearTimeout(primaryRemoveTimer);
+    // (272) a newer card, or a reset, supersedes a burst's card still waiting for its window
+    if (burstCardTimer) { clearTimeout(burstCardTimer); burstCardTimer = null; }
+    burstCard = null;
+  }
+  function heldForBurst(ev: ShotHitEvent, cls: HitOutcomePresentation): boolean {
+    if (!isRapidFireHit(ev)) { lastBurstCard.at = -Infinity; return false; }
+    const now = performance.now();
+    const sinceMs = now - lastBurstCard.at;
+    if (sinceMs >= CARD_BURST_GAP_MS || lastBurstCard.attackerId !== ev.attackerId || lastBurstCard.targetId !== ev.targetId) {
+      lastBurstCard.attackerId = ev.attackerId; lastBurstCard.targetId = ev.targetId; lastBurstCard.at = now;
+      return false;
+    }
+    burstCard = { ev, cls };
+    if (!burstCardTimer) {
+      burstCardTimer = setTimeout(() => {
+        burstCardTimer = null;
+        const held = burstCard;
+        burstCard = null;
+        if (!held || isTouchBattleLayout() || logOpen) return;
+        lastBurstCard.at = performance.now();
+        paintCard(held.ev, held.cls);
+      }, CARD_BURST_GAP_MS - sinceMs);
+    }
+    return true;
+  }
+  /**
+   * The card's figure, beside the outcome: the hull points the shot took off (owner 2026-10-31, "should show the amount u
+   * took off the enemy"; the registry's shot-damage, the shot's record beside the float's live cue). A missile's adds its
+   * blast's, whose line names the vehicles it reached. A shot that took none shows its outcome alone, never −0.
+   */
+  function paintShotDamage(card: HTMLDivElement, ev: ShotHitEvent): void {
+    const group = missileBlasts.get(ev);
+    // (a splash card's own hit is in its blast group already)
+    const removed = Math.round((ev.kind === 'he_splash' && group ? 0 : hullPointsRemoved(ev)) + (group?.damage ?? 0));
+    card.dataset.shown = String(removed);
+    const header = card.querySelector<HTMLDivElement>('.cot-si-hd');
+    let figure = header?.querySelector<HTMLSpanElement>('.cot-si-dmg') ?? null;
+    if (!header || removed <= 0) { figure?.remove(); return; }
+    figure ??= markDatum(el('span', 'cot-si-dmg', header), 'shot-damage');
+    figure.innerHTML = damageFigureMarkup(removed);
+  }
+  function showMissileBlast(card: HTMLDivElement, ev: ShotHitEvent): void {
+    const group = missileBlasts.get(ev); if (!group) return;
+    let line = card.querySelector<HTMLDivElement>('.cot-si-missile-blast');
+    if (!line) line = el('div', 'cot-si-missile-blast', card);
+    line.textContent = t('shotInfo.missileBlast', { targets: group.targets });
+    card.style.setProperty('--cot-si-blast-space', '30px');
+    paintShotDamage(card, ev);
+  }
+  function showCard(ev: ShotHitEvent, cls: HitOutcomePresentation): void {
+    if (!shouldShowShotReadout(ev)) return;
+    missileBlasts.record(ev);
+    if (isTouchBattleLayout() || logOpen) return;
+    if (keepMissileDirectHit(currentPrimary, ev)) {
+      const card = cardHost.querySelector<HTMLDivElement>('.cot-si-card');
+      if (card && currentPrimary) showMissileBlast(card, currentPrimary);
+      return;
+    }
+    if (heldForBurst(ev, cls)) return;
+    paintCard(ev, cls);
+  }
+  function paintCard(ev: ShotHitEvent, cls: HitOutcomePresentation): void {
+    currentPrimary = ev;
+    clearCardTimers();
+    while (cardHost.firstChild) cardHost.firstChild.remove();
+    const card = buildCard(ev, cls);
+    paintShotDamage(card, ev);
+    cardHost.appendChild(card);
+    showMissileBlast(card, ev);
+    // The existing battle layout still owns this single, bounded panel.
+    primaryFadeTimer = setTimeout(() => card.classList.add('out'), 6200);
+    primaryRemoveTimer = setTimeout(() => {
+      card.remove(); currentPrimary = null;
+    }, 7200);
+  }
+
+  // ---------- 2. collapsible log ----------
+  // (272) the open log follows a burst at most once a LOG_RENDER_GAP_MS: the first hit at once, the rest of the burst when
+  // the window ends (every hit of an air-defence gun's burst rebuilt every row of the battle's received log, twenty times a
+  // second). A hit after a pause renders at once, as before.
+  const LOG_RENDER_GAP_MS = 100;
+  let logRenderedAt = -Infinity;
+  let logRenderTimer: ReturnType<typeof setTimeout> | null = null;
+  function refreshLog(): void {
+    if (!logOpen) return;
+    const sinceMs = performance.now() - logRenderedAt;
+    if (sinceMs >= LOG_RENDER_GAP_MS) { renderLog(); return; }
+    if (logRenderTimer) return;
+    logRenderTimer = setTimeout(() => { logRenderTimer = null; if (logOpen) renderLog(); }, LOG_RENDER_GAP_MS - sinceMs);
+  }
+  function renderLog(): void {
+    logRenderedAt = performance.now();
+    if (logRenderTimer) { clearTimeout(logRenderTimer); logRenderTimer = null; }
+    logPanel.textContent = '';
+    const sec1 = el('div', 'sec', logPanel);
+    sec1.innerHTML = `<span>${t('action.shotLog')}</span><span>${shotLog.length} / 6</span>`;
+    for (const it of shotLog) {
+      const r = el('div', 'cot-si-lrow', logPanel);
+      // (rounded before the test, as the card's: an autocannon's 0.4 printed "−0")
+      const removed = Math.round(hullPointsRemoved(it.ev));
+      r.innerHTML =
+        `<span class="b" style="color:${it.cls.color}">${it.cls.label}</span>` +
+        `<span class="d dealt">${removed > 0 ? damageFigureMarkup(removed) : '·'}</span>` +
+        `<span class="n">${escapeHtml(it.ev.targetName || it.ev.targetId || '')}</span>` +
+        `<span class="z">${zoneLabel(it.ev.zone)} · ${Math.round(it.ev.flightDistM || 0)}\u202fm</span>`;
+    }
+    const total = receivedLog.reduce((a, e) => a + e.dmg, 0);
+    const sec2 = el('div', 'sec', logPanel);
+    // (an empty section is its header's count alone, no sentence; nothing received reads 0, never "−0")
+    sec2.innerHTML = `<span>${t('endScreen.damageReceived')}</span><span class="num">${Math.round(total) > 0 ? t('shotInfo.damageAmount', { amount: Math.round(total) }) : '0'}</span>`;
+    for (let i = receivedLog.length - 1; i >= 0; i--) {
+      const e = receivedLog[i];
+      const r = el('div', 'cot-si-lrow', logPanel);
+      r.innerHTML =
+        `<span class="b" style="color:${e.dmg > 0 ? COL.red : e.outcome.color}">` +
+        `${e.dmg > 0 ? fmtTime(e.t) : e.outcome.label}</span>` +
+        `<span class="d">${e.dmg > 0 ? `−${formatNumber(Math.round(e.dmg))}` : '·'}</span>` +
+        `<span class="n">${escapeHtml(e.attacker)}</span>` +
+        `<span class="z">${escapeHtml(e.shellType)}${e.mods ? ' · ' + escapeHtml(e.mods) : ''}</span>`;
+    }
+    // a log taller than its dock ends on a whole row, its cue under it (measured a frame later, off any press, and again
+    // whenever a row changes size)
+    const cue = el('div', 'more-cue', logPanel);
+    cue.innerHTML = uiIconSVG('chevronDown', 14);
+    cue.setAttribute('aria-hidden', 'true');
+    if (logObserver) {
+      logObserver.disconnect();
+      logObserver.observe(logPanel);
+      for (const row of logPanel.children) if (row !== cue) logObserver.observe(row);
+    }
+    requestAnimationFrame(fitLog);
+  }
+
+  function toggleLog(): void {
+    if (isTouchBattleLayout()) {
+      logOpen = false;
+      logPanel.classList.remove('open');
+      return;
+    }
+    logOpen = !logOpen;
+    logPanel.classList.toggle('open', logOpen);
+    if (logOpen) {
+      while (cardHost.firstChild) cardHost.firstChild.remove();
+      renderLog();
+    }
+  }
+
+  // ---------- 3. incoming toasts ----------
+  // (the kit's notice queue, components/notice.ts, as the alert band's: as many rows as the lane holds, the newest in front
+  // and the oldest leaving for it, each row's time stopped while the game pauses; the rows keep the lane's plateless form
+  // and their seat, UI-LOCKDOWN B14)
+  let latestToast: { id: string; element: HTMLElement; group: IncomingHitGroup } | null = null;
+  const toastEls = new Map<string, HTMLElement>();
+  let toastSerial = 0;
+  let toastTimer: TimerHandle | null = null;
+  const toastQueue = new NoticeQueue(MAX_BATTLE_NOTIFICATIONS, () => performance.now(), {
+    show: (toast) => { const row = toastEls.get(toast.id); if (row && !row.isConnected) toastHost.prepend(row); },
+    update: () => {},
+    hide: (toast) => {
+      const row = toastEls.get(toast.id);
+      toastEls.delete(toast.id);
+      if (latestToast?.id === toast.id) latestToast = null;
+      row?.remove();
+    },
+  });
+  /** The rows' clock: each row fades INCOMING_FADE_MS into its time and leaves at its end. */
+  function scheduleToasts(): void {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = null;
+    const now = performance.now();
+    let wake = Infinity;
+    for (const toast of toastQueue.shown) {
+      if (toast.remaining === null || toast.runningSince === null) continue;
+      const left = toast.remaining - (now - toast.runningSince);
+      const fadeIn = left - (INCOMING_HOLD_MS - INCOMING_FADE_MS);
+      if (fadeIn <= 0) toastEls.get(toast.id)?.classList.add('out');
+      else wake = Math.min(wake, fadeIn);
+      wake = Math.min(wake, Math.max(0, left));
+    }
+    if (wake === Infinity) return;
+    toastTimer = setTimeout(() => {
+      toastTimer = null;
+      for (const id of toastQueue.expired()) toastQueue.remove(id);
+      scheduleToasts();
+    }, Math.ceil(wake));
+  }
+  function clearToasts(): void {
+    for (const toast of [...toastQueue.waiting, ...toastQueue.shown]) toastQueue.remove(toast.id);
+    latestToast = null;
+    scheduleToasts();
+  }
+  bus.on('ui:pause', (payload) => {
+    toastQueue.pause(!!(payload as { on?: boolean } | undefined)?.on);
+    scheduleToasts();
+  });
+  function showToast(ev: ShotHitEvent, cls: HitOutcomePresentation): void {
+    const previous = latestToast?.element.parentNode === toastHost ? latestToast : null;
+    const group = appendIncomingHit(previous?.group ?? null, ev.attackerId,
+      hullPointsRemoved(ev), cls, performance.now());
+    const attacker = ev.attackerId ? combatants.get(ev.attackerId) : null;
+    const source = killSourceIdentity(ev.attackerSource);
+    const name = attackerLabel(ev) || attacker?.name || t('hud.enemy');
+    let toast: HTMLElement;
+    let id: string;
+    if (previous?.group === group) {
+      toast = previous.element;
+      id = previous.id;
+    } else {
+      id = `hit-${++toastSerial}`;
+      toast = el('div', 'cot-si-toast');
+      toastEls.set(id, toast);
+      toast.innerHTML = '<div class="l1"><span class="si" aria-hidden="true"></span>' +
+        '<span class="attacker"></span><b></b></div>';
+      const silhouette = toast.querySelector<HTMLElement>('.si')!;
+      const specId = ev.attackerSpecId || attacker?.specId;
+      // (the attacker's silhouette in the enemy ink the rosters and lanes use: a pink of its own, gauntlet r4)
+      if (source) silhouette.innerHTML = uiIconSVG(source.icon, 12, 'var(--hud-enemy)');
+      else if (specId) {
+        maskIcon(silhouette, specId, 'side_silhouette', 'var(--hud-enemy)');
+        // (from the row's start, the column's 12 px line: centred in its box, a short hull began 7 px in, gauntlet r7)
+        silhouette.style.maskPosition = silhouette.style.webkitMaskPosition = 'left center';
+      } else silhouette.remove();
+    }
+    // (its time restarts with each hit it gathers; a newer row takes the place of the oldest, which leaves, never waits)
+    toastQueue.push(id, { text: '', durationMs: INCOMING_HOLD_MS, dismissible: false, priority: ++toastSerial });
+    for (const waiting of [...toastQueue.waiting]) toastQueue.remove(waiting.id);
+    latestToast = { id, element: toast, group };
+    const damaging = group.damage > 0;
+    // (the damage taken is the hit-direction label's figure: the toast names the attacker and the shell, UI-LOCKDOWN B16)
+    const summary = damaging ? escapeHtml(ev.shellType || '') :
+      group.outcome?.label || t('hud.incoming.mixedHits');
+    const color = damaging ? COL.red : (group.outcome?.color || COL.dim);
+    toast.dataset.damage = String(Math.round(group.damage));
+    toast.dataset.count = String(group.count);
+    toast.dataset.kind = ev.kind;
+    toast.dataset.outcome = group.outcome?.id || 'mixed';
+    toast.classList.toggle('deflected', !damaging);
+    toast.classList.remove('out');
+    const attackerName = toast.querySelector<HTMLElement>('.attacker')!;
+    attackerName.textContent = name;
+    // (a Latin callsign keeps the Latin size in Chinese, as the kill feed's does: .lat, gauntlet r10)
+    attackerName.classList.toggle('lat', LATIN_NAME.test(name));
+    const value = toast.querySelector<HTMLElement>('.l1 b')!;
+    value.style.color = color;
+    value.innerHTML = uiIconSVG(damaging ? 'damage' : (group.outcome?.icon || 'shield'), 11) +
+      summary + (group.count > 1 ? `<span class="hit-count">×${group.count}</span>` : '');
+    const detail = [...group.outcomes.values()].map(item => `${item.count}× ${item.label}`).join(' · ');
+    toast.dataset.tip = group.count > 1 ? t('hud.incoming.stackSummary',
+      { count: group.count, damage: Math.round(group.damage) }) + ' · ' + detail : detail;
+    toast.setAttribute('aria-label', name + ' · ' + (toast.dataset.tip || ''));
+    scheduleToasts();
+  }
+
+  // ---------- 4. session stats -> END SCREEN (killcam_endscreen r1) ----------
+  // The full-screen report rendering moved to src/ui/endScreen.ts. This
+  // module stays the single bookkeeper: buildSummary() bundles the same
+  // resolved-event sums the old report printed — rosters from the
+  // authoritative battle:ended payload (parity-graph evidence as fallback),
+  // per-kill rows from the tank:destroyed credit, the best shot from the
+  // full-battle allShots ledger. Nothing recomputed, nothing invented:
+  // side-unconfirmed contacts are OMITTED rather than guessed onto a team,
+  // and there is no base-capture stat because the sim has no capture.
+  function summaryRows(): Map<EntityId, SummaryTeamRow> {
+    const rows = new Map<EntityId, SummaryTeamRow>();
+    for (const [id, combatantRow] of combatants) {
+      rows.set(id, {
+        id,
+        name: combatantRow.name,
+        specId: combatantRow.specId,
+        ...(combatantRow.aircraft ? { aircraft: true } : {}),
+        dmg: Math.round(combatantRow.dmg),
+        kills: combatantRow.kills,
+        deaths: combatantRow.deaths,
+        dead: combatantRow.dead,
+        side: sideOf(id),
+        isPlayer: id === playerId,
+      });
+    }
+    for (const rosterRow of endRoster || []) {
+      mergeEndRosterRow(rows, rosterRow, revives);
+    }
+    return rows;
+  }
+
+  function summaryTeams(rows: Map<EntityId, SummaryTeamRow>): Readonly<{
+    allies: EndScreenTeamRow[];
+    enemies: EndScreenTeamRow[];
+  }> {
+    const allies: EndScreenTeamRow[] = [];
+    const enemies: EndScreenTeamRow[] = [];
+    for (const row of rows.values()) {
+      if (row.side === 'ally') allies.push(row);
+      else if (row.side === 'enemy') enemies.push(row);
+    }
+    const bySort = (left: EndScreenTeamRow, right: EndScreenTeamRow): number => (
+      (right.isPlayer ? 1 : 0) - (left.isPlayer ? 1 : 0) || right.dmg - left.dmg
+    );
+    allies.sort(bySort);
+    enemies.sort(bySort);
+    return { allies, enemies };
+  }
+
+  function summaryKills(): Array<{ id: string; name: string; specId: string; dmg: number }> {
+    const kills: Array<{ id: string; name: string; specId: string; dmg: number }> = [];
+    for (const [id, target] of stats.perTarget) {
+      if (!target.killed || sideOf(id) === 'ally') continue;
+      kills.push({
+        id,
+        name: target.name || id,
+        specId: target.specId || id,
+        dmg: Math.round(target.dmg),
+      });
+    }
+    kills.sort((left, right) => right.dmg - left.dmg);
+    return kills;
+  }
+
+  function bestShot(): ShotEntry | null {
+    let best: ShotEntry | null = null;
+    for (const shot of allShots) {
+      if (hullPointsRemoved(shot.ev) > 0 && (!best || hullPointsRemoved(shot.ev) > hullPointsRemoved(best.ev))) best = shot;
+    }
+    return best;
+  }
+
+  function summaryMapName(): string | null {
+    const mapId = endInfo?.map || null;
+    if (!mapId) return null;
+    // The battlefield's name in the active locale (map.<id>, BUI-F8); a removed map keeps its config name or raw id.
+    if (isMapId(mapId)) return getLocalizedMapName(mapId);
+    try {
+      return getMapConfig(mapId).name || mapId;
+    } catch (_) {
+      return mapId;
+    }
+  }
+
+  function summaryTime(): number {
+    if (typeof endInfo?.timeS === 'number' && Number.isFinite(endInfo.timeS)) {
+      return endInfo.timeS;
+    }
+    return Math.max(
+      0,
+      ...stats.timeline.map((entry) => entry.t),
+      ...receivedLog.map((entry) => entry.t),
+    );
+  }
+
+  /**
+   * The blow that ended the battle. A watched battle's reads as the battle's, whichever tank was ridden, and a blow with
+   * no named attacker (a ram, a burn-out) is the victim's enemy side's, never "Enemy".
+   */
+  function summaryFinalBlow(watched: boolean): FinalBlow | null {
+    const blow = resolveFinalBlow(lastLethalHit, lastDestroyedRow, playerId == null || watched ? null : String(playerId),
+      (id) => combatants.get(id)?.name ?? null);
+    if (!watched || !blow || blow.attacker || !lastDestroyedRow) return blow;
+    const victimSide = battleSide(teamOf(lastDestroyedRow.id));
+    return victimSide ? { ...blow, attacker: t(`endScreen.side.${victimSide === 'alpha' ? 'bravo' : 'alpha'}`) } : blow;
+  }
+
+  function buildSummary(result: EndScreenResult): EndScreenSummary {
+    const watched = !!endInfo?.watch;
+    const rows = summaryRows();
+    const { allies, enemies } = summaryTeams(rows);
+    const kills = summaryKills();
+    const best = bestShot();
+    const me = playerId === null ? undefined : rows.get(playerId);
+    return {
+      result,
+      reason: endInfo?.reason || null,
+      playerVehicle: me?.name || '',
+      playerSpecId: me?.specId || null,
+      // (ac130-fx-228) the pilot flew the AC-130: the debrief shows the aircraft, not the garage tank
+      ...(me?.aircraft ? { playerAircraft: true } : {}),
+      playerDead: !!me?.dead,
+      playerDeaths: me?.deaths ?? 0,
+      playerKills: playerId ? killLedger.count(playerId) : 0,
+      revives,
+      map: summaryMapName(),
+      mapId: endInfo?.mapId || endInfo?.map || null,
+      mode: endInfo?.gameMode ?? null,
+      timeS: summaryTime(),
+      stats: {
+        dealt: stats.dealt,
+        received: stats.received,
+        blocked: stats.blocked,
+        fired: stats.fired,
+        hits: stats.hits,
+        pens: stats.pens,
+        assist: stats.assist,
+        modulesDestroyed: stats.modulesDestroyed,
+        spotted: spottedSet.size,
+        spotAttributed,
+      },
+      kills,
+      bestShot: best ? {
+        damage: hullPointsRemoved(best.ev),
+        shellType: best.ev.shellType || '',
+        shellName: shellDisplayName(best.ev),
+        targetName: best.ev.targetName || '',
+        zone: zoneLabel(best.ev.zone),
+        distM: best.ev.flightDistM || 0,
+        destroyed: !!best.ev.destroyed,
+      } : null,
+      allies,
+      enemies,
+      campaign: endInfo?.campaign ?? null,
+      finalBlow: summaryFinalBlow(watched),
+      hordeWave: endInfo?.hordeWave ?? null,
+      brains: endInfo?.brains ?? null,
+      awards: getLastBattleAwards(),
+      beats: watched ? beatLog.battleList() : beatLog.list(),
+      ...(watched ? { watched, score: endInfo?.score ?? null } : {}),
+    };
+  }
+
+  function renderStats(result: EndScreenResult): void {
+    endScreen.show(result, buildSummary(result));
+    statsRoot.classList.add('show'); // endScreen owns this too — kept for parity
+  }
+
+  // ---------- bookkeeping ----------
+  function perTarget(ev: ShotHitEvent): TargetStats {
+    let t = stats.perTarget.get(ev.targetId);
+    if (!t) {
+      t = {
+        name: ev.targetName, specId: ev.targetSpecId, dmg: 0, hits: 0, pens: 0,
+        killed: false, lastZone: null, hpLeft: null,
+      };
+      stats.perTarget.set(ev.targetId, t);
+    }
+    return t;
+  }
+
+  function recordHitCombatants(ev: ShotHitEvent): void {
+    if (ev.attackerId == null || ev.targetId == null || ev.attackerId === ev.targetId) return;
+    // (ac130-fx-228) a gunship's hits are the AC-130's: its name and icon, never the pilot's garage tank
+    const aircraft = killSourceIdentity(ev.attackerSource)?.source === 'ac130';
+    const attacker = combatant(ev.attackerId, attackerLabel(ev), aircraft ? null : ev.attackerSpecId);
+    if (aircraft) { attacker.aircraft = true; attacker.name = attackerLabel(ev) ?? attacker.name; }
+    attacker.dmg += hullPointsRemoved(ev);
+    const target = combatant(ev.targetId, ev.targetName, ev.targetSpecId);
+    if (ev.destroyed) target.dead = true;
+    if (ev.kind !== 'he_splash') linkOpposed(ev.attackerId, ev.targetId);
+  }
+
+  function recordSpottingAssist(ev: ShotHitEvent): void {
+    const spottedAt = spotWindow.get(ev.targetId);
+    if (ev.attackerId === playerId || ev.targetId === playerId || hullPointsRemoved(ev) <= 0) return;
+    if (spottedAt === undefined || (ev.timeS || 0) - spottedAt > ASSIST_WINDOW_S) return;
+    if (ev.attackerId != null && sideOf(ev.attackerId) === 'ally') stats.assist += hullPointsRemoved(ev);
+  }
+
+  function recordOutgoingHit(ev: ShotHitEvent): void {
+    if (ev.attackerId !== playerId || !ev.targetId || ev.targetId === playerId) return;
+    const outcome = hitOutcomeFor(ev);
+    const round = firedRounds.hit(ev.shellId, outcome.penetrated);
+    if (round.hit) stats.hits += 1;
+    if (round.pen) stats.pens += 1;
+    // (every damage figure and total is the hull points taken off, the card's and the float's: a kill reads what was left)
+    const removed = hullPointsRemoved(ev);
+    stats.dealt += removed;
+    const shell = perShell(ev.shellType || '—');
+    if (round.hit) shell.hits += 1;
+    if (round.pen) shell.pens += 1;
+    shell.dmg += removed;
+    if (removed > 0) stats.timeline.push({ t: ev.timeS || 0, d: removed });
+    stats.modulesDestroyed += (ev.modulesHit || [])
+      .filter((module) => module.newState === 'red').length;
+    const target = perTarget(ev);
+    target.dmg += removed;
+    target.hits += 1;
+    if (outcome.penetrated) target.pens += 1;
+    if (ev.zone) target.lastZone = ev.zone;
+    if (typeof ev.targetHpAfter === 'number' && Number.isFinite(ev.targetHpAfter)) {
+      target.hpLeft = Math.max(0, Math.round(ev.targetHpAfter));
+    }
+    if (ev.destroyed) {
+      target.killed = true;
+      target.hpLeft = 0;
+    }
+    if (shouldShowShotReadout(ev) && !keepMissileDirectHit(shotLog[0]?.ev || null, ev)) {
+      shotLog.unshift({ ev, cls: outcome });
+      if (shotLog.length > 6) shotLog.pop();
+    }
+    allShots.push({ ev, cls: outcome });
+    showCard(ev, outcome);
+    refreshLog();
+  }
+
+  function recordIncomingHit(ev: ShotHitEvent): void {
+    if (ev.targetId !== playerId) return;
+    const outcome = hitOutcomeFor(ev);
+    const removed = hullPointsRemoved(ev);
+    stats.received += removed;
+    if (removed <= 0 && outcome.blocked) stats.blocked += ev.dmgRoll || 0;
+    const knocked = (ev.modulesHit || []).filter((module) => module.newState === 'red');
+    for (const module of knocked) beatLog.loss(module.module, ev.timeS);
+    const mods = knocked.map((module) => moduleName(module.module)).join(', ');
+    receivedLog.push({
+      t: ev.timeS || 0,
+      dmg: removed,
+      kind: ev.kind,
+      aid: ev.attackerId,
+      attacker: attackerLabel(ev) || 'Enemy',
+      shellType: ev.shellType || '',
+      mods,
+      outcome,
+      zone: ev.zone || '',
+    });
+    showToast(ev, outcome);
+    refreshLog();
+  }
+
+  bus.on('shell:fired', (payload) => {
+    const p = eventPayload<ShellFiredEvent>(payload);
+    if (!p.isPlayer) return;
+    // identity hardening (r3 audit): latch the player id from the sim event
+    // itself — hud.update only forwards setPlayer once a frame has rendered,
+    // which silently dropped a hit resolved before the first post-start
+    // frame. main.ts now also sets it synchronously at battle start (see
+    // docs/GUNNERY-CAMERA-SPEC.md); this latch covers sim-tick-driven
+    // replays that never render at all.
+    if (p.shooterId != null) playerId = p.shooterId;
+    firedRounds.fire(p.shellId);
+    stats.fired += 1;
+    perShell(p.shellType || '—').fired += 1;
+  });
+
+  bus.on('tank:spotted', (payload) => {
+    const ev = eventPayload<TankSpottedEvent | null>(payload);
+    if (!ev || ev.id == null) return;
+    beatLog.clock(ev.timeS);
+    // a spot is a sim-asserted cross-team fact: the spotting TEAM ('player'
+    // side) opposes the target — feed the parity graph the same way a direct
+    // hit would (helps side resolution for combatants that never traded fire)
+    if (ev.team === 'player' && playerId != null) linkOpposed(playerId, ev.id);
+    if (ev.spotterId == null) return;
+    spotAttributed = true;
+    if (playerId != null && ev.spotterId === playerId && ev.id !== playerId) {
+      spotWindow.set(ev.id, ev.timeS || 0);
+      spottedSet.add(ev.id);
+      beatLog.spot(ev.timeS);
+    }
+  });
+
+  bus.on('shell:hit', (payload) => {
+    const ev = eventPayload<ShotHitEvent>(payload);
+    beatLog.clock(ev.timeS);
+    recordHitCombatants(ev);
+    if (ev.destroyed && ev.targetId != null) {
+      lastLethalHit = {
+        attackerId: ev.attackerId == null ? null : String(ev.attackerId),
+        attackerName: attackerLabel(ev) || null,
+        targetId: String(ev.targetId),
+        targetName: ev.targetName || null,
+        shellName: shellDisplayName(ev) || null,
+        shellType: ev.shellType || null,
+      };
+    }
+    if (playerId == null) return;
+    recordSpottingAssist(ev);
+    recordOutgoingHit(ev);
+    recordIncomingHit(ev);
+  });
+
+  bus.on('tank:destroyed', (payload) => {
+    latestToast = null; // A kill notification ends the previous incoming run.
+    const p = eventPayload<TankDestroyedEvent>(payload);
+    if (!killLedger.record(p.id, p.killerId, teamOf(p.id), p.killerId ? teamOf(p.killerId) : undefined)) return;
+    // team-wide roster bookkeeping (fire deaths included — no shell:hit fires)
+    recordCombatantDestroyed(combatant(p.id, null, p.specId));
+    // the timeline's beats: the player's death, and each tank the player destroyed (fire and rams included)
+    if (playerId != null && p.id === playerId) beatLog.death();
+    else if (playerId != null && p.killerId === playerId) beatLog.kill(String(p.id), p.specId);
+    // and the battle's own line: every kill, to the killer's side (a fire or a fall: the victim's enemy)
+    const killerSide = p.killerId != null && p.killerId !== p.id ? battleSide(teamOf(p.killerId)) : null;
+    const victimSide = battleSide(teamOf(p.id));
+    beatLog.battleKill(String(p.id), p.specId, killerSide ?? (victimSide && (victimSide === 'alpha' ? 'bravo' : 'alpha')));
+    lastDestroyedRow = { id: String(p.id), killerId: p.killerId == null ? null : String(p.killerId), cause: p.cause ?? null,
+      source: p.source ?? null };
+    if (p.killerId != null && p.killerId !== p.id) {
+      combatant(p.killerId).kills = killLedger.count(p.killerId);
+      linkOpposed(p.killerId, p.id);
+    }
+    if (playerId == null || p.killerId !== playerId || p.id === playerId) return;
+    let t = stats.perTarget.get(p.id);
+    if (!t) {
+      let name = p.specId;
+      try { name = presentationSpec(p.specId).name; } catch (_) { /* keep raw id */ }
+      t = {
+        name, specId: p.specId, dmg: 0, hits: 0, pens: 0,
+        killed: false, lastZone: null, hpLeft: null,
+      };
+      stats.perTarget.set(p.id, t);
+    }
+    t.killed = true;
+    t.hpLeft = 0;
+  });
+
+  // owner 2026-09-21 ("in respawn modes youre registered as dead even if you respawned at end"): the revive
+  // clears the state flag; the death stays counted in `deaths`
+  bus.on('mode:respawn', (payload) => {
+    const p = eventPayload<{ id?: EntityId | null } | null>(payload);
+    if (!p || p.id == null) return;
+    revives = true;
+    if (p.id === playerId) beatLog.revive();
+    killLedger.respawn(p.id);
+    recordCombatantRevived(combatant(p.id));
+  });
+  // (round 3 merge review r1; round 4 E6b) a network battle restarted under this seat (battlePresentation.ts
+  // 'battle:restarted'): every hull stands at its spawn again, and the restart opens a new battle (owner approved
+  // 2026-11-13), so the report starts over as at a battle's start (reset(): shots, hits, damage both ways, the
+  // combatants' kills, deaths and life, the kill ledger, the timeline, the spotting assists). Before, only the dead were
+  // revived, and the report of the battle that ended added the abandoned battle's shots, damage and kills to its own.
+  bus.on('battle:restarted', () => api.reset());
+
+  // --- REPORT GATE: battle-report rendering deferred past the kill-cam ------
+  // state.ts emits battle:ended in the very sim step the player dies, but
+  // the composition root starts the kill-cam replay LATER in the same task — rendering
+  // the report synchronously buried the still-playing slow-mo flight and the
+  // whole 7 s x-ray hold under the full-screen DEFEAT panel (z 71 over the
+  // replay's z 60; r6 critical). Stat ACCUMULATION stays on battle:ended;
+  // RENDERING waits on the report gate (battleReportGate.ts, 2026-11-02 audit F4):
+  // it decides after the frame that arms the verdict's close, holds while the
+  // battle input owner (battleInputOwner.ts) says a replay, an ending beat or the
+  // menu owns the screen, decides again when that ends, and renders a held report
+  // on battle:presented (the result presentation's hand-off, end overlay built).
+  const inputOwner = battleInputOwnerFor(bus);
+  const reportGate = createBattleReportGate<EndScreenResult>({
+    holdReason: () => (inputOwner.state === 'presentation' || inputOwner.state === 'menu' ? inputOwner.state : null),
+    render: (result) => renderStats(result),
+  });
+  inputOwner.onChange(() => reportGate.ownerChanged());
+  bus.on('battle:presented', () => reportGate.presented());
+
+  bus.on('battle:ended', (payload) => {
+    const p = eventPayload<BattleEndedEvent | null>(payload);
+    // the floating shot card and incoming toasts must never linger behind the
+    // results screen — a dimmed PENETRATION card double-reported the final
+    // shot in the corner of the DEFEAT report for up to 7 s (r4 critique)
+    while (cardHost.firstChild) cardHost.firstChild.remove();
+    clearToasts();
+    // authoritative team roster when the sim provides one (additive payload)
+    if (p && Array.isArray(p.roster)) endRoster = p.roster;
+    // identity hardening (r3 audit): the roster names the player — latch it
+    // in case no rendered frame ever forwarded setPlayer (headless replays)
+    if (playerId == null && endRoster) {
+      const me = endRoster.find((r) => r.isPlayer);
+      if (me && me.id != null) playerId = me.id;
+    }
+    // report header data (r3): battle duration is the payload's end-of-battle
+    // sim clock (setupBattle zeroes it), map id is an additive state.ts
+    // enrichment (docs/SYSTEMS.md) — the header simply omits what is absent
+    endInfo = p ? {
+      timeS: p.timeS, map: p.map || p.mapId || null, mapId: p.mapId || p.map || null, reason: p.reason || null, campaign: campaignDebrief(p),
+      hordeWave: typeof p.hordeWave === 'number' && Number.isFinite(p.hordeWave) ? p.hordeWave : null,
+      brains: p.brains && typeof p.brains === 'object'
+        ? { enemy: String(p.brains.enemy || 'classic'), allies: String(p.brains.allies || 'classic') } : null,
+      watch: p.watch === true,
+      score: p.score && Number.isFinite(p.score.alpha) && Number.isFinite(p.score.bravo)
+        ? { alpha: p.score.alpha, bravo: p.score.bravo } : null,
+      gameMode: typeof p.gameMode === 'string' && p.gameMode ? p.gameMode : null,
+    } : null;
+    if (rulesetRevives(p?.gameMode)) revives = true;
+    reportGate.ended(p ? (p.result || '') : ''); // ('' is valid)
+  });
+  // the mode's objective moments for the timeline (sim/matchModes.ts via state.ts: zone, flag, goal)
+  bus.on('mode:zone_captured', (payload) => {
+    const p = eventPayload<{ team?: string; zoneId?: string } | null>(payload);
+    beatLog.objective('zone', p?.team, p?.zoneId);
+  });
+  bus.on('mode:flag_captured', (payload) => beatLog.objective('flag', eventPayload<{ team?: string } | null>(payload)?.team));
+  bus.on('mode:goal_scored', (payload) => beatLog.objective('goal', eventPayload<{ team?: string } | null>(payload)?.team));
+  bus.on('ui:shotLog', () => toggleLog());
+  bus.on('ui:battleStart', () => api.reset());
+
+  const api: ShotInfoRuntime = {
+    /**
+     * Queue exact roster schematics in the shared serial preparation owner.
+     * Decode, full-resolution processing and PNG encoding run in its worker;
+     * unsupported hosts use bounded cooperative work and asynchronous encode.
+     * Cards always retain their immediate raw-image fallback while pending.
+     * @param {string[]} specIds fielded roster (both teams)
+     */
+    warmSchematics(specIds: readonly string[]): void {
+      cancelSchematicWarm();
+      const revision = schematicWarmRevision;
+      const ids = (specIds || []).filter(Boolean);
+      let i = 0;
+      const kick = () => {
+        schematicWarmFrame = null;
+        if (revision !== schematicWarmRevision || i >= ids.length) return;
+        const id = ids[i++];
+        schematicUrl(id, 'top', CARD_TOP_S * 2, CARD_TOP_S * 2);
+        schematicUrl(id, 'side', CARD_SIDE_W * 2, CARD_SIDE_H * 2);
+        if (i < ids.length) schematicWarmFrame = requestAnimationFrame(kick);
+      };
+      kick();
+    },
+    root,
+    statsRoot,
+    toggleLog,
+
+    /** Latch the player entity id (hud.ts forwards it each frame). */
+    setPlayer(id: EntityId | null, timeS?: number, perspective?: string): void {
+      playerId = id;
+      beatLog.clock(timeS);
+      if (perspective) beatLog.setPerspective(perspective);
+    },
+    setTeamResolver(resolve: (id: EntityId) => string | undefined): void { teamOf = resolve; },
+
+    /** Hide the end-of-battle stats card (garage/hidden HUD). */
+    hideStats() {
+      reportGate.clear();
+      endScreen.hide();
+      statsRoot.classList.remove('show');
+      document.body.classList.remove('cot-si-report');
+    },
+
+    /** Fresh battle: clear cards, toasts, logs and session stats. */
+    reset() {
+      // Activation may reset immediately after warming this roster. Immutable
+      // spec-keyed preparation survives UI reset; a new warm supersedes it.
+      reportGate.clear();
+      while (cardHost.firstChild) cardHost.firstChild.remove();
+      clearToasts();
+      clearCardTimers(); currentPrimary = null; missileBlasts.clear();
+      shotLog.length = 0;
+      allShots.length = 0;
+      receivedLog.length = 0;
+      combatants.clear();
+      tg.clear();
+      endRoster = null;
+      endInfo = null;
+      lastLethalHit = null;
+      lastDestroyedRow = null;
+      revives = false;
+      spotWindow.clear();
+      spottedSet.clear();
+      spotAttributed = false;
+      Object.assign(stats, newStats());
+      firedRounds.clear();
+      killLedger.clear();
+      beatLog.clear();
+      stats.perTarget = new Map();
+      logOpen = false;
+      logPanel.classList.remove('open');
+      endScreen.hide();
+      statsRoot.classList.remove('show');
+      document.body.classList.remove('cot-si-report');
+    },
+  };
+  return api;
+}
+
+/** A tank's side on the battle line: the solo roster's teams ('player', 'enemy') or a room's ('alpha', 'bravo'). */
+function battleSide(team: string | undefined): BattleSide | null {
+  return team === 'player' || team === 'alpha' ? 'alpha' : team === 'enemy' || team === 'bravo' ? 'bravo' : null;
+}

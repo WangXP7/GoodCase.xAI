@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Browse featured worlds built with Tiny World Builder. Explore isometric voxel worlds created by the community." />
+<title>Featured Worlds - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<style>
+/* ---- featured gallery page ---- */
+.featured-section {
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 8px 0 80px;
+}
+
+.featured-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.featured-card {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 2px rgba(20, 30, 50, 0.05),
+    0 18px 44px -16px rgba(40, 50, 80, 0.24);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.featured-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 2px 4px rgba(20, 30, 50, 0.07),
+    0 28px 56px -16px rgba(40, 50, 80, 0.30);
+}
+
+.featured-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #070911;
+}
+
+.featured-card-body {
+  padding: 16px 18px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.featured-world-name {
+  font-family: var(--display-font);
+  font-size: 17px;
+  font-weight: 700;
+  color: #111b45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.featured-open-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 13px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 12px -6px rgba(22, 76, 170, 0.45);
+  transition: filter 0.12s;
+  white-space: nowrap;
+}
+
+.featured-open-link:hover { filter: brightness(1.12); }
+
+.featured-open-link svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.featured-empty {
+  grid-column: 1 / -1;
+  padding: 72px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.60);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.86) inset,
+    0 16px 40px -18px rgba(40, 50, 80, 0.20);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+.featured-empty-icon {
+  display: block;
+  margin: 0 auto 20px;
+  width: 48px;
+  height: 48px;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.featured-empty h2 {
+  margin: 0 0 10px;
+  font-family: var(--display-font);
+  font-size: 26px;
+  color: #111b45;
+}
+
+.featured-empty p {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.55;
+}
+
+.featured-empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 15px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+}
+
+.featured-empty-action:hover { filter: brightness(1.1); }
+
+.featured-empty-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 600px) {
+  .featured-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/badges">Badges</a>
+      <a href="/rewards">Rewards</a>
+      <a href="/docs">Docs</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Featured Worlds</h1>
+        <p>Discover isometric worlds built by the community. Open any world to explore it.</p>
+      </div>
+    </section>
+
+    <section class="featured-section" aria-label="World gallery">
+      <div class="featured-grid" id="featured-grid" aria-live="polite" aria-label="Featured worlds grid">
+        <!-- populated by script -->
+      </div>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script src="scripts/world-preview.js" defer></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var grid = document.getElementById('featured-grid');
+    if (!grid) return;
+
+    function worldHref(slug) {
+      var s = String(slug || '').trim();
+      if (!s) return '/tiny-world-builder';
+      return '/tiny-world-builder?world=' + encodeURIComponent(s);
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showEmpty() {
+      grid.innerHTML = '<div class="featured-empty">'
+        + '<svg class="featured-empty-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+        + '<polyline points="9 22 9 12 15 12 15 22"/>'
+        + '</svg>'
+        + '<h2>No featured worlds yet</h2>'
+        + '<p>Be the first to publish one and it may appear here.</p>'
+        + '<a class="featured-empty-action" href="/tiny-world-builder">'
+        + '<span>Start building</span>'
+        + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>'
+        + '</a>'
+        + '</div>';
+    }
+
+    function buildCard(w) {
+      var card = document.createElement('article');
+      card.className = 'featured-card';
+
+      var cnv = document.createElement('canvas');
+      cnv.className = 'featured-canvas';
+      cnv.setAttribute('aria-hidden', 'true');
+      // Explicit fallback dimensions for renderPreview before layout paint.
+      cnv.width = 560;
+      cnv.height = 350;
+
+      var body = document.createElement('div');
+      body.className = 'featured-card-body';
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'featured-world-name';
+      nameEl.textContent = String(w.name || w.slug || 'World');
+
+      var link = document.createElement('a');
+      link.className = 'featured-open-link';
+      link.href = worldHref(w.slug);
+      link.textContent = 'Open world';
+      link.setAttribute('aria-label', 'Open ' + esc(w.name || w.slug || 'world'));
+      link.innerHTML = 'Open world <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+
+      body.appendChild(nameEl);
+      body.appendChild(link);
+      card.appendChild(cnv);
+      card.appendChild(body);
+
+      // Render synchronously. The canvas has explicit fallback dimensions (560x350)
+      // so renderPreview does not need layout/clientWidth — and a synchronous draw
+      // works even in a background/unfocused tab, where requestAnimationFrame is
+      // throttled and would leave the previews blank until the tab gains focus.
+      try {
+        window.TinyWorldPreview.renderPreview(cnv, w.preview);
+      } catch (_) {}
+
+      return card;
+    }
+
+    function render(worlds) {
+      if (!worlds || !worlds.length) { showEmpty(); return; }
+      grid.textContent = '';
+      worlds.forEach(function (w) {
+        grid.appendChild(buildCard(w));
+      });
+    }
+
+    function load() {
+      fetch('/api/worlds/featured', { headers: { Accept: 'application/json' } })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (data) {
+          var all = (data && Array.isArray(data.worlds)) ? data.worlds : [];
+          var ready = all.filter(function (w) {
+            return w && w.preview && Array.isArray(w.preview.cells) && w.preview.cells.length > 0;
+          });
+          render(ready);
+        })
+        .catch(function () { showEmpty(); });
+    }
+
+    // This inline script runs during HTML parse (readyState === 'loading').
+    // DOMContentLoaded fires after all defer scripts (including world-preview.js),
+    // so window.TinyWorldPreview is guaranteed to be available when load() runs.
+    // Expose load on window as a test seam so the real loader can be called from
+    // the browser console (e.g. to inject a fetch mock and re-run the full path).
+    window._featuredLoad = load;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+import { FramePacer } from '../utils/frame-pacer';
+
+/**
+ * Longest wait for a drawn frame in the shader warm-up. A hidden tab gets no
+ * rAF frames at all; the warm-up then closes the pools again without them.
+ */
+const FRAME_WAIT_TIMEOUT_MS = 1000;
+
+/**
+ * Longest delta a single background tick hands to `update()`, ms.
+ *
+ * A throttled hidden tab can hand us gaps of seconds. The game time runs in
+ * the simulation's worker by its own clock (docs/archive/SIM_DECOUPLE_PLAN.md); what
+ * the delta still drives on this thread (the bot's reaction time, the
+ * presentation's clocks) should not jump by seconds in one step.
+ */
+const MAX_BACKGROUND_STEP_MS = 50;
+
+/** Main-thread ms of the rAF frames, summed (RenderLoop.setTiming) */
+export interface FrameTiming {
+  /** update(): the game loop, the simulation's packet applied included */
+  updateMs: number;
+  /** render(): tiles, renderers, renderer.render */
+  renderMs: number;
+  frames: number;
+}
+
+/** Was der Loop am Engine antreibt. */
+export interface RenderLoopHooks {
+  /** Gameplay und Animationen um `deltaTime` ms weiter. Läuft pro rAF-Frame und pro Heartbeat-Tick. */
+  update(deltaTime: number): void;
+  /** Einen Frame zeichnen. Nur aus rAF-Frames, nie aus dem Heartbeat. */
+  render(): void;
+  /** False, solange render() nichts zeichnet (Headless-Training). */
+  isRendering(): boolean;
+}
+
+/**
+ * RenderLoop: treibt `update()` und `render()` des Engines.
+ *
+ * Vorher inline in `three-tiles-engine.ts` (`startRenderLoop`, `stopRenderLoop`,
+ * `setFpsLimit`, `setBackgroundLoopEnabled`, der Heartbeat, `getFPS`,
+ * `waitForRenderedFrame`). Zwei Treiber teilen sich eine Uhr:
+ *
+ * - rAF: pro Frame `update(delta)`, dann `render()`. Der {@link FramePacer} lässt zu
+ *   frühe Frames bei einem FPS-Cap ganz aus.
+ * - Heartbeat-Worker: nur im versteckten Tab und nur mit `setBackgroundLoopEnabled(true)`
+ *   (Training). Pro Tick `update(delta)` ohne `render()`, der Schritt auf 50 ms gedeckelt.
+ *   Solange er läuft, steppen rAF-Frames nicht.
+ *
+ * Der Engine meldet jeden gezeichneten Frame mit `frameRendered()` zurück; daran hängen
+ * `waitForRenderedFrame()` (Shader-Warm-up) und der FPS-Zähler.
+ *
+ * Vom Engine besessen, als `engine.renderLoop` erreichbar. `stop()` aus dem Engine-dispose().
+ */
+export class RenderLoop {
+  private animationFrameId: number | null = null;
+  /**
+   * Hidden-tab loop driver. Chrome freezes requestAnimationFrame outright
+   * while a tab is not visible, so the render loop, and with it the bot, the
+   * wave logic and every training episode, stops dead rather than slowing
+   * down. Opt in via `setBackgroundLoopEnabled(true)`; training and a coop game do.
+   */
+  private heartbeatWorker: Worker | null = null;
+  /** Who wants the background loop ('training', 'coop'); it runs while any does */
+  private readonly backgroundReasons = new Set<string>();
+  private onVisibilityChange: (() => void) | null = null;
+  /** Shared between the rAF and heartbeat drivers so deltas stay continuous. */
+  private lastLoopTime = 0;
+  private isRunning = false;
+
+  /** Frame cap of the rAF loop, see setFpsLimit(). */
+  private readonly framePacer = new FramePacer();
+
+  /** Released by the next drawn frame, see waitForRenderedFrame(). */
+  private frameWaiters: (() => void)[] = [];
+
+  /** Run synchronously after the next drawn frame, see onNextFrameRendered(). */
+  private frameCallbacks: (() => void)[] = [];
+
+  /** The perf panel's sums of the rAF frames while it is open, see setTiming() */
+  private timing: FrameTiming | null = null;
+
+  // Performance stats
+  private lastFrameTime = 0;
+  private frameCount = 0;
+  private fps = 0;
+
+  constructor(private readonly hooks: RenderLoopHooks) {}
+
+  /**
+   * Cap the render loop at `fps` frames per second, 0 = unlimited (vsync).
+   *
+   * Frames that come too early are skipped whole, update included. The
+   * simulation runs by its own clock in the worker (docs/archive/SIM_DECOUPLE_PLAN.md),
+   * so the game speed stays the same at any cap, training timescales
+   * included. Persisted by DebugFacadeService.
+   */
+  setFpsLimit(fps: number): void {
+    this.framePacer.setLimit(fps);
+  }
+
+  /**
+   * Drive the loop from a worker timer while the tab is hidden.
+   *
+   * Training turns this on, and a coop game: the relay drops a player whose
+   * lockstep stands for 30 s, a minimised window included (E136). The solo
+   * game has no reason to run in a tab nobody is looking at, and the browser's
+   * throttling is a feature there. Each `reason` switches on its own; the loop
+   * runs in the background while any of them is on.
+   */
+  setBackgroundLoopEnabled(enabled: boolean, reason = 'training'): void {
+    const was = this.backgroundReasons.size > 0;
+    if (enabled) this.backgroundReasons.add(reason);
+    else this.backgroundReasons.delete(reason);
+    const now = this.backgroundReasons.size > 0;
+    if (was === now) return;
+    if (!now) {
+      this.stopHeartbeat();
+      if (this.onVisibilityChange) {
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        this.onVisibilityChange = null;
+      }
+      return;
+    }
+    this.onVisibilityChange = () => this.syncLoopDriver();
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.syncLoopDriver();
+  }
+
+  /** Pick the driver that actually ticks under the current visibility. */
+  private syncLoopDriver(): void {
+    if (this.backgroundReasons.size === 0 || !this.isRunning) {
+      this.stopHeartbeat();
+      return;
+    }
+    if (document.hidden) {
+      this.startHeartbeat();
+    } else {
+      this.stopHeartbeat();
+    }
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeatWorker) return;
+    try {
+      this.heartbeatWorker = new Worker(
+        new URL('../workers/heartbeat.worker', import.meta.url),
+        { type: 'module' },
+      );
+    } catch (err) {
+      console.warn('[ThreeTilesEngine] Heartbeat worker unavailable:', err);
+      this.heartbeatWorker = null;
+      return;
+    }
+    this.heartbeatWorker.onmessage = ({ data }) => {
+      if (data?.type === 'tick') this.tickFromHeartbeat();
+    };
+    this.lastLoopTime = performance.now();
+    this.heartbeatWorker.postMessage({ type: 'start', intervalMs: 16 });
+  }
+
+  private stopHeartbeat(): void {
+    if (!this.heartbeatWorker) return;
+    this.heartbeatWorker.postMessage({ type: 'stop' });
+    this.heartbeatWorker.terminate();
+    this.heartbeatWorker = null;
+    // Hand the clock back to rAF without a giant catch-up delta.
+    this.lastLoopTime = performance.now();
+  }
+
+  /**
+   * One loop step driven by the heartbeat instead of a frame.
+   *
+   * Deliberately skips `render()`: nothing is visible, and the GPU half is the
+   * expensive one. Gameplay, the bot and the wave logic all hang off
+   * `update()`.
+   */
+  private tickFromHeartbeat(): void {
+    if (!this.isRunning || !document.hidden) return;
+    const currentTime = performance.now();
+    const deltaTime = Math.min(
+      currentTime - this.lastLoopTime,
+      MAX_BACKGROUND_STEP_MS,
+    );
+    this.lastLoopTime = currentTime;
+    if (deltaTime <= 0) return;
+    this.hooks.update(deltaTime);
+  }
+
+  /**
+   * Start the render loop
+   */
+  start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+
+    this.lastLoopTime = performance.now();
+    this.framePacer.reset();
+    const animate = (currentTime: number) => {
+      if (!this.isRunning) return;
+
+      // While the heartbeat owns the clock, rAF must not also step the world.
+      // A tab can deliver a straggling frame right as it goes hidden, and two
+      // drivers stepping the same fixed sub-step loop double gameplay speed.
+      if (this.heartbeatWorker) {
+        this.animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
+      // FPS cap: a frame that comes too early is skipped whole.
+      if (!this.framePacer.shouldRun(currentTime)) {
+        this.animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
+      const deltaTime = currentTime - this.lastLoopTime;
+      this.lastLoopTime = currentTime;
+
+      const timing = this.timing;
+      if (timing) {
+        const t0 = performance.now();
+        this.hooks.update(deltaTime);
+        const t1 = performance.now();
+        this.hooks.render();
+        timing.updateMs += t1 - t0;
+        timing.renderMs += performance.now() - t1;
+        timing.frames++;
+      } else {
+        this.hooks.update(deltaTime);
+        this.hooks.render();
+      }
+
+      this.animationFrameId = requestAnimationFrame(animate);
+    };
+
+    this.animationFrameId = requestAnimationFrame(animate);
+    this.syncLoopDriver();
+  }
+
+  /**
+   * Stop the render loop
+   */
+  stop(): void {
+    this.isRunning = false;
+    this.stopHeartbeat();
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  /**
+   * Stop for good, from the engine's dispose(). Also drops the visibility
+   * listener of the background loop, which stop() keeps so that a restarted
+   * loop picks the heartbeat up again.
+   */
+  dispose(): void {
+    for (const reason of [...this.backgroundReasons]) this.setBackgroundLoopEnabled(false, reason);
+    this.stop();
+  }
+
+  /**
+   * Called by the engine's render() after every drawn frame: releases
+   * waitForRenderedFrame() and counts the frame for getFPS().
+   */
+  frameRendered(): void {
+    this.runFrameCallbacks();
+    this.notifyFrameRendered();
+    this.updateFPS();
+  }
+
+  /**
+   * Run `callback` once, synchronously, right after the next drawn frame.
+   *
+   * The renderer keeps no copy of a frame (preserveDrawingBuffer is off), and
+   * the browser may clear the drawing buffer once the frame is presented. A
+   * canvas read for a screenshot has to happen in here, not in a promise
+   * continuation or a later task. Callbacks added while they run wait for the
+   * frame after.
+   */
+  onNextFrameRendered(callback: () => void): void {
+    this.frameCallbacks.push(callback);
+  }
+
+  private runFrameCallbacks(): void {
+    if (this.frameCallbacks.length === 0) return;
+    const callbacks = this.frameCallbacks;
+    this.frameCallbacks = [];
+    for (const callback of callbacks) callback();
+  }
+
+  private updateFPS(): void {
+    this.frameCount++;
+    const now = performance.now();
+    if (now - this.lastFrameTime >= 1000) {
+      this.fps = this.frameCount;
+      this.frameCount = 0;
+      this.lastFrameTime = now;
+    }
+  }
+
+  /**
+   * Time update() and render() of every rAF frame (the perf panel, TODO
+   * E82); off, the loop takes no timer. CPU time on this thread only: what
+   * the GPU does after render() returns is not in it.
+   */
+  setTiming(on: boolean): void {
+    this.timing = on ? { updateMs: 0, renderMs: 0, frames: 0 } : null;
+  }
+
+  /** The sums since the last call, null while timing is off */
+  takeTiming(): FrameTiming | null {
+    const out = this.timing;
+    if (out) this.timing = { updateMs: 0, renderMs: 0, frames: 0 };
+    return out;
+  }
+
+  /**
+   * Get current FPS
+   */
+  getFPS(): number {
+    return this.fps;
+  }
+
+  /**
+   * Resolves after the next frame the loop draws, or after
+   * {@link FRAME_WAIT_TIMEOUT_MS} when none comes. Right away when nothing
+   * draws at all (loop stopped, headless training).
+   */
+  waitForRenderedFrame(): Promise<void> {
+    if (!this.isRunning || !this.hooks.isRendering()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(done, FRAME_WAIT_TIMEOUT_MS);
+      this.frameWaiters.push(done);
+    });
+  }
+
+  /** Someone waits for the next drawn frame (waitForRenderedFrame, onNextFrameRendered) */
+  hasFrameWaiters(): boolean {
+    return this.frameWaiters.length > 0 || this.frameCallbacks.length > 0;
+  }
+
+  /** Releases the waiters of waitForRenderedFrame(). */
+  private notifyFrameRendered(): void {
+    if (this.frameWaiters.length === 0) return;
+    const waiters = this.frameWaiters;
+    this.frameWaiters = [];
+    for (const done of waiters) done();
+  }
+}

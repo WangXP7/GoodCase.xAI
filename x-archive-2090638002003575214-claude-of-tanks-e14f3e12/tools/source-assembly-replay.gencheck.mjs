@@ -1,0 +1,227 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { replaySourceAssembly, prepareRegisteredSourceAssembly } from './source-assembly-replay.mjs';
+import { SUPPLIED_SOURCE_ASSEMBLIES, withAssembledSourceFrames, assembledSourcePath } from './supplied-source-assemblies.mjs';
+import { withOwnerSizeTargets } from './owner-size-targets.ts';
+import { SOURCE_WORLD_FRAMES, AUTHORING_SOURCE_WORLD_FRAMES, validateSourceWorldFrame } from './source-world-registration.mjs';
+import { SUPPLIED_SOURCE_REFERENCE_OVERRIDES } from './supplied-source-reference-overrides.mjs';
+import { GRIFFIN_PROPORTION_REFERENCE } from './griffin-proportion-registration.mjs';
+import { tankSeedId } from '../src/vehicles/tankIdAliases.ts';
+import { recipeMatrix } from './source-x-oracle.mjs';
+
+const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'cot-source-assembly-unit-'));
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+const originalArieteFrame = {
+  sha256: 'fec5f915eb6862ef4b6e3c442355b0ec9dd5df6f1357ec560490e43c84fda08c',
+  fused: true, turret: [0, 1.306227824, .328028885], gun: [0, 1.651499209, 1.3415539],
+};
+function restoreArieteRegistration(frames) {
+  assert.deepEqual(frames.c1_ariete, {
+    ...originalArieteFrame,
+    sha256: '1f33b3966189c876c8e507a57c59def5e6f3a70334d42315e0366911aedb6177',
+    turret: originalArieteFrame.turret.map(v => v * (1.12 * 1.10)),
+    gun: originalArieteFrame.gun.map(v => v * (1.12 * 1.10)),
+  }, 'only the exact owner-directed 1.232 C1 source frame may replace its historical registration');
+  return { ...frames, c1_ariete: structuredClone(originalArieteFrame) };
+}
+function checkArieteRegistrationRecipe() {
+  const originalBytes = fs.readFileSync(path.join(root, 'docs/history/research/second-wave-registrations/ariete_c1_x.json'));
+  const enlargedBytes = fs.readFileSync(path.join(root, 'docs/history/research/second-wave-registrations/ariete_c1_x-enlarged-20260921.json'));
+  assert.equal(sha(originalBytes), '9cf61ecc80ee45152d7a743de8e029d1e0c2688aefba7996be782c32f245fb5d');
+  assert.equal(sha(enlargedBytes), '2fac6ad3b23939e4013002a8b53a1f3128eef16d028498ff5fd486a49694371c');
+  const original = JSON.parse(originalBytes), enlarged = JSON.parse(enlargedBytes);
+  assert.equal(enlarged.ownerRequestedEnlargement, 1.12);
+  assert.equal(enlarged.sourceSha256, original.sourceSha256);
+  assert.deepEqual(enlarged.axes, original.axes);
+  assert.equal(enlarged.scale, original.scale * 1.12);
+  assert.deepEqual(enlarged.translation, original.translation.map(v => v * 1.12));
+  // The registration records are hash-pinned evidence and keep their historical path strings
+  // (the notes moved to docs/history/research/ on 2026-09-23).
+  assert.equal(enlarged.parentRegistration, 'docs/research/second-wave-registrations/ariete_c1_x.json');
+}
+function glb(json, bin) {
+  const text = Buffer.from(JSON.stringify(json));
+  const j = Buffer.concat([text, Buffer.alloc((4 - text.length % 4) % 4, 32)]);
+  const header = Buffer.alloc(20), tail = Buffer.alloc(8);
+  header.writeUInt32LE(0x46546c67); header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(28 + j.length + bin.length, 8);
+  header.writeUInt32LE(j.length, 12); header.writeUInt32LE(0x4e4f534a, 16);
+  tail.writeUInt32LE(bin.length); tail.writeUInt32LE(0x004e4942, 4);
+  return Buffer.concat([header, j, tail, bin]);
+}
+const bytesOf = array => Buffer.from(array.buffer);
+function fixture() {
+  const positions = new Float32Array([-1, 0, 0, 0, 0, 0, -1, 1, 0, 2, 0, 0, 3, 0, 0, 2, 1, 0, 5, 0, 0, 6, 0, 0, 5, 1, 0]);
+  const normals = new Float32Array(Array.from({ length: 9 }, () => [0, 0, 1]).flat());
+  const indices = new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const bin = Buffer.concat([bytesOf(positions), bytesOf(normals), bytesOf(indices)]);
+  const json = {
+    asset: { version: '2.0' }, scenes: [{ nodes: [0] }], scene: 0,
+    nodes: [{ name: 'source_root', children: [1] }, { name: 'source_stock', mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, mode: 4 }] }],
+    buffers: [{ byteLength: 252 }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 108 }, { buffer: 0, byteOffset: 108, byteLength: 108 }, { buffer: 0, byteOffset: 216, byteLength: 36 }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 9, type: 'VEC3', min: [-1, 0, 0], max: [6, 1, 0] },
+      { bufferView: 1, componentType: 5126, count: 9, type: 'VEC3' },
+      { bufferView: 2, componentType: 5125, count: 9, type: 'SCALAR' },
+    ],
+  };
+  const bytes = glb(json, bin);
+  fs.writeFileSync(path.join(temp, 'original.glb'), bytes);
+  const selector = index => {
+    const points = [...positions.slice(index * 9, index * 9 + 9)];
+    const x = [-1, 2, 5][index];
+    return { mesh: 'source_stock', componentIndex: index, weldedPoints: 3, triangles: 1,
+      min: [x, 0, 0], max: [x + 1, 1, 0], center: [x + .5, .5, 0],
+      positionTriangleSha256: sha(bytesOf(new Float64Array(points))) };
+  };
+  // Independently specify the entire expected compacted geometry and buffer layout.
+  const expected = structuredClone(json);
+  expected.meshes[0].primitives[0].attributes = { POSITION: 3, NORMAL: 4 };
+  expected.meshes[0].primitives[0].indices = 5;
+  expected.buffers[0].byteLength = 420;
+  expected.bufferViews.push({ buffer: 0, byteOffset: 252, byteLength: 72 },
+    { buffer: 0, byteOffset: 324, byteLength: 72 }, { buffer: 0, byteOffset: 396, byteLength: 24 });
+  expected.accessors.push(
+    { bufferView: 3, componentType: 5126, count: 6, type: 'VEC3', byteOffset: 0, min: [2.125, 0, -.5], max: [6, 1.25, 0] },
+    { bufferView: 4, componentType: 5126, count: 6, type: 'VEC3', byteOffset: 0 },
+    { bufferView: 5, componentType: 5125, count: 6, type: 'SCALAR', byteOffset: 0 });
+  const finalPositions = new Float32Array([2.125, .25, -.5, 3.125, .25, -.5, 2.125, 1.25, -.5, 5, 0, 0, 6, 0, 0, 5, 1, 0]);
+  const finalNormals = new Float32Array(Array.from({ length: 6 }, () => [0, 0, 1]).flat());
+  const finalIndices = new Uint32Array([0, 1, 2, 3, 4, 5]);
+  const expectedBytes = glb(expected, Buffer.concat([bin, bytesOf(finalPositions), bytesOf(finalNormals), bytesOf(finalIndices)]));
+  return { json, bin, bytes, expectedBytes, selector,
+    recipe: { schemaVersion: 1, id: 'fixture_x', source: { path: 'original.glb', sha256: sha(bytes) },
+      output: { sha256: sha(expectedBytes) }, operations: [
+        { kind: 'remove-components', selectors: [selector(0)] },
+        { kind: 'translate-components', selectors: [selector(1)], translation: [.125, .25, -.5] },
+      ] } };
+}
+try {
+  const f = fixture();
+  const actual = await replaySourceAssembly(f.recipe, { root: temp });
+  assert.deepEqual(actual.bytes, f.expectedBytes, 'literal source geometry, winding, normals and compaction');
+  assert.equal(actual.proof.removedTriangles, 1);
+  assert.equal(actual.proof.movedTriangles, 1);
+  assert.equal(actual.proof.unchanged[0].triangles, 1);
+  assert.deepEqual(fs.readFileSync(path.join(temp, 'original.glb')), f.bytes, 'source never overwritten');
+  for (const [mutate, expected] of [
+    [r => { r.source.sha256 = '0'.repeat(64); }, /original canonical source hash/],
+    [r => { r.operations[0].selectors[0].positionTriangleSha256 = '0'.repeat(64); }, /component selector drift/],
+    [r => { r.operations[0].selectors[0].triangles++; }, /component selector drift/],
+    [r => { r.operations[0].selectors[0].min[0] += .1; }, /component selector drift/],
+    [r => { r.operations[0].selectors[0].componentIndex = 2; }, /component selector drift/],
+    [r => { r.operations[1].selectors.push(r.operations[0].selectors[0]); }, /one operation per component/],
+    [r => { r.operations[1].translation[0] = NaN; }, /finite source translation/],
+    [r => { r.operations[1].translation[0] += .1; }, /assembled output hash/],
+    [r => { r.output.sha256 = '0'.repeat(64); }, /assembled output hash/],
+  ]) {
+    const wrong = structuredClone(f.recipe); mutate(wrong);
+    await assert.rejects(replaySourceAssembly(wrong, { root: temp }), expected);
+  }
+  const matrix = [...IDENTITY]; matrix[12] = .125; matrix[13] = .25; matrix[14] = -.5;
+  const expectedNode = structuredClone(f.json); expectedNode.nodes[1].matrix = matrix;
+  const rigidExpected = glb(expectedNode, f.bin);
+  const rigid = { ...f.recipe, output: { sha256: sha(rigidExpected) }, operations: [{ kind: 'rigid-node-transform',
+    selector: { nodeIndex: 1, nodeName: 'source_stock', meshIndex: 0, originalMatrix: null,
+      triangles: 3, connectedComponents: 3, bounds: { min: [-1, 0, 0], max: [6, 1, 0] },
+      meshDefinitionSha256: sha(Buffer.from(JSON.stringify(f.json.meshes[0]))) }, matrix }] };
+  assert.deepEqual((await replaySourceAssembly(rigid, { root: temp })).bytes, rigidExpected, 'literal node translation preserves every binary byte');
+  for (const [mutate, expected] of [
+    [r => { r.operations[0].selector.nodeName = 'wrong'; }, /node selector/],
+    [r => { r.operations[0].selector.meshDefinitionSha256 = '0'.repeat(64); }, /mesh definition selector/],
+    [r => { r.operations[0].selector.triangles++; }, /node triangle selector/],
+    [r => { r.operations[0].selector.connectedComponents++; }, /node component selector/],
+    [r => { r.operations[0].selector.bounds.max[0] += .1; }, /node bounds selector/],
+    [r => { r.operations[0].matrix[0] = 1.01; }, /rigid orthonormal transform/],
+    [r => { r.operations[0].matrix[0] = -1; }, /proper rigid transform/],
+  ]) {
+    const wrong = structuredClone(rigid); mutate(wrong);
+    await assert.rejects(replaySourceAssembly(wrong, { root: temp }), expected);
+  }
+  // 263 (ztz20-262): the ZTZ-100's '[OD]ZTZ-20 Test-3' certificate (7eeb9852…758f1) is retired with its comparison (the bake
+  // measures the ZTZ-20 family concept and certifies none); every other historical certificate is byte-identical.
+  const legacyIds = ["aft10", "ajax", "amx30b", "amx40", "c1_ariete", "challenger1_mk3", "chieftain5", "chieftain_mk10", "cv90105_tml", "cv90_mk4", "jpz_e100", "k1a1", "kf41_lynx", "kf51_panther", "amx56", "leclerc_xlr", "leo2a5", "leo2a6", "m1a2_abrams_sepv2", "sabra_mk2", "strv122", "t62mv1", "t72b3", "t72b3m_2016", "t72b_1987", "t72bu", "t80u", "t90", "t90a_burlak", "t90a", "t90m", "t90ms_tagil", "t90sm", "type10", "type90", "type96b"];
+  // Raw assembly/hash evidence is immutable; the explicit owner size target
+  // is a separate frame layer, independently asserted against every entry.
+  const legacy = Object.fromEntries(legacyIds.map(id => [id, AUTHORING_SOURCE_WORLD_FRAMES[id]]));
+  assert.deepEqual(SOURCE_WORLD_FRAMES, withOwnerSizeTargets(AUTHORING_SOURCE_WORLD_FRAMES));
+  checkArieteRegistrationRecipe();
+  // The certificate names each vehicle by the id it was issued under (schema 1, tankIdAliases.ts, SSOT 2.19).
+  const certified = (frames) => Object.fromEntries(Object.entries(frames).map(([id, frame]) => [tankSeedId(id), frame]));
+  assert.equal(sha(Buffer.from(JSON.stringify(certified(restoreArieteRegistration(legacy))))), "0e4e8f7e0bd23bc175862e821a8533d16a2a25bac7286e98b71e2d097d81abe5", 'all historical certificates remain exact after reversing only the authenticated C1 enlargement');
+  for (const mutate of [frame => { frame.sha256 = originalArieteFrame.sha256; },
+    frame => { frame.turret[1] += .001; }, frame => { frame.gun[2] *= 1.01; },
+    frame => { frame.fused = false; }]) {
+    const wrong = structuredClone(legacy); mutate(wrong.c1_ariete);
+    assert.throws(() => restoreArieteRegistration(wrong), assert.AssertionError);
+  }
+  assert.equal(SOURCE_WORLD_FRAMES.c2_ariete, undefined,
+    'the new C2 concept must not inherit a whole-model C1 source certificate');
+  for (const [id, assembly] of Object.entries(SUPPLIED_SOURCE_ASSEMBLIES)) {
+    const assembledFrame={ ...assembly.originalFrame, sha256: assembly.sha256 };
+    const currentFrame=withOwnerSizeTargets({[id]:id==='griffin50mm'?GRIFFIN_PROPORTION_REFERENCE.frame:assembledFrame})[id];
+    assert.deepEqual(SOURCE_WORLD_FRAMES[id], currentFrame, 'only approved source transformations');
+    const reference = SUPPLIED_SOURCE_REFERENCE_OVERRIDES[id];
+    assert.equal(reference.glb.path, id==='griffin50mm'?GRIFFIN_PROPORTION_REFERENCE.path:assembly.path);
+    assert.equal(reference.qualityBar, 'exemplar');
+    assert.equal(reference.glb.fixedMount, true);
+    assert.equal(reference.glb.componentMasks, false);
+    assert.equal(reference.glb.paintUntextured, true);
+    const baseline = { [id]: structuredClone(assembly.originalFrame) };
+    const selected = { [id]: assembly };
+    const before = structuredClone(baseline);
+    assert.deepEqual(withAssembledSourceFrames(baseline, selected)[id], assembledFrame);
+    assert.deepEqual(baseline, before, 'original certificate is immutable input');
+    for (const mutate of [r => { r[id].sha256 = '0'.repeat(64); }, r => { r[id].turret[1] += .001; }, r => { r[id].gun[2] += .001; }, r => { r[id].fused = false; }]) {
+      const wrong = structuredClone(baseline); mutate(wrong);
+      assert.throws(() => withAssembledSourceFrames(wrong, selected), /original source certificate changed/);
+    }
+    assert.throws(() => assembledSourcePath(id, '/models/community-candidates/other.glb'), /original source path changed/);
+    const frame = { rootMatrix: IDENTITY, hull: [0, 0, 0], turret: currentFrame.turret, gun: currentFrame.gun };
+    const frames = { procedural: frame, reference: { ...frame, turret: [0, 0, 0], gun: [0, 0, 0] } };
+    assert(validateSourceWorldFrame(SOURCE_WORLD_FRAMES[id], currentFrame.sha256, frames).passed);
+    assert(!validateSourceWorldFrame(SOURCE_WORLD_FRAMES[id], assembly.originalSha256, frames).passed, 'old bytes cannot certify as assembled');
+    const recipePath = path.join(temp, assembly.recipePath);
+    fs.mkdirSync(path.dirname(recipePath), { recursive: true });
+    const recipeBytes = fs.readFileSync(path.join(root, assembly.recipePath));
+    assert.equal(sha(recipeBytes), assembly.recipeSha256);
+    fs.writeFileSync(recipePath, Buffer.concat([recipeBytes, Buffer.from(' ')]));
+    await assert.rejects(prepareRegisteredSourceAssembly(id, { root: temp }), /approved source recipe hash/);
+  }
+  assert.equal(assembledSourcePath('m1a1_abrams_hc', 'unchanged.glb'), 'unchanged.glb');
+  for (const [id, reference] of Object.entries(SUPPLIED_SOURCE_REFERENCE_OVERRIDES)) {
+    // source models keep the file name they were registered under (schema 1, tankIdAliases.ts)
+    if (!SUPPLIED_SOURCE_ASSEMBLIES[id]) assert.equal(reference.glb.path, `/models/community-candidates/${tankSeedId(id)}_source.glb`);
+  }
+  // 267: the Centurion family's certificate is the Strv 81 print's committed recipe replayed (tools/source-x-oracle.mjs
+  // --prepare writes the same bytes each run): the recipe and its bake receipt are pinned, the recipe registers the
+  // pristine download (before the 08-17 whip excision) by a proper rotation and one uniform scale, and the three marks'
+  // certificate is the replay's hash. The historical certificates above stay byte-identical.
+  const centurionRecipeBytes = fs.readFileSync(path.join(root, 'docs/history/research/second-wave-registrations/strv81_x.json'));
+  const centurionReceiptBytes = fs.readFileSync(path.join(root, 'docs/history/research/second-wave-registrations/strv81_x.receipt.json'));
+  assert.equal(sha(centurionRecipeBytes), '86e7104655f96194e2aee9dddb512ccdf0e7ef9de490a24567d096f0b42baaa9', 'the Strv 81 recipe is pinned');
+  assert.equal(sha(centurionReceiptBytes), '777075ce504d60154f3c5d90d9b41a3422607a99ca2bb81aef0da83aa1100a09', 'its bake receipt is pinned');
+  const centurionRecipe = JSON.parse(centurionRecipeBytes), centurionReceipt = JSON.parse(centurionReceiptBytes);
+  assert.equal(recipeMatrix(centurionRecipe).determinant() > 0, true, 'a proper, uniform registration');
+  assert.equal(centurionRecipe.sourceSha256, 'bda892df141aab4ef64879de5be3236a2cfe118fada7a9c38e707076b634765d', 'the pristine download');
+  assert.equal(centurionReceipt.sourceSha256, centurionRecipe.sourceSha256);
+  // object3d-assert-ok: the recipe's and receipt's JSON selector fields (names and arrays), not three.js objects
+  assert.deepEqual([centurionRecipe.includeRoots, centurionRecipe.exactDuplicateMeshes, centurionRecipe.omitIslandsBelowY,
+    centurionRecipe.omitIslandsInside, centurionReceipt.omittedMeshes, centurionReceipt.omittedDetachedIslands],
+    [undefined, undefined, undefined, undefined, [], null], 'the whole print: nothing selected away or trimmed');
+  for (const id of ['centurion3', 'centurion5_2', 'strv81']) {
+    assert.equal(SOURCE_WORLD_FRAMES[id].sha256, centurionReceipt.canonicalSha256, `${id}: certified on the replayed bytes`);
+    assert.equal(SOURCE_WORLD_FRAMES[id].fused, undefined, `${id}: the print's own turret_0 and gun_0`);
+  }
+  console.log('source-assembly-replay: literal component/node fixtures, hash/selector/transform negatives, five source-only references, unchanged legacy datums and the pinned Centurion recipe pass');
+} finally {
+  fs.rmSync(temp, { recursive: true, force: true });
+}

@@ -1,0 +1,226 @@
+<!DOCTYPE html><meta charset=utf-8>
+<title>LittleJS smoke: environment cube maps</title>
+<script src=../../dist/littlejs.js></script>
+<script src=smoke.js></script>
+<pre id=result>PENDING</pre>
+<script>
+'use strict';
+
+// a cube map of six plain faces: the sky box shows the face of each way the camera looks, and a mirror sphere shows
+// the face of each way it reflects, which pins down which pixel of which face is which direction; a rough sphere
+// blurs them together, and with no environment a reflection is the sky's gradient as before
+smokeRun(async ()=>
+{
+    setShowSplashScreen(false);
+    setDebugWatermark(false);
+    setEngineManualStep(true);
+    setCanvasFixedSize(vec2(128));
+    setCanvasClearColor(rgb(0, 0, 0));
+    const faces = {px: [255, 0, 0], nx: [0, 255, 0], py: [0, 0, 255], ny: [255, 255, 0], pz: [255, 0, 255], nz: [0, 255, 255]};
+    let cube, sphere;
+    await engineInit(()=>
+    {
+        new Render3DPlugin;
+        render3D.camera.pos = vec3();
+        render3D.camera.rotation = vec3();
+        // each direction the color of the face it points at most
+        cube = makeCubeMap(16, (d)=>
+        {
+            const ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
+            const c = ax >= ay && ax >= az ? (d.x > 0 ? faces.px : faces.nx) :
+                ay >= az ? (d.y > 0 ? faces.py : faces.ny) : (d.z > 0 ? faces.pz : faces.nz);
+            return rgb(c[0] / 255, c[1] / 255, c[2] / 255);
+        });
+    }, ()=> {}, ()=> {}, ()=> {}, ()=> {});
+
+    // the sky box, looking ahead, up, to the right and back
+    render3D.skyBox = cube;
+    const look = (name, rotation, face)=>
+    {
+        render3D.camera.rotation = rotation;
+        engineStep(1);
+        checkPixel('the sky box looking ' + name + ' shows that face', .5, .5, [...faces[face], 255], 8);
+    };
+    look('ahead, -z', vec3(), 'nz');
+    look('up, +y', vec3(Math.PI / 2, 0, 0), 'py');
+    look('right, +x', vec3(0, -Math.PI / 2, 0), 'px');
+    look('back, +z', vec3(0, Math.PI, 0), 'pz');
+    // the sky box goes by the camera's turn alone, so far out it is as sharp as at the origin
+    render3D.camera.pos = vec3(1e6, 0, 1e6);
+    look('ahead from a million units out', vec3(), 'nz');
+    look('up from a million units out', vec3(Math.PI / 2, 0, 0), 'py');
+    render3D.camera.pos = vec3();
+    render3D.skyBox = undefined;
+    render3D.camera.rotation = vec3();
+
+    // a mirror sphere five ahead: its middle reflects straight back, toward +z; a point whose normal is (0, .8, .6)
+    // reflects the view mostly up, (0, .96, -.28)
+    render3D.environment = cube;
+    sphere = new EngineObject3D(vec3(0, 0, -5), buildSphere(2, 48, 24, true), undefined, BLACK);
+    sphere.reflectivity = 1;
+    sphere.shininess = 1e4;
+    engineStep(1);
+    checkPixel('a mirror sphere\'s middle reflects the face behind the camera', .5, .5, [...faces.pz, 255], 12);
+    const upper = render3D.worldToScreen(vec3(0, .8, -4.4));
+    const at = [upper.x / mainCanvasSize.x, 1 - upper.y / mainCanvasSize.y];
+    checkPixel('higher up it reflects the face above', at[0], at[1], [...faces.py, 255], 12);
+
+    // a cube whose face behind the camera is black and white stripes: sharp, the middle is one stripe; rough, the
+    // mipmaps blur the stripes to gray
+    render3D.environment = makeCubeMap(16, (d)=> d.z > Math.abs(d.x) && d.z > Math.abs(d.y) ?
+        ((d.x / d.z + 1) * 4 + .5 & 1 ? WHITE : BLACK) : GRAY);
+    engineStep(1);
+    const sharp = smokePixel(.5, .5);
+    sphere.shininess = 1;
+    engineStep(1);
+    const rough = smokePixel(.5, .5);
+    check('a rough sphere blurs what a sharp one reflects', (sharp[0] < 20 || sharp[0] > 235) && rough[0] > 60 &&
+        rough[0] < 200, {sharp, rough});
+    sphere.shininess = 1e4;
+
+    // a mirror a few pixels across turns its reflection a long way from one pixel to the next, so it reads the blur
+    // of what those pixels cover, gray, where reading the sharp stripes made it sparkle black or white as it moved
+    render3D.environment = makeCubeMap(64, (d)=> (d.x + d.y * 1.3 + d.z * .7) * 5 + 100 & 1 ? WHITE : BLACK);
+    sphere.pos3D = vec3(0, 0, -60);
+    engineStep(1);
+    const far = smokePixel(.5, .5);
+    check('a small far mirror reads the blur of what a pixel covers', far[0] > 50 && far[0] < 205, far);
+    sphere.pos3D = vec3(0, 0, -5);
+    render3D.environment = undefined;
+    engineStep(1);
+    const plain = smokePixel(.5, .5);
+    check('with no environment it reflects the sky\'s colors as before',
+        !smokeNear(plain, [...faces.pz, 255], 40) && plain[0] + plain[1] + plain[2] > 60, plain); // drawn, not the face
+    sphere.destroy();
+
+    // six images loaded by url, each a face's color with a white top left quarter, as a sky box set is drawn: each
+    // face is seen from inside looking at it as the image shows, upright and not mirrored, as three.js shows it;
+    // images of other sizes are refused
+    const image = (color, size=16)=>
+    {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = size;
+        const c = canvas.getContext('2d');
+        c.fillStyle = `rgb(${color})`;
+        c.fillRect(0, 0, size, size);
+        c.fillStyle = '#fff';
+        c.fillRect(0, 0, size / 2, size / 2);
+        return canvas.toDataURL();
+    };
+    const urls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'].map((face)=> image(faces[face]));
+    render3D.skyBox = await loadCubeMap(urls);
+    engineStep(1);
+    checkPixel('a loaded -z face shows ahead', .6, .3, [...faces.nz, 255], 8);
+    checkPixel('its top left is above and to the left', .4, .7, [255, 255, 255, 255], 8);
+    // a set is a left handed world made right handed as three.js makes it, by turning x around: its front, pz, is at
+    // +z, and its right, px, at -x, to the right of the front
+    render3D.camera.rotation = vec3(0, Math.PI / 2, 0);
+    engineStep(1);
+    checkPixel('the +x image shows looking toward -x', .6, .3, [...faces.px, 255], 8);
+    checkPixel('the same way round', .4, .7, [255, 255, 255, 255], 8);
+    render3D.camera.rotation = vec3();
+    const wrong = await loadCubeMap([...urls.slice(0, 5), image(faces.nz, 8)]).then(()=> 'loaded', (e)=> e.message);
+    check('six images not all one size are refused', /square images of one size/.test(wrong), wrong);
+    const missing = await loadCubeMap([...urls.slice(0, 5), 'missing.png']).then(()=> 'loaded', (e)=> e.message);
+    check('an image that does not load says which', /missing\.png/.test(missing), missing);
+    render3D.skyBox = undefined;
+
+    // a capture: six glowing walls in the face colors around the origin and two markers, one on the right of the
+    // wall ahead and one on the ceiling toward +z, with a mirror sphere at the origin reflecting the cube map being
+    // drawn; the capture is then the sky box with the walls gone, and must show the same walls the same way up
+    const walls = [], wall = (pos, scale, color)=>
+    {
+        const o = new EngineObject3D(pos, render3D.boxMesh, undefined, rgb(...color.map((c)=> c / 255)));
+        o.scale3D = scale;
+        o.emissive = 1;
+        walls.push(o);
+    };
+    const marker = [255, 128, 0];
+    wall(vec3(5, 0, 0), vec3(.2, 10, 10), faces.px);
+    wall(vec3(-5, 0, 0), vec3(.2, 10, 10), faces.nx);
+    wall(vec3(0, 5, 0), vec3(10, .2, 10), faces.py);
+    wall(vec3(0, -5, 0), vec3(10, .2, 10), faces.ny);
+    wall(vec3(0, 0, 5), vec3(10, 10, .2), faces.pz);
+    wall(vec3(0, 0, -5), vec3(10, 10, .2), faces.nz);
+    wall(vec3(1.5, 0, -4.75), vec3(1, 1, .2), marker);
+    wall(vec3(0, 4.75, 1.5), vec3(1, .2, 1), marker);
+    // a sprite ahead, white over orange, which faces the capture as it would a camera, and must stay upright
+    const spriteCanvas = document.createElement('canvas');
+    spriteCanvas.width = spriteCanvas.height = 8;
+    const spriteContext = spriteCanvas.getContext('2d');
+    spriteContext.fillStyle = '#fff';
+    spriteContext.fillRect(0, 0, 8, 4);
+    spriteContext.fillStyle = 'rgb(255,128,0)';
+    spriteContext.fillRect(0, 4, 8, 4);
+    const sprite = new EngineObject3D(vec3(-2, 0, -4), undefined, new TextureInfo(spriteCanvas));
+    sprite.size3D = vec3(2);
+    sprite.emissive = 1; // its own colors, which way up it is is what is checked
+    walls.push(sprite);
+    const mirror = new EngineObject3D(vec3(), buildSphere(1, 24, 12, true), undefined, BLACK);
+    mirror.reflectivity = 1;
+    const captured = new CubeMap(64);
+    render3D.environment = captured;
+    captured.capture(vec3());
+    engineStep(1);
+    walls.forEach((o)=> o.destroy());
+    mirror.destroy();
+    render3D.environment = undefined;
+    render3D.skyBox = captured;
+    look('ahead, -z, captured,', vec3(), 'nz');
+    look('up, +y, captured,', vec3(Math.PI / 2, 0, 0), 'py');
+    look('right, +x, captured,', vec3(0, -Math.PI / 2, 0), 'px');
+    look('down, -y, captured,', vec3(-Math.PI / 2, 0, 0), 'ny');
+    render3D.camera.rotation = vec3();
+    engineStep(1);
+    checkPixel('a capture keeps right on the right', .76, .5, [...marker, 255], 12);
+    const spriteAt = (y)=> { const p = render3D.worldToScreen(vec3(-2, y, -4));
+        return [p.x / mainCanvasSize.x, 1 - p.y / mainCanvasSize.y]; };
+    checkPixel('a sprite in a capture keeps its top up', ...spriteAt(.5), [255, 255, 255, 255], 12);
+    checkPixel('and its bottom down', ...spriteAt(-.5), [255, 128, 0, 255], 12);
+    render3D.camera.rotation = vec3(Math.PI / 2, 0, 0);
+    engineStep(1);
+    checkPixel('a capture keeps its ceiling the right way round', .5, .77, [...marker, 255], 12);
+    render3D.skyBox = undefined;
+    render3D.camera.rotation = vec3();
+
+    // an orthographic camera may have its near plane behind it; a capture keeps its own in front
+    render3D.camera.orthographic = 10;
+    render3D.camera.near = -20;
+    const orthographic = new CubeMap(8);
+    orthographic.capture(vec3());
+    engineStep(1);
+    check('an orthographic camera can capture', !render3D.cubeCaptures.size && !!orthographic.glTexture);
+    render3D.camera.orthographic = 0;
+    render3D.camera.near = .1;
+
+    // a capture asked for bigger than the device makes is drawn at the largest it can, as the shadow map falls back;
+    // the device says 64 here, so the test does not ask for gigabytes
+    const huge = new CubeMap(1e5), getParameter = glContext.getParameter;
+    glContext.getParameter = function(name)
+    { return name === this.MAX_CUBE_MAP_TEXTURE_SIZE ? 64 : getParameter.call(this, name); };
+    huge.capture(vec3());
+    try { engineStep(1); }
+    finally { glContext.getParameter = getParameter; }
+    check('a capture too big falls back to the largest size there is', huge.size === 64 && !!huge.glTexture, huge.size);
+    checkGLError();
+    huge.dispose();
+
+    // two mirror spheres, the left one with an environment of its own, a plain red one; the right one reflects the
+    // scene's as before
+    render3D.environment = cube;
+    const pair = [-1.2, 1.2].map((x)=>
+    {
+        const o = new EngineObject3D(vec3(x, 0, -5), buildSphere(2, 32, 16, true), undefined, BLACK);
+        o.reflectivity = 1;
+        o.shininess = 1e4;
+        return o;
+    });
+    pair[0].environment = makeCubeMap(4, ()=> rgb(1, 0, 0));
+    engineStep(1);
+    checkPixel('an object reflects its own environment', .29, .5, [255, 0, 0, 255], 12);
+    checkPixel('and one with none the scene\'s', .71, .5, [...faces.pz, 255], 12);
+    pair.forEach((o)=> o.destroy());
+    render3D.environment = undefined;
+    checkGLError();
+});
+</script>

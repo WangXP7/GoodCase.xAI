@@ -1,0 +1,31 @@
+<!-- PASSIVE BUILDING section (Missile Silo) -->
+<h2 class="td-side-head">
+  <span class="td-side-name" [class.is-armed]="sellArmed()" aria-live="polite">
+    {{ sellArmed() ? 'Click again to sell' : tower().typeConfig.name }}
+  </span>
+  @if (sellValue() > 0) {
+    <button class="td-btn-danger td-btn-sm"
+            [class.is-armed]="sellArmed()"
+            aria-keyshortcuts="Delete"
+            [matTooltip]="sellArmed() ? 'Click again to sell for ' + sellValue() + ' credits' : 'Sell: refunds 75% of its cost'"
+            matTooltipPosition="left"
+            [attr.aria-label]="(sellArmed() ? 'Confirm: sell for ' : 'Sell for ') + sellValue() + ' credits'"
+            (click)="onSell()">
+      Sell <span class="td-num">{{ sellValue() }}</span>
+    </button>
+  }
+</h2>
+@if (tower().typeConfig.description; as description) {
+  <p class="td-text">{{ description }}</p>
+}
+<div class="td-rows">
+  @for (ability of abilities(); track ability.id) {
+    <div class="td-row">
+      <span class="td-inline">
+        <span class="td-name">{{ ability.name }}</span>
+        <kbd class="td-kbd" aria-hidden="true">{{ ability.hotkey }}</kbd>
+      </span>
+      <span class="td-note">{{ ability.status }}</span>
+    </div>
+  }
+</div>

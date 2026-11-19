@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/winchxyz/tria-prima",
+  "commit": "acce14089aeee01f3225a09a3a8a9532612359fb",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 181,
+  "bytes": 6988301
+}

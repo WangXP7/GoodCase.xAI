@@ -1,0 +1,61 @@
+// Layout of the event bus window: category segments, the counts and tools,
+// the log scrolling below. Each line marked in its category's colour.
+
+.event-debug-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.filter-row {
+  flex-wrap: wrap;
+}
+
+.stats-row {
+  gap: 12px;
+}
+
+.clear-btn {
+  margin-left: auto;
+}
+
+.event-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  gap: 2px;
+}
+
+.event-entry {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 0;
+  padding: 3px 6px;
+
+  // The event's kind in the colour of its name
+  &.enemy { --event-tone: var(--td-health-red); }
+  &.tower { --event-tone: var(--td-teal); }
+  &.wave { --event-tone: var(--td-brass); }
+  &.game { --event-tone: var(--td-green); }
+  &.vfx { --event-tone: var(--td-event-vfx); }
+  &.audio { --event-tone: var(--td-event-audio); }
+
+  .time {
+    flex-shrink: 0;
+    min-width: 50px;
+  }
+
+  .type {
+    flex-shrink: 0;
+    min-width: 120px;
+    color: var(--event-tone, inherit);
+  }
+
+  }
+
+.empty-state {
+  padding: 20px;
+  text-align: center;
+}

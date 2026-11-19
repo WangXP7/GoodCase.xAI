@@ -1,0 +1,70 @@
+// Layout of the loading plate: place and percent in the head, the bar, the
+// step line, the list of steps. The look comes from the td-* classes.
+
+:host {
+  display: block;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+}
+
+.ml-plate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 14px;
+}
+
+.ml-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--td-sp-3);
+}
+
+.ml-step {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--td-sp-3);
+}
+
+.ml-step-count {
+  flex: 0 0 auto;
+}
+
+// The tiles' thin bar and count on one line
+.ml-tiles {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--td-sp-3);
+}
+
+.ml-toggle {
+  align-self: flex-start;
+}
+
+.ml-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.ml-steps-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: var(--td-sp-2);
+}
+
+.ml-done {
+  color: var(--td-text-secondary);
+}
+
+.ml-current {
+  color: var(--td-brass-light);
+}
+
+.ml-problem p {
+  margin: 0;
+}

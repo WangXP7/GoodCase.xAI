@@ -1,0 +1,420 @@
+{
+  "updatedAt": "2026-06-25T01:00:00Z",
+  "wave": "WAVE 2",
+  "waveDeadline": "2026-06-29T23:59:00Z",
+  "headline": "ECONOMY LIVE ON PROD, GATED behind tinyverse access (owner: 'do everything to live just keep it behind the tinyverse which only I can get to'). Public site intact; economy 401/403 for non-owners. Stripe inert until keys.",
+  "launchGate": "Owner directed a gated dark launch: full economy merged to main + live on tiny-world-builder.netlify.app, reachable only by the tinyverse-access allowlist (requireTinyverseAccess 403s non-owners). Verified on prod. To go FULLY public: relax the gate. Stripe (P1) needs keys; tweets need X keys; no autonomous cron (owner hasn't said yes).",
+  "stats": {
+    "featuresShipped": 7,
+    "featuresInProgress": 0,
+    "featuresQueued": 2,
+    "featuresHeld": 8,
+    "prsOpen": 0,
+    "prsMerged": 9,
+    "newsPosts": 3,
+    "tweets": 0
+  },
+  "pipeline": [
+    {
+      "id": "ANNOUNCE",
+      "title": "Announce the autonomous production line",
+      "priority": 0,
+      "stage": "shipped",
+      "model": "haiku",
+      "status": "shipped",
+      "pr": 73,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T08:48:30Z"
+    },
+    {
+      "id": "T3a",
+      "title": "Home featured-worlds carousel + auto-latest-news teaser (public)",
+      "priority": 2,
+      "stage": "shipped",
+      "model": "sonnet",
+      "status": "shipped",
+      "pr": 75,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T10:05:00Z"
+    },
+    {
+      "id": "T3b",
+      "title": "Public featured-worlds gallery page (/featured)",
+      "priority": 2,
+      "stage": "shipped",
+      "model": "sonnet",
+      "status": "shipped",
+      "pr": 77,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T11:00:00Z"
+    },
+    {
+      "id": "E1",
+      "title": "Wire live $TINYWORLD SPL balance into GOLD allowance",
+      "priority": 1,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 74,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T09:05:00Z"
+    },
+    {
+      "id": "E2",
+      "title": "Weekly holdings-based GOLD payout (admin dry-run, idempotent)",
+      "priority": 1,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 78,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T11:45:00Z"
+    },
+    {
+      "id": "E3",
+      "title": "Server-authoritative GOLD-spend endpoint (race-safe, idempotent)",
+      "priority": 1,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 82,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T13:55:00Z"
+    },
+    {
+      "id": "EC1",
+      "title": "Earned GOLD (Coins) ledger + atomic credit/debit/transfer",
+      "priority": 1,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 84,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T15:30:00Z"
+    },
+    {
+      "id": "E4",
+      "title": "Fix goldEvents loop-nesting bug in world-resources",
+      "priority": 1,
+      "stage": "queued",
+      "model": "haiku",
+      "status": "queued",
+      "pr": null,
+      "mood": "idle",
+      "updatedAt": "2026-06-24T03:30:00Z"
+    },
+    {
+      "id": "T1",
+      "title": "World-template schema + remix/duplicate action",
+      "priority": 2,
+      "stage": "queued",
+      "model": "sonnet",
+      "status": "queued",
+      "pr": null,
+      "mood": "idle",
+      "updatedAt": "2026-06-24T03:30:00Z"
+    },
+    {
+      "id": "T2",
+      "title": "Template paid-remix (Earned GOLD, atomic, author payout)",
+      "priority": 2,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 85,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T16:30:00Z"
+    },
+    {
+      "id": "T3",
+      "title": "Templates listing API + home-screen carousel",
+      "priority": 2,
+      "stage": "queued",
+      "model": "sonnet",
+      "status": "queued",
+      "pr": null,
+      "mood": "idle",
+      "updatedAt": "2026-06-24T03:30:00Z"
+    },
+    {
+      "id": "G1",
+      "title": "Referral rewards (earned-on-verified-action, anti-Sybil)",
+      "priority": 3,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 86,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T17:30:00Z"
+    },
+    {
+      "id": "G1b",
+      "title": "Rewards page UI (Earned GOLD balance + referral share)",
+      "priority": 3,
+      "stage": "pr",
+      "model": "sonnet",
+      "status": "held",
+      "pr": 88,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T19:00:00Z"
+    },
+    {
+      "id": "G2",
+      "title": "Top-builders leaderboard API + page",
+      "priority": 3,
+      "stage": "shipped",
+      "model": "sonnet",
+      "status": "shipped",
+      "pr": 80,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T12:25:00Z"
+    },
+    {
+      "id": "G3",
+      "title": "Achievements + pixel badges showcase (/badges)",
+      "priority": 3,
+      "stage": "shipped",
+      "model": "sonnet",
+      "status": "shipped",
+      "pr": 81,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T13:05:00Z"
+    },
+    {
+      "id": "G4",
+      "title": "Public builder profile page (/builder) — worlds + badges",
+      "priority": 3,
+      "stage": "shipped",
+      "model": "sonnet",
+      "status": "shipped",
+      "pr": 83,
+      "mood": "wave",
+      "updatedAt": "2026-06-24T14:30:00Z"
+    },
+    {
+      "id": "P1",
+      "title": "Stripe integration (buy GOLD packs / premium)",
+      "priority": 4,
+      "stage": "blocked",
+      "model": "sonnet",
+      "status": "blocked",
+      "pr": null,
+      "mood": "sad",
+      "updatedAt": "2026-06-24T03:30:00Z"
+    },
+    {
+      "id": "AI1",
+      "title": "Paid AI generation (metered in Earned GOLD, OpenRouter)",
+      "priority": 4,
+      "stage": "pr",
+      "model": "opus",
+      "status": "held",
+      "pr": 89,
+      "mood": "sit",
+      "updatedAt": "2026-06-24T20:00:00Z"
+    }
+  ],
+  "feed": [
+    {
+      "ts": "2026-11-19T01:18:58.725Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-19T01-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-19T00:38:50.038Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-19T00-38-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T23:18:47.039Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T23-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T22:18:51.767Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T22-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T21:18:57.041Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T21-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T20:19:16.523Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T20-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T19:18:40.829Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T19-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T18:19:55.064Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T18-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T17:18:30.908Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T17-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T16:18:41.671Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T16-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T15:18:33.078Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T15-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T14:19:41.206Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T14-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T13:19:12.125Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T13-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T12:24:16.530Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T12-24-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T11:18:38.664Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T11-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T10:19:17.352Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T10-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T09:20:27.509Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T09-20-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T08:22:54.602Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T08-22-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T07:20:01.647Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T07-20-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T06:27:58.943Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T06-27-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T05:19:18.401Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T05-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T04:20:53.901Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T04-20-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T03:21:23.363Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T03-21-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T02:23:25.446Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T02-23-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T01:19:20.968Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T01-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-18T00:39:08.032Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-18T00-39-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T23:18:36.976Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T23-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T22:18:28.650Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T22-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T21:18:39.898Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T21-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T20:19:26.111Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T20-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T19:18:52.818Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T19-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T18:21:48.604Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T18-21-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T17:18:54.086Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T17-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T16:21:12.238Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T16-21-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T15:19:18.312Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T15-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T14:19:31.352Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T14-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T13:19:24.543Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T13-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T12:24:25.095Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T12-24-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T11:18:57.471Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T11-18-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
+      "ts": "2026-11-17T10:19:32.223Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-11-17T10-19-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    }
+  ],
+  "lastTick": "2026-11-19T01:18:58.725Z"
+}

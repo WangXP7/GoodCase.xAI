@@ -1,0 +1,379 @@
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { WebGLBindingStates } from 'three/src/renderers/webgl/WebGLBindingStates.js';
+import { createGarageWorkshopTransfer } from './garageWorkshopTransfer.ts';
+import { TANK_SPECS } from '../vehicles/specs.ts';
+
+const attribute = (array, itemSize, normalized = false) => ({ array, itemSize, normalized });
+
+function instanceMatrices(count) {
+  const array = new Float32Array(count * 16);
+  for (let i = 0; i < count; i++) new THREE.Matrix4().makeTranslation(i, i / 2, -i).toArray(array, i * 16);
+  return attribute(array, 16);
+}
+
+function wireGeometry(vertexCount, indexed = false) {
+  return {
+    attributes: {
+      position: attribute(new Float32Array(vertexCount * 3).fill(0.25), 3),
+      normal: attribute(new Float32Array(vertexCount * 3).fill(0.5), 3),
+    },
+    index: indexed ? attribute(new Uint16Array([0, 1, 2, 0, 2, 3]), 1) : null,
+    groups: [], drawRange: { start: 0, count: Infinity },
+    boundingBox: [-1, -1, -1, 1, 1, 1], boundingSphere: [0, 0, 0, 2],
+  };
+}
+
+function wireNode(kind, name, overrides = {}) {
+  return {
+    kind, name, position: [1, 2, 3], quaternion: [0, 0, 0, 1], scale: [1, 1, 1],
+    visible: true, matrixAutoUpdate: false, renderOrder: 0, userData: {},
+    geometry: null, materials: [], count: 0, instanceMatrix: null, instanceColor: null,
+    parentIndex: -1, lodDistance: null, lodHysteresis: null, ...overrides,
+  };
+}
+
+function fixture() {
+  const first = wireNode('instanced', 'transferred-running-gear', {
+    parentIndex: 0, geometry: 0, materials: [0], count: 14,
+    instanceMatrix: instanceMatrices(14),
+    instanceColor: attribute(Float32Array.from({ length: 42 }, (_, i) => i / 42), 3, true),
+  });
+  const second = wireNode('instanced', 'transferred-indexed-gear', {
+    parentIndex: 0, geometry: 1, materials: [0], count: 2,
+    instanceMatrix: instanceMatrices(2),
+  });
+  const packed = wireNode('instanced', 'gearRoadWheelDiscs', {
+    parentIndex: 0, geometry: 1, materials: [2], count: 2,
+    instanceMatrix: instanceMatrices(2),
+    instanceColor: attribute(new Uint8Array([255, 0, 0, 0, 255, 0]), 3, true),
+  });
+  return {
+    geometries: [wireGeometry(888), wireGeometry(4, true)],
+    nodes: [wireNode('group', 'worker-exhibit'), first, second,
+      wireNode('mesh', 'unclassified-part', { parentIndex: 0, geometry: 0, materials: [1] }), packed,
+      // garage r9 (the T-90M glare): a suit's net and a jerrycan stack whose paint lived in vertex colours the wire omits
+      wireNode('mesh', 't90m_ghillie_turret_net', { parentIndex: 0, geometry: 0, materials: [3] }),
+      wireNode('mesh', 'decor_hull_cans', { parentIndex: 0, geometry: 0, materials: [4] })],
+    materials: [
+      { name: 'factory-paint', role: 'armorPaint', color: 0x445544, roughness: 0.8,
+        metalness: 0.1, opacity: 1, transparent: false, side: THREE.FrontSide, depthWrite: true },
+      { name: 'unknown-finish', role: '', color: 0x778899, roughness: 0.7,
+        metalness: 0.2, opacity: 1, transparent: false, side: THREE.DoubleSide, depthWrite: true },
+      { name: 'wheel', role: 'wheelPaint', color: 0xffffff,
+        opacity: 1, transparent: false, side: THREE.FrontSide, depthWrite: true },
+      { name: '', role: '', color: 0xffffff, roughness: 1, metalness: 0,
+        opacity: 1, transparent: false, side: THREE.DoubleSide, depthWrite: true },
+      { name: '', role: '', color: 0xffffff, roughness: 0.82, metalness: 0.07,
+        opacity: 1, transparent: false, side: THREE.FrontSide, depthWrite: true },
+    ],
+    payload: { attributeBytes: 22_746, omittedAttributeBytes: 0, omittedAttributeCount: 0 },
+  };
+}
+
+// The production public transfer receives the same begin/geometries/nodes/
+// complete message shape as the real module worker. No private code extraction
+// or replacement of Three's attribute/binding implementation is involved.
+const workers = [];
+class FixtureWorker {
+  constructor(url, options) {
+    assert.ok(url.pathname.endsWith('/garageWorkshopGeometryWorker.ts'));
+    assert.deepEqual(options, { type: 'module', name: 'cot-garage-workshop-geometry' });
+    this.requests = [];
+    this.fixtures = [];
+    this.terminations = 0;
+    workers.push(this);
+  }
+  postMessage(request) {
+    this.requests.push(request);
+    // (improve-271, plan 031) a worker that holds its answer, or fails on this request
+    if (FixtureWorker.mode === 'silent') return;
+    if (FixtureWorker.mode === 'error') { queueMicrotask(() => this.onerror?.({ message: 'fixture worker crashed' })); return; }
+    const wire = fixture();
+    this.fixtures.push(wire);
+    queueMicrotask(() => {
+      const emit = (data) => this.onmessage({ data: { ok: true, requestId: request.requestId, ...data } });
+      emit({ kind: 'begin', specId: request.specId, buildMs: 12, materials: wire.materials,
+        geometryCount: wire.geometries.length, nodeCount: wire.nodes.length, payload: wire.payload });
+      // Distinct chunks exercise accumulation as well as final completeness.
+      for (const geometry of wire.geometries) emit({ kind: 'geometries', geometries: [geometry] });
+      for (const node of wire.nodes) emit({ kind: 'nodes', nodes: [node] });
+      emit({ kind: 'complete' });
+    });
+  }
+  terminate() { this.terminations++; }
+}
+FixtureWorker.mode = 'answer';
+
+function inspectNativeBindings(mesh) {
+  const bindings = new Map();
+  const divisors = new Map();
+  let arrayBuffer;
+  const gl = {
+    MAX_VERTEX_ATTRIBS: 0x8869, ARRAY_BUFFER: 0x8892, ELEMENT_ARRAY_BUFFER: 0x8893,
+    FLOAT: 0x1406, INT: 0x1404, UNSIGNED_INT: 0x1405, UNSIGNED_BYTE: 0x1401,
+    getParameter: () => 16,
+    createVertexArray: () => ({}), bindVertexArray() {}, deleteVertexArray() {},
+    enableVertexAttribArray() {}, disableVertexAttribArray() {},
+    vertexAttribDivisor: (location, divisor) => divisors.set(location, divisor),
+    bindBuffer(target, buffer) { if (target === this.ARRAY_BUFFER) arrayBuffer = buffer; },
+    vertexAttribPointer(location, size, type, normalized, stride, offset) {
+      bindings.set(location, { size, type, normalized, stride, offset, array: arrayBuffer });
+    },
+  };
+  const attributes = {
+    get: attr => ({ buffer: attr.array,
+      type: attr.array instanceof Uint8Array ? gl.UNSIGNED_BYTE : gl.FLOAT,
+      bytesPerElement: attr.array.BYTES_PER_ELEMENT }),
+    update() {},
+  };
+  const programAttributes = {
+    position: { location: 0, locationSize: 1 }, normal: { location: 1, locationSize: 1 },
+    instanceMatrix: { location: 2, locationSize: 4 },
+  };
+  if (mesh.instanceColor) programAttributes.instanceColor = { location: 6, locationSize: 1 };
+  const state = WebGLBindingStates(gl, attributes);
+  try {
+    state.setup(mesh, mesh.material, { id: 1, getAttributes: () => programAttributes },
+      mesh.geometry, mesh.geometry.index);
+  } finally { state.dispose(); }
+  return { bindings, divisor: location => divisors.get(location) ?? 0 };
+}
+
+function verifyTransferredAttributes(visual, wire) {
+  const [first, second, ordinary, packed] = visual.root.children;
+  assert.ok(first.geometry === ordinary.geometry, 'shared wire geometry stays shared within its visual');
+  assert.ok(first.material === second.material, 'native palette identity remains shared');
+  for (const [mesh, node] of [[first, wire.nodes[1]], [second, wire.nodes[2]], [packed, wire.nodes[4]]]) {
+    assert.ok(mesh instanceof THREE.InstancedMesh);
+    assert.equal(mesh.count, node.count);
+    assert.ok(mesh.instanceMatrix instanceof THREE.InstancedBufferAttribute);
+    assert.equal(mesh.instanceMatrix.isInstancedBufferAttribute, true);
+    assert.equal(mesh.instanceMatrix.meshPerAttribute, 1);
+    assert.equal(mesh.instanceMatrix.count, node.count);
+    assert.equal(mesh.instanceMatrix.itemSize, 16);
+    assert.equal(mesh.instanceMatrix.normalized, false);
+    assert.equal(mesh.instanceMatrix.array, node.instanceMatrix.array, 'transfer adds no matrix copy');
+    assert.deepEqual(mesh.instanceMatrix.array, instanceMatrices(node.count).array,
+      'every authored instance transform survives reconstruction');
+    const restoredMatrix = new THREE.Matrix4();
+    mesh.getMatrixAt(1, restoredMatrix);
+    assert.deepEqual(restoredMatrix.elements, new THREE.Matrix4().makeTranslation(1, 0.5, -1).elements);
+    assert.deepEqual(mesh.position.toArray(), node.position);
+    for (const [name, source] of Object.entries(wire.geometries[node.geometry].attributes)) {
+      const attr = mesh.geometry.getAttribute(name);
+      assert.equal(attr.array, source.array, `${name} retains transferred array ownership`);
+      assert.equal(attr.isInstancedBufferAttribute, undefined, `${name} remains per-vertex`);
+      assert.equal(attr.itemSize, source.itemSize);
+      assert.equal(attr.normalized, source.normalized);
+    }
+    const native = inspectNativeBindings(mesh);
+    assert.equal(native.divisor(0), 0);
+    assert.equal(native.divisor(1), 0);
+    for (let column = 0; column < 4; column++) {
+      const location = column + 2;
+      assert.equal(native.divisor(location), 1, 'installed Three advances every matrix column per instance');
+      const binding = native.bindings.get(location);
+      assert.equal(binding.array, node.instanceMatrix.array);
+      assert.equal(binding.stride, 64);
+      assert.equal(binding.offset, column * 16);
+      const lastRequiredByte = binding.offset + (mesh.count - 1) * binding.stride + binding.size * 4;
+      assert.ok(lastRequiredByte <= binding.array.byteLength, 'last instance fits the exact transferred storage');
+    }
+  }
+  assert.equal(first.instanceColor.array, wire.nodes[1].instanceColor.array, 'transfer adds no color copy');
+  assert.equal(first.instanceColor.itemSize, 3);
+  assert.equal(first.instanceColor.count, first.count);
+  assert.equal(first.instanceColor.normalized, true);
+  assert.deepEqual(first.instanceColor.array, Float32Array.from({ length: 42 }, (_, i) => i / 42));
+  assert.equal(first.instanceColor.meshPerAttribute, 1);
+  assert.equal(inspectNativeBindings(first).divisor(6), 1, 'installed Three advances color per instance');
+  assert.ok(packed.instanceColor instanceof THREE.InstancedBufferAttribute);
+  assert.equal(packed.instanceColor.isInstancedBufferAttribute, true);
+  assert.equal(packed.instanceColor.array, wire.nodes[4].instanceColor.array, 'packed colors retain their exact buffer');
+  assert.deepEqual(packed.instanceColor.array, new Uint8Array([255, 0, 0, 0, 255, 0]));
+  assert.equal(packed.instanceColor.normalized, true, 'integer wire normalization survives reconstruction');
+  assert.equal(packed.instanceColor.itemSize, 3);
+  assert.equal(packed.instanceColor.count, packed.count);
+  assert.equal(packed.instanceColor.meshPerAttribute, 1);
+  const packedBindings = inspectNativeBindings(packed);
+  assert.equal(packedBindings.divisor(6), 1);
+  assert.equal(packedBindings.bindings.get(6).type, 0x1401, 'packed colors bind as unsigned bytes');
+  assert.equal(packedBindings.bindings.get(6).normalized, true);
+  const clone = packed.clone();
+  assert.equal(clone.instanceMatrix.isInstancedBufferAttribute, true, 'cloned gear keeps instanced matrices');
+  assert.equal(clone.instanceColor.isInstancedBufferAttribute, true, 'cloned gear keeps instanced colors');
+  assert.equal(clone.instanceColor.normalized, true);
+  clone.dispose();
+  assert.ok(second.instanceColor === null, 'an absent color must not allocate an attribute');
+  assert.equal(second.geometry.index.array, wire.geometries[1].index.array);
+  assert.equal(first.geometry.getAttribute('position').count, 888);
+  assert.equal(first.instanceMatrix.array.byteLength, 14 * 64);
+  assert.equal(visual.root.userData.workshopTransferPayload, wire.payload);
+  const geometryBytes = wire.geometries.reduce((sum, geometry) => sum
+    + Object.values(geometry.attributes).reduce((bytes, attr) => bytes + attr.array.byteLength, 0)
+    + (geometry.index?.array.byteLength ?? 0), 0);
+  const instanceBytes = wire.nodes.reduce((sum, node) => sum
+    + (node.instanceMatrix?.array.byteLength ?? 0) + (node.instanceColor?.array.byteLength ?? 0), 0);
+  assert.equal(geometryBytes + instanceBytes, wire.payload.attributeBytes,
+    'fixture uses the actual native worker backing-byte accounting');
+
+  // Reproduce the previous reconstruction error against real Three binding
+  // code. A TypeScript cast cannot supply this missing runtime divisor.
+  const broken = new THREE.InstancedMesh(first.geometry, first.material, first.count);
+  broken.instanceMatrix = new THREE.BufferAttribute(first.instanceMatrix.array, 16);
+  const negative = inspectNativeBindings(broken);
+  assert.equal(negative.divisor(2), 0);
+  const binding = negative.bindings.get(2);
+  const requiredAsVertices = (888 - 1) * binding.stride + binding.size * 4;
+  assert.ok(requiredAsVertices > binding.array.byteLength,
+    'old divisor 0 consumes beyond the 14-matrix buffer for the observed 888-vertex draw');
+}
+
+function disposalCounts(visual) {
+  const geometry = new Map(), material = new Map();
+  for (const mesh of visual.root.children) {
+    for (const [resource, map] of [[mesh.geometry, geometry], [mesh.material, material]]) {
+      if (map.has(resource)) continue;
+      map.set(resource, 0);
+      resource.addEventListener('dispose', () => map.set(resource, map.get(resource) + 1));
+    }
+  }
+  return { geometry, material };
+}
+
+const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+let transfer;
+const visuals = [];
+// the engine's cascade registration: every material the transfer makes, its fallbacks too, joins it and leaves it
+const registered = new Set(), released = new Set();
+const shadowCtx = {
+  setupShadowMaterial(material) { registered.add(material); },
+  releaseShadowMaterial(material) { released.add(material); return true; },
+};
+try {
+  Object.defineProperty(globalThis, 'Worker', { configurable: true, value: FixtureWorker });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { setTimeout } });
+  transfer = createGarageWorkshopTransfer(shadowCtx);
+  // Construct successively: the second visual must reuse the completed first
+  // visual's worker and palette lease, not merely join a concurrent request.
+  visuals.push(await transfer.createVisual('m1a1_abrams_hc', 4200));
+  visuals.push(await transfer.createVisual('m1a1_abrams_hc', 4201));
+  assert.equal(workers.length, 1, 'one native module worker is reused');
+  assert.deepEqual(workers[0].requests.map(({ requestId, specId, camoSeed, spec }) =>
+    [requestId, specId, camoSeed, spec === TANK_SPECS.m1a1_abrams_hc]),
+  [[1, 'm1a1_abrams_hc', 4200, true], [2, 'm1a1_abrams_hc', 4201, true]]);
+  visuals.forEach((visual, index) => verifyTransferredAttributes(visual, workers[0].fixtures[index]));
+  const [first, second] = visuals;
+  const sharedMaterial = first.root.children[0].material;
+  assert.ok(sharedMaterial === second.root.children[0].material, 'matching finishes retain one palette lease');
+  assert.ok(first.root.children[0].geometry !== second.root.children[0].geometry,
+    'separate transfers retain independent geometry ownership');
+  // the suit's net is the exhibit's cloth, the cans its fitting paint, never a white fallback; the remaining fallback
+  // joins the cascade registration (unregistered, three's plain loop summed all four cascade suns on it)
+  const byName = (name) => first.root.children.find((child) => child.name === name).material;
+  assert.equal(byName('t90m_ghillie_turret_net').name, 'cot:garage-canvas', 'a ghillie net takes the exhibit canvas');
+  assert.equal(byName('decor_hull_cans').name, 'cot:garage-factory-fitting-paint', 'a near-white part takes the fitting paint');
+  const fallback = first.root.children[2].material;
+  assert.ok(registered.has(fallback), 'a fallback material joins the cascade registration');
+  assert.ok(!first.root.children.some((child) => child.material.color?.getHex() === 0xffffff && !child.material.name),
+    'no exhibit part renders as an unregistered white fallback');
+  const firstDisposal = disposalCounts(first), secondDisposal = disposalCounts(second);
+  const parent = new THREE.Group();
+  parent.add(first.root, second.root);
+  first.dispose(); first.dispose();
+  assert.ok(first.root.parent === null);
+  assert.ok([...firstDisposal.geometry.values()].every(count => count === 1),
+    'every transferred geometry is disposed once even when multiple meshes share it');
+  assert.equal(firstDisposal.material.get(sharedMaterial), 0, 'live second visual protects shared palette');
+  assert.equal(firstDisposal.material.get(first.root.children[2].material), 1,
+    'per-visual fallback material is disposed exactly once');
+  assert.ok(released.has(fallback), 'a disposed fallback leaves the cascade registration');
+  assert.ok([...secondDisposal.geometry.values()].every(count => count === 0));
+  second.dispose(); second.dispose();
+  assert.ok([...secondDisposal.geometry.values()].every(count => count === 1));
+  assert.equal(firstDisposal.material.get(sharedMaterial), 1);
+  assert.equal(secondDisposal.material.get(sharedMaterial), 1, 'last lease disposes shared material once');
+  transfer.dispose(); transfer = null;
+  assert.equal(workers[0].terminations, 1);
+  assert.equal(firstDisposal.material.get(sharedMaterial), 1, 'worker teardown does not redispose released palette');
+} finally {
+  for (const visual of visuals) visual.dispose();
+  transfer?.dispose();
+  if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+  else delete globalThis.Worker;
+  if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+  else delete globalThis.window;
+}
+
+// (improve-271, plan 031) a silent or failed worker cannot hang Return to Garage: the request rejects (garageDressing.ts
+// then builds the exhibit in line), a dead worker is terminated and never posted to again, and after one that had
+// answered the next request starts a fresh worker; an answering worker leaves no deadline armed
+{
+  let now = 0, serial = 0;
+  const live = new Map();
+  const timers = {
+    set(callback, ms) { const h = ++serial; live.set(h, { at: now + ms, callback }); return h; },
+    clear(h) { live.delete(h); },
+    advance(ms) { now += ms; for (const [h, t] of [...live]) if (t.at <= now && live.delete(h)) t.callback(); },
+  };
+  const settle = (promise) => promise.then(() => 'resolved', (error) => error.message);
+  try {
+    Object.defineProperty(globalThis, 'Worker', { configurable: true, value: FixtureWorker });
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { setTimeout } });
+    // (a) a worker that never answers: rejected within the deadline and terminated; one failure of R6's count, so the next
+    // request starts a fresh worker
+    workers.length = 0;
+    FixtureWorker.mode = 'silent';
+    let silent = createGarageWorkshopTransfer(shadowCtx, { timers });
+    const held = settle(silent.createVisual('m1a1_abrams_hc', 1));
+    timers.advance(29_999);
+    assert.equal(live.size, 1, 'not before the first-answer deadline');
+    timers.advance(1);
+    assert.equal(await held, 'Garage workshop worker went silent');
+    assert.equal(workers[0].terminations, 1, 'the silent worker is terminated');
+    const next = settle(silent.createVisual('m1a1_abrams_hc', 2));
+    assert.equal(workers.length, 2, 'a fresh worker takes the next request');
+    assert.equal(workers[0].requests.length, 1, 'nothing posted to the dead worker');
+    timers.advance(30_000);
+    assert.equal(await next, 'Garage workshop worker went silent');
+    silent.dispose(); silent = null;
+    // (b) an error after an answer: the pending request rejects AND the next request starts a NEW worker
+    workers.length = 0;
+    FixtureWorker.mode = 'answer';
+    const failing = createGarageWorkshopTransfer(shadowCtx, { timers });
+    const answered = await failing.createVisual('m1a1_abrams_hc', 3);
+    assert.equal(live.size, 0, 'an answering worker leaves no deadline armed');
+    FixtureWorker.mode = 'error';
+    assert.equal(await settle(failing.createVisual('m1a1_abrams_hc', 4)), 'Garage workshop worker failed: fixture worker crashed');
+    assert.equal(workers[0].terminations, 1);
+    FixtureWorker.mode = 'answer';
+    const fresh = await failing.createVisual('m1a1_abrams_hc', 5);
+    assert.equal(workers.length, 2, 'a fresh worker after the failure (constructions counted)');
+    assert.equal(workers[0].requests.length, 2, 'the dead worker took nothing more');
+    // a slow build is not a silent one: the deadline runs from the worker's last batch
+    FixtureWorker.mode = 'silent';
+    const slow = settle(failing.createVisual('m1a1_abrams_hc', 6));
+    timers.advance(14_000);
+    const last = workers[1].requests.at(-1), wire = fixture();
+    workers[1].onmessage({ data: { ok: true, requestId: last.requestId, kind: 'begin', specId: last.specId, buildMs: 14_000,
+      materials: wire.materials, geometryCount: wire.geometries.length, nodeCount: wire.nodes.length, payload: wire.payload } });
+    timers.advance(14_000);
+    workers[1].onmessage({ data: { ok: true, requestId: last.requestId, kind: 'geometries', geometries: wire.geometries } });
+    workers[1].onmessage({ data: { ok: true, requestId: last.requestId, kind: 'nodes', nodes: wire.nodes } });
+    workers[1].onmessage({ data: { ok: true, requestId: last.requestId, kind: 'complete' } });
+    assert.equal(await slow, 'resolved', 'batches reset the deadline');
+    FixtureWorker.mode = 'answer';
+    answered.dispose(); fresh.dispose();
+    failing.dispose();
+  } finally {
+    FixtureWorker.mode = 'answer';
+    if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+    else delete globalThis.Worker;
+    if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+    else delete globalThis.window;
+  }
+}
+
+console.log('garageWorkshopTransfer.selftest: public worker roundtrip, exact arrays/counts, packed colors, clones, native Three divisors and shared disposal, silent and failed workers settle (plan 031) pass');

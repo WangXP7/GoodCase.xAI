@@ -1,0 +1,88 @@
+import * as THREE from 'three';
+import { ownVmResource } from './vmownership.js';
+import {gloveSkinStyle} from './data/glove-skin-definitions.js';
+
+// Três propostas para FUNKEIROS (o dono escolhe; ?vmmaosf=<opção> na revisão). docs/reports/VM-MAOS-POR-TIME.md.
+export const F_OPCOES = Object.freeze({
+  ouro: Object.freeze({ id: 'F_ouro', glove: '#c9a227', sleeve: '#232326', accent: '#232326', motif: 'plain', fingerless: true }),
+  grife: Object.freeze({ id: 'F_grife', glove: '#1f1f23', sleeve: '#232326', accent: '#d4a73a', motif: 'grife', fingerless: true }),
+  corrente: Object.freeze({ id: 'F_corrente', glove: '#34363a', sleeve: '#292b30', accent: '#c9a227', motif: 'corrente', fingerless: true }),
+});
+const F_QS = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('vmmaosf') : null;
+export const TEAM_HANDS = Object.freeze({
+  E: Object.freeze({ id: 'E', glove: '#8c2632', sleeve: '#781f2a', accent: '#e2d6b5', motif: 'star', fingerless: false }),
+  B: Object.freeze({ id: 'B', glove: '#4e5740', sleeve: '#4e5740', accent: '#a5a57b', motif: 'camo', fingerless: false }),
+  C: Object.freeze({ id: 'C', glove: '#dad8cd', sleeve: '#493544', accent: '#ba3544', motif: 'plain', fingerless: false }),
+  F: F_OPCOES[F_QS] || F_OPCOES.ouro,
+  U: Object.freeze({ id: 'U', glove: '#34363a', sleeve: '#292b30', accent: '#d9d7cf', motif: 'checker', fingerless: true }),
+  M: Object.freeze({ id: 'M', glove: '#4a3b28', sleeve: '#3d1f66', accent: '#b8914a', motif: 'trama', fingerless: false }),
+  // Fora do Ar (factions.js, ready): verde-fósforo de TV velha sobre o petróleo do brasão.
+  'fora-do-ar': Object.freeze({ id: 'fora-do-ar', glove: '#24594f', sleeve: '#142e38', accent: '#72d6b1', motif: 'plain', fingerless: false }),
+});
+// Neutro = base da fábrica (braco-coro-ak.json): luva e manga Mandrake da AK aprovada, em sRGB.
+const NEUTRAL_HANDS = Object.freeze({ id: 'neutral', glove: '#242f38', sleeve: '#243c4d', accent: '#797d80', motif: 'plain', fingerless: false });
+export const teamHandStyle = (faction, gloveSkinId = null) => gloveSkinStyle(gloveSkinId) || TEAM_HANDS[faction] || NEUTRAL_HANDS;
+export const HAND_ATLAS_VERSION = 'team-hands-10';
+
+// Rig A (AK golden), L (faca), K (SK_Arms_Mono): docs/reports/VM-MAOS-POR-TIME.md.
+// O GLTFLoader tira os pontos dos nomes de osso (hand.R_metarig → handR_metarig).
+const RIG_BONES = Object.freeze([
+  ['ak', /^hand\.?R_metarig$/],
+  ['knife', /^R_wrist_026$/],
+  ['pistol', /^hand_r$/],
+]);
+export function handLayoutOfMesh(mesh) {
+  const bones = mesh?.skeleton?.bones || [];
+  return RIG_BONES.find(([, re]) => bones.some((bone) => re.test(bone.name)))?.[0] || '';
+}
+
+export function refreshTeamHands(meshes, profile) {
+  for (const mesh of meshes) {
+    const update = (material) => {
+      const current = material?.userData.teamHands;
+      if (!current) return material;
+      if (current.style === teamHandStyle(profile.faction, profile.gloveSkinId).id) return material;
+      const next = applyTeamHandMaterial(material, profile, current.layout);
+      material.dispose(); // o material pertence ao controlador; atlas compartilhados ficam no cache
+      return next;
+    };
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(update) : update(mesh.material);
+  }
+}
+
+const maps = new Map();
+export function applyTeamHandMaterial(material, profile, layout) {
+  const style = teamHandStyle(profile.faction, profile.gloveSkinId);
+  const role = layout === 'knife' ? 'combined' : /Cloth|Sleeves/i.test(material.name) ? 'cloth'
+    : /Glove/i.test(material.name) ? 'glove' : 'skin';
+  const key = `${layout}/${role}-${style.id}`;
+  const copy = ownVmResource(material.clone());
+  copy.color.set(0xffffff);
+  copy.metalness = 0;
+  copy.roughness = role === 'skin' && style.fingerless ? 0.72 : 0.86;
+  // O normal/ORM gasto do donor da pistola não corresponde à luva da faca.
+  // Acabamento têxtil comum; relevos geométricos aprovados são preservados.
+  copy.normalMap = copy.bumpMap = copy.roughnessMap = copy.metalnessMap = copy.aoMap = null;
+  copy.envMapIntensity = 1;
+  copy.bumpScale = 0.002;
+  // Os atlas têm UVs distintos; só a identidade é comum. Não colar UV de um rig no outro.
+  if (typeof document !== 'undefined' && !(typeof process !== 'undefined' && process.versions?.node)) {
+    if (!maps.has(key)) {
+      const colorVersion = key === 'pistol/glove-E' ? 'team-hands-11' : HAND_ATLAS_VERSION;
+      const map = new THREE.TextureLoader().load(`/models/viewmodels/coro/hands/${key}.webp?v=${colorVersion}`, undefined, undefined,
+        (error) => console.error(`[viewmodel-hands] ${key}`, error));
+      map.flipY = false;
+      map.colorSpace = THREE.SRGBColorSpace;
+      maps.set(key, map);
+      const bump = new THREE.TextureLoader().load(`/models/viewmodels/coro/hands/${key}-height.webp?v=${HAND_ATLAS_VERSION}`, undefined, undefined,
+        (error) => console.error(`[viewmodel-hands] altura ${key}`, error));
+      bump.flipY = false;
+      maps.set(`${key}:height`, bump);
+    }
+    copy.map = maps.get(key);
+    copy.bumpMap = maps.get(`${key}:height`);
+  }
+  copy.userData.teamHands = { faction: TEAM_HANDS[profile.faction] ? profile.faction : style.id, style: style.id, layout, role, key, fingerless: style.fingerless };
+  copy.needsUpdate = true;
+  return copy;
+}

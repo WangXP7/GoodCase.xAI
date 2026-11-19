@@ -1,0 +1,503 @@
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Scene, PerspectiveCamera, WebGLRenderer, Color, PointsMaterial, Points, BufferGeometry, BufferAttribute, Vector3, GridHelper, AxesHelper, AdditiveBlending, NormalBlending, ShaderMaterial } from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+/**
+ * Engine Test Component - Sandbox for testing Three.js features
+ * Route: /engine-test
+ *
+ * Use this for:
+ * - Particle system experiments (ShaderMaterial vs PointsMaterial)
+ * - Shader development without 3D tiles interference
+ * - Performance testing
+ * - New effect prototyping
+ */
+@Component({
+  selector: 'app-engine-test',
+  standalone: true,
+  imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="engine-test-container">
+      <div #canvasContainer class="canvas-container"></div>
+      <div class="controls td-side td-dense">
+        <h2 class="td-dlg-title">Engine test sandbox</h2>
+
+        <div class="td-group">
+          <h3 class="td-section">Spawn particles</h3>
+          <button class="td-btn-secondary td-btn-sm" (click)="spawnAdditive()">Spawn additive (fire)</button>
+          <button class="td-btn-secondary td-btn-sm" (click)="spawnNormal()">Spawn normal (smoke)</button>
+          <button class="td-btn-secondary td-btn-sm" (click)="spawnBoth()">Spawn both</button>
+          <button class="td-btn-danger td-btn-sm" (click)="clearParticles()">Clear all</button>
+        </div>
+
+        <div class="td-group">
+          <h3 class="td-section">Material settings</h3>
+          <label class="td-field">
+            <span class="td-label">Additive size: {{ additiveSize }}</span>
+            <input class="td-slider" type="range" min="0.1" max="5" step="0.1"
+                   [value]="additiveSize"
+                   (input)="updateAdditiveSize($event)">
+          </label>
+          <label class="td-field">
+            <span class="td-label">Normal size: {{ normalSize }}</span>
+            <input class="td-slider" type="range" min="0.1" max="5" step="0.1"
+                   [value]="normalSize"
+                   (input)="updateNormalSize($event)">
+          </label>
+        </div>
+
+        <div class="td-group">
+          <h3 class="td-section">Shader test</h3>
+          <button class="td-btn-secondary td-btn-sm" (click)="toggleShaderMode()">
+            {{ useShaders ? 'Using shaders' : 'Using PointsMaterial' }}
+          </button>
+        </div>
+
+        <div class="td-group">
+          <div class="td-kv"><span>Additive particles</span><b>{{ additiveCount }}</b></div>
+          <div class="td-kv"><span>Normal particles</span><b>{{ normalCount }}</b></div>
+          <div class="td-kv"><span>FPS</span><b>{{ fps }}</b></div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .engine-test-container {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      background: var(--td-bg-surface);
+    }
+    .canvas-container {
+      flex: 1;
+      position: relative;
+    }
+    .controls {
+      width: 300px;
+      gap: 12px;
+      padding: 20px;
+      overflow-y: auto;
+    }
+  `]
+})
+export class EngineTestComponent implements OnInit, OnDestroy {
+  @ViewChild('canvasContainer', { static: true }) canvasContainer!: ElementRef;
+
+  // Three.js objects
+  private renderer!: WebGLRenderer;
+  private scene!: Scene;
+  private camera!: PerspectiveCamera;
+  private controls!: OrbitControls;
+  private animationId = 0;
+
+  // Particle systems
+  private additiveParticles!: Points;
+  private normalParticles!: Points;
+  private additiveMaterial!: PointsMaterial | ShaderMaterial;
+  private normalMaterial!: PointsMaterial | ShaderMaterial;
+
+  // Particle pools
+  private readonly MAX_PARTICLES = 1000;
+  private additivePool: ParticleData[] = [];
+  private normalPool: ParticleData[] = [];
+
+  // UI state
+  additiveSize = 2.0;
+  normalSize = 2.0;
+  additiveCount = 0;
+  normalCount = 0;
+  fps = 0;
+  useShaders = false;
+
+  private lastTime = performance.now();
+  private frameCount = 0;
+
+  ngOnInit(): void {
+    this.initThree();
+    this.initParticleSystems();
+    this.animate();
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('resize', this.resizeListener);
+    cancelAnimationFrame(this.animationId);
+    this.renderer.dispose();
+  }
+
+  private readonly resizeListener = (): void => this.onResize();
+
+  private initThree(): void {
+    const container = this.canvasContainer.nativeElement;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Renderer
+    this.renderer = new WebGLRenderer({ antialias: true });
+    this.renderer.setSize(width, height);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.setClearColor(0x1a1a2e);
+    container.appendChild(this.renderer.domElement);
+
+    // Scene
+    this.scene = new Scene();
+
+    // Camera
+    this.camera = new PerspectiveCamera(60, width / height, 0.1, 1000);
+    this.camera.position.set(0, 5, 15);
+
+    // Controls
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+
+    // Grid helper
+    const grid = new GridHelper(20, 20, 0x444444, 0x222222);
+    this.scene.add(grid);
+
+    // Axes helper
+    const axes = new AxesHelper(5);
+    this.scene.add(axes);
+
+    // Handle resize
+    window.addEventListener('resize', this.resizeListener);
+  }
+
+  private initParticleSystems(): void {
+    // Initialize pools
+    for (let i = 0; i < this.MAX_PARTICLES; i++) {
+      this.additivePool.push(this.createParticleData());
+      this.normalPool.push(this.createParticleData());
+    }
+
+    this.createMaterials();
+    this.createGeometries();
+  }
+
+  private createParticleData(): ParticleData {
+    return {
+      position: new Vector3(),
+      velocity: new Vector3(),
+      color: new Color(),
+      size: 1,
+      life: 0,
+      maxLife: 1,
+    };
+  }
+
+  private createMaterials(): void {
+    if (this.useShaders) {
+      this.createShaderMaterials();
+    } else {
+      this.createPointsMaterials();
+    }
+  }
+
+  private createPointsMaterials(): void {
+    this.additiveMaterial = new PointsMaterial({
+      size: this.additiveSize,
+      transparent: true,
+      opacity: 0.9,
+      sizeAttenuation: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      vertexColors: true,
+    });
+
+    this.normalMaterial = new PointsMaterial({
+      size: this.normalSize,
+      transparent: true,
+      opacity: 0.7,
+      sizeAttenuation: true,
+      depthWrite: false,
+      blending: NormalBlending,
+      vertexColors: true,
+    });
+  }
+
+  private createShaderMaterials(): void {
+    const vertexShader = `
+      attribute float size;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+
+    const fragmentShaderAdditive = `
+      precision highp float;
+      varying vec3 vColor;
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        if (dist > 0.5) discard;
+        float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+        gl_FragColor = vec4(vColor * alpha, alpha);
+      }
+    `;
+
+    const fragmentShaderNormal = `
+      precision highp float;
+      varying vec3 vColor;
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        if (dist > 0.5) discard;
+        float alpha = 1.0 - smoothstep(0.1, 0.5, dist);
+        gl_FragColor = vec4(vColor, alpha * 0.8);
+      }
+    `;
+
+    this.additiveMaterial = new ShaderMaterial({
+      vertexShader,
+      fragmentShader: fragmentShaderAdditive,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      vertexColors: true,
+    });
+
+    this.normalMaterial = new ShaderMaterial({
+      vertexShader,
+      fragmentShader: fragmentShaderNormal,
+      transparent: true,
+      depthWrite: false,
+      blending: NormalBlending,
+      vertexColors: true,
+    });
+  }
+
+  private createGeometries(): void {
+    // Remove old particles if they exist
+    if (this.additiveParticles) {
+      this.scene.remove(this.additiveParticles);
+      this.additiveParticles.geometry.dispose();
+    }
+    if (this.normalParticles) {
+      this.scene.remove(this.normalParticles);
+      this.normalParticles.geometry.dispose();
+    }
+
+    // Additive geometry
+    const additiveGeometry = new BufferGeometry();
+    const additivePositions = new Float32Array(this.MAX_PARTICLES * 3);
+    const additiveColors = new Float32Array(this.MAX_PARTICLES * 3);
+    const additiveSizes = new Float32Array(this.MAX_PARTICLES);
+
+    additiveGeometry.setAttribute('position', new BufferAttribute(additivePositions, 3));
+    additiveGeometry.setAttribute('color', new BufferAttribute(additiveColors, 3));
+    additiveGeometry.setAttribute('size', new BufferAttribute(additiveSizes, 1));
+
+    this.additiveParticles = new Points(additiveGeometry, this.additiveMaterial);
+    this.additiveParticles.frustumCulled = false;
+    this.scene.add(this.additiveParticles);
+
+    // Normal geometry
+    const normalGeometry = new BufferGeometry();
+    const normalPositions = new Float32Array(this.MAX_PARTICLES * 3);
+    const normalColors = new Float32Array(this.MAX_PARTICLES * 3);
+    const normalSizes = new Float32Array(this.MAX_PARTICLES);
+
+    normalGeometry.setAttribute('position', new BufferAttribute(normalPositions, 3));
+    normalGeometry.setAttribute('color', new BufferAttribute(normalColors, 3));
+    normalGeometry.setAttribute('size', new BufferAttribute(normalSizes, 1));
+
+    this.normalParticles = new Points(normalGeometry, this.normalMaterial);
+    this.normalParticles.frustumCulled = false;
+    this.scene.add(this.normalParticles);
+  }
+
+  private animate(): void {
+    this.animationId = requestAnimationFrame(() => this.animate());
+
+    const now = performance.now();
+    const deltaTime = (now - this.lastTime) / 1000;
+    this.lastTime = now;
+
+    // FPS counter
+    this.frameCount++;
+    if (this.frameCount >= 30) {
+      this.fps = Math.round(30 / deltaTime / 30);
+      this.frameCount = 0;
+    }
+
+    // Update particles
+    this.updateParticles(this.additivePool, deltaTime);
+    this.updateParticles(this.normalPool, deltaTime);
+
+    // Update buffers
+    this.updateBuffers();
+
+    // Update controls
+    this.controls.update();
+
+    // Render
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateParticles(pool: ParticleData[], dt: number): void {
+    for (const p of pool) {
+      if (p.life <= 0) continue;
+
+      p.position.add(p.velocity.clone().multiplyScalar(dt));
+      p.velocity.y -= 2 * dt; // Gravity
+      p.life -= dt / p.maxLife;
+    }
+  }
+
+  private updateBuffers(): void {
+    // Additive buffer
+    const addPos = this.additiveParticles.geometry.attributes['position'] as BufferAttribute;
+    const addCol = this.additiveParticles.geometry.attributes['color'] as BufferAttribute;
+    const addSize = this.additiveParticles.geometry.attributes['size'] as BufferAttribute;
+
+    let addCount = 0;
+    for (const p of this.additivePool) {
+      if (p.life > 0) {
+        addPos.array[addCount * 3] = p.position.x;
+        addPos.array[addCount * 3 + 1] = p.position.y;
+        addPos.array[addCount * 3 + 2] = p.position.z;
+        addCol.array[addCount * 3] = p.color.r;
+        addCol.array[addCount * 3 + 1] = p.color.g;
+        addCol.array[addCount * 3 + 2] = p.color.b;
+        addSize.array[addCount] = p.size * p.life;
+        addCount++;
+      }
+    }
+    addPos.needsUpdate = true;
+    addCol.needsUpdate = true;
+    addSize.needsUpdate = true;
+    this.additiveParticles.geometry.setDrawRange(0, addCount);
+    this.additiveCount = addCount;
+
+    // Normal buffer
+    const normPos = this.normalParticles.geometry.attributes['position'] as BufferAttribute;
+    const normCol = this.normalParticles.geometry.attributes['color'] as BufferAttribute;
+    const normSize = this.normalParticles.geometry.attributes['size'] as BufferAttribute;
+
+    let normCount = 0;
+    for (const p of this.normalPool) {
+      if (p.life > 0) {
+        normPos.array[normCount * 3] = p.position.x;
+        normPos.array[normCount * 3 + 1] = p.position.y;
+        normPos.array[normCount * 3 + 2] = p.position.z;
+        normCol.array[normCount * 3] = p.color.r;
+        normCol.array[normCount * 3 + 1] = p.color.g;
+        normCol.array[normCount * 3 + 2] = p.color.b;
+        normSize.array[normCount] = p.size * p.life;
+        normCount++;
+      }
+    }
+    normPos.needsUpdate = true;
+    normCol.needsUpdate = true;
+    normSize.needsUpdate = true;
+    this.normalParticles.geometry.setDrawRange(0, normCount);
+    this.normalCount = normCount;
+  }
+
+  private onResize(): void {
+    const container = this.canvasContainer.nativeElement;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(width, height);
+  }
+
+  // UI Actions
+  spawnAdditive(): void {
+    this.spawnParticles(this.additivePool, 50, {
+      colorMin: { r: 1, g: 0.3, b: 0 },
+      colorMax: { r: 1, g: 0.8, b: 0.2 },
+      sizeMin: 0.5,
+      sizeMax: 1.5,
+    });
+  }
+
+  spawnNormal(): void {
+    this.spawnParticles(this.normalPool, 50, {
+      colorMin: { r: 0.1, g: 0.1, b: 0.1 },
+      colorMax: { r: 0.3, g: 0.3, b: 0.3 },
+      sizeMin: 0.8,
+      sizeMax: 2.0,
+    });
+  }
+
+  spawnBoth(): void {
+    this.spawnAdditive();
+    this.spawnNormal();
+  }
+
+  private spawnParticles(pool: ParticleData[], count: number, config: SpawnConfig): void {
+    let spawned = 0;
+    for (const p of pool) {
+      if (p.life <= 0 && spawned < count) {
+        p.position.set(
+          (Math.random() - 0.5) * 2,
+          0,
+          (Math.random() - 0.5) * 2
+        );
+        p.velocity.set(
+          (Math.random() - 0.5) * 5,
+          5 + Math.random() * 5,
+          (Math.random() - 0.5) * 5
+        );
+        const t = Math.random();
+        p.color.setRGB(
+          config.colorMin.r + t * (config.colorMax.r - config.colorMin.r),
+          config.colorMin.g + t * (config.colorMax.g - config.colorMin.g),
+          config.colorMin.b + t * (config.colorMax.b - config.colorMin.b)
+        );
+        p.size = config.sizeMin + Math.random() * (config.sizeMax - config.sizeMin);
+        p.life = 1;
+        p.maxLife = 1 + Math.random() * 1;
+        spawned++;
+      }
+    }
+  }
+
+  clearParticles(): void {
+    for (const p of this.additivePool) p.life = 0;
+    for (const p of this.normalPool) p.life = 0;
+  }
+
+  updateAdditiveSize(event: Event): void {
+    this.additiveSize = parseFloat((event.target as HTMLInputElement).value);
+    if (this.additiveMaterial instanceof PointsMaterial) {
+      this.additiveMaterial.size = this.additiveSize;
+    }
+  }
+
+  updateNormalSize(event: Event): void {
+    this.normalSize = parseFloat((event.target as HTMLInputElement).value);
+    if (this.normalMaterial instanceof PointsMaterial) {
+      this.normalMaterial.size = this.normalSize;
+    }
+  }
+
+  toggleShaderMode(): void {
+    this.useShaders = !this.useShaders;
+    this.createMaterials();
+    this.createGeometries();
+  }
+}
+
+interface ParticleData {
+  position: Vector3;
+  velocity: Vector3;
+  color: Color;
+  size: number;
+  life: number;
+  maxLife: number;
+}
+
+interface SpawnConfig {
+  colorMin: { r: number; g: number; b: number };
+  colorMax: { r: number; g: number; b: number };
+  sizeMin: number;
+  sizeMax: number;
+}

@@ -1,0 +1,103 @@
+// Global styles: fonts, the td-* classes of the design system
+// (docs/DESIGN_SYSTEM.md), Material's tooltip and dialog shell in that look.
+// The --td-* tokens stand on :root, set from TD_CSS_VARS by installThemeVars
+// (main.ts); this sheet only reads them.
+@use '@angular/material' as mat;
+@use 'app/styles/ui/classes';
+@use 'app/styles/ui/surface';
+
+// Self-hosted fonts (CSP font-src 'self', the desktop app runs offline).
+// Barlow Semi Condensed for all text (500 also italic: traits, flavour lines);
+// JetBrains Mono for codes and keys.
+@import '@fontsource/barlow-semi-condensed/latin-500.css';
+@import '@fontsource/barlow-semi-condensed/latin-500-italic.css';
+@import '@fontsource/barlow-semi-condensed/latin-600.css';
+@import '@fontsource/barlow-semi-condensed/latin-700.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-600.css';
+
+html {
+  height: 100%;
+  @include mat.theme((
+    color: (
+      theme-type: dark,
+      primary: mat.$orange-palette,
+      tertiary: mat.$cyan-palette,
+    ),
+    typography: 'Barlow Semi Condensed',
+    density: 0,
+  ));
+
+  // Every tooltip a small plaster popup
+  @include mat.tooltip-overrides((
+    container-color: transparent,
+    container-shape: 3px,
+    supporting-text-color: var(--td-text-primary),
+    supporting-text-font: var(--td-font),
+    supporting-text-size: var(--td-fs-body),
+    supporting-text-weight: 500,
+    supporting-text-line-height: 1.35,
+    supporting-text-tracking: 0,
+  ));
+}
+
+.mat-mdc-tooltip .mdc-tooltip__surface {
+  @include surface.popup;
+}
+
+// Material's spinner in brass
+.mat-mdc-progress-spinner {
+  --mdc-circular-progress-active-indicator-color: var(--td-brass);
+}
+
+body {
+  color-scheme: dark;
+  margin: 0;
+  height: 100%;
+  background: var(--td-bg-dark);
+  font-size: var(--td-fs-body);
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+@include classes.all;
+
+// Dialog shell (panelClass 'td-dialog-panel' in MatDialog): transparent, the
+// dialog draws its own panel (.td-dlg)
+.td-dialog-panel .mdc-dialog__surface {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--td-text-secondary);
+}
+
+// A dialog never covers the top bar: it stands under it (the research tree
+// fills the window by itself)
+.td-dialog-panel:not(.td-research-panel) {
+  margin-top: var(--td-h-topbar);
+}
+
+// Research tree: fills the window and scrolls only in its own board. The
+// surface of MatDialog scrolls by itself, which would put a second scrollbar
+// around a dialog the size of the screen (panelClass 'td-research-panel').
+.td-research-panel .mdc-dialog__surface {
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.td-research-panel .mat-mdc-dialog-container,
+.td-research-panel .mat-mdc-dialog-content {
+  overflow: hidden;
+  max-height: none;
+  padding: 0;
+}
+
+// The update hint of the desktop app (UpdateHintComponent) above every dialog,
+// also one opened after it: a modal backdrop must not swallow "Restart now".
+.cdk-overlay-container .td-update-hint-host {
+  z-index: 1001;
+}

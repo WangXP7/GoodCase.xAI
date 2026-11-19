@@ -1,0 +1,32 @@
+// Layout of the line of sight legend: a strip with a swatch per state.
+
+:host {
+  display: block;
+  pointer-events: none;
+}
+
+.los-legend {
+  padding: 6px 12px;
+}
+
+.los-legend-title {
+  margin-bottom: 4px;
+  text-align: center;
+  color: var(--td-brass-light);
+}
+
+.los-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.los-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+

@@ -1,0 +1,84 @@
+<div class="td-replay-bar td-overlay" role="toolbar" aria-label="Replay of a wave">
+  <div class="td-replay-row">
+    <span class="td-replay-title td-caps td-inline">
+      Replay
+      <button type="button" class="td-tool rb-step" aria-label="Previous wave"
+              [disabled]="!hasPrevious()" (click)="replay.switchWave(-1)">
+        <td-icon name="caretL" [size]="12"></td-icon>
+      </button>
+      <span class="td-replay-wave td-figure">Wave {{ replay.wave() }}@if (replay.fromFile()) { <span class="td-muted" [matTooltip]="replay.fileNote() ?? ''" matTooltipPosition="above">from file{{ replay.fileNote() ? ', other version' : '' }}</span> }</span>
+      <button type="button" class="td-tool rb-step" aria-label="Next wave"
+              [disabled]="!hasNext()" (click)="replay.switchWave(1)">
+        <td-icon name="caretR" [size]="12"></td-icon>
+      </button>
+    </span>
+    @if (replay.divergedAtMs() !== null) {
+      <span class="td-note is-warn" role="status"
+            matTooltip="From here the replay no longer matches the game that was played. A bug: please report it with the run file."
+            matTooltipPosition="above">differs from {{ divergedAt() }}</span>
+    }
+    <span class="td-replay-stats td-inline td-num">
+      <span class="td-inline rb-stat" matTooltip="HQ health at this moment" matTooltipPosition="above">
+        <td-icon name="heart" [size]="12" ariaLabel="HQ health"></td-icon>{{ replay.baseHealth() }}
+      </span>
+      <span class="td-inline rb-stat" matTooltip="Enemies on the route at this moment" matTooltipPosition="above">
+        <td-icon name="skull" [size]="12" ariaLabel="Enemies on the route"></td-icon>{{ replay.enemiesAlive() }}
+      </span>
+    </span>
+    <button type="button" class="td-btn-secondary td-btn-sm"
+            matTooltip="Save the replayable waves of this run as a file. It loads again on the same map."
+            matTooltipPosition="above"
+            (click)="replay.saveFile()">
+      Save
+    </button>
+    <button type="button" class="td-btn-secondary td-btn-sm" (click)="replay.exit()">
+      Exit <kbd class="td-kbd">Esc</kbd>
+    </button>
+  </div>
+
+  <div class="td-replay-row td-replay-controls">
+    <button type="button" class="td-icon-btn td-replay-play"
+            [attr.aria-label]="playLabel()" aria-keyshortcuts="Space"
+            (click)="replay.togglePlay()">
+      <td-icon [name]="playIcon()" [size]="14"></td-icon>
+    </button>
+
+    <!-- Progress, to scrub. The ticks under it mark the player's commands -->
+    <div class="td-replay-track"
+         matTooltip="Drag to jump. Ticks mark your orders: builds, sales, upgrades, abilities, the hero"
+         matTooltipPosition="above">
+      @for (marker of replay.markers(); track $index) {
+        <span class="td-replay-mark" [style.left.%]="marker.percent" aria-hidden="true"></span>
+      }
+      <input type="range" class="td-slider td-replay-scrub"
+             min="0" [max]="replay.durationMs()" step="1" [value]="replay.timeMs()"
+             aria-label="Replay position"
+             [attr.aria-valuetext]="time() + ' of ' + duration()"
+             (pointerdown)="replay.beginScrub()"
+             (input)="onScrub($event)"
+             (pointerup)="replay.endScrub()"
+             (pointercancel)="replay.endScrub()"
+             (change)="replay.endScrub()">
+    </div>
+
+    @if (replay.seekPercent() !== null) {
+      <span class="td-replay-time td-replay-seeking td-note td-num is-seeking" role="status">Jumping {{ replay.seekPercent() }} %</span>
+    } @else {
+      <span class="td-replay-time td-note td-num">{{ time() }} / {{ duration() }}</span>
+    }
+
+    <div class="td-replay-speeds td-seg is-compact is-sm" role="group" aria-label="Replay speed" aria-keyshortcuts="+ -">
+      @if (replay.recordedSpeed() !== null) {
+        <button type="button"
+                [attr.aria-pressed]="replay.originalTempo()"
+                [title]="'The speed the wave was played at, now ' + speedLabel(replay.recordedSpeed()!)"
+                (click)="replay.toggleOriginalTempo()">orig</button>
+      }
+      @for (s of replay.speeds; track s) {
+        <button type="button"
+                [attr.aria-pressed]="!replay.originalTempo() && s === replay.speed()"
+                (click)="replay.setSpeed(s)">{{ speedLabel(s) }}</button>
+      }
+    </div>
+  </div>
+</div>

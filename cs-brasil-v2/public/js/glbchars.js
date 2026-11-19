@@ -1,0 +1,2169 @@
+// Real rigged GLB characters (Mint-generated) with shared animation clips.
+//
+// Meshy delivers a rigged base mesh per character plus one GLB per animation clip.
+// All characters share the same humanoid rig, so the 5 clips (idle/walk/run/shoot/
+// death) are loaded ONCE and re-bound by bone name onto every character's skeleton.
+// Base meshes are ~270KB (texture downscaled to 512/webp); clips ~30-70KB each.
+//
+// Only bots use these models (the player is first-person). Characters without a GLB
+// fall back to the procedural box meshes in characters.js.
+//
+// Kill-switches de clareza (todos em characters.js, valem p/ GLB e procedural):
+//   ?charfx=0     desliga TODA a injeção de shader (volta ao material cru)
+//   ?charclamp=0  desliga só o clamp de ambiente + o piso/ganho de albedo
+//   ?rim=0        desliga só o rim/fresnel por time
+//   ?cshadow=0    desliga a sombra de contato   |  ?charrecv=0  o char não recebe sombra
+//   tuning ao vivo: ?charfloor= ?charfloorfar= ?charceil= ?charsat= ?rimnear= ?rimfar=
+import * as THREE from 'three';
+import { assetUrl } from './data/asseturl.js';
+import { revDe } from './data/assetver.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { buildRifle, CHAR_FX, charRimColor, upgradeCharMaterial, makeContactShadow } from './characters.js';
+import { weaponModel, preloadWeapons, ONE_HANDED, gripPoints } from './weapons.js';
+import { mountEyewear } from './eyewear.js';
+import { gloveSkinStyle } from './data/glove-skin-definitions.js';
+import { solveCCDIK } from './handik.js';
+import { marcarRef, refsDoCorpo, REFS_PADRAO } from './anim-speed-ref.js';
+import { CHARACTER_RELEASES, STUDIO_CHARACTER_STATES, characterRelease } from './data/content-releases.js';
+import { resolveStudioCharacter, StudioCharacterError } from './studio-character.js';
+import { studioSkeletonMismatch } from './studio-skeleton.js';
+
+// Character ids that have a real model under public/models/characters/<id>.glb.
+export const GLB_CHARS = new Set([
+  'esquerdomacho', 'sindicato', 'mst', 'doutora', 'mistico',
+  'caminhoneiro', 'sertanejo', 'coach',
+  'gotinha', 'farialimer',
+  'bombado', 'hipster', 'dollynho', 'et', 'ancap',
+  'bonzo', 'canarinho', 'proerd',
+  // Palhaços (4ª facção). bonzo (ex-bozo) veio da Mint; os 8 abaixo foram rigados offline
+  // (tools/rig-from-donor.mjs: esqueleto do mst transplantado + auto-skin por proximidade),
+  // então usam os clips compartilhados por nome de osso, sem retarget por char.
+  'palhacomal', 'jozo', 'adjim', 'esbirro', 'titica', 'padati', 'padata', 'cadequinha',
+  // Tribos Urbanas (3º grupo, GLB Mint riggado).
+  'emo', 'blackmetal', 'metaleiro', 'punk', 'skatista', 'clubber', 'rapper', 'reggae', 'pagodeiro',
+  // Funkeiros (5ª facção). mandrake = o antigo funkeiro.glb renomeado (com clips próprios);
+  // os outros 8 são GLBs Mint riggados offline (tools/rig-from-donor.mjs, esqueleto do mst)
+  // com clips retargetados em models/anims/<id>/ (tools/retarget-glb.mjs).
+  'mandrake', 'raul', 'oakley', 'criarj', 'chave', 'funkraiz', 'trapfunk', 'fluxo', 'ostentacao',
+  'lobisomem',
+  'mariabonita', 'lampiao', 'bandeirante', 'boto', 'zumbi', 'curupira', 'saci', 'caipora',
+  // Políticos: GLB Mint de concept caricato, rigados offline (rig-from-donor, esqueleto do mst).
+  'barbudo', 'capitao', 'dama', 'professor', 'senador', 'ministro', 'deputado', 'juiz',
+  'julia-zanatta', 'marina-silva',
+]);
+/* Releases do Studio entram no GLB_CHARS, mas corpo e clipes vêm só do pacote verificado;
+   a lista literal acima segue sendo a dos GLBs legados de public/. */
+for (const id of Object.keys(CHARACTER_RELEASES)) GLB_CHARS.add(id);
+
+// Mascotes de braços-toco: a mão de apoio via IK vira uma mão gigante flutuando
+// (caso do Dollynho na tela de seleção). Neles, a mão L segue a pose do clipe.
+// Exportado para a select-mount.mjs: nesses, MÃO-L não se aplica (é decisão, não defeito).
+// Fora do Ar: o Coronel (rig 0.2.2) ainda deixa a palma L a 10,3 cm do guarda-mão da md97 no
+// idle de jogo; segue com arma de uma mão e fora do IK. Clóvis (5,3 cm) e Bebezão (3,1) voltaram.
+export const IK_L_SKIP = new Set(['dollynho', 'gotinha', 'et', 'canarinho', 'coronel-arrego']);
+
+const STATES = ['idle', 'walk', 'run', 'shoot', 'death', 'crouch', 'crouchwalk', 'jump'];
+// Clipes OPCIONAIS: 1 mão (pistolas) + andando atirando. Se o arquivo não existir,
+// o load falha em silêncio e cai no comportamento padrão (idle/walk/shoot de 2 mãos).
+const OPT_STATES = ['idle1h', 'walk1h', 'walkfire'];
+// Vocabulário espelhado de STUDIO_EXTRA_CLIPS (PR #1260). O pack compartilhado é
+// carregado só no primeiro uso; draw/holster_pistol ficam no fallback por não ter fonte.
+const EXTRA_STATES = ['strafe_left', 'strafe_right', 'walk_back', 'run_back',
+  'strafe_left_pistol', 'strafe_right_pistol', 'walk_back_pistol',
+  'reload_rifle', 'reload_pistol', 'draw_rifle', 'holster_rifle', 'draw_pistol', 'holster_pistol',
+  'hit_front', 'hit_back', 'hit_left', 'hit_right', 'hit_head',
+  'grenade_throw', 'knife_idle', 'knife_stab', 'victory', 'defeat'];
+const UPPER_BONE = /^(Spine|Spine01|Spine02|neck|Head|head_end|headfront|LeftShoulder|LeftArm|LeftForeArm|LeftHand|RightShoulder|RightArm|RightForeArm|RightHand)$/;
+const qp = new URLSearchParams(location.search);
+// ?skindepth=0 volta ao depth único do three (A/B e mutante da régua bots-perf).
+const DEPTH_SKINNED = qp.get('skindepth') === '0' ? undefined : new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+// Sem variante = o three usaria o depth compartilhado como está (sem recorte alfa, deslocamento ou clipping).
+const sombraSemVariante = (m) => !!DEPTH_SKINNED && [].concat(m || []).every((x) => !((x.map || x.alphaMap) && x.alphaTest > 0)
+  && !(x.displacementMap && x.displacementScale !== 0) && !(x.clipShadows && x.clippingPlanes?.length));
+/* CORREÇÃO DE PÉ NO CHÃO, POR CLIPE (invariante CHR3) — tabela GERADA por
+   `npm run feet` a partir da medição do char-probe. Ver tools/gen-foot-offsets.mjs.
+
+   Por que por CLIPE e não por personagem: o probe mede `bind = 0.000` nos 44 — o rig está
+   certo. Quem tira o pé do chão é o clipe (walk ≈ -2,8 cm, crouch ≈ -1,7 cm…), e 38 dos 44
+   compartilham os mesmos clipes, logo os mesmos desvios.
+
+   Carrega assíncrono e falha em silêncio: sem a tabela o jogo fica exatamente como estava
+   (offset 0), nunca quebra. `?feet=0` desliga pra comparar lado a lado. */
+let _footOff = null;
+if (qp.get('feet') !== '0') {
+  fetch(assetUrl('models/anims/foot-offsets.json'))
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => { _footOff = (j && j.offsets) || null; })
+    .catch(() => {});
+}
+export function footOffset(id, pose) { return (_footOff && _footOff[id] && _footOff[id][pose]) || 0; }
+
+/* ÍNDICE DE CLIPES POR PERSONAGEM (models/anims/index.json, gerado por `npm run anims`).
+   MEDIDO: sem ele o preload pedia os 11 clipes de TODO personagem, e 8 dos 44 (os 8
+   palhaços) nunca tiveram pasta — **88 requisições 404 por carregamento de partida**.
+   O `catch` vazio abaixo engolia tudo, então o jogo funcionava e o console mentia: com
+   88 erros por partida, qualquer exceção de verdade ficava enterrada, e foi assim que o
+   dono viu "vários erros no console" enquanto caçávamos um reinício.
+   Página estática não lista diretório: quem sabe o que existe é o build (mesmo desenho
+   do `audio/manifest.json` e do `foot-offsets.json`).
+   Falha do fetch = `null` = comportamento antigo (pede tudo). Nunca quebra. */
+let _animIdxP = null;
+function animIndex() {
+  if (!_animIdxP) {
+    _animIdxP = fetch(assetUrl('models/anims/index.json'))
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  return _animIdxP;
+}
+
+const ANIM_DIR = qp.get('animdir') || 'models/anims/mixamo';   // pack Mixamo rifle (retarget próprio, tools/retarget-mixamo.mjs) — padrão desde 22/07; override via ?animdir=
+const TARGET_HEIGHT = parseFloat(qp.get('charh')) || 1.72;      // meters (match box silhouette)
+// Per-clip natural ground speed (m/s) that plants the feet at timeScale 1, MEASURED from
+// each clip's real foot stride (tools: iktest HARNESS.measureStride / tools/eval/mixamo-measure.mjs).
+const WALK_REF   = parseFloat(qp.get('wref')) || REFS_PADRAO.walk;
+const RUN_REF    = parseFloat(qp.get('rref')) || REFS_PADRAO.run;
+const CROUCH_REF = parseFloat(qp.get('cref')) || REFS_PADRAO.crouchwalk;
+const REFS_GLOBAIS = Object.freeze({ walk: WALK_REF, walk1h: WALK_REF, run: RUN_REF, crouchwalk: CROUCH_REF });
+const FACING_OFFSET = (parseFloat(qp.get('charface')) || 0) * Math.PI / 180; // yaw fix if model faces -Z
+// FASE 3: clamp de segurança da correção de pitch da cabeça (malha fechada, ~28°).
+// (O antigo HEAD_UP fixo foi removido: ele acumulava rotação quando o mixer não
+// escrevia o osso — a correção agora é sempre em malha fechada, ver update().)
+const AIM_CORR_CLAMP = 0.5;
+
+// Rifle mounted in the right hand (bone-local meters via a scale-compensated mount).
+// Tunable live with ?gunpos=x,y,z ?gunrot=xdeg,ydeg,zdeg ?guns=scale.
+const _num3 = (s, d) => { const p = (s || '').split(',').map(Number); return p.length === 3 && p.every((n) => !isNaN(n)) ? p : d; };
+// z era 0,10: o grip (origem do weaponModel) nascia 10 cm À FRENTE do centro da palma —
+// era o revólver "na ponta dos dedos" do bonzo/cadequinha e a arma apoiada na palma aberta
+// em vez de dentro dela (reprovação de 05/08). 0,04 deixa o grip DENTRO da mão com os
+// dedos por cima do corpo da arma. A/B por figura: scratchpad sel_now × sel_fix (05/08).
+const GUN_POS = _num3(qp.get('gunpos'), [0.02, 0.02, 0.04]);
+const GUN_ROT = _num3(qp.get('gunrot'), [90, 0, 0]).map((d) => d * Math.PI / 180);
+const GUN_SCALE = parseFloat(qp.get('guns')) || 1.0;
+// Armas que precisam de +180° só na 3ª pessoa (mount). VAZIO desde 04/08: o flip da p90
+// era da época de outro GLB; o modelo atual já nasce com o cano em +Z e o flip a deixava
+// de coronha pra frente (visto pelo dono na tela de seleção; A/B por figura no scratchpad
+// v2-padata.png × v2-padata-semflip.png). Mutação que prova: readicionar 'p90' aqui
+// reproduz a inversão na hora.
+const TP_FLIP_Y = new Set([]);
+
+// ── MOUNT V2 (rodada de CONSISTÊNCIA) ───────────────────────────────────────
+// O mount antigo tirava a direção do cano da linha ANTEBRAÇO->MÃO. Medido rig a rig
+// (tools/eval/tp-mount-probe.mjs) esse vetor dá, no clipe de idle:
+//   • pitch entre -21° e -35° em TODOS os 27 personagens  -> toda arma apontada pro chão
+//   • yaw de 63° no coach                                  -> a "arma pra trás" que o dono viu
+// Ou seja: o defeito não era de um personagem, era do método. A direção do cano agora
+// vem do CORPO (frente do personagem), que é o que CS 1.6/ev.io/VALORANT fazem: em 3ª
+// pessoa a arma aponta pra onde o boneco olha, ponto. Só o ângulo de porte (leve
+// inclinação) é constante, e ele é o mesmo pra todo mundo — consistência antes de tudo.
+// Kill-switch: ?tpmount=0 volta ao algoritmo antigo (linha do antebraço).
+const TP_MOUNT_V2 = qp.get('tpmount') !== '0';
+// ?tpmountlive=0 -> mount volta a ser resolvido só uma vez, na pose de idle (ver o bloco
+// longo em buildCharacterModel). Existe pra permitir A/B do defeito, não pra uso normal.
+const TP_MOUNT_LIVE = qp.get('tpmountlive') !== '0';
+// Vitrine do lobby gira o PULSO, não a arma na mão (girar a arma deixava 37-65° fora da
+// pegada: "arma bugada na mão", 28/10). Régua eval:lobbyarmamao; ?pvpulso=0 volta ao antigo.
+const PV_PULSO = qp.get('pvpulso') !== '0';
+const PV_PIVO = qp.get('pvpivo') !== '0';   // ?pvpivo=0: gira no osso (sem CCD na palma), só p/ mutante
+const _tpc = (qp.get('tpcarry') || '').split(',').map(Number);
+const TP_CARRY_PITCH = ((_tpc.length === 2 && !isNaN(_tpc[0]) ? _tpc[0] : -6)) * Math.PI / 180;  // cano levemente pro chão (porte)
+const TP_CARRY_YAW = ((_tpc.length === 2 && !isNaN(_tpc[1]) ? _tpc[1] : 4)) * Math.PI / 180;     // levemente cruzando o corpo
+/* Lâmina não é cano: com o porte de cano (−6°) a faca saía horizontal, escondida no punho.
+   Pitch negativo levanta a ponta. A/B: ?tpcarryfaca=-6,4. Régua: faca-porte-check.mjs. */
+const _tpb = (qp.get('tpcarryfaca') || '').split(',').map(Number);
+const TP_CARRY_BLADE = [
+  _tpb.length === 2 && !isNaN(_tpb[0]) ? _tpb[0] : -38,
+  _tpb.length === 2 && !isNaN(_tpb[1]) ? _tpb[1] : 20,
+];
+const BLADES = new Set(['knife']);
+const TP_CLEAR = parseFloat(qp.get('tpclear')) || 0.06;   // folga mínima entre o grip e a superfície do corpo (m)
+// O empurrão só entra quando a palma está ENTERRADA de verdade. Medido: humano típico
+// tem a palma 3-10 cm dentro do volume do quadril na pose de idle (braço encostado no
+// corpo) e mesmo assim a arma lê bem; o Dollynho está 25 cm dentro da garrafa e o Ancap
+// 12 cm dentro da túnica. A tolerância abaixo separa os dois casos. Teto baixo de
+// propósito: arma longe da mão é mão solta (C7), que é pior que um encosto na roupa.
+const TP_BURIED_TOL = 0.10;
+const TP_CLEAR_MAX = 0.20;
+/* Corpos cuja cabeça é mais larga que o tronco logo abaixo e cuja palma nasce na altura do
+   pescoço: o raio do tronco é medido sem pescoço/cabeça (torsoProfile). Saci mudaria também
+   (empurrão 0,094 -> 0 com mp5), mas legado fica como está. ?torsocabeca=1 desliga (mutante). */
+const TORSO_SEM_CABECA = new Set(qp.get('torsocabeca') === '1' ? [] : ['bebe-reborn']);
+/* CLAMP DE FRENTE (04-05/08, BUG do dono: "arma por trás do corpo" — jozo, trapfunk,
+   coach). O clipe assentado da seleção deixa a mão direita de alguns rigs ATRÁS do plano
+   do corpo (select-mount.mjs: coach frenteZ -0,052 m, esbirro -0,065) e a arma, que é
+   filha do osso da mão, vai junto. Nenhum porte real carrega arma atrás do quadril.
+   Correção por-quadro (a de build não segura: a mão MUDA de lugar quando o idle assenta):
+   a âncora da palma é reprojetada no espaço do modelo e o Z é clampado a um mínimo à
+   frente. Procedência do 0,15: pior elogiado da select-mount (mandrake 0,187) ÷ 1,25.
+   Kill-switch ?tpfz=0; valor tunável ?tpfz=0.2. */
+const TP_FRONT_MIN = qp.get('tpfz') === '0' ? -Infinity : (parseFloat(qp.get('tpfz')) || 0.15);
+// Guarda de palma (ver measurePalmLocal): teto de alavanca do mount, em antebraços.
+const PALM_GUARD = qp.get('palmguard') !== '0';
+const PALM_MAX_LEVER = parseFloat(qp.get('palmlever')) || 0.9;
+/* PORTE DE 1 MÃO: overlay de mundo que corrige o clipe `idle1h` (braço desce, cotovelo
+   fecha, mão esquerda ao lado do quadril). Medidas e limites: docs/ANIM-3P.md. */
+const _p1h = (qp.get('porte1h') || '').split(',').map(Number);
+const PORTE_1H = qp.get('porte1h') !== '0';
+const P1H_ARM = ((_p1h.length === 2 && !isNaN(_p1h[0]) ? _p1h[0] : 50)) * Math.PI / 180;
+const P1H_FORE = ((_p1h.length === 2 && !isNaN(_p1h[1]) ? _p1h[1] : -50)) * Math.PI / 180;
+const CANARINHO_P1H_ARM = 32 * Math.PI / 180;
+const CANARINHO_P1H_FORE = -16 * Math.PI / 180;
+const P1H_MAO_L = [-0.19, -0.06, 0.02];
+/* Corpos onde o clipe 1H autorado já resolve a anatomia e não aceita o overlay genérico. */
+const P1H_SKIP = new Set(['canarinho', 'bonzo']);
+/* Esquerdomacho alternava entre clipe 1H e overlay. Usa locomotiva base + um único overlay. */
+const P1H_BASE_CLIP = new Set(['esquerdomacho']);
+const loader = new GLTFLoader();
+const loadGLB = (url) => new Promise((res, rej) => loader.load(url, res, undefined, rej));
+/* Tint 3P por personagem (31/10, capa do Juiz); crivo na contact sheet. Hist: docs/ANIM-3P.md. */
+const TINT_3P = {
+  juiz: [{ material: /Navy Broadshoulder/i, color: 0x98a3c6 }],
+};
+
+let _clips = null;                 // { idle: AnimationClip, ... } shared fallback
+const _clipsByChar = {};           // id -> per-character retargeted clip set (fallback to _clips)
+const _extraClips = {};
+const _upperClips = new Map();
+let _extrasP = null;
+function extrasPack() {
+  if (!_extrasP) {
+    _extrasP = loadGLB(assetUrl('models/anims/extras.glb')).then((g) => {
+      for (const c of g.animations) if (EXTRA_STATES.includes(c.name)) _extraClips[c.name] = c;
+      return _extraClips;
+    }).catch(() => _extraClips);
+  }
+  return _extrasP;
+}
+function upperClip(name) {
+  if (!_upperClips.has(name)) {
+    const c = _extraClips[name];
+    if (!c) return null;
+    const tracks = c.tracks.filter((t) => {
+      const bone = t.name.split('.')[0];
+      // A postura de faca preserva o porte validado; o clipe autoral move só a cabeça.
+      if (name === 'knife_idle') return /^(neck|Head|head_end|headfront)$/.test(bone);
+      return UPPER_BONE.test(bone);
+    });
+    _upperClips.set(name, new THREE.AnimationClip(`${name}_upper`, c.duration, tracks));
+  }
+  return _upperClips.get(name);
+}
+/* EMOTES DE CAPTURA: pack lazy no esqueleto de referência, retargetado por corpo no 1º uso.
+   Rotação, chão por contato, apêndice e cápsula: docs/EMOTES-BR.md ("Corpo inteiro"). */
+export const EMOTE_CAPSULA_R = 0.38;   // raio da cápsula do jogador: game.js `_collide(p.pos, 0.38)`
+const EMOTE_FPS = 30;
+// Braço, antebraço e mão usam a rotação de mundo ABSOLUTA da referência; o resto, o delta
+// sobre o próprio repouso (medida do roster em docs/EMOTES-BR.md, "Rotação").
+const EMOTE_ABSOLUTO = /Arm|Hand/;
+// 26 direções no espaço do osso (faces, arestas e cantos do cubo): casco da região de cada osso.
+const EMOTE_DIRS = [];
+for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) {
+  if (x || y || z) EMOTE_DIRS.push(new THREE.Vector3(x, y, z).normalize());
+}
+// Caches: repouso da cena do pack; por charId, repouso e pontos de apoio (+ chão do repouso);
+// por `${charId}|${nome}|${escala}`, o clipe retargetado.
+const _emoteClips = {};
+let _emoteRef = null;
+const _emoteRepouso = new Map();
+const _emoteApoio = new Map();
+const _emoteClipsCorpo = new Map();
+let _emotesP = null;
+const _qI = new THREE.Quaternion();
+/* Repouso relativo à raiz (sem o enquadramento do modelo), pai antes do filho. Não desce
+   do osso para filhos que não são osso (mount de arma, óculos). */
+function repousoEsqueleto(raiz) {
+  const ossos = new Map(), ordem = [], indice = new Map();
+  const visita = (o, paiW, pai) => {
+    const w = new THREE.Matrix4().compose(o.position, o.quaternion, o.scale);
+    if (paiW) w.premultiply(paiW);
+    let nome = pai;
+    if (o.name && !ossos.has(o.name)) {
+      const pW = new THREE.Vector3(), qW = new THREE.Quaternion();
+      w.decompose(pW, qW, new THREE.Vector3());
+      const r = { nome: o.name, pai, q: o.quaternion.clone(), p: o.position.clone(), s: o.scale.clone(), w, pW, qW };
+      indice.set(o.name, ordem.length);
+      ossos.set(o.name, r); ordem.push(r); nome = o.name;
+    }
+    for (const c of o.children) if (!c.isMesh && (!o.isBone || c.isBone)) visita(c, w, nome);
+  };
+  for (const c of raiz.children) if (!c.isMesh) visita(c, null, null);
+  return { ossos, ordem, indice };
+}
+/* Pontos de apoio: por osso, os extremos da malha nas 26 direções do espaço do osso, com os
+   4 pesos para skinning exato por quadro. Uma passada na malha por personagem. */
+function apoioDoCorpo(model, tgt) {
+  const melhor = new Map();
+  const v = new THREE.Vector3(), r = new THREE.Vector3(), t = new THREE.Vector3();
+  const GET = ['getX', 'getY', 'getZ', 'getW'];
+  const pontos = [];
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh || !o.skeleton) return;
+    const { position: pos, skinIndex: J, skinWeight: W } = o.geometry.attributes;
+    if (!pos || !J || !W) return;
+    const nos = o.skeleton.bones.map((b) => (tgt.indice.has(b.name) ? tgt.indice.get(b.name) : -1));
+    const bi = o.skeleton.boneInverses.map((m) => m.clone().multiply(o.bindMatrix));
+    const ms = nos.map((i, j) => (i >= 0 ? tgt.ordem[i].w.clone().multiply(bi[j]) : null));
+    const inv = nos.map((i) => (i >= 0 ? tgt.ordem[i].w.clone().invert() : null));
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i); r.set(0, 0, 0);
+      let dom = -1, wDom = 0, soma = 0;
+      const js = [], ws = [], qs = [];
+      for (let k = 0; k < 4; k++) {
+        const w = W[GET[k]](i), j = J[GET[k]](i);
+        if (!w || !ms[j]) continue;
+        r.addScaledVector(t.copy(v).applyMatrix4(ms[j]), w); soma += w;
+        js.push(nos[j]); ws.push(w); qs.push(v.clone().applyMatrix4(bi[j]));
+        if (w > wDom) { wDom = w; dom = j; }
+      }
+      if (dom < 0) continue;
+      r.divideScalar(soma);
+      t.copy(r).applyMatrix4(inv[dom]);
+      let m = melhor.get(nos[dom]);
+      if (!m) melhor.set(nos[dom], m = { val: new Float64Array(EMOTE_DIRS.length).fill(-Infinity), idx: new Int32Array(EMOTE_DIRS.length).fill(-1) });
+      let novo = -1;
+      for (let d = 0; d < EMOTE_DIRS.length; d++) {
+        const s = t.dot(EMOTE_DIRS[d]);
+        if (s <= m.val[d]) continue;
+        if (novo < 0) { novo = pontos.length; pontos.push({ r: r.clone(), j: js, w: ws.map((x) => x / soma), q: qs, dom: nos[dom] }); }
+        m.val[d] = s; m.idx[d] = novo;
+      }
+    }
+  });
+  const usados = [...new Set([...melhor.values()].flatMap((m) => [...m.idx]))].filter((i) => i >= 0).map((i) => pontos[i]);
+  if (!usados.length) return null;
+  /* Classes: `pe` assenta a dança em pé; `apendice` (mais de uma altura de quadril do osso)
+     nunca sustenta nem é guardado; `corpo` é o resto. Casos: docs/EMOTES-BR.md, "Apêndice". */
+  const altura = alturaQuadril(tgt);
+  const filhos = new Map();
+  for (const o of tgt.ordem) if (o.pai) (filhos.get(o.pai) || filhos.set(o.pai, []).get(o.pai)).push(o);
+  const seg = new THREE.Line3(), c = new THREE.Vector3();
+  for (const p of usados) {
+    const dono = tgt.ordem[p.dom];
+    const segs = filhos.get(dono.nome) || [];
+    const d = segs.length ? Math.min(...segs.map((f) => { seg.set(dono.pW, f.pW); return seg.closestPointToPoint(p.r, true, c).distanceTo(p.r); })) : p.r.distanceTo(dono.pW);
+    p.classe = /Foot|ToeBase/.test(dono.nome) ? 'pe' : d > altura ? 'apendice' : 'corpo';
+  }
+  const chao = (lista) => (lista.length ? Math.min(...lista.map((p) => p.r.y)) : null);
+  return { pts: usados, chao: chao(usados.filter((p) => p.classe !== 'apendice')), chaoPe: chao(usados.filter((p) => p.classe === 'pe')) };
+}
+/* Altura do ponto de apoio mais baixo (da `classe`, ou de todos fora os apêndices) com o
+   esqueleto em `mats`: o skinning linear do SkinnedMesh (Σ w · osso · boneInverse ·
+   bindMatrix · v), só o Y. */
+function apoioMaisBaixo(apoio, mats, classe = null) {
+  let baixo = Infinity;
+  for (const p of apoio.pts) {
+    if (classe ? p.classe !== classe : p.classe === 'apendice') continue;
+    let y = 0;
+    for (let k = 0; k < p.j.length; k++) {
+      const e = mats[p.j[k]].elements, q = p.q[k];
+      y += p.w[k] * (e[1] * q.x + e[5] * q.y + e[9] * q.z + e[13]);
+    }
+    if (y < baixo) baixo = y;
+  }
+  return baixo;
+}
+/* Mundo de cada nó num quadro: rotação local de `quats` (índice da ordem; null = repouso) e
+   translação de repouso, salvo o Hips (`hipsLocal`). */
+function fkQuadro(r, mats, quats, hipsLocal) {
+  for (let i = 0; i < r.ordem.length; i++) {
+    const o = r.ordem[i];
+    mats[i].compose(o.nome === 'Hips' && hipsLocal ? hipsLocal : o.p, quats[i] || o.q, o.s);
+    if (o.pai) mats[i].premultiply(mats[r.indice.get(o.pai)]);
+  }
+}
+function emotesPack() {
+  if (!_emotesP) {
+    _emotesP = loadGLB(assetUrl('models/anims/emotes-mocap.glb')).then((g) => {
+      _emoteRef = repousoEsqueleto(g.scene);
+      for (const c of g.animations) _emoteClips[c.name] = c;
+      return _emoteClips;
+    }).catch((error) => {
+      console.error('[glbchars] falha ao carregar models/anims/emotes-mocap.glb', error);
+      throw error;
+    });
+  }
+  return _emotesP;
+}
+const alturaQuadril = (r) => r.ossos.get('Hips').pW.y - (r.ossos.get('LeftFoot').pW.y + r.ossos.get('RightFoot').pW.y) / 2;
+/* Clipe do emote retargetado para o corpo do controlador; `model.scale` (metros de jogo por
+   unidade) converte a cápsula para unidade local. */
+function emoteClipDoCorpo(nome, ctrl) {
+  const { charId, model } = ctrl, escala = model?.scale.x || 1;
+  const c = _emoteClips[nome], tgt = _emoteRepouso.get(charId), ref = _emoteRef;
+  if (!c || !tgt || !ref || !model) return null;
+  const nomesTrack = new Set(c.tracks.map((t) => t.name));
+  const animados = tgt.ordem.map((o) => ref.ossos.has(o.nome) && nomesTrack.has(`${o.nome}.quaternion`));
+  // Curl_* (fechamento da mão, escrito uma vez pelo buildCharacterModel) fica VIVO na dança:
+  // entra no contato e na chave — o Lampião enterrava 8,7 cm de dedo fechado no freeze.
+  const curls = new Map();
+  model.traverse((o) => { if (o.isBone && /^Curl_/.test(o.name) && !curls.has(o.name)) curls.set(o.name, o.quaternion); });
+  const vivos = tgt.ordem.map((o) => (curls.has(o.nome) && curls.get(o.nome).angleTo(o.q) > 1e-3 ? curls.get(o.nome).clone() : null));
+  const chave = `${charId}|${nome}|${escala.toFixed(4)}|${vivos.map((q, i) => (q ? `${i}:${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)}` : '')).join('')}`;
+  if (_emoteClipsCorpo.has(chave)) return _emoteClipsCorpo.get(chave);
+  if (!_emoteApoio.has(charId)) _emoteApoio.set(charId, apoioDoCorpo(model, tgt));
+  const apoio = _emoteApoio.get(charId);
+  const interp = new Map(c.tracks.map((t) => [t.name, t.createInterpolant()]));
+  const n = Math.max(2, Math.round(c.duration * EMOTE_FPS) + 1);
+  const times = new Float32Array(n);
+  for (let f = 0; f < n; f++) times[f] = Math.min(c.duration, f / EMOTE_FPS);
+  // Mundo do osso = mundo da referência · base. Delta: base = qW_ref_rest⁻¹ · qW_corpo_rest;
+  // absoluto (braço): base = identidade, como no retarget-glb.
+  const base = tgt.ordem.map((o, i) => (!animados[i] ? null
+    : EMOTE_ABSOLUTO.test(o.nome) ? _qI : ref.ossos.get(o.nome).qW.clone().invert().multiply(o.qW)));
+  const locais = tgt.ordem.map((o, i) => (animados[i] ? new Float32Array(n * 4) : null));
+  const hipsIt = interp.get('Hips.position'), rh = ref.ossos.get('Hips'), th = tgt.ossos.get('Hips');
+  const comQuadril = !!(hipsIt && rh && th && ['LeftFoot', 'RightFoot'].every((o) => ref.ossos.has(o) && tgt.ossos.has(o)));
+  const refQ = ref.ordem.map(() => new THREE.Quaternion()), refQL = ref.ordem.map(() => null);
+  const refM = ref.ordem.map(() => new THREE.Matrix4());
+  const tgtW = tgt.ordem.map(() => new THREE.Quaternion());
+  const refHips = new THREE.Vector3(), loc = new THREE.Quaternion(), p = new THREE.Vector3();
+  // Ossos da referência do Hips para baixo: o mais baixo deles é o contato com o chão, e se
+  // ele é pé/dedo a referência está em pé naquele quadro.
+  const abaixo = ref.ordem.map((o) => { for (let x = o; x; x = ref.ossos.get(x.pai)) if (x.nome === 'Hips') return true; return false; });
+  const ePe = ref.ordem.map((o) => /Foot|ToeBase/.test(o.nome));
+  const menorRef = (mats) => {
+    let y = Infinity, pe = false;
+    mats.forEach((m, i) => { if (abaixo[i] && m.elements[13] < y) { y = m.elements[13]; pe = ePe[i]; } });
+    return [y, pe];
+  };
+  const refChao = menorRef(ref.ordem.map((o) => o.w))[0];
+  const refAlto = new Float32Array(n), refNoPe = new Uint8Array(n);
+  for (let f = 0; f < n; f++) {
+    ref.ordem.forEach((o, i) => {
+      const it = interp.get(`${o.nome}.quaternion`);
+      refQL[i] = it ? (refQL[i] || new THREE.Quaternion()).fromArray(it.evaluate(times[f])) : null;
+      refQ[i].copy(o.pai ? refQ[ref.indice.get(o.pai)] : _qI).multiply(refQL[i] || o.q);
+    });
+    if (comQuadril) {
+      fkQuadro(ref, refM, refQL, refHips.fromArray(hipsIt.evaluate(times[f])));
+      const [y, pe] = menorRef(refM);
+      refAlto[f] = Math.max(0, y - refChao); refNoPe[f] = pe ? 1 : 0;
+    }
+    tgt.ordem.forEach((o, i) => {
+      const paiW = o.pai ? tgtW[tgt.indice.get(o.pai)] : _qI;
+      if (!animados[i]) { tgtW[i].copy(paiW).multiply(o.q); return; }
+      tgtW[i].copy(refQ[ref.indice.get(o.nome)]).multiply(base[i]);
+      loc.copy(paiW).invert().multiply(tgtW[i]).toArray(locais[i], f * 4);
+    });
+  }
+  const tracks = [];
+  tgt.ordem.forEach((o, i) => { if (locais[i]) tracks.push(new THREE.QuaternionKeyframeTrack(`${o.nome}.quaternion`, times, locais[i])); });
+  if (comQuadril) {
+    const k = alturaQuadril(tgt) / alturaQuadril(ref);
+    const refPai = rh.pai ? ref.ossos.get(rh.pai).w : new THREE.Matrix4();
+    const tgtPai = th.pai ? tgt.ossos.get(th.pai).w : new THREE.Matrix4(), tgtPaiInv = tgtPai.clone().invert();
+    const mundo = new Float32Array(n * 3);
+    let maxXZ = 0;
+    for (let f = 0; f < n; f++) {
+      p.fromArray(hipsIt.evaluate(times[f])).applyMatrix4(refPai).sub(rh.pW).multiplyScalar(k).toArray(mundo, f * 3);
+      maxXZ = Math.max(maxXZ, Math.hypot(p.x, p.z));
+    }
+    // Cápsula centrada no EIXO do grupo, não no repouso do Hips; o horizontal do clipe
+    // inteiro encolhe junto (sem quina na trajetória).
+    const limite = EMOTE_CAPSULA_R / escala;
+    const fXZ = maxXZ > limite ? limite / maxXZ : 1;
+    const v = new Float32Array(n * 3), tgtM = tgt.ordem.map(() => new THREE.Matrix4()), quats = tgt.ordem.map(() => null);
+    const q = tgt.ordem.map(() => new THREE.Quaternion()), hl = new THREE.Vector3();
+    for (let f = 0; f < n; f++) {
+      p.fromArray(mundo, f * 3);
+      p.set(p.x * fXZ, th.pW.y + p.y, p.z * fXZ);
+      if (apoio) {
+        tgt.ordem.forEach((o, i) => { quats[i] = locais[i] ? q[i].fromArray(locais[i], f * 4) : vivos[i]; });
+        fkQuadro(tgt, tgtM, quats, hl.copy(p).applyMatrix4(tgtPaiInv));
+        if (refNoPe[f] && apoio.chaoPe !== null) {
+          // Em pé: o pé assenta; o resto do corpo (joelho, mão, cabeça) só não atravessa o chão.
+          let dy = apoio.chaoPe + refAlto[f] * k - apoioMaisBaixo(apoio, tgtM, 'pe');
+          const corpo = apoioMaisBaixo(apoio, tgtM, 'corpo') + dy;
+          if (corpo < apoio.chao) dy += apoio.chao - corpo;
+          p.y += dy;
+        } else p.y += apoio.chao + refAlto[f] * k - apoioMaisBaixo(apoio, tgtM);
+      }
+      p.applyMatrix4(tgtPaiInv).toArray(v, f * 3);
+    }
+    tracks.push(new THREE.VectorKeyframeTrack('Hips.position', times, v));
+  }
+  const clip = new THREE.AnimationClip(`emote_${nome}`, c.duration, tracks);
+  _emoteClipsCorpo.set(chave, clip);
+  return clip;
+}
+const _base = new Map();           // id -> THREE.Object3D template scene
+const _bodyOrigins = new WeakMap();
+const _skins = new Map(), _skinRequests = new Map();
+let _skinManifest = null;
+export async function preloadCosmeticAssets(ids = []) {
+  if (!ids.some(Boolean)) return;
+  if (!_skinManifest) _skinManifest = fetch(assetUrl('models/skins/manifest.json')).then(r => { if (!r.ok) throw new Error('skin_manifest'); return r.json(); }).catch(() => ({skins:{}}));
+  const manifest = await _skinManifest;
+  await Promise.all([...new Set(ids.filter(Boolean))].map(async id => {
+    const entry = manifest.skins?.[id];
+    if (!entry?.approved || !GLB_CHARS.has(entry.character) || !/^\/models\/skins\/[a-z0-9-]+\.glb$/.test(entry.model || '')) return;
+    if (_skins.has(id)) return;
+    if (_skinRequests.has(id)) return _skinRequests.get(id);
+    const request = (async () => {
+      const origin = Object.freeze({ kind: 'cosmetic', character: entry.character, path: `public${entry.model}`, sha256: entry.sha256 });
+      const g = await loadGLB(entry.model); let rigged = false;
+      g.scene.traverse(o => { if (o.isSkinnedMesh && o.skeleton) rigged = true; });
+      if (!rigged) throw new Error('skin_requires_rig');
+      const clips = {};
+      for (const name of [...STATES, ...OPT_STATES]) {
+        const clip = g.animations.find(c => c.name === (entry.animationNames?.[name] || name));
+        if (clip) clips[name] = clip;
+      }
+      const compatible = entry.rigCompatibleWith === entry.character;
+      if (!compatible && !STATES.every(name => clips[name])) throw new Error('skin_requires_animations');
+      _bodyOrigins.set(g.scene, origin);
+      _skins.set(id, {character:entry.character, model:g.scene, clips:compatible?null:clips,gripProfile:entry.gripProfile,metalFinish:entry.metalFinish});
+    })().catch(e => console.warn(`[skins] ${id}: ${e.message}`)).finally(() => _skinRequests.delete(id));
+    _skinRequests.set(id, request); return request;
+  }));
+}
+
+/* LUVAS EM 3ª PESSOA (20/10): a fábrica já recortava a mão de cada personagem em
+   `models/gloves/3p/`; aqui o pacote é re-bindado por nome de osso e pintado. */
+const _gloveMeshes = new Map();
+const _gloveRequests = new Map();
+const _gloveHandles = new Map(), _gloveOrigins = new WeakMap();
+export class GloveManifestUnavailable extends Error {
+  constructor(cause) { super('gloves_manifest_unavailable'); this.cause = cause; this.reported = false; }
+  warn() { if (!this.reported) { this.reported = true; console.warn('[luvas] manifesto TP indisponível'); } }
+}
+let _gloveManifest = null;
+function gloveManifest() {
+  if (!_gloveManifest) {
+    const request = Promise.resolve().then(() => fetch(assetUrl('data/gloves-manifest.json')))
+      .then((r) => { if (!r.ok) throw new Error('gloves_manifest'); return r.json(); })
+      .then((manifest) => {
+        const object = (v) => v && typeof v === 'object' && !Array.isArray(v);
+        if (!object(manifest) || !Array.isArray(manifest.packages) || manifest.packages.some((p) =>
+          !object(p) || typeof p.perspective !== 'string' || (p.perspective === '3p' &&
+            (!/^[a-f0-9]{64}$/.test(p.skeletonFamily?.fingerprintSha256 || '') || !Array.isArray(p.sourceVariants)
+              || p.sourceVariants.some((v) => !object(v) || typeof v.id !== 'string' || !Array.isArray(v.characterIds)
+                || v.characterIds.some((id) => typeof id !== 'string')))))) throw new Error('gloves_manifest');
+        return manifest;
+      }).catch((cause) => {
+        if (_gloveManifest === request) _gloveManifest = null;
+        throw new GloveManifestUnavailable(cause);
+      });
+    _gloveManifest = request;
+  }
+  return _gloveManifest;
+}
+function glovePath(manifest, origin) {
+  const matches = [];
+  for (const pack of manifest.packages || []) {
+    if (pack.perspective !== '3p') continue;
+    const family = pack.skeletonFamily?.fingerprintSha256;
+    if (!/^[a-f0-9]{64}$/.test(family || '')) continue;
+    for (const variante of pack.sourceVariants || []) {
+      const source = variante.source;
+      if (!(variante.characterIds || []).includes(origin.character) || !/^[a-z0-9-]+$/.test(variante.id || '')
+        || source?.path !== origin.path || !/^[a-f0-9]{64}$/.test(source.sha256 || '')
+        || source.skeletonFamilySha256 !== family) continue;
+      const sameSource = origin.kind === 'cosmetic' ? source.sha256 === origin.sha256
+        : origin.kind === 'base' && /^[a-f0-9]{10}$/.test(origin.revision || '') && source.sha256.startsWith(origin.revision);
+      if (sameSource) matches.push({ url: `/models/gloves/3p/${variante.id}-${family.slice(0, 12)}.glb` });
+    }
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+/* Corpo do Studio tem origem {kind:'studio'}: nem origem base em public/ nem luva pública
+   casam com ele (docs/studio-character-release.md). */
+function baseGloveOrigin(id) {
+  if (!GLB_CHARS.has(id) || characterRelease(id)) return null;
+  const path = `models/characters/${id}.glb`;
+  return Object.freeze({ kind: 'base', character: id, path: `public/${path}`, revision: revDe(path) });
+}
+function gloveHandleFor(origin) {
+  if (!origin || origin.kind === 'studio') return null;
+  const key = JSON.stringify([origin.kind, origin.character, origin.path, origin.kind === 'cosmetic' ? origin.sha256 : origin.revision]);
+  if (_gloveHandles.has(key)) return _gloveHandles.get(key);
+  const handle = Object.freeze({
+    key,
+    get ready() { return !!_gloveMeshes.get(key); },
+    preload() {
+      if (_gloveMeshes.has(key)) return Promise.resolve();
+      if (_gloveRequests.has(key)) return _gloveRequests.get(key);
+      const request = Promise.resolve().then(() => gloveManifest()).then(async (manifest) => {
+        try {
+          const pack = glovePath(manifest, origin);
+          if (!pack) { _gloveMeshes.set(key, null); return; }
+          const g = await loadGLB(assetUrl(pack.url.replace(/^\//, '')));
+          const meshes = [];
+          g.scene.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
+          _gloveMeshes.set(key, meshes.length ? meshes : null);
+        } catch (e) { _gloveMeshes.set(key, null); }
+      }).finally(() => _gloveRequests.delete(key));
+      _gloveRequests.set(key, request);
+      return request;
+    },
+  });
+  _gloveHandles.set(key, handle);
+  _gloveOrigins.set(handle, origin);
+  return handle;
+}
+export function getGloveHandle(charId, skinId = null) {
+  const cosmetic = _skins.get(skinId);
+  const template = cosmetic?.character === charId ? cosmetic.model : _base.get(charId);
+  return gloveHandleFor(template && _bodyOrigins.get(template));
+}
+export async function preloadGloveAssets(ids = []) {
+  await Promise.all([...new Set(ids)].map(id => gloveHandleFor(baseGloveOrigin(id))?.preload()));
+}
+export function hasGloveModel(id) {
+  return !!gloveHandleFor(baseGloveOrigin(id))?.ready;
+}
+/* Anexa o pacote inteiro ao personagem JÁ CLONADO, ou recusa a família divergente. */
+function attachGloves(model, gloveSkinId, handle) {
+  const estilo = gloveSkinStyle(gloveSkinId);
+  const templates = handle && _gloveOrigins.has(handle) ? _gloveMeshes.get(handle.key) : null;
+  if (!estilo || !templates) return null;
+  let corpo = null;
+  model.traverse((o) => { if (!corpo && o.isSkinnedMesh) corpo = o; });
+  if (!corpo) return null;
+  const ossos = new Map();
+  corpo.skeleton.bones.forEach((b) => ossos.set(b.name, b));
+  const binds = templates.map(template => ({ template, bones: template.skeleton.bones.map(b => ossos.get(b.name)) }));
+  if (binds.some(({ bones }) => bones.some(b => !b))) return null;
+  return binds.map(({ template, bones }) => {
+    const luva = new THREE.SkinnedMesh(template.geometry, new THREE.MeshStandardMaterial({
+      color: new THREE.Color(estilo.glove), roughness: 0.86, metalness: 0,
+    }));
+    luva.name = 'luvas-3p';
+    luva.userData.gloveSkin = estilo.id;
+    luva.bind(new THREE.Skeleton(bones, template.skeleton.boneInverses), template.bindMatrix);
+    luva.bindMode = template.bindMode;
+    luva.frustumCulled = false;
+    corpo.parent.add(luva);
+    return luva;
+  });
+}
+
+
+export function hasModel(id, skinId) { return _base.has(id) || _skins.get(skinId)?.character === id; }
+// Acesso ao template já carregado (fparms.js clona daqui p/ os braços de 1ª pessoa)
+// e aos clipes compartilhados (pose base congelada). Pré-requisito: preloadCharacterAssets.
+export function getCharTemplate(id) { return _base.get(id); }
+export function getSharedClips() { return _clips; }
+
+// Descendentes herdam a seleção de pesos; isso não comprova contato anatômico.
+// Em hierarquia inválida, conserva o conjunto original completo.
+function withBoneDescendants(bones, seeds) {
+  if (new Set(bones).size !== bones.length) return seeds;
+  const roots = new Set([...seeds].map((i) => bones[i]));
+  const expanded = new Set(seeds);
+  for (let i = 0; i < bones.length; i++) {
+    const seen = new Set();
+    let owned = false;
+    for (let p = bones[i]; p; p = p.parent) {
+      if (seen.has(p)) return seeds;
+      seen.add(p);
+      if (roots.has(p)) owned = true;
+    }
+    if (owned) expanded.add(i);
+  }
+  return expanded;
+}
+
+// Mede o centro REAL da palma no espaço local do osso Hand: média (em BIND pose) dos
+// verts da malha com peso dominante (>0.5) no osso Hand ou no seu filho Curl (os dedos
+// são skinned nos ossos Curl). Rígido por construção (independe da pose) e adaptado a
+// cada personagem — sem isso o IK crava o PULSO no grip e a palma visível flutua
+// centímetros fora da arma. Compartilhado por fparms.js (1ª pessoa) e pelo IK de 3ª
+// pessoa (mão de apoio dos bots). Fallback: fração do antebraço ao longo de +Y.
+export function measurePalmLocal(model, hand, curl) {
+  const fallback = new THREE.Vector3(0, hand.position.length() * 0.25, 0);
+  let sk = null;
+  model.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o; });
+  if (!sk) return fallback;
+  const bones = sk.skeleton.bones;
+  const hi = bones.indexOf(hand);
+  if (hi < 0) return fallback;
+  // `curl` agora pode ser UMA LISTA de ossos (ver o bloco de curl em buildCharacterModel):
+  // nos 18 GLB de 28 juntas o Curl_R e o Curl_L aparecem DUPLICADOS na hierarquia.
+  const ci = (Array.isArray(curl) ? curl : [curl]).map((b) => (b ? bones.indexOf(b) : -1)).filter((i) => i >= 0);
+  const owned = withBoneDescendants(bones, new Set([hi, ...ci]));
+  const pos = sk.geometry.attributes.position, si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight;
+  const at = (a, i, k) => (k === 0 ? a.getX(i) : k === 1 ? a.getY(i) : k === 2 ? a.getZ(i) : a.getW(i));
+  const c = new THREE.Vector3(), v = new THREE.Vector3();
+  let n = 0;
+  for (let i = 0; i < pos.count; i++) {
+    let w = 0;
+    for (let k = 0; k < 4; k++) { const bi = at(si, i, k); if (owned.has(bi)) w += at(sw, i, k); }
+    if (w > 0.5) { c.add(v.fromBufferAttribute(pos, i)); n++; }
+  }
+  if (!n) return fallback;
+  c.divideScalar(n);
+  // bind: posição do vértice no espaço local do osso = inv(handBindWorld) × meshBindWorld × c
+  // (boneInverses[hi] já É inv(handBindWorld) por definição do esqueleto)
+  const toLocal = new THREE.Matrix4().copy(sk.skeleton.boneInverses[hi]).multiply(sk.bindMatrix);
+  c.applyMatrix4(toLocal);
+  /* ── glbchars.js:143 — GUARDA DE PALMA: "o jozo tá com a arma por trás" ─────────────
+     O vetor devolvido aqui vira `mount.position` (linha ~403), e o mount é FILHO do osso
+     da mão. Ou seja: este vetor é um BRAÇO DE ALAVANCA. Quando o clipe gira a mão em θ, a
+     arma varre um arco de 2·|palma|·sin(θ/2). Meio palmo de alavanca é invisível; um braço
+     inteiro joga a arma pro outro lado do corpo.
+     MEDIDO nos 45 GLB (tools/eval/tp-mount-probe.mjs, seção 5, personagem em 1,72 m):
+       mediana do elenco   |palma| = 0,45 do antebraço  -> arco a 90° = 15 cm
+       pior rig SÃO         0,85 (blackmetal, manga larga)
+       jozo                 1,38  -> arco a 90° = 46 cm   <- a arma vai parar nas costas
+       trapfunk             1,15  -> arco a 90° = 38 cm
+     A CAUSA: os 18 GLB de 28 juntas compartilham UM esqueleto (translações de junta
+     byte-idênticas — o doador `mst`, tools/rig-from-donor.mjs) que está em T-POSE, mas a
+     malha do jozo e a do trapfunk está em A-POSE (braços caídos ~40°). O osso da mão
+     direita fica em [-0,634, 1,230, -0,025] nos 18; a mão VISÍVEL do jozo está 32 cm dali.
+     A auto-skinagem por proximidade pendurou no osso `RightHand` um pedaço de malha que
+     não está na mão, e o centroide sai fora de alcance.
+     Regra: acima de 0,9 antebraço o centroide não é palma — é ruído de skin. Volta pro
+     fallback (25% do antebraço ao longo de +Y, a direção dos dedos na cadeia), que é onde
+     o punho está. Teto 0,9 escolhido NO VÃO MEDIDO entre o pior rig são (0,85) e o pior
+     quebrado (1,15): não é palpite, é o meio do buraco. Nos outros 43 personagens este
+     ramo NUNCA dispara — a mudança é cirúrgica.
+     Kill-switch: ?palmguard=0. */
+  if (PALM_GUARD) {
+    const antebraco = hand.position.length() || 0;
+    if (antebraco > 0 && c.length() > PALM_MAX_LEVER * antebraco) {
+      if (qp.get('chartune')) console.log(`[glbchars] palma descolada do osso (${(c.length() / antebraco).toFixed(2)}x antebraço) — mount volta pro punho`);
+      return fallback;
+    }
+  }
+  return c;
+}
+
+// Perfil de RAIO DO TRONCO por altura, medido nos vértices (bind), sem braços/mãos.
+// PORQUÊ: em mascote de braço-toco a palma nasce DENTRO do volume do corpo e a arma
+// montada nela fica enterrada na malha — foi assim que o Dollynho apareceu "sem arma
+// nenhuma" (a palma dele está 25 cm dentro da garrafa; o 2º pior é o Ancap com 12 cm,
+// e o humano típico está FORA por 3-10 cm). Com o perfil dá pra empurrar a arma pra
+// fora só de quem precisa, na medida exata, em vez de chutar offset por personagem.
+// Espaço: com o GLTFLoader do three o bind é IDENTIDADE, então a posição crua do
+// vértice já está no espaço local do `model` (o mesmo de model.worldToLocal).
+// Cache por id: o custo (uma passada com stride) é pago uma vez por personagem.
+const _torsoCache = new Map();
+const BUCKET = 0.05;
+function torsoProfile(id, model) {
+  if (_torsoCache.has(id)) return _torsoCache.get(id);
+  let sk = null;
+  model.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o; });
+  let prof = null;
+  if (sk) {
+    const bones = sk.skeleton.bones;
+    const arm = new Set();
+    /* Pescoço/cabeça fora do perfil só em TORSO_SEM_CABECA: no Bebê Reborn a palma do idle1h
+       nasce na altura do pescoço, a faixa vizinha pegava a cabeça de boneca (raio 0,37 m contra
+       tronco de 0,09–0,13) e o empurrão tirava a pistola 15 cm da palma. */
+    const fora = TORSO_SEM_CABECA.has(id) ? /arm|hand|shoulder|clavicle|curl|^neck$|^head$/i : /arm|hand|shoulder|clavicle|curl/i;
+    bones.forEach((b, i) => { if (fora.test(b.name)) arm.add(i); });
+    const excluded = withBoneDescendants(bones, arm);
+    const pos = sk.geometry.attributes.position, si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight;
+    const at = (a, i, k) => (k === 0 ? a.getX(i) : k === 1 ? a.getY(i) : k === 2 ? a.getZ(i) : a.getW(i));
+    const r = new Float32Array(64);
+    for (let i = 0; i < pos.count; i += 3) {
+      if (si && sw) { let w = 0; for (let k = 0; k < 4; k++) if (excluded.has(at(si, i, k))) w += at(sw, i, k); if (w > 0.3) continue; }
+      const y = pos.getY(i), b = Math.floor(y / BUCKET);
+      if (b < 0 || b >= 64) continue;
+      const rad = Math.hypot(pos.getX(i), pos.getZ(i));
+      if (rad > r[b]) r[b] = rad;
+    }
+    prof = r;
+  }
+  _torsoCache.set(id, prof);
+  return prof;
+}
+const torsoRadiusAt = (prof, y) => {
+  if (!prof) return 0;
+  const b = Math.floor(y / BUCKET);
+  let m = 0;
+  for (let k = b - 1; k <= b + 1; k++) if (k >= 0 && k < 64 && prof[k] > m) m = prof[k];
+  return m;
+};
+
+// Preload shared clips + base meshes for the given character ids. Safe to call once
+// before a match; already-loaded assets are skipped. Failures are swallowed per-asset
+// so a missing model just falls back to the box mesh.
+// Release do Studio é tudo ou nada: falha rejeita esta chamada depois que os outros ids
+// assentam (StudioCharacterError, ou AggregateError para vários).
+export async function preloadCharacterAssets(ids, opts = {}) {
+  /* Armas FORA do bootstrap de clipes: a 1ª chamada é a da tela de carregamento, e prender as
+     armas ao `if (!_clips)` fazia a partida herdar a lista errada (ou as 26). Idempotente. */
+  const armas = preloadWeapons(opts.weapons);
+  if (!_clips) {
+    _clips = {};
+    await Promise.all([
+      armas,
+      // Pack compartilhado em 1 GLB MESCLADO (tools/merge-anims.mjs): os 11 requests de
+      // clipe viram 1. O THREE amarra o clipe no esqueleto pelo NOME do osso, então
+      // basta ler as animações nomeadas. Se o mesclado faltar (deploy velho, ?animdir=
+      // experimental), o per-estado de sempre cobre o que faltou.
+      (async () => {
+        try {
+          const g = await loadGLB(assetUrl(`${ANIM_DIR}.glb`));
+          for (const c of g.animations) _clips[c.name] = c;
+        } catch (e) { /* fallback: per-estado abaixo */ }
+        await Promise.all([
+          ...STATES.filter((s) => !_clips[s]).map(async (s) => {
+            try {
+              const g = await loadGLB(assetUrl(`${ANIM_DIR}/${s}.glb`));
+              if (g.animations[0]) { g.animations[0].name = s; _clips[s] = g.animations[0]; }
+            } catch (e) { console.warn('anim load failed', s, e); }
+          }),
+          // Opcionais (idle/walk de 1 mão p/ pistolas): ausência NÃO é erro — sem warn.
+          ...OPT_STATES.filter((s) => !_clips[s]).map(async (s) => {
+            try {
+              const g = await loadGLB(assetUrl(`${ANIM_DIR}/${s}.glb`));
+              if (g.animations[0]) { g.animations[0].name = s; _clips[s] = g.animations[0]; }
+            } catch (e) { /* fallback: idle/walk de 2 mãos */ }
+          }),
+        ]);
+      })(),
+    ]);
+  } else await armas;
+  const wanted = [...new Set(ids)].filter((id) => GLB_CHARS.has(id) && !_base.has(id));
+  const studioFailures = [];
+  await Promise.all(wanted.map(async (id) => {
+    const release = characterRelease(id);
+    if (release) {
+      try { await preloadStudioCharacter(id, release); }
+      catch (e) { console.error(`[studio] ${id}@${release.version}: ${e?.code || 'studio_load_failed'}`, e); studioFailures.push(e); }
+      return;
+    }
+    try {
+      const path = `models/characters/${id}.glb`;
+      const origin = Object.freeze({ kind: 'base', character: id, path: `public/${path}`, revision: revDe(path) });
+      const g = await loadGLB(assetUrl(path));
+      _bodyOrigins.set(g.scene, origin);
+      _base.set(id, g.scene);
+    } catch (e) { console.warn('model load failed', id, e); }
+    // Clipes retargetados POR PERSONAGEM (models/anims/<id>/): cada rig do Meshy tem
+    // proporção de esqueleto diferente, então o pack único (assado contra 1 referência)
+    // deformava quem divergia (doutora agachada, dollynho dobrado). Aqui cada char usa
+    // seus próprios clipes; qualquer estado ausente cai no pack compartilhado (_clips).
+    const set = { ..._clips };
+    // GUARDA DE DISPONIBILIDADE — ver o comentário do animIndex(). `disponiveis === null`
+    // (manifesto ausente ou fetch falhou) mantém o comportamento antigo: pede tudo.
+    const _idx = await animIndex();
+    const disponiveis = _idx && _idx.clipes ? (_idx.clipes[id] || []) : null;
+    // 1 GLB MESCLADO por personagem (tools/merge-anims.mjs): 11 requests viram 1.
+    // O manifesto diz quem tem mesclado; quem não tem (os 8 palhaços) nem tenta —
+    // senão o 404 voltava por outra porta. Sem o mesclado ou sem clipe dentro dele,
+    // cai no per-estado, que cai no compartilhado.
+    let mesclado = null;
+    if (!disponiveis || disponiveis.length) {
+      try { mesclado = (await loadGLB(assetUrl(`models/anims/${id}.glb`))).animations; }
+      catch (e) { /* fallback: per-estado */ }
+    }
+    const refs = (_idx && _idx.refs && _idx.refs[id]) || {};
+    await Promise.all([...STATES, ...OPT_STATES].map(async (s) => {
+      if (disponiveis && !disponiveis.includes(s)) return;   // não pede o que o build sabe que não existe
+      if (mesclado) {
+        const c = mesclado.find((a) => a.name === s);
+        if (c) { set[s] = c; marcarRef(c, refs[s]); return; }
+        if (disponiveis) return;  // mesclado em dia (manifesto) e sem o clipe: compartilhado
+      }
+      try {
+        const g = await loadGLB(assetUrl(`models/anims/${id}/${s}.glb`));
+        if (g.animations[0]) { g.animations[0].name = s; set[s] = g.animations[0]; marcarRef(set[s], refs[s]); }
+      } catch (e) { /* fallback: clipe compartilhado */ }
+    }));
+    _clipsByChar[id] = set;
+  }));
+  if (studioFailures.length === 1) throw studioFailures[0];
+  if (studioFailures.length) throw new AggregateError(studioFailures, 'studio_character_preload_failed');
+}
+
+/* Modelo e 11 clipes só das Blob URLs verificadas (sem animIndex, mesclado ou compartilhado);
+   _base/_clipsByChar/origem só são escritos depois que tudo carregou e conferiu. */
+const _studioRequests = new Map();
+const _studioProvenance = new Map();
+function preloadStudioCharacter(id, release) {
+  if (_studioRequests.has(id)) return _studioRequests.get(id);
+  const request = (async () => {
+    const pack = await resolveStudioCharacter(release);
+    const [model, ...clipGlbs] = await Promise.all([
+      loadGLB(pack.modelUrl),
+      ...STUDIO_CHARACTER_STATES.map((s) => loadGLB(pack.animationUrls[s])),
+    ]).catch((e) => { throw new StudioCharacterError('studio_glb_invalid', `${id}: ${e?.message || e}`, { cause: e }); });
+    const bones = new Set();
+    model.scene.traverse((o) => {
+      if (o.isSkinnedMesh && o.skeleton) for (const bone of o.skeleton.bones) bones.add(bone);
+    });
+    const detalhe = studioSkeletonMismatch([...bones]);
+    if (detalhe) throw new StudioCharacterError('studio_skeleton_mismatch', `${id}: ${detalhe}`);
+    const set = {};
+    STUDIO_CHARACTER_STATES.forEach((s, i) => {
+      const clip = clipGlbs[i].animations.find((c) => c.name === s);
+      if (!clip) throw new StudioCharacterError('studio_clip_missing', `${id}: ${s}`);
+      set[s] = clip;
+    });
+    _bodyOrigins.set(model.scene, Object.freeze({ kind: 'studio', character: id, sha256: pack.modelSha256, manifestSha256: pack.manifestSha256 }));
+    _clipsByChar[id] = set;
+    _base.set(id, model.scene);
+    _studioProvenance.set(id, Object.freeze({
+      kind: 'studio', id, version: pack.version, manifestSha256: pack.manifestSha256, modelSha256: pack.modelSha256,
+      modelUrl: pack.modelUrl, animationUrls: pack.animationUrls, previewUrls: pack.previewUrls, clips: Object.freeze({ ...set }),
+    }));
+  })().finally(() => _studioRequests.delete(id));
+  _studioRequests.set(id, request);
+  return request;
+}
+// Proveniência de um id do Studio para harness/réguas (null para legado ou não carregado).
+export function studioCharacterProvenance(id) { return _studioProvenance.get(id) || null; }
+
+const _v = new THREE.Vector3();
+const _gq = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _headUpQ = new THREE.Quaternion();
+const _qLean = new THREE.Quaternion(), _axisF = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _ikTgt = new THREE.Vector3(), _ancoraPalma = new THREE.Vector3();
+function orientTpMount(t) {
+  t.handBone.updateWorldMatrix(true, false);
+  t.model.getWorldQuaternion(_gq);
+  _wq.copy(_gq).multiply(t.carry);
+  // Só no porte parado: em corrida/tiro (tela de carregamento) a mão volta a seguir o clipe.
+  if (t.pegada && t.pegadaAtiva) {
+    // PV_PULSO: a mão segue a arma (absoluto, não acumula). Pivô na PALMA via CCD: girar
+    // no osso empurrava a palma 2 cm e esticava o braço da pistola (select-mount ESTICADO).
+    const ancora = PV_PIVO && t.palmLocal && t.rArm && t.rFore ? t.handBone.localToWorld(_ancoraPalma.copy(t.palmLocal)) : null;
+    t.mount.quaternion.copy(t.pegada);
+    for (let i = 0; i < (ancora ? 2 : 1); i++) {
+      if (i) solveCCDIK([t.rArm, t.rFore], t.handBone, ancora, { iterations: 4, endOffset: t.palmLocal });
+      t.handBone.parent.updateWorldMatrix(true, false);
+      t.handBone.parent.getWorldQuaternion(_pq).invert();
+      t.handBone.quaternion.copy(_pq.multiply(_wq).multiply(t.pegadaInv));
+      t.handBone.updateWorldMatrix(false, true);
+    }
+    return;
+  }
+  t.handBone.getWorldQuaternion(_pq);
+  t.mount.quaternion.copy(_pq.invert().multiply(_wq));
+}
+
+// Build a bot mesh from a loaded GLB. Returns an object shaped like buildCharacter()'s
+// result ({ group, parts }) plus animation control (isGLB, mixer, ctrl). Returns null
+// if the character has no model loaded.
+export function buildCharacterModel(def, opts = {}) {
+  const cosmetic = _skins.get(def.skinId);
+  const skin = cosmetic?.character === def.id ? cosmetic : null;
+  if (opts.preview && def.skinId && !skin) return null;
+  const template = skin?.model || _base.get(def.id);
+  if (!template || !_clips) return null;
+  const bodyOrigin = _bodyOrigins.get(template);
+  const withWeapon = opts.weapon !== false; // menu showcase passes weapon:false
+  const gloveHandle = gloveHandleFor(bodyOrigin);
+  // ownedResources: coleta recursos próprios do actor p/ descarte sem tocar caches compartilhados.
+  const owned = opts.ownedResources;
+  if (owned && (opts.weapon !== false || opts.gloveSkinId)) return null;
+
+  const model = skeletonClone(template);
+  if (owned) model.traverse(o => { if (o.isSkinnedMesh && o.skeleton) owned.add(o.skeleton); });
+  // Luva equipada: entra ANTES do passe de materiais para herdar sombra/rim como o corpo.
+  let gloveMeshes = opts.gloveSkinId ? attachGloves(model, opts.gloveSkinId, gloveHandle) || [] : [];
+
+  // Normalize: scale to target height, drop feet to y=0, apply facing fix.
+  // Update world matrices first so the bounding box reflects the real transforms.
+  model.updateMatrixWorld(true);
+  const bbox = new THREE.Box3().setFromObject(model);
+  const h = bbox.max.y - bbox.min.y || 1;
+  const s = TARGET_HEIGHT / h;
+  if (qp.get('chartune')) console.log(`[glbchars] ${def.id} rawH=${h.toFixed(3)} min.y=${bbox.min.y.toFixed(3)} scale=${s.toFixed(3)}`);
+  model.scale.setScalar(s);
+  model.position.y = -bbox.min.y * s;
+  model.rotation.y = FACING_OFFSET;
+  // Materiais: CLONE POR PERSONAGEM. skeletonClone compartilha o material com o
+  // template do cache (_base), e o fparms.js clona ESSE MESMO template pros braços de
+  // 1ª pessoa — mutar o material aqui vazaria pro viewmodel já validado. Cada bot
+  // ganha seu material, com a cor de rim do time dele.
+  const rimCol = charRimColor(def);
+  const finishMaterial=(m)=>{
+    const next=upgradeCharMaterial(m,rimCol);
+    if(skin?.metalFinish==='matte' && 'roughness' in next){next.roughness=Math.max(next.roughness ?? 1,.82);next.needsUpdate=true;}
+    if (owned) owned.add(next);
+    return next;
+  };
+  const finishMesh = (o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    // receiveShadow: sem isto a sombra do sol NUNCA escurecia o personagem — parte do
+    // motivo de ele ler como adesivo. Quem impede que essa sombra o faça SUMIR é o piso
+    // de irradiância do characters.js (CS_AMB) — e desde a R3 esse piso é MULTIPLICATIVO,
+    // então ele garante o mínimo de luz sem apagar a diferença entre cabelo preto e
+    // jaleco branco (era esse o bug do "fantasma" da R2). Off em quality low e ?charrecv=0.
+    o.receiveShadow = CHAR_FX.recv;
+    o.frustumCulled = false;
+    if (!CHAR_FX.mats || !o.material) return;
+    o.material = Array.isArray(o.material)
+      ? o.material.map(finishMaterial)
+      : finishMaterial(o.material);
+  };
+  model.traverse(finishMesh);
+  // Profundidade de sombra própria dos esqueletos: no depth único do three, cada boneco
+  // alternava skinning e recalculava a chave do programa 2× por bot por quadro.
+  model.traverse((o) => { if (o.isSkinnedMesh && sombraSemVariante(o.material)) o.customDepthMaterial = DEPTH_SKINNED; });
+
+  const group = new THREE.Group();
+  group.add(model);
+
+  // Sombra de contato (A2). Ancorada no GRUPO, não no modelo: game.js crava
+  // `g.position.y = world.groundHeightAt(x,z)` TODO quadro (game.js:3791-3792), ou
+  // seja, a origem do grupo JÁ está no piso por construção. Um raycast por bot por
+  // quadro contra a cena inteira (sem BVH, em SwiftShader de 2 CPUs) repetiria essa
+  // conta e custaria caro sem acrescentar informação — o acompanhamento do piso vem
+  // de graça; o "sumir no ar" vem do estado de pulo, tratado no CharController.
+  const shadow = CHAR_FX.shadow ? makeContactShadow() : null;
+  if (shadow) { if (owned) owned.add(shadow.material); group.add(shadow); }
+
+  mountEyewear(model,def,owned);
+
+  // Head hitbox: an invisible (unrendered) but raycastable box tracked to the head bone
+  // each frame, so headshots stay accurate through the animation.
+  let headBone = null;
+  model.traverse((o) => { if (o.isBone && !headBone && /head/i.test(o.name)) headBone = o; });
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.26, 0.30, 0.26),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  if (owned) { owned.add(head.geometry); owned.add(head.material); }
+  group.add(head);
+
+  // Rifle in the right hand: a scale-compensated mount parented to the hand bone so
+  // GUN_POS/GUN_ROT are expressed in world meters regardless of the bone's scale.
+  let handBone = null, lhandBone = null, rforeBone = null, gunObj = null;
+  model.traverse((o) => { if (o.isBone && !handBone && /right.?hand|hand.?r\b|rhand|r_hand/i.test(o.name)) handBone = o; });
+  model.traverse((o) => { if (o.isBone && !lhandBone && /left.?hand|hand.?l\b|lhand|l_hand/i.test(o.name)) lhandBone = o; });
+  model.traverse((o) => { if (o.isBone && !rforeBone && /right.?forearm|r_forearm/i.test(o.name)) rforeBone = o; });
+  if (!handBone) model.traverse((o) => { if (o.isBone && !handBone && /hand/i.test(o.name)) handBone = o; });
+  if (handBone && withWeapon) {
+    /* O nome é o que torna a queda em caixa MEDÍVEL: sem ele a arma procedural some calada
+       dentro da cena e nenhuma régua enxerga (ARM2). */
+    // `weaponSkinId` é a pintura equipada: o preview do lobby mostra a arma do jogador
+    // como ela é no jogo. `null` mantém o default (pintura de revisão por ?weaponskin).
+    const glb = weaponModel(opts.weaponId || 'awp', opts.weaponSkinId ?? undefined);
+    const gun = glb || buildRifle();
+    gun.name = glb ? 'arma-glb' : 'arma-caixa';
+    // Flip de 180° SÓ na 3ª pessoa p/ armas que ficam de costas no mount (o cano +Z da
+    // weaponModel não bate com a mão nesses casos). O FP tem seu próprio ajuste (vmRotY),
+    // então corrigimos aqui sem tocar no viewmodel já validado. (P90: usuário viu ao contrário.)
+    if (TP_FLIP_Y.has(opts.weaponId)) gun.rotateY(Math.PI);
+    gunObj = gun;
+    // Measure the weapon's authored (real-world) size in its own space, before parenting.
+    gun.updateMatrixWorld(true);
+    const asz = new THREE.Vector3(); new THREE.Box3().setFromObject(gun).getSize(asz);
+    const authored = Math.max(asz.x, asz.y, asz.z) || 1;
+    const mount = new THREE.Group();
+    handBone.add(mount); mount.add(gun);
+    // Orientation is computed AFTER the controller is created (below).
+    group.updateMatrixWorld(true);
+    if (TP_MOUNT_V2) {
+      // ESCALA: direto da escala de mundo do OSSO (exata e independente de giro).
+      // A conta antiga comparava o tamanho da arma solta com a AABB dela já pendurada
+      // no osso — e AABB é alinhada aos eixos do MUNDO, então ela ENCOLHE quando o osso
+      // está girado. Medido: erro de -12% (uzi no reggae) a +7% (ak no coach), ou seja,
+      // até 19% de diferença de tamanho da MESMA arma entre dois personagens. Aqui a
+      // arma renderiza exatamente no comprimento real dela em qualquer rig.
+      const e = handBone.matrixWorld.elements;
+      const boneScale = Math.hypot(e[0], e[1], e[2]) || 1;   // ~0.0101-0.0116 nestes rigs
+      mount.scale.setScalar(GUN_SCALE / boneScale);
+      gun.position.set(0, 0, 0);   // o grip já é a origem do weaponModel; quem posiciona é o mount
+    } else {
+      const wsz = new THREE.Vector3(); new THREE.Box3().setFromObject(gun).getSize(wsz);
+      const worldLen = Math.max(wsz.x, wsz.y, wsz.z) || authored;
+      mount.scale.setScalar(GUN_SCALE * authored / worldLen); // -> mount space ~= world meters
+      gun.position.set(GUN_POS[0], GUN_POS[1], GUN_POS[2]);
+    }
+    gun.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.userData.noHit = true; } });
+  }
+
+  const mixer = new THREE.AnimationMixer(model);
+  const actions = {};
+  const clips = skin?.clips || _clipsByChar[def.id] || _clips;   // clipes retargetados por personagem
+  for (const name of [...STATES, ...OPT_STATES]) if (clips[name]) actions[name] = mixer.clipAction(clips[name]);
+
+  // Skins assam contato no próprio clipe; offsets da base têm outro rig.
+  const ctrl = new CharController(mixer, actions, group, headBone, head, skin ? def.skinId : def.id, model, def.id);
+  ctrl.shadow = shadow;   // antes do settle loop abaixo (ctrl.update já a atualiza)
+  // Arma de 1 mão (pistol/deagle/revolver38/knife): usa idle1h/walk1h quando carregados.
+  ctrl.oneHanded = !!(opts.weaponId && ONE_HANDED.has(opts.weaponId));
+  ctrl.weaponId = opts.weaponId || 'awp';
+  if (opts.preview === true && !skin && withWeapon && def.id === 'esquerdomacho'
+      && opts.weaponId === 'pistol' && lhandBone) {
+    const target = `${lhandBone.name}.quaternion`;
+    const rest = clips.idle1h, idle = clips.idle;
+    const restTracks = rest?.tracks.filter(t => t.name === target) || [];
+    const idleTracks = idle?.tracks.filter(t => t.name === target) || [];
+    const valid = t => t?.getValueSize() === 4 && t.times.length > 0
+      && t.values.length === t.times.length * 4 && t.values.every(Number.isFinite)
+      && t.times.every(Number.isFinite);
+    if (restTracks.length === 1 && idleTracks.length === 1 && valid(restTracks[0]) && valid(idleTracks[0])
+        && Number.isFinite(rest.duration) && rest.duration > 0 && Number.isFinite(idle.duration) && idle.duration > 0) {
+      ctrl._previewFreeHand = { bone: lhandBone, sample: restTracks[0].createInterpolant(),
+        duration: rest.duration, idleDuration: idle.duration,
+        before: new THREE.Quaternion(), target: new THREE.Quaternion(), applied: false };
+    }
+  }
+
+  if (handBone && withWeapon) {
+    // A pose tem que estar ASSENTADA antes de medir qualquer coisa: o mixer acabou de
+    // ser criado e o modelo ainda está na pose de bind (braços abertos). Medir antes
+    // disso é a origem clássica dos mounts errados neste projeto. (O código antigo
+    // pedia 'walk' e logo em seguida chamava update(...,moving=0,...), que devolve o
+    // controlador pra 'idle' — ele media, na prática, um BLEND no meio da transição,
+    // e blend de transição é diferente em cada rig: daí a aleatoriedade dos defeitos.)
+    for (let i = 0; i < 10; i++) ctrl.update(1 / 30, 0, false, 0);
+    model.updateMatrixWorld(true);
+    const mount = handBone.children.find((c) => c.isGroup);
+    /* ── glbchars.js:365 — OS OSSOS DE CURL VÊM DUPLICADOS EM 18 PERSONAGENS ───────────
+       Medido nos GLB: os 18 modelos de 28 juntas (palhaços + funkeiros rigados offline por
+       tools/rig-from-donor.mjs, mais o próprio doador `mst`) trazem `Curl_R` e `Curl_L`
+       DUAS VEZES cada, ambos filhos da mesma mão — 4 ossos de dedo em vez de 2. É um
+       defeito do transplante de esqueleto, não do modelo.
+       O código antigo (`if (o.name === 'Curl_R') curlR = o`) não parava no primeiro: ele
+       varria a árvore inteira e ficava com o ÚLTIMO. E o último é justamente a cópia SEM
+       PESO NENHUM — no `mst`, o primeiro Curl_R tem 185 vértices e o segundo tem 0. Ou
+       seja: o `curlR.rotation.x += curl` fechava os dedos de um osso que não move malha
+       nenhuma, e a mão ficava aberta na arma nos 18. E o mesmo `curlR` era passado pro
+       measurePalmLocal, que perdia os vértices dos dedos na média da palma.
+       Agora: junta TODOS os ossos com esse nome e prefere os que têm peso de skin. */
+    const curlsR = [], curlsL = [];
+    model.traverse((o) => { if (o.isBone) { if (o.name === 'Curl_R') curlsR.push(o); if (o.name === 'Curl_L') curlsL.push(o); } });
+    const comPeso = (lista) => {
+      if (lista.length < 2) return lista;
+      let sk = null;
+      model.traverse((o) => { if (o.isSkinnedMesh && !sk) sk = o; });
+      if (!sk) return lista;
+      const bones = sk.skeleton.bones, si = sk.geometry.attributes.skinIndex, sw = sk.geometry.attributes.skinWeight;
+      if (!si || !sw) return lista;
+      const at = (a, i, k) => (k === 0 ? a.getX(i) : k === 1 ? a.getY(i) : k === 2 ? a.getZ(i) : a.getW(i));
+      const peso = new Map(lista.map((b) => [b, 0]));
+      const idx = new Map(lista.map((b) => [bones.indexOf(b), b]));
+      for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) {
+        const b = idx.get(at(si, i, k));
+        if (b) peso.set(b, peso.get(b) + at(sw, i, k));
+      }
+      const uteis = lista.filter((b) => peso.get(b) > 0);
+      return uteis.length ? uteis : lista;
+    };
+    const curlRs = comPeso(curlsR), curlLs = comPeso(curlsL);
+    if (TP_MOUNT_V2 && mount) {
+      // 1) ORIENTAÇÃO: cano na direção do CORPO + ângulo de porte fixo (igual pra todos).
+      // `opts.preview` liga o porte de EXIBIÇÃO, usado SÓ pela tela de seleção
+      // (main.js/pvSetChar): com o porte funcional (−6°, 4°) o cano aponta pra CÂMERA do
+      // preview e a arma vira um toco sem silhueta — era o "posturas bizarras" do dono em
+      // 05/08 (coach/trapfunk/mandrake com a arma "sumida" na mão). Arma de 2 mãos fica
+      // atravessada no peito (−14° = cano ~14° pra cima, yaw 40°, estilo vitrine de CS);
+      // arma de 1 mão compensa a inclinação intrínseca do cano das pistolas (+18°..21°
+      // medidos por vértice, probe-muzzle 05/08) com pitch pra baixo — sem isso o revólver
+      // do bonzo aponta ~35° pro céu. No jogo o porte funcional fica intocado: bot mira
+      // pra onde olha (funcional > identidade). A/B: scratchpad sel_now × sel_fix.
+      // Lâmina tem porte próprio (TP_CARRY_BLADE) tanto na vitrine quanto no jogo: com o
+      // porte de cano a faca saía apontada pra frente na horizontal.
+      const faca = BLADES.has(opts.weaponId);
+      const cd = faca ? TP_CARRY_BLADE
+        : opts.preview ? (ONE_HANDED.has(opts.weaponId) ? [4, 26] : [-14, 40]) : null;
+      const carry = new THREE.Quaternion().setFromEuler(cd
+        ? new THREE.Euler(cd[0] * Math.PI / 180, cd[1] * Math.PI / 180, 0, 'YXZ')
+        : new THREE.Euler(TP_CARRY_PITCH, TP_CARRY_YAW, 0, 'YXZ'));
+      const bodyQ = model.getWorldQuaternion(new THREE.Quaternion());
+      const desired = bodyQ.multiply(carry);
+      const handQ = handBone.getWorldQuaternion(new THREE.Quaternion());
+      mount.quaternion.copy(handQ.invert().multiply(desired));
+      /* ── O MOUNT ESTAVA CONGELADO NA POSE DE IDLE (rodada da RÉGUA) ──────────────
+         O bloco acima roda UMA VEZ, aqui na construção, depois do settle de 10 quadros de
+         idle (linha ~352). Ele resolve `mount.quaternion` para que, NAQUELE INSTANTE, o
+         cano aponte pra frente do corpo. Mas o mount é filho do OSSO DA MÃO: assim que o
+         clipe começa a girar a mão — andar, correr, atirar, agachar, morrer — o cano gira
+         JUNTO, e a correção calculada no idle deixa de valer. Ou seja, a promessa do MOUNT
+         V2 ("em 3ª pessoa a arma aponta pra onde o boneco olha, ponto", linha ~76) só era
+         cumprida em UMA pose, justamente a pose em que ninguém está olhando pro bot.
+         Conserto: guardar o que a conta precisa e REFAZER a orientação por quadro, no fim
+         do CharController.update (depois do mixer). É uma inversão de quaternion e duas
+         multiplicações por bot — comparável ao que o pitch da cabeça já faz ali.
+         A POSIÇÃO não entra: `mount.position` está no espaço LOCAL DO OSSO e a palma é
+         rígida em relação a ele (measurePalmLocal mede em bind), então ela acompanha o
+         osso sozinha e recalcular seria custo sem efeito.
+         Kill-switch: ?tpmountlive=0 volta ao comportamento congelado. */
+      let rArmBone = null;
+      model.traverse((o) => { if (o.isBone && !rArmBone && o.name === 'RightArm') rArmBone = o; });
+      if (TP_MOUNT_LIVE) ctrl.tpMount = { mount, handBone, model, carry, palmLocal: null, carryPalmModel: null, rArm: rArmBone, rFore: rforeBone, stabilizeCarry:skin?.gripProfile==='mint24-curl-v1' };
+      // 2) POSIÇÃO: no centro medido da PALMA, não na origem do osso (que é o PULSO).
+      // É a diferença entre "a mão segura a arma" e "a arma flutua perto da mão" (C7).
+      const palmLocal = measurePalmLocal(model, handBone, curlRs);
+      const palmW = handBone.localToWorld(palmLocal.clone());
+      // 3) FOLGA: se a palma nasce dentro da silhueta do corpo, empurra a arma pra fora
+      // na medida exata (Dollynho: 25 cm dentro da garrafa; humano típico: 0).
+      const palmM = model.worldToLocal(palmW.clone());
+      const prof = torsoProfile(def.id, model);
+      const rNow = Math.hypot(palmM.x, palmM.z);
+      const need = Math.min(TP_CLEAR_MAX, torsoRadiusAt(prof, palmM.y) + TP_CLEAR - rNow - TP_BURIED_TOL);
+      if (need > 0.005) {
+        // Direção do empurrão: frente do corpo + um pouco pra direita. Usar a direção
+        // da própria palma não serve nos mascotes — lá o raio é ~0 e a direção é ruído.
+        palmM.x += need * 0.33; palmM.z += need * 0.94;
+        if (qp.get('chartune')) console.log(`[glbchars] ${def.id}: arma empurrada ${need.toFixed(3)} m pra fora do corpo`);
+      }
+      mount.position.copy(handBone.worldToLocal(model.localToWorld(palmM)));
+      // A âncora da palma em espaço do OSSO: é o que o clamp de frente por-quadro
+      // (CharController.update) reprojeta no espaço do modelo a cada frame.
+      if (ctrl.tpMount) {
+        ctrl.tpMount.palmLocal = mount.position.clone();
+        ctrl.tpMount.empurrao = need > 0.005 ? need : 0;   // régua porte-braco-browser (PB2)
+      }
+      if(ctrl.tpMount){
+        const carryPalm=mount.position.clone();
+        handBone.localToWorld(carryPalm);model.worldToLocal(carryPalm);
+        ctrl.tpMount.carryPalmModel=carryPalm;
+      }
+    } else if (mount) {
+      // --- caminho antigo (?tpmount=0): direção do cano pela linha antebraço->mão ---
+      const dirAvg = new THREE.Vector3();
+      if (rforeBone) {
+        for (let i = 0; i < 8; i++) {
+          ctrl.update(1 / 24, 0, false, 0);
+          model.updateMatrixWorld(true);
+          const d = handBone.getWorldPosition(new THREE.Vector3()).sub(rforeBone.getWorldPosition(new THREE.Vector3()));
+          if (d.lengthSq() > 1e-6) dirAvg.add(d.normalize());
+        }
+      }
+      let dir = dirAvg.lengthSq() > 1e-6 ? dirAvg.normalize() : null;
+      if (!dir) dir = new THREE.Vector3(0, 0, 1).applyQuaternion(group.getWorldQuaternion(new THREE.Quaternion()));
+      const lookM = new THREE.Matrix4().lookAt(new THREE.Vector3(), dir.clone().negate(), new THREE.Vector3(0, 1, 0));
+      const desired = new THREE.Quaternion().setFromRotationMatrix(lookM);
+      mount.quaternion.copy(handBone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired));
+    }
+    // Grip curl: close the fingers onto the grip (the auto-skinned curl bones).
+    // Two-handed weapons curl both hands; one-handed only the grip (right) hand.
+    const twoHanded = !ONE_HANDED.has(opts.weaponId || 'awp');
+    /* CURL DOS DEDOS: era 0,5 rad CRAVADO nas duas mãos, para as 26 armas.
+       O curl é o quanto os dedos fecham em volta do PUNHO da arma, então o valor certo é
+       função da GROSSURA do que a mão agarra — um punho de pistola e o guarda-mão de uma
+       AWP não fecham a mão no mesmo ângulo. Com 0,5 fixo, ou a mão fica aberta na arma
+       fina ou os dedos atravessam a arma grossa; nos dois casos lê como "mão solta".
+       Aqui o ângulo sai da própria arma: `gripPoints` dá o ponto do guarda-mão e o
+       weaponModel dá a caixa, então a espessura no grip é MEDIDA e não tabelada.
+       Faixa 0,55-0,95 rad (31/10, afinada em 2 rodadas de juiz nos 13 flagrados: 7 com "dedos planos/
+       bloco que não envolvem o cabo" — jozo, bonzo, esquerdomacho, cadequinha, juiz,
+       canarinho, lobisomem): a faixa antiga 0,35-0,80 era conservadora e a mão lia
+       como espalmada na arma. Acima disso os dedos entram na palma em arma grossa;
+       teto por corpo segue no CURL_MAX. */
+    const curlPara = (obj) => {
+      const zumbi = def.id === 'zumbi';
+      if (!obj) return zumbi ? 0.5 : 0.7;
+      const sz = new THREE.Vector3();
+      new THREE.Box3().setFromObject(obj).getSize(sz);
+      const esp = Math.min(sz.x, sz.y, sz.z);            // menor dimensão = espessura do corpo da arma
+      if (!isFinite(esp) || esp <= 0) return zumbi ? 0.5 : 0.7;
+      // mão humana fecha ~0,95 rad em volta de 3 cm e ~0,55 em 9 cm; zumbi mantém a curva legada (.35–.80)
+      return zumbi ? Math.max(0.35, Math.min(0.80, 0.80 - (esp - 0.03) * (0.45 / 0.06)))
+                   : Math.max(0.55, Math.min(0.95, 0.95 - (esp - 0.03) * (0.40 / 0.06)));
+    };
+    /* Teto de curl por personagem: a faixa do `curlPara` é calibrada em mão HUMANA e o lobo
+       tem pata. Não morde hoje (shotgun já dá 0,35); varredura e porquê em BUG-149. */
+    const CURL_MAX = { lobisomem: 0.50 };
+    let curl = gunObj ? curlPara(gunObj) : 0;
+    const tetoCurl = CURL_MAX[def.id];
+    if (gunObj && skin?.gripProfile === 'mint24-curl-v1') curl = 1.4;
+    if (tetoCurl != null) curl = Math.min(curl, tetoCurl);
+    // fecha TODOS os ossos de curl com peso (nos 18 rigs transplantados eles vêm em par)
+    for (const b of curlRs) b.rotation.x += curl;
+    const supportCurl = skin?.gripProfile === 'mint24-curl-v1' && ['lula-drip', 'senador-drip', 'zero-um-mandrake'].includes(def.skinId) ? 2.5 : curl;
+    if (twoHanded) for (const b of curlLs) b.rotation.x += supportCurl;
+    /* TINT 3P (ver TINT_3P): multiplicador de cor sobre a textura, clonando o material
+     * só dos meshes atingidos (o resto do elenco não toca em nada). */
+    const tints = TINT_3P[def.id];
+    if (tints?.length) {
+      model.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const lista = Array.isArray(o.material) ? o.material : [o.material];
+        let trocou = false;
+        for (let i = 0; i < lista.length; i++) {
+          const t = tints.find((tt) => lista[i]?.name && tt.material.test(lista[i].name));
+          if (!t) continue;
+          const c = lista[i].clone();
+          c.color = new THREE.Color(t.color);
+          lista[i] = c;
+          trocou = true;
+        }
+        if (trocou) o.material = Array.isArray(o.material) ? lista : lista[0];
+      });
+    }
+    // IK da mão de apoio (FASE 2): em armas de 2 mãos, o CharController trava a palma L
+    // no guarda-mão depois de cada mixer.update — vale pra idle/walk dos bots E pro
+    // preview da tela de seleção (mesmo ctrl.update). Posicional apenas: os clipes já
+    // orientam a mão perto do certo (rifle-hold); o IK resolve o contato por arma.
+    if (twoHanded && lhandBone) {
+      let lArm = null, lFore = null;
+      model.traverse(o => { if (o.isBone) { if (o.name === 'LeftArm') lArm = o; if (o.name === 'LeftForeArm') lFore = o; } });
+      const gp = gripPoints(opts.weaponId || 'awp');
+      if (skin?.gripProfile === 'mint24-curl-v1' && gp.fore) { gp.fore.z *= 1.35; gp.fore.y += def.skinId === 'lula-drip' ? 0.07 : 0.035; }
+      if (lArm && lFore && gp.fore && gunObj && !IK_L_SKIP.has(def.id)) ctrl.ikL = { chain: [lArm, lFore], end: lhandBone, endOffset: measurePalmLocal(model, lhandBone, curlLs), gun: gunObj, fore: gp.fore.clone() };
+    }
+    /* Overlay de tronco (recarga/lean): ossos Spine do rig doado + alvos da mão esquerda.
+       2 mãos: a mão vai ao PENTE (abaixo do guarda-mão). 1 mão: ao porta-carregador no
+       quadril direito. Por quê e medidas: docs/ANIM-3P.md. */
+    const spines = [];
+    model.traverse(o => { if (o.isBone && /^Spine\d*$/i.test(o.name) && spines.length < 2) spines.push(o); });
+    let lHandBone2 = null, lArm2 = null, lFore2 = null;
+    model.traverse(o => { if (o.isBone) { if (o.name === 'LeftHand' && !lHandBone2) lHandBone2 = o; if (o.name === 'LeftArm' && !lArm2) lArm2 = o; if (o.name === 'LeftForeArm' && !lFore2) lFore2 = o; } });
+    const gpR = twoHanded ? gripPoints(opts.weaponId || 'awp') : null;
+    let hipsBone = null;
+    model.traverse(o => { if (o.isBone && !hipsBone && /^hips$/i.test(o.name)) hipsBone = o; });
+    ctrl.torso = {
+      spines, hips: hipsBone,
+      lHand: lHandBone2, lArm: lArm2, lFore: lFore2,
+      gun: ctrl.ikL?.gun || null,
+      magLocal: gpR?.fore ? gpR.fore.clone().add(new THREE.Vector3(0, -0.11, -gpR.fore.z * 0.40)) : null,
+      beltLocal: new THREE.Vector3(0.16, 0.92, 0.10),
+    };
+    if (ctrl.ikL && ctrl.torso.magLocal && skin?.gripProfile === 'mint24-curl-v1') ctrl.torso.magLocal.z *= 1.35;
+  }
+  /* Mapa de ossos por NOME pro overlay de emote: pernas e braços não entravam em
+     `torso` porque recarga/lean não precisavam deles. Uma travessia só. */
+  const corpo = new Map();
+  const QUERO = new Set(['Hips', 'Spine', 'Spine01', 'Spine02', 'Head', 'neck',
+    'LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm',
+    'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot']);
+  model.traverse(o => { if (o.isBone && QUERO.has(o.name) && !corpo.has(o.name)) corpo.set(o.name, o); });
+  ctrl.corpo = corpo;
+  /* PV_PULSO: guarda a pegada de JOGO e gira o pulso — mas só DEPOIS de torso/corpo
+     (o overlay 1H precisa deles) e da pose funcional assentada (#1179, crítico 31/10). */
+  if (PV_PULSO && opts.preview && withWeapon && ctrl.tpMount && !BLADES.has(opts.weaponId)) {
+    // O overlay 1H precisa de torso/corpo antes da captura; ver PREVIEW-GRIP-PHASE.md.
+    if (def.id === 'canarinho') for (let i = 0; i < 10; i++) ctrl.update(1 / 30, 0, false, 0);
+    const funcional = new THREE.Quaternion().setFromEuler(new THREE.Euler(TP_CARRY_PITCH, TP_CARRY_YAW, 0, 'YXZ'));
+    const pegada = handBone.getWorldQuaternion(new THREE.Quaternion()).invert()
+      .multiply(model.getWorldQuaternion(new THREE.Quaternion()).multiply(funcional));
+    ctrl.tpMount.pegada = pegada;
+    ctrl.tpMount.pegadaInv = pegada.clone().invert();
+    ctrl.tpMount.pegadaAtiva = true;
+    orientTpMount(ctrl.tpMount);
+  }
+  return { group, parts: { head }, isGLB: true, mixer, ctrl, skinId: skin ? def.skinId : null, gloveHandle,
+    setGloveSkin(id) {
+      const removed = gloveMeshes;
+      for (const mesh of removed) {
+        mesh.removeFromParent();
+        mesh.material.dispose();
+        mesh.skeleton.dispose();
+      }
+      gloveMeshes = attachGloves(model, id, gloveHandle) || [];
+      for (const mesh of gloveMeshes) {
+        const rawMaterial = mesh.material;
+        finishMesh(mesh);
+        if (mesh.material !== rawMaterial) rawMaterial.dispose();
+      }
+      return { removed, added: gloveMeshes };
+    },
+  };
+}
+
+/* O driver de coreografia (public/js/emotes.js) é injetado, nunca importado aqui:
+   assim ele fica FORA do grafo estático do boot e só baixa quando alguém pede dança.
+   Régua EM5 cobra exatamente isso. */
+let _emoteDriver = null;
+export function setEmoteDriver(api) { _emoteDriver = (api && api.pose) ? api : null; }
+export function temEmoteDriver() { return !!_emoteDriver; }
+
+const FADE = 0.16;
+
+class CharController {
+  constructor(mixer, actions, group, headBone, head, charId, model, bodyId = charId) {
+    this.mixer = mixer; this.actions = actions;
+    this.group = group; this.headBone = headBone; this.head = head;
+    /* Base do Y vem do enquadramento da bind (`model.position.y = -bbox.min.y * s`, acima).
+       A correção do clipe é somada A ELA, nunca substitui — senão o personagem perde o
+       alinhamento de bind que já estava certo em todos os 44. */
+    this.charId = charId; this.bodyId = bodyId; this.model = model || null;
+    this._footBase = model ? model.position.y : 0;
+    // Ref por clipe × escala do modelo (anim-speed-ref.js); clipe sem ref usa a global.
+    this.refs = refsDoCorpo(actions, model ? model.scale.x : 0, REFS_GLOBAIS);
+    this.cur = null; this.dead = false; this.shooting = false; this.crouch = false; this.jumping = false;
+    this._reloadT = 0; this._reloadDur = 0; this.reloadK = 0; this._leanK = 0; this._porte1hK = 0;
+    this._flinchT = 0; this._flinchDur = 0; this._flinchDir = null; this._fireT = 0; this._fireDur = 0;
+    this._drawT = 0; this._drawBone = null; this._drawBase = new THREE.Quaternion();
+    this._emoteId = null; this._emoteT = 0; this._emoteK = 0; this._emoteDip = 0;
+    this.emotando = false; this._emoteOssos = []; this._emoteClipeInfo = null; this._emoteClipeAtivo = false; this._ultimoPose = null;
+    // Repouso do esqueleto ANTES de qualquer pose, uma vez por personagem: base do retarget
+    // dos emotes de captura (o template nunca é animado; o clone nasce no repouso).
+    if (model && charId && !_emoteRepouso.has(charId)) _emoteRepouso.set(charId, repousoEsqueleto(model));
+    this._emoteClipes = new Map();   // id -> clipe já retargetado para este corpo
+    this._ar = false; this._mantleF = null; this._landT = 0; this._yawAtraso = null; this._deathTilt = 0; this.lod = 0;
+    this.shadow = null; this._airK = 0;   // sombra de contato + fator "está no ar" (0..1, suavizado)
+    this.oneHanded = false; // arma de 1 mão: idle/walk trocam p/ idle1h/walk1h (setado em buildCharacterModel)
+    this.weaponId = 'awp';
+    this._upperName = null; this._upperDur = 0; this._upperT = 0; this._upperAction = null;
+    this._upperActions = new Map(); this._drawPending = false; this._drawRequested = false; this._reloadClip = false; this._hitClip = false; this._grenadePending = null; this._ceremonyPending = null;
+    this._extrasReady = false;
+    this._locoA = null; this._locoB = null; this._locoAName = null; this._locoBName = null; this._locoMix = 0;
+    this._loco = 'idle'; // current locomotion state (hysteresis memory for walk/run choice)
+    for (const name of EXTRA_STATES) if (_extraClips[name]) actions[name] = mixer.clipAction(_extraClips[name]);
+    mixer.addEventListener('finished', (e) => {
+      if (e.action === actions.shoot) this.shooting = false;
+      if (e.action === actions.jump) this.jumping = false;
+    });
+    this._to('idle');
+  }
+
+  _requestExtras() {
+    if (this._extrasBind) return;
+    this._extrasBind = true;
+    void extrasPack().then(() => {
+      this._extrasReady = true;
+      for (const name of EXTRA_STATES) if (_extraClips[name] && !this.actions[name]) this.actions[name] = this.mixer.clipAction(_extraClips[name]);
+      if (this._reloadDur > 0 && !this._reloadClip) this._startReloadClip();
+      if (this._grenadePending) this._retomaGranada();
+      if (this._drawRequested) { this._drawRequested = false; this.draw(); }
+      if (this._ceremonyPending != null) { const v = this._ceremonyPending; this._ceremonyPending = null; this.ceremony(v); }
+    });
+  }
+
+  _startReloadClip() {
+    const name = this.oneHanded && this.weaponId !== 'knife' ? 'reload_pistol' : 'reload_rifle';
+    this._reloadClip = this._playUpper(name, Math.max(0.05, this._reloadDur - this._reloadT));
+    return this._reloadClip;
+  }
+
+  _playUpper(name, dur, repeat = false) {
+    if (this.dead || this.lod >= 2) return false;
+    if (!_extraClips[name]) { this._requestExtras(); return false; }
+    const key = name;
+    let a = this._upperActions.get(key);
+    if (!a) {
+      const clip = upperClip(name);
+      if (!clip) return false;
+      a = this.mixer.clipAction(clip);
+      this._upperActions.set(key, a);
+    }
+    if (this._upperAction && this._upperAction !== a) this._upperAction.fadeOut(0.08);
+    a.reset(); a.setLoop(repeat ? THREE.LoopRepeat : THREE.LoopOnce, repeat ? Infinity : 1); a.clampWhenFinished = false;
+    a.timeScale = dur > 0 ? a.getClip().duration / dur : 1;
+    a.enabled = true; a.fadeIn(0.08).play();
+    this._upperAction = a; this._upperName = name; this._upperDur = repeat ? Infinity : (dur || a.getClip().duration); this._upperT = 0;
+    this._hitClip = name.startsWith('hit_');   // outro clipe tomou o trem superior: o flinch volta ao overlay
+    return true;
+  }
+
+  // Usado pelo mutante reload-perna-congelada e por clipes full-body futuros.
+  _playFull(name, dur) {
+    const a = this.actions[name];
+    if (!a || this.dead || this.lod >= 2) return false;
+    if (this._upperAction && this._upperAction !== a) this._upperAction.fadeOut(0.08);
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+    a.timeScale = dur > 0 ? a.getClip().duration / dur : 1;
+    a.enabled = true; a.fadeIn(0.08).play();
+    this._upperAction = a; this._upperName = name; this._upperDur = dur || a.getClip().duration; this._upperT = 0; this._hitClip = false;
+    return true;
+  }
+
+  _stopUpper() {
+    if (this._upperAction) this._upperAction.fadeOut(0.08);
+    this._upperAction = null; this._upperName = null; this._upperDur = 0; this._upperT = 0; this._hitClip = false;
+  }
+
+  _tickUpper(dt) {
+    if (!this._upperName) return;
+    this._upperT += dt;
+    if (this._upperT < this._upperDur) return;
+    if (this._drawPending) {
+      this._drawPending = false; this._drawRequested = false;
+      this._playUpper(`draw_${this.oneHanded ? 'pistol' : 'rifle'}`, 0.65);
+    } else if (this._reloadDur > 0 && this._reloadClip) {
+      const reloadTerminou = this._upperName.startsWith('reload_');
+      this._stopUpper();
+      if (reloadTerminou) {
+        this._reloadClip = false; this._reloadDur = 0; this._reloadT = 0;
+      } else this._startReloadClip();   // hit interrompeu o clipe: retoma só o restante
+    } else this._stopUpper();
+  }
+
+  _setLocoSemDirecao() { this._to(this._loco); }
+
+  _setLocoPar(an, bn, mix) {
+    const a = this.actions[an], b = this.actions[bn];
+    if (!a) return false;
+    if (this._locoA !== a || this._locoB !== (b || null)) {
+      /* Clipe que JÁ toca na locomoção (no par anterior ou como estado único) segue com a
+         fase e o fade dele; só entra do zero quem não estava tocando. Andando reto, a
+         lateral é ±0 de ruído e cai dos dois lados da fronteira de setor: o par trocava
+         (run|strafe_right) ↔ (strafe_left|run) a cada quadro e o reset() devolvia o run ao
+         quadro 0 com peso de fade-in — bot deslizando parado na pose (Operação Flávio). */
+      const vivos = this._locoA ? [this._locoA, this._locoB] : [this.cur];
+      if (this.cur && !vivos.includes(this.cur)) this.cur.fadeOut(FADE);
+      for (const x of vivos) if (x && x !== a && x !== b) x.fadeOut(FADE);
+      for (const action of b ? [a, b] : [a]) {
+        if (vivos.includes(action) && action.isRunning()) continue;
+        action.reset(); action.setLoop(THREE.LoopRepeat, Infinity); action.enabled = true; action.fadeIn(FADE).play();
+      }
+      this._locoA = a; this._locoB = b || null; this._locoAName = an; this._locoBName = b ? bn : null;
+      this.cur = a;
+      if (this.model) this.model.position.y = this._footBase + footOffset(this.charId, an) - (this._emoteDip || 0);
+    }
+    this._locoMix = b ? mix : 0;
+    a.weight = 1 - this._locoMix;
+    if (b) b.weight = this._locoMix;
+    this.curName = this._locoMix > 0.5 ? bn : an;
+    return true;
+  }
+
+  _setLocoDirecional(speed, back, lateral, usaClipe1h) {
+    if (this.lod < 2 && (back || Math.abs(lateral) > 0.25)) this._requestExtras();
+    const base = this._loco === 'walk' && usaClipe1h && this.actions.walk1h ? 'walk1h' : this._loco;
+    const variante = (nome) => this.oneHanded && this.actions[`${nome}_pistol`] ? `${nome}_pistol` : nome;
+    const costas = this._loco === 'run' && !(this.oneHanded && this.actions.walk_back_pistol) ? 'run_back' : 'walk_back';
+    if (this.lod >= 2 || (back && !this.actions[variante(costas)])) {
+      this._to(back ? (usaClipe1h && this.actions.walk1h ? 'walk1h' : 'walk') : base);
+      return;
+    }
+    if (!back && Math.abs(lateral) > speed * 0.7
+      && !this.actions[variante(lateral > 0 ? 'strafe_right' : 'strafe_left')]) {
+      this._to(base);
+      return;
+    }
+    const fwd = (back ? -1 : 1) * Math.sqrt(Math.max(0, speed * speed - lateral * lateral));
+    let ang = Math.atan2(lateral, fwd); if (ang < 0) ang += Math.PI * 2;
+    const setor = Math.floor(ang / (Math.PI / 2)) % 4;
+    const mix = (ang / (Math.PI / 2)) - Math.floor(ang / (Math.PI / 2));
+    const nomes = [base, variante('strafe_right'), variante(costas), variante('strafe_left')];
+    if (!this._setLocoPar(nomes[setor], nomes[(setor + 1) % 4], mix)) this._to(base);
+  }
+
+  _to(name, once = false, restart = true) {
+    const a = this.actions[name];
+    if (!a || (this.cur === a && !this._locoA && !this._locoB)) return;
+    // Sair do par 8-way para um clipe que já toca nele (fallback sem strafe, LOD≥2) segue a
+    // fase: reiniciar ali congelava o ciclo de pernas a cada troca de setor.
+    const herda = !once && (a === this._locoA || a === this._locoB) && a.isRunning();
+    if (this._locoA && this._locoA !== a) this._locoA.fadeOut(FADE);
+    if (this._locoB && this._locoB !== a) this._locoB.fadeOut(FADE);
+    this._locoA = null; this._locoB = null; this._locoAName = null; this._locoBName = null; this._locoMix = 0;
+    if (a !== this.actions.jump) this.jumping = false;
+    // O par escreve `weight` (1−mix / mix): sem devolver 1, o clipe voltava com o peso velho
+    // do par (até 0) e o resto do esqueleto ia para a pose de ligação.
+    a.weight = 1;
+    if (!herda) {
+      if (restart) {
+        a.reset();
+        a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+        a.clampWhenFinished = once;
+      }
+      a.enabled = true; a.fadeIn(FADE); a.play();
+    }
+    if (this.cur && this.cur !== a) this.cur.fadeOut(FADE);
+    this.cur = a;
+    this.curName = name;   // nome do estado atual — o clamp de frente do mount lê daqui
+    // pé no chão: o offset do clipe que ENTRA (ver footOffset)
+    if (this.model) this.model.position.y = this._footBase + footOffset(this.charId, name) - (this._emoteDip || 0);
+  }
+
+  setCrouch(v) { this.crouch = !!v; }
+  /* EMOTE: dança por overlay de mundo (ver public/js/emotes.js). Entra e sai em rampa
+     de 0,18 s — cortar no quadro dá solavanco e o boneco "pula" de pose. Emote de
+     captura (`clipe` no driver) toca o clipe de corpo inteiro; `elapsed` posiciona a
+     fase (entrada no meio da dança, rede) sem reiniciar rampa nem clipe já em curso. */
+  emote(id, elapsed = 0) {
+    if (this.dead || !id) return false;
+    this._emoteId = id; this._emoteT = Math.max(0, Number(elapsed) || 0); this.emotando = true;
+    this._emoteClipeInfo = _emoteDriver?.clipe?.(id) || null;
+    if (this._emoteClipeInfo) this._tocarEmoteClipe();
+    return true;
+  }
+  pararEmote() { this._emoteId = null; }
+  emoteAtual() { return this.emotando ? this._emoteId : null; }
+
+  _pedirEmotes() {
+    if (this._emotesBind) return;
+    this._emotesBind = true;
+    void emotesPack().then(() => {
+      // O pack chega depois: só retoma se o MESMO emote ainda está pedido (parar ou
+      // morrer durante o download não ressuscita a dança).
+      if (this._emoteId && this._emoteClipeInfo?.id === this._emoteId) this._tocarEmoteClipe();
+    }).catch((error) => { this._emotePackError = error; });
+  }
+
+  _tocarEmoteClipe() {
+    const info = this._emoteClipeInfo;
+    if (!info || this.dead || this.lod >= 2) return false;
+    let clip = this._emoteClipes.get(info.id);
+    if (!clip) {
+      clip = emoteClipDoCorpo(info.id, this);
+      if (!clip) { this._pedirEmotes(); return false; }
+      this._emoteClipes.set(info.id, clip);
+    }
+    const nome = `emote_${info.id}`;
+    const a = this.actions[nome] || (this.actions[nome] = this.mixer.clipAction(clip));
+    const dur = clip.duration;
+    const fase = info.laco ? this._emoteT % dur : Math.min(this._emoteT, dur);
+    if (this.cur === a) {
+      // Ressincronização: só corrige deriva visível; a fase local já anda com o mixer.
+      let d = Math.abs(a.time - fase);
+      if (info.laco) d = Math.min(d, dur - d);
+      if (d > 0.25) a.time = fase;
+      return true;
+    }
+    // Corpo inteiro: recarga/faca/hit em camada superior não sobrepõem a dança.
+    this._stopUpper();
+    this._to(nome, !info.laco);
+    a.time = fase;
+    return true;
+  }
+
+  /* Recarga visível em 3P: overlay procedural sobre o clipe corrente (não há clipe de
+     reload no acervo — ver docs/ANIM-3P.md). Envelope sobe e desce; a mão esquerda vai
+     ao pente pelo MESMO CCD da mão de apoio. */
+  reload(dur) {
+    if (this.dead || !(dur > 0)) return;
+    this._reloadT = 0; this._reloadDur = dur; this._grenadePending = null;
+    if (!this._startReloadClip() && this.lod < 2) this._requestExtras();
+  }
+  // Recarga INTERROMPIDA (granada na mão, morte): o overlay cai no mesmo quadro — senão o
+  // corpo 3P segue mergulhando atrás de um pente que ninguém está trocando.
+  cancelReload() {
+    this._reloadT = 0; this._reloadDur = 0; this.reloadK = 0; this._reloadClip = false;
+    if (this._upperName?.startsWith('reload_')) this._stopUpper();
+  }
+
+  draw() {
+    if (this.dead || this.lod >= 2 || this.weaponId === 'knife') return;
+    if (this.oneHanded) { this._drawRequested = false; this._drawT = 0.32; return; }
+    this._drawRequested = true;
+    this._drawPending = this._playUpper('holster_rifle', 0.45);
+    if (this._drawPending) return;
+    if (this._playUpper('draw_rifle', 0.65)) { this._drawRequested = false; return; }
+    if (this._extrasReady) { this._drawRequested = false; this._drawT = 0.32; }
+  }
+
+  grenade(dur = 1.05) {
+    if (this.dead) return;
+    this.cancelReload();
+    this._grenadePending = null;
+    // Pack ainda não chegou: guarda o fim do arremesso no relógio do mixer e retoma na carga.
+    if (!this._playUpper('grenade_throw', dur) && this.lod < 2 && !_extraClips.grenade_throw) this._grenadePending = { dur, fim: this.mixer.time + dur };
+  }
+
+  // Toca em fase com o arremesso; se faltam ≤0,1 s (ou acabou), a granada não toca.
+  _retomaGranada() {
+    const { dur, fim } = this._grenadePending, resta = fim - this.mixer.time;
+    this._grenadePending = null;
+    if (resta <= 0.1 || !this._playUpper('grenade_throw', dur)) return;
+    this._upperT = dur - resta;
+    this._upperAction.time = this._upperT * this._upperAction.timeScale;
+  }
+
+  ceremony(vitoria) {
+    if (this.dead) return;
+    if (this.lod >= 2) { this._to('idle'); return; }
+    this.cancelReload(); this._stopUpper(); this.shooting = false; this._emoteId = null; this._drawPending = false; this._drawRequested = false; this._grenadePending = null;
+    const nome = vitoria ? 'victory' : 'defeat';
+    if (!this.actions[nome]) { this._ceremonyPending = vitoria; this._requestExtras(); return; }
+    this._to(nome);
+  }
+
+  _hitClipName(dir, head) {
+    if (head) return 'hit_head';
+    const yaw = this.group.rotation.y;
+    const frente = -dir.x * Math.sin(yaw) - dir.z * Math.cos(yaw);
+    const direita = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
+    const quadrante = Math.abs(frente) >= Math.abs(direita) ? (frente >= 0 ? 'front' : 'back') : (direita >= 0 ? 'right' : 'left');
+    return `hit_${quadrante}`;
+  }
+
+
+  /* Levar tiro move o corpo: sem isso quem atira de longe não sabe se acertou.
+     `dir` é a direção do disparo em mundo; `forca` 0..1 (dano/100). */
+  flinch(dir, forca = 0.5, head = false) {
+    this._emoteId = null;   // levar tiro derruba o emote na hora
+    if (this.dead || !dir) return;
+    this._flinchDir = { x: dir.x, z: dir.z };
+    this._flinchDur = 0.18;
+    this._flinchT = 0;
+    this._flinchF = Math.max(0.25, Math.min(1, forca));
+    this._hitClip = this._playUpper(this._hitClipName(dir, head), head ? 0.43 : 0.45);
+  }
+
+  /* No ar o clipe de pulo acabava e o corpo voltava a CORRER em queda livre.
+     Segura a última pose enquanto não toca o chão e marca o amortecimento. */
+  setAr(v) {
+    const novo = !!v;
+    if (novo === this._ar) return;
+    if (this._ar && !novo) this._landT = 0.14;
+    this._ar = novo;
+  }
+
+  /* O mantle reutiliza o clipe de pulo, mas o tempo vem do progresso físico. Deixar o
+     mixer tocar livre fazia braços e corpo terminarem antes de o jogador cruzar a borda. */
+  setMantle(f) {
+    this._mantleF = Number.isFinite(f) ? Math.max(0, Math.min(1, f)) : null;
+  }
+
+  jump() {
+    if (this.dead || this.crouch || this.jumping || !this.actions.jump) return;
+    this.jumping = true;
+    this.curName = 'jump';
+    const a = this.actions.jump;
+    a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+    a.enabled = true; a.fadeIn(0.08).play();
+    // Larga o par 8-way inteiro (como shoot): membro em fade-out não pode ser "herdado" depois.
+    if (this._locoA && this._locoA !== this.cur) this._locoA.fadeOut(0.08);
+    if (this._locoB && this._locoB !== this.cur) this._locoB.fadeOut(0.08);
+    this._locoA = null; this._locoB = null; this._locoAName = null; this._locoBName = null; this._locoMix = 0;
+    if (this.cur && this.cur !== a) this.cur.fadeOut(0.08);
+    this.cur = a;
+  }
+
+  shoot() {
+    if (this.dead) return;
+    if (this.weaponId === 'knife' && this._playUpper('knife_stab', 0.65)) return;
+    // Agachado não troca de clipe (a pose já mira), mas ganha recuo aditivo: antes o
+    // bot agachado atirava completamente imóvel. Ver docs/ANIM-3P.md.
+    if (this.crouch || !this.actions.shoot) { this._fireDur = 0.12; this._fireT = 0; return; }
+    this.jumping = false;
+    if (this._locoA) this._locoA.fadeOut(0.06);
+    if (this._locoB) this._locoB.fadeOut(0.06);
+    this._locoA = null; this._locoB = null; this._locoAName = null; this._locoBName = null; this._locoMix = 0;
+    this.shooting = true;
+    this.curName = 'shoot';
+    this._shootUntil = this.mixer.time + this.actions.shoot.getClip().duration;
+    if (this.cur === this.actions.shoot) { this.cur.time = 0; this.cur.paused = false; return; }
+    this.actions.shoot.reset();
+    this.actions.shoot.setLoop(THREE.LoopOnce, 1);
+    this.actions.shoot.clampWhenFinished = true;
+    this.actions.shoot.enabled = true; this.actions.shoot.fadeIn(0.06).play();
+    if (this.cur && this.cur !== this.actions.shoot) this.cur.fadeOut(0.06);
+    this.cur = this.actions.shoot;
+  }
+
+  die(dir = null) {
+    this._emoteId = null;
+    if (this.dead) {
+      if (dir && !this._deathDir) {
+        this._deathTilt = Math.atan2(dir.x, dir.z);
+        this._deathDir = { x: dir.x, z: dir.z };
+      }
+      return;
+    }
+    // Viés de tombo pela direção do disparo: o mesmo clipe deixa de cair sempre igual.
+    this._deathTilt = dir ? Math.atan2(dir.x, dir.z) : 0;
+    this._deathDir = dir ? { x: dir.x, z: dir.z } : null;
+    this._deathK = 0;
+    this.dead = true; this.shooting = false; this._ar = false; this._mantleF = null;
+    /* Overlays de vida (reload/flinch/lean/pitch) morrem junto com o corpo (dono, 31/10). Hist: docs/ANIM-3P.md. */
+    this.cancelReload();
+    this._stopUpper(); this._ceremonyPending = null; this._drawPending = false; this._drawRequested = false; this._grenadePending = null;
+    this._drawT = 0;
+    this._flinchDur = 0;
+    this._leanK = 0;
+    this.aimPitch = 0;
+    this._to('death', true);
+    if (this.actions.death) this.actions.death.timeScale = 1.8; // snappy fall, not slow-mo
+  }
+
+  // Stop ALL actions first — the death clip runs with clampWhenFinished, so it holds
+  // its last (fallen) frame at full weight forever. Without stopAllAction the revived
+  // character does everything on top of the fallen pose (the "walking while falling
+  // backward" bug). Then start idle clean.
+  revive() {
+    this._restaurarPoseMorte();
+    this._deathK = 0; this._deathDir = null;
+    this.dead = false; this.shooting = false; this.jumping = false; this._ar = false; this._mantleF = null;
+    this._ceremonyPending = null; this._drawPending = false; this._drawRequested = false; this._grenadePending = null; this._stopUpper();
+    this._drawT = 0;
+    this.mixer.stopAllAction();
+    this.cur = null;
+    this._to('idle');
+  }
+
+  _restaurarPoseMorte() {
+    if (!this._deathPoseBone) return;
+    this._deathPoseBone.quaternion.copy(this._deathPoseBase);
+    this._deathPoseBone = null;
+  }
+
+  // moving: 0..1, hasTarget: bool, speed: real ground speed (m/s), back: true when the
+  // body is moving BACKWARD relative to its facing (combat retreat). Advances the mixer,
+  // picks the locomotion state, and scales the leg-cycle rate to the actual ground speed
+  // so the feet plant instead of ice-skating (root-motion-free clips have no built-in
+  // stride, so we drive the cycle rate from how fast the body is really moving).
+  update(dt, moving, hasTarget, speed = 0, back = false, lateral = 0) {
+    this._restaurarPoseMorte();
+    if (this._drawBone) { this._drawBone.quaternion.copy(this._drawBase); this._drawBone = null; }
+    this._drawT = Math.max(0, this._drawT - dt);
+    const freeHand = this._previewFreeHand;
+    // Restaura antes do mixer: uma pose idêntica pode não reescrever a propriedade em dt=0.
+    if (freeHand?.applied) { freeHand.bone.quaternion.copy(freeHand.before); freeHand.applied = false; }
+    this._tickUpper(dt);
+    if (!this.dead) {
+      if (this.shooting && this.mixer.time >= (this._shootUntil || 0)) this.shooting = false;
+      if (/^(victory|defeat)$/.test(this.curName || '')) {
+        // A cerimônia segura o corpo inteiro até a próxima rodada.
+      } else if (this._mantleF !== null && this.actions.jump) {
+        if (this.cur !== this.actions.jump) { this._to('jump'); this.jumping = false; }
+        const jump = this.actions.jump;
+        jump.paused = true;
+        jump.time = jump.getClip().duration * (0.08 + this._mantleF * 0.88);
+        this.curName = 'jump';
+      } else if (this._emoteClipeInfo && this._emoteId && !this.crouch && !this._ar) {
+        // Emote de captura: o clipe é dono do corpo inteiro. LOD≥2 não paga o clipe e
+        // fica no idle com a coreografia de reserva; voltando ao LOD perto, retoma na fase.
+        if (this.lod >= 2) this._to('idle');
+        else this._tocarEmoteClipe();
+      } else if (this.crouch) {
+        this._to(moving > 0.05 ? 'crouchwalk' : 'crouch');
+      } else if (this.shooting && moving > 0.05 && this.actions.walkfire) {
+        // Atirar EM MOVIMENTO: o clipe combinado (walk+fire) mantém as pernas andando —
+        // antes as pernas congelavam ~1s a cada disparo (usuário reprovou).
+        this._to('walkfire');
+      } else if (this.shooting && moving <= 0.05
+        && this.cur === this.actions.walkfire && this.actions.shoot) {
+        this.actions.shoot.time = this.actions.shoot.getClip().duration - (this._shootUntil - this.mixer.time);
+        this.actions.shoot.paused = false;
+        this._to('shoot', true, false);
+      } else if (this._ar && this.actions.jump) {
+        if (this.cur !== this.actions.jump) { this._to('jump'); this.jumping = false; }
+        const jump = this.actions.jump;
+        jump.paused = jump.time >= jump.getClip().duration - 0.02;
+        this.curName = 'jump';
+      } else if (this._landT > 0 && this.actions.crouch) {
+        this._landT = Math.max(0, this._landT - dt);
+        this._to('crouch');
+      } else if (!this.shooting && !this.jumping) {
+        const usaClipe1h = this.oneHanded && !P1H_BASE_CLIP.has(this.bodyId);
+        if (moving <= 0.05) {
+          if (this.weaponId === 'knife' && this.lod < 2) this._requestExtras();
+          const baseIdle = usaClipe1h && this.actions.idle1h ? 'idle1h' : 'idle';
+          this._to(baseIdle);
+          if (this.weaponId === 'knife' && this.lod < 2 && this.actions.knife_idle && !this._upperName) this._playUpper('knife_idle', 0, true);
+          this._loco = 'idle';
+        } else {
+          if (this._upperName === 'knife_idle') this._stopUpper();
+          if (this._loco !== 'run' && speed > 1.45) this._loco = 'run';
+          else if (this._loco !== 'walk' && speed < 1.15) this._loco = 'walk';
+          else if (this._loco !== 'walk' && this._loco !== 'run') this._loco = hasTarget && speed < 1.7 ? 'walk' : 'run';
+          this._setLocoDirecional(speed, back, lateral, usaClipe1h);
+        }
+      }
+      // Per-clip cycle rate = ground speed / that clip's measured natural speed, so the
+      // feet plant instead of ice-skating. clamp keeps it from looking frantic/frozen.
+      const rate = (ref) => Math.max(0.45, Math.min(3.0, speed / ref));
+      const refs = this.refs;
+      if (this.actions.run) this.actions.run.timeScale = rate(refs.run);
+      if (this.actions.walk) this.actions.walk.timeScale = back ? -rate(refs.walk) : rate(refs.walk);
+      if (this.actions.walk1h) this.actions.walk1h.timeScale = back ? -rate(refs.walk1h) : rate(refs.walk1h);
+      if (this.actions.crouchwalk) this.actions.crouchwalk.timeScale = rate(refs.crouchwalk);
+      for (const nome of ['strafe_left', 'strafe_right', 'strafe_left_pistol', 'strafe_right_pistol']) {
+        if (this.actions[nome]) this.actions[nome].timeScale = rate(nome.endsWith('_pistol') ? 1.8 : 1.53);
+      }
+      if (this.actions.walk_back) this.actions.walk_back.timeScale = rate(0.87);
+      if (this.actions.walk_back_pistol) this.actions.walk_back_pistol.timeScale = rate(1.16);
+      if (this.actions.run_back) this.actions.run_back.timeScale = rate(3.826);
+    }
+    this.mixer.update(dt);
+    // Emote de captura tocando: o clipe manda no corpo, então mira/coluna não o torcem.
+    const clipeEmote = this._emoteClipeInfo ? this.actions[`emote_${this._emoteClipeInfo.id}`] : null;
+    this._emoteClipeAtivo = !!clipeEmote && this.cur === clipeEmote && !this.dead;
+    // Pitch da cabeça em MALHA FECHADA (substitui o HEAD_UP fixo, que ACUMULAVA rotação
+    // quando o mixer parava de escrever o osso — ex.: idle.glb com duração zero, que
+    // dobrava a cabeça do personagem na tela de seleção). Mede o pitch real do olhar
+    // (eixo +Z local da cabeça em mundo) e gira o osso pela DIFERENÇA pro aimPitch.
+    // Só roda quando aimPitch é DEFINIDO (bots) — preview da seleção e braços FP ficam
+    // com a pose natural do clipe (aplicar em todos deixava as cabeças esquisitas).
+    if (this.headBone && this.aimPitch !== undefined && !this.dead && this.lod < 2) {
+      const target = this.aimPitch;
+      this.group.getWorldQuaternion(_gq);
+      _right.set(1, 0, 0).applyQuaternion(_gq);
+      this.headBone.getWorldQuaternion(_wq);
+      _v.set(0, 0, 1).applyQuaternion(_wq);
+      const curPitch = Math.asin(Math.max(-1, Math.min(1, _v.y)));
+      // Emote de captura manda na cabeça: a correção decai a zero em vez de torcer o clipe.
+      let corr = this._emoteClipeAtivo ? 0 : target - curPitch;
+      corr = Math.max(-AIM_CORR_CLAMP, Math.min(AIM_CORR_CLAMP, corr));
+      this._aimCorr = (this._aimCorr || 0) + (corr - (this._aimCorr || 0)) * Math.min(1, dt * 6);
+      if (Math.abs(this._aimCorr) > 1e-4) {
+        _headUpQ.setFromAxisAngle(_right, -this._aimCorr);
+        this.headBone.parent.getWorldQuaternion(_pq);
+        this.headBone.quaternion.copy(_pq.invert().multiply(_headUpQ).multiply(_wq));
+        this.headBone.updateWorldMatrix(false, true);
+      }
+    }
+    // Sombra de contato: reage ao estado do corpo. No pulo ela ABRE e desbota (penumbra
+    // que cresce com a distância do contato, critério A4); agachado ela FECHA e escurece
+    // (o corpo está mais perto do chão); morto, alivia — o corpo tombou e a mancha sob
+    // o eixo do grupo deixaria de fazer sentido se ficasse cheia.
+    if (this.shadow) {
+      const air = this._ar ? 1 : 0;
+      this._airK += (air - this._airK) * Math.min(1, dt * 8);
+      const k = 1 - this._airK;
+      const s = this.shadow, base = s.userData.csBase || 0.9;
+      const tight = this.crouch ? 0.82 : 1.0;
+      const sc = base * tight * (1 + this._airK * 0.6);
+      s.scale.set(sc, sc, 1);
+      s.material.opacity = CHAR_FX.csOp * (0.12 + 0.88 * k) * (this.crouch ? 1.15 : 1) * (this.dead ? 0.5 : 1);
+      s.visible = s.material.opacity > 0.02;
+    }
+    // Mount usa a mão após o mixer; a correção final da cabeça fica antes do proxy.
+    // Contrato de orientação: docs/ANIM-3P.md.
+    /* Dançando, a arma some: o cano acompanha a mão do passo e cruza o rosto, e o mount
+       briga com a coreografia. Guarda e devolve, sem tocar no inventário. */
+    if (this.emotando !== this._armaGuardada) {
+      this._armaGuardada = this.emotando;
+      // a arma mora em lugares diferentes por personagem (mount vivo, arma-glb ou a
+      // caixa de fallback): esconder só o mount deixava fuzil flutuando em alguns.
+      if (!this._armaNos) {
+        this._armaNos = [];
+        if (this.tpMount?.mount) this._armaNos.push(this.tpMount.mount);
+        this.group?.traverse((o) => {
+          if (/^arma-(glb|caixa)$/.test(o.name) && !this._armaNos.includes(o)) this._armaNos.push(o);
+        });
+      }
+      for (const n of this._armaNos) n.visible = !this.emotando;
+    }
+    if (this.tpMount && !this.dead && !this.emotando) {
+      const t = this.tpMount;
+      if (t.pegada) t.pegadaAtiva = /^(idle|idle1h|crouch|knife_idle)$/.test(this.curName || '');
+      orientTpMount(t);
+      if(t.stabilizeCarry && t.carryPalmModel && t.rArm && t.rFore && /^(walk|run|walk1h|walkfire)$/.test(this.curName || '')){
+        _v.copy(t.carryPalmModel);t.model.localToWorld(_v);
+        solveCCDIK([t.rArm,t.rFore],t.handBone,_v,{iterations:12,endOffset:t.palmLocal});
+        orientTpMount(t);
+        // Rigs de braço curto deixam resíduo no CCD. O mount corrige só esse resíduo,
+        // sem mover o corpo nem alocar por quadro.
+        t.mount.position.copy(t.handBone.worldToLocal(_v));
+      }
+      else if(t.palmLocal) t.mount.position.copy(t.palmLocal);
+      // CLAMP DE FRENTE via IK DO BRAÇO DIREITO (ver TP_FRONT_MIN): o clipe assentado
+      // deixa a palma de alguns rigs atrás do plano do corpo e a arma vai junto
+      // ("arma por trás" — jozo/trapfunk/coach). Empurrar só o MOUNT foi tentado e
+      // reprovado no olho: a arma descolava da mão (esbirro: 11 cm). Aqui a MÃO inteira
+      // vem pra frente (CCD em Arm→ForeArm, o mesmo solver da mão de apoio) e a arma,
+      if (t.palmLocal && t.rArm && t.rFore && TP_FRONT_MIN > -Infinity
+          && /^(idle|idle1h|crouch|knife_idle)$/.test(this.curName || '')) {
+        _v.copy(t.palmLocal);
+        t.handBone.localToWorld(_v);
+        t.model.worldToLocal(_v);
+        if (_v.z < TP_FRONT_MIN) {
+          _v.z = TP_FRONT_MIN;
+          t.model.localToWorld(_v);
+          solveCCDIK([t.rArm, t.rFore], t.handBone, _v, { iterations: 6, endOffset: t.palmLocal });
+          orientTpMount(t);   // reorienta o cano pós-IK
+        }
+      }
+    }
+    const drawArm = this._drawT > 0 && !this.dead && this.lod < 1 && !this.emotando && this.corpo?.get('RightArm');
+    if (drawArm?.parent) {
+      this._drawBone = drawArm;
+      this._drawBase.copy(drawArm.quaternion);
+      this.group.updateMatrixWorld(true);
+      drawArm.parent.getWorldQuaternion(_pq).invert();
+      _axisF.set(Math.cos(this.group.rotation.y), 0, -Math.sin(this.group.rotation.y)).applyQuaternion(_pq).normalize();
+      drawArm.quaternion.premultiply(_qLean.setFromAxisAngle(_axisF, Math.sin(Math.PI * this._drawT / 0.32) * 0.3));
+      if (this.tpMount) orientTpMount(this.tpMount);
+    }
+    // IK da mão de apoio (FASE 2): palma L no guarda-mão da arma montada (só 2 mãos).
+    // Roda depois do mixer/pose — corrige o contato por arma sem tocar na orientação.
+    if (this.ikL && !this.dead && this.lod < 1 && !this.emotando && !this._upperName) {
+      const ik = this.ikL;
+      ik.gun.updateWorldMatrix(true, false);
+      _ikTgt.copy(ik.fore);
+      ik.gun.localToWorld(_ikTgt);
+      solveCCDIK(ik.chain, ik.end, _ikTgt, { iterations: 8, endOffset: ik.endOffset });
+    }
+    /* Overlays de tronco por ÚLTIMO; eixo em MUNDO via quadro do pai e undo antes do
+       mixer. As duas armadilhas estão contadas em docs/ANIM-3P.md. */
+    /* EMOTE (dança): overlay de mundo em cima do clipe base, ANTES do bloco de tronco
+       (quem vem depois manda na pose final). Não há undo a fazer: `mixer.update` do
+       quadro seguinte reescreve a rotação local de todo osso animado. */
+    const querEmote = !!this._emoteId && !this.dead;
+    this._emoteK += ((querEmote ? 1 : 0) - this._emoteK) * Math.min(1, dt / 0.18);
+    if (this._emoteK < 0.004 && !querEmote) { this._emoteK = 0; this.emotando = false; this._emoteDip = 0; }
+    if (querEmote) {
+      this._emoteT += dt;
+      this.emotando = true;
+      // emote de uma vez só se apaga sozinho no fim (laço continua até mandarem parar)
+      if (_emoteDriver && !_emoteDriver.laco(this._emoteId)
+          && this._emoteT >= _emoteDriver.duracao(this._emoteId)) this._emoteId = null;
+    }
+    if (freeHand && this.cur === this.actions.idle && !this.dead && this._emoteK < 1
+        && this._reloadDur === 0 && this.reloadK === 0 && !this.crouch && !this.jumping
+        && !this._ar && this._mantleF === null && !this.shooting && this._fireDur === 0) {
+      freeHand.before.copy(freeHand.bone.quaternion);
+      freeHand.target.fromArray(freeHand.sample.evaluate(
+        this.cur.time / freeHand.idleDuration * freeHand.duration)).normalize();
+      freeHand.bone.quaternion.copy(freeHand.before).slerp(freeHand.target, 1 - this._emoteK);
+      freeHand.applied = true;
+    }
+    if (this._emoteK > 0.004 && _emoteDriver && this.corpo?.size) {
+      const lista = this._emoteOssos;
+      lista.length = 0;
+      /* Procedural: a própria coreografia. Captura: a `reserva` só enquanto o clipe não
+         manda inteiro (pack baixando, falha, LOD≥2 ou cruzando a entrada); na saída de
+         um clipe já assentado não há reserva para ressurgir. */
+      let poseId = this._ultimoPose, pesoReserva = 1;
+      if (this._emoteId) {
+        const info = this._emoteClipeInfo;
+        const wClipe = this._emoteClipeAtivo ? clipeEmote.getEffectiveWeight() : 0;
+        poseId = !info ? this._emoteId : (wClipe > 0.999 ? null : (info.reserva || null));
+        if (info) pesoReserva = 1 - wClipe;
+        this._ultimoPose = poseId;
+      }
+      const dip = poseId ? (_emoteDriver.pose(poseId, this._emoteT, lista) || 0) * pesoReserva : 0;
+      if (pesoReserva < 1) for (const passo of lista) passo[2] *= pesoReserva;
+      this._emoteDip = dip * this._emoteK;
+      const yawE = this.group.rotation.y;
+      const cosE = Math.cos(yawE), sinE = Math.sin(yawE);
+      this.group.updateMatrixWorld(true);
+      for (const passo of lista) {
+        const bone = this.corpo.get(passo[0]);
+        const ang = passo[2] * this._emoteK;
+        if (!bone || !bone.parent || Math.abs(ang) < 1e-4) continue;
+        const eixo = passo[1];
+        // direita R̂=(cos,0,−sin) · cima Û=(0,1,0) · frente F̂=(−sin,0,−cos)
+        const ax = eixo === 'r' ? cosE : (eixo === 'f' ? -sinE : 0);
+        const ay = eixo === 'u' ? 1 : 0;
+        const az = eixo === 'r' ? -sinE : (eixo === 'f' ? -cosE : 0);
+        bone.parent.getWorldQuaternion(_pq).invert();
+        _axisF.set(ax, ay, az).applyQuaternion(_pq).normalize();
+        const q = _qLean.setFromAxisAngle(_axisF, ang).clone();
+        bone.quaternion.premultiply(q);
+      }
+    } else if (!querEmote) this._emoteDip = 0;
+    /* O agachamento da dança vale POR QUADRO: a altura do modelo só era escrita na troca
+       de clipe, então frevo e ginga afundavam zero. Enquanto a rampa não zera, o emote
+       manda na altura; ao sair, a linha abaixo devolve a altura do clipe corrente. */
+    if (this.model && (this._emoteK > 0.004 || this._dipAtivo)) {
+      this.model.position.y = this._footBase + footOffset(this.charId, this.curName) - this._emoteDip;
+      this._dipAtivo = this._emoteK > 0.004;
+    }
+
+    const torso = this.torso;
+    if (!this.dead && torso?.spines?.length) {
+      const yaw = this.group.rotation.y;
+      const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+      // eixos de mundo do grupo: direita R̂=(cos,0,−sin), frente F̂=(−sin,0,−cos)
+      const _deltaMundo = (bone, ax, ay, az, ang) => {
+        this.group.updateMatrixWorld(true);
+        bone.parent.getWorldQuaternion(_pq).invert();
+        _axisF.set(ax, ay, az).applyQuaternion(_pq).normalize();
+        _torsoAplica(bone, _qLean.setFromAxisAngle(_axisF, ang).clone());
+      };
+      const _torsoAplica = (bone, q) => { bone.quaternion.premultiply(q); };
+      // LEAN: peso pro lado do movimento (sem clipe de strafe). Teto 0,10 rad, 8/s.
+      const alvo = Math.max(-1, Math.min(1, (Number.isFinite(lateral) ? lateral : 0) / 4.5)) * 0.12;
+      this._leanK += (alvo - this._leanK) * Math.min(1, dt * 8);
+      this.leanK = this._leanK;
+      if (Math.abs(this._leanK) > 1e-4) {
+        _deltaMundo(torso.spines[0], -sinY, 0, -cosY, -this._leanK);
+        if (torso.spines[1]) _deltaMundo(torso.spines[1], -sinY, 0, -cosY, -this._leanK * 0.5);
+      }
+      /* PORTE DE 1 MÃO: desce o braço direito, dobra o cotovelo e tira a mão esquerda da
+         frente. Exceções anatômicas usam `bodyId`: `charId` vira o id da skin nas skins
+         Mint e fazia todas as variantes do Canarinho furarem P1H_SKIP/IK_L_SKIP. O
+         Canarinho recebe um porte curto próprio: os 50° humanos inflam a asa, mas sem
+         overlay o cotovelo fica quase reto e a pistola lê como pendurada. */
+      const canarinho1h = this.bodyId === 'canarinho';
+      const usaBase1h = P1H_BASE_CLIP.has(this.bodyId);
+      const clipeAceita1h = usaBase1h ? /^(idle|walk|run|knife_idle)$/ : /^(idle1h|walk1h|knife_idle)$/;
+      const quer1h = PORTE_1H && this.oneHanded && !this.emotando && this.lod < 1
+        && (!P1H_SKIP.has(this.bodyId) || canarinho1h)
+        && clipeAceita1h.test(this.curName || '');
+      this._porte1hK += ((quer1h ? 1 : 0) - this._porte1hK) * Math.min(1, dt * 10);
+      if (this._porte1hK > 0.004 && this.reloadK <= 0.05 && (!this._upperName || this._upperName === 'knife_idle') && this.corpo?.size) {
+        const k1 = this._porte1hK;
+        const rArm = this.corpo.get('RightArm'), rFore = this.corpo.get('RightForeArm');
+        if (rArm) _deltaMundo(rArm, cosY, 0, -sinY, (canarinho1h ? CANARINHO_P1H_ARM : P1H_ARM) * k1);
+        if (rFore) _deltaMundo(rFore, cosY, 0, -sinY, (canarinho1h ? CANARINHO_P1H_FORE : P1H_FORE) * k1);
+        /* Mascote de braço-toco (IK_L_SKIP) fica de fora: IK neles vira mão gigante
+           flutuando, a mesma razão por que o guarda-mão de 2 mãos já os pula. */
+        if (torso.lArm && torso.lFore && torso.lHand && torso.hips && this.model
+            && !IK_L_SKIP.has(this.bodyId)) {
+          _ikTgt.copy(torso.hips.getWorldPosition(_ikTgt));
+          this.model.worldToLocal(_ikTgt);
+          _ikTgt.set(_ikTgt.x + P1H_MAO_L[0], _ikTgt.y + P1H_MAO_L[1], _ikTgt.z + P1H_MAO_L[2]);
+          this.model.localToWorld(_ikTgt);
+          solveCCDIK([torso.lArm, torso.lFore], torso.lHand, _ikTgt, { iterations: 8 });
+        }
+      }
+      if (this._reloadDur > 0) {
+        this._reloadT += dt;
+        if (this._reloadT >= this._reloadDur) { this._reloadT = 0; this._reloadDur = 0; }
+      }
+      this.reloadK = !this._reloadClip && this._reloadDur > 0 ? Math.sin(Math.PI * Math.min(1, this._reloadT / this._reloadDur)) : 0;
+      // PITCH DISTRIBUÍDO: a coluna assume parte da mira vertical; a malha fechada da
+      // cabeça (acima) converge o resto. Antes só a cabeça inclinava, com teto de 28°.
+      if (this.aimPitch !== undefined && this.lod < 1 && !this._emoteClipeAtivo) {
+        const pit = Math.max(-0.35, Math.min(0.35, this.aimPitch * 0.45));
+        if (Math.abs(pit) > 1e-3) _deltaMundo(torso.spines[0], cosY, 0, -sinY, -pit);
+      }
+      // ATRASO DE QUADRIL: o grupo gira junto com a mira (instantâneo); o quadril fica
+      // para trás até 35° e corre atrás, que é o que dá leitura de giro no lugar.
+      if (torso.hips && this.lod < 1) {
+        if (this._yawAtraso === null) this._yawAtraso = yaw;
+        let d = yaw - this._yawAtraso;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        const teto = 0.61;   // 35°
+        const excesso = Math.max(0, Math.abs(d) - teto) * Math.sign(d);
+        this._yawAtraso += excesso + d * Math.min(1, dt * 3.2);
+        const lag = Math.max(-teto, Math.min(teto, yaw - this._yawAtraso));
+        this.yawLag = lag;
+        if (Math.abs(lag) > 1e-3) _deltaMundo(torso.hips, 0, 1, 0, -lag);
+      }
+      // FLINCH: o corpo cede na direção do tiro por ~0,18 s.
+      if (this._flinchDur > 0) {
+        this._flinchT += dt;
+        if (this._flinchT >= this._flinchDur) { this._flinchDur = 0; this._flinchT = 0; }
+      }
+      const fk = !this._hitClip && this._flinchDur > 0 ? Math.sin(Math.PI * Math.min(1, this._flinchT / this._flinchDur)) * (this._flinchF || 0.5) : 0;
+      this.flinchK = fk;
+      if (fk > 0.02 && this._flinchDir) {
+        const d = this._flinchDir, n = Math.hypot(d.x, d.z) || 1;
+        _deltaMundo(torso.spines[0], -d.z / n, 0, d.x / n, fk * 0.26);
+        if (torso.spines[1]) _deltaMundo(torso.spines[1], -d.z / n, 0, d.x / n, fk * 0.13);
+      }
+      // RECUO AGACHADO: tiro agachado não troca de clipe, então o recuo é aditivo.
+      if (this._fireDur > 0) {
+        this._fireT += dt;
+        if (this._fireT >= this._fireDur) { this._fireDur = 0; this._fireT = 0; }
+      }
+      const rk = this._fireDur > 0 ? 1 - this._fireT / this._fireDur : 0;
+      if (rk > 0.02) _deltaMundo(torso.spines[0], cosY, 0, -sinY, -rk * 0.09);
+      if (this.reloadK > 0.05) {
+        const k = this.reloadK;
+        // mergulho do tronco em torno da direita do corpo: os olhos acompanham o pente
+        _deltaMundo(torso.spines[0], cosY, 0, -sinY, k * 0.20);
+        if (torso.spines[1]) _deltaMundo(torso.spines[1], cosY, 0, -sinY, k * 0.10);
+        // mão esquerda: ao pente (2 mãos, alvo no espaço da arma) ou ao coldre (1 mão)
+        if (this.ikL && torso.magLocal && torso.gun) {
+          _ikTgt.copy(this.ikL.fore).lerp(torso.magLocal, k);
+          torso.gun.localToWorld(_ikTgt);
+          solveCCDIK(this.ikL.chain, this.ikL.end, _ikTgt, { iterations: 12, endOffset: this.ikL.endOffset });
+        } else if (torso.lArm && torso.lFore && torso.lHand && this.model) {
+          _ikTgt.copy(torso.beltLocal);
+          this.model.localToWorld(_ikTgt);
+          solveCCDIK([torso.lArm, torso.lFore], torso.lHand, _ikTgt, { iterations: 8 });
+        }
+      }
+    }
+    /* O overlay de 1 mão roda depois do mount vivo. Refecha a malha: posição acompanha
+       o osso automaticamente; orientação volta ao porte do corpo, sem pistola torcida. */
+    if (this.tpMount && !this.dead && !this.emotando && this._porte1hK > 0.004) orientTpMount(this.tpMount);
+    // TOMBO DIRECIONAL: o acervo tem um clipe de morte só. O viés pela direção do disparo
+    // tira o "todo mundo cai igual" sem clipe novo. Ver docs/ANIM-3P.md.
+    if (this.dead && this._deathDir && torso?.spines?.length) {
+      const d = this._deathDir, n = Math.hypot(d.x, d.z) || 1;
+      this._deathK = Math.min(1, (this._deathK || 0) + dt * 3);
+      const _aplicaMorte = (bone, q) => { bone.quaternion.premultiply(q); };
+      this.group.updateMatrixWorld(true);
+      bone_pai: {
+        const bone = torso.spines[0];
+        this._deathPoseBase ||= new THREE.Quaternion();
+        this._deathPoseBase.copy(bone.quaternion); this._deathPoseBone = bone;
+        bone.parent.getWorldQuaternion(_pq).invert();
+        _axisF.set(-d.z / n, 0, d.x / n).applyQuaternion(_pq).normalize();
+        _aplicaMorte(bone, _qLean.setFromAxisAngle(_axisF, this._deathK * 0.22).clone());
+      }
+    }
+    /* Hitbox da cabeça sincronizada por ÚLTIMO: overlays de tronco/emote/recarga/morte
+       mexem em ancestrais do Head DEPOIS do ponto onde ela era copiada (crítico 31/10, docs/visual-consistency/TP-WORLD.md). */
+    if (this.headBone) {
+      this.group.updateMatrixWorld(true);
+      this.head.position.copy(this.group.worldToLocal(this.headBone.getWorldPosition(_v)));
+    }
+  }
+}

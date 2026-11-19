@@ -1,0 +1,119 @@
+// Layout of the quick actions at the bottom right of the map: a row of stone
+// buttons; the layers open upwards above theirs, the developer options as a
+// strip of tiles over the row.
+
+:host {
+  display: contents;
+}
+
+.qa-root {
+  position: absolute;
+  /* From below the compass (top 12px + 88px + clearance) to the bottom edge,
+     so the developer strip caps its height against it and never grows into
+     the compass. The buttons sit at the bottom; the empty area above them
+     must not eat map drags and clicks. */
+  top: 112px;
+  bottom: 36px;
+  right: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  z-index: 5;
+  pointer-events: none;
+
+  > * {
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
+}
+
+.qa-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.qa-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Clipped for the fold, with room for the buttons' focus ring */
+  overflow: clip;
+  overflow-clip-margin: 4px;
+  max-height: 0;
+  opacity: 0;
+  /* Hidden also from Tab and screen readers while collapsed, after the fade */
+  visibility: hidden;
+  transition:
+    max-height var(--td-dur-mid) var(--td-ease-out),
+    opacity var(--td-dur-mid) var(--td-ease-out),
+    visibility 0s linear var(--td-dur-mid);
+
+  &.is-open {
+    max-height: 100vh;
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+}
+
+/* Developer options: tiles in three columns over the row, right-aligned,
+   4px above the buttons. Out of flow, so they do not push the buttons aside;
+   capped at the free height between row and compass, scrolling on short
+   windows. */
+.qa-dev {
+  position: absolute;
+  right: 0;
+  bottom: 36px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  box-sizing: border-box;
+  width: 260px;
+  max-height: calc(100% - 36px);
+  padding: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.qa-group,
+.qa-status {
+  grid-column: 1 / -1;
+  margin: 4px 2px 0;
+}
+
+.qa-group:first-child {
+  margin-top: 0;
+}
+
+.qa-status {
+  overflow-wrap: anywhere;
+}
+
+/* A tile: icon over a short caption */
+.qa-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 46px;
+
+  &.is-wide {
+    grid-column: span 2;
+  }
+}
+
+/* Cheats: one-shot actions, coloured by what they touch */
+.qa-cheat,
+.qa-cheat:hover {
+  color: var(--cheat-color);
+}
+
+.qa-cheat.is-red { --cheat-color: var(--td-hp-text); }
+.qa-cheat.is-brass { --cheat-color: var(--td-brass); }
+.qa-cheat.is-teal { --cheat-color: var(--td-teal); }
+.qa-cheat.is-orange { --cheat-color: var(--td-warn-text); }
+.qa-cheat.is-green { --cheat-color: var(--td-green); }

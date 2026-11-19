@@ -1,0 +1,15 @@
+// Layout of the save slots: name and time on one line, the detail under it.
+
+.ss-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--td-sp-2);
+}
+
+.ss-title {
+  font-weight: 600;
+}
+
+.mp-meta {
+  margin-left: auto;
+}

@@ -1,0 +1,152 @@
+import assert from 'node:assert/strict';
+import {
+  baseDynamicScale,
+  cappedPixelRatio,
+  carriedDynamicScale,
+  dynamicScaleFloor,
+  dynamicScaleHold,
+  internalPixelRatio,
+  overloadReliefLever,
+  reconstructionMode,
+  RCAS_MIN_SCALE,
+  reconstructionSharpness,
+  TEMPORAL_RECONSTRUCTION_SHARPNESS,
+} from './renderScalePolicy.ts';
+import { PRESETS } from './quality.ts';
+
+const high = {
+  maxPixelRatio: 1.5,
+  adaptiveBasePixelRatio: 1.5,
+  dynMin: 0.9,
+};
+
+assert.equal(cappedPixelRatio(2, high), 1.5);
+assert.equal(cappedPixelRatio(0, null), 1,
+  'invalid renderer density resolves to a finite native fallback');
+assert.equal(cappedPixelRatio(Number.NaN, { maxPixelRatio: Number.NaN }), 1);
+assert.equal(cappedPixelRatio(2, { maxPixelRatio: 0 }), 2,
+  'non-positive preset caps cannot collapse the post chain');
+assert.equal(cappedPixelRatio(2, { maxPixelRatio: '1.25' }), 2,
+  'runtime string caps are rejected rather than silently coercing resolution');
+assert.equal(baseDynamicScale(2, high), 1,
+  'desktop High must start at its full configured density');
+assert.equal(baseDynamicScale(2, null), 1);
+assert.equal(baseDynamicScale(2, { adaptiveBasePixelRatio: Number.NaN }), 1);
+assert.equal(baseDynamicScale(2, { adaptiveBasePixelRatio: 0 }), 1);
+assert.equal(baseDynamicScale(2, { adaptiveBasePixelRatio: '1' }), 1,
+  'runtime string bases cannot override the numeric preset contract');
+assert.equal(baseDynamicScale(2, { adaptiveBasePixelRatio: 0.001 }), 0.005,
+  'positive authored bases retain a non-zero safety floor');
+assert.equal(dynamicScaleFloor(2, high), 0.9);
+assert.equal(dynamicScaleFloor(2, null), 0.75);
+assert.equal(dynamicScaleFloor(2, { dynMin: Number.NaN }), 0.75);
+assert.equal(dynamicScaleFloor(1.25, high), 0.9,
+  'the DPR-1 safety fence ends at the exact retina threshold');
+assert.equal(internalPixelRatio(2, high, 0.75), 1.35,
+  'desktop High must never fall back to the old muddy 1.125 ratio');
+
+const ultra = { maxPixelRatio: 2, dynMin: 0.75 };
+assert.equal(cappedPixelRatio(2, ultra), 2,
+  'Ultra should reach native density on a DPR-2 display');
+assert.equal(internalPixelRatio(2, ultra, 0.75), 1.5,
+  'Ultra fallback must remain at least the full High ceiling');
+
+const nativeDesktop = { maxPixelRatio: 1, dynMin: 0.75 };
+assert.equal(dynamicScaleFloor(1, nativeDesktop), 1);
+assert.equal(internalPixelRatio(1, nativeDesktop, 0.5), 1,
+  'DPR-1 desktop output must not be softened below native CSS density');
+
+const desktopFallback = { maxPixelRatio: 1, dynMin: 1 };
+assert.equal(internalPixelRatio(2, desktopFallback, 0.5), 1,
+  'desktop fallback tiers must not double-downscale below CSS density');
+
+assert.equal(PRESETS.mobile.msaaSamples, 0,
+  'balanced mobile must not allocate a multisampled half-float scene target');
+assert.deepEqual(PRESETS.mobile.shadowMapSizes, [1024, 768, 512, 512],
+  'balanced mobile shadows must retain a bounded resident footprint');
+assert.equal(PRESETS.mobile.vehicleTextureScale, 0.75,
+  'mobile vehicle textures must not inherit the harsher world-texture scale');
+assert.equal(baseDynamicScale(3, PRESETS.mobile), 1.25 / 1.4,
+  'balanced mobile begins above one scene sample per CSS pixel');
+assert.equal(dynamicScaleFloor(3, PRESETS.mobile), 0.715,
+  'balanced mobile retains a bounded but readable dynamic floor');
+assert.ok(internalPixelRatio(3, PRESETS.mobile, 0.1) >= 1,
+  'balanced mobile must never fall below CSS-native scene density');
+
+assert.equal(overloadReliefLever(0, 1, 1, 0.9), 'trim',
+  'AO/session trim must be the first overload response');
+assert.equal(overloadReliefLever(1, 1, 1, 0.9), 'resolution',
+  'resolution may move only after the trim is exhausted');
+assert.equal(overloadReliefLever(1, 1, 0.9, 0.9), 'tier',
+  'tier fallback owns overload after the readable floor');
+assert.equal(overloadReliefLever(0, 0, 1, 0.6), 'resolution',
+  'AO-free mobile presets proceed directly to their raster lever');
+
+assert.equal(reconstructionSharpness(1), 0.12);
+assert.ok(Math.abs(reconstructionSharpness(0.75) - 0.28) < 1e-12,
+  'High retains the proven 0.28 RCAS recovery at a 75% input ratio');
+assert.equal(reconstructionSharpness(0.5), 0.4,
+  'the recovery policy remains capped even when a caller requests it');
+assert.equal(reconstructionSharpness(-1), 0.4);
+assert.equal(reconstructionSharpness(Number.NaN), 0.4);
+assert.equal(reconstructionSharpness(2), 0.12);
+// 2026-09-13: under temporal AA the converged frame has no sparkle left to amplify and
+// the reference's ground/foliage contrast needs recovering — RCAS lifts to a floor.
+assert.equal(TEMPORAL_RECONSTRUCTION_SHARPNESS, 0.5);
+assert.equal(reconstructionSharpness(1, true), TEMPORAL_RECONSTRUCTION_SHARPNESS,
+  'native output under temporal accumulation sharpens at the temporal floor');
+assert.equal(reconstructionSharpness(0.75, true), TEMPORAL_RECONSTRUCTION_SHARPNESS,
+  'moderate enlargement under TAA keeps the floor (0.28 spatial sits below it)');
+assert.equal(reconstructionSharpness(0.5, true), TEMPORAL_RECONSTRUCTION_SHARPNESS,
+  'the temporal floor sits just above the spatial cap');
+assert.equal(reconstructionSharpness(1, false), 0.12, 'without temporal AA the spatial policy is unchanged');
+assert.equal(reconstructionMode(0.75), 'easu+rcas');
+assert.equal(reconstructionMode(0.467), 'easu');
+assert.equal(reconstructionMode(0.333), 'linear',
+  'heavily reduced mobile sources must not pay for 12-tap native-output EASU');
+assert.equal(reconstructionMode(0.4), 'easu',
+  'the exact linear/EASU boundary belongs to EASU');
+assert.equal(reconstructionMode(0.6), 'easu+rcas',
+  'the exact EASU/RCAS boundary restores contrast');
+assert.equal(reconstructionMode(1), 'native-rcas');
+// 2026-10-13 (the perf stream): the RCAS threshold is a preset's (High 0.49: a 1.0 raster on a DPR-2 panel keeps RCAS);
+// the default keeps phones' 0.42-0.47 on EASU alone, and the linear floor below 0.4 is not the preset's to move
+assert.equal(RCAS_MIN_SCALE, 0.6);
+assert.equal(reconstructionMode(0.5), 'easu', 'the default threshold is unchanged');
+assert.equal(reconstructionMode(0.5, 0.49), 'easu+rcas');
+assert.equal(reconstructionMode(0.467, 0.49), 'easu', 'a phone ratio stays on EASU alone even at High\'s threshold');
+assert.equal(reconstructionMode(0.35, 0.2), 'linear', 'a threshold below 0.4 cannot reach under the linear floor');
+assert.equal(reconstructionMode(0.5, Number.NaN), 'easu', 'an invalid threshold falls back to the default');
+// the hold rung: a retina preset's declared hold, clamped into [floor, 1]; the floor without one or below retina
+const autoHigh = { ...high, dynMin: 0.667, nativeDynMin: 0.67, dynHold: 0.8334 };
+assert.equal(dynamicScaleHold(2, autoHigh), 0.8334);
+assert.equal(dynamicScaleHold(1.5, autoHigh), 0.67, 'below the retina threshold there is no hold');
+assert.equal(dynamicScaleHold(2, high), 0.9, 'no declared hold: the floor');
+assert.equal(dynamicScaleHold(2, { ...autoHigh, dynHold: 0.5 }), 0.667, 'a hold under the floor is the floor');
+assert.equal(dynamicScaleHold(2, { ...autoHigh, dynHold: 1.4 }), 1);
+assert.equal(reconstructionMode(2), 'native-rcas');
+assert.equal(reconstructionMode(Number.NaN), 'linear');
+
+// (local-fps-265) the governor's tier change carries its raster: a cut never raises it, a restore keeps it
+{
+  const autoMedium = { maxPixelRatio: 1.0, dynMin: 1.0, nativeDynMin: 0.67 };
+  const explicitMedium = { maxPixelRatio: 1.0, dynMin: 1.0 };
+  // DPR 1: Auto High at its 0.67 floor cut to Medium lands on the same 0.67 raster (it used to restart at 1.0)
+  const atFloor = internalPixelRatio(1, autoHigh, 0.67);
+  assert.equal(carriedDynamicScale(1, autoMedium, atFloor), 0.67);
+  assert.ok(internalPixelRatio(1, autoMedium, carriedDynamicScale(1, autoMedium, atFloor)) <= atFloor + 1e-12, 'never more pixels');
+  // a preset without a native floor keeps one sample per CSS pixel (its own fence)
+  assert.equal(carriedDynamicScale(1, explicitMedium, atFloor), 1);
+  // DPR 2: Auto High held at 1.25 cut to Medium (cap 1.0) starts at its full 1.0 raster, still fewer pixels
+  assert.equal(carriedDynamicScale(2, autoMedium, internalPixelRatio(2, autoHigh, 0.8334)), 1);
+  // a failed trial's restore: High back at the raster Medium had (DPR 1: 0.67; DPR 2: Medium's 1.0, High's floor)
+  assert.equal(carriedDynamicScale(1, autoHigh, 0.67), 0.67);
+  assert.equal(carriedDynamicScale(2, autoHigh, 1), 0.667, 'DPR 2: Medium\'s 1.0 raster is Auto High at its floor');
+  // never above the next preset's base, never below its floor; no carried raster is the base
+  assert.equal(carriedDynamicScale(1, autoHigh, 3), baseDynamicScale(1, autoHigh));
+  assert.equal(carriedDynamicScale(1, autoHigh, 0.1), dynamicScaleFloor(1, autoHigh));
+  assert.equal(carriedDynamicScale(1, autoHigh, Number.NaN), baseDynamicScale(1, autoHigh));
+  assert.equal(carriedDynamicScale(1, autoHigh, 0), baseDynamicScale(1, autoHigh));
+}
+
+console.log('renderScalePolicy self-test passed');

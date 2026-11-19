@@ -1,0 +1,26 @@
+// Layout of the hero section: the way to the next level, three figures, the
+// ammo as segments with two lines each.
+
+.hp-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hp-xp {
+  gap: 4px;
+}
+
+.hp-figures {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hp-ammo-name {
+  gap: 5px;
+}
+
+
+
+.hp-status {
+  color: var(--td-text-primary);
+}

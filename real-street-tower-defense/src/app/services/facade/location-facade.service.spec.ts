@@ -1,0 +1,1022 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Injector, runInInjectionContext, signal } from '@angular/core';
+// The street lookup has its own spec; the network here is a stub without real
+// streets, so every real-map spawn reads as the street 'Damrak'.
+vi.mock('../../utils/spawn-label', () => ({ spawnLabel: vi.fn(() => 'Damrak') }));
+
+import { LocationFacadeService, VizCallbacks } from './location-facade.service';
+import { MapRelocationService } from './map-relocation.service';
+import { MarkerVisualizationService, SpawnPoint } from '../world/marker-visualization.service';
+import { PathAndRouteService } from '../world/path-route.service';
+import { LocationManagementService } from '../location/location-management.service';
+import { HeightUpdateService } from '../world/height-update.service';
+import { EngineInitializationService } from '../infrastructure/engine-initialization.service';
+import { UrlLocationService } from '../location/url-location.service';
+import { WorldContext } from '../../world/world-context.service';
+import { TILES_CAPABILITIES } from '../../world/tiles/tiles-world';
+import { DEV_WORLD_CAPABILITIES } from '../../devworld/dev-world-provider';
+import type { WorldCapabilities, WorldStartLayout } from '../../world/world-provider';
+import { UIStore, type UiNotice } from '../../store/ui.store';
+import { OUTSIDE_COVERAGE_LINK_TEXT } from '../../world/world-coverage';
+import { fakeWorldContext } from '../../../test/world-context-fake';
+import { RouteAnimationService } from '../world/route-animation.service';
+import { StreetRenderingService } from '../world/street-rendering.service';
+import { WaveDebugService } from '../debug/wave-debug.service';
+import { DebugFacadeService } from '../debug/debug-facade.service';
+import { LocationChangeCoordinatorService, LocationFlowDelegate } from '../location/location-change-coordinator.service';
+import { MapPlacementService } from '../world/map-placement.service';
+import { RelocationStatusService } from '../world/relocation-status.service';
+import { TowerPlacementService } from '../tower-placement.service';
+import { TowerDefenseStore } from '../../store/tower-defense.store';
+import { SPAWN_COLORS } from '../../configs/map-constants.config';
+import type { FacadeComponentBridge } from './tower-defense-facade.service';
+import { MainWorldService } from '../world/main-world.service';
+import { GlobalRouteGridService } from '../world/global-route-grid.service';
+import { RouteGridVizService } from '../world/route-grid-viz.service';
+import { PresentationService } from '../../presentation/presentation.service';
+import { storedPlace, type PlacedChoice } from '../location/place-choice';
+
+/**
+ * The location sub-facade decides where the game starts (DevWorld, URL, the
+ * place chosen in the menu), creates the spawns, moves HQ or spawn in place
+ * when the click stays inside the loaded streets (a full location change via
+ * the coordinator otherwise) and rebuilds the DevWorld after regeneration.
+ * These tests pin those decisions and what each path does to the store and
+ * its collaborators.
+ */
+
+const HQ = { lat: 48.7758, lon: 9.1829 };
+const BOUNDS = { minLat: 48.7, maxLat: 48.9, minLon: 9.1, maxLon: 9.3 };
+const INSIDE = { lat: 48.78, lon: 9.19 };
+const OUTSIDE = { lat: 49.5, lon: 9.19 };
+const OLD_SPAWN: SpawnPoint = { id: 'spawn-1', name: 'Damrak', lat: 48.79, lon: 9.2, color: SPAWN_COLORS[0] };
+
+interface Spawn { lat: number; lon: number }
+
+/** DevWorld's layout in these tests: HQ at the origin, the generator's first spawn */
+const DEV_LAYOUT = { hq: { lat: 0, lon: 0 }, spawns: [{ id: 'dev-n', name: 'North', lat: 0.4, lon: 0.1 }] };
+
+describe('LocationFacadeService', () => {
+  let facade: LocationFacadeService;
+  let streetNetwork: { streets: unknown[]; bounds: typeof BOUNDS } | null;
+  let cachedPaths: Map<string, unknown[]>;
+  let destroyCallbacks: (() => void)[];
+  let destroyRef: { destroyed: boolean; onDestroy: (cb: () => void) => () => void };
+  let vizCallbacks: { [K in keyof VizCallbacks]: ReturnType<typeof vi.fn> };
+
+  const overlay = { name: 'overlay' };
+  /** The engine's world: the tiles, or DevWorld with its layout and regeneration (useDevWorld) */
+  const engineWorld = {
+    capabilities: TILES_CAPABILITIES as WorldCapabilities,
+    startLayout: vi.fn((): WorldStartLayout | null => null),
+    regenerate: vi.fn(async () => undefined),
+    streets: { loadStreets: vi.fn(async () => streetNetwork) },
+    sync: { getOrigin: () => ({ lat: 0, lon: 0, height: 0 }) },
+  };
+  const engine = {
+    getOverlayGroup: vi.fn(() => overlay),
+    setOrigin: vi.fn(),
+    world: engineWorld,
+    terrain: { clearHeightCache: vi.fn() },
+  };
+  const bridge = {
+    getEngine: vi.fn((): unknown => engine),
+    getStreetNetwork: vi.fn(() => streetNetwork),
+    getStreetNetworkLocation: vi.fn(() => ({ ...HQ })),
+    setStreetNetwork: vi.fn(),
+    setStreetNetworkLocation: vi.fn(),
+    setFilteredStreetNetwork: vi.fn(),
+  };
+  /** The route grid's cells and their overlays */
+  const routeGrid = { clear: vi.fn() };
+  const gridViz = { disposeVisualization: vi.fn() };
+  /** The main thread's world: a new run, HQ and spawns, the cells, the world to the simulation */
+  const world = { resetRun: vi.fn(), attach: vi.fn(), buildCells: vi.fn(), setSpawns: vi.fn(), sendToSim: vi.fn() };
+  /** The presentation's host (HQ ground once the tiles are in) */
+  const presentationHost = { onTilesLoaded: vi.fn() };
+
+  /** The world's streets; a spawn on the tiles is named after its street */
+  const osm = {
+    loadStreets: vi.fn(),
+    findRandomStreetPoint: vi.fn(),
+    findPath: vi.fn(),
+    haversineDistance: vi.fn(() => 0),
+    spawnLabel: vi.fn((_network: unknown, _lat: number, _lon: number, _name: string) => 'Damrak'),
+  };
+  const worldContext = fakeWorldContext(osm);
+  const uiStore = { notice: signal<UiNotice | null>(null) };
+  /** Play DevWorld: its ref and capabilities, its streets keep the names, the engine's world regenerates */
+  const useDevWorld = (layout: WorldStartLayout = DEV_LAYOUT) => {
+    worldContext.useDevWorld();
+    engineWorld.capabilities = DEV_WORLD_CAPABILITIES;
+    engineWorld.startLayout.mockReturnValue(layout);
+    worldContext.setProvider(engineWorld as never);
+    osm.spawnLabel.mockImplementation((_network, _lat, _lon, name) => name);
+  };
+  const markerViz = {
+    addSpawnMarker: vi.fn(),
+    clearAllMarkers: vi.fn(),
+    clearSpawnMarkers: vi.fn(),
+    addBaseMarker: vi.fn(),
+    updateMarkerHeights: vi.fn(),
+    setPortalHeading: vi.fn(),
+  };
+  const pathRoute = {
+    showPathFromSpawn: vi.fn(),
+    clearAllRoutes: vi.fn(),
+    clearCachedPaths: vi.fn(),
+    getCachedPaths: vi.fn(() => cachedPaths),
+    refreshRouteLines: vi.fn(),
+  };
+  const locationMgmt = {
+    hq: signal<Spawn | null>(null),
+    spawns: signal<Spawn[]>([]),
+    needsRandomSpawn: signal(false),
+    editableSpawnLocations: signal<{ id: string; name: string; lat: number; lon: number; portalBearing?: number }[]>([]),
+    setLocation: vi.fn((hq: Spawn, spawns: Spawn[]) => {
+      locationMgmt.hq.set(hq);
+      locationMgmt.spawns.set(spawns);
+    }),
+    setGeneratedSpawns: vi.fn(),
+    getLocationDisplayName: vi.fn(() => 'Stuttgart'),
+  };
+  const heightUpdate = { stopHeightUpdates: vi.fn() };
+  const engineInit = {
+    setStepCurrent: vi.fn(async (_id: string) => undefined),
+    setStepDone: vi.fn(async (_id: string, _meta?: string) => undefined),
+    updateStepMeta: vi.fn(),
+    getEngine: vi.fn((): unknown => null),
+    setError: vi.fn(),
+    setLoading: vi.fn(),
+  };
+  const urlLocation = { parseFromUrl: vi.fn(), updateUrl: vi.fn() };
+  const routeAnimation = { stopAnimation: vi.fn(), startAnimation: vi.fn() };
+  const streetRendering = { dispose: vi.fn() };
+  const debugFacade = { appendDebugLog: vi.fn() };
+  /** The menu's choice for a start without a place: `choose` hands one to the waiting start */
+  let choose: (choice: PlacedChoice) => void;
+  const coordinator = {
+    initializeFlow: vi.fn(),
+    applyNewLocation: vi.fn(async () => undefined),
+    waitForStartChoice: vi.fn(() => new Promise<PlacedChoice>((resolve) => { choose = resolve; })),
+    cancelStartChoice: vi.fn(),
+  };
+  const mapPlacement = { startPlacement: vi.fn(), handlePlacementClick: vi.fn(), updateDependencies: vi.fn() };
+  let store: {
+    baseCoords: ReturnType<typeof signal<Spawn>>;
+    centerCoords: ReturnType<typeof signal<Spawn & { height: number }>>;
+    spawnPoints: ReturnType<typeof signal<SpawnPoint[]>>;
+    streetCount: ReturnType<typeof signal<number>>;
+    heightDebugVisible: ReturnType<typeof signal<boolean>>;
+    phase: ReturnType<typeof signal<string>>;
+    waveNumber: ReturnType<typeof signal<number>>;
+    worldRegenerating: ReturnType<typeof signal<boolean>>;
+  };
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  /** The start waits for the menu's choice */
+  const waiting = () => vi.waitFor(() => expect(coordinator.waitForStartChoice).toHaveBeenCalled());
+  const delegate = (): LocationFlowDelegate => coordinator.initializeFlow.mock.calls[0][0];
+  /** The spawn points the facade put into the store, by id. */
+  const spawnIds = () => store.spawnPoints().map((s) => s.id);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    streetNetwork = { streets: [{}], bounds: BOUNDS };
+    cachedPaths = new Map([['spawn-1', [HQ, OLD_SPAWN]]]);
+    destroyCallbacks = [];
+    destroyRef = {
+      destroyed: false,
+      onDestroy: (cb) => {
+        destroyCallbacks.push(cb);
+        return () => { destroyCallbacks = destroyCallbacks.filter((c) => c !== cb); };
+      },
+    };
+    bridge.getEngine.mockImplementation(() => engine);
+    engineInit.getEngine.mockImplementation(() => null);
+    worldContext.useTiles();
+    worldContext.setProvider(null);
+    engineWorld.capabilities = TILES_CAPABILITIES;
+    engineWorld.startLayout.mockReturnValue(null);
+    engineWorld.streets.loadStreets.mockImplementation(async () => streetNetwork);
+    osm.spawnLabel.mockImplementation(() => 'Damrak');
+    osm.findRandomStreetPoint.mockReturnValue(null);
+    osm.findPath.mockReturnValue([OLD_SPAWN, HQ]);
+    osm.haversineDistance.mockReturnValue(0);
+    mapPlacement.handlePlacementClick.mockReturnValue(null);
+    urlLocation.parseFromUrl.mockReturnValue(null);
+    worldContext.setCoverage(null);
+    uiStore.notice.set(null);
+    locationMgmt.hq.set(null);
+    locationMgmt.spawns.set([]);
+    locationMgmt.needsRandomSpawn.set(false);
+    locationMgmt.editableSpawnLocations.set([]);
+
+    store = {
+      baseCoords: signal({ ...HQ }),
+      centerCoords: signal({ ...HQ, height: 400 }),
+      spawnPoints: signal<SpawnPoint[]>([]),
+      streetCount: signal(0),
+      heightDebugVisible: signal(false),
+      phase: signal('setup'),
+      waveNumber: signal(0),
+      worldRegenerating: signal(false),
+    };
+    vizCallbacks = {
+      initializeTowerPlacement: vi.fn(),
+      filterStreetNetworkToRoutes: vi.fn(),
+      scheduleOverlayHeightUpdate: vi.fn(async () => undefined),
+      initializeVisualizationServices: vi.fn(),
+      reframeCameraWithRoutes: vi.fn(),
+      renderStreets: vi.fn(),
+      saveInitialCameraPosition: vi.fn(),
+      buildCorridor: vi.fn(async () => ({ stations: 0, unmeasured: 0, passes: 1, timedOut: false, fallbackStations: 0, fallbackCells: 0, cells: 0, ms: 0 })),
+    };
+
+    const injector = Injector.create({
+      providers: [
+        { provide: WorldContext, useValue: worldContext },
+        { provide: UIStore, useValue: uiStore },
+        { provide: MarkerVisualizationService, useValue: markerViz },
+        { provide: PathAndRouteService, useValue: pathRoute },
+        { provide: LocationManagementService, useValue: locationMgmt },
+        { provide: HeightUpdateService, useValue: heightUpdate },
+        { provide: EngineInitializationService, useValue: engineInit },
+        { provide: UrlLocationService, useValue: urlLocation },
+        { provide: RouteAnimationService, useValue: routeAnimation },
+        { provide: StreetRenderingService, useValue: streetRendering },
+        { provide: WaveDebugService, useValue: {} },
+        { provide: DebugFacadeService, useValue: debugFacade },
+        { provide: LocationChangeCoordinatorService, useValue: coordinator },
+        { provide: MapPlacementService, useValue: mapPlacement },
+        // The hint while the HQ moves; map-relocation.service.spec.ts covers it
+        {
+          provide: RelocationStatusService,
+          useValue: {
+            show: vi.fn(), clear: vi.fn(), painted: vi.fn(async () => undefined),
+            follow: vi.fn(() => ({ report: vi.fn(), end: vi.fn() })),
+          },
+        },
+        { provide: TowerPlacementService, useValue: {} },
+        { provide: TowerDefenseStore, useValue: store },
+        { provide: MainWorldService, useValue: world },
+        { provide: GlobalRouteGridService, useValue: routeGrid },
+        { provide: RouteGridVizService, useValue: gridViz },
+        { provide: PresentationService, useValue: { host: presentationHost } },
+        // The real relocation flows, on the mocks above; a factory, since a
+        // class provider would need the JIT compiler.
+        { provide: MapRelocationService, useFactory: () => new MapRelocationService() },
+      ],
+    });
+    facade = runInInjectionContext(injector, () => new LocationFacadeService());
+    facade.initialize(
+      bridge as unknown as FacadeComponentBridge,
+      { get: () => destroyRef } as unknown as Injector,
+    );
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  describe('coordinator delegate', () => {
+    beforeEach(() => facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks));
+
+    it('has no change context without an engine', () => {
+      bridge.getEngine.mockReturnValue(null);
+      expect(delegate().getChangeContext()).toBeNull();
+    });
+
+    it('builds the change context from the bridge and the store', () => {
+      expect(delegate().getChangeContext()).toEqual({
+        engine,
+        streetNetwork,
+        streetNetworkLocation: HQ,
+        heightDebugVisible: store.heightDebugVisible,
+      });
+    });
+
+    it('routes the change callbacks to the store, the bridge and the viz facade', async () => {
+      const cb = delegate().getChangeCallbacks();
+
+      cb.setBaseCoords(INSIDE);
+      cb.setCenterCoords({ ...INSIDE, height: 400 });
+      cb.setSpawnPoints([OLD_SPAWN]);
+      cb.setStreetCount(12);
+      cb.setStreetNetwork(null);
+      cb.setStreetNetworkLocation(INSIDE);
+      cb.appendDebugLog('hello');
+      cb.initializeTowerPlacement();
+      cb.filterStreetNetworkToRoutes();
+      await cb.scheduleOverlayHeightUpdate();
+
+      expect(store.baseCoords()).toEqual(INSIDE);
+      expect(store.centerCoords()).toEqual({ ...INSIDE, height: 400 });
+      expect(cb.getSpawnPoints()).toEqual([OLD_SPAWN]);
+      expect(cb.getBaseCoords()).toEqual(INSIDE);
+      expect(store.streetCount()).toBe(12);
+      expect(bridge.setStreetNetwork).toHaveBeenCalledWith(null);
+      expect(bridge.setStreetNetworkLocation).toHaveBeenCalledWith(INSIDE);
+      expect(debugFacade.appendDebugLog).toHaveBeenCalledWith('hello');
+      expect(vizCallbacks.initializeTowerPlacement).toHaveBeenCalled();
+      expect(vizCallbacks.filterStreetNetworkToRoutes).toHaveBeenCalled();
+      expect(vizCallbacks.scheduleOverlayHeightUpdate).toHaveBeenCalled();
+    });
+  });
+
+  describe('initializeLocation', () => {
+    it('uses the HQ of a world of its own (DevWorld) without reading the URL', async () => {
+      useDevWorld();
+
+      await facade.initializeLocation();
+
+      const origin = { lat: 0, lon: 0 };
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(origin, []);
+      expect(store.baseCoords()).toEqual(origin);
+      expect(store.centerCoords()).toEqual({ ...origin, height: 400 });
+      expect(engineInit.setStepDone).toHaveBeenCalledWith('location', 'devworld flat/42');
+      expect(urlLocation.parseFromUrl).not.toHaveBeenCalled();
+      expect(urlLocation.updateUrl).not.toHaveBeenCalled();
+    });
+
+    it('takes HQ and spawns from the URL first', async () => {
+      urlLocation.parseFromUrl.mockReturnValue({ hq: INSIDE, spawns: [OUTSIDE] });
+
+      await facade.initializeLocation();
+
+      expect(engineInit.setStepCurrent).toHaveBeenCalledWith('location');
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(INSIDE, [OUTSIDE]);
+      expect(engineInit.setStepDone).toHaveBeenCalledWith('location', 'from URL');
+      expect(coordinator.waitForStartChoice).not.toHaveBeenCalled();
+      expect(urlLocation.updateUrl).toHaveBeenCalledWith(INSIDE, [OUTSIDE]);
+      expect(store.baseCoords()).toEqual(INSIDE);
+      expect(store.centerCoords()).toEqual({ ...INSIDE, height: 400 });
+    });
+
+    it("starts in the middle of a world's area when the link's place lies outside it, and says so", async () => {
+      const middle = { lat: INSIDE.lat + 0.1, lon: INSIDE.lon };
+      worldContext.setCoverage({ center: middle, radiusM: 500 });
+      urlLocation.parseFromUrl.mockReturnValue({ hq: INSIDE, spawns: [OUTSIDE] });
+
+      await facade.initializeLocation();
+
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(middle, []);
+      expect(coordinator.waitForStartChoice).not.toHaveBeenCalled();
+      expect(uiStore.notice()).toEqual({ text: OUTSIDE_COVERAGE_LINK_TEXT, tone: 'warn' });
+    });
+
+    it('without a place in the URL waits for the place chosen in the menu, the browser is not asked', async () => {
+      const done = facade.initializeLocation();
+      await waiting();
+      expect(engineInit.updateStepMeta).toHaveBeenCalledWith('location', 'Choose a place');
+      expect(locationMgmt.setLocation).not.toHaveBeenCalled();
+
+      choose({ kind: 'place', hq: { ...INSIDE, name: 'Stuttgart' }, spawn: { ...OUTSIDE } });
+      expect(await done).toBe(true);
+
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(INSIDE, [OUTSIDE]);
+      expect(engineInit.setStepDone).toHaveBeenCalledWith('location', 'chosen');
+      expect(store.baseCoords()).toEqual(INSIDE);
+    });
+
+    it('stops quietly when the component goes away before a place is chosen', async () => {
+      const done = facade.initializeLocation();
+      await waiting();
+      destroyCallbacks.forEach((cb) => cb());
+      expect(await done).toBe(false);
+
+      expect(coordinator.cancelStartChoice).toHaveBeenCalled();
+      expect(engineInit.setStepDone).not.toHaveBeenCalled();
+      expect(engineInit.setError).not.toHaveBeenCalled();
+      expect(urlLocation.updateUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('waitForPlaceChoice', () => {
+    it('stores every spawn of a stored place: the place of a coop host or of a save (E30, E110)', async () => {
+      const done = facade.waitForPlaceChoice();
+      await waiting();
+      choose(storedPlace(INSIDE, [OUTSIDE, INSIDE]));
+      await done;
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(INSIDE, [OUTSIDE, INSIDE]);
+    });
+
+    it('stores no spawn when the player asked for a random one', async () => {
+      const done = facade.waitForPlaceChoice();
+      await waiting();
+      choose({ kind: 'place', hq: { ...INSIDE, name: 'Stuttgart' }, spawn: null });
+      await done;
+      expect(locationMgmt.setLocation).toHaveBeenCalledWith(INSIDE, []);
+    });
+
+    it('rejects when the component is destroyed first, and a late choice sets nothing', async () => {
+      const done = facade.waitForPlaceChoice();
+      await waiting();
+      destroyCallbacks.forEach((cb) => cb());
+      await expect(done).rejects.toThrow('Component destroyed before a place was chosen');
+      choose(storedPlace(INSIDE, [OUTSIDE]));
+      await settle();
+      expect(locationMgmt.setLocation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('syncUrlWithLocation', () => {
+    it('writes HQ and spawns into the URL', () => {
+      locationMgmt.setLocation(INSIDE, [OUTSIDE]);
+      facade.syncUrlWithLocation();
+      expect(urlLocation.updateUrl).toHaveBeenCalledWith(INSIDE, [OUTSIDE]);
+    });
+
+    it('skips without an HQ and in DevWorld', () => {
+      facade.syncUrlWithLocation();
+      useDevWorld();
+      locationMgmt.setLocation(INSIDE, []);
+      facade.syncUrlWithLocation();
+      expect(urlLocation.updateUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addSpawnPoint', () => {
+    it('stores the spawn, named after its street, draws its marker and asks for its path', () => {
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 0xff0000);
+
+      const spawn = { id: 's1', name: 'Damrak', lat: 48.8, lon: 9.2, color: 0xff0000 };
+      expect(store.spawnPoints()).toEqual([spawn]);
+      expect(markerViz.addSpawnMarker).toHaveBeenCalledWith('s1', 'Damrak', 48.8, 9.2, 0xff0000);
+      expect(pathRoute.showPathFromSpawn).toHaveBeenCalledWith(spawn);
+    });
+
+    it('keeps the name it was given in DevWorld, whose streets carry ids, not names', () => {
+      useDevWorld();
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 0xff0000);
+      expect(markerViz.addSpawnMarker).toHaveBeenCalledWith('s1', 'North', 48.8, 9.2, 0xff0000);
+    });
+
+    it('falls back to the engine of the init service', () => {
+      bridge.getEngine.mockReturnValue(null);
+      engineInit.getEngine.mockReturnValue(engine);
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 1);
+      expect(spawnIds()).toEqual(['s1']);
+    });
+
+    it('turns the portal to a bearing it brought along once its route stands, and leaves it to the route otherwise', () => {
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 1, 90);
+      // Bearing 90 is east, -x: heading -PI/2
+      expect(markerViz.setPortalHeading).toHaveBeenCalledWith('s1', expect.closeTo(-Math.PI / 2, 9));
+      expect(pathRoute.showPathFromSpawn.mock.invocationCallOrder[0])
+        .toBeLessThan(markerViz.setPortalHeading.mock.invocationCallOrder[0]);
+
+      markerViz.setPortalHeading.mockClear();
+      facade.addSpawnPoint('s2', 'South', 48.7, 9.2, 1);
+      expect(markerViz.setPortalHeading).not.toHaveBeenCalled();
+    });
+
+    it('does nothing without an engine or without streets', () => {
+      bridge.getEngine.mockReturnValue(null);
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 1);
+      bridge.getEngine.mockReturnValue(engine);
+      streetNetwork = null;
+      facade.addSpawnPoint('s2', 'South', 48.7, 9.2, 1);
+
+      expect(store.spawnPoints()).toEqual([]);
+      expect(markerViz.addSpawnMarker).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addPredefinedSpawns', () => {
+    it('creates none without an HQ', () => {
+      expect(facade.addPredefinedSpawns()).toBe(0);
+      expect(store.spawnPoints()).toEqual([]);
+    });
+
+    it('creates the spawns from the location service with cycling colours', () => {
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.editableSpawnLocations.set([
+        { id: 'a', name: 'Alpha', lat: 48.8, lon: 9.2 },
+        { id: 'b', name: '', lat: 48.81, lon: 9.21 },
+      ]);
+
+      expect(facade.addPredefinedSpawns()).toBe(2);
+      expect(store.spawnPoints().map((s) => [s.id, s.name, s.color])).toEqual([
+        ['a', 'Damrak', SPAWN_COLORS[0]],
+        ['b', 'Damrak', SPAWN_COLORS[1]],
+      ]);
+    });
+
+    it('turns a spawn from the URL the way its portal was saved', () => {
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.editableSpawnLocations.set([
+        { id: 'spawn-1', name: '', lat: 48.8, lon: 9.2, portalBearing: 180 },
+        { id: 'spawn-2', name: '', lat: 48.81, lon: 9.21 },
+      ]);
+
+      expect(facade.addPredefinedSpawns()).toBe(2);
+      expect(markerViz.setPortalHeading).toHaveBeenCalledTimes(1);
+      expect(markerViz.setPortalHeading).toHaveBeenCalledWith('spawn-1', expect.closeTo(-Math.PI, 9));
+    });
+
+    it('creates none when a stored spawn sits at 0/0', () => {
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.editableSpawnLocations.set([
+        { id: 'a', name: 'Alpha', lat: 48.8, lon: 9.2 },
+        { id: 'b', name: 'Null Island', lat: 0, lon: 9.2 },
+      ]);
+      expect(facade.addPredefinedSpawns()).toBe(0);
+    });
+
+    it('draws one random street spawn 500 to 1000 m away and writes it to the URL', () => {
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.needsRandomSpawn.set(true);
+      osm.findRandomStreetPoint.mockReturnValue({ lat: 48.781, lon: 9.19, streetName: '' });
+
+      expect(facade.addPredefinedSpawns()).toBe(1);
+
+      expect(osm.findRandomStreetPoint).toHaveBeenCalledWith(streetNetwork, HQ.lat, HQ.lon, 500, 1000, null);
+      expect(locationMgmt.setGeneratedSpawns).toHaveBeenCalledWith([{ lat: 48.781, lon: 9.19 }]);
+      expect(urlLocation.updateUrl).toHaveBeenCalled();
+      expect(store.spawnPoints()).toEqual([
+        { id: 'spawn-1', name: 'Damrak', lat: 48.781, lon: 9.19, color: SPAWN_COLORS[0] },
+      ]);
+    });
+
+    it('creates none when no random street point is found', () => {
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.needsRandomSpawn.set(true);
+      expect(facade.addPredefinedSpawns()).toBe(0);
+      expect(locationMgmt.setGeneratedSpawns).not.toHaveBeenCalled();
+    });
+
+    it('takes the spawns of the world\'s start layout (DevWorld: the generator\'s)', () => {
+      useDevWorld();
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.needsRandomSpawn.set(true);
+
+      expect(facade.addPredefinedSpawns()).toBe(1);
+
+      expect(locationMgmt.setGeneratedSpawns).toHaveBeenCalledWith([{ lat: 0.4, lon: 0.1 }]);
+      expect(store.spawnPoints()).toEqual([
+        { id: 'dev-n', name: 'North', lat: 0.4, lon: 0.1, color: SPAWN_COLORS[0] },
+      ]);
+      expect(osm.findRandomStreetPoint).not.toHaveBeenCalled();
+    });
+
+    it('places every spawn of the layout, each in its colour', () => {
+      useDevWorld({
+        hq: { lat: 0, lon: 0 },
+        spawns: [
+          { id: 'dev-n', name: 'North', lat: 0.4, lon: 0.1 },
+          { id: 'dev-s', name: 'South', lat: -0.4, lon: 0.1 },
+        ],
+      });
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.needsRandomSpawn.set(true);
+
+      expect(facade.addPredefinedSpawns()).toBe(2);
+      expect(store.spawnPoints().map((s) => [s.id, s.color])).toEqual([
+        ['dev-n', SPAWN_COLORS[0]],
+        ['dev-s', SPAWN_COLORS[1]],
+      ]);
+    });
+  });
+
+  describe('map placement', () => {
+    const click = async (mode: 'hq' | 'spawn', at: Spawn) => {
+      mapPlacement.handlePlacementClick.mockReturnValue({ mode, ...at });
+      await facade.handleMapPlacementClick(at.lat, at.lon, 0);
+    };
+
+    it('starts the placement mode through the map placement service', () => {
+      facade.startMapPlacement('spawn');
+      expect(mapPlacement.startPlacement).toHaveBeenCalledWith('spawn', false, null);
+    });
+
+    it('does nothing when the placement service rejects the click', async () => {
+      await facade.handleMapPlacementClick(INSIDE.lat, INSIDE.lon, 0);
+      expect(world.resetRun).not.toHaveBeenCalled();
+      expect(coordinator.applyNewLocation).not.toHaveBeenCalled();
+    });
+
+    describe('HQ inside the loaded streets', () => {
+      beforeEach(() => {
+        facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+        store.spawnPoints.set([OLD_SPAWN]);
+      });
+
+      it('moves the origin and rebuilds the world in place', async () => {
+        await click('hq', INSIDE);
+
+        expect(routeAnimation.stopAnimation).toHaveBeenCalled();
+        expect(heightUpdate.stopHeightUpdates).toHaveBeenCalled();
+        expect(world.resetRun).toHaveBeenCalled();
+        expect(markerViz.clearAllMarkers).toHaveBeenCalled();
+        expect(pathRoute.clearAllRoutes).toHaveBeenCalled();
+        expect(pathRoute.clearCachedPaths).toHaveBeenCalled();
+        expect(streetRendering.dispose).toHaveBeenCalledWith(overlay);
+        expect(bridge.setFilteredStreetNetwork).toHaveBeenCalledWith(null);
+        expect(engine.setOrigin).toHaveBeenCalledWith(INSIDE.lat, INSIDE.lon);
+        expect(store.baseCoords()).toEqual(INSIDE);
+        expect(store.centerCoords()).toEqual({ ...INSIDE, height: 400 });
+        // The viz services are re-initialised on the new base before the HQ marker goes up.
+        expect(vizCallbacks.initializeVisualizationServices.mock.invocationCallOrder[0])
+          .toBeLessThan(markerViz.addBaseMarker.mock.invocationCallOrder[0]);
+        expect(osm.loadStreets).not.toHaveBeenCalled();
+        expect(coordinator.applyNewLocation).not.toHaveBeenCalled();
+      });
+
+      it('keeps a spawn that still has a route to the new HQ', async () => {
+        await click('hq', INSIDE);
+
+        expect(osm.findPath).toHaveBeenCalledWith(streetNetwork, OLD_SPAWN.lat, OLD_SPAWN.lon, INSIDE.lat, INSIDE.lon);
+        expect(store.spawnPoints()).toEqual([OLD_SPAWN]);
+        expect(osm.findRandomStreetPoint).not.toHaveBeenCalled();
+        expect(world.attach).toHaveBeenCalledWith(
+          engine, INSIDE,
+          [{ id: OLD_SPAWN.id, name: OLD_SPAWN.name, lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon }],
+        );
+        expect(world.buildCells).toHaveBeenCalledWith(true);
+      });
+
+      it('draws a new random spawn when the old one has no route', async () => {
+        osm.findPath.mockReturnValue([OLD_SPAWN]);
+        osm.findRandomStreetPoint.mockReturnValue({ lat: 48.785, lon: 9.195, streetName: 'Neckarstraße' });
+
+        await click('hq', INSIDE);
+
+        expect(osm.findRandomStreetPoint).toHaveBeenCalledWith(streetNetwork, INSIDE.lat, INSIDE.lon, 500, 1000, null);
+        expect(store.spawnPoints()).toEqual([
+          { id: 'spawn-1', name: 'Damrak', lat: 48.785, lon: 9.195, color: SPAWN_COLORS[0] },
+        ]);
+      });
+
+      it('re-runs placement, streets and camera and saves the new location', async () => {
+        await click('hq', INSIDE);
+
+        expect(vizCallbacks.initializeTowerPlacement).toHaveBeenCalled();
+        expect(vizCallbacks.filterStreetNetworkToRoutes).toHaveBeenCalled();
+        expect(vizCallbacks.renderStreets).toHaveBeenCalled();
+        expect(vizCallbacks.reframeCameraWithRoutes).toHaveBeenCalled();
+        expect(vizCallbacks.saveInitialCameraPosition).toHaveBeenCalled();
+        expect(locationMgmt.setLocation).toHaveBeenCalledWith(INSIDE, [{ lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon }]);
+        expect(urlLocation.updateUrl).toHaveBeenCalledWith(INSIDE, [{ lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon }]);
+        expect(routeAnimation.startAnimation).toHaveBeenCalledWith(cachedPaths, [OLD_SPAWN]);
+        expect(mapPlacement.updateDependencies).toHaveBeenCalledWith(streetNetwork, INSIDE);
+      });
+
+      it('does not start the route animation without routes', async () => {
+        cachedPaths = new Map();
+        await click('hq', INSIDE);
+        expect(routeAnimation.startAnimation).not.toHaveBeenCalled();
+      });
+
+      it('builds the corridor of the rebuilt routes once their grid stands, then starts the route animation', async () => {
+        await click('hq', INSIDE);
+        expect(vizCallbacks.buildCorridor).toHaveBeenCalledTimes(1);
+        expect(world.buildCells.mock.invocationCallOrder[0])
+          .toBeLessThan(vizCallbacks.buildCorridor.mock.invocationCallOrder[0]);
+        expect(vizCallbacks.buildCorridor.mock.invocationCallOrder[0])
+          .toBeLessThan(routeAnimation.startAnimation.mock.invocationCallOrder[0]);
+      });
+    });
+
+    it('moves nothing in place before the coordinator was initialised', async () => {
+      await click('hq', INSIDE);
+      expect(world.resetRun).not.toHaveBeenCalled();
+      expect(engine.setOrigin).not.toHaveBeenCalled();
+      expect(coordinator.applyNewLocation).not.toHaveBeenCalled();
+    });
+
+    describe('HQ outside the loaded streets', () => {
+      it('keeps an old spawn up to 1500 m away and runs a full location change', async () => {
+        store.spawnPoints.set([OLD_SPAWN]);
+        osm.haversineDistance.mockReturnValue(1500);
+
+        await click('hq', OUTSIDE);
+
+        expect(osm.haversineDistance).toHaveBeenCalledWith(OLD_SPAWN.lat, OLD_SPAWN.lon, OUTSIDE.lat, OUTSIDE.lon);
+        expect(osm.loadStreets).not.toHaveBeenCalled();
+        expect(coordinator.applyNewLocation).toHaveBeenCalledWith({
+          hq: { ...OUTSIDE, name: 'Loading...' },
+          spawn: { lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon, name: OLD_SPAWN.name },
+        });
+        expect(world.resetRun).not.toHaveBeenCalled();
+      });
+
+      it('loads the new streets and draws a random spawn when the old one is farther', async () => {
+        store.spawnPoints.set([OLD_SPAWN]);
+        osm.haversineDistance.mockReturnValue(1501);
+        const loaded = { streets: [{}], bounds: BOUNDS };
+        osm.loadStreets.mockResolvedValue(loaded);
+        osm.findRandomStreetPoint.mockReturnValue({ lat: 49.505, lon: 9.2, streetName: '' });
+
+        await click('hq', OUTSIDE);
+
+        expect(osm.loadStreets).toHaveBeenCalledWith(OUTSIDE.lat, OUTSIDE.lon, 2000);
+        // Handed to the bridge so the coordinator's street step reuses them.
+        expect(bridge.setStreetNetwork).toHaveBeenCalledWith(loaded);
+        expect(bridge.setStreetNetworkLocation).toHaveBeenCalledWith(OUTSIDE);
+        expect(osm.findRandomStreetPoint).toHaveBeenCalledWith(loaded, OUTSIDE.lat, OUTSIDE.lon, 500, 1000, null);
+        expect(coordinator.applyNewLocation).toHaveBeenCalledWith({
+          hq: { ...OUTSIDE, name: 'Loading...' },
+          spawn: { lat: 49.505, lon: 9.2, name: 'Spawn' },
+        });
+      });
+
+      it('treats a missing spawn like one that is too far', async () => {
+        osm.loadStreets.mockResolvedValue({ streets: [], bounds: BOUNDS });
+
+        await click('hq', OUTSIDE);
+
+        expect(osm.loadStreets).toHaveBeenCalled();
+        expect(coordinator.applyNewLocation).toHaveBeenCalledWith({
+          hq: { ...OUTSIDE, name: 'Loading...' },
+          spawn: { lat: OUTSIDE.lat + 0.0063, lon: OUTSIDE.lon, name: 'Fallback Spawn' },
+        });
+      });
+
+      it('puts the spawn about 700 m north when the streets cannot be loaded', async () => {
+        osm.loadStreets.mockRejectedValue(new Error('Overpass down'));
+
+        await click('hq', OUTSIDE);
+
+        expect(bridge.setStreetNetwork).not.toHaveBeenCalled();
+        expect(coordinator.applyNewLocation).toHaveBeenCalledWith({
+          hq: { ...OUTSIDE, name: 'Loading...' },
+          spawn: { lat: OUTSIDE.lat + 0.0063, lon: OUTSIDE.lon, name: 'Spawn' },
+        });
+      });
+    });
+
+    describe('spawn', () => {
+      it('builds the corridor of the new route once its grid stands, then starts the route animation', async () => {
+        facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+        store.spawnPoints.set([OLD_SPAWN]);
+
+        await click('spawn', INSIDE);
+
+        expect(vizCallbacks.buildCorridor).toHaveBeenCalledTimes(1);
+        expect(world.buildCells.mock.invocationCallOrder[0])
+          .toBeLessThan(vizCallbacks.buildCorridor.mock.invocationCallOrder[0]);
+        expect(vizCallbacks.buildCorridor.mock.invocationCallOrder[0])
+          .toBeLessThan(routeAnimation.startAnimation.mock.invocationCallOrder[0]);
+      });
+
+      it('moves one spawn and keeps the others with their ids (coop host, lobby)', async () => {
+        facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+        const second = { lat: 48.77, lon: 9.17 };
+        locationMgmt.setLocation(HQ, [{ lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon }, second]);
+        mapPlacement.handlePlacementClick.mockReturnValue({ mode: 'spawn', move: 0, ...INSIDE });
+        await facade.handleMapPlacementClick(INSIDE.lat, INSIDE.lon, 0);
+
+        expect(locationMgmt.setLocation).toHaveBeenLastCalledWith(HQ, [{ ...INSIDE, portalBearing: undefined }, second]);
+        expect(store.spawnPoints().map((s) => [s.id, s.lat, s.lon])).toEqual([
+          ['spawn-1', INSIDE.lat, INSIDE.lon], ['spawn-2', second.lat, second.lon],
+        ]);
+        expect(vizCallbacks.buildCorridor).toHaveBeenCalledTimes(1);
+      });
+
+      it('takes one spawn away, the ones after it move up, never the last one', async () => {
+        facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+        const second = { lat: 48.77, lon: 9.17 };
+        locationMgmt.setLocation(HQ, [{ lat: OLD_SPAWN.lat, lon: OLD_SPAWN.lon }, second]);
+
+        expect(await facade.removeSpawn(0)).toBe(true);
+        expect(store.spawnPoints().map((s) => [s.id, s.lat, s.lon])).toEqual([['spawn-1', second.lat, second.lon]]);
+        expect(await facade.removeSpawn(0)).toBe(false);
+      });
+
+      it('replaces the spawn in place when it has a route to the HQ', async () => {
+        facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+        store.spawnPoints.set([OLD_SPAWN]);
+
+        await click('spawn', INSIDE);
+
+        expect(osm.findPath).toHaveBeenCalledWith(streetNetwork, INSIDE.lat, INSIDE.lon, HQ.lat, HQ.lon);
+        expect(routeAnimation.stopAnimation).toHaveBeenCalled();
+        expect(markerViz.clearSpawnMarkers).toHaveBeenCalled();
+        expect(markerViz.clearAllMarkers).not.toHaveBeenCalled();
+        expect(pathRoute.clearAllRoutes).toHaveBeenCalled();
+        expect(pathRoute.clearCachedPaths).toHaveBeenCalled();
+        expect(world.resetRun).toHaveBeenCalled();
+        expect(store.spawnPoints()).toEqual([
+          { id: 'spawn-1', name: 'Damrak', ...INSIDE, color: SPAWN_COLORS[0] },
+        ]);
+        expect(locationMgmt.setLocation).toHaveBeenCalledWith(HQ, [INSIDE]);
+        expect(urlLocation.updateUrl).toHaveBeenCalledWith(HQ, [INSIDE]);
+        expect(world.attach).toHaveBeenCalledWith(
+          engine, HQ, [{ id: 'spawn-1', name: 'Damrak', ...INSIDE }],
+        );
+        expect(world.buildCells).toHaveBeenCalledWith(true);
+        expect(mapPlacement.updateDependencies).toHaveBeenCalledWith(streetNetwork, HQ);
+        expect(routeAnimation.startAnimation).toHaveBeenCalledWith(cachedPaths, store.spawnPoints());
+        expect(engine.setOrigin).not.toHaveBeenCalled();
+      });
+
+      it('rejects a spawn without a route and leaves the game as it was', async () => {
+        store.spawnPoints.set([OLD_SPAWN]);
+        osm.findPath.mockReturnValue(null);
+
+        await click('spawn', INSIDE);
+
+        expect(world.resetRun).not.toHaveBeenCalled();
+        expect(markerViz.clearSpawnMarkers).not.toHaveBeenCalled();
+        expect(store.spawnPoints()).toEqual([OLD_SPAWN]);
+        expect(coordinator.applyNewLocation).not.toHaveBeenCalled();
+      });
+
+      it('replaces a spawn outside the loaded box in place as well, without reloading the streets', async () => {
+        await click('spawn', OUTSIDE);
+
+        expect(osm.findPath).toHaveBeenCalledWith(streetNetwork, OUTSIDE.lat, OUTSIDE.lon, HQ.lat, HQ.lon);
+        expect(store.spawnPoints()).toEqual([
+          { id: 'spawn-1', name: 'Damrak', ...OUTSIDE, color: SPAWN_COLORS[0] },
+        ]);
+        expect(osm.loadStreets).not.toHaveBeenCalled();
+        expect(coordinator.applyNewLocation).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('clearMapEntities', () => {
+    it('removes markers, routes, streets, spawns and the route cells', () => {
+      store.spawnPoints.set([OLD_SPAWN]);
+
+      facade.clearMapEntities();
+
+      expect(markerViz.clearAllMarkers).toHaveBeenCalled();
+      expect(pathRoute.clearAllRoutes).toHaveBeenCalled();
+      expect(streetRendering.dispose).toHaveBeenCalledWith(overlay);
+      // The cells and their overlays of the old location, see GlobalRouteGridService.clear
+      expect(routeGrid.clear).toHaveBeenCalled();
+      expect(store.spawnPoints()).toEqual([]);
+      expect(pathRoute.clearCachedPaths).toHaveBeenCalled();
+      expect(bridge.setFilteredStreetNetwork).toHaveBeenCalledWith(null);
+      expect(bridge.setStreetNetworkLocation).toHaveBeenCalledWith(null);
+    });
+
+    it('does nothing without an engine', () => {
+      bridge.getEngine.mockReturnValue(null);
+      facade.clearMapEntities();
+      expect(markerViz.clearAllMarkers).not.toHaveBeenCalled();
+      expect(bridge.setFilteredStreetNetwork).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshTerrainHeights', () => {
+    it('clears the height cache and reports the tiles as loaded in the real world', () => {
+      const onTilesLoaded = vi.fn();
+      facade.refreshTerrainHeights(onTilesLoaded);
+      expect(engine.terrain.clearHeightCache).toHaveBeenCalled();
+      expect(onTilesLoaded).toHaveBeenCalled();
+    });
+
+    it('does nothing without an engine', () => {
+      bridge.getEngine.mockReturnValue(null);
+      const onTilesLoaded = vi.fn();
+      facade.refreshTerrainHeights(onTilesLoaded);
+      expect(onTilesLoaded).not.toHaveBeenCalled();
+    });
+
+    it('regenerates the DevWorld and rebuilds on the new terrain', async () => {
+      useDevWorld();
+      let finish!: () => void;
+      engineWorld.regenerate.mockImplementation(() => new Promise<undefined>((resolve) => { finish = () => resolve(undefined); }));
+      const newNetwork = { streets: [{}, {}], bounds: BOUNDS };
+      engineWorld.streets.loadStreets.mockImplementation(async () => newNetwork);
+      store.spawnPoints.set([OLD_SPAWN]);
+      const onTilesLoaded = vi.fn();
+
+      facade.refreshTerrainHeights(onTilesLoaded);
+
+      expect(store.worldRegenerating()).toBe(true);
+      expect(world.resetRun).toHaveBeenCalled();
+      expect(gridViz.disposeVisualization).toHaveBeenCalled();
+      expect(markerViz.clearAllMarkers).toHaveBeenCalled();
+      expect(streetRendering.dispose).toHaveBeenCalledWith(overlay);
+      expect(store.spawnPoints()).toEqual([]);
+      expect(engine.terrain.clearHeightCache).toHaveBeenCalled();
+      expect(onTilesLoaded).not.toHaveBeenCalled();
+
+      finish();
+      await settle();
+
+      expect(store.worldRegenerating()).toBe(false);
+      expect(spawnIds()).toEqual(['dev-n']);
+      // The new streets before the spawns, the ref follows the new configuration
+      expect(bridge.setStreetNetwork).toHaveBeenCalledWith(newNetwork);
+      expect(store.streetCount()).toBe(2);
+      expect(worldContext.refreshRef).toHaveBeenCalled();
+      // The new world goes to the simulation, a fresh run on it
+      expect(world.sendToSim).toHaveBeenCalled();
+    });
+
+    it('clears the regenerating flag when the regeneration fails', async () => {
+      useDevWorld();
+      engineWorld.regenerate.mockImplementation(async () => { throw new Error('seed'); });
+
+      facade.refreshTerrainHeights(vi.fn());
+      await settle();
+
+      expect(store.worldRegenerating()).toBe(false);
+      expect(console.error).toHaveBeenCalledWith('[LocationFacade] world regeneration failed:', expect.any(Error));
+      expect(world.sendToSim).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dispose', () => {
+    const initAgain = () => facade.initialize(
+      bridge as unknown as FacadeComponentBridge,
+      { get: () => destroyRef } as unknown as Injector,
+    );
+
+    it('gives the coordinator no change context any more', () => {
+      facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+      facade.dispose();
+
+      expect(delegate().getChangeContext()).toBeNull();
+      delegate().getChangeCallbacks().setStreetNetwork(null);
+      expect(bridge.setStreetNetwork).not.toHaveBeenCalled();
+    });
+
+    it('moves nothing in place and draws no spawn', async () => {
+      facade.initializeCoordinator(vizCallbacks as unknown as VizCallbacks);
+      store.spawnPoints.set([OLD_SPAWN]);
+      locationMgmt.setLocation(HQ, []);
+      locationMgmt.editableSpawnLocations.set([{ id: 'a', name: 'Alpha', lat: 48.8, lon: 9.2 }]);
+      facade.dispose();
+
+      mapPlacement.handlePlacementClick.mockReturnValue({ mode: 'hq', ...INSIDE });
+      await facade.handleMapPlacementClick(INSIDE.lat, INSIDE.lon, 0);
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 1);
+      facade.clearMapEntities();
+
+      expect(facade.addPredefinedSpawns()).toBe(0);
+      expect(world.resetRun).not.toHaveBeenCalled();
+      expect(engine.setOrigin).not.toHaveBeenCalled();
+      expect(markerViz.clearAllMarkers).not.toHaveBeenCalled();
+      expect(store.spawnPoints()).toEqual([OLD_SPAWN]);
+    });
+
+    it('leaves the old game alone when a DevWorld regeneration finishes afterwards', async () => {
+      useDevWorld();
+      let finish!: () => void;
+      engineWorld.regenerate.mockImplementation(() => new Promise<undefined>((resolve) => { finish = () => resolve(undefined); }));
+      facade.refreshTerrainHeights(vi.fn());
+      facade.dispose();
+
+      finish();
+      await settle();
+
+      expect(store.worldRegenerating()).toBe(false);
+      expect(markerViz.addBaseMarker).not.toHaveBeenCalled();
+      expect(world.sendToSim).not.toHaveBeenCalled();
+    });
+
+    it('refuses to wait for a place without a component', async () => {
+      facade.dispose();
+      await expect(facade.waitForPlaceChoice()).rejects.toThrow('not initialized');
+      expect(coordinator.waitForStartChoice).not.toHaveBeenCalled();
+    });
+
+    it('works again after the next initialize', () => {
+      facade.dispose();
+      initAgain();
+
+      facade.addSpawnPoint('s1', 'North', 48.8, 9.2, 1);
+      expect(spawnIds()).toEqual(['s1']);
+    });
+  });
+
+  describe('onWorldRegenerated', () => {
+    it('re-creates HQ and the layout\'s spawn and hands them to the simulation', () => {
+      useDevWorld();
+      facade.onWorldRegenerated();
+
+      const spawn = { id: 'dev-n', name: 'North', lat: 0.4, lon: 0.1, color: SPAWN_COLORS[0] };
+      expect(markerViz.addBaseMarker).toHaveBeenCalled();
+      expect(store.spawnPoints()).toEqual([spawn]);
+      expect(bridge.setFilteredStreetNetwork).toHaveBeenCalledWith(streetNetwork);
+      expect(markerViz.updateMarkerHeights).toHaveBeenCalledWith();
+      expect(presentationHost.onTilesLoaded).toHaveBeenCalled();
+      expect(world.setSpawns).toHaveBeenCalledWith([spawn]);
+      expect(world.sendToSim).toHaveBeenCalled();
+      expect(routeAnimation.startAnimation).toHaveBeenCalledWith(cachedPaths, [spawn]);
+    });
+
+    it('rebuilds the route grid before the route lines read their heights from it', () => {
+      useDevWorld();
+      facade.onWorldRegenerated();
+
+      expect(world.buildCells.mock.invocationCallOrder[0])
+        .toBeLessThan(pathRoute.refreshRouteLines.mock.invocationCallOrder[0]);
+      expect(pathRoute.refreshRouteLines).toHaveBeenCalledWith(store.spawnPoints());
+    });
+
+    it('does nothing without an engine', () => {
+      bridge.getEngine.mockReturnValue(null);
+      facade.onWorldRegenerated();
+      expect(markerViz.addBaseMarker).not.toHaveBeenCalled();
+      expect(world.sendToSim).not.toHaveBeenCalled();
+    });
+  });
+});

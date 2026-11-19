@@ -1,0 +1,285 @@
+// Layout of the top bar: logo, place, tools left; enemies and the three
+// values right, flush with the sidebar's content below. The look comes from
+// the td-* classes (td-topbar, td-sunk, td-tool, td-stat).
+@use '../../styles/game-ui' as ui;
+
+:host {
+  display: block;
+}
+
+.header {
+  gap: 12px;
+  /* Right padding = sidebar gutter: the values end flush with the sidebar content */
+  padding-right: var(--td-sidebar-gutter);
+}
+
+.logo-btn {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: filter var(--td-dur-fast) ease;
+
+  &:hover { filter: brightness(1.15); }
+}
+
+.logo {
+  height: calc(var(--td-h-topbar) - 12px);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* On a narrow window the place name gives way, not the tools or the values */
+  min-width: 0;
+}
+
+.location-btn {
+  min-width: 0;
+}
+
+.location-pin {
+  flex-shrink: 0;
+  color: var(--td-brass);
+}
+
+.location-name {
+  /* Street, city and country; on a narrow window the end gives way */
+  max-width: 34vw;
+}
+
+.location-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* HQ, Credits, Wave: the right edge ends flush with the sidebar content
+   below. Each figure keeps room for the digits header-stats allows it
+   (HQ_EXACT_BELOW, CREDITS_EXACT_BELOW, WAVE_EXACT_BELOW), so a growing
+   value never shifts its neighbours. */
+.header-stats {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  display: flex;
+  align-items: baseline;
+  column-gap: 2px;
+}
+
+.stat-num {
+  white-space: nowrap;
+}
+
+/* The HQ figure sits right in its room, so the max hangs right after it */
+.hp .stat-num { min-width: 4ch; text-align: right; }
+.credits .stat-num { min-width: 6ch; }
+.wave .stat-num { min-width: 3ch; }
+
+/* A thin bar at the foot of HQ and Wave */
+.stat-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 1px;
+  height: 5px;
+  padding: 1px;
+}
+
+/* HQ: ten segments, one per tenth of the start health. Warm below 30 % with
+   a slow pulse, a hazard stripe at the foot below 10 %. A loss of health
+   flashes and jolts it (Web Animations, see the component). */
+.hp {
+  color: var(--td-hp-text);
+
+  .td-value {
+    color: var(--td-hp-text);
+  }
+
+  .stat-bar > .is-on {
+    background: var(--td-hp-text);
+  }
+}
+
+.hp[data-level='low'],
+.hp[data-level='critical'] {
+  .td-value {
+    color: var(--td-hp-low);
+    animation: hq-warm 2.4s ease-in-out infinite;
+  }
+
+  .stat-bar > .is-on {
+    background: var(--td-hp-low);
+  }
+}
+
+@keyframes hq-warm {
+  50% { filter: brightness(1.35); }
+}
+
+.hazard {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 1px;
+  height: 5px;
+  background: var(--td-hazard);
+}
+
+/* Credits: the figure counts to a new value, a change rises under it, a
+   refused buy flashes the figure red (component) */
+.credits td-icon {
+  color: var(--td-brass);
+}
+
+.credits .stat-value {
+  position: relative;
+}
+
+/* Below the header like before (the figure ends 3px above the plate), left
+   on the figure: a wide plate put it by the next plate's edge */
+.credits-delta {
+  position: absolute;
+  top: calc(100% + 11px);
+  left: 0;
+  /* Over the map like the header's menus, under the favorites (100) */
+  z-index: 90;
+  padding: 3px 8px;
+  font-size: var(--td-fs-body);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--td-gain);
+  pointer-events: none;
+  animation: credits-delta 900ms var(--td-ease-out) forwards;
+}
+
+.credits-delta.loss {
+  color: var(--td-loss);
+}
+
+/* Rises from below towards the figure and fades there */
+@keyframes credits-delta {
+  0% { opacity: 0; transform: translateY(8px); }
+  15% { opacity: 1; transform: translateY(3px); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+
+/* Wave: the share of the running wave that is gone; a wave that starts
+   lights the figure in brass for 600 ms */
+.wave td-icon {
+  color: var(--td-teal);
+}
+
+.wave.starting .td-value {
+  color: var(--td-brass-light);
+}
+
+/* Enemies alive, only during a wave */
+.enemies-chip {
+  color: var(--td-warn-text);
+}
+
+.enemies-num {
+  font-size: var(--td-fs-lead);
+  color: var(--td-warn-text);
+}
+
+/* Reduced motion: colour and stripe stay, nothing moves or pulses */
+@include ui.reduced-motion {
+  .hp[data-level='low'] .td-value,
+  .hp[data-level='critical'] .td-value {
+    animation: none;
+  }
+
+  .credits-delta {
+    animation: credits-delta-still 900ms linear forwards;
+  }
+}
+
+@keyframes credits-delta-still {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Coop room (docs/COOP_PLAN.md, C8): code, a square per player, seats */
+.coop-btn {
+  width: auto;
+  min-width: var(--td-tool-size);
+  gap: 6px;
+  display: inline-flex;
+  padding: 0 6px;
+  white-space: nowrap;
+  filter: none;
+}
+
+.room-dots {
+  display: flex;
+  gap: 3px;
+
+  b {
+    width: 7px;
+    height: 7px;
+  }
+}
+
+.fav-wrapper,
+.spawn-wrapper {
+  position: relative;
+}
+
+.spawn-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  padding: 6px;
+}
+
+.fav-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  width: 320px;
+  padding: 6px;
+}
+
+/* No limit on the favorites: the list scrolls, "Save this place" stays on top */
+.fav-list {
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+}
+
+.fav-item,
+.fav-edit {
+  gap: 2px;
+  padding-right: 4px;
+}
+
+.fav-input {
+  flex: 1;
+}
+
+.fav-empty {
+  padding: 8px 12px;
+}

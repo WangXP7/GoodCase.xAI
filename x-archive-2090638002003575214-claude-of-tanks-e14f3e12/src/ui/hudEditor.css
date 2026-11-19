@@ -1,0 +1,78 @@
+/* The editor's chrome is the kit's: its buttons, the screen layouts on the segmented control and the parts on the
+   picker's list, on the kit's plates. Battle frames inside the preview come directly from their production owners. */
+@layer reset,tokens,base,components,surfaces,utilities,overrides;
+@layer surfaces{
+.cot-modal-root.cot-hud-editor{padding:var(--s4);place-items:center}
+/* an opaque plate: the editor opens over Settings, which must not read through it */
+.cot-hud-editor .cot-modal{width:100%;max-width:1720px;height:calc(100dvh - 32px);max-height:calc(100dvh - 32px);background:var(--surface-page)}
+.cot-hud-editor .cot-modal__title{font-size:24px;text-transform:uppercase;letter-spacing:var(--track-label-s)}
+body .cot-modal-root.cot-hud-editor .cot-modal__body{display:flex;flex-direction:column;gap:var(--s3);overflow:hidden;min-height:0;flex:1}
+/* one inset on the header, the body and the footer: 16 over and under, 24 a side (a narrow or short window 12 and 16) */
+body .cot-modal-root.cot-hud-editor :is(.cot-modal__header,.cot-modal__body,.cot-modal__footer){padding:var(--s4) var(--s5)}
+.cot-hud-editor .hud-edit-part:focus-visible{outline:2px solid var(--focus-ink);outline-offset:3px}
+.hud-edit-toolbar{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+/* the layouts' plate is as tall as the toolbar's 36 px buttons (touch raises both to the floor) */
+.hud-edit-profiles .cot-c-seg__opt{height:30px}
+.cot-hud-editor .cot-modal__header{align-items:center}.hud-edit-toolbar>button:last-child{margin-left:auto}
+.hud-edit-content{display:grid;grid-template-columns:minmax(0,1fr) 248px;gap:var(--s3);flex:1;min-height:0}
+.hud-edit-preview{position:relative;min-height:0;min-width:0;display:grid;place-items:center;overflow:hidden;background:var(--surface-scene);border-radius:var(--plate-radius)}
+/* the preview's frame line is drawn over the picture, so it shows on all four sides whatever the scale */
+.hud-edit-preview::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:var(--ring-1);pointer-events:none}
+.hud-edit-viewport{position:relative;overflow:hidden}.hud-edit-stage{position:absolute;left:0;top:0;transform-origin:0 0;background-size:cover;background-position:center}
+.hud-edit-scene{position:absolute;inset:0;border:0;pointer-events:none;opacity:0}
+.hud-edit-scene[data-ready]{opacity:1}
+.hud-edit-loading{position:absolute;inset:0;margin:0;display:grid;place-items:center;background:var(--hud-plate);color:var(--accent);font-size:var(--battle-fs-12);z-index:4;text-align:center;padding:var(--s5)}
+.hud-edit-loading[hidden]{display:none}
+.cot-hud-editor button.hud-edit-part{position:absolute;transform:translate(-50%,-50%);padding:0;min-height:0;border:1px solid transparent;touch-action:none;background:transparent;text-align:center;cursor:grab;overflow:visible;box-sizing:border-box}
+.cot-hud-editor .hud-edit-part[hidden]{display:none}.cot-hud-editor .hud-edit-part:active{cursor:grabbing}
+.hud-edit-part>*{pointer-events:none}.cot-hud-editor .hud-edit-part:is(:hover,.is-previewed){border-color:var(--accent);background:var(--accent-wash)}
+/* the selected panel's frame is drawn unscaled over the preview (hudEditor.ts placeMark) */
+.hud-edit-mark{position:absolute;z-index:4;pointer-events:none;
+  box-shadow:inset 0 0 0 1px var(--surface-scene),inset 0 0 0 3px var(--accent),inset 0 0 0 4px var(--surface-scene)}
+.hud-edit-mark[hidden]{display:none}
+.hud-edit-inspector{min-height:0;overflow:auto;padding:var(--s4);display:flex;flex-direction:column;gap:var(--s3);background:var(--surface-raised);box-shadow:var(--ring-1);border-radius:var(--plate-radius)}
+/* the inspector scrolls as one column: its buttons keep their kit height beside the long parts list */
+.hud-edit-inspector>*{flex-shrink:0}
+.hud-edit-inspector h3{margin:0 0 var(--s1);color:var(--ink-1);font:600 var(--fs-16)/1.2 var(--font-body)}.hud-edit-inspector p{font-size:var(--battle-fs-11);line-height:1.6;color:var(--ink-3);margin:0}
+/* the list grows in the inspector's one scrolling column (no scroller of its own); the rule, the search and the first row
+   keep the inspector's 12 px step */
+.hud-edit-list{max-height:none;padding-top:var(--s3);border-top:1px solid var(--line-1)}
+.hud-edit-list .cot-c-picker__bar{row-gap:0}
+.hud-edit-list .cot-c-picker__grid{overflow:visible;padding-top:var(--s1);-webkit-mask-image:none;mask-image:none}
+.hud-edit-status{margin:0 auto 0 0;font-size:var(--battle-fs-11);line-height:1.5;color:var(--ink-3);max-width:55%}
+.hud-edit-status:empty{display:none}
+/* touch: every control meets the 44 px floor (a segment through its plate's inset, as Settings' do) */
+@media (pointer:coarse){
+ .cot-hud-editor :is(.cot-c-btn,.cot-c-picker__search){--h:var(--cot-control-floor,44px);height:var(--cot-control-floor,44px)}
+ .cot-hud-editor .cot-c-seg__opt{position:relative;height:calc(var(--cot-control-floor,44px) - 6px)}
+ .cot-hud-editor .cot-c-seg__opt::before{content:'';position:absolute;inset:-3px 0}
+ .cot-hud-editor .cot-modal__close{width:var(--cot-control-floor,44px);height:var(--cot-control-floor,44px);min-height:var(--cot-control-floor,44px)}
+}
+.hud-edit-nudge{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s1)}.cot-hud-editor .hud-edit-nudge button{width:auto;min-width:0}.cot-hud-editor .hud-edit-nudge .nudge-up svg{transform:rotate(180deg)}
+.hud-edit-preview.zoomed{display:block;overflow:auto}.hud-edit-preview.zoomed .hud-edit-viewport{margin:auto}
+@media(max-width:800px){
+ .cot-modal-root.cot-hud-editor{padding:6px}.cot-hud-editor .cot-modal{height:calc(100dvh - 12px);max-height:calc(100dvh - 12px)}
+ .hud-edit-content{grid-template-columns:minmax(0,1fr) 162px;gap:var(--s2)}
+ body .cot-modal-root.cot-hud-editor .cot-modal__body{gap:var(--s2)}
+ body .cot-modal-root.cot-hud-editor :is(.cot-modal__header,.cot-modal__body,.cot-modal__footer){padding:var(--s3) var(--s4)}
+ .hud-edit-inspector{padding:var(--s4)}.hud-edit-inspector h3{font-size:var(--battle-fs-13)}
+ .hud-edit-status{max-width:45%;font-size:var(--battle-fs-11)}
+}
+@media(orientation:portrait) and (max-width:700px){
+ .cot-hud-editor .cot-modal__title{font-size:19px}
+ /* a phone's toolbar: the screen layouts across the first row, Zoom and Reset sharing the second */
+ .hud-edit-toolbar .hud-edit-profiles{flex:1 1 100%}.hud-edit-profiles .cot-c-seg__opt{flex:1 1 0;min-width:0}
+ .hud-edit-toolbar>button{flex:1 1 0}.hud-edit-toolbar>button:last-child{margin-left:0}
+ .hud-edit-content{grid-template-columns:1fr;grid-template-rows:minmax(140px,1fr) 180px}.hud-edit-inspector{display:grid;grid-template-columns:1fr 1fr;align-content:start}
+ .hud-edit-inspector h3{grid-column:1/-1}.hud-edit-inspector p{display:none}.hud-edit-list{grid-column:1/-1}.hud-edit-list .cot-c-picker__grid{grid-template-columns:1fr 1fr}.hud-edit-nudge{grid-column:1/-1}
+}
+@media(max-height:450px){
+ /* a short window keeps one inset on the header, the body and the footer, each a little tighter */
+ body .cot-modal-root.cot-hud-editor :is(.cot-modal__header,.cot-modal__body,.cot-modal__footer){padding:var(--s3) var(--s4)}
+ body .cot-modal-root.cot-hud-editor .cot-modal__header{gap:var(--s1);align-items:center}
+ .cot-hud-editor .cot-modal__title{font-size:var(--battle-fs-15)}
+ body .cot-modal-root.cot-hud-editor .cot-modal__footer{flex-wrap:nowrap}
+ .hud-edit-toolbar{flex-wrap:nowrap}
+ .hud-edit-status{font-size:var(--battle-fs-11)}.hud-edit-inspector p{display:none}
+}
+}

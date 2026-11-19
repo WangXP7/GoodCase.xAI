@@ -1,0 +1,2823 @@
+import type { RuntimeValue } from '../runtimeTypes.ts';
+/**
+ * cameraRig.ts — the WoT camera: third-person arcade orbit + sniper zoom.
+ *
+ * Implements docs/history/research/movement-physics.md §9/§11 verbatim and
+ * ARCHITECTURE.md §3.1.5:
+ *  - one camera, two states (ARCADE orbit / SNIPER first-person), sharing one
+ *    aim yaw/pitch pair so mode switches never snap the view;
+ *  - arcade: spring-followed pivot over the turret, discrete orbit steps
+ *    [24,18,13,9,6,4] m with smooth lerp, collision pull-in, terrain
+ *    auto-height, pitch clamp [-65°, +15°]; the pivot's height, the steps'
+ *    scale, a shoulder offset, the lens and a lens shift come from the chase
+ *    framing (chaseFraming.ts: the HUD's bands and the camera settings);
+ *  - sniper: camera at the gun trunnion, FOV = 60/zoom, zoom steps ×2/×4/×8
+ *    (×16/×25 behind the increased-zoom flag), mouse sensitivity ÷ zoom, own
+ *    hull hidden;
+ *  - server-aim: raycast from the camera through screen center (max 720 m);
+ *    the rig writes the result into the player's `input.aimPoint` every frame;
+ *  - trauma-based rotational shake (graphics-aaa.md §11), ×0.3 in sniper;
+ *  - deterministic screenshot hooks: setExternalPose / snapArcade / snapSniper.
+ */
+import { strikeView } from '../game/strikeViewState.ts';
+import * as THREE from 'three';
+import { ImprovedNoise } from 'three/examples/jsm/math/ImprovedNoise.js';
+import { createAerialCamera } from './aerialCamera.ts';
+import type { AerialView } from '../sim/aerialCombat.ts';
+import { createIsometricCamera } from './isometricCamera.ts';
+import { staticMergePartMatrixWorld, staticMergePartsOf } from '../vehicles/staticMergeParts.ts';
+import { A11Y } from '../ui/accessibilityPreferences.ts';
+import {
+  CHASE_BASE_DISTANCE_M, CHASE_PITCH_RAD, chaseTankFromDims, solveChaseFraming,
+  type ChaseBands, type ChaseCameraSettings, type ChaseFraming, type ChaseTank,
+} from './chaseFraming.ts';
+
+const ORBIT_STEPS = [24, 18, 13, 9, 6, 4]; // meters, wheel-in moves toward the end
+const SNIPER_ZOOMS_BASE = [2, 4, 8];
+const SNIPER_ZOOMS_FULL = [2, 4, 8, 16, 25]; // ×16/×25 behind rig._increasedZoom
+const BASE_FOV_DEG = 60;
+const BASE_SENS = 0.0022; // rad per mouse px
+const PITCH_MIN = THREE.MathUtils.degToRad(-65); // looking down
+// Looking up: must EXCEED every tank's gun elevation limit (+18..+20° per the
+// class table in movement-physics.md §7) or full elevation is uncommandable —
+// close targets uphill were unaimable at the old +15°. WoT lets the camera
+// look well above the horizon; the gun clamps itself at spec.gunElevationDeg
+// with the atGunLimit reticle pin (movement.ts).
+const PITCH_MAX = THREE.MathUtils.degToRad(30);
+const MAX_AIM_DIST_M = 720;
+// The death cam's and an ally spectate's pivot over the turret (the chase's own comes from its framing).
+const PIVOT_ABOVE_TURRET_M = 1.0;
+// battle-camera-264: the framed orbit steps stay inside these (the closest never in the hull, the farthest readable).
+const ORBIT_MIN_M = 4;
+const ORBIT_MAX_M = 40;
+// The chase lens, shoulder and lens shift glide to a new framing (a settings preview, a band change) over this.
+const FRAMING_TAU_S = 0.22;
+const PIVOT_FOLLOW_TAU_S = 0.1; // critically-damped-feel position lag
+const DIST_LERP_TAU_S = 0.15; // smooth lerp between orbit steps
+// >>> gameplay_feel r4: uphill framing assist -------------------------------
+// Climbing toward rising ground the naive orbit buries ~85% of the frame in
+// the hill face (r4 drive critique — "green wall"): WoT slides the camera up
+// so the vehicle and some crest/sky stay in frame. We probe how steeply the
+// terrain ahead of the pivot rises above the turret line within ~1.6 orbit
+// distances and blend extra camera height (plus a small look-target lift).
+const CLIMB_PROBE_N = 5;      // heightfield samples along the view azimuth
+const CLIMB_PROBE_RANGE = 1.6; // × orbit distance probed ahead of the pivot
+const CLIMB_FULL_RAD = 0.30;  // apparent terrain rise (rad) for full assist
+// r2 (gameplay_feel critique MAJOR): 0.55 with a turret-roof reference lifted
+// the camera 7+ m while DESCENDING into any bowl whose far wall rises — the
+// player tank shrank to <5% of frame behind canopy. The probe now references
+// the PIVOT height (a far wall must clear the whole camera pivot line before
+// it counts as "uphill"), the assist only engages when the ground under/ahead
+// of the hull actually RISES (CLIMB_GATE_*), and the max lift is clamped so
+// the projected hull stays in the lower third of frame (atan(0.42·0.45) ≈
+// 10.7° look-offset ≈ the lower-third boundary at FOV 60).
+const CLIMB_LIFT_MAX = 0.42;  // max extra camera height, × orbit distance
+const CLIMB_GATE_DIST_M = 9;  // near-ground slope probe ahead of the pivot
+const CLIMB_GATE_LO_RAD = 0.05; // ~3° near-ground rise — assist starts
+const CLIMB_GATE_HI_RAD = 0.16; // ~9° — full assist authority
+const CLIMB_LOOK_FRAC = 0.45; // look-target lift as a fraction of camera lift
+const CLIMB_TAU_S = 0.35;     // assist ease time constant
+// <<< gameplay_feel r4 ------------------------------------------------------
+const COLLISION_PAD_M = 0.3;
+const CAMERA_MIN_CLEARANCE_M = 1.0; // auto-height above terrain
+const TRAUMA_DECAY_PER_S = 1.4;
+// Scope-in aim policy (enterSniper): the reticle's world point is PRESERVED
+// across the boundary (gunnery r1, owner mandate — see enterSniper). The
+// scan-lift below survives ONLY for a battle where the player has not aimed
+// yet (aimTouched false): the arcade default pitch rests the aim on grass a
+// dozen meters ahead and the first scope used to open on dirt.
+const SNIPER_KEEP_AIM_M = 50;
+const SNIPER_ENTRY_PITCH_RAD = THREE.MathUtils.degToRad(-1.5);
+const SHAKE_FREQ = 11;
+const SHAKE_AMP_XY = 0.045;
+const SHAKE_AMP_Z = 0.03;
+const SNIPER_SHAKE_SCALE = 0.3;
+const AUTO_AIM_FOLLOW_TAU_S = 0.10; // Blitz-style lock settles quickly without snapping
+
+const _pivotTarget = new THREE.Vector3();
+const _desired = new THREE.Vector3();
+const _viewDir = new THREE.Vector3();
+const _rayDir = new THREE.Vector3();
+const _autoAimAnchor = new THREE.Vector3();
+const _aimOrigin = new THREE.Vector3();
+const _aimAnchor = new THREE.Vector3();
+// >>> gameplay_feel r4: uphill framing assist scratch
+const _lookTarget = new THREE.Vector3();
+// <<< gameplay_feel r4
+const _shoulderDir = new THREE.Vector3();
+const _roofProbe = new THREE.Vector3();
+const _reachInverse = new THREE.Matrix4();
+const _reachMatrix = new THREE.Matrix4();
+const _reachCorner = new THREE.Vector3();
+
+interface CameraRaycastHit {
+  point: THREE.Vector3;
+  normal: THREE.Vector3;
+  dist: number;
+  kind?: string;
+}
+
+export type CameraRaycast = (
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  maxDistanceM: number,
+) => CameraRaycastHit | null;
+
+interface CameraAimRaycastHit {
+  point: THREE.Vector3;
+  dist: number;
+}
+
+type CameraAimRaycast = (
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  maxDistanceM: number,
+) => CameraAimRaycastHit | null;
+
+interface CameraEntityVisual {
+  root: THREE.Object3D;
+  boundingRadiusM?: number;
+  turretTopWorld(out: THREE.Vector3): RuntimeValue;
+  gunPivotWorld(out: THREE.Vector3): RuntimeValue;
+  /** The gun's bore direction in the world (a watcher's gunner sight is slaved to it: engine/watchCamera.ts). */
+  gunDirWorld?(out: THREE.Vector3): RuntimeValue;
+}
+
+export interface CameraEntity {
+  aerial?: AerialView;
+  state: {
+    pos: THREE.Vector3;
+    yaw: number;
+    turretYaw: number;
+    speed?: number;
+  };
+  input?: {
+    aimPoint?: THREE.Vector3 | null;
+  };
+  spec?: {
+    dims?: {
+      heightM: number;
+      widthM?: number;
+      hullLengthM?: number;
+    };
+  };
+  /** Live combat state; `destroyed` ends every scoped view (death r1). */
+  combat?: {
+    destroyed?: boolean;
+  } | null;
+  visual?: CameraEntityVisual | null;
+}
+
+export interface CameraRigDeps {
+  heightField: {
+    getHeightAt(x: number, z: number): number;
+  };
+  raycast: CameraRaycast;
+  aimRaycast?: CameraAimRaycast;
+  getPlayer(): CameraEntity | null;
+  getIsometricView?(): boolean;
+  /**
+   * A spectate handover is about to carry the camera to `position` (looking at `lookAt`) over `durationS`
+   * (2026-10-24, perf-245; cameraDestinationWarm.ts): the destination is warmed on the way.
+   */
+  prepareDestination?(position: THREE.Vector3, lookAt: THREE.Vector3, durationS: number): void;
+  /** The HUD's bands the chase framing clears (ui/battleSight.ts battleBands; null before the battle HUD's first layout:
+   *  the base pose). */
+  getChaseBands?(): ChaseBands | null;
+  /** The player's camera settings (input.ts: height, distance, shoulder, framing, field of view). */
+  getCameraSettings?(): Partial<ChaseCameraSettings> | null;
+  /** The framed arcade sight's rise over the screen centre, CSS px (ui/battleSight.ts setBattleSightShift). */
+  publishSightShift?(px: number): void;
+}
+
+interface CameraInputFrame {
+  mouseDX: number;
+  mouseDY: number;
+  wheel: number;
+  rmb: boolean;
+  shiftPressed: boolean;
+  aimHold?: boolean;
+  cursorAim?: boolean;
+  cursorX?: number;
+  cursorY?: number;
+  autoAimPoint?: { x: number; y: number; z: number } | null;
+}
+
+interface CinematicState {
+  t: number;
+  dur: number;
+  endYaw: number;
+  fwd: THREE.Vector3;
+  curve: THREE.CatmullRomCurve3;
+  /** The curve's last control point (the chase pose's offset from the pivot) and its direction (the -10 degree look). */
+  chase: THREE.Vector3;
+  chaseDir: THREE.Vector3;
+}
+
+interface DeathCameraState {
+  az: number;
+}
+
+interface SpectateState {
+  ent: CameraEntity;
+  yaw: number;
+  yawT: number;
+  pitch: number;
+  pitchT: number;
+  dist: number;
+  distT: number;
+  pivot: THREE.Vector3 | null;
+  blendT: number;
+  blendDur: number;
+  fromPos: THREE.Vector3;
+  fromLook: THREE.Vector3;
+  fromFov: number;
+}
+
+/**
+ * Who drives the battle camera (2026-11-02 audit F7). One owner at a time, entered through the rig's one enter
+ * function, which runs the leaving owner's teardown (the flyby's letterbox, the spectate chase, the death orbit, the
+ * external pin), so no caller has to release() one owner before starting the next.
+ *   external   a pinned pose (killcam replay, ending beat, harness shots) until release() or a snap
+ *   spectate   the ally chase after the player's death replay, or a lobby observer
+ *   death      the slow orbit of the player's wreck
+ *   cinematic  the battle-open flyby (with its letterbox)
+ *   player     the player's own camera: ARCADE or SNIPER (rig.mode), the isometric overlay, and a flight while
+ *              player.aerial is active (the aerial camera then drives each frame; it ends a flyby, never a death orbit)
+ */
+export type CameraOwner = 'external' | 'spectate' | 'death' | 'cinematic' | 'player';
+
+export interface CameraRig {
+  mode: 'ARCADE' | 'SNIPER';
+  zoom: number;
+  aimPoint: THREE.Vector3;
+  aimDist: number;
+  /** The owner driving the camera (CameraOwner). */
+  readonly cameraOwner: CameraOwner;
+  /** True while an external pose pins the camera (cameraOwner === 'external'). */
+  readonly externalActive: boolean;
+  _increasedZoom: boolean;
+  readonly cinematicActive: boolean;
+  readonly spectateActive: boolean;
+  readonly spectateTargetEnt: CameraEntity | null;
+  update(dt: number, input: CameraInputFrame): void;
+  addTrauma(amount: number): void;
+  recoilKick(amount?: number, fovScale?: number): void;
+  startCinematic(durationS?: number): void;
+  startDeathCam(): void;
+  /** Leave the death orbit for the player's camera (a restart's living hull); another owner is left as it is. */
+  endDeathCam(): void;
+  startSpectate(entity: CameraEntity): void;
+  snapSpectateForReveal(): boolean;
+  setSpectateTarget(entity: CameraEntity): void;
+  spectateLook(dxPx: number, dyPx: number): void;
+  spectateZoom(notches: number): void;
+  stopSpectate(): void;
+  enterSniper(): void;
+  exitSniper(restorePreviousOrbit?: boolean): void;
+  getAimRay(outOrigin: THREE.Vector3, outDirection: THREE.Vector3): void;
+  setExternalPose(position: THREE.Vector3, target: THREE.Vector3, fovDeg?: number): void;
+  snapArcade(step: number, orbitYaw: number, orbitPitch: number): void;
+  snapSniper(zoom: number, aimYaw: number, aimPitch: number): void;
+  release(): void;
+  /** The chase framing in force (chaseFraming.ts), solved on a band, setting or tank change. */
+  readonly framing: ChaseFraming;
+  /** A paused battle's frame: the chase glides to a changed camera setting behind the pause menu (no input, no aim
+   *  change but the reticle's new world point). */
+  previewFraming(dt: number): void;
+  /** Another owner drives the camera this frame (Watch, the Garage): the chase's lens shift comes off it. */
+  suspendFraming(): void;
+}
+
+/** True once the player's own combat state reports the wreck (death r1). */
+function isWreck(entity: CameraEntity | null): boolean {
+  return !!(entity && entity.combat && entity.combat.destroyed);
+}
+
+/** Forward direction from view yaw/pitch (yaw 0 → +Z, positive pitch → up). */
+function dirFromAngles(yaw: number, pitch: number, out: THREE.Vector3): THREE.Vector3 {
+  const cp = Math.cos(pitch);
+  return out.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
+}
+
+/** Index of the zoom step closest to `zoom` inside `list`. */
+function nearestZoomIndex(zoom: number, list: readonly number[]): number {
+  let best = 0;
+  let bestErr = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const err = Math.abs(list[i] - zoom);
+    if (err < bestErr) {
+      bestErr = err;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Create the camera rig.
+ *
+ * The rig drives camera position, rotation, and FOV; integration owns the
+ * projection near/far planes and aspect ratio.
+ */
+export function createCameraRig(
+  camera: THREE.PerspectiveCamera,
+  deps: CameraRigDeps,
+): CameraRig {
+  const { heightField, raycast, getPlayer } = deps;
+  // Server-aim ray may use a richer raycast (world + enemy tank armor) so the
+  // reticle sticks to vehicles; camera collision keeps the world-only raycast.
+  const aimRaycast = deps.aimRaycast || raycast;
+  const noise = new ImprovedNoise();
+  const isometric = createIsometricCamera(camera, deps);
+  const aerialCamera = createAerialCamera(camera);
+  const isIsometric = () => !!deps.getIsometricView?.() && rig.mode === 'ARCADE';
+  let wasIsometric = false;
+
+  // Shared aim angles (both modes; switching modes never snaps the view).
+  let aimYaw = 0;
+  let aimPitch = THREE.MathUtils.degToRad(-10);
+  // The sight ray always follows the camera. Gun-hold/free-look is a single
+  // simulation flag sampled by playerFrameInput: it freezes the articulated
+  // turret/gun lay without creating a second camera angle or stale world aim
+  // point. Guided rounds can therefore follow the live sight immediately.
+  // gunnery r1: has the player actively mouse-aimed since the last battle
+  // snap? Gates enterSniper's dirt-guard scan-lift — once the player owns the
+  // pitch, scoping preserves it exactly (see enterSniper).
+  let aimTouched = false;
+  // gunnery r1: RMB hold-to-aim edge state (camInput.aimHold).
+  let prevAimHold = false;
+  let aimHoldLatched = false;
+
+  let step = 2; // ORBIT_STEPS index — 13 m default
+  let dist = ORBIT_STEPS[step];
+  // gameplay_feel r6 (round critique MINOR): the arcade orbit step the player
+  // scoped in FROM — Shift-exit restores it (WoT behavior) instead of dumping
+  // the camera at the 4 m step inside the nearest bush.
+  let preSniperStep = -1;
+  const pivot = new THREE.Vector3();
+  let pivotInitialized = false;
+  // >>> gameplay_feel r4: current uphill camera lift in meters (eased)
+  let climbLift = 0;
+  // <<< gameplay_feel r4
+  // battle-camera-264: the chase framing (chaseFraming.ts) and what it was solved from. The pivot and the orbit glide to
+  // a new framing through their own follows; the lens, the shoulder and the lens shift through FRAMING_TAU_S.
+  let framing: ChaseFraming = solveChaseFraming(1000 * camera.aspect, 1000, null);
+  let framedBands: ChaseBands | null | undefined;
+  let framedAspect = 0;
+  let framedSpec: CameraEntity['spec'] | null | undefined;
+  let framedHeight: number | undefined, framedDistance: number | undefined;
+  let framedFraming: number | undefined, framedFov: number | undefined;
+  let framedShoulder: unknown;
+  let framedTank: ChaseTank = chaseTankFromDims(null);
+  let publishedShift = 0;
+  let chaseFov = framing.fovDeg;
+  let shoulder = 0;
+  let lensShift = 0;
+
+  // the camera's one owner (CameraOwner, 2026-11-02 audit F7); cine, death and spec are the owners' payloads, set only
+  // right after enterOwner and cleared only by its teardown
+  let owner: CameraOwner = 'player';
+  let prevShift = false;
+  let trauma = 0;
+  let shakeT = 0;
+  let recoil = 0; // gun-fire pitch kick (rad), decays fast — additive like shake
+  let fovKick = 0; // gun-fire FOV punch (0..1), ~120 ms concussion pulse
+  // the unpunched field of view the last solve asked for (applyFovKick's base); never a record of what the camera holds
+  let lastFov = 0;
+  // battle-start cinematic flyby state (null when inactive)
+  let cine: CinematicState | null = null;
+  // death-cam slow orbit state (null when inactive)
+  let death: DeathCameraState | null = null;
+  // >>> SPECTATE (killcam_endscreen r1): ally chase-cam state after the
+  // player's death replay — null when inactive. The spectate camera is the
+  // arcade chase grammar re-aimed at a LIVING ALLY: damped pivot follow,
+  // free orbit yaw/pitch, the same collision pull-in + terrain floor as
+  // solveArcade, plus an eased pose BLEND whenever the target changes so
+  // cycling allies never teleports the camera (owner ask). Driven entirely
+  // through rig.startSpectate / setSpectateTarget / spectateLook /
+  // stopSpectate — no main.ts wiring needed (killcam.ts owns the flow).
+  // killcam r2 FREE CURSOR ORBIT: yaw/pitch/dist carry eased TARGETS
+  // (yawT/pitchT/distT) fed by spectateLook/spectateZoom — cursor motion
+  // orbits the camera with chase-free-look damping instead of raw per-event
+  // steps, full 360° yaw, pitch clamped, wheel zoom clamped + eased.
+  let spec: SpectateState | null = null; // { ent, yaw, yawT, pitch, pitchT, dist, distT, pivot,
+                     //   blendT, blendDur, fromPos, fromLook, fromFov }
+  const _specFrom = new THREE.Vector3();
+  const _specFromLook = new THREE.Vector3();
+  const _specLook = new THREE.Vector3();
+  let specFromFov = 55;
+  const SPEC_DIST_M = 14;
+  const SPEC_DIST_MIN = 7;   // wheel-in floor (never inside the hull)
+  const SPEC_DIST_MAX = 26;  // wheel-out ceiling (ally stays readable)
+  const SPEC_PITCH = THREE.MathUtils.degToRad(-13);
+  const SPEC_BLEND_S = 1.05;
+  const SPEC_LOOK_TAU_S = 0.085; // orbit ease toward the cursor target
+  // rad per px: one full screen-width of cursor travel ≈ a full 360° walk
+  // around the tank (pointer lock is not guaranteed while spectating, so an
+  // unlocked cursor must reach all the way around before it hits the screen
+  // edge). Damped by SPEC_LOOK_TAU_S above, so the higher gain stays smooth.
+  const SPEC_SENS = BASE_SENS * 1.8;
+
+  /** (perf-245) where a spectate handover lands: the chase pose behind `ent` (tank forward is local +Z). */
+  const _specDest = new THREE.Vector3();
+  function announceSpectate(ent: CameraEntity, durationS: number): void {
+    if (!deps.prepareDestination || !ent.state?.pos) return;
+    const p = ent.state.pos, yaw = ent.state.yaw ?? 0;
+    _specDest.set(p.x - Math.sin(yaw) * SPEC_DIST_M, p.y + 3, p.z - Math.cos(yaw) * SPEC_DIST_M);
+    deps.prepareDestination(_specDest, p as THREE.Vector3, durationS);
+  }
+
+  function spectateBlendDuration(ent: CameraEntity | null): number {
+    if (!ent || !ent.state || !ent.state.pos) return SPEC_BLEND_S;
+    const dx = ent.state.pos.x - camera.position.x;
+    const dy = ent.state.pos.y - camera.position.y;
+    const dz = ent.state.pos.z - camera.position.z;
+    return THREE.MathUtils.clamp(0.82 + Math.hypot(dx, dy, dz) / 190,
+      SPEC_BLEND_S, 2.45);
+  }
+
+  /** Resolve the arcade orbit pivot for the current player into `out`, `aboveM` over the turret roof. */
+  function pivotTargetFor(player: CameraEntity, out: THREE.Vector3, aboveM = PIVOT_ABOVE_TURRET_M): THREE.Vector3 {
+    if (player.visual !== null && player.visual !== undefined) {
+      player.visual.turretTopWorld(out);
+    } else {
+      out.copy(player.state.pos);
+      out.y += (player.spec && player.spec.dims ? player.spec.dims.heightM : 2.4);
+    }
+    out.y += aboveM;
+    return out;
+  }
+
+  /** The default orbit steps scaled by the framing (the wheel keeps its ladder about the framed default). */
+  function orbitDistance(index: number): number {
+    return THREE.MathUtils.clamp(ORBIT_STEPS[index] * framing.distanceM / CHASE_BASE_DISTANCE_M, ORBIT_MIN_M, ORBIT_MAX_M);
+  }
+
+  /** The view's screen right at `yaw` (the shoulder's side: forward × up). */
+  function screenRight(yaw: number, out: THREE.Vector3): THREE.Vector3 {
+    return out.set(-Math.cos(yaw), 0, Math.sin(yaw));
+  }
+
+  /** The point the chase's aim ray runs through from the camera's side (the pivot, the shoulder beside it): an aim that
+   *  must land on a world point is solved from here. */
+  function chaseAnchorFor(player: CameraEntity, yaw: number, out: THREE.Vector3): THREE.Vector3 {
+    pivotTargetFor(player, out, framing.pivotAboveM);
+    if (framing.shoulderM !== 0) out.addScaledVector(screenRight(yaw, _shoulderDir), framing.shoulderM);
+    return out;
+  }
+
+  /** The tank's box for the framing: the spec's dims, the roof's height and its place along the hull from the visual,
+   *  and the visual's own reach behind the roof and across (stowage, skirts and fenders past the hull's length) measured
+   *  once in the hull's frame, so the tracks the band must clear are the model's own. The front stays the spec's (the
+   *  barrel is not the hull), the top the roof's (an antenna is not the hull). Sane values only: a stale matrix at a
+   *  reveal must not frame the Garage pose. */
+  function framingTankFor(player: CameraEntity): ChaseTank {
+    const dims = player.spec?.dims ?? null;
+    let ahead = 0;
+    let height = dims?.heightM;
+    let width = dims?.widthM;
+    let rear = 0;
+    if (player.visual && player.state?.pos) {
+      player.visual.turretTopWorld(_roofProbe);
+      const pos = player.state.pos;
+      const yaw = player.state.yaw ?? 0;
+      const along = (_roofProbe.x - pos.x) * Math.sin(yaw) + (_roofProbe.z - pos.z) * Math.cos(yaw);
+      const half = (dims?.hullLengthM ?? 7) / 2;
+      if (Math.abs(along) < half * 0.7) ahead = along;
+      const roof = _roofProbe.y - pos.y;
+      if (roof > 0.8 && roof < 5) height = roof;
+      const reach = visualReach(player.visual.root, half);
+      if (reach) {
+        width = Math.max(width ?? 0, reach.width);
+        rear = reach.rear;
+      }
+    }
+    const tank = chaseTankFromDims({ heightM: height, widthM: width, hullLengthM: dims?.hullLengthM }, ahead);
+    if (rear > tank.rearM - ahead) tank.rearM = rear + ahead;
+    return tank;
+  }
+
+  /** The visual's reach in its own frame (+Z forward): how far behind its origin and how wide its meshes' boxes run,
+   *  null where it has none (a Node stand-in) or the reach is not a hull's (over twice the hull's half length). */
+  function visualReach(root: THREE.Object3D, halfLengthM: number): { rear: number; width: number } | null {
+    root.updateWorldMatrix(true, true);
+    _reachInverse.copy(root.matrixWorld).invert();
+    let rear = 0, side = 0, meshes = 0;
+    root.traverseVisible((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      const instanced = (mesh as THREE.InstancedMesh).isInstancedMesh ? mesh as THREE.InstancedMesh : null;
+      if (instanced && !instanced.boundingBox) instanced.computeBoundingBox();
+      if (!instanced && !mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      const box = instanced ? instanced.boundingBox : mesh.geometry.boundingBox;
+      if (!box || box.isEmpty()) return;
+      _reachMatrix.multiplyMatrices(_reachInverse, mesh.matrixWorld);
+      for (let i = 0; i < 8; i++) {
+        _reachCorner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
+          .applyMatrix4(_reachMatrix);
+        if (-_reachCorner.z > rear) rear = -_reachCorner.z;
+        if (Math.abs(_reachCorner.x) > side) side = Math.abs(_reachCorner.x);
+      }
+      meshes++;
+    });
+    if (!meshes || rear > 2 * halfLengthM || side > 2.5) return null;
+    return { rear, width: 2 * side };
+  }
+
+  /** Re-solve the framing when the HUD's bands, the window's shape, the tank or a camera setting changed; publishes the
+   *  framed sight's rise. Cheap when nothing did (a few comparisons). */
+  function refreshFraming(player: CameraEntity): void {
+    const raw = deps.getChaseBands?.() ?? null;
+    // (bands measured for another window shape are stale until the HUD lays out again: the framing in force holds; a
+    // phone's toolbar can leave the layout viewport a little shorter than the canvas, which the tolerance allows)
+    const bands = raw && Math.abs(raw.width / Math.max(1, raw.height) - camera.aspect) < 0.05 ? raw : null;
+    if (raw && !bands && framedSpec !== undefined) return;
+    const settings = deps.getCameraSettings?.() ?? null;
+    const spec = player.spec ?? null;
+    if (bands === framedBands && camera.aspect === framedAspect && spec === framedSpec
+      && settings?.cameraHeight === framedHeight && settings?.cameraDistance === framedDistance
+      && settings?.cameraFraming === framedFraming && settings?.cameraFov === framedFov
+      && settings?.cameraShoulder === framedShoulder) return;
+    if (spec !== framedSpec || framedSpec === undefined) framedTank = framingTankFor(player);
+    framedBands = bands; framedAspect = camera.aspect; framedSpec = spec;
+    framedHeight = settings?.cameraHeight; framedDistance = settings?.cameraDistance;
+    framedFraming = settings?.cameraFraming; framedFov = settings?.cameraFov;
+    framedShoulder = settings?.cameraShoulder;
+    framing = bands
+      ? solveChaseFraming(bands.width, bands.height, bands, settings, framedTank)
+      : solveChaseFraming(1000 * camera.aspect, 1000, null, settings, framedTank);
+    publishShift(framing.sightShiftPx);
+  }
+
+  function publishShift(px: number): void {
+    if (px === publishedShift) return;
+    publishedShift = px;
+    deps.publishSightShift?.(px);
+  }
+
+  /** The lens shift camera.view carries now: 0 for none, NaN for a view in another shape than applyLens writes. */
+  function liveLens(): number {
+    const view = camera.view;
+    if (!view || !view.enabled) return 0;
+    const ours = view.fullWidth === 1 && view.fullHeight === 1 && view.width === 1 && view.height === 1 && view.offsetX === 0;
+    return ours ? view.offsetY : NaN;
+  }
+
+  /** The lens shift on the camera (camera.view: the picture rises by `shift` of its height; 0 takes it off). The view is
+   *  written directly: setViewOffset would also set the aspect to its full width over its full height. Compared against
+   *  the live camera, never a cache: other owners write it too (couch panes clear it on close; drone-aim-camera-274). */
+  function applyLens(shift: number): void {
+    const next = Math.abs(shift) < 1e-4 ? 0 : shift;
+    if (next === liveLens()) return;
+    if (next === 0) { camera.clearViewOffset(); return; }
+    const view = camera.view ?? { enabled: true, fullWidth: 1, fullHeight: 1, offsetX: 0, offsetY: 0, width: 1, height: 1 };
+    view.enabled = true;
+    view.fullWidth = view.fullHeight = view.width = view.height = 1;
+    view.offsetX = 0;
+    view.offsetY = next;
+    camera.view = view;
+    camera.updateProjectionMatrix();
+  }
+
+  /** The chase's lens, shoulder and lens shift toward the framing (`snap`: at once). */
+  function easeFraming(dt: number, snap: boolean): void {
+    const k = snap ? 1 : 1 - Math.exp(-Math.max(0, dt) / FRAMING_TAU_S);
+    chaseFov += (framing.fovDeg - chaseFov) * k;
+    shoulder += (framing.shoulderM - shoulder) * k;
+    lensShift += (framing.shift - lensShift) * k;
+    if (Math.abs(framing.fovDeg - chaseFov) < 1e-3) chaseFov = framing.fovDeg;
+    if (Math.abs(framing.shoulderM - shoulder) < 1e-3) shoulder = framing.shoulderM;
+    if (Math.abs(framing.shift - lensShift) < 1e-5) lensShift = framing.shift;
+  }
+
+  /** Resolve the sniper camera anchor (gun trunnion) into `out`. */
+  function sniperAnchorFor(player: CameraEntity, out: THREE.Vector3): THREE.Vector3 {
+    if (player.visual !== null && player.visual !== undefined) {
+      player.visual.gunPivotWorld(out);
+    } else {
+      out.copy(player.state.pos);
+      out.y += (player.spec && player.spec.dims ? player.spec.dims.heightM : 2.4);
+    }
+    return out;
+  }
+
+  /** The camera's field of view. Compared against the live camera, never a cache: the flight, Watch, the Studio and the
+   *  combat warm write camera.fov too, and a cached value left the scope on the drone's lens after a flight
+   *  (drone-aim-camera-274: aim at x4, fly the drone, return, and the sight kept 60 degrees). */
+  function setFov(fovDeg: number): void {
+    lastFov = fovDeg;
+    if (camera.fov !== fovDeg) {
+      camera.fov = fovDeg;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  /** Place the arcade camera for the current angles. `snap` skips all smoothing. */
+  function solveArcade(player: CameraEntity, dt: number, snap: boolean): void {
+    if (isIsometric()) {
+      if (!wasIsometric || snap) isometric.reset();
+      applyLens(0);
+      // (the isometric view has no arcade sight: the HUD's bands keep the centre while it shows)
+      publishShift(0);
+      setFov(isometric.fov);
+      isometric.solve(player, dt, snap);
+      wasIsometric = true;
+      return;
+    }
+    if (wasIsometric) { pivotInitialized = false; wasIsometric = false; framedBands = undefined; }
+    refreshFraming(player);
+    easeFraming(dt, snap);
+    pivotTargetFor(player, _pivotTarget, framing.pivotAboveM);
+    if (snap || !pivotInitialized) {
+      pivot.copy(_pivotTarget);
+      pivotInitialized = true;
+      dist = orbitDistance(step);
+      // >>> gameplay_feel r4: snaps are deterministic screenshot poses — no lift
+      climbLift = 0;
+      // <<< gameplay_feel r4
+    } else {
+      pivot.lerp(_pivotTarget, 1 - Math.exp(-dt / PIVOT_FOLLOW_TAU_S));
+      dist += (orbitDistance(step) - dist) * (1 - Math.exp(-dt / DIST_LERP_TAU_S));
+    }
+
+    const viewYaw = aimYaw;
+    const viewPitch = THREE.MathUtils.clamp(aimPitch, PITCH_MIN, PITCH_MAX);
+    dirFromAngles(viewYaw, viewPitch, _viewDir);
+    _desired.copy(pivot).addScaledVector(_viewDir, -dist);
+    // the shoulder: the camera beside the orbit, looking along it (the sight stays on the aim, the tank to one side)
+    if (shoulder !== 0) _desired.addScaledVector(screenRight(viewYaw, _shoulderDir), shoulder);
+
+    // >>> gameplay_feel r4: uphill framing assist ---------------------------
+    // How steeply does the ground ahead rise above the turret roof line
+    // within CLIMB_PROBE_RANGE orbits? (0 on flat/downhill ground — the
+    // reference point sits above the hull, so level terrain never engages.)
+    if (!snap && dt > 0) {
+      const fx = Math.sin(viewYaw), fz = Math.cos(viewYaw);
+      // r2: reference the PIVOT line, not the turret roof — a bowl's far
+      // wall must rise past the camera pivot before it reads as "uphill".
+      const refY = pivot.y;
+      let rise = 0;
+      for (let i = 1; i <= CLIMB_PROBE_N; i++) {
+        const d = (i / CLIMB_PROBE_N) * dist * CLIMB_PROBE_RANGE;
+        const a = Math.atan2(heightField.getHeightAt(pivot.x + fx * d, pivot.z + fz * d) - refY, d);
+        if (a > rise) rise = a;
+      }
+      // r2 gate: the assist exists for CLIMBS. Only engage when the ground
+      // immediately ahead of the hull is actually rising — a far wall across
+      // a depression is a view feature, not a climb, and must never pull the
+      // camera off the tank.
+      const hHere = heightField.getHeightAt(pivot.x, pivot.z);
+      const hNear = heightField.getHeightAt(
+        pivot.x + fx * CLIMB_GATE_DIST_M, pivot.z + fz * CLIMB_GATE_DIST_M);
+      const nearPitch = Math.atan2(hNear - hHere, CLIMB_GATE_DIST_M);
+      const gate = THREE.MathUtils.clamp(
+        (nearPitch - CLIMB_GATE_LO_RAD) / (CLIMB_GATE_HI_RAD - CLIMB_GATE_LO_RAD), 0, 1);
+      const liftTarget =
+        THREE.MathUtils.clamp(rise / CLIMB_FULL_RAD, 0, 1) * gate * dist * CLIMB_LIFT_MAX;
+      climbLift += (liftTarget - climbLift) * (1 - Math.exp(-dt / CLIMB_TAU_S));
+    }
+    if (climbLift > 1e-3) _desired.y += climbLift;
+    // <<< gameplay_feel r4 ---------------------------------------------------
+
+    // Collision pull-in: pivot → desired camera position.
+    _rayDir.copy(_desired).sub(pivot);
+    const segLen = _rayDir.length();
+    // (how much of the shoulder's offset the camera keeps after a pull-in: the look point keeps the same share)
+    let shoulderKept = 1;
+    if (segLen > 1e-4) {
+      _rayDir.multiplyScalar(1 / segLen);
+      const hit = raycast(pivot, _rayDir, segLen);
+      if (hit !== null) {
+        // Retreat along the orbit segment. A surface normal can point through
+        // the pivot when the tank brushes a wall, reversing lookAt and aim.
+        const pullIn = Math.max(0.15, Math.min(segLen, hit.dist - COLLISION_PAD_M));
+        _desired.copy(pivot).addScaledVector(_rayDir, pullIn);
+        shoulderKept = pullIn / segLen;
+      }
+    }
+
+    // Auto height: never let the camera go subterranean behind the tank.
+    const minY = heightField.getHeightAt(_desired.x, _desired.z) + CAMERA_MIN_CLEARANCE_M;
+    if (_desired.y < minY) _desired.y = minY;
+
+    camera.position.copy(_desired);
+    camera.up.set(0, 1, 0);
+    // >>> gameplay_feel r4: tip the look target up with the lift so the crest
+    // and some sky come down into frame while the tank stays in the lower
+    // third (plain lookAt(pivot) when the assist is idle).
+    _lookTarget.copy(pivot);
+    if (climbLift > 1e-3) _lookTarget.y += climbLift * CLIMB_LOOK_FRAC;
+    if (shoulder !== 0) _lookTarget.addScaledVector(_shoulderDir, shoulder * shoulderKept);
+    camera.lookAt(_lookTarget);
+    // <<< gameplay_feel r4
+    setFov(chaseFov);
+    // the screen offset: the picture (and the sight, hud.ts projects the aim point on it) rises by the framed shift
+    applyLens(lensShift);
+    camera.userData.scoped = false;
+  }
+
+  /** Place the sniper camera: glued to the gun, view = aim angles instantly. */
+  function solveSniper(player: CameraEntity): void {
+    applyLens(0);
+    sniperAnchorFor(player, _desired);
+    camera.position.copy(_desired);
+    const viewPitch = THREE.MathUtils.clamp(aimPitch, PITCH_MIN, PITCH_MAX);
+    camera.rotation.set(viewPitch, aimYaw + Math.PI, 0, 'YXZ');
+    setFov(BASE_FOV_DEG / rig.zoom);
+    // fx reads this: own-gun muzzle-flash geometry is hidden in the scope
+    // (WoT behavior) and replaced by the light flash + reticle kick
+    camera.userData.scoped = true;
+  }
+
+  // CURSOR-AIM FALLBACK state (set per update from camInput; snaps reset it so
+  // deterministic screenshot poses always aim through screen center).
+  let cursorAimOn = false;
+  let cursorNdcX = 0;
+  let cursorNdcY = 0;
+
+  /** Server-aim raycast from the camera through screen center — or through
+   *  the real cursor position in cursor-aim mode (both camera modes). */
+  function updateAim(player: CameraEntity): void {
+    if (cursorAimOn) {
+      camera.updateMatrixWorld();
+      _rayDir.set(cursorNdcX, cursorNdcY, 0.5).unproject(camera)
+        .sub(camera.position).normalize();
+    } else {
+      camera.getWorldDirection(_rayDir);
+    }
+    _aimOrigin.copy(camera.position);
+    let rayStart = 0;
+    if (rig.mode === 'ARCADE' && !cursorAimOn && !isIsometric()) {
+      // The orbit camera sits behind the gun. Cover on that camera-to-gun
+      // segment is not a valid target: aiming at it slews the turret backwards
+      // and entering the scope can latch that backwards yaw. Start the same
+      // sight ray at the gun's horizontal depth plane, independent of hull yaw.
+      sniperAnchorFor(player, _aimAnchor);
+      const horizontalSq = _rayDir.x * _rayDir.x + _rayDir.z * _rayDir.z;
+      if (horizontalSq > 1e-6) {
+        rayStart = THREE.MathUtils.clamp(
+          ((_aimAnchor.x - camera.position.x) * _rayDir.x +
+            (_aimAnchor.z - camera.position.z) * _rayDir.z + 0.05) / horizontalSq,
+          0, MAX_AIM_DIST_M - 1,
+        );
+        _aimOrigin.addScaledVector(_rayDir, rayStart);
+      }
+    }
+    const hit = aimRaycast(_aimOrigin, _rayDir, MAX_AIM_DIST_M - rayStart);
+    if (hit !== null) {
+      rig.aimPoint.copy(hit.point);
+      rig.aimDist = hit.dist + rayStart;
+    } else {
+      rig.aimPoint.copy(camera.position).addScaledVector(_rayDir, MAX_AIM_DIST_M);
+      rig.aimDist = MAX_AIM_DIST_M;
+    }
+    writePlayerAim(player);
+  }
+
+  /** Push the rig's aim point into the player's input (every update). */
+  function writePlayerAim(player: CameraEntity): void {
+    if (player.input && player.input.aimPoint) player.input.aimPoint.copy(rig.aimPoint);
+  }
+
+  /** Set own-hull visibility (hidden while in sniper — camera is inside the tank). */
+  function applyPlayerVisibility(player: CameraEntity | null, visible: boolean): void {
+    if (player && player.visual !== null && player.visual !== undefined) {
+      player.visual.root.visible = visible;
+    }
+  }
+
+  // Sun azimuth of the fixed lighting rig (sky.ts: elevation 35°, azimuth
+  // 140° — world sun dir ≈ (0.527, 0.574, -0.627)). The flyby keeps the
+  // camera on the sun side of the hero tank: the r6 flyby opened on an unlit
+  // black silhouette in its own terrain shadow.
+  const SUN_DIR_X = 0.527, SUN_DIR_Z = -0.627;
+
+  const _cineLook = new THREE.Vector3();
+
+  // --- cinematic grade (rig-owned DOM) --------------------------------------
+  // The flyby must READ as an authored cinematic, not a camera bug: a soft grade
+  // darkens the frame's head and foot while cine is active, the scene to every
+  // edge (owner 2026-10-26, no black bars: two 11vh bands of black had owned the
+  // frame). Created lazily (headless-safe), torn between by every path that
+  // cancels the cinematic. main.ts additionally veils the battle HUD while
+  // rig.cinematicActive (see the cinematicActive getter note).
+  let letterboxEl: HTMLDivElement | null = null;
+  function setLetterbox(on: boolean): void {
+    if (typeof document === 'undefined') return;
+    if (!letterboxEl) {
+      if (!on) return;
+      letterboxEl = document.createElement('div');
+      letterboxEl.className = 'cot-cine-letterbox';
+      letterboxEl.style.cssText =
+        'position:fixed;inset:0;z-index:59;pointer-events:none;display:none;'
+        + 'background:linear-gradient(oklch(from var(--surface-scene) l c h / .55),transparent 18vh,'
+        + 'transparent calc(100% - 18vh),oklch(from var(--surface-scene) l c h / .55));';
+      document.body.appendChild(letterboxEl);
+    }
+    letterboxEl.style.display = on ? 'block' : 'none';
+  }
+
+  /**
+   * Solve the battle-start flyby at cine.t; returns false when finished.
+   * r5 rebuild: the old quintic crane-down parked at the chase pose by 1 s of
+   * a "3 s" cinematic (r4: static for frames 3-10 of 10). Now a real authored
+   * path — open 45 m out low over the advance route, sweep laterally past the
+   * hull (terrain parallax, nonzero velocity throughout), then swing onto the
+   * chase pose over the last beat. The camera LOOK starts down the battle
+   * line and converges onto the tank, so the sweep reveals the objective.
+   */
+  function solveCinematic(player: CameraEntity, dt: number): boolean {
+    const activeCinematic = cine;
+    if (!activeCinematic) return false;
+    activeCinematic.t += dt;
+    camera.userData.scoped = false;
+    const kLin = THREE.MathUtils.clamp(activeCinematic.t / activeCinematic.dur, 0, 1);
+    // r6 HOLD BEAT (critic: "flyby is ~2 s and weakly composed ... fully over
+    // with HUD up by 2.2 s"): the path parameter now decelerates through the
+    // mid-arc — the camera visibly LINGERS on the hero close-up (~0.45x path
+    // speed around k=0.5) and accelerates out onto the chase pose. Total
+    // screen time comes from startCinematic's 4 s floor.
+    const k = THREE.MathUtils.clamp(
+      kLin + 0.55 * Math.sin(Math.PI * 2 * kLin) / (Math.PI * 2), 0, 1);
+    applyLens(0);
+    // the flyby lands on the framed chase pose (its pivot and default step: a band or a setting can change mid-flight)
+    refreshFraming(player);
+    pivotTargetFor(player, _pivotTarget, framing.pivotAboveM);
+    activeCinematic.chase.copy(activeCinematic.chaseDir).multiplyScalar(-orbitDistance(2));
+    // path position: world-frame offsets from the (moving) pivot
+    activeCinematic.curve.getPoint(k < 0.97 ? k : 0.97 + (k - 0.97) * 0.999, _desired);
+    _desired.add(_pivotTarget);
+    // r2 minimum standoff: the swing-behind segment could cut directly over
+    // the rear deck (~2.5 m off the hull at k≈0.83), clipping through the
+    // exhaust plume right before handoff. Enforce a hull-sphere standoff —
+    // the camera is pushed radially out (never below) when it dips inside.
+    {
+      const vis = player && player.visual;
+      const standR = Math.max(4.2, (vis && vis.boundingRadiusM ? vis.boundingRadiusM : 3) + 2.2);
+      const dx = _desired.x - _pivotTarget.x;
+      const dy = _desired.y - _pivotTarget.y;
+      const dz = _desired.z - _pivotTarget.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d > 1e-4 && d < standR) {
+        const push = standR / d;
+        _desired.x = _pivotTarget.x + dx * push;
+        _desired.y = _pivotTarget.y + Math.max(dy * push, dy); // never push down
+        _desired.z = _pivotTarget.z + dz * push;
+      }
+    }
+    const minY = heightField.getHeightAt(_desired.x, _desired.z) + 1.3;
+    if (_desired.y < minY) _desired.y = minY;
+    camera.position.copy(_desired);
+    camera.up.set(0, 1, 0);
+    // look: a SHORT lead down the advance route converging onto the hero tank
+    // from the very first frame. r5 motion capture: the old 40 m lead (held
+    // until k=0.12, converged at 0.72) pointed the camera at empty road for
+    // ~1.4 s of the 3 s sweep with the hull fully off-screen — every battle
+    // opened on what read as a camera bug. A 14 m lead keeps the hull inside
+    // the left third at k=0 (camera opens 45 m out) while still revealing the
+    // battle line; converged fully by k=0.6.
+    // r4: lead 14 -> 9 m and converge by k=0.5 — with the tightened r4 path
+    // (opens 36 m out) the 14 m lead pushed the hull to the frame edge for
+    // the first beat; 9 m keeps the hero inside the middle third from the
+    // opening frame while still reading the advance route.
+    // r6 (critic: flyby_08 "clips the hero tank at the bottom frame edge
+    // with 55% empty sky"): lead 9 -> 7 m, the downward look bias cut to
+    // -0.3, and convergence pulled in to k=0.32 — the hull is fully inside
+    // frame from k~0.15 and OWNS the frame through the mid-arc hold beat.
+    const s = THREE.MathUtils.smoothstep(k, 0.0, 0.32);
+    _cineLook.copy(_pivotTarget)
+      .addScaledVector(activeCinematic.fwd, 7 * (1 - s))
+      .addScaledVector(_UPV, -0.3 * (1 - s));
+    camera.lookAt(_cineLook);
+    // FOV 72 -> 60: wide establishing breath tightening onto gameplay FOV
+    setFov(BASE_FOV_DEG + 12 * (1 - k));
+    return activeCinematic.t < activeCinematic.dur;
+  }
+  const _UPV = new THREE.Vector3(0, 1, 0);
+
+  /**
+   * SPECTATE solve: damped chase orbit around the spectated ally with the
+   * same collision pull-in / terrain floor as solveArcade, wrapped in an
+   * eased position+look blend while a target handover is in flight. The
+   * blend's FROM pose is wherever the camera actually was when the handover
+   * started (previous ally, death cam, killcam exit) so the cut is always a
+   * continuous camera move, never a teleport.
+   * @param {number} dt render delta seconds
+   */
+  function solveSpectate(dt: number): void {
+    const activeSpectate = spec;
+    if (!activeSpectate) return;
+    const ent = activeSpectate.ent;
+    if (!ent || !ent.state) return;
+    applyLens(0);
+    camera.userData.scoped = false;
+    // pivot: damped follow of the ally's turret line (arcade grammar)
+    pivotTargetFor(ent, _pivotTarget);
+    if (activeSpectate.pivot === null) {
+      activeSpectate.pivot = new THREE.Vector3().copy(_pivotTarget);
+    } else {
+      activeSpectate.pivot.lerp(_pivotTarget, 1 - Math.exp(-dt / PIVOT_FOLLOW_TAU_S));
+    }
+    // killcam r2: ease the live orbit toward the cursor-fed targets — the
+    // free orbit damps like the chase cam's smoothed free look instead of
+    // stepping per mousemove event, and the wheel dist glides between stops
+    if (dt > 0) {
+      const kLook = 1 - Math.exp(-dt / SPEC_LOOK_TAU_S);
+      activeSpectate.yaw += (activeSpectate.yawT - activeSpectate.yaw) * kLook;
+      activeSpectate.pitch += (activeSpectate.pitchT - activeSpectate.pitch) * kLook;
+      activeSpectate.dist += (activeSpectate.distT - activeSpectate.dist) * (1 - Math.exp(-dt / DIST_LERP_TAU_S));
+    }
+    const viewPitch = THREE.MathUtils.clamp(activeSpectate.pitch, PITCH_MIN, PITCH_MAX);
+    dirFromAngles(activeSpectate.yaw, viewPitch, _viewDir);
+    _desired.copy(activeSpectate.pivot).addScaledVector(_viewDir, -activeSpectate.dist);
+    // collision pull-in: pivot -> desired camera position (solveArcade pattern)
+    _rayDir.copy(_desired).sub(activeSpectate.pivot);
+    const segLen = _rayDir.length();
+    if (segLen > 1e-4) {
+      _rayDir.multiplyScalar(1 / segLen);
+      const hit = raycast(activeSpectate.pivot, _rayDir, segLen);
+      if (hit !== null) _desired.copy(hit.point).addScaledVector(hit.normal, COLLISION_PAD_M);
+    }
+    const minY = heightField.getHeightAt(_desired.x, _desired.z) + CAMERA_MIN_CLEARANCE_M;
+    if (_desired.y < minY) _desired.y = minY;
+    _specLook.copy(activeSpectate.pivot);
+    let nextFov = 55;
+    // eased handover blend (target switch / spectate entry)
+    if (activeSpectate.blendT < activeSpectate.blendDur) {
+      activeSpectate.blendT = Math.min(activeSpectate.blendDur, activeSpectate.blendT + Math.max(0, dt));
+      const u = activeSpectate.blendT / activeSpectate.blendDur;
+      const k = u * u * u * (u * (u * 6 - 15) + 10); // smootherstep
+      _desired.lerpVectors(activeSpectate.fromPos, _desired, k);
+      _specLook.lerpVectors(activeSpectate.fromLook, _specLook, k);
+      nextFov = activeSpectate.fromFov + (55 - activeSpectate.fromFov) * k;
+      // the interpolated path must respect the terrain floor too — a blend
+      // across a ridge otherwise dips the camera through the crest
+      const bMinY = heightField.getHeightAt(_desired.x, _desired.z) + CAMERA_MIN_CLEARANCE_M;
+      if (_desired.y < bMinY) _desired.y = bMinY;
+    }
+    camera.position.copy(_desired);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(_specLook);
+    setFov(nextFov);
+  }
+
+  /** Capture the live camera pose as the FROM side of a spectate blend. */
+  function specCaptureFrom(): void {
+    _specFrom.copy(camera.position);
+    camera.getWorldDirection(_viewDir);
+    _specFromLook.copy(camera.position).addScaledVector(_viewDir, SPEC_DIST_M);
+    specFromFov = camera.fov;
+  }
+
+  /**
+   * Hand the camera to `next`, running the leaving owner's teardown first (2026-11-02 audit F7). Every owner change goes
+   * through here. Handing it back to the player re-arms the scope edges, so a Shift held through a replay, a death orbit
+   * or a spectate chase is not a rising edge on the first player frame; the flyby is the exception: the sniper-toggle
+   * tap that skips it continues through the rising-edge handler in the same frame (advanceCinematic).
+   */
+  function enterOwner(next: CameraOwner): void {
+    const prev = owner;
+    if (prev === next) return;
+    if (prev === 'cinematic') { cine = null; setLetterbox(false); }
+    else if (prev === 'death') death = null;
+    else if (prev === 'spectate') spec = null;
+    owner = next;
+    if (next === 'player' && prev !== 'cinematic') rearmScopeEdges();
+  }
+
+  /** The scope keys need a fresh press: a held Shift reads as already held, an RMB hold as released. */
+  function rearmScopeEdges(): void {
+    prevShift = true;
+    prevAimHold = false;
+    aimHoldLatched = false;
+  }
+
+  /** Hand control back to the arcade rig exactly where the flyby lands. */
+  function endCinematic(player: CameraEntity | null): void {
+    if (!cine) return;
+    aimYaw = cine.endYaw;
+    aimPitch = THREE.MathUtils.degToRad(-10);
+    enterOwner('player');
+    rig.mode = 'ARCADE';
+    step = 2;
+    if (player) {
+      // the pivot and the step land where the flyby did; its lens (60 degrees, centred, no shift) glides to the
+      // framing's from there (the snap set the framing's: the zero-step solve puts the flyby's back)
+      solveArcade(player, 0, true);
+      chaseFov = BASE_FOV_DEG; shoulder = 0; lensShift = 0;
+      solveArcade(player, 0, false);
+      updateAim(player);
+    }
+  }
+
+  function stepZoom(dir: number): void {
+    if (rig.mode === 'ARCADE') {
+      if (dir > 0 && step === ORBIT_STEPS.length - 1) rig.enterSniper();
+      else step = THREE.MathUtils.clamp(step + dir, 0, ORBIT_STEPS.length - 1);
+    } else {
+      const zooms = rig._increasedZoom ? SNIPER_ZOOMS_FULL : SNIPER_ZOOMS_BASE;
+      const i = nearestZoomIndex(rig.zoom, zooms) + dir;
+      if (i < 0) rig.exitSniper();
+      else rig.zoom = zooms[Math.min(i, zooms.length - 1)];
+    }
+  }
+
+  function latchCursorAim(camInput: CameraInputFrame): void {
+    cursorAimOn = !!camInput.cursorAim;
+    if (!cursorAimOn) return;
+    cursorNdcX = camInput.cursorX || 0;
+    cursorNdcY = camInput.cursorY || 0;
+  }
+
+  function solveDeathCamera(player: CameraEntity, dt: number): boolean {
+    if (!death) return false;
+    applyLens(0);
+    camera.userData.scoped = false;
+    death.az += 0.22 * dt;
+    pivotTargetFor(player, _pivotTarget);
+    _pivotTarget.y -= PIVOT_ABOVE_TURRET_M * 0.6;
+    const distance = 15 + Math.sin(death.az * 0.7) * 1.5;
+    _desired.set(
+      _pivotTarget.x + Math.sin(death.az) * distance * 0.93,
+      _pivotTarget.y + distance * 0.36,
+      _pivotTarget.z + Math.cos(death.az) * distance * 0.93,
+    );
+    const minY = heightField.getHeightAt(_desired.x, _desired.z) + CAMERA_MIN_CLEARANCE_M;
+    if (_desired.y < minY) _desired.y = minY;
+    camera.position.copy(_desired);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(_pivotTarget);
+    setFov(50);
+    return true;
+  }
+
+  function advanceCinematic(
+    player: CameraEntity,
+    dt: number,
+    camInput: CameraInputFrame,
+  ): boolean {
+    if (!cine) return true;
+    const skip = Math.abs(camInput.mouseDX) > 2 || Math.abs(camInput.mouseDY) > 2 ||
+      camInput.wheel !== 0 || camInput.shiftPressed || camInput.rmb;
+    if (skip || !solveCinematic(player, dt)) endCinematic(player);
+    // A sniper-toggle tap skips the flyby and must continue through the
+    // rising-edge handler in this same frame. Every other skip, plus natural
+    // completion, leaves camera input for the next frame as before.
+    return camInput.shiftPressed && cine === null;
+  }
+
+  let prevStrikeView = false, strikeViewScoped = false;
+  function updateScopeActions(camInput: CameraInputFrame): void {
+    // Air Support (air-support-270): the strike view's binoculars ride the scope's camera; going up it enters the scope
+    // (and owns that entry), coming down it leaves only a scope it entered itself
+    if (strikeView.open !== prevStrikeView) {
+      prevStrikeView = strikeView.open;
+      if (strikeView.open && rig.mode === 'ARCADE') { strikeViewScoped = true; rig.enterSniper(); }
+      else if (!strikeView.open && strikeViewScoped) { strikeViewScoped = false; if (rig.mode === 'SNIPER') rig.exitSniper(true); }
+    }
+    if (camInput.shiftPressed && !prevShift) {
+      if (rig.mode === 'ARCADE') rig.enterSniper();
+      else rig.exitSniper(true);
+    }
+    prevShift = camInput.shiftPressed;
+
+    if (camInput.aimHold && !prevAimHold && rig.mode === 'ARCADE') {
+      aimHoldLatched = true;
+      rig.enterSniper();
+    } else if (!camInput.aimHold && prevAimHold && aimHoldLatched) {
+      aimHoldLatched = false;
+      if (rig.mode === 'SNIPER') rig.exitSniper(true);
+    }
+    if (!camInput.aimHold && aimHoldLatched && rig.mode === 'ARCADE') {
+      aimHoldLatched = false;
+    }
+    prevAimHold = !!camInput.aimHold;
+  }
+
+  function updateWheelZoom(camInput: CameraInputFrame): void {
+    if (!camInput.wheel) return;
+    if (isIsometric()) { isometric.zoom(camInput.wheel); return; }
+    const direction = camInput.wheel > 0 ? 1 : -1;
+    for (let remaining = Math.min(Math.abs(camInput.wheel | 0), 3);
+      remaining > 0; remaining--) stepZoom(direction);
+  }
+
+  function updateAutoAim(
+    player: CameraEntity,
+    dt: number,
+    autoAimPoint: CameraInputFrame['autoAimPoint'],
+  ): void {
+    if (!autoAimPoint) return;
+    if (rig.mode === 'SNIPER') sniperAnchorFor(player, _autoAimAnchor);
+    else chaseAnchorFor(player, aimYaw, _autoAimAnchor);
+    const dx = autoAimPoint.x - _autoAimAnchor.x;
+    const dy = autoAimPoint.y - _autoAimAnchor.y;
+    const dz = autoAimPoint.z - _autoAimAnchor.z;
+    const horizontalDistance = Math.hypot(dx, dz);
+    if (horizontalDistance <= 1e-3) return;
+    const desiredYaw = Math.atan2(dx, dz);
+    const desiredPitch = THREE.MathUtils.clamp(
+      Math.atan2(dy, horizontalDistance), PITCH_MIN, PITCH_MAX,
+    );
+    const follow = 1 - Math.exp(-Math.max(dt, 0) / AUTO_AIM_FOLLOW_TAU_S);
+    aimYaw += wrapPi(desiredYaw - aimYaw) * follow;
+    aimPitch += (desiredPitch - aimPitch) * follow;
+    aimTouched = true;
+  }
+
+  function updateAimAngles(
+    player: CameraEntity,
+    dt: number,
+    camInput: CameraInputFrame,
+  ): void {
+    const sensitivity = rig.mode === 'SNIPER' ? BASE_SENS / rig.zoom : BASE_SENS;
+    if (camInput.mouseDX !== 0 || camInput.mouseDY !== 0) aimTouched = true;
+    aimYaw += camInput.mouseDX * sensitivity;
+    aimPitch = THREE.MathUtils.clamp(
+      aimPitch - camInput.mouseDY * sensitivity, PITCH_MIN, PITCH_MAX,
+    );
+    updateAutoAim(player, dt, camInput.autoAimPoint);
+  }
+
+  // Every camera motion the player does not steer (sight sway, trauma shake, recoil kick, FOV punch) is scaled by the
+  // Accessibility camera-shake setting (A11Y.shake, 0-1): at 0 the camera moves only as the player aims it.
+  function applyIdleCameraMotion(): void {
+    if (rig.mode !== 'SNIPER' || A11Y.shake <= 0) return;
+    camera.rotation.x += A11Y.shake * (0.0011 * noise.noise(shakeT * 0.45, 11.7, 0) +
+      0.0004 * Math.sin(shakeT * 1.9));
+    camera.rotation.y += A11Y.shake * 0.0013 * noise.noise(4.2, shakeT * 0.38, 0);
+  }
+
+  function applyTraumaMotion(): void {
+    if (trauma <= 0 || A11Y.shake <= 0) return;
+    const scale = Math.pow(trauma, 1.6) * A11Y.shake *
+      (rig.mode === 'SNIPER' ? SNIPER_SHAKE_SCALE : 1);
+    camera.rotation.x += SHAKE_AMP_XY * scale * noise.noise(shakeT * SHAKE_FREQ, 0, 0);
+    camera.rotation.y += SHAKE_AMP_XY * scale * noise.noise(0, shakeT * SHAKE_FREQ, 0);
+    camera.rotation.z += SHAKE_AMP_Z * scale * noise.noise(0, 0, shakeT * SHAKE_FREQ);
+  }
+
+  function applyRecoilMotion(dt: number): void {
+    if (recoil <= 1e-4) {
+      recoil = 0;
+      return;
+    }
+    camera.rotation.x += recoil * A11Y.shake * (rig.mode === 'SNIPER' ? 0.55 : 1);
+    recoil *= Math.exp(-dt / 0.09);
+  }
+
+  function applyFovKick(dt: number): void {
+    if (fovKick > 0.02) {
+      const base = lastFov;
+      setFov(base * (1 + 0.075 * fovKick * A11Y.shake * (rig.mode === 'SNIPER' ? 0.25 : 1)));
+      lastFov = base;
+      fovKick *= Math.exp(-dt / 0.08);
+      return;
+    }
+    if (fovKick === 0) return;
+    fovKick = 0;
+    camera.fov = lastFov;
+    camera.updateProjectionMatrix();
+  }
+
+  function applyCameraMotion(dt: number): void {
+    trauma = Math.max(0, trauma - TRAUMA_DECAY_PER_S * dt);
+    shakeT += dt;
+    applyIdleCameraMotion();
+    applyTraumaMotion();
+    applyRecoilMotion(dt);
+    applyFovKick(dt);
+  }
+
+  const rig: CameraRig = {
+    mode: 'ARCADE',
+    zoom: SNIPER_ZOOMS_BASE[0],
+    aimPoint: new THREE.Vector3(),
+    aimDist: MAX_AIM_DIST_M,
+    /** True while setExternalPose pins the camera (harness/killcam framing).
+     * Consumers (main.ts foliage occlusion focus) must not treat an external
+     * capture pose as a chase camera — WoT never fades foliage in replays. */
+    get cameraOwner() { return owner; },
+    get externalActive() { return owner === 'external'; },
+    /** Settings flag: unlock ×16/×25 sniper zoom steps ("increased zoom"). */
+    _increasedZoom: false,
+    /**
+     * True while the battle-open flyby drives the camera. The rig owns the
+     * cinematic LETTERBOX bars itself (setLetterbox); main.ts reads this flag
+     * to veil the battle HUD for the sweep's duration (a full battle HUD over
+     * the opening cinematic reads as a bug — see effects_combat-r5 handoff).
+     */
+    get cinematicActive() { return cine !== null; },
+
+    /**
+     * Per-frame rig update (ARCHITECTURE.md §4 step 3). No-op while an
+     * external pose is active. Applies mouse to the shared aim angles
+     * (sensitivity ÷ zoom in sniper), handles wheel zoom stepping and
+     * sniper-action toggling, solves the active camera mode, runs the
+     * server-aim raycast, writes the player's `input.aimPoint`, and applies
+     * trauma shake last.
+     *
+     * @param {number} dt - render delta seconds
+     * @param {CamInput} camInput - this frame's camera input
+     * @returns {void}
+     */
+    update(dt: number, camInput: CameraInputFrame): void {
+      // death r1 (owner 2026-09-17: "if you die you should get kicked out of
+      // scope mode"): the frame the player's tank is a wreck the rig leaves
+      // SNIPER on its own — before any external killcam pose, death cam,
+      // spectate or result flow decides what to show — so no zoomed gun view
+      // or scope-only HUD rides the corpse whichever presentation follows.
+      // Shift-exit semantics (restore the pre-scope orbit step) keep the
+      // arcade camera where the player last orbited.
+      if (rig.mode === 'SNIPER' && isWreck(getPlayer())) rig.exitSniper(true);
+      if (owner === 'external') return;
+
+      // A lobby spectator has no player entity. The observer chase still has
+      // a concrete target and must be solved before the player-only guard.
+      if (owner === 'spectate') {
+        solveSpectate(dt);
+        return;
+      }
+
+      const player = getPlayer();
+      if (!player) return;
+
+      if (aerialCamera.update(player, camInput, dt)) {
+        // the flight owns the lens; the scope's flags come off it (the gun view's solve puts them back the frame it ends)
+        applyLens(0);
+        camera.userData.scoped = false;
+        cursorAimOn = false;
+        camera.getWorldDirection(_rayDir);
+        const aerialHit = aimRaycast(camera.position, _rayDir, 1600);
+        rig.aimDist = aerialHit?.dist ?? 1600;
+        rig.aimPoint.copy(camera.position).addScaledVector(_rayDir, rig.aimDist);
+        player.input?.aimPoint?.copy(rig.aimPoint);
+        applyPlayerVisibility(player, player.aerial?.kind !== 'gunship');
+        // a flight ends the flyby through its teardown, letterbox and all (2026-11-02 audit F7: it set cine = null and
+        // left the bars on); a death orbit waits under the flight
+        if (owner === 'cinematic') enterOwner('player');
+        return;
+      }
+      latchCursorAim(camInput);
+
+      if (solveDeathCamera(player, dt)) return;
+
+      if (!advanceCinematic(player, dt, camInput)) return;
+      updateScopeActions(camInput);
+
+      updateWheelZoom(camInput);
+      if (!isIsometric()) updateAimAngles(player, dt, camInput);
+
+      applyPlayerVisibility(player, rig.mode !== 'SNIPER');
+      if (rig.mode === 'ARCADE') solveArcade(player, dt, false);
+      else solveSniper(player);
+
+      if (isIsometric()) {
+        isometric.aim(camInput.mouseDX, camInput.mouseDY, !!camInput.cursorAim, camInput.cursorX, camInput.cursorY);
+        if (camInput.autoAimPoint) isometric.aimAt(camInput.autoAimPoint);
+        cursorAimOn = true;
+        cursorNdcX = isometric.cursorX;
+        cursorNdcY = isometric.cursorY;
+        aimTouched = true;
+      }
+
+      updateAim(player);
+      if (!isIsometric()) applyCameraMotion(dt);
+      else { trauma = 0; recoil = 0; fovKick = 0; }
+    },
+
+    /**
+     * Add camera-shake trauma (fire 0.25, hit 0.45, near explosion 0.7).
+     * @param {number} x - trauma to add, result clamped to [0, 1]
+     * @returns {void}
+     */
+    addTrauma(x: number): void {
+      trauma = Math.min(1, trauma + x);
+    },
+
+    /**
+     * Camera recoil kick when the player's gun fires: an instant upward pitch
+     * impulse (visual only — aim angles are untouched) that eases back in
+     * ~0.25 s. Complements the noise-based trauma shake.
+     * @param {number} [x=0.012] - pitch impulse in radians
+     * @param {number} [fovScale=1] - normalized FOV-punch strength
+     * @returns {void}
+     */
+    recoilKick(x = 0.012, fovScale = 1): void {
+      // 2.4x the caller impulse (r5 motion capture: even the r7 1.5x kick was
+      // imperceptible across a 13-frame burst from the 13 m chase orbit — a
+      // 120 mm shot must visibly punch the camera) + arm the FOV punch.
+      recoil = Math.min(0.055, recoil + x * 2.4);
+      fovKick = Math.max(fovKick, Math.max(0, Math.min(1, fovScale)));
+    },
+
+    /**
+     * Start the battle-open cinematic: a ~3 s flyby sweeping from a high
+     * front-quarter arc down onto the arcade chase pose behind the player
+     * tank. Any camera input skips it instantly.
+     * @param {number} [durS=3] sweep duration in seconds
+     * @returns {void}
+     */
+    startCinematic(durS = 3): void {
+      // SPECTATE (or an external pin, a death orbit) never survives into a fresh battle flyby
+      enterOwner('cinematic');
+      // r6 (critic: "battle-start flyby is ~2 s ... over with HUD up by
+      // 2.2 s"): 4 s floor regardless of the caller's legacy constant — the
+      // authored sweep + mid-arc hold beat needs the screen time, and every
+      // input still skips it instantly.
+      durS = Math.max(4.0, durS);
+      const player = getPlayer();
+      trauma = 0;
+      const endYaw = player && player.state ? player.state.yaw : aimYaw;
+      // r5 authored path (world-frame offsets from the pivot, Catmull-Rom):
+      // open 45 m ahead over the advance route on the SUN side, sweep
+      // laterally past the hull at speed (parallax against terrain), then
+      // swing behind onto the exact arcade chase pose. Camera velocity stays
+      // nonzero until the final blend — no parked frames.
+      const fwd = new THREE.Vector3(Math.sin(endYaw), 0, Math.cos(endYaw));
+      const right = new THREE.Vector3(Math.cos(endYaw), 0, -Math.sin(endYaw));
+      // pick the lateral side the sun lives on so the hero hull is lit
+      const side = (right.x * SUN_DIR_X + right.z * SUN_DIR_Z) >= 0 ? 1 : -1;
+      const P = (rx: number, y: number, fz: number, out = new THREE.Vector3()): THREE.Vector3 =>
+        out.set(0, y, 0).addScaledVector(right, rx * side).addScaledVector(fwd, fz);
+      // exact chase-pose offset (solveArcade: pivot - dir(endYaw, -10deg) * the framed default step; solveCinematic keeps
+      // it on the framing in force)
+      const chaseDir = dirFromAngles(endYaw, CHASE_PITCH_RAD, new THREE.Vector3());
+      if (player) refreshFraming(player);
+      const chase = chaseDir.clone().multiplyScalar(-orbitDistance(2));
+      // r2: 4th waypoint routed wider + higher (7.5,0.6,-9 -> 9.5,1.6,-10) —
+      // the old swing-behind cut over the rear deck through the exhaust
+      // plume at ~2.5 s; paired with the solve-time hull standoff clamp.
+      // r4 HERO FRAMING: the whole arc pulled in — the old path (open 51 m
+      // out, lateral pass at 10 m) peaked the player tank at ~15% of frame
+      // width ("the flyby never features the hero tank"). Opens 36 m out
+      // with the hull already readable, and the low lateral beat passes at
+      // ~6.5 m — a 3/4 close-up where the hull fills ~40% of frame height —
+      // before swinging up onto the chase pose. The hull-sphere standoff
+      // clamp below still guarantees no clip.
+      const curve = new THREE.CatmullRomCurve3([
+        P(18, 2.2, 31),
+        P(11, 0.4, 14),
+        P(6.5, -0.5, 2.5),
+        P(6.8, 0.9, -7.5),
+        chase,
+      ], false, 'centripetal', 0.5);
+      cine = {
+        t: 0,
+        dur: Math.max(0.5, durS),
+        endYaw,
+        fwd,
+        curve,
+        chase,
+        chaseDir,
+      };
+      setLetterbox(true);
+      rig.mode = 'ARCADE';
+      applyPlayerVisibility(player, true);
+    },
+
+    /**
+     * Start the death-cam: a slow orbit around the player's wreck. Runs until
+     * a snap/external pose or a new cinematic takes over.
+     * @returns {void}
+     */
+    startDeathCam(): void {
+      // a fresh death cam retires the ally chase, the flyby and an external pin (no caller release needed)
+      enterOwner('death');
+      trauma = 0;
+      const player = getPlayer();
+      death = { az: player && player.state ? player.state.yaw + Math.PI * 0.75 : 0 };
+      rig.mode = 'ARCADE';
+      camera.userData.scoped = false; // death r1: scope consumers follow this frame
+      applyPlayerVisibility(player, true);
+    },
+
+    /**
+     * The death orbit ends with the player's camera (round 4 E6b review r1): the player's hull lives again without a
+     * revive's own camera flow (a network battle's restart; round 5 U4: a mode's revive of a hull its ruleset gives no
+     * respawn timer, which a network Horde room's next wave or a Watch seat's allied bot reaches:
+     * game/battleResultPresentationRuntime.ts). Another owner (an external pin, the ally chase, the flyby) is left as it
+     * is.
+     */
+    endDeathCam(): void {
+      if (owner === 'death') enterOwner('player');
+    },
+
+    // --- SPECTATE (killcam_endscreen r1) ------------------------------------
+
+    /** True while the ally spectate chase-cam owns the camera. */
+    get spectateActive() { return spec !== null; },
+
+    /** Entity currently spectated (null when inactive). */
+    get spectateTargetEnt() { return spec ? spec.ent : null; },
+
+    /**
+     * Enter spectate on a living ally. The camera BLENDS from wherever it is
+     * right now (killcam exit pose, death-cam orbit) onto a chase pose behind
+     * the ally — no cut. Overrides an active death cam.
+     * @param {object} ent ally TankEntity (state + visual)
+     */
+    startSpectate(ent: CameraEntity): void {
+      if (!ent || !ent.state) return;
+      // spectate overrides a death orbit, the flyby and an external pin (the camera blends from wherever it is)
+      enterOwner('spectate');
+      trauma = 0;
+      specCaptureFrom();
+      spec = {
+        ent,
+        yaw: ent.state.yaw,          // open behind the ally's hull
+        yawT: ent.state.yaw,
+        pitch: SPEC_PITCH,
+        pitchT: SPEC_PITCH,
+        dist: SPEC_DIST_M,
+        distT: SPEC_DIST_M,
+        pivot: null,
+        blendT: 0,
+        blendDur: spectateBlendDuration(ent),
+        fromPos: _specFrom,
+        fromLook: _specFromLook,
+        fromFov: specFromFov,
+      };
+      announceSpectate(ent, spec.blendDur);
+      rig.mode = 'ARCADE';
+      applyPlayerVisibility(getPlayer(), true);
+    },
+
+    /** Covered initial observer entry only; ordinary visible handovers blend. */
+    snapSpectateForReveal(): boolean {
+      if (!spec?.ent?.state) return false;
+      spec.ent.visual?.root.updateWorldMatrix(true, true);
+      spec.pivot = null;
+      spec.blendT = spec.blendDur;
+      solveSpectate(0);
+      camera.updateMatrixWorld(true);
+      return true;
+    },
+
+    /**
+     * Retarget the spectate camera onto another ally with an eased blend
+     * (cycling, auto-advance on target death). No-op when not spectating.
+     * The orbit re-centers behind the NEW tank (yaw target reset); the
+     * player's chosen zoom distance survives the switch.
+     * @param {object} ent ally TankEntity
+     */
+    setSpectateTarget(ent: CameraEntity): void {
+      if (!spec || !ent || !ent.state || ent === spec.ent) return;
+      specCaptureFrom();
+      spec.ent = ent;
+      spec.yaw = ent.state.yaw;
+      spec.yawT = ent.state.yaw;
+      spec.pitch = SPEC_PITCH;
+      spec.pitchT = SPEC_PITCH;
+      spec.pivot = null;
+      spec.blendT = 0;
+      spec.blendDur = spectateBlendDuration(ent);
+      spec.fromFov = specFromFov;
+      announceSpectate(ent, spec.blendDur);
+    },
+
+    /**
+     * Free-look orbit input while spectating — cursor motion forwarded by
+     * the spectate controller (killcam r2: no button hold; solveSpectate
+     * eases the live angles toward these targets). Full 360° yaw, pitch
+     * clamped to the arcade envelope.
+     * @param {number} dxPx horizontal cursor pixels
+     * @param {number} dyPx vertical cursor pixels
+     */
+    spectateLook(dxPx: number, dyPx: number): void {
+      if (!spec) return;
+      // Unlike CameraInputFrame.mouseDX, these are raw screen pixels, not
+      // consumeMouseDelta's world-yaw delta. Mouse-right must decrease yaw
+      // here too so the view and fixed-map cone turn clockwise together.
+      spec.yawT -= dxPx * SPEC_SENS;
+      spec.pitchT = THREE.MathUtils.clamp(
+        spec.pitchT - dyPx * SPEC_SENS, PITCH_MIN, PITCH_MAX);
+    },
+
+    /**
+     * Wheel zoom while spectating (killcam r2): steps the eased orbit
+     * distance target — in toward SPEC_DIST_MIN, out to SPEC_DIST_MAX.
+     * @param {number} notches wheel steps (+1 out / -1 in per notch)
+     */
+    spectateZoom(notches: number): void {
+      if (!spec || !notches) return;
+      spec.distT = THREE.MathUtils.clamp(
+        spec.distT * Math.pow(1.22, notches), SPEC_DIST_MIN, SPEC_DIST_MAX);
+    },
+
+    /** Leave spectate (battle end / garage). The next owner sets the pose. */
+    stopSpectate(): void { if (owner === 'spectate') enterOwner('player'); },
+
+    /**
+     * Enter sniper mode. Keeps the shared aim angles (no view snap); the own
+     * hull is hidden on the next solve. Zoom resumes at the last-used step.
+     * @returns {void}
+     */
+    enterSniper(): void {
+      if (rig.mode === 'SNIPER') return;
+      if (isWreck(getPlayer())) return; // death r1: a wreck never scopes in
+      if (isIsometric()) { cursorAimOn = false; aimTouched = true; }
+      rig.mode = 'SNIPER';
+      preSniperStep = step; // gameplay_feel r6: restored on Shift-exit
+      // AIM PRESERVATION (gunnery r1, owner bug 2 — bidirectional with
+      // exitSniper): scoping in keeps the reticle's WORLD POINT — yaw/pitch
+      // are re-solved from the gun trunnion, because the camera is about to
+      // jump there from the orbit position (different parallax). The old
+      // unconditional close-aim scan-lift re-pitched every deliberate
+      // close-quarters scope toward the horizon and, against rising ground,
+      // stepped it clear up to PITCH_MAX — the SKY — with nothing ever
+      // restoring it (owner: "aimed by scrolling → looking at the sky, have
+      // to come down"; each in/out cycle ratcheted the pitch further up).
+      //
+      // The scan-lift survives for exactly one case: the player has not
+      // aimed at all since the battle snapped (aimTouched false), where the
+      // arcade default pitch rests the aim on grass a dozen meters ahead and
+      // the first scope of a battle used to open on dirt ("aim 13 m" —
+      // gameplay_feel r4). Once the player owns the aim, their pitch is
+      // their pitch.
+      //
+      // TOUCH (owner: "double finger expanding shouldnt send me aiming at
+      // the sky"): the scan-lift is DESKTOP-ONLY. A touch player drives with
+      // the stick and pinches to scope without ever aim-dragging, so
+      // aimTouched is still false — and against rising ground or a tree wall
+      // the 2-degree ladder walked clear up to PITCH_MAX (+30 deg, open
+      // sky). On the touch layout the pinch itself is the deliberate aim
+      // act: always preserve the reticle's world point instead.
+      const player = getPlayer();
+      const touchUi = typeof document !== 'undefined' &&
+        document.body.classList.contains('cot-touch-layout');
+      if (!aimTouched && !touchUi && rig.aimDist < SNIPER_KEEP_AIM_M) {
+        aimPitch = Math.max(aimPitch, SNIPER_ENTRY_PITCH_RAD);
+        // gameplay_feel r1: facing RISING ground the flat-ground scan pitch
+        // still ray-hits the slope a few meters out (full-screen grass at
+        // 6 m). Raise the entry pitch in 2-degree steps until the scope
+        // opens at least SNIPER_KEEP_AIM_M into the battlefield (PITCH_MAX
+        // stops the loop when a genuine wall fills the view).
+        if (player) {
+          sniperAnchorFor(player, _desired);
+          const stepR = THREE.MathUtils.degToRad(2);
+          for (let i = 0; i < 20 && aimPitch < PITCH_MAX; i++) {
+            dirFromAngles(aimYaw, aimPitch, _rayDir);
+            const hit = aimRaycast(_desired, _rayDir, SNIPER_KEEP_AIM_M);
+            if (hit === null) break;
+            aimPitch = Math.min(aimPitch + stepR, PITCH_MAX);
+          }
+        }
+      } else if (player) {
+        sniperAnchorFor(player, _desired);
+        const dx = rig.aimPoint.x - _desired.x;
+        const dy = rig.aimPoint.y - _desired.y;
+        const dz = rig.aimPoint.z - _desired.z;
+        const h = Math.hypot(dx, dz);
+        if (h > 1e-3) {
+          aimPitch = THREE.MathUtils.clamp(
+            Math.atan2(dy, h), PITCH_MIN, PITCH_MAX);
+          aimYaw = Math.atan2(dx, dz);
+        }
+      }
+      applyPlayerVisibility(getPlayer(), false);
+    },
+
+    /**
+     * Exit sniper back to arcade, with the orbit oriented behind the current
+     * gun (aim yaw synced to hull yaw + turret yaw) so the camera comes out
+     * behind the barrel — the classic cannon-following camera, unchanged.
+     * gameplay_feel r6 (round critique MINOR): a Shift TOGGLE exit
+     * (`restorePrev` true) returns to the orbit distance the player scoped
+     * in from — WoT restores the pre-sniper arcade distance — while the
+     * wheel-out path keeps the closest 4 m step for zoom continuity.
+     *
+     * PITCH PRESERVATION (gunnery r1, owner scope-aim fix — bidirectional
+     * with enterSniper): the arcade PITCH is re-solved from the CURRENT
+     * reticle world point (its elevation as seen from the orbit pivot), so
+     * the scope's pitch — including any never-aimed entry scan-lift — can no
+     * longer ratchet the arcade view toward the sky ("aimed by scrolling →
+     * looking at the sky, have to come down": the old exit kept the
+     * scope-mutated pitch verbatim, +8.5 deg per close-aim scope cycle).
+     * Yaw stays the classic behind-the-cannon line above; only the pitch
+     * component of the preserved aim ray is applied.
+     *
+     * Cursor-aim mode keeps the fully legacy exit (pitch untouched): there
+     * the aim point is the ray through the real CURSOR, and re-solving the
+     * view pitch from it would tilt the camera toward wherever the cursor
+     * happened to rest.
+     * @param {boolean} [restorePrev=false] restore the pre-sniper orbit step
+     * @returns {void}
+     */
+    exitSniper(restorePrev = false): void {
+      if (rig.mode === 'ARCADE') return;
+      rig.mode = 'ARCADE';
+      step = restorePrev && preSniperStep >= 0
+        ? preSniperStep
+        : ORBIT_STEPS.length - 1;
+      dist = orbitDistance(step);
+      const player = getPlayer();
+      if (player && player.state) aimYaw = player.state.yaw + player.state.turretYaw;
+      if (!cursorAimOn && player) {
+        // (the chase's aim ray runs through its anchor: the pivot, and the shoulder beside it)
+        chaseAnchorFor(player, aimYaw, _pivotTarget);
+        const dx = rig.aimPoint.x - _pivotTarget.x;
+        const dy = rig.aimPoint.y - _pivotTarget.y;
+        const dz = rig.aimPoint.z - _pivotTarget.z;
+        const h = Math.hypot(dx, dz);
+        if (h > 1e-3) {
+          // a shoulder's camera aims across from the side: the yaw comes from its anchor too
+          if (framing.shoulderM !== 0) aimYaw = Math.atan2(dx, dz);
+          aimPitch = THREE.MathUtils.clamp(
+            Math.atan2(dy, h), PITCH_MIN, PITCH_MAX);
+        }
+      }
+      applyPlayerVisibility(player, true);
+      if (isIsometric() && player) {
+        solveArcade(player, 0, true);
+        isometric.aimAt(rig.aimPoint);
+      }
+    },
+
+    /**
+     * Screen-center aim ray in world space (shared origin/direction with the
+     * server-aim raycast).
+     * @param {THREE.Vector3} outOrigin - receives the camera position
+     * @param {THREE.Vector3} outDir - receives the unit view direction
+     * @returns {void}
+     */
+    getAimRay(outOrigin: THREE.Vector3, outDir: THREE.Vector3): void {
+      outOrigin.copy(camera.position);
+      if (cursorAimOn) {
+        camera.updateMatrixWorld();
+        outDir.set(cursorNdcX, cursorNdcY, 0.5).unproject(camera).sub(outOrigin).normalize();
+      } else camera.getWorldDirection(outDir);
+    },
+
+    // --- deterministic screenshot hooks -------------------------------------
+
+    /**
+     * Pin the camera to an explicit pose and suspend all rig control until
+     * `release()`. Own hull is made visible (external shots frame the tank).
+     * @param {THREE.Vector3} pos - world camera position
+     * @param {THREE.Vector3} lookAt - world look-at target
+     * @param {number} [fovDeg=50] - vertical field of view in degrees
+     * @returns {void}
+     */
+    setExternalPose(pos: THREE.Vector3, lookAt: THREE.Vector3, fovDeg = 50): void {
+      enterOwner('external'); // the flyby (letterbox), spectate and the death orbit never survive an external pose
+      trauma = 0;
+      camera.userData.scoped = false;
+      applyPlayerVisibility(getPlayer(), true);
+      applyLens(0);
+      camera.position.copy(pos);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(lookAt);
+      setFov(fovDeg);
+      camera.updateMatrixWorld(true);
+    },
+
+    /**
+     * Deterministic arcade pose: snap pivot/distance (no smoothing, no shake)
+     * and solve immediately. Resumes normal rig control.
+     * @param {number} step_ - orbit step index 0..5 into [24,18,13,9,6,4] m
+     * @param {number} orbitYaw - view yaw in radians (0 → looking down +Z)
+     * @param {number} orbitPitch - view pitch in radians (negative = looking down)
+     * @returns {void}
+     */
+    snapArcade(step_: number, orbitYaw: number, orbitPitch: number): void {
+      enterOwner('player'); // deterministic pose: retires every other owner
+      cursorAimOn = false; // deterministic pose: aim through screen center
+      rig.mode = 'ARCADE';
+      step = THREE.MathUtils.clamp(step_ | 0, 0, ORBIT_STEPS.length - 1);
+      aimYaw = orbitYaw;
+      aimPitch = THREE.MathUtils.clamp(orbitPitch, PITCH_MIN, PITCH_MAX);
+      aimTouched = false; // gunnery r1: fresh battle/staged pose — dirt-guard re-arms
+      rearmScopeEdges();
+      trauma = 0;
+      shakeT = 0;
+      const player = getPlayer();
+      if (!player) return;
+      applyPlayerVisibility(player, true);
+      // A Garage hero can be reparented and synchronously moved to its battle
+      // spawn immediately before this covered reveal snap. Three.js normally
+      // refreshes descendant world matrices during render, which is one frame
+      // too late for turretTopWorld(): sampling the stale showroom matrix
+      // starts the visible camera at the Garage anchor and eases across the
+      // whole map after the loader fades. Deterministic snaps own an immediate
+      // matrix barrier before querying articulation anchors.
+      player.visual?.root.updateWorldMatrix(true, true);
+      solveArcade(player, 0, true);
+      if (isIsometric()) {
+        isometric.resetAim();
+        cursorAimOn = true;
+        cursorNdcX = isometric.cursorX;
+        cursorNdcY = isometric.cursorY;
+      }
+      updateAim(player);
+      camera.updateMatrixWorld(true);
+    },
+
+    /**
+     * Deterministic sniper pose: set zoom and aim angles, solve immediately
+     * (own hull hidden, no shake). Resumes normal rig control.
+     * @param {number} zoom - zoom factor (2|4|8|16|25)
+     * @param {number} aimYaw_ - view yaw in radians
+     * @param {number} aimPitch_ - view pitch in radians
+     * @returns {void}
+     */
+    snapSniper(zoom: number, aimYaw_: number, aimPitch_: number): void {
+      enterOwner('player'); // deterministic pose: retires every other owner
+      cursorAimOn = false; // deterministic pose: aim through screen center
+      rig.mode = 'SNIPER';
+      rig.zoom = zoom;
+      aimYaw = aimYaw_;
+      aimPitch = THREE.MathUtils.clamp(aimPitch_, PITCH_MIN, PITCH_MAX);
+      aimTouched = false; // gunnery r1: staged pose — see snapArcade
+      rearmScopeEdges();
+      trauma = 0;
+      shakeT = 0;
+      const player = getPlayer();
+      if (!player) return;
+      applyPlayerVisibility(player, false);
+      player.visual?.root.updateWorldMatrix(true, true);
+      solveSniper(player);
+      updateAim(player);
+      camera.updateMatrixWorld(true);
+    },
+
+    /**
+     * Resume normal rig control after `setExternalPose`.
+     * @returns {void}
+     */
+    release(): void {
+      if (owner === 'external') enterOwner('player');
+    },
+
+    get framing() { return framing; },
+
+    previewFraming(dt: number): void {
+      if (owner !== 'player' || rig.mode !== 'ARCADE' || isIsometric()) return;
+      const player = getPlayer();
+      if (!player || player.aerial?.active || isWreck(player)) return;
+      solveArcade(player, dt, false);
+      updateAim(player);
+    },
+
+    suspendFraming(): void {
+      applyLens(0);
+    },
+  };
+
+  return rig;
+}
+
+// ===========================================================================
+// GARAGE CAMERA: showroom hero framing + damped drag orbit
+// ===========================================================================
+// The garage pedestal used to be a hard-coded eye/target pair, so the SAME
+// pose framed a 4.4 m Leichttraktor and an 11 m Object 279 (small tanks sat
+// lost in the middle of the bay, long-gun TDs pushed the muzzle into the stats
+// card). This block replaces it with a solved pose:
+//
+//  - AUTO-FRAME: the selected vehicle's ORIENTED bounding box (measured in the
+//    hull's own local frame, so a yawed 10 m hull is not padded out by an
+//    axis-aligned world box) is projected through the live camera basis and a
+//    distance + framing offsets are solved so the whole silhouette — barrel
+//    included — lands inside the garage's clear STAGE RECT (the screen area
+//    the UI leaves free; garage.ts measures it from its own DOM) with even
+//    margins. Every vehicle therefore reads at the same apparent size and the
+//    same 3/4 angle regardless of hull length.
+//
+//  - DRAG ORBIT: pointer drag steers a damped turntable around the hero pose
+//    with release momentum and a gentle spring back to the hero angle after a
+//    couple of seconds idle. Yaw is FREE — a continuous 360° walk-around
+//    (garage-scene r1: the player can inspect the rear); only pitch keeps its
+//    turntable clamp. The camera distance grows (never shrinks below the hero
+//    distance) if the widening silhouette would otherwise leave the stage
+//    rect, so a broadside orbit of a long vehicle can never crop the gun.
+//
+// Determinism: the pose is a pure function of (box, yaw, pitch, zoom, rect).
+// `reset()` snaps the orbit state back to the hero pose and re-solves, which
+// is what the __SHOTS garage recipe calls — a staged capture is
+// therefore byte-identical whether or not the player had dragged the view.
+
+const SHOW_FOV_DEG = 42;               // stage lens (matches the authored bay)
+const SHOW_FOV_UPRIGHT_MAX_DEG = 80;   // a screen held upright opens the lens up to this (showFovDeg)
+const SHOW_HERO_FILL = 0.86;           // hero framing: fraction of the stage rect
+const SHOW_KEEP_FILL = 0.99;           // orbiting: pull back rather than crop
+// garage-scene r1: the ±72° yaw clamp is GONE — free continuous 360° orbit
+// (the hangar dressing gives every azimuth something to look at). Pitch keeps
+// its clamps: the turntable read must never go under the pedestal or top-down.
+const SHOW_PITCH_MIN = THREE.MathUtils.degToRad(5);   // never below the pedestal
+const SHOW_PITCH_MAX = THREE.MathUtils.degToRad(35);
+const SHOW_DRAG_YAW_PER_PX = THREE.MathUtils.degToRad(0.22);
+const SHOW_DRAG_PITCH_PER_PX = THREE.MathUtils.degToRad(0.10);
+const SHOW_FOLLOW_TAU_S = 0.085;       // pointer → camera smoothing
+const SHOW_INERTIA_TAU_S = 0.42;       // release momentum decay
+const SHOW_INERTIA_MIN = THREE.MathUtils.degToRad(2.5); // rad/s: coast cutoff
+const SHOW_INERTIA_MAX = THREE.MathUtils.degToRad(220); // rad/s: flick clamp
+const SHOW_IDLE_RETURN_S = 2.0;        // idle before the spring back engages
+const SHOW_RETURN_TAU_S = 0.75;        // spring-back ease
+const SHOW_SETTLE_EPS = 1e-5;          // explicit rest; stop rewriting one pose forever
+const SHOW_ZOOM_STEP = 0.9;            // per wheel notch
+const SHOW_ZOOM_MIN = 0.45;            // closest dolly, as a share of the fit (the tank's near radius can hold it further: clampZoom)
+const SHOW_ZOOM_MAX = 1.55;
+const SHOW_DIST_MAX_M = 19;            // stays inside the 46 m bay (HW 23)
+// A screen held upright (the 246 Garage fix): the hero framed whole, gun included, in a frame narrower than it is tall.
+// The camera pitches down onto the tank and stands back no further than a screen held wide does (19 m; the UI gauntlet
+// 10-25: at 22 m the eye stood past Verdant's overhead crane, which filled a phone's stage), the lens opening to 80
+// degrees instead, and the tank takes seven tenths of the stage, so its turntable stays on the screen.
+const SHOW_UPRIGHT_PITCH = THREE.MathUtils.degToRad(12);
+const SHOW_UPRIGHT_DIST_MAX_M = 19;
+const SHOW_UPRIGHT_HERO_FILL = 0.7;    // the turntable (about 1.4 times the tank) stays on a phone's screen
+const SHOW_NEAR_PAD_M = 1.2;           // camera never inside the silhouette
+const SHOW_FLOOR_PAD_M = 0.7;          // camera never under the pedestal plane
+// The framing at rest keeps the eye at a person's height over the pedestal plane: a stage high in a short upright window
+// (an iPad's Split View half, 601x702) lifted the pitch only to the guard's 0.7 m, and from knee height 19 m out the frame
+// lost the tank and the bay's back wall (the iPad sweep g4/g5); the pitch lifts on to this (a drag keeps the guard).
+const SHOW_REST_EYE_M = 1.6;
+const SHOW_SOLVE_ITERS = 9;
+// The camera blends onto a new framing (another hero, a moved stage rect: a panel opening, a resize) on --dur-base's time
+// constant instead of jumping to it; a reset, and a reader who asked for reduced motion, take it at once.
+const SHOW_FRAME_TAU_S = 0.22;
+const SHOW_FRAME_EPS = 1e-4;           // NDC: a stage rect moved by less than this is the same rect
+const SHOW_BLEND_EPS_M = 1e-3;         // m: a blended pose this close to its solve has arrived
+const SHOW_REMEASURE_S = 3;            // a new hero's late parts (its stowage, its decor) land in its first seconds
+const SHOW_LATE_CHECK_S = 1;           // after them, a check a second: under load a part can land after the first window,
+const SHOW_LATE_UNTIL_S = 20;          // which framed the hero too close; a change found restarts the dense window
+const SHOW_POINTS_MAX = 4096;          // silhouette points (8 per drawn part); past it the hero frames its whole box
+const SHOW_FOV_SHORT_MAX_DEG = 58;     // a stage too short for the hero at the bay's reach opens the lens up to this
+const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Wrap an angle delta into [-π, π) — yaw springs take the short way home. */
+function wrapPi(a: number): number {
+  const TAU = Math.PI * 2;
+  return ((a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+}
+
+const _sbMin = new THREE.Vector3();
+const _sbMax = new THREE.Vector3();
+const _sbInv = new THREE.Matrix4();
+const _sbPartWorld = new THREE.Matrix4();
+const _sbV = new THREE.Vector3();
+const _sbC = new THREE.Vector3();      // target → camera unit vector
+const _sbR = new THREE.Vector3();      // camera right
+const _sbU = new THREE.Vector3();      // camera up
+const _sbPos = new THREE.Vector3();
+const _sbLook = new THREE.Vector3();
+const _sbCenter = new THREE.Vector3();
+// The framed points (world): a fixed frame's eight corners, or the hero's silhouette, the corners of every drawn part's
+// own box (a gun reaches out as a thin box, where the hull box's corners stood a whole tank's width out in front), plus
+// one point for a mode preview's headroom.
+const _sbPx = new Float64Array(SHOW_POINTS_MAX + 1);
+const _sbPy = new Float64Array(SHOW_POINTS_MAX + 1);
+const _sbPz = new Float64Array(SHOW_POINTS_MAX + 1);
+let _sbCount = 0;
+// the hero's silhouette in its own frame, measured once per hero (measureLocalPoints)
+const _lpX = new Float64Array(SHOW_POINTS_MAX);
+const _lpY = new Float64Array(SHOW_POINTS_MAX);
+const _lpZ = new Float64Array(SHOW_POINTS_MAX);
+// per-point camera-basis coordinates (right, up, toward-camera), reused
+const _sbPr = new Float64Array(SHOW_POINTS_MAX + 1);
+const _sbPu = new Float64Array(SHOW_POINTS_MAX + 1);
+const _sbPc = new Float64Array(SHOW_POINTS_MAX + 1);
+
+/**
+ * Union of every descendant mesh's geometry AABB, expressed in `root`'s LOCAL
+ * frame (so the result hugs a yawed hull instead of ballooning into a
+ * world-axis box). Invisible children are included on purpose: the garage
+ * hides the whole hero while it loads, and the pose must still solve.
+ *
+ * @param {THREE.Object3D} root
+ * @param {THREE.Vector3} outMin
+ * @param {THREE.Vector3} outMax
+ * @returns {boolean} false when the subtree carries no geometry
+ */
+function measureLocalBox(
+  root: THREE.Object3D,
+  outMin: THREE.Vector3,
+  outMax: THREE.Vector3,
+): boolean {
+  root.updateMatrixWorld(true);
+  _sbInv.copy(root.matrixWorld).invert();
+  outMin.set(Infinity, Infinity, Infinity);
+  outMax.set(-Infinity, -Infinity, -Infinity);
+  let any = false;
+  const addBox = (g: THREE.BufferGeometry, matrixWorld: THREE.Matrix4): void => {
+    if (!g.boundingBox) g.computeBoundingBox();
+    const bb = g.boundingBox;
+    if (!bb || bb.isEmpty()) return;
+    for (let i = 0; i < 8; i++) {
+      _sbV.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z);
+      _sbV.applyMatrix4(matrixWorld).applyMatrix4(_sbInv);
+      outMin.min(_sbV);
+      outMax.max(_sbV);
+      any = true;
+    }
+  };
+  root.traverse((o: THREE.Object3D) => {
+    if (!(o instanceof THREE.Mesh) || !o.geometry) return;
+    // A static draw merge (vehicles/staticDrawMerge.ts) frames exactly as the
+    // separate source meshes it folded did.
+    const parts = o instanceof THREE.InstancedMesh ? [] : staticMergePartsOf(o);
+    for (const part of parts) addBox(part.geometry, staticMergePartMatrixWorld(o, part, _sbPartWorld));
+    if (!parts.length) addBox(o.geometry, o.matrixWorld);
+  });
+  return any;
+}
+
+/**
+ * The hero's silhouette in `root`'s LOCAL frame, into _lpX/_lpY/_lpZ: the eight corners of every part's own geometry
+ * box. `drawnOnly` keeps what is drawn (hidden descendants, the armour, module and crew helpers a hull carries for its
+ * overlays, and meshes whose materials do not draw leave it; the root's own flag is ignored, it hides the hero while it
+ * parses). @returns the point count, 0 for none, -1 past SHOW_POINTS_MAX.
+ */
+function measureLocalPoints(root: THREE.Object3D, drawnOnly: boolean): number {
+  root.updateMatrixWorld(true);
+  _sbInv.copy(root.matrixWorld).invert();
+  let count = 0;
+  const addBox = (g: THREE.BufferGeometry, matrixWorld: THREE.Matrix4): void => {
+    if (count < 0) return;
+    if (!g.boundingBox) g.computeBoundingBox();
+    const bb = g.boundingBox;
+    if (!bb || bb.isEmpty()) return;
+    if (count + 8 > SHOW_POINTS_MAX) { count = -1; return; }
+    for (let i = 0; i < 8; i++) {
+      _sbV.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z);
+      _sbV.applyMatrix4(matrixWorld).applyMatrix4(_sbInv);
+      _lpX[count] = _sbV.x; _lpY[count] = _sbV.y; _lpZ[count] = _sbV.z;
+      count++;
+    }
+  };
+  const visit = (o: THREE.Object3D): void => {
+    if (!(o instanceof THREE.Mesh) || !o.geometry) return;
+    if (drawnOnly) {
+      // a shadow proxy draws no colour: its one box wraps the whole tank, gun and all (the articulated shadow batch put
+      // the silhouette's foot about 125 px under the tracks at 1920 and framed every hero smaller than it is)
+      if (o.userData.authoredShadowProxy === true) return;
+      const material = o.material as THREE.Material | THREE.Material[] | undefined;
+      const draws = (m: THREE.Material): boolean => m.visible !== false && m.colorWrite !== false;
+      if (Array.isArray(material) ? !material.some(draws) : material ? !draws(material) : false) return;
+    }
+    const parts = o instanceof THREE.InstancedMesh ? [] : staticMergePartsOf(o);
+    for (const part of parts) addBox(part.geometry, staticMergePartMatrixWorld(o, part, _sbPartWorld));
+    if (!parts.length) addBox(o.geometry, o.matrixWorld);
+  };
+  if (drawnOnly) for (const child of root.children) child.traverseVisible(visit);
+  else root.traverse(visit);
+  return count;
+}
+
+/**
+ * Create the garage showroom camera controller.
+ *
+ * Owns nothing but the pose it hands to `rig.setExternalPose` — the rig stays
+ * the single writer of camera position/rotation/fov.
+ *
+ * `getSubject` returns the pedestal hero root (null while empty), and
+ * `getStageRect` returns the UI-free screen area in CSS pixels. `heroYawRad`
+ * is the world azimuth of the camera as seen from the vehicle (0 → +Z), while
+ * `heroPitchRad` is its elevation.
+ */
+interface ShowroomStageRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface ShowroomFixedFrame {
+  x: number;
+  y: number;
+  z: number;
+  hw: number;
+  hh: number;
+  hd: number;
+}
+
+interface ShowroomPoseRig {
+  setExternalPose(position: THREE.Vector3, target: THREE.Vector3, fovDeg?: number): void;
+}
+
+interface ShowroomOrbitDeps {
+  getSubject(): THREE.Object3D | null;
+  getStageRect?(): ShowroomStageRect | null;
+  heroYawRad: number;
+  heroPitchRad: number;
+  fixedFrame?(): ShowroomFixedFrame | null;
+  /** Headroom (m) over the hero's own box that the frame keeps: a mode preview's flag or drone above the tank. */
+  frameTopPadM?(): number;
+  /** The turntable the hero stands on (world centre, radius and deck height, m): kept whole on the screen and across
+   *  `getKeepRect`'s width. */
+  keepRing?(): { x: number; y: number; z: number; r: number; h: number } | null;
+  /** The whole free stage (CSS px) the turntable keeps inside, left to right; the screen when absent. */
+  getKeepRect?(): ShowroomStageRect | null;
+  /** The silhouette's foot rests on the stage rect's foot rather than its middle on the rect's middle: the Garage's tracks
+   *  on the name line, for every hero and size (owner 10-26: "more lower again!!! more!"). */
+  anchorFoot?(): boolean;
+  floorY?(): number;
+}
+
+interface ShowroomOrbit {
+  readonly active: boolean;
+  readonly moving: boolean;
+  readonly heroDist: number;
+  reset(): boolean;
+  start(): boolean;
+  stop(): void;
+  update(dt: number): boolean;
+  beginDrag(): void;
+  drag(dxPx: number, dyPx: number): void;
+  endDrag(): void;
+  /** Stop a drag without its release momentum: a second finger turned the drag into a pinch. */
+  cancelDrag(): void;
+  wheel(notches: number): void;
+  /** A pinch's spread since the last call (> 1 apart, toward the tank): the tank grows by that factor. */
+  pinch(scale: number): void;
+  /** Hold the framing: no idle spring back to the hero pose while held (the Garage's photo mode). */
+  hold(on: boolean): void;
+  /** Steer toward a view: yaw and pitch in radians (the pitch kept inside the turntable's clamp), the dolly (1 = the
+   *  hero fit). */
+  aim(yawRad: number, pitchRad: number, zoomTo?: number): void;
+  debugState(): Record<string, RuntimeValue>;
+}
+
+type ShowroomCamera = THREE.PerspectiveCamera & {
+  __cotViewW?: number;
+  __cotViewH?: number;
+};
+
+interface ShowroomSolve {
+  dist: number;
+  sx: number;
+  sy: number;
+}
+
+export function createShowroomOrbit(
+  camera: ShowroomCamera,
+  rig: ShowroomPoseRig,
+  deps: ShowroomOrbitDeps,
+): ShowroomOrbit {
+  const heroYaw = deps.heroYawRad;
+  const heroPitchWide = THREE.MathUtils.clamp(deps.heroPitchRad, SHOW_PITCH_MIN, SHOW_PITCH_MAX);
+  // the hero pose's yaw holds in every shape; an upright screen looks down onto it (SHOW_UPRIGHT_*)
+  const upright = (): boolean => viewAspect() < 1;
+  // a stage high in a short window lifts the hero pitch (solveHero) so the eye stays over the floor while the tank sits up
+  // in the frame, rather than the floor guard sinking the tank under the name
+  let liftPitch = 0;
+  const heroPitchNow = (): number => Math.max(upright() ? Math.max(heroPitchWide, SHOW_UPRIGHT_PITCH) : heroPitchWide, liftPitch);
+  const heroFill = (): number => (upright() ? SHOW_UPRIGHT_HERO_FILL : SHOW_HERO_FILL);
+  const distMax = (): number => (upright() ? SHOW_UPRIGHT_DIST_MAX_M : SHOW_DIST_MAX_M);
+
+  // measured subject (local-frame box + the world transform it was taken in)
+  let subject: THREE.Object3D | null = null;
+  let haveBox = false;
+  let heroDist = 12;
+  let nearDist = 3;
+  // live orbit state: `t*` are the pointer/spring targets, the bare values are
+  // the damped ones actually rendered.
+  let tYaw = heroYaw, yaw = heroYaw;
+  let tPitch = heroPitchWide, pitch = heroPitchWide;
+  let tZoom = 1, zoom = 1;
+  let yawVel = 0, pitchVel = 0;
+  let dragging = false;
+  let running = false;
+  let held = false;
+  let sinceInputS = 999;
+  let lastDragMs = 0;
+  let lastInputMs = -Infinity;
+  let measureAccS = 0;
+  const win = { cx: 0, cy: 0, hx: 1, hy: 1 };      // the framing window the solve fits
+  const goal = { cx: 0, cy: 0, hx: 1, hy: 1 };     // the stage rect as last read
+  let haveWindow = false;
+  let appliedAspect = NaN;
+  const appliedWin = { cx: NaN, cy: NaN, hx: NaN, hy: NaN };
+  const projectionBounds = { nx0: 0, nx1: 0, ny0: 0, ny1: 0 };
+
+  /** Stage rect (CSS px) → NDC center/half-extents in `goal`, with a sanity floor. */
+  function readWindow(): typeof goal {
+    const vw = camera.__cotViewW || (typeof window !== 'undefined' ? window.innerWidth : 1920);
+    const vh = camera.__cotViewH || (typeof window !== 'undefined' ? window.innerHeight : 1080);
+    // A viewport with no area (a collapsed pane or embed reports 0 wide or 0 high) has no stage to frame: dividing by
+    // it made the window infinite and the solved camera NaN, and the Garage's audio listener is that camera (232's
+    // AudioParam throw). Keep the last window until the viewport has an area again.
+    if (!(vw > 0 && vh > 0)) return goal;
+    let r: ShowroomStageRect | null = null;
+    try { r = deps.getStageRect ? deps.getStageRect() : null; } catch { r = null; }
+    let x0 = 0, y0 = 0, x1 = vw, y1 = vh;
+    if (r && r.w > 0 && r.h > 0) { x0 = r.x; y0 = r.y; x1 = r.x + r.w; y1 = r.y + r.h; }
+    // Crowded viewports (the 768 px embed the controls probe drives) can pinch
+    // the free area to a sliver — never let the UI starve the hero framing. The floors are low: the Garage hands a
+    // hero rect a little over half its free stage (so the turntable, about 1.4 times the tank, stays in it), and a short
+    // docked window's stage over the tank's name is a band the hero fits rather than standing under the name.
+    const minW = vw * 0.36, minH = vh * 0.24;
+    if (x1 - x0 < minW) {
+      const c = THREE.MathUtils.clamp((x0 + x1) / 2, minW / 2, vw - minW / 2);
+      x0 = c - minW / 2; x1 = c + minW / 2;
+    }
+    if (y1 - y0 < minH) {
+      const c = THREE.MathUtils.clamp((y0 + y1) / 2, minH / 2, vh - minH / 2);
+      y0 = c - minH / 2; y1 = c + minH / 2;
+    }
+    goal.cx = ((x0 + x1) / vw) - 1;         // NDC x of the rect center
+    goal.cy = 1 - ((y0 + y1) / vh);         // NDC y (screen y grows downward)
+    goal.hx = (x1 - x0) / vw;               // NDC half-width
+    goal.hy = (y1 - y0) / vh;
+    return goal;
+  }
+
+  /** Read the stage rect into the framing window. @returns whether it moved (the camera then blends onto it). */
+  function syncWindow(): boolean {
+    readWindow();
+    const moved = !haveWindow || Math.abs(goal.cx - win.cx) + Math.abs(goal.cy - win.cy) + Math.abs(goal.hx - win.hx)
+      + Math.abs(goal.hy - win.hy) > SHOW_FRAME_EPS;
+    haveWindow = true;
+    if (!moved) return false;
+    win.cx = goal.cx; win.cy = goal.cy; win.hx = goal.hx; win.hy = goal.hy;
+    return true;
+  }
+
+  /** The camera's aspect, or 16:9 while the viewport has no area (the resize seam's w / 0 and 0 / 0 are no aspect). */
+  function viewAspect(): number {
+    return Number.isFinite(camera.aspect) && camera.aspect > 0 ? camera.aspect : 16 / 9;
+  }
+
+  /** The stage lens (the 245 Garage redesign): 42° on a screen held wide. A screen held upright opens it until it sees as
+   *  wide as a square screen would (up to 70°), so a phone frames the whole tank inside the bay's 19 m reach instead of
+   *  cropping both ends of the hull. */
+  function showFovDeg(): number {
+    return Math.max(stageFovDeg(), lensDeg);
+  }
+
+  function stageFovDeg(): number {
+    const aspect = viewAspect();
+    if (aspect >= 1) return SHOW_FOV_DEG;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(SHOW_FOV_DEG) * 0.5);
+    return Math.min(SHOW_FOV_UPRIGHT_MAX_DEG, THREE.MathUtils.radToDeg(2 * Math.atan(tanV / aspect)));
+  }
+
+  // A stage too short for the hero even at the bay's reach (a docked window 600 px tall, its stage a band over the
+  // tank's name): the lens opens just enough for the hero to fit it, rather than the name covering the hull.
+  let lensDeg = 0;
+  /** The hero solve at the current hero pitch, opening the lens where the reach alone cannot fit the stage. */
+  function solveHeroAtPitch(): ShowroomSolve {
+    lensDeg = 0;
+    let solved = solve(heroYaw, heroPitchNow(), heroFill(), 0);
+    if (solved.dist < distMax() - 1e-6) return solved;
+    const fill = heroFill();
+    const over = Math.max(
+      (projectionBounds.nx1 - projectionBounds.nx0) / Math.max(2 * win.hx * fill, 1e-6),
+      (projectionBounds.ny1 - projectionBounds.ny0) / Math.max(2 * win.hy * fill, 1e-6),
+    );
+    if (!(over > 1.001)) return solved;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(stageFovDeg()) * 0.5);
+    const maxDeg = Math.max(stageFovDeg(), SHOW_FOV_SHORT_MAX_DEG);
+    lensDeg = Math.min(maxDeg, THREE.MathUtils.radToDeg(2 * Math.atan(tanV * over)));
+    solved = solve(heroYaw, heroPitchNow(), heroFill(), 0);
+    return solved;
+  }
+
+  /** The hero distance: the lens opened where the reach cannot fit the stage, the pitch lifted where the eye would sink
+   *  under the floor guard. The orbit at rest follows the lifted pitch. @returns the distance */
+  function solveHero(): number {
+    liftPitch = 0;
+    let solved = solveHeroAtPitch();
+    const minY = (deps.floorY ? deps.floorY() : -Infinity) + SHOW_REST_EYE_M;
+    const eyeY = (s: ShowroomSolve): number => {
+      basis(heroYaw, heroPitchNow());
+      return _sbCenter.y + _sbC.y * s.dist + _sbU.y * s.sy;
+    };
+    while (eyeY(solved) < minY && heroPitchNow() < SHOW_PITCH_MAX - 1e-6) {
+      liftPitch = Math.min(SHOW_PITCH_MAX, heroPitchNow() + THREE.MathUtils.degToRad(1));
+      solved = solveHeroAtPitch();
+    }
+    if (!dragging && !held && sinceInputS > SHOW_IDLE_RETURN_S) tPitch = heroPitchNow();
+    return keepRingOnScreen(solved);
+  }
+
+  // The turntable stays whole on the screen (Main 10-25): framed on the tank, a phone's stage could push its rim past an
+  // edge (the rim is centred on the hull, the tank's silhouette on its gun side). The camera then stands back, or at the
+  // bay's reach opens the lens, just enough.
+  const SHOW_RING_EDGE = 0.98;          // NDC: the rim keeps this inside the screen's edge
+  const SHOW_RING_STEPS = 24;
+  /** How far the turntable's rim reaches past its room, as the factor the framing must shrink by (≤ 1: it fits). */
+  function ringOverflow(dist: number, sx: number): number {
+    const ring = deps.keepRing ? deps.keepRing() : null;
+    if (!ring) return 0;
+    let lo = -SHOW_RING_EDGE, hi = SHOW_RING_EDGE;
+    let keep: ShowroomStageRect | null = null;
+    try { keep = deps.getKeepRect ? deps.getKeepRect() : null; } catch { keep = null; }
+    const vw = camera.__cotViewW || (typeof window !== 'undefined' ? window.innerWidth : 1920);
+    if (keep && keep.w > 0 && vw > 0) {
+      lo = Math.max(lo, (2 * keep.x) / vw - 1);
+      hi = Math.min(hi, (2 * (keep.x + keep.w)) / vw - 1);
+    }
+    basis(heroYaw, heroPitchNow());
+    const tanH = Math.tan(THREE.MathUtils.degToRad(showFovDeg()) * 0.5) * viewAspect();
+    const c = win.cx;
+    let worst = 0;
+    for (let step = 0; step < SHOW_RING_STEPS * 2; step++) {
+      const a = ((step >> 1) / SHOW_RING_STEPS) * Math.PI * 2;
+      _sbV.set(ring.x + Math.cos(a) * ring.r - _sbCenter.x, ring.y + (step & 1 ? ring.h : 0) - _sbCenter.y,
+        ring.z + Math.sin(a) * ring.r - _sbCenter.z);
+      const depth = dist - _sbV.dot(_sbC);
+      if (depth <= 0.1) return Infinity;
+      const nx = (_sbV.dot(_sbR) - sx) / (depth * tanH);
+      if (nx > hi) worst = Math.max(worst, (nx - c) / Math.max(hi - c, 1e-3));
+      else if (nx < lo) worst = Math.max(worst, (c - nx) / Math.max(c - lo, 1e-3));
+    }
+    return worst;
+  }
+  function keepRingOnScreen(solved: ShowroomSolve): number {
+    let dist = solved.dist;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const off = solve(heroYaw, heroPitchNow(), heroFill(), dist);
+      const over = ringOverflow(dist, off.sx);
+      if (!(over > 1.001)) break;
+      if (dist < distMax() - 1e-6) {
+        dist = Math.min(distMax(), dist * over);
+      } else {
+        const tanV = Math.tan(THREE.MathUtils.degToRad(showFovDeg()) * 0.5);
+        lensDeg = Math.min(SHOW_FOV_UPRIGHT_MAX_DEG, THREE.MathUtils.radToDeg(2 * Math.atan(tanV * over)));
+      }
+    }
+    return dist;
+  }
+
+  function measureFixedFrame(frame: ShowroomFixedFrame): void {
+    _sbCenter.set(frame.x, frame.y, frame.z);
+    for (let index = 0; index < 8; index++) {
+      _sbPx[index] = frame.x + (index & 1 ? frame.hw : -frame.hw);
+      _sbPy[index] = frame.y + (index & 2 ? frame.hh : -frame.hh);
+      _sbPz[index] = frame.z + (index & 4 ? frame.hd : -frame.hd);
+    }
+    _sbCount = 8;
+  }
+
+  // The hero's own silhouette (owner 10-25 via Main: frame the tank itself, centred), measured once per hero root and
+  // again through its first seconds, while its late parts land; never every refresh.
+  let pointsRoot: THREE.Object3D | null = null;
+  let pointsAgeS = Infinity;
+  let pointsCheckS = 0;
+  let pointsCount = 0;
+  const pointsMin = new THREE.Vector3(), pointsMax = new THREE.Vector3();
+  const lateMin = new THREE.Vector3(), lateMax = new THREE.Vector3();
+
+  function measureSubjectFrame(root: THREE.Object3D): boolean {
+    const late = root === pointsRoot && pointsAgeS >= SHOW_REMEASURE_S && pointsAgeS < SHOW_LATE_UNTIL_S
+      && pointsAgeS - pointsCheckS >= SHOW_LATE_CHECK_S;
+    if (root !== pointsRoot || pointsAgeS < SHOW_REMEASURE_S || late) {
+      const lateCount = pointsCount;
+      if (late) { pointsCheckS = pointsAgeS; lateMin.copy(pointsMin); lateMax.copy(pointsMax); }
+      let count = measureLocalPoints(root, true);
+      if (count === 0) count = measureLocalPoints(root, false);
+      if (count < 0) {
+        // a hero of more parts than the buffer holds frames its whole box
+        if (!measureLocalBox(root, _sbMin, _sbMax)) return false;
+        for (let index = 0; index < 8; index++) {
+          _lpX[index] = index & 1 ? _sbMax.x : _sbMin.x;
+          _lpY[index] = index & 2 ? _sbMax.y : _sbMin.y;
+          _lpZ[index] = index & 4 ? _sbMax.z : _sbMin.z;
+        }
+        count = 8;
+      }
+      if (count === 0) return false;
+      pointsCount = count;
+      pointsMin.set(Infinity, Infinity, Infinity);
+      pointsMax.set(-Infinity, -Infinity, -Infinity);
+      for (let index = 0; index < count; index++) {
+        _sbV.set(_lpX[index], _lpY[index], _lpZ[index]);
+        pointsMin.min(_sbV);
+        pointsMax.max(_sbV);
+      }
+      if (root !== pointsRoot) { pointsRoot = root; pointsAgeS = 0; pointsCheckS = 0; }
+      else if (late && (count !== lateCount || !pointsMin.equals(lateMin) || !pointsMax.equals(lateMax))) { pointsAgeS = 0; pointsCheckS = 0; }
+    } else {
+      root.updateMatrixWorld(true);
+    }
+    const m = root.matrixWorld;
+    for (let index = 0; index < pointsCount; index++) {
+      _sbV.set(_lpX[index], _lpY[index], _lpZ[index]).applyMatrix4(m);
+      _sbPx[index] = _sbV.x; _sbPy[index] = _sbV.y; _sbPz[index] = _sbV.z;
+    }
+    _sbCount = pointsCount;
+    // a mode preview's headroom: one point over the hero's middle
+    const pad = Math.max(0, deps.frameTopPadM ? deps.frameTopPadM() : 0);
+    if (pad > 0) {
+      _sbV.set((pointsMin.x + pointsMax.x) / 2, pointsMax.y + pad, (pointsMin.z + pointsMax.z) / 2).applyMatrix4(m);
+      _sbPx[_sbCount] = _sbV.x; _sbPy[_sbCount] = _sbV.y; _sbPz[_sbCount] = _sbV.z;
+      _sbCount++;
+    }
+    _sbCenter.set((pointsMin.x + pointsMax.x) / 2, (pointsMin.y + pointsMax.y + pad) / 2, (pointsMin.z + pointsMax.z) / 2)
+      .applyMatrix4(m);
+    return true;
+  }
+
+  function updateMeasuredRadius(): void {
+    let radius = 0;
+    for (let index = 0; index < _sbCount; index++) {
+      const dx = _sbPx[index] - _sbCenter.x, dy = _sbPy[index] - _sbCenter.y, dz = _sbPz[index] - _sbCenter.z;
+      radius = Math.max(radius, Math.hypot(dx, dy, dz));
+    }
+    nearDist = radius + SHOW_NEAR_PAD_M;
+  }
+
+  /** Re-measure the hero's oriented box + world corners. @returns {boolean} */
+  function measure(): boolean {
+    const root = deps.getSubject ? deps.getSubject() : null;
+    subject = root || null;
+    haveBox = false;
+    if (!root) return false;
+    // A fixed showroom frame avoids traversing each replacement tank merely
+    // to overwrite its bounds with the canonical stage box.
+    const fixedFrame = deps.fixedFrame ? deps.fixedFrame() : null;
+    if (fixedFrame) measureFixedFrame(fixedFrame);
+    else if (!measureSubjectFrame(root)) return false;
+    updateMeasuredRadius();
+    haveBox = true;
+    return true;
+  }
+
+  /** Camera basis for (yaw, pitch) into _sbC / _sbR / _sbU. */
+  function basis(y: number, p: number): void {
+    const cp = Math.cos(p);
+    _sbC.set(Math.sin(y) * cp, Math.sin(p), Math.cos(y) * cp);
+    _sbR.set(Math.cos(y), 0, -Math.sin(y));
+    _sbU.set(-Math.sin(p) * Math.sin(y), cp, -Math.sin(p) * Math.cos(y));
+  }
+
+  function prepareCornerProjection(yawRad: number, pitchRad: number): number {
+    basis(yawRad, pitchRad);
+    let maxDepth = -Infinity;
+    for (let index = 0; index < _sbCount; index++) {
+      _sbV.set(_sbPx[index] - _sbCenter.x, _sbPy[index] - _sbCenter.y, _sbPz[index] - _sbCenter.z);
+      _sbPr[index] = _sbV.dot(_sbR);
+      _sbPu[index] = _sbV.dot(_sbU);
+      _sbPc[index] = _sbV.dot(_sbC);
+      if (_sbPc[index] > maxDepth) maxDepth = _sbPc[index];
+    }
+    return maxDepth;
+  }
+
+  function readProjectionBounds(
+    distance: number,
+    shiftX: number,
+    shiftY: number,
+    tanH: number,
+    tanV: number,
+  ): void {
+    projectionBounds.nx0 = Infinity;
+    projectionBounds.nx1 = -Infinity;
+    projectionBounds.ny0 = Infinity;
+    projectionBounds.ny1 = -Infinity;
+    for (let index = 0; index < _sbCount; index++) {
+      const depth = distance - _sbPc[index];
+      const nx = (_sbPr[index] - shiftX) / (depth * tanH);
+      const ny = (_sbPu[index] - shiftY) / (depth * tanV);
+      if (nx < projectionBounds.nx0) projectionBounds.nx0 = nx;
+      if (nx > projectionBounds.nx1) projectionBounds.nx1 = nx;
+      if (ny < projectionBounds.ny0) projectionBounds.ny0 = ny;
+      if (ny > projectionBounds.ny1) projectionBounds.ny1 = ny;
+    }
+  }
+
+  function fitHorizontalWindow(distance: number, tanH: number): number {
+    let shiftX = -win.cx * distance * tanH;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (let index = 0; index < _sbCount; index++) {
+      const nx = (_sbPr[index] - shiftX) / ((distance - _sbPc[index]) * tanH);
+      if (nx < minX) minX = nx;
+      if (nx > maxX) maxX = nx;
+    }
+    const windowMin = win.cx - win.hx * 0.995;
+    const windowMax = win.cx + win.hx * 0.995;
+    if (maxX - minX > windowMax - windowMin) {
+      shiftX += ((minX + maxX) * 0.5 - win.cx) * distance * tanH;
+    } else if (minX < windowMin) {
+      shiftX += (minX - windowMin) * distance * tanH;
+    } else if (maxX > windowMax) {
+      shiftX += (maxX - windowMax) * distance * tanH;
+    }
+    return shiftX;
+  }
+
+  /**
+   * Solve the pose for the current box at (yaw, pitch).
+   *
+   * Projects the 8 oriented-box corners through the camera basis and iterates
+   * distance + lateral/vertical framing offsets until the silhouette fills
+   * `fill` of the stage rect, centered in it. `fixedDist` skips the distance
+   * search and only solves the centering offsets (used once the orbit has
+   * picked its own distance).
+   *
+   * @returns {{ dist: number, sx: number, sy: number }} sx/sy shift the camera
+   *   along its right/up axes (the framing offsets).
+   */
+  function solve(y: number, p: number, fill: number, fixedDist: number): ShowroomSolve {
+    if (!haveWindow) syncWindow();
+    const w = win;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(showFovDeg()) * 0.5);
+    const tanH = tanV * viewAspect();
+    const maxPc = prepareCornerProjection(y, p);
+    const dFloor = Math.max(maxPc + SHOW_NEAR_PAD_M, nearDist, 1);
+    let d = fixedDist || Math.max(dFloor, nearDist * 2.2);
+    let sx = 0, sy = 0;
+    const foot = deps.anchorFoot ? deps.anchorFoot() : false;
+    for (let it = 0; it < SHOW_SOLVE_ITERS; it++) {
+      readProjectionBounds(d, sx, sy, tanH, tanV);
+      if (!fixedDist) {
+        // the silhouette spans `fill` of the rect's full width or height (2 × its NDC half-extent): measured against the
+        // half-extent, every hero wanted twice the distance and stood at the bay's 19 m reach on every screen
+        const s = Math.min(
+          (2 * w.hx * fill) / Math.max(projectionBounds.nx1 - projectionBounds.nx0, 1e-6),
+          (2 * w.hy * fill) / Math.max(projectionBounds.ny1 - projectionBounds.ny0, 1e-6),
+        );
+        const dNew = THREE.MathUtils.clamp(d / s, dFloor, distMax());
+        // offsets are proportional to distance — carry them across the step so
+        // the centering correction below starts from the same framing
+        const k = dNew / d;
+        sx *= k; sy *= k;
+        projectionBounds.nx0 /= k;
+        projectionBounds.nx1 /= k;
+        projectionBounds.ny0 /= k;
+        projectionBounds.ny1 /= k;
+        d = dNew;
+      }
+      // UI-AWARE CENTERING (garage-scene r1): pin the projected OBB CENTER on
+      // the stage-rect center X instead of the silhouette-extremes midpoint.
+      // The 8 projected corners over-hang the true pixels asymmetrically on
+      // the gun side (empty box volume above/beside the barrel), so extremes-
+      // centering parked every hull ~50 px right of the panel-aware center at
+      // 1920x1080 — the vehicle MASS read as centered on the raw viewport,
+      // off-center against the left column / stats panel. The box center
+      // tracks the hull mass, so the tank now reads centered in the UI-free
+      // area. Camera ANGLES are untouched — this only slides the eye/look-at
+      // pair along the camera's right axis, exactly like the old offset.
+      sx = fitHorizontalWindow(d, tanH);
+      // vertically, the extremes' midpoint on the rect's centre; foot-anchored, the silhouette's lowest point on the rect's
+      // foot (it fills at most `fill` of the rect, so its top stays inside it)
+      sy += (foot ? projectionBounds.ny0 - (w.cy - w.hy) : (projectionBounds.ny0 + projectionBounds.ny1) * 0.5 - w.cy) * d * tanV;
+    }
+    return { dist: d, sx, sy };
+  }
+
+  // the pose the rig was last given: a new framing (another hero, a moved stage) blends from it onto the solve
+  const shownPos = new THREE.Vector3(), shownLook = new THREE.Vector3();
+  let haveShownPose = false;
+  let blending = false;
+  /** Blend onto the next framing rather than jumping to it (no blend before a first pose, or under reduced motion). */
+  function beginBlend(): void {
+    blending = haveShownPose && !reducedMotion();
+  }
+
+  /** Write the solved pose for the current damped orbit state to the rig: at once, or blended over `dt` while a new
+   *  framing settles. */
+  function applyPose(dt = 0): void {
+    if (!haveBox) return;
+    const need = solve(yaw, pitch, SHOW_KEEP_FILL, 0).dist;
+    const d = THREE.MathUtils.clamp(Math.max(heroDist, need) * zoom,
+      nearDist, distMax());
+    const off = solve(yaw, pitch, heroFill(), d);
+    basis(yaw, pitch);
+    _sbPos.copy(_sbCenter).addScaledVector(_sbC, d)
+      .addScaledVector(_sbR, off.sx).addScaledVector(_sbU, off.sy);
+    // last-resort floor guard: the pitch clamp already keeps the eye above the
+    // pedestal, this catches a pathological framing offset on a huge subject.
+    const minY = (deps.floorY ? deps.floorY() : -Infinity) + SHOW_FLOOR_PAD_M;
+    if (_sbPos.y < minY) _sbPos.y = minY;
+    _sbLook.copy(_sbPos).addScaledVector(_sbC, -d);
+    if (blending && dt > 0) {
+      const k = 1 - Math.exp(-dt / SHOW_FRAME_TAU_S);
+      shownPos.lerp(_sbPos, k);
+      shownLook.lerp(_sbLook, k);
+      if (shownPos.distanceToSquared(_sbPos) + shownLook.distanceToSquared(_sbLook) < SHOW_BLEND_EPS_M * SHOW_BLEND_EPS_M) {
+        blending = false;
+      }
+    }
+    if (!blending || dt <= 0) {
+      blending = false;
+      shownPos.copy(_sbPos);
+      shownLook.copy(_sbLook);
+    }
+    haveShownPose = true;
+    rig.setExternalPose(shownPos, shownLook, showFovDeg());
+    appliedAspect = viewAspect();
+    appliedWin.cx = win.cx; appliedWin.cy = win.cy;
+    appliedWin.hx = win.hx; appliedWin.hy = win.hy;
+  }
+
+  function resetMeasuredOrbit(): boolean {
+    tYaw = yaw = heroYaw;
+    tPitch = pitch = heroPitchNow();
+    tZoom = zoom = 1;
+    yawVel = pitchVel = 0;
+    dragging = false;
+    sinceInputS = 999;
+    lastInputMs = -Infinity;
+    measureAccS = 0;
+    syncWindow();
+    blending = false;
+    heroDist = solveHero();
+    tPitch = pitch = heroPitchNow();
+    applyPose();
+    return true;
+  }
+
+  function resetOrbit(): boolean {
+    return measure() ? resetMeasuredOrbit() : false;
+  }
+
+  function pollForFirstSubject(dt: number): boolean {
+    measureAccS += dt;
+    if (measureAccS <= 0.4) return false;
+    measureAccS = 0;
+    return measure() && haveBox ? resetMeasuredOrbit() : false;
+  }
+
+  function framingChanged(previousHeroDist: number): boolean {
+    return Math.abs(heroDist - previousHeroDist) > SHOW_SETTLE_EPS ||
+      Math.abs(viewAspect() - appliedAspect) > SHOW_SETTLE_EPS ||
+      Math.abs(win.cx - appliedWin.cx) > SHOW_SETTLE_EPS ||
+      Math.abs(win.cy - appliedWin.cy) > SHOW_SETTLE_EPS ||
+      Math.abs(win.hx - appliedWin.hx) > SHOW_SETTLE_EPS ||
+      Math.abs(win.hy - appliedWin.hy) > SHOW_SETTLE_EPS;
+  }
+
+  function settleNewSubject(previousSubject: THREE.Object3D | null): void {
+    if (previousSubject === subject) return;
+    // The pedestal can replace its root before this periodic measurement.
+    // A drag/zoom begun since that replacement is newer user intent, not a
+    // stale pose to reset. Keep it (including release momentum); the normal
+    // idle spring and explicit reset still restore the canonical hero view.
+    // Use wall time here: the settled Garage only ticks every five seconds,
+    // with a clamped simulation delta. That must not extend this input grace.
+    if (held || dragging || performance.now() - lastInputMs <= SHOW_IDLE_RETURN_S * 1000) return;
+    tYaw = yaw + wrapPi(heroYaw - yaw);
+    tPitch = heroPitchNow();
+    tZoom = 1;
+    yawVel = pitchVel = 0;
+  }
+
+  function refreshSubjectMeasurement(dt: number): boolean {
+    measureAccS += dt;
+    if (measureAccS <= 0.4) return false;
+    measureAccS = 0;
+    const previousSubject = subject;
+    const previousHeroDist = heroDist;
+    if (!measure() || !haveBox) return false;
+    heroDist = solveHero();
+    settleNewSubject(previousSubject);
+    return framingChanged(previousHeroDist);
+  }
+
+  function coastOrbitTargets(dt: number): void {
+    tYaw += yawVel * dt;
+    tPitch += pitchVel * dt;
+    const unclampedPitch = tPitch;
+    tPitch = THREE.MathUtils.clamp(tPitch, SHOW_PITCH_MIN, SHOW_PITCH_MAX);
+    if (tPitch !== unclampedPitch) pitchVel = 0;
+    const decay = Math.exp(-dt / SHOW_INERTIA_TAU_S);
+    yawVel *= decay;
+    pitchVel *= decay;
+  }
+
+  function returnOrbitTargets(dt: number): void {
+    if (held || sinceInputS <= SHOW_IDLE_RETURN_S) return;
+    const follow = 1 - Math.exp(-dt / SHOW_RETURN_TAU_S);
+    tYaw += wrapPi(heroYaw - tYaw) * follow;
+    const heroPitch = heroPitchNow();
+    tPitch += (heroPitch - tPitch) * follow;
+    tZoom += (1 - tZoom) * follow;
+    const settled = Math.abs(wrapPi(heroYaw - tYaw)) < SHOW_SETTLE_EPS &&
+      Math.abs(heroPitch - tPitch) < SHOW_SETTLE_EPS &&
+      Math.abs(1 - tZoom) < SHOW_SETTLE_EPS;
+    if (!settled) return;
+    tYaw = yaw + wrapPi(heroYaw - yaw);
+    tPitch = heroPitch;
+    tZoom = 1;
+  }
+
+  function advanceOrbitTargets(dt: number): void {
+    if (dragging) {
+      sinceInputS = 0;
+      return;
+    }
+    sinceInputS += dt;
+    if (Math.hypot(yawVel, pitchVel) > SHOW_INERTIA_MIN) coastOrbitTargets(dt);
+    else yawVel = pitchVel = 0;
+    returnOrbitTargets(dt);
+  }
+
+  function dampOrbitPose(dt: number): boolean {
+    const previousYaw = yaw;
+    const previousPitch = pitch;
+    const previousZoom = zoom;
+    const follow = 1 - Math.exp(-dt / SHOW_FOLLOW_TAU_S);
+    yaw += (tYaw - yaw) * follow;
+    pitch += (tPitch - pitch) * follow;
+    zoom += (tZoom - zoom) * follow;
+    if (Math.abs(tYaw - yaw) < SHOW_SETTLE_EPS) yaw = tYaw;
+    if (Math.abs(tPitch - pitch) < SHOW_SETTLE_EPS) pitch = tPitch;
+    if (Math.abs(tZoom - zoom) < SHOW_SETTLE_EPS) zoom = tZoom;
+    return Math.abs(yaw - previousYaw) > Number.EPSILON ||
+      Math.abs(pitch - previousPitch) > Number.EPSILON ||
+      Math.abs(zoom - previousZoom) > Number.EPSILON;
+  }
+
+  /** A dolly target inside what the camera can reach from this view: from the tank's near radius (the camera never enters
+   *  the silhouette) to the bay's reach, as shares of the fitted distance. A target past either end moved nothing and had
+   *  to be wound back before the next pinch or notch did anything (2026-10-27, the iPad review: "fix zoom amounts"). */
+  function clampZoom(target: number): number {
+    const base = Math.max(heroDist, solve(yaw, pitch, SHOW_KEEP_FILL, 0).dist, 1e-3);
+    const min = Math.max(SHOW_ZOOM_MIN, nearDist / base);
+    const max = Math.max(min, Math.min(SHOW_ZOOM_MAX, distMax() / base));
+    return THREE.MathUtils.clamp(target, min, max);
+  }
+
+  const api: ShowroomOrbit = {
+    /** True once a hero has been measured (the orbit owns the camera). */
+    get active() { return running && haveBox; },
+    /** True only while an interaction/spring can produce another camera pose. */
+    get moving() {
+      return running && haveBox && (dragging || blending ||
+        Math.hypot(yawVel, pitchVel) > SHOW_INERTIA_MIN ||
+        Math.abs(tYaw - yaw) > SHOW_SETTLE_EPS ||
+        Math.abs(tPitch - pitch) > SHOW_SETTLE_EPS ||
+        Math.abs(tZoom - zoom) > SHOW_SETTLE_EPS);
+    },
+    /** Hero framing distance in meters (0 until measured). */
+    get heroDist() { return haveBox ? heroDist : 0; },
+
+    /**
+     * Re-measure the hero and snap the orbit back to the solved hero pose.
+     * Deterministic — the __SHOTS garage recipes call this so a staged capture
+     * never inherits a dragged view.
+     * @returns {boolean} true when a hero was measured and the pose applied
+     */
+    reset(): boolean {
+      return resetOrbit();
+    },
+
+    /** Enable showroom ownership and immediately solve the selected hero. */
+    start(): boolean {
+      running = true;
+      return api.reset();
+    },
+
+    /** Release showroom ownership before battle/shot-mode camera control. */
+    stop(): void {
+      running = false;
+      dragging = false;
+      yawVel = pitchVel = 0;
+      lastInputMs = -Infinity;
+    },
+
+    /**
+     * Per-frame damped integration (drag → momentum → idle spring-back) and
+     * pose write. Returns whether the rendered camera pose changed.
+     * @param {number} dt render delta seconds
+     * @returns {boolean}
+     */
+    update(dt: number): boolean {
+      if (!running) return false;
+      const d = THREE.MathUtils.clamp(dt, 0, 0.1);
+      pointsAgeS += d;
+      if (!haveBox) return pollForFirstSubject(d);
+      // The hero can stream in behind a stand-in and the carousel
+      // can swap vehicles at any time — re-measure a few times a second so the
+      // framing (and heroDist) always describes what is actually on stage.
+      const dirty = refreshSubjectMeasurement(d);
+      if (!haveBox) return false;
+      // another hero or a moved stage (a panel opening): the camera blends onto the new framing. A resized window
+      // re-solves at once (the still Garage ticks too rarely for the periodic re-measure) and takes its framing directly.
+      const windowMoved = syncWindow();
+      const resized = Math.abs(viewAspect() - appliedAspect) > SHOW_SETTLE_EPS;
+      if (windowMoved || resized) heroDist = solveHero();
+      if (resized) blending = false;
+      else if (dirty || windowMoved) beginBlend();
+      advanceOrbitTargets(d);
+      const moved = dampOrbitPose(d);
+      const settling = blending;
+      if (dirty || moved || windowMoved || resized || settling) applyPose(d);
+      return dirty || moved || windowMoved || resized || settling;
+    },
+
+    /** Pointer went down on the 3D stage. @returns {void} */
+    beginDrag(): void {
+      if (!running || !haveBox) return;
+      dragging = true;
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+      yawVel = pitchVel = 0;
+      lastDragMs = 0;
+    },
+
+    /**
+     * Pointer moved during a stage drag: steer the turntable within the clamp
+     * and remember the flick velocity for release momentum.
+     * @param {number} dxPx horizontal pointer delta in CSS px
+     * @param {number} dyPx vertical pointer delta in CSS px
+     * @returns {void}
+     */
+    drag(dxPx: number, dyPx: number): void {
+      if (!dragging) return;
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+      const y0 = tYaw, p0 = tPitch;
+      // drag right → the near face sweeps right (camera orbits left).
+      // garage-scene r1: yaw unclamped — drag all the way around to the rear.
+      tYaw -= dxPx * SHOW_DRAG_YAW_PER_PX;
+      // drag down → look further down onto the roof (turntable tilt)
+      tPitch = THREE.MathUtils.clamp(tPitch + dyPx * SHOW_DRAG_PITCH_PER_PX,
+        SHOW_PITCH_MIN, SHOW_PITCH_MAX);
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const dtMs = lastDragMs ? THREE.MathUtils.clamp(now - lastDragMs, 4, 60) : 16;
+      lastDragMs = now;
+      const inv = 1000 / dtMs;
+      const mix = 0.45;                       // EMA over ~2-3 pointer events
+      yawVel = THREE.MathUtils.clamp(yawVel * (1 - mix) + (tYaw - y0) * inv * mix,
+        -SHOW_INERTIA_MAX, SHOW_INERTIA_MAX);
+      pitchVel = THREE.MathUtils.clamp(pitchVel * (1 - mix) + (tPitch - p0) * inv * mix,
+        -SHOW_INERTIA_MAX, SHOW_INERTIA_MAX);
+    },
+
+    /** Pointer released — the coast + spring-back take over. @returns {void} */
+    endDrag(): void {
+      dragging = false;
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+    },
+
+    cancelDrag(): void {
+      dragging = false;
+      yawVel = pitchVel = 0;
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+    },
+
+    /**
+     * Wheel zoom inside clamps derived from the fitted hero distance.
+     * @param {number} notches positive = zoom in
+     * @returns {void}
+     */
+    wheel(notches: number): void {
+      if (!haveBox || !notches || !Number.isFinite(notches)) return;
+      // fractional notches (2026-09-19): a trackpad scroll or pinch dollies proportionally to its travel
+      const n = THREE.MathUtils.clamp(notches, -3, 3);
+      tZoom = clampZoom(tZoom * Math.pow(SHOW_ZOOM_STEP, n));
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+    },
+
+    pinch(scale: number): void {
+      if (!haveBox || !(scale > 0) || !Number.isFinite(scale)) return;
+      // the fingers' spread is the tank's growth (a 2x spread halves the distance), as a map or a photo pinches
+      tZoom = clampZoom(tZoom / THREE.MathUtils.clamp(scale, 0.5, 2));
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+    },
+
+    hold(on: boolean): void {
+      held = on;
+    },
+
+    aim(yawRad: number, pitchRad: number, zoomTo = 1): void {
+      if (!haveBox || !Number.isFinite(yawRad) || !Number.isFinite(pitchRad)) return;
+      tYaw = yaw + wrapPi(yawRad - yaw);
+      tPitch = THREE.MathUtils.clamp(pitchRad, SHOW_PITCH_MIN, SHOW_PITCH_MAX);
+      tZoom = clampZoom(zoomTo);
+      yawVel = pitchVel = 0;
+      sinceInputS = 0;
+      lastInputMs = performance.now();
+    },
+
+    /**
+     * Live state for the headless camera probe (tools/garage-camera-probe.mjs).
+     * @returns {object}
+     */
+    debugState(): Record<string, RuntimeValue> {
+      return {
+        active: running && haveBox,
+        running,
+        yawDeg: THREE.MathUtils.radToDeg(yaw),
+        pitchDeg: THREE.MathUtils.radToDeg(pitch),
+        heroYawDeg: THREE.MathUtils.radToDeg(heroYaw),
+        heroPitchDeg: THREE.MathUtils.radToDeg(heroPitchNow()),
+        // garage-scene r1: yaw is unclamped (full 360°). Report a full turn so
+        // probe assertions of the form |yaw-hero| <= clamp keep holding for
+        // any single-drag gesture without a schema change.
+        yawClampDeg: 360,
+        pitchMinDeg: THREE.MathUtils.radToDeg(SHOW_PITCH_MIN),
+        pitchMaxDeg: THREE.MathUtils.radToDeg(SHOW_PITCH_MAX),
+        zoom, zoomMin: SHOW_ZOOM_MIN, zoomMax: SHOW_ZOOM_MAX,
+        heroDist, dragging, sinceInputS,
+        fovDeg: showFovDeg(),
+        box: haveBox
+          ? { min: _sbMin.toArray(), max: _sbMax.toArray(), center: _sbCenter.toArray() }
+          : null,
+        corners: haveBox ? Array.from({ length: _sbCount }, (_, index) => [_sbPx[index], _sbPy[index], _sbPz[index]]) : null,
+        stage: { cx: win.cx, cy: win.cy, hx: win.hx, hy: win.hy },
+      };
+    },
+  };
+
+  return api;
+}

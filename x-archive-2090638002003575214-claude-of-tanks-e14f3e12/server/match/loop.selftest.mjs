@@ -1,0 +1,109 @@
+import assert from 'node:assert/strict';
+import { createFixedStepLoop } from './loop.ts';
+
+// A fake clock and timer: every wake-up is exact, then we inject jitter and a stall.
+{
+  let nowMs = 1000;
+  const timers = [];
+  const schedule = (callback, delayMs) => {
+    const timer = { at: nowMs + delayMs, callback, cancelled: false };
+    timers.push(timer);
+    return () => { timer.cancelled = true; };
+  };
+  const earliest = () => {
+    timers.sort((a, b) => a.at - b.at);
+    return timers.find((timer) => !timer.cancelled) ?? null;
+  };
+  /** Fire the earliest armed timer `lateMs` after its scheduled instant. */
+  const fireNext = (lateMs = 0) => {
+    const next = earliest();
+    if (!next) return false;
+    timers.splice(timers.indexOf(next), 1);
+    nowMs = Math.max(nowMs, next.at + lateMs);
+    next.callback();
+    return true;
+  };
+  /** Fire every timer due by `untilMs`, each exactly on time. */
+  const fire = (untilMs) => {
+    while (earliest() && earliest().at <= untilMs) fireNext(0);
+    nowMs = Math.max(nowMs, untilMs);
+  };
+  const seen = [];
+  const loop = createFixedStepLoop({
+    tickMs: 1000 / 60, maxCatchUpTicks: 6, now: () => nowMs, schedule,
+    onTick: (tick, dt) => { seen.push(tick); assert.equal(dt, 1 / 60); },
+  });
+  assert.equal(loop.advance(), 0, 'a stopped loop runs nothing');
+  loop.start();
+  fire(1000 + 1000 / 60 * 10 + 0.001);
+  assert.deepEqual(seen, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'ten exact wake-ups run ten consecutive ticks');
+  // a timer that wakes 12 ms late does not drift the schedule: the next target is still on the grid
+  fireNext(12);
+  assert.equal(loop.tick, 11);
+  const after = earliest().at;
+  assert.ok(Math.abs(after - (1000 + 12 * 1000 / 60)) < 1e-6, `late wake-up keeps the grid (${after})`);
+  assert.ok(loop.stats.lateWakeupMaxMs >= 12 - 1e-6);
+  // a 500 ms stall: six ticks run (the catch-up window, on from the tick before it), the rest are dropped and counted,
+  // and the tick lands on the wall's grid (267): every peer reads server time as tick * tickMs
+  const beforeStall = seen.length;
+  fireNext(500);
+  assert.equal(loop.stats.stalls, 1);
+  assert.ok(loop.stats.droppedTicks >= 20, `dropped ${loop.stats.droppedTicks}`);
+  assert.deepEqual(seen.slice(beforeStall), [12, 13, 14, 15, 16, 17], 'the catch-up window runs the six ticks after the stall began');
+  assert.equal(loop.tick, Math.floor((nowMs - 1000) * 60 / 1000 + 1e-6), `the tick is the wall's (${loop.tick} at ${(nowMs - 1000).toFixed(1)} ms)`);
+  assert.equal(loop.tick, 17 + loop.stats.droppedTicks, 'the dropped ticks are skipped, never run');
+  fire(nowMs);
+  const ticksAfterStall = loop.tick;
+  fire(nowMs + 1000 / 60 * 3 + 0.001);
+  assert.equal(loop.tick, ticksAfterStall + 3, 'after a stall the loop resumes one tick per interval');
+  assert.deepEqual(seen.slice(-3), [ticksAfterStall + 1, ticksAfterStall + 2, ticksAfterStall + 3], 'from the tick after the skip');
+  loop.stop();
+  const pending = timers.filter((t) => !t.cancelled).length;
+  assert.equal(pending, 0, 'stop cancels the armed timer');
+  assert.equal(loop.running, false);
+  assert.equal(loop.tickCost.count, loop.tick - loop.stats.droppedTicks);
+  console.log(`loop.selftest: ${loop.tick} ticks, ${loop.stats.wakeups} wake-ups, drift-free late wake, stall dropped ${loop.stats.droppedTicks} ticks`);
+}
+
+// Manual driving without timers (the receipts and the soak's in-process mode use this).
+{
+  let nowMs = 0;
+  const loop = createFixedStepLoop({ now: () => nowMs, schedule: () => () => {}, onTick: () => {} });
+  loop.start();
+  nowMs = 1000;
+  assert.equal(loop.advance(nowMs), 6, 'a one second gap runs the catch-up window');
+  nowMs = 1000 + 1000 / 60 * 4;
+  assert.equal(loop.advance(nowMs), 4);
+  assert.throws(() => createFixedStepLoop({ tickMs: 0, onTick: () => {} }), TypeError);
+  assert.throws(() => createFixedStepLoop({ maxCatchUpTicks: 0, onTick: () => {} }), TypeError);
+  // an error inside a tick is reported and does not stop the loop
+  const errors = [];
+  const faulty = createFixedStepLoop({ now: () => nowMs, schedule: () => () => {}, onTick: (tick) => { if (tick === 2) throw new Error('boom'); }, onError: (e) => errors.push(e) });
+  faulty.start();
+  nowMs += 1000 / 60 * 3;
+  assert.equal(faulty.advance(nowMs), 3);
+  assert.equal(errors.length, 1);
+  console.log('loop.selftest: manual advance, catch-up window and error isolation hold');
+}
+
+// Real timers for one short stretch: every tick of the wall clock is run or counted as dropped.
+// (266, main's reds: under a loaded suite a stall past the catch-up window dropped ticks by design, and the stretch ended
+// before the loop's next wake-up saw the time since its last one, so the bare count fell more than three short.) The
+// stretch ends with the loop accounting up to now, and the run and dropped ticks together keep the wall clock; with no
+// stall that is the cadence itself.
+{
+  const started = performance.now();
+  let count = 0;
+  const loop = createFixedStepLoop({ onTick: () => { count++; } });
+  loop.start();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const elapsed = performance.now() - started;
+  loop.advance();
+  loop.stop();
+  const expected = elapsed / (1000 / 60);
+  const accounted = count + loop.stats.droppedTicks;
+  assert.ok(loop.stats.wakeups > 0, 'real timers drive the loop');
+  assert.ok(Math.abs(accounted - expected) <= 3,
+    `real timers: ${count} ticks run and ${loop.stats.droppedTicks} dropped in ${elapsed.toFixed(1)} ms (expected ~${expected.toFixed(1)})`);
+  console.log(`loop.selftest: real timers ran ${count} ticks (${loop.stats.droppedTicks} dropped over ${loop.stats.stalls} stalls) in ${elapsed.toFixed(0)} ms (max late wake ${loop.stats.lateWakeupMaxMs.toFixed(1)} ms)`);
+}

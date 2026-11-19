@@ -1,0 +1,228 @@
+import { describe, expect, it } from 'vitest';
+import {
+  baseBudgetSeconds, bodyParts, budgetSeconds, ENDLESS_GROWTH, enemyHp, meanRush, sizeWave, BOSS_MIN_HP_MULT, BOSS_OVER_ELITE, BOSS_OVER_ESCORT,
+  BUDGET_REALISM, CAP_REGULATOR_MAX, ELITE_HP_FACTOR, MAX_ALLOWED_LEAK_SHARE, rageFactor, SURE_KILL_HQ_SHARE, SURE_KILL_SHARE, UNDER_FIRE_SHARE, eliteCount, type BudgetInput,
+} from './budget';
+import type { EffectiveDPSPerArmor } from '../../models/game-state-snapshot';
+import { ENEMY_TYPES, WORM_MAX_SEGMENTS } from '../../../configs/enemy-types.config';
+
+const flat = (v: number) => ({ unarmored: v, light: v, heavy: v, fortified: v, ethereal: v });
+const scale = <T extends Record<string, number>>(o: T, k: number) =>
+  Object.fromEntries(Object.entries(o).map(([key, v]) => [key, v * k])) as T;
+const dps = (ground: number, air = ground): EffectiveDPSPerArmor => ({ ground: flat(ground), air: flat(air) });
+
+const base = (over: Partial<BudgetInput> = {}): BudgetInput => ({
+  wave: 20,
+  enemies: { zombie: 100 },
+  strength: 1,
+  spawnDelayMs: 1000,
+  regulator: 1,
+  targetPressure: 0.05,
+  leakScale: () => 1,
+  defense: { dps: dps(1000), damageMetres: dps(1000 * 400), hpRemaining: 300 },
+  ...over,
+});
+
+/** Seconds of defense damage the sized wave costs, its elites included. */
+const cost = (input: BudgetInput, sized: ReturnType<typeof sizeWave>) =>
+  Object.entries(input.enemies).reduce((sum, [type, n]) => {
+    const elite = sized.elites[type] ?? { count: 0, hpMult: 0 };
+    const hp = (n - elite.count) * sized.hpMult[type] + elite.count * elite.hpMult;
+    return sum + (enemyHp(type) * hp) / (1000 * BUDGET_REALISM);
+  }, 0);
+
+describe('budget curve', () => {
+  it('starts at 15 s and rises steadily, without a bend at the end of the plan', () => {
+    expect(budgetSeconds(1)).toBe(15);
+    for (let w = 2; w <= 200; w++) expect(budgetSeconds(w)).toBeGreaterThan(budgetSeconds(w - 1));
+    expect(budgetSeconds(60)).toBeCloseTo(baseBudgetSeconds(60) + ENDLESS_GROWTH * (59 / 60) ** 2, 9);
+    expect(budgetSeconds(150) - budgetSeconds(100)).toBeGreaterThan(30);
+  });
+
+  it('keeps a saturating part that flattens towards 100 s', () => {
+    expect(baseBudgetSeconds(1)).toBe(15);
+    expect(baseBudgetSeconds(120)).toBeLessThan(100);
+  });
+});
+
+describe('sizeWave', () => {
+  it('fills exactly the budget when the wave is long enough', () => {
+    const input = base();
+    const sized = sizeWave(input);
+    expect(sized.capped).toBe(false);
+    expect(sized.delivered).toBeCloseTo(budgetSeconds(20));
+    expect(cost(input, sized)).toBeCloseTo(sized.delivered, 1);
+  });
+
+  it('scales with the row strength and the loop, the same way for every wave', () => {
+    const one = sizeWave(base()).hpMult['zombie'];
+    expect(sizeWave(base({ strength: 1.3 })).hpMult['zombie']).toBeCloseTo(one * 1.3, 2);
+    expect(sizeWave(base({ regulator: 0.5 })).hpMult['zombie']).toBeCloseTo(one * 0.5, 2);
+  });
+
+  it('gives a stronger defense tougher enemies, not more of them', () => {
+    const weak = sizeWave(base());
+    const strong = sizeWave(base({ defense: { ...base().defense, dps: dps(2000), damageMetres: dps(2000 * 400) } }));
+    expect(strong.hpMult['zombie']).toBeCloseTo(weak.hpMult['zombie'] * 2, 2);
+  });
+
+  it('holds an enemy at what the defense deals while it is under fire', () => {
+    // One worm, a short stretch under fire: it would take far more than that
+    const input = base({ enemies: { ooze: 1 }, spawnDelayMs: 0, targetPressure: 10, defense: { dps: dps(50000), damageMetres: dps(50000 * 20), hpRemaining: 3000 } });
+    const sized = sizeWave(input);
+    const fire = 20 / ENEMY_TYPES['ooze'].baseSpeed;
+    expect(sized.clamped).toEqual(['ooze']);
+    expect((enemyHp('ooze') * sized.hpMult['ooze']) / (50000 * BUDGET_REALISM)).toBeCloseTo(UNDER_FIRE_SHARE * fire, 1);
+  });
+
+  it('gives the rest of the budget to the others when one type is at its limit', () => {
+    const sized = sizeWave(base({ enemies: { ooze: 1, skeleton: 300 }, spawnDelayMs: 400, defense: { dps: dps(50000), damageMetres: dps(50000 * 60), hpRemaining: 300 } }));
+    expect(sized.clamped).toContain('ooze');
+    expect(sized.hpMult['skeleton']).toBeGreaterThan(sized.hpMult['ooze']);
+  });
+
+  it('cuts the budget to the time on the route plus the leaks the curve allows', () => {
+    const at = (hpRemaining: number) => sizeWave(base({ enemies: { zombie: 200 }, spawnDelayMs: 100, defense: { dps: dps(1000), damageMetres: dps(1000 * 30), hpRemaining } }));
+    const short = at(300);
+    expect(short.capped).toBe(true);
+    expect(short.delivered).toBeLessThan(short.budget);
+    expect(at(3000).delivered).toBeGreaterThan(short.delivered);
+  });
+
+  it('lets through at most MAX_ALLOWED_LEAK_SHARE of the bodies by design', () => {
+    // Ten zombies against a large HQ: every one may leak, the cap asks at most 1 / (1 - share) of the time
+    const at = (hpRemaining: number) => sizeWave(base({ enemies: { zombie: 10 }, spawnDelayMs: 100, defense: { dps: dps(1000), damageMetres: dps(1000 * 30), hpRemaining } }));
+    const capped = at(30000);
+    expect(capped.delivered).toBeCloseTo(capped.window / (1 - MAX_ALLOWED_LEAK_SHARE), 6);
+  });
+
+  it('moves the cap with the loop up to CAP_REGULATOR_MAX, so a capped wave still answers to it', () => {
+    const at = (regulator: number) => sizeWave(base({ enemies: { zombie: 200 }, spawnDelayMs: 100, regulator, defense: { dps: dps(1000), damageMetres: dps(1000 * 30), hpRemaining: 300 } }));
+    expect(at(1).capped).toBe(true);
+    expect(at(CAP_REGULATOR_MAX).delivered).toBeCloseTo(at(1).delivered * CAP_REGULATOR_MAX, 6);
+    expect(at(CAP_REGULATOR_MAX + 0.5).delivered).toBeCloseTo(at(CAP_REGULATOR_MAX).delivered, 6);
+    expect(at(0.5).delivered).toBeLessThan(at(1).delivered);
+  });
+
+  it('counts what a regenerating body heals and what a raging boss is worth', () => {
+    const plain = sizeWave(base({ enemies: { zombie: 100 } }));
+    const healing = sizeWave(base({ enemies: { zombie: 100 }, regenPerSecond: () => 0.02, defense: { ...base().defense, metresUnderFire: { ground: 300, air: 300 } } }));
+    expect(healing.hpMult['zombie']).toBeLessThan(plain.hpMult['zombie']);
+    const rage = ENEMY_TYPES['herbert'].traits!.rage!;
+    expect(rageFactor(ENEMY_TYPES['herbert'])).toBeCloseTo(1 - rage.belowHp + (rage.belowHp * rage.speed) / rage.damageTaken, 9);
+    expect(rageFactor(ENEMY_TYPES['zombie'])).toBe(1);
+  });
+
+  it('leaves enemies the defense cannot hurt at the row strength, HP ×1 at strength 1', () => {
+    const sized = sizeWave(base({ enemies: { bat: 20, zombie: 50 }, defense: { dps: dps(1000, 0), damageMetres: dps(1000 * 400, 0), hpRemaining: 300 } }));
+    expect(sized.unhurt).toEqual(['bat']);
+    expect(sized.hpMult['bat']).toBe(1);
+    expect(sized.hpMult['zombie']).toBeGreaterThan(1);
+  });
+
+  it('answers without a defense', () => {
+    const sized = sizeWave(base({ defense: { dps: undefined, damageMetres: undefined, hpRemaining: 500 } }));
+    expect(sized.hpMult['zombie']).toBe(1);
+  });
+});
+
+describe('sizeWave, an enemy whose one leak costs a good part of the HQ', () => {
+  it('gets only the sure-kill share of the damage under fire', () => {
+    const at = (hpRemaining: number) => sizeWave(base({ enemies: { ooze: 1 }, spawnDelayMs: 0, defense: { dps: dps(50000), damageMetres: dps(50000 * 30), hpRemaining } }));
+    // The Ooze's leak (49) against SURE_KILL_HQ_SHARE of 3000 and of 300 HQ HP
+    expect(49).toBeLessThan(3000 * SURE_KILL_HQ_SHARE);
+    expect(49).toBeGreaterThan(300 * SURE_KILL_HQ_SHARE);
+    expect(at(300).hpMult['ooze']).toBeCloseTo((at(3000).hpMult['ooze'] * SURE_KILL_SHARE) / UNDER_FIRE_SHARE, 2);
+  });
+});
+
+describe('sizeWave, elites', () => {
+  it('makes one in twenty of a kind an elite with ELITE_HP_FACTOR times the HP, inside the same budget', () => {
+    const input = base({ enemies: { zombie: 100 } });
+    const sized = sizeWave(input);
+    expect(eliteCount('zombie', 100)).toBe(5);
+    expect(sized.elites['zombie']).toEqual({ count: 5, hpMult: expect.any(Number) });
+    expect(sized.elites['zombie'].hpMult / sized.hpMult['zombie']).toBeCloseTo(ELITE_HP_FACTOR, 2);
+    expect(cost(input, sized)).toBeCloseTo(sized.delivered, 1);
+  });
+
+  it('has none for a boss, a chain or fewer than ten of a kind', () => {
+    expect(eliteCount('herbert', 40)).toBe(0);
+    expect(eliteCount('worm', 40)).toBe(0);
+    expect(eliteCount('ooze', 40)).toBe(0);
+    expect(eliteCount('tank', 9)).toBe(0);
+    expect(eliteCount('tank', 10)).toBe(1);
+  });
+
+  it('keeps an elite at the limit of its kind', () => {
+    const sized = sizeWave(base({ enemies: { mammoth: 40 }, defense: { dps: dps(1000), damageMetres: dps(1000 * 15), hpRemaining: 300 } }));
+    expect(sized.elites['mammoth'].hpMult).toBeLessThanOrEqual(sized.limits['mammoth'] + 1e-3);
+  });
+});
+
+describe('sizeWave, a boss', () => {
+  const defense = { dps: dps(3000), damageMetres: dps(3000 * 40), metresUnderFire: { ground: 200, air: 200 }, hpRemaining: 300 };
+
+  it('is never weaker than BOSS_OVER_ESCORT times the toughest escort body', () => {
+    const sized = sizeWave(base({ wave: 10, enemies: { herbert: 1, tank: 10, zombie: 9 }, spawnDelayMs: 2000, defense }));
+    const herbert = enemyHp('herbert') * sized.hpMult['herbert'];
+    const tank = enemyHp('tank') * sized.hpMult['tank'];
+    expect(herbert).toBeGreaterThanOrEqual(BOSS_OVER_ESCORT * tank * 0.999);
+    // and BOSS_OVER_ELITE times the elite tank
+    expect(herbert).toBeGreaterThanOrEqual(BOSS_OVER_ELITE * enemyHp('tank') * sized.elites['tank'].hpMult * 0.999);
+    expect(sized.floored).toContain('herbert');
+  });
+
+  it('keeps at least BOSS_MIN_HP_MULT of its base HP, however short its time under fire', () => {
+    const sized = sizeWave(base({ wave: 20, enemies: { ooze: 1 }, spawnDelayMs: 0, defense: { ...defense, damageMetres: dps(3000 * 2) } }));
+    expect(sized.hpMult['ooze']).toBe(BOSS_MIN_HP_MULT);
+  });
+
+  it('takes its floor out of the budget of its escort', () => {
+    const alone = sizeWave(base({ wave: 10, enemies: { tank: 10, zombie: 9 }, spawnDelayMs: 2000, defense }));
+    const led = sizeWave(base({ wave: 10, enemies: { herbert: 1, tank: 10, zombie: 9 }, spawnDelayMs: 2000, defense }));
+    expect(led.hpMult['tank']).toBeLessThan(alone.hpMult['tank']);
+  });
+});
+
+describe('sizeWave, a chain', () => {
+  it('counts every segment as a body of its own, with the time the chain takes to come out', () => {
+    const defense = { dps: dps(5000), damageMetres: dps(5000 * 60), metresUnderFire: { ground: 60, air: 60 }, hpRemaining: 300 };
+    const worm = sizeWave(base({ wave: 30, enemies: { worm: 1 }, spawnDelayMs: 0, defense }));
+    // A segment takes little damage alone: no limit holds it, and the window is the chain coming out
+    expect(worm.clamped).toEqual([]);
+    const out = (WORM_MAX_SEGMENTS * ENEMY_TYPES['worm'].chain!.spacing) / ENEMY_TYPES['worm'].baseSpeed;
+    expect(worm.window).toBeGreaterThan(out);
+    expect(worm.hpMult['worm']).toBeGreaterThan(1);
+  });
+
+  it('counts the head as a body of its own, with its HP and armor', () => {
+    const chain = ENEMY_TYPES['worm'].chain!;
+    const [head, segments] = bodyParts('worm');
+    expect(head).toMatchObject({ bodies: 1, hp: 400 * chain.head.hpFactor, armor: chain.head.armorType });
+    expect(segments).toMatchObject({ bodies: WORM_MAX_SEGMENTS - 1, hp: 400, armor: ENEMY_TYPES['worm'].armorType });
+    expect(enemyHp('worm')).toBe(400 * (WORM_MAX_SEGMENTS - 1 + chain.head.hpFactor));
+  });
+
+  it('holds the whole worm lower against a defense weak against the head', () => {
+    const at = (fortified: number) => {
+      const d = { ...flat(5000), fortified };
+      const defense = { dps: { ground: d, air: d }, damageMetres: { ground: scale(d, 60), air: scale(d, 60) }, metresUnderFire: { ground: 60, air: 60 }, hpRemaining: 300 };
+      return sizeWave(base({ wave: 30, enemies: { worm: 1 }, spawnDelayMs: 0, regulator: 20, defense })).hpMult['worm'];
+    };
+    expect(at(200)).toBeLessThan(at(5000));
+  });
+
+  it('passes the towers faster on average the more it rushes', () => {
+    expect(meanRush(0)).toBe(1);
+    expect(meanRush(1)).toBeCloseTo(1 / Math.log(2), 6);
+    expect(bodyParts('worm')[1].speed).toBeCloseTo(ENEMY_TYPES['worm'].baseSpeed * meanRush(ENEMY_TYPES['worm'].chain!.rush), 9);
+  });
+});
+
+describe('sizeWave before any tower stands', () => {
+  it('gives every enemy the row strength as HP factor', () => {
+    const sized = sizeWave(base({ strength: 0.75, defense: { dps: undefined, damageMetres: undefined, hpRemaining: 500 } }));
+    expect(sized.hpMult['zombie']).toBe(0.75);
+  });
+});

@@ -1,0 +1,455 @@
+import * as THREE from 'three';
+import {AERIAL_RULES} from '../sim/matchRuleset.ts';
+import {droneLaunchHeight,droneFreeFlightBlend,DRONE_SPOOL_S} from '../sim/droneLaunch.ts';
+import { createDroneAttitude, updateDroneAttitude, droneWobblePitch, droneWobbleRoll, droneHoverDrift, droneClimbCharacter, type DroneAttitude } from './droneMotion.ts';
+import { acquireDroneModelKit, droneNation, droneRotorDirection, mirroredRotorGeometry, poseDroneRotor, DRONE_LITE_DISTANCE_M, type DroneKitLease } from './droneModel.ts';
+import { DRONE_ARRIVAL, DRONE_RETURN, droneArrivalAttitude } from './droneArrival.ts';
+import { avoidDroneObstacles, type AerialWorldQuery } from '../sim/aerialCombat.ts';
+import { droneReturnS, droneReturnSpeed, droneReturnClimbS } from '../sim/droneRecall.ts';
+
+const CAPACITY = 42;
+/**
+ * The pilot's lens rides inside its own airframe, so that one drone is skipped near the camera while the pilot's aerial
+ * camera follows it (2 m covers the one fixed step the camera's view lags the airframe). Every other camera (a film, the
+ * killcam, spectators, a teammate beside the carrier) draws every drone, however close (2026-10-10: a film camera 1.99 m
+ * from the dock lost the airframe for a frame as it passed camera height).
+ */
+export function droneHiddenFromCamera(position:THREE.Vector3,shooterId:string|number|null|undefined,flightActive:boolean,camera:THREE.Camera):boolean {
+  return flightActive&&shooterId!=null&&camera.userData.aerialPilotId===shooterId&&position.distanceToSquared(camera.position)<=4;
+}
+/** The blades read individually only while they spool; at speed each rotor is a translucent disc. From `FAINT_DISC_S`
+ * a faint disc shows over the quickening blades, so the spool-up reads blades, then blades under a disc, then a disc —
+ * all on the cradle (round 4b: the disc is full just before the 0.6 s lift, DRONE_SPOOL_S). */
+const BLUR_AFTER_SPOOL = .5, FAINT_DISC_S = .2;
+/** A shell's marked end (an impact, a downing) is kept this many frames: past any network frame still listing it. */
+const DRONE_END_MARK_FRAMES = 120;
+
+interface DetailPool {
+ lease:DroneKitLease;
+ parts:THREE.InstancedMesh[];
+ rotors:THREE.InstancedMesh;
+ /** The counter-rotating props, pre-mirrored (mirroredRotorGeometry): an instance never carries a mirrored transform. */
+ mirrorRotors:THREE.InstancedMesh;
+ blurs:THREE.InstancedMesh;
+ faint:THREE.InstancedMesh;
+ meshes:THREE.InstancedMesh[];
+ count:number; bladeCount:number; mirrorCount:number; blurCount:number; faintCount:number;
+}
+/** A drone's carrier as the presentation sees it: the live dock frame (the cradle's airframe datum), and whether the
+ * carrier is gone or flying again (either ends a flight home). */
+interface DroneCarrierView { frame?: THREE.Object3D; destroyed: boolean; flying: boolean }
+interface DronePresentationOptions {
+  /** The battle world's raycast, the one the shells and the authorities sweep: a flight home avoids what it hits. */
+  world?(): Pick<AerialWorldQuery,'raycast'> | null | undefined;
+  resolveCarrier?(ownerId: string | number): DroneCarrierView | null;
+  /** Diagnostics: each flight home's start and end, with the reason it ended (or never began). */
+  onReturnEvent?(id: string | number, event: 'start' | 'end' | 'skip', reason: string): void;
+  /** (round 2 of the 2026-11-02 audit, U31) a drone the network view reports out of view, still in flight (effects.ts
+   *  unseenRounds): its airframe is held, undrawn, and no flight home begins, until it is seen again or the hold ends.
+   *  (round 3, A13) A hold that ends unseen drops the drone with no flight home: it may have ended out of view (struck,
+   *  shot down, landed), and a flight home from where it was last seen, the hold's length ago, would be a phantom. */
+  held?(id: string | number): boolean;
+  /** (round 8 Y6, s4-02) A drone shot down (markDowned) breaks up here, its last drawn place (where the audio's break-up
+   *  plays): the caller draws a short burst; no fall or wreck animation. */
+  onDowned?(id: string | number, at: THREE.Vector3): void;
+}
+/**
+ * (round 8 Y6, s4-02) Why a drone's flight ended. Each flight ends once, by one cause, through endFlight (its one owner):
+ *  - 'recalled': it left the frame with nothing striking it (a recall, its battery, the link's range): it flies home and
+ *    lands on its carrier's dock (presentation only; the sim's cooldown and timings are untouched);
+ *  - 'impact': it struck a hull or the world (markImpact, by its shell id): the shell event draws its burst; no flight home;
+ *  - 'downed': counter-drone fire shot it down (markDowned, by its carrier: the bus's drone:down names the carrier, never
+ *    the shell): it stops drawing at once, even while a lagging network frame still lists it, breaks up at its last drawn
+ *    place (onDowned) and never flies home; a flight home it reached late (not yet at the dock) ends where it is;
+ *  - 'unseen': its network hold ran out unseen (round 3, A13): dropped where it went, no flight home;
+ *  - 'lost': it has nothing to fly home on, reported by its reason ('no track', 'no owner', 'never flew free' of its dock).
+ * A shell id's marked cause (impact, downed) wins over what the frame that drops it shows; 'downed' wins over 'impact'.
+ * markImpact and markDowned only mark; the next end() ends the flight. A flight home it started then ends on its own
+ * terms (stepReturn: handed over, abandoned) or gives way to its shell seen again (write).
+ */
+export type DroneEndCause = 'recalled' | 'impact' | 'downed' | 'unseen' | 'lost';
+type ReturnPhase = 'grace' | 'transit' | 'descent' | 'handoff';
+interface ReturnFlight {
+  id: string | number; ownerId: string | number; nation: string; phase: ReturnPhase;
+  pos: THREE.Vector3; vel: THREE.Vector3; state: DroneAttitude; seed: number;
+  /** Where the flight ended: the recall's law reads the way home from here, as the authority did. */
+  from: THREE.Vector3;
+  t: number; phaseT: number; cruiseY: number; speed: number; descentFrom: number;
+  /** The climb (+) or sink (−) to cruise height over the dock, and the seconds the recall's law gives it (sim/droneRecall.ts,
+   * bounded by maxTransitS however high or low the airframe was): flown as an eased profile so it ends on time. */
+  rise: number; riseS: number;
+  /** Over the column once: from then it keeps station over it (as the descent does) while the climb or sink ends. */
+  overColumn: boolean;
+  /** Abandoned past this (the recall timing law plus its overrun; set as the transit begins). */
+  limitS: number;
+  /** The landing's first pose last frame: the carrier's motion, fed forward so a flight home keeps up with it. */
+  dockPrev: THREE.Vector3; dockSeen: boolean;
+}
+interface Track { pos: THREE.Vector3; vel: THREE.Vector3; ownerId?: string | number; nation: string; ageS: number }
+
+/** Bounded pools; a quadcopter banks modestly under motion, never points its body vertically. Airframe builds are the
+ * shared per-nation kits (lit-material registration rides with them). A flight that ends in the air (recall, battery,
+ * signal: no impact, never shot down) flies home and lands on its dock; presentation only, gameplay timing unchanged.
+ * Every flight's end has one cause (DroneEndCause) and one owner (endFlight). */
+export function createDronePresentation(parent: THREE.Group, options: DronePresentationOptions = {}) {
+  const variants=new Map<string,{full:DetailPool;lite:DetailPool|null;nation:string}>();
+  function buildDetail(nation:string,detail:'full'|'lite'):DetailPool {
+    const lease=acquireDroneModelKit(nation,detail),kit=lease.kit;
+    const parts=kit.parts.map(part=>new THREE.InstancedMesh(part.geometry,part.material,CAPACITY));
+    const rotors=new THREE.InstancedMesh(kit.rotor,kit.rotorMaterial,CAPACITY*2);
+    const mirrorRotors=new THREE.InstancedMesh(lease.shared('rotor-mirrored',k=>mirroredRotorGeometry(k.rotor)),kit.rotorMaterial,CAPACITY*2);
+    const blurs=new THREE.InstancedMesh(kit.rotorBlur,kit.blurMaterial,CAPACITY*4);
+    const faint=new THREE.InstancedMesh(kit.rotorBlurFaint,kit.blurMaterial,CAPACITY*4);
+    blurs.renderOrder=faint.renderOrder=2;
+    const meshes=[...parts,rotors,mirrorRotors,blurs,faint];
+    // Shaded like the docked airframe (one program per material), so a launch from a shaded dock never brightens.
+    for(const mesh of meshes){mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.receiveShadow=true;parent.add(mesh);}
+    // Near airframes cast with the sun (solid parts and spooling blades; never the translucent discs or the lite pool).
+    for(const mesh of [...parts,rotors,mirrorRotors])mesh.castShadow=detail==='full';
+    parts[0]!.name=`FPV ${kit.name} airframes${detail==='lite'?' (lite)':''}`;rotors.name='FPV spinning propellers';
+    mirrorRotors.name='FPV spinning propellers (counter-rotating)';blurs.name='FPV rotor discs';faint.name='FPV fading rotor discs';
+    return {lease,parts,rotors,mirrorRotors,blurs,faint,meshes,count:0,bladeCount:0,mirrorCount:0,blurCount:0,faintCount:0};
+  }
+  function variant(nation:string){
+    const key=droneNation(nation);let entry=variants.get(key);
+    if(!entry){entry={full:buildDetail(key,'full'),lite:null,nation:key};variants.set(key,entry);}
+    return entry;
+  }
+  const pose=new THREE.Object3D(),prop=new THREE.Object3D(),matrix=new THREE.Matrix4();
+  pose.rotation.order='YXZ';let count=0,time=0,dt=1/60,frame=0;
+  const camera=new THREE.Vector3();let hasCamera=false;
+  const attitudes=new Map<string|number,DroneAttitude>();
+  const launchFrames=new Map<string|number,{orientation:THREE.Quaternion;offset:THREE.Vector3;blocked:boolean}>();
+  const climb={pitch:0,roll:0,lift:0},drift={x:0,z:0},climbEuler=new THREE.Euler(0,0,0,'YXZ'),climbQuat=new THREE.Quaternion();
+  const launchOrientation=new THREE.Quaternion(),upRay=new THREE.Vector3(0,1,0);
+  const upAxis=new THREE.Vector3(0,1,0),lift=new THREE.Vector3(),dockUp=new THREE.Vector3();
+  const dockOrientation=new THREE.Quaternion(),flightOrientation=new THREE.Quaternion();
+  const tracks=new Map<string|number,Track>(),returns=new Map<string|number,ReturnFlight>(),impacted=new Map<string|number,number>();
+  // (round 8 Y6, s4-02) the shells shot down (markDowned), by the frame the mark came: kept DRONE_END_MARK_FRAMES like the
+  // impacts, so a lagging network frame that still lists the shell never draws it again
+  const downed=new Map<string|number,number>();
+  // (round 3, A13) the drones held out of view (options.held) and not seen since: one whose hold ends unseen is dropped
+  const heldUnseen=new Set<string|number>();
+  const dockAt=new THREE.Vector3(),drawAt=new THREE.Vector3(),handoffAt=new THREE.Vector3(),toward=new THREE.Vector3(),desired=new THREE.Vector3();
+  const handoffQuat=new THREE.Quaternion(),arrivalEuler=new THREE.Euler(0,0,0,'YXZ'),arrivalQuat=new THREE.Quaternion();
+  const arrivalPose={pitch:0,yaw:0,roll:0},rayDir=new THREE.Vector3(),dockVel=new THREE.Vector3();
+  const {climbMps:RETURN_CLIMB_MPS,sinkMps:RETURN_SINK_MPS,maxMps:RETURN_PACE_MPS}=AERIAL_RULES.drone.recall;
+  /** The climb or sink profile: its position gain and the vertical response (1/s), so it tracks the eased profile
+   * closely, and the beat it is drawn out by past the law's leg (the column's approach settles in that while). */
+  const RETURN_PROFILE_GAIN=2.5,RETURN_LIFT_HZ=6,RETURN_RISE_SETTLE_S=1.3;
+  /** Recalled this close to the column (m), the flight home starts by keeping station over it. */
+  const RETURN_NEAR_M=8;
+  /**
+   * The four rotors of one airframe into the pools, never with a mirrored instance transform (2026-10-12: two of the four
+   * props and discs drew lit from behind, near-black against the ground). A counter-rotating spinning prop draws the
+   * pre-mirrored geometry with the pose's scale held at +1; a disc is symmetric, so it takes no mirror at all.
+   */
+  function drawRotors(pool:DetailPool,base:THREE.Matrix4,blades:boolean,spin:number):void {
+    for(let n=0;n<4;n++){
+      poseDroneRotor(prop,n,spin+(blades?0:n));
+      const counter=droneRotorDirection(n)<0;
+      if(counter||!blades){prop.scale.set(1,1,1);prop.updateMatrix();}
+      matrix.multiplyMatrices(base,prop.matrix);
+      if(!blades)pool.blurs.setMatrixAt(pool.blurCount++,matrix);
+      else if(counter)pool.mirrorRotors.setMatrixAt(pool.mirrorCount++,matrix);
+      else pool.rotors.setMatrixAt(pool.bladeCount++,matrix);
+    }
+  }
+  /** One airframe into the pools: `blades` draws spooling blades, otherwise rotor discs. */
+  function drawAirframe(nation:string,matrixWorld:THREE.Matrix4,spin:number,blades:boolean):void {
+    if(count>=CAPACITY)return;
+    const entry=variant(nation);
+    const far=hasCamera&&drawAt.setFromMatrixPosition(matrixWorld).distanceToSquared(camera)>DRONE_LITE_DISTANCE_M*DRONE_LITE_DISTANCE_M;
+    if(far&&!entry.lite)entry.lite=buildDetail(entry.nation,'lite');
+    const pool=far?entry.lite!:entry.full,index=pool.count++;
+    for(const part of pool.parts)part.setMatrixAt(index,matrixWorld);
+    drawRotors(pool,matrixWorld,blades,blades?spin:time*9);
+    count++;
+  }
+  /** The landing's first pose on the carrier's dock, in the world: the hand-over point of a flight home. */
+  function handoffPose(frame:THREE.Object3D):void {
+    frame.updateWorldMatrix(true,false);
+    handoffAt.set(0,DRONE_ARRIVAL.heightM,0).applyMatrix4(frame.matrixWorld);
+    droneArrivalAttitude(0,arrivalPose);
+    arrivalQuat.setFromEuler(arrivalEuler.set(arrivalPose.pitch,arrivalPose.yaw,arrivalPose.roll,'YXZ'));
+    frame.getWorldQuaternion(handoffQuat).multiply(arrivalQuat);
+  }
+  function startReturn(id:string|number,track:Track):void {
+    if(track.ownerId==null||track.ageS<AERIAL_RULES.drone.launchS){options.onReturnEvent?.(id,'skip',track.ownerId==null?'no owner':'never flew free');return;}
+    options.onReturnEvent?.(id,'start',`owner ${track.ownerId}`);
+    const state=attitudes.get(id)??createDroneAttitude();
+    returns.set(id,{id,ownerId:track.ownerId,nation:track.nation,phase:'grace',pos:track.pos.clone(),vel:track.vel.clone(),state,from:track.pos.clone(),
+      seed:typeof id==='number'?id*.71:id.length*.71,t:0,phaseT:0,cruiseY:track.pos.y,speed:droneReturnSpeed(0),descentFrom:0,
+      rise:0,riseS:0,overColumn:false,limitS:Infinity,dockPrev:new THREE.Vector3(),dockSeen:false});
+  }
+  /**
+   * (round 8 Y6, s4-02) The one end of a drone's flight, by its cause (DroneEndCause), reported once through
+   * onReturnEvent. 'recalled' starts the flight home (startReturn may still find it 'lost': no owner, never flew free).
+   * Every other cause drops the airframe where it is, with any flight home not yet at its dock (a hand-over is the dock's);
+   * a 'downed' one breaks up at its last drawn place: its flight home's, else its own when it was drawn last frame (a
+   * drone held out of view was not: no burst at a stale place). A flight in its grace keeps its airframe for it.
+   */
+  function endFlight(id:string|number,cause:Exclude<DroneEndCause,'lost'>,drawnLastFrame:boolean):void {
+    const track=tracks.get(id),r=returns.get(id),flying=r&&r.phase!=='handoff'?r:undefined;
+    if(cause==='recalled'){
+      if(!track)options.onReturnEvent?.(id,'skip','no track');
+      else if(options.resolveCarrier)startReturn(id,track);
+    }else{
+      // a flight home past its grace ends ('end'); a drone still in flight or in its grace never began one ('skip')
+      if(flying&&flying.phase!=='grace')options.onReturnEvent?.(id,'end',`${cause} (${flying.phase}, ${flying.t.toFixed(2)} s)`);
+      else options.onReturnEvent?.(id,'skip',cause);
+      if(cause==='downed'){
+        const at=flying?flying.pos:drawnLastFrame?track?.pos:undefined;
+        if(at)options.onDowned?.(id,at);
+      }
+      if(flying)returns.delete(id);
+    }
+    if(returns.get(id)?.phase!=='grace'){attitudes.delete(id);launchFrames.delete(id);tracks.delete(id);}
+  }
+  /** Advance one flight home by this frame's presentation dt and draw it; false when it ended (handed over or abandoned). */
+  function stepReturn(r:ReturnFlight):boolean {
+    const ended=(reason:string)=>{options.onReturnEvent?.(r.id,'end',`${reason} (${r.phase}, ${r.t.toFixed(2)} s)`);return false;};
+    const carrier=options.resolveCarrier?.(r.ownerId),frame=carrier?.frame;
+    if(!carrier)return ended('no carrier');
+    if(!frame)return ended('no dock frame');
+    if(carrier.destroyed)return ended('carrier destroyed');
+    if(carrier.flying)return ended('carrier flying again');
+    if(frame.parent?.visible===false)return ended('dock hidden');
+    if(r.phase==='handoff'&&frame.userData.returnAck===true){frame.userData.returnAck=false;return ended('handed over');}
+    r.t+=dt;r.phaseT+=dt;
+    if(r.t>r.limitS)return ended('time bound');
+    const world=options.world?.()??null;
+    handoffPose(frame);
+    frame.getWorldPosition(dockAt);
+    // The carrier may be driving: its ground velocity is fed forward (bounded against a teleport) so the flight home and
+    // the column descent keep station over a moving dock instead of trailing it into the hand-over.
+    if(r.dockSeen&&dt>0)dockVel.set(handoffAt.x-r.dockPrev.x,0,handoffAt.z-r.dockPrev.z).multiplyScalar(1/dt).clampLength(0,30);
+    else dockVel.set(0,0,0);
+    r.dockPrev.copy(handoffAt);r.dockSeen=true;
+    if(r.phase==='grace'){
+      r.vel.multiplyScalar(Math.exp(-dt*6));r.pos.addScaledVector(r.vel,dt);
+      if(r.phaseT>=DRONE_RETURN.graceS){
+        r.phase='transit';r.phaseT=0;r.cruiseY=dockAt.y+DRONE_RETURN.cruiseAboveDockM;
+        // Paced and bounded by the recall's timing law (sim/droneRecall.ts), the window the authority holds the dock for.
+        const distance=Math.hypot(dockAt.x-r.pos.x,dockAt.z-r.pos.z),fromM=Math.hypot(dockAt.x-r.from.x,dockAt.z-r.from.z);
+        r.speed=droneReturnSpeed(distance);
+        // Recalled right by the column, it hops straight over it and keeps station (a carrier driving off is caught up).
+        r.overColumn=distance<=RETURN_NEAR_M;
+        r.rise=r.cruiseY-r.pos.y;r.riseS=droneReturnClimbS(r.from.y-dockAt.y)+RETURN_RISE_SETTLE_S;
+        r.limitS=droneReturnS(fromM,r.from.y-dockAt.y)+DRONE_RETURN.overrunS;
+      }
+    }else if(r.phase==='transit'){
+      toward.set(handoffAt.x-r.pos.x,0,handoffAt.z-r.pos.z);
+      const distance=toward.length();
+      if(distance<=DRONE_RETURN.columnM&&Math.abs(r.pos.y-r.cruiseY)<2){
+        // Straight down the column to the dock: abandoned if anything lies across it (a bough, a bridge over the carrier).
+        rayDir.copy(handoffAt).sub(r.pos);const drop=rayDir.length();
+        if(world&&drop>1e-3&&world.raycast(r.pos,rayDir.multiplyScalar(1/drop),drop))return ended('column blocked');
+        r.phase='descent';r.phaseT=0;r.descentFrom=Math.max(.5,r.pos.y-handoffAt.y);
+      }else{
+        // Home at cruise height over a moving carrier: climbs or glides to it on the way, lifted over what lies ahead.
+        r.cruiseY=dockAt.y+DRONE_RETURN.cruiseAboveDockM;
+        // A fast return (from the link's edge) brakes a little harder, so it settles over the column as a usual one does.
+        const pace=Math.max(1,r.speed/RETURN_PACE_MPS),ground=Math.min(r.speed,distance*1.4*Math.sqrt(pace)+.5);
+        if(distance<=DRONE_RETURN.columnM)r.overColumn=true;
+        if(r.overColumn)desired.set(toward.x*4,0,toward.z*4).clampLength(0,r.speed).add(dockVel);
+        else desired.copy(toward).multiplyScalar(distance>1e-6?ground/distance:0).add(dockVel);
+        // The climb or sink to cruise height runs the law's profile (eased in and out over riseS, so a long one from high
+        // above or far below the tank ends on time and levels off without a jolt), then holds the cruise height.
+        const u=r.riseS>0?Math.min(1,r.phaseT/r.riseS):1;
+        if(u<1){
+          // The profile's pace and its change (fed forward through the vertical response), and a bounded correction.
+          const k=r.rise/r.riseS,profileY=r.cruiseY-r.rise*(1-u*u*(3-2*u));
+          desired.y=k*6*u*(1-u)+k/r.riseS*6*(1-2*u)/RETURN_LIFT_HZ
+            +Math.max(-RETURN_SINK_MPS,Math.min(RETURN_CLIMB_MPS,(profileY-r.pos.y)*RETURN_PROFILE_GAIN));
+        }else desired.y=Math.max(-RETURN_SINK_MPS,Math.min(RETURN_CLIMB_MPS,(r.cruiseY-r.pos.y)*.8));
+        if(world)avoidDroneObstacles(world,String(r.ownerId),r.pos,desired);
+        // The ground track eases in at the airframe's pace (quicker for a fast return), the climb and sink at the thrust's.
+        const ease=1-Math.exp(-dt*(r.overColumn?6:2.5*pace)),lift=1-Math.exp(-dt*RETURN_LIFT_HZ);
+        r.vel.x+=(desired.x-r.vel.x)*ease;r.vel.z+=(desired.z-r.vel.z)*ease;r.vel.y+=(desired.y-r.vel.y)*lift;
+        r.pos.addScaledVector(r.vel,dt);
+      }
+    }
+    if(r.phase==='descent'){
+      // The carrier may move: the column is tracked; the last metres ease into the landing's first pose.
+      // round 5: down the column at no less than the landing's hand-over speed, so the landing continues the descent
+      // instead of a stop at the hand-over (droneArrival.ts handoffSpeed)
+      desired.set((handoffAt.x-r.pos.x)*4+dockVel.x,-Math.min(6,Math.max(DRONE_ARRIVAL.handoffSpeed,(r.pos.y-handoffAt.y)*1.6)),(handoffAt.z-r.pos.z)*4+dockVel.z);
+      r.vel.lerp(desired,1-Math.exp(-dt*6));r.pos.addScaledVector(r.vel,dt);
+      if(r.pos.y<=handoffAt.y+.04){
+        r.pos.copy(handoffAt);r.vel.set(0,0,0);r.phase='handoff';r.phaseT=0;
+        frame.userData.returnRequest=true;frame.userData.returnAck=false;
+      }
+    }
+    if(r.phase==='handoff'){
+      if(r.phaseT>.5)return ended('hand-over not taken');
+      r.pos.copy(handoffAt);
+      pose.position.copy(handoffAt);pose.quaternion.copy(handoffQuat);pose.scale.set(1,1,1);pose.updateMatrix();
+      drawAirframe(r.nation,pose.matrix,0,false);return true;
+    }
+    const horizontal=Math.hypot(r.vel.x,r.vel.z);
+    const heading=horizontal>1?Math.atan2(r.vel.x,r.vel.z):r.state.heading;
+    updateDroneAttitude(r.state,r.vel,heading,time,dt,r.seed);
+    pose.rotation.set(r.state.pitch+droneWobblePitch(time,r.seed),r.state.yaw,r.state.roll+droneWobbleRoll(time,r.seed));
+    pose.position.copy(r.pos);pose.position.y+=r.state.bob;
+    if(r.phase==='descent'){
+      // Over the last 1.5 m the attitude, heading and hover bob fold exactly into the hand-over pose.
+      const k=Math.min(1,Math.max(0,1-(r.pos.y-handoffAt.y)/Math.min(1.5,r.descentFrom)));
+      const ease=k*k*(3-2*k);
+      flightOrientation.copy(pose.quaternion);pose.quaternion.copy(flightOrientation).slerp(handoffQuat,ease);
+      pose.position.y-=r.state.bob*ease;
+    }
+    pose.scale.set(1,1,1);pose.updateMatrix();
+    drawAirframe(r.nation,pose.matrix,0,false);
+    return true;
+  }
+  return {
+    /** An impact for this shell (a tank hit, a world hit): its airframe exploded, so it never flies home. (round 8 Y6
+     *  fix-up r1) It only marks: the next end() ends the flight through endFlight('impact'), a flight home still in its
+     *  grace included (a grace keeps its airframe, so end() visits it before any flight home is stepped). */
+    markImpact(id:string|number){
+      impacted.set(id,frame);
+    },
+    /**
+     * (round 8 Y6, s4-02) Counter-drone fire shot down this carrier's drone: the bus's drone:down names the carrier (both
+     * drivers: the solo step's droneHit, a peer's drone_down relay), never the shell. Its live flight (the newest seen;
+     * held out of view or in its flight home's grace too), else its flight home not yet at the dock (an event behind the
+     * frame that dropped the shell), ends 'downed' at the next end(): never a later launch of the same carrier, whose shell
+     * is another. Ids match as strings (a shooter id is a string or a number). False when the carrier has no such flight.
+     */
+    markDowned(ownerId:string|number):boolean{
+      const owner=String(ownerId);
+      let id:string|number|undefined,seen=-Infinity;
+      for(const [trackId,track] of tracks){
+        const at=attitudes.get(trackId)?.seen??-Infinity;
+        if(track.ownerId!=null&&String(track.ownerId)===owner&&at>seen){id=trackId;seen=at;}
+      }
+      if(id===undefined)for(const [flightId,r] of returns)if(r.phase!=='handoff'&&String(r.ownerId)===owner){id=flightId;break;}
+      if(id===undefined)return false;
+      downed.set(id,frame);
+      return true;
+    },
+    begin(timeS:number,cameraPosition?:THREE.Vector3){
+      count=0;dt=Math.min(.1,Math.max(0,timeS-time));time=timeS;frame++;
+      hasCamera=!!cameraPosition;if(cameraPosition)camera.copy(cameraPosition);
+      for(const v of variants.values())for(const pool of [v.full,v.lite])if(pool){pool.count=0;pool.bladeCount=0;pool.mirrorCount=0;pool.blurCount=0;pool.faintCount=0;}
+    },
+    /** Every live drone shell, every frame (a missed one reads as a flight that ended). `hidden` keeps an airframe
+     * tracked without drawing it (the pilot's own, around its FPV lens). (round 8 Y6, s4-02) A shell shot down is never
+     * drawn again, though a lagging network frame still lists it: unseen, it ends 'downed' at this frame's end(). */
+    write(position:THREE.Vector3,velocity:THREE.Vector3,id:string|number,heading?:number,ageS=1,nation?:string,launchFrame?:THREE.Object3D,ownerId?:string|number,hidden=false){
+      if(downed.has(id))return;
+      let track=tracks.get(id);if(!track){track={pos:new THREE.Vector3(),vel:new THREE.Vector3(),nation:droneNation(nation??'USA'),ageS:0};tracks.set(id,track);}
+      track.pos.copy(position);track.vel.copy(velocity);track.ownerId=ownerId;track.nation=droneNation(nation??'USA');track.ageS=ageS;
+      returns.delete(id);heldUnseen.delete(id);
+      if(hidden){let state=attitudes.get(id);if(!state){state=createDroneAttitude();attitudes.set(id,state);}state.seen=frame;return;}
+      // (2026-11-02 audit F10) past the pool's capacity a drone is tracked, not drawn: never read as a flight that ended
+      if(count>=CAPACITY){let state=attitudes.get(id);if(!state){state=createDroneAttitude();attitudes.set(id,state);}state.seen=frame;return;}
+      const entry=variant(nation??'USA');
+      const far=hasCamera&&position.distanceToSquared(camera)>DRONE_LITE_DISTANCE_M*DRONE_LITE_DISTANCE_M;
+      if(far&&!entry.lite)entry.lite=buildDetail(entry.nation,'lite');
+      const pool=far?entry.lite!:entry.full,index=pool.count++;
+      const horizontal=Math.hypot(velocity.x,velocity.z);
+      let state=attitudes.get(id);if(!state){state=createDroneAttitude();attitudes.set(id,state);}
+      const phase=typeof id==='number'?id*.71:id.length*.71;
+      const yaw=heading ?? (horizontal>.05?Math.atan2(velocity.x,velocity.z):state.heading);
+      updateDroneAttitude(state,velocity,yaw,time,dt,phase);state.seen=frame;
+      // Motors spool from rest on the cradle: the blades accelerate visibly, then blur into discs.
+      const spool=Math.min(1,ageS/BLUR_AFTER_SPOOL);
+      state.rotorSpin+=dt*(6+44*spool*spool);
+      const launchS=AERIAL_RULES.drone.launchS;
+      const free=droneFreeFlightBlend(ageS);
+      pose.position.copy(position);pose.position.y+=state.bob*free;
+      // Station-keeping: a centimetre of wander caught again, once the airframe flies free.
+      droneHoverDrift(time,phase,drift);pose.position.x+=drift.x*free;pose.position.z+=drift.z*free;
+      pose.rotation.set(state.pitch+droneWobblePitch(time,phase)*free,state.yaw,state.roll+droneWobbleRoll(time,phase)*free);
+      if(free<1){
+        let remembered=launchFrames.get(id);if(!remembered){remembered={orientation:new THREE.Quaternion(),offset:new THREE.Vector3(),blocked:false};launchFrames.set(id,remembered);}
+        if(launchFrame&&ageS<launchS){
+          launchFrame.getWorldQuaternion(dockOrientation);remembered.orientation.copy(dockOrientation);
+          launchFrame.getWorldPosition(pose.position);
+          // Never draw the climb above where the authority stopped it (a deck or bough over the dock).
+          dockUp.set(0,1,0).applyQuaternion(dockOrientation);
+          const authorityLift=lift.copy(position).sub(pose.position).dot(dockUp),climbHeight=droneLaunchHeight(ageS);
+          if(authorityLift<climbHeight-.05)remembered.blocked=true;
+          lift.set(0,Math.min(climbHeight,Math.max(0,authorityLift)+.05),0).applyQuaternion(dockOrientation);pose.position.add(lift);
+          remembered.offset.copy(pose.position).sub(position);
+        }
+        else if(ageS<launchS)remembered.orientation.setFromAxisAngle(upAxis,yaw);
+        // Render interpolation can put the live carrier slightly behind the
+        // fixed-step authority. Fade that presentation-only offset after the
+        // aircraft is clear instead of snapping at the end of spool-up.
+        else pose.position.addScaledVector(remembered.offset,1-free);
+        // The climb's character: trim corrections and a nose-down lean toward forward flight (in the dock's frame,
+        // folded into the flight attitude as the airframe flies free), and a short overshoot of the launch height that
+        // settles in quick corrections, drawn only where the authority's climb was clear and nothing lies just above.
+        const climbU=Math.min(1,Math.max(0,(ageS-DRONE_SPOOL_S)/(launchS-DRONE_SPOOL_S)));
+        droneClimbCharacter(ageS,launchS,climbU,remembered.blocked?0:droneLaunchHeight(ageS),phase,climb);
+        climbQuat.setFromEuler(climbEuler.set(climb.pitch,0,climb.roll,'YXZ'));
+        launchOrientation.copy(remembered.orientation).multiply(climbQuat);
+        flightOrientation.copy(pose.quaternion);pose.quaternion.copy(launchOrientation).slerp(flightOrientation,free);
+        if(climb.lift!==0&&!remembered.blocked){
+          let overshoot=climb.lift*(1-free);
+          const world=overshoot>0?options.world?.():null;
+          const hit=world?world.raycast(pose.position,upRay,overshoot+.3):null;
+          if(hit)overshoot=Math.max(0,Math.min(overshoot,hit.dist-.3));
+          pose.position.y+=overshoot;
+        }
+      }
+      pose.updateMatrix();
+      for(const part of pool.parts)part.setMatrixAt(index,pose.matrix);
+      const blur=spool>=1&&ageS>=Math.max(BLUR_AFTER_SPOOL,DRONE_SPOOL_S*.9),fading=!blur&&ageS>=FAINT_DISC_S;
+      // A disc turns slowly so its faint blade passages shimmer; spooling blades show their real direction.
+      drawRotors(pool,pose.matrix,!blur,blur?time*9:state.rotorSpin);
+      // Round 4b: from FAINT_DISC_S a faint disc shows over the quickening blades (blades, then blades under a disc,
+      // then a disc). A disc is symmetric, so it never takes the counter-rotating mirror.
+      if(fading)for(let n=0;n<4;n++){
+        poseDroneRotor(prop,n,time*9+n);prop.scale.set(1,1,1);prop.updateMatrix();
+        matrix.multiplyMatrices(pose.matrix,prop.matrix);pool.faint.setMatrixAt(pool.faintCount++,matrix);
+      }
+      count++;
+    },
+    end(){
+      // Flights that ended in the air this frame begin their flight home (unless an impact claimed them); every flight
+      // home advances and draws into the same pools before they are committed.
+      // (2026-11-02 audit F10) its airframe kept through the return's grace: seen again inside it (a dropped frame, a
+      // spotting blink) the flight goes on as it was (its attitude, its launch frame), not a fresh airframe
+      // (round 8 Y6, s4-02) each ends once, by its cause (endFlight): a marked end (downed, impact) first, before the hold
+      // and the grace; then a hold that ran out unseen; else it ended in the air and flies home
+      for(const [id,state] of attitudes)if(state.seen!==frame){
+        const marked=downed.has(id)?'downed':impacted.has(id)?'impact':null;
+        if(!marked&&options.held?.(id)===true){heldUnseen.add(id);continue;}
+        // (round 3, A13) its hold ended and it was never seen again: its end went unseen, so it is dropped where it went
+        const unseen=heldUnseen.delete(id);
+        if(!marked&&!unseen&&returns.get(id)?.phase==='grace')continue;
+        endFlight(id,marked??(unseen?'unseen':'recalled'),state.seen===frame-1);
+      }
+      for(const [id,r] of returns){
+        // (round 8 Y6, s4-02) shot down with its flight home past the grace (an event behind the frame that dropped the
+        // shell): it ends where it is, never lands
+        if(downed.has(id)&&r.phase!=='handoff'){endFlight(id,'downed',false);continue;}
+        if(!stepReturn(r)){returns.delete(id);if(attitudes.get(id)?.seen!==frame){attitudes.delete(id);launchFrames.delete(id);tracks.delete(id);}}
+        else if(r.phase!=='grace'&&attitudes.get(id)?.seen!==frame){attitudes.delete(id);launchFrames.delete(id);tracks.delete(id);}
+      }
+      for(const [id,at] of impacted)if(frame-at>DRONE_END_MARK_FRAMES)impacted.delete(id);
+      for(const [id,at] of downed)if(frame-at>DRONE_END_MARK_FRAMES)downed.delete(id);
+      for(const v of variants.values())for(const pool of [v.full,v.lite]){
+        if(!pool)continue;
+        for(const part of pool.parts)part.count=pool.count;
+        pool.rotors.count=pool.bladeCount;pool.mirrorRotors.count=pool.mirrorCount;pool.blurs.count=pool.blurCount;pool.faint.count=pool.faintCount;
+        for(const mesh of pool.meshes){mesh.visible=mesh.count>0;mesh.instanceMatrix.needsUpdate=true;}
+      }
+    },
+    reset(){for(const v of variants.values())for(const pool of [v.full,v.lite])if(pool)for(const mesh of pool.meshes){mesh.count=0;mesh.visible=false;}attitudes.clear();launchFrames.clear();tracks.clear();returns.clear();impacted.clear();downed.clear();heldUnseen.clear();},
+    /** Diagnostics and tests: the flights home in progress. */
+    returning():ReadonlyMap<string|number,{readonly phase:ReturnPhase;readonly pos:THREE.Vector3;readonly t:number}>{return returns;},
+    dispose(){
+      for(const v of variants.values())for(const pool of [v.full,v.lite]){
+        if(!pool)continue;
+        for(const mesh of pool.meshes){mesh.removeFromParent();mesh.dispose();}
+        pool.lease.release();
+      }
+      variants.clear();attitudes.clear();launchFrames.clear();tracks.clear();returns.clear();impacted.clear();downed.clear();heldUnseen.clear();
+    },
+  };
+}

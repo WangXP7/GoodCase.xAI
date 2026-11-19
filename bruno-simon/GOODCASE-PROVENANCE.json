@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/brunosimon/folio-2025",
+  "commit": "70764a94756cc4de564e493c8ba46c4b5fe03ed1",
+  "license": "MIT",
+  "scope": "code-only",
+  "files": 143,
+  "bytes": 4585572
+}

@@ -1,0 +1,67 @@
+{
+  "name": "littlejsengine",
+  "version": "1.30.1",
+  "description": "LittleJS - Tiny and Fast HTML5 Game Engine",
+  "main": "dist/littlejs.esm.js",
+  "types": "dist/littlejs.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/littlejs.d.ts",
+      "production": "./dist/littlejs.esm.min.js",
+      "default": "./dist/littlejs.esm.js"
+    },
+    "./dist/*": "./dist/*",
+    "./plugins/*": "./plugins/*",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KilledByAPixel/LittleJS.git"
+  },
+  "keywords": [
+    "LittleJS",
+    "HTML5",
+    "JavaScript",
+    "game",
+    "engine",
+    "library",
+    "JS13K",
+    "webgl"
+  ],
+  "author": "Frank Force",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/KilledByAPixel/LittleJS/issues"
+  },
+  "homepage": "https://github.com/KilledByAPixel/LittleJS",
+  "files": [
+    "dist/",
+    "src/",
+    "plugins/",
+    "!plugins/box2d.wasm.*",
+    "COPYRIGHT.txt",
+    "FAQ.md",
+    "CHANGELOG.md",
+    "REFERENCE.md",
+    "EDITOR.md"
+  ],
+  "scripts": {
+    "build": "node src/engineBuild.mjs",
+    "build-docs": "node tools/buildDocs.mjs",
+    "build-release": "node tools/buildRelease.mjs",
+    "test": "node --test --import ./test/setup.mjs \"test/**/*.test.mjs\"",
+    "test:browser": "node test/browser/run.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "bestzip": "^2.2.1",
+    "google-closure-compiler": "~20230502.0.0",
+    "jsdoc": "~4.0.2",
+    "roadroller": "~2.1.0",
+    "typescript": "~5.1.6",
+    "uglify-js": "~3.17.4"
+  }
+}

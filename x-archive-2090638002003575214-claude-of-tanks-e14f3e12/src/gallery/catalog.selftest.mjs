@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+// The factory registers every first-party expansion module before finalizing
+// ALL_TANK_IDS. The browser gallery imports it first for the same reason.
+import '../vehicles/tankFactory.ts';
+import { VISIBLE_TANK_IDS, getSpec } from '../vehicles/specs.ts';
+import {
+  buildGalleryRecords,
+  createGalleryRecord,
+  filterGalleryRecords,
+  serializeGallerySpec,
+} from './catalog.ts';
+import { FIRST_PARTY_LICENSE } from '../authorship.ts';
+
+const records = buildGalleryRecords(VISIBLE_TANK_IDS.map(getSpec));
+assert.equal(records.length, VISIBLE_TANK_IDS.length, 'every visible vehicle must appear in the gallery');
+assert.ok(records.length > 0, 'gallery roster must not be empty');
+assert.ok(records.every((record) => !record.developmentOnly),
+  'production gallery must not expose development-only vehicles');
+
+for (const record of records) {
+  assert.ok(record.displayName, `${record.id}: missing display name`);
+  assert.equal(record.authorship?.creator, 'Kevin B. Liu', `${record.id}: missing named model creator`);
+  assert.equal(record.authorship?.license, FIRST_PARTY_LICENSE, `${record.id}: missing first-party model license`);
+  assert.equal(record.brief.length, 2, `${record.id}: expected two readable paragraphs`);
+  assert.ok(record.brief.every((paragraph) => paragraph.length > 100), `${record.id}: brief is too thin`);
+  assert.ok(Object.values(record.ratings).every((value) => value >= 0 && value <= 100), `${record.id}: rating outside 0..100`);
+  assert.ok(record.searchText.includes(record.id.toLocaleLowerCase('en-US')), `${record.id}: stable id missing from search index`);
+}
+
+const first = records[0];
+assert.deepEqual(filterGalleryRecords(records, { query: first.id }), [first], 'stable id search must find one exact record');
+assert.ok(filterGalleryRecords(records, { nation: first.nation }).every((record) => record.nation === first.nation));
+assert.ok(filterGalleryRecords(records, { era: first.eraKey }).every((record) => record.eraKey === first.eraKey));
+
+// Fleet facets (vehicleFacets.ts): every record is classified, the class and role filters and the facet search
+// narrow the archive, and the concept-and-prototype option is the non-service cut.
+assert.ok(records.every((record) => record.vehicleClass?.label && record.battleRole?.label && record.designStatus?.label),
+  'every gallery record carries its class, role and status');
+const tds = filterGalleryRecords(records, { vehicleClass: 'td' });
+assert.ok(tds.length > 0 && tds.every((record) => record.vehicleClass.id === 'td'), 'the class filter narrows to one class');
+assert.deepEqual(filterGalleryRecords(records, { query: 'class:td' }).map((record) => record.id),
+  tds.map((record) => record.id), 'the class: token matches the class filter');
+assert.ok(filterGalleryRecords(records, { battleRole: 'scout' }).every((record) => record.battleRole.id === 'scout'));
+assert.ok(filterGalleryRecords(records, { vehicleClass: 'concept-prototype' })
+  .every((record) => record.designStatus.id !== 'service'), 'concept & prototype excludes in-service vehicles');
+assert.ok(filterGalleryRecords(records, { query: 'tank destroyer' }).length >= tds.length, 'class labels are searchable');
+assert.deepEqual(filterGalleryRecords(records, { vehicleClass: 'td', battleRole: 'flanker' }), [], 'filters AND');
+assert.deepEqual(filterGalleryRecords(records, { vehicleClass: 'all', battleRole: 'all' }), records);
+const galleryHtml = readFileSync(new URL('../../site/gallery.html', import.meta.url), 'utf8');
+// The browse pane offers every facet the filter reads: nation flags, class chips, era and role glyphs (gallery.ts fills them).
+for (const [id, key] of [['nationFacets', 'gallery.archive.filter.nation'], ['classFacets', 'fleet.filter.class'],
+  ['eraFacets', 'gallery.archive.filter.era'], ['roleFacets', 'fleet.filter.role']]) {
+  assert.match(galleryHtml, new RegExp(`id="${id}" role="group" data-i18n-aria-label="${key}"`), `the browse pane offers the ${id} group`);
+}
+
+const serialized = serializeGallerySpec(getSpec(first.id));
+assert.equal(serialized.schema, 'claude-of-tanks/gallery-spec@2');
+assert.equal(serialized.id, first.id);
+assert.equal(serialized.authorship.creator, 'Kevin B. Liu');
+assert.equal(serialized.authorship.geometry, 'first-party-procedural');
+assert.deepEqual(serialized.era, { id: first.eraKey, label: first.era });
+assert.equal('class' in serialized, false, 'public gallery export must not expose retired classes');
+assert.deepEqual(serialized.vehicleClass, { id: first.vehicleClass.id, label: first.vehicleClass.label },
+  'the export names the fleet-facet class under its own key');
+assert.equal(serialized.battleRole.id, first.battleRole.id);
+assert.equal(serialized.designStatus.id, first.designStatus.id);
+assert.ok(Array.isArray(serialized.gun.shells));
+assert.ok(Number.isFinite(serialized.protection.armorPlateCount));
+
+const sample = createGalleryRecord(getSpec(VISIBLE_TANK_IDS[0]));
+assert.match(sample.brief.join(' '), new RegExp(sample.displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+assert.ok(records.some((record) => record.brief.some((paragraph) =>
+  paragraph.includes('a high power-to-weight ratio and high maximum road speed'))),
+'Gallery briefs preserve the top mobility assessment bucket');
+assert.ok(records.some((record) => record.brief.some((paragraph) =>
+  paragraph.includes('limited kinetic protection, which increases the importance of positioning'))),
+'Gallery briefs preserve the low protection assessment bucket');
+
+const magazineRecord = createGalleryRecord(getSpec('pl01_105'));
+assert.equal(magazineRecord.metrics.autoloader, true);
+assert.equal(magazineRecord.metrics.magazineSize, 4);
+assert.equal(magazineRecord.metrics.intraClipS, 1.8);
+assert.equal(magazineRecord.metrics.reloadS, 13.5);
+assert.equal(magazineRecord.metrics.burstDamage, 1720);
+assert.equal(magazineRecord.metrics.dpm, 5460);
+assert.match(magazineRecord.brief.join(' '), /4-round magazine autoloader/);
+assert.match(magazineRecord.highlights.join(' '), /1,720 burst damage/);
+
+const serializedMagazine = serializeGallerySpec(getSpec('pl01_105'));
+assert.deepEqual(serializedMagazine.gun.autoloader, {
+  magazineSize: 4,
+  intraMagazineCycleS: 1.8,
+  fullReloadS: 13.5,
+  burstDamage: 1720,
+  sustainedDamagePerMinute: 5460,
+});
+
+console.log(`tank gallery catalog self-test passed (${records.length} vehicles)`);

@@ -1,0 +1,334 @@
+@import "@fontsource/grandstander/latin-800.css";
+@import "@fontsource/nunito/latin-600.css";
+@import "@fontsource/nunito/latin-800.css";
+
+html,
+body,
+#root
+{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #eee4b0;
+    background-image: radial-gradient(
+        ellipse farthest-corner at 50% 50%,
+        #ffffff 0%,
+        #fffff8 28%,
+        ivory 58%,
+        #eee4b0 100%
+    );
+}
+
+.hud
+{
+    position: fixed;
+    left: max(1.15rem, env(safe-area-inset-left));
+    bottom: max(1.15rem, env(safe-area-inset-bottom));
+    z-index: 10;
+    box-sizing: border-box;
+    width: min(20.5rem, calc(100vw - 2.3rem));
+    padding: 1rem 1.15rem 1.05rem;
+    border-radius: 1.15rem;
+    background: #fffaf0;
+    box-shadow: 0 12px 28px rgba(120, 82, 18, 0.2);
+    pointer-events: none;
+}
+
+.hud-toggle
+{
+    display: none;
+}
+
+.github-fab
+{
+    position: fixed;
+    right: max(1.15rem, env(safe-area-inset-right));
+    bottom: max(1.15rem, env(safe-area-inset-bottom));
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #fffaf0;
+    box-shadow: 0 12px 28px rgba(120, 82, 18, 0.2);
+    color: #d62828;
+    text-decoration: none;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.github-fab-icon
+{
+    display: block;
+    width: 1.42rem;
+    height: 1.42rem;
+}
+
+.github-fab:focus
+{
+    outline: none;
+}
+
+.github-fab:focus-visible
+{
+    outline: 2px solid #d62828;
+    outline-offset: 3px;
+}
+
+.hud h1
+{
+    margin: 0 0 0.4rem;
+    font-family: Grandstander, "Trebuchet MS", "Segoe UI", sans-serif;
+    font-weight: 800;
+    font-size: 1.28rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: #d62828;
+}
+
+.hud p
+{
+    margin: 0;
+    font-family: Nunito, "Trebuchet MS", "Segoe UI", sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    color: #4a3214;
+}
+
+.hud-cross,
+.hud-plus
+{
+    font-weight: 800;
+}
+
+.hud-cross
+{
+    color: #1557b5;
+}
+
+.hud-plus
+{
+    color: #5f6800;
+}
+
+@media (prefers-reduced-motion: no-preference)
+{
+    .hud,
+    .github-fab
+    {
+        animation: hud-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+}
+
+@keyframes hud-in
+{
+    from
+    {
+        opacity: 0;
+        transform: translateY(0.7rem);
+    }
+    to
+    {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 480px)
+{
+    .hud h1
+    {
+        font-size: 1.12rem;
+    }
+
+    .hud p
+    {
+        font-size: 0.88rem;
+    }
+}
+
+@media (max-width: 1024px)
+{
+    .hud
+    {
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: flex-start;
+        gap: 0.7rem;
+        width: auto;
+        max-width: min(20.5rem, calc(100vw - 2.3rem));
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .hud-toggle
+    {
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        width: 3rem;
+        height: 3rem;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: #fffaf0;
+        box-shadow: 0 12px 28px rgba(120, 82, 18, 0.2);
+        color: #d62828;
+        cursor: pointer;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .hud-toggle-i,
+    .hud-toggle-close
+    {
+        grid-area: 1 / 1;
+        transition:
+            opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+            transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .hud-toggle-i
+    {
+        font-family: Grandstander, "Trebuchet MS", "Segoe UI", sans-serif;
+        font-weight: 800;
+        font-size: 1.42rem;
+        line-height: 1;
+        letter-spacing: 0;
+        transform: translateY(0.04em);
+    }
+
+    .hud-toggle-close
+    {
+        position: relative;
+        width: 1.05rem;
+        height: 1.05rem;
+        opacity: 0;
+        transform: rotate(-90deg) scale(0.55);
+    }
+
+    .hud-toggle-close::before,
+    .hud-toggle-close::after
+    {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 100%;
+        height: 0.18rem;
+        border-radius: 99px;
+        background: currentColor;
+    }
+
+    .hud-toggle-close::before
+    {
+        transform: translate(-50%, -50%) rotate(45deg);
+    }
+
+    .hud-toggle-close::after
+    {
+        transform: translate(-50%, -50%) rotate(-45deg);
+    }
+
+    .hud.is-open .hud-toggle-i
+    {
+        opacity: 0;
+        transform: translateY(0.04em) rotate(90deg) scale(0.55);
+    }
+
+    .hud.is-open .hud-toggle-close
+    {
+        opacity: 1;
+        transform: none;
+    }
+
+    .hud-toggle:focus
+    {
+        outline: none;
+    }
+
+    .hud-toggle:focus-visible
+    {
+        outline: 2px solid #d62828;
+        outline-offset: 3px;
+    }
+
+    .hud-body
+    {
+        display: none;
+        box-sizing: border-box;
+        width: min(20.5rem, calc(100vw - 2.3rem));
+        max-height: min(18rem, calc(100dvh - 6.5rem));
+        overflow: auto;
+        padding: 0.85rem 0.95rem 0.9rem;
+        border-radius: 1rem;
+        background: #fffaf0;
+        box-shadow: 0 12px 28px rgba(120, 82, 18, 0.2);
+        pointer-events: auto;
+        transform-origin: 1.5rem calc(100% + 0.7rem + 1.5rem);
+    }
+
+    .hud.is-open .hud-body
+    {
+        display: block;
+    }
+
+    @media (prefers-reduced-motion: no-preference)
+    {
+        .hud
+        {
+            animation: none;
+        }
+
+        .hud-toggle
+        {
+            animation: hud-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .hud.is-open .hud-body
+        {
+            animation: hud-pop 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+    }
+}
+
+@keyframes hud-pop
+{
+    from
+    {
+        opacity: 0;
+        transform: translateY(0.45rem) scale(0.96);
+    }
+    to
+    {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (hover: hover) and (pointer: fine)
+{
+    .hud-toggle:hover,
+    .github-fab:hover
+    {
+        transform: translateY(-1px);
+    }
+
+    .hud-toggle:active,
+    .github-fab:active
+    {
+        transform: none;
+    }
+}

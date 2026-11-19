@@ -1,0 +1,14 @@
+// The recipes of the design system (docs/DESIGN_SYSTEM.md) for the few places
+// that cannot take a td-* class: a :host, a ::part, an element the template
+// does not own. Everything else uses the classes (styles/ui/_classes.scss).
+// Use as `@use '.../styles/game-ui' as ui;`.
+@forward 'ui/base';
+@forward 'ui/surface';
+@forward 'ui/buttons' as btn-*;
+@forward 'ui/forms';
+@forward 'ui/lists';
+@forward 'ui/menu';
+@forward 'ui/hud';
+@forward 'ui/text';
+@forward 'ui/layout';
+@forward 'ui/sidebar' as side-*;

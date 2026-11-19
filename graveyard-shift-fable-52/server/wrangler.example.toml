@@ -1,0 +1,56 @@
+# Template for the Worker's config. Copy it to wrangler.toml (which is not tracked) and fill in your
+# own values:  cp wrangler.example.toml wrangler.toml
+name = "graveyard-shift-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# The D1 database (env.DB). Create it with `npx wrangler d1 create graveyard-shift-leaderboard` and paste
+# the database_id it prints here.
+[[d1_databases]]
+binding = "DB"
+database_name = "graveyard-shift-leaderboard"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+# Comma list of the exact origins (scheme + host, no trailing slash) the game is served from. Only these
+# get CORS headers, and a POST from any other origin is refused.
+ALLOWED_ORIGINS = "https://your-game.example"
+
+# Optional. Extra gamertags to refuse, on top of the built-in list (comma lists, case-insensitive):
+#   RESERVED_WORDS     whole words, e.g. your own name: "Your Name" and "y0urname2" are refused
+#   RESERVED_PREFIXES  any word starting with one of these
+# RESERVED_WORDS = "yourname"
+# RESERVED_PREFIXES = ""
+
+# Optional. The game's host name, shown in report emails and issues (default: "the game site").
+# SITE_NAME = "your-game.example"
+
+# Optional. "owner/name" of the GitHub repository that receives reports as issues (needs GITHUB_TOKEN).
+# GITHUB_REPO = "your-account/your-repo"
+
+# Optional. "1" returns the created issue's link to the game (only useful when the repository is public).
+# REPORT_RETURN_URL = "1"
+
+# Per-IP limit for GET /api/leaderboard and /api/player: 60 per minute per Cloudflare location
+# (approximate). namespace_id must be a positive integer, as a string, unique in the account.
+# Needs Wrangler 4.36.0 or later.
+[[ratelimits]]
+name = "READ_LIMITER"
+namespace_id = "4021"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
+# Daily housekeeping: delete rate rows older than 2 days and tags never scored after 30 days; delete
+# reports older than 180 days; retry undelivered report emails.
+[triggers]
+crons = ["17 4 * * *"]
+
+# Secrets: set each with `npx wrangler secret put <NAME>`; never write them in this file.
+#   IP_SALT         required. Salt for hashing client IPs; POSTs return 500 server_misconfigured until set.
+#                   e.g. `openssl rand -hex 32 | npx wrangler secret put IP_SALT`
+# "Report a problem" (src/report.js). Reports are always stored in D1; these switch on delivery:
+#   RESEND_API_KEY, REPORT_TO, REPORT_FROM   all three set -> each report is emailed through Resend
+#   GITHUB_TOKEN    fine-grained token with Issues: read and write on GITHUB_REPO -> each report also
+#                   becomes an issue labelled website-feedback

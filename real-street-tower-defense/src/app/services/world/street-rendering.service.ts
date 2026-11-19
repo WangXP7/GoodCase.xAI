@@ -1,0 +1,440 @@
+import { Injectable, inject } from '@angular/core';
+import {
+  Vector3,
+  Material,
+  LineSegments,
+  BufferGeometry,
+  Float32BufferAttribute,
+  LineBasicMaterial,
+  Group,
+} from 'three';
+import { ThreeTilesEngine } from '../../three-engine';
+import { StreetNetwork, StreetNode } from '../location/osm-street.service';
+import { MarkerVisualizationService } from './marker-visualization.service';
+import { METERS_PER_DEGREE_LAT } from '../../utils/geo-utils';
+import { raycastStats } from '../../utils/raycast-stats';
+import { smoothPathHeights } from '../../utils/route-height-smoothing';
+import { GeoPosition } from '../../models/game.types';
+import { UIStore } from '../../store/ui.store';
+import { StreetSurface, streetDeckApproaches } from '../../utils/carried-height';
+import { streetUnderpasses } from '../../utils/underpass';
+
+/** Batch size for progressive street rendering (nodes per frame) */
+const STREET_BATCH_SIZE = 50;
+
+/** Node prepared for rendering with prev/next context */
+interface PreparedNode {
+  node: StreetNode;
+  prev: StreetNode;
+  next: StreetNode;
+  /** Height from the plain terrain (StreetStyle.plainGround), not the street estimate */
+  plainGround: boolean;
+  /**
+   * On a bridge way, the stretch off its end or a stretch under another
+   * way, what the height compares with (TerrainQueries.getStreetHeightEstimate);
+   * null elsewhere and on plain ground (DevWorld).
+   */
+  deck: StreetSurface | null;
+}
+
+/**
+ * StreetRenderingService - Handles street network visualization
+ *
+ * Extracted from TowerDefenseComponent to reduce god object complexity.
+ * Manages:
+ * - Merged LineSegments geometry for all streets (1 draw call instead of 600+)
+ * - Terrain-following street heights via raycast with segment subdivision,
+ *   on the deck over a bridge way, on the ways off its ends at the height
+ *   they carry from there (carried-height.ts), and under another way between
+ *   the ground either side (underpass.ts), as the route cells take them
+ * - Debug height markers
+ * - Street visibility toggle
+ *
+ * Uses progressive rendering to avoid main-thread stutter:
+ * startStreetRender() collects work, continueStreetRender() processes in batches.
+ * Renders only while the streets or the height markers show; a render asked
+ * for while both are hidden waits until one of them shows (renderSkipped).
+ */
+@Injectable({ providedIn: 'root' })
+export class StreetRenderingService {
+  private readonly markerViz = inject(MarkerVisualizationService);
+  private readonly uiStore = inject(UIStore);
+
+  /** Single merged mesh for all street segments */
+  private streetLinesMesh: LineSegments | null = null;
+
+  /** Old mesh kept visible during progressive rebuild (swap on complete) */
+  private oldStreetLinesMesh: LineSegments | null = null;
+
+  /** Flag to prevent concurrent renderStreets calls */
+  private isRenderingStreets = false;
+
+  /** The last render asked for while nothing of it showed, see renderStreets() */
+  private skipped: {
+    engine: ThreeTilesEngine;
+    filteredNetwork: StreetNetwork;
+    fullNetwork: StreetNetwork | null;
+    baseCoords: GeoPosition;
+  } | null = null;
+
+  /** Progressive street build state */
+  private streetBuildState: {
+    engine: ThreeTilesEngine;
+    overlayGroup: Group;
+    heightAboveGround: number;
+    streets: StreetNetwork['streets'];
+    /** Flat list of all nodes to process (across all streets) */
+    allNodes: PreparedNode[];
+    currentIndex: number;
+    /** Accumulated points per street (for smoothing + segment creation) */
+    streetPoints: Map<number, Vector3[]>;
+    /** Which street index each node belongs to */
+    streetIndices: number[];
+    debugMarkerCount: number;
+    debugMarkerInterval: number;
+    t0: number;
+  } | null = null;
+
+  /**
+   * Start progressive street rendering.
+   * Collects all nodes, then returns immediately.
+   * Call continueStreetRender() each frame until complete.
+   */
+  renderStreets(
+    engine: ThreeTilesEngine,
+    filteredNetwork: StreetNetwork | null,
+    fullNetwork: StreetNetwork | null,
+    baseCoords: GeoPosition,
+  ): void {
+    // Guard: Only render when filtered (prevents 16s raycast on unfiltered streets)
+    if (!filteredNetwork) return;
+
+    // Hidden streets and hidden height markers: nothing of this would show,
+    // yet every node costs its rays, on each tile batch and each height
+    // update of a load. Keep the request until one of them shows.
+    if (!this.showsAnything()) {
+      this.skipped = { engine, filteredNetwork, fullNetwork, baseCoords };
+      return;
+    }
+    this.skipped = null;
+
+    // Cancel any ongoing progressive build and reset guard
+    if (this.streetBuildState) {
+      this.streetBuildState = null;
+      this.isRenderingStreets = false;
+    }
+
+    // Prevent concurrent calls
+    if (this.isRenderingStreets) return;
+    this.isRenderingStreets = true;
+
+    if (!fullNetwork) {
+      this.isRenderingStreets = false;
+      return;
+    }
+
+    const networkToRender = filteredNetwork || fullNetwork;
+    const overlayGroup = engine.getOverlayGroup();
+
+    // How the world draws its streets: lift, subdivision, plain heights
+    const style = engine.world.streetStyle;
+    const heightAboveGround = style.overlayLift;
+
+    // Tiles have to be far enough along that the ground can be sampled at
+    // all — the per-point heights below come from their own columns.
+    if (engine.getTerrainHeightAtGeo(baseCoords.lat, baseCoords.lon) === null) {
+      this.isRenderingStreets = false;
+      return;
+    }
+
+    // Clear height debug markers
+    this.markerViz.clearHeightDebugMarkers();
+
+    // Prepare flat list of all nodes with prev/next context
+    const allNodes: PreparedNode[] = [];
+    const streetIndices: number[] = [];
+    const plainGround = style.plainGround;
+    // The ways off the ends of bridge ways, whose deck may carry on, and the
+    // stretches of streets under another way.
+    const approaches = plainGround ? null : streetDeckApproaches(networkToRender.streets);
+    const underpasses = plainGround ? null : streetUnderpasses(networkToRender.streets);
+
+    for (let si = 0; si < networkToRender.streets.length; si++) {
+      const street = networkToRender.streets[si];
+      if (street.nodes.length < 2) continue;
+
+      if (plainGround) {
+        // Plain ground (DevWorld): subdivide segments to follow it, collect all subdivision nodes
+        for (let nodeIdx = 0; nodeIdx < street.nodes.length - 1; nodeIdx++) {
+          const nodeA = street.nodes[nodeIdx];
+          const nodeB = street.nodes[nodeIdx + 1];
+          const subdivided = this.subdivideSegment(nodeA, nodeB, style.subdivideM);
+          for (const node of subdivided) {
+            allNodes.push({ node, prev: nodeA, next: nodeB, plainGround: true, deck: null });
+            streetIndices.push(si);
+          }
+        }
+        // Last node
+        const lastNode = street.nodes[street.nodes.length - 1];
+        allNodes.push({ node: lastNode, prev: lastNode, next: lastNode, plainGround: true, deck: null });
+        streetIndices.push(si);
+      } else {
+        // Real world: use nodes directly with prev/next for lateral sampling
+        const nodes = street.nodes;
+        for (let idx = 0; idx < nodes.length; idx++) {
+          const node = nodes[idx];
+          const prevNode = nodes[Math.max(0, idx - 1)];
+          const nextNode = nodes[Math.min(nodes.length - 1, idx + 1)];
+          // Under another way, as a route piece there is a tunnel stretch, the stretch off a bridge end ends.
+          const under = underpasses?.get(street.id)?.[idx] ?? null;
+          const approach = street.bridge !== undefined || under !== null ? null : approaches?.get(node.id);
+          const deck: StreetSurface | null = street.bridge !== undefined ? 'bridge'
+            : under ?? (approach ? { path: approach.path, m: approach.distanceM, start: 'bridge' } : null);
+          allNodes.push({ node, prev: prevNode, next: nextNode, plainGround: false, deck });
+          streetIndices.push(si);
+        }
+      }
+    }
+
+    // Keep old mesh visible during progressive rebuild
+    this.oldStreetLinesMesh = this.streetLinesMesh;
+    this.streetLinesMesh = null;
+
+    // Store state for progressive processing
+    this.streetBuildState = {
+      engine,
+      overlayGroup,
+      heightAboveGround,
+      streets: networkToRender.streets,
+      allNodes,
+      currentIndex: 0,
+      streetPoints: new Map(),
+      streetIndices,
+      debugMarkerCount: 0,
+      debugMarkerInterval: 10,
+      t0: performance.now(),
+    };
+
+    // If very few nodes, process immediately (no need for progressive)
+    if (allNodes.length <= STREET_BATCH_SIZE) {
+      while (!this.continueStreetRender()) { /* process all */ }
+    }
+  }
+
+  /**
+   * Continue progressive street rendering.
+   * Call each frame from game loop. Returns true when complete.
+   */
+  continueStreetRender(): boolean {
+    if (!this.streetBuildState) return true;
+
+    const s = this.streetBuildState;
+    const endIndex = Math.min(s.currentIndex + STREET_BATCH_SIZE, s.allNodes.length);
+
+    for (let i = s.currentIndex; i < endIndex; i++) {
+      const prepared = s.allNodes[i];
+      const streetIdx = s.streetIndices[i];
+
+      // Get terrain height (rays booked as `streets`, see __raycastStats())
+      let terrainY: number | null;
+      const scope = raycastStats.enter('streets');
+      try {
+        if (prepared.plainGround) {
+          terrainY = s.engine.getTerrainHeightAtGeo(prepared.node.lat, prepared.node.lon);
+        } else {
+          terrainY = s.engine.terrain.getStreetHeightEstimate(
+            prepared.node.lat, prepared.node.lon,
+            prepared.prev.lat, prepared.prev.lon,
+            prepared.next.lat, prepared.next.lon,
+            prepared.deck,
+          );
+        }
+      } finally {
+        raycastStats.exit(scope);
+      }
+
+      if (terrainY !== null) {
+        const local = s.engine.sync.geoToLocalSimple(prepared.node.lat, prepared.node.lon, 0);
+        local.y = terrainY + s.heightAboveGround;
+
+        // Add to street's point list
+        let points = s.streetPoints.get(streetIdx);
+        if (!points) {
+          points = [];
+          s.streetPoints.set(streetIdx, points);
+        }
+        points.push(local);
+
+        // Debug markers
+        if (s.debugMarkerCount % s.debugMarkerInterval === 0) {
+          this.markerViz.addHeightDebugMarker(local, terrainY, true);
+        }
+      } else {
+        if (s.debugMarkerCount % s.debugMarkerInterval === 0) {
+          const localMiss = s.engine.sync.geoToLocalSimple(prepared.node.lat, prepared.node.lon, 5);
+          this.markerViz.addHeightDebugMarker(localMiss, null, false);
+        }
+      }
+      s.debugMarkerCount++;
+    }
+
+    s.currentIndex = endIndex;
+
+    // Check if complete
+    if (endIndex >= s.allNodes.length) {
+      this.finalizeStreetRender(s);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Finalize street rendering — create mesh, swap old, cleanup
+   */
+  private finalizeStreetRender(s: NonNullable<typeof this.streetBuildState>): void {
+    // Build merged line segments from all street points
+    const allSegmentVertices: number[] = [];
+
+    for (const [streetIdx, points] of s.streetPoints) {
+      if (points.length < 2) continue;
+
+      // Find street type for smoothing
+      const street = s.streets[streetIdx];
+      const smoothedPoints = smoothPathHeights(points, street?.type);
+
+      for (let i = 0; i < smoothedPoints.length - 1; i++) {
+        const p1 = smoothedPoints[i];
+        const p2 = smoothedPoints[i + 1];
+        allSegmentVertices.push(p1.x, p1.y, p1.z);
+        allSegmentVertices.push(p2.x, p2.y, p2.z);
+      }
+    }
+
+    // Remove old mesh
+    if (this.oldStreetLinesMesh) {
+      s.overlayGroup.remove(this.oldStreetLinesMesh);
+      this.oldStreetLinesMesh.geometry.dispose();
+      (this.oldStreetLinesMesh.material as Material).dispose();
+      this.oldStreetLinesMesh = null;
+    }
+
+    // Create new mesh
+    if (allSegmentVertices.length > 0) {
+      const geometry = new BufferGeometry();
+      geometry.setAttribute('position', new Float32BufferAttribute(allSegmentVertices, 3));
+
+      const material = new LineBasicMaterial({
+        color: 0xffd700,
+        linewidth: 2,
+        depthTest: true,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9
+      });
+
+      this.streetLinesMesh = new LineSegments(geometry, material);
+      // As the toggle stands now, which may have changed during the build
+      this.streetLinesMesh.visible = this.uiStore.streetsVisible();
+      this.streetLinesMesh.renderOrder = 1;
+      this.streetLinesMesh.frustumCulled = false;
+      s.overlayGroup.add(this.streetLinesMesh);
+    }
+
+    // PerfTrace renderStreets disabled — fires per street build, noisy.
+
+    this.streetBuildState = null;
+    this.isRenderingStreets = false;
+  }
+
+  /**
+   * Set street visibility
+   */
+  setVisibility(visible: boolean): void {
+    if (this.streetLinesMesh) {
+      this.streetLinesMesh.visible = visible;
+    }
+  }
+
+  /**
+   * Toggle street visibility based on UI state signal.
+   */
+  toggleVisibility(): void {
+    this.setVisibility(this.uiStore.streetsVisible());
+    this.renderSkipped();
+  }
+
+  /**
+   * The render renderStreets() kept back while the streets and the height
+   * markers were hidden, now that one of them shows: when the streets or the
+   * height markers are switched on.
+   */
+  renderSkipped(): void {
+    const skipped = this.skipped;
+    if (!skipped || !this.showsAnything()) return;
+    this.renderStreets(skipped.engine, skipped.filteredNetwork, skipped.fullNetwork, skipped.baseCoords);
+  }
+
+  /** The streets show, or the height markers along them do. */
+  private showsAnything(): boolean {
+    return this.uiStore.streetsVisible() || this.uiStore.heightDebugVisible();
+  }
+
+  /**
+   * Dispose street mesh and cleanup
+   */
+  dispose(overlayGroup: Group): void {
+    this.streetBuildState = null;
+    this.skipped = null;
+    if (this.oldStreetLinesMesh) {
+      overlayGroup.remove(this.oldStreetLinesMesh);
+      this.oldStreetLinesMesh.geometry.dispose();
+      (this.oldStreetLinesMesh.material as Material).dispose();
+      this.oldStreetLinesMesh = null;
+    }
+    if (this.streetLinesMesh) {
+      overlayGroup.remove(this.streetLinesMesh);
+      this.streetLinesMesh.geometry.dispose();
+      (this.streetLinesMesh.material as Material).dispose();
+      this.streetLinesMesh = null;
+    }
+  }
+
+  /**
+   * Reset service state (for location change)
+   */
+  reset(): void {
+    this.streetLinesMesh = null;
+    this.oldStreetLinesMesh = null;
+    this.isRenderingStreets = false;
+    this.streetBuildState = null;
+    this.skipped = null;
+  }
+
+  /**
+   * Subdivide a street segment longer than `maxLength` m (StreetStyle.subdivideM,
+   * 0 for none) to follow the terrain contour: smaller values follow it
+   * more smoothly with more vertices.
+   */
+  private subdivideSegment(a: StreetNode, b: StreetNode, maxLength: number): StreetNode[] {
+    const dLat = b.lat - a.lat;
+    const dLon = b.lon - a.lon;
+    const approxDist = Math.sqrt(dLat * dLat + dLon * dLon) * METERS_PER_DEGREE_LAT;
+
+    if (maxLength <= 0 || approxDist <= maxLength) {
+      return [a];
+    }
+
+    const steps = Math.ceil(approxDist / maxLength);
+    const result: StreetNode[] = [];
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      result.push({
+        lat: a.lat + dLat * t,
+        lon: a.lon + dLon * t,
+        id: a.id,
+      });
+    }
+    return result;
+  }
+}

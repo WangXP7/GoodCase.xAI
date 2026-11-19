@@ -1,0 +1,61 @@
+/**
+ * Research Center Placement Strategy
+ *
+ * A rule (decision/arbiter.ts), taken before any buy, so the bot bootstraps
+ * research early. Without a Research Center the bot cannot unlock new towers.
+ *
+ * Triggers when:
+ * - Research Center NOT yet placed (state.research.centerLevel === 0)
+ * - Player has enough credits (>= 75)
+ * - Its wave reached (TowerTypeConfig.minWave, the build phase before wave 2)
+ */
+
+import { BaseStrategy } from '../tower-strategy.interface';
+import { GameStateSnapshot } from '../../../director/models/game-state-snapshot';
+import { TowerAction } from '../../bots/tower-bot.interface';
+import { TOWER_TYPES, towerWaitsForWave } from '../../../configs/tower-types.config';
+import { researchWave } from '../../../configs/research/research.types';
+import { StrategicPlacementService } from '../../../services/world/strategic-placement.service';
+import type { BotWorld } from '../../bot-world';
+
+export class ResearchCenterPlacementStrategy extends BaseStrategy {
+  constructor(
+    private strategicPlacement: StrategicPlacementService,
+    private gameState: BotWorld,
+  ) {
+    super('ResearchCenterPlacement');
+  }
+
+  canExecute(state: GameStateSnapshot): boolean {
+    // Already placed?
+    if (state.research && state.research.centerLevel > 0) return false;
+
+    // The simulation refuses it before its wave
+    if (towerWaitsForWave(TOWER_TYPES['research-center'], researchWave(state.waveNumber, state.phase)) !== null) return false;
+
+    // Need enough credits: research center + at least one Archer
+    // (so the bot doesn't drain everything into the research center and stall)
+    const centerCost = TOWER_TYPES['research-center'].cost;
+    const archerCost = TOWER_TYPES['archer']?.cost ?? 45;
+    if (state.player.credits < centerCost + archerCost) return false;
+
+    return true;
+  }
+
+  execute(_state: GameStateSnapshot): TowerAction | null {
+    // Reuse the standard strategic-placement logic — Research Center doesn't need
+    // combat range, but the placement service already picks valid street-adjacent positions.
+    const spawnPoints = this.gameState.getSpawnPoints();
+    const paths = this.gameState.getCachedPaths();
+    const [best] = this.strategicPlacement.findStrategicPositions(spawnPoints, paths, 'research-center');
+    if (!best) return null;
+
+    return {
+      type: 'place',
+      position: { x: best.position.lon, z: best.position.lat },
+      towerType: 'research-center',
+      confidence: 0.95,
+      reason: 'Bootstrapping research',
+    };
+  }
+}

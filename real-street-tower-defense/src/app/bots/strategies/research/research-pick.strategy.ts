@@ -1,0 +1,405 @@
+/**
+ * Research Pick Strategy
+ *
+ * Research (decision/arbiter.ts): taken while the last wave held, and a
+ * rule when the next wave brings air the defense cannot hit (kindNow).
+ *
+ * Fires when:
+ * - Research Center is placed (centerLevel > 0)
+ * - At least one free slot available
+ * - Next research in skill-specific order is affordable + prereqs met
+ *
+ * Skill-level pick order:
+ * - beginner: gatling, then the upgrade-tier line up to tier 4
+ * - casual: basic unlocks (gatling, ice, poison, cannon, fire)
+ * - strategist: full tree + perks + tiers (adaptive: armor-gap aware)
+ * - meta: same as strategist
+ */
+
+import { BaseStrategy } from '../tower-strategy.interface';
+import type { Proposal, ProposalKind } from '../../decision/arbiter';
+import { killTimeSaved, newTowerCapacity } from '../../decision/value';
+import type { DecisionContext } from '../tower-strategy.interface';
+import type { BotWorld } from '../../bot-world';
+import { GameStateSnapshot } from '../../../director/models/game-state-snapshot';
+import { TowerAction, BotConfig, BotSkillLevel } from '../../bots/tower-bot.interface';
+import {
+  getResearch,
+  getAllResearchIds,
+  RESEARCH_TREE,
+} from '../../../configs/research/research-tree.config';
+import {
+  ResearchId, ResearchEffect, researchCost, researchWaitsForWave, researchWave,
+} from '../../../configs/research/research.types';
+import { ArmorType, ARMOR_TYPES } from '../../../configs/combat/combat.types';
+import { DAMAGE_MATRIX } from '../../../configs/combat/damage-matrix.config';
+import { TowerTypeId, TOWER_TYPES } from '../../../configs/tower-types.config';
+import { waveHasAir, waveRules } from '../../../director/wave-rules';
+import { ENEMY_TYPES, EnemyTypeId } from '../../../configs/enemy-types.config';
+import { HERO } from '../../../configs/hero.config';
+import { isAntiEtherealTower } from '../../../director/defense-analyzer';
+
+/**
+ * Researches no bot starts. The mercenary: bots never hire the hero, so the
+ * research would spend their gold on nothing and shift the baselines the
+ * wave director is measured against (docs/HERO.md).
+ */
+/**
+ * Added to the score of a research that unlocks magic, ice or lightning. The
+ * other scores sit around 0.1 to 2 (2 for the next upgrade tier), the
+ * anti-air bump at 100, so these come after air and before the tier line.
+ */
+const ETHEREAL_STAPLE_BONUS = 2.5;
+
+/**
+ * Gold the bot expects to spend on the towers of a new type before the next
+ * research matters: what an unlock's better value per gold is worth over.
+ */
+const UNLOCK_SPEND = 1000;
+
+/** A gate is worth what it opens, a little less, since a second research is still to pay */
+const GATE_SHARE = 0.9;
+
+export const BOT_SKIPPED_RESEARCH: ReadonlySet<ResearchId> = new Set([HERO.researchId]);
+
+export class ResearchPickStrategy extends BaseStrategy {
+  constructor(private config: BotConfig, private world?: Pick<BotWorld, 'towerManager'>) {
+    super('ResearchPick', 'research');
+  }
+
+  /** Static fallback order per skill — used when no adaptive pick is available. */
+  private readonly researchOrderBySkill: Record<Exclude<BotSkillLevel, 'normal'>, ResearchId[]> = {
+    // A beginner researches what makes its towers stronger, not what answers
+    // a wave: the tier line, and the two unlocks that gate it. With only
+    // `gatling-tech` every branch of every tower stood at the tier-1 ceiling
+    // of level 5 by wave twelve, the bot had nothing left it was allowed to
+    // buy, and it sat on 143,000 credits until it died (measured over 51 runs,
+    // 2026-09-20). `transcendent-tech` stays out: the last tech is not where a
+    // beginner ends up.
+    beginner: [
+      'gatling-tech',
+      'siege-engineering', 'arcane-studies',   // what advanced-weaponry needs
+      'advanced-weaponry',                     // tier 2, levels 6-10
+      'master-engineering',                    // tier 3, levels 11-15
+      'advanced-engineering',                  // tier 4, levels 16-20
+    ],
+    // Phase 5.16: order aligned to campaign so the bot has the
+    // right counters by the time the campaign forces a new armor type.
+    //   W7  bat_swarm     → light air → aa-retrofit done by W6
+    //   W10 boss_herbert  → needs Cannon (Heavy/Boss) → siege-engineering
+    //   W12 dragon_elite  → heavy air → rocketry done by W11
+    //   W13 ghost_surge   → needs Magic (Ethereal) → arcane-studies done by W12
+    expert: [
+      'gatling-tech',           // W1 — Dual-Gatling early DPS
+      'aa-retrofit',            // by W6 — light air of W7 on the gatlings
+      'ice-magic',              // W1-2 — Ice (slow, ethereal-decent later)
+      'biology',                // the gate in front of tentacle and poison
+      'tentacle-biology',       // W2-3 — chokepoint melee
+      'siege-engineering',      // by W10 — Cannon against heavy and the boss
+      'rocketry',               // by W11 — the dragon of W12
+      'arcane-studies',         // by W12 — Magic against the ethereal of W13
+      'toxic-compounds', 'fire-alchemy',
+      'advanced-weaponry', 'nuclear-strike', 'frost-bomb', 'storm-mastery', 'emp',
+      'master-engineering', 'orbital-laser',
+      'chaos-rift', 'advanced-engineering', 'transcendent-tech',
+      'mercenary-contract',     // the hero; HeroStrategy hires him once it is done
+    ],
+  };
+
+  canExecute(state: GameStateSnapshot): boolean {
+    const r = state.research;
+    if (!r) return false;
+    if (r.centerLevel === 0) return false;
+    if (r.slotsUsed >= r.maxSlots) return false;
+
+    const next = this.pickNext(state);
+    if (!next) return false;
+
+    const cfg = getResearch(next);
+    if (!cfg) return false;
+
+    return state.player.credits >= researchCost(cfg, r.lanes ?? 1);
+  }
+
+  /**
+   * The next research as a proposal. One that unlocks a tower better per gold
+   * than the best the bot can build now is a buy like any other: worth that
+   * gain over the gold it will spend on the new type (UNLOCK_SPEND), so it
+   * competes with towers and upgrades and the bot may save for it. Without
+   * such a gain it waits until a wave held (kind research); an answer to air
+   * the next wave brings is a rule. Proposed while unaffordable too, so the
+   * arbiter can save for it; a rule only once it is affordable.
+   */
+  override propose(state: GameStateSnapshot, context: DecisionContext): Proposal[] {
+    const r = state.research;
+    if (!r || r.centerLevel === 0) return [];
+    const next = this.pickNext(state);
+    const cfg = next ? getResearch(next) : undefined;
+    if (!next || !cfg) return [];
+    if (r.slotsUsed >= r.maxSlots) return this.proposeSlot(state, context, next);
+    const cost = researchCost(cfg, r.lanes ?? 1);
+    const act = () => this.execute(state);
+    const kind = this.kindNow(state);
+    if (kind === 'rule') return cost <= state.player.credits ? [{ kind, label: cfg.name, cost, value: 0, act }] : [];
+    const value = this.unlockGain(next, state, context) * UNLOCK_SPEND;
+    return [{ kind: value > 0 ? 'buy' : 'research', label: cfg.name, cost, value, act }];
+  }
+
+  /**
+   * Every slot busy and a research waiting: another slot of the research
+   * center, worth what that research is worth (a buy for an unlock, else
+   * research after a held wave). A player buys the slot when the tree has
+   * more to give than one slot can take.
+   */
+  private proposeSlot(state: GameStateSnapshot, context: DecisionContext, waiting: ResearchId): Proposal[] {
+    const center = this.world?.towerManager.getAll().find((t) => t.typeConfig.id === 'research-center');
+    if (!center || !center.getAvailableUpgrades().some((u) => u.id === 'research-slots')) return [];
+    const value = this.unlockGain(waiting, state, context) * UNLOCK_SPEND;
+    return [{
+      kind: value > 0 ? 'buy' : 'research',
+      label: 'Research slot',
+      cost: center.getNextUpgradeCost('research-slots'),
+      value,
+      act: () => ({ type: 'upgrade', towerId: center.id, upgradeId: 'research-slots', reason: `Another research slot for ${waiting}` }),
+    }];
+  }
+
+  /**
+   * Value per gold a research adds to the best tower the bot can build: of
+   * the towers it unlocks, or for a gate of those behind it (GATE_SHARE).
+   */
+  private unlockGain(id: ResearchId, state: GameStateSnapshot, context: DecisionContext): number {
+    const air = state.research.airTargetingUnlocked;
+    const perGold = (t: TowerTypeId) => {
+      const cfg = TOWER_TYPES[t];
+      if (!cfg || cfg.cost <= 0) return 0;
+      return killTimeSaved(context.threat, context.capacity, newTowerCapacity(t, air, context.routes, context.capacity, context.routeMetres)) / cfg.cost;
+    };
+    const known = this.config.knownTowerTypes;
+    const bestNow = Math.max(0, ...known.filter((t) => state.research.towerUnlocked[t]).map(perGold));
+    const unlocks = (rid: ResearchId) => (getResearch(rid)?.effects ?? [])
+      .flatMap((e) => e.kind === 'unlock-tower' && known.includes(e.towerId as TowerTypeId) ? [e.towerId as TowerTypeId] : []);
+    const direct = Math.max(0, ...unlocks(id).map(perGold));
+    const behind = Object.values(RESEARCH_TREE)
+      .filter((c) => c.prerequisites.includes(id))
+      .flatMap((c) => unlocks(c.id as ResearchId))
+      .map((t) => GATE_SHARE * perGold(t));
+    return Math.max(0, Math.max(direct, ...behind) - bestNow);
+  }
+
+  /**
+   * A rule when the next wave cannot wait for it: air the defense cannot hit
+   * and the retrofit is next, or armored air and the rocket is. Otherwise it
+   * waits until the last wave held.
+   */
+  protected override kindNow(state: GameStateSnapshot): ProposalKind {
+    const next = this.pickNext(state);
+    const urgent = (next === 'aa-retrofit' && this.upcomingWaveHasAir(state) && !this.hasAntiAirCapability(state))
+      || (next === 'rocketry' && this.upcomingWaveHasHeavyAir(state));
+    return urgent ? 'rule' : 'research';
+  }
+
+  execute(state: GameStateSnapshot): TowerAction | null {
+    const next = this.pickNext(state);
+    if (!next) return null;
+
+    const cfg = getResearch(next);
+    return {
+      type: 'research-start',
+      researchId: next,
+      confidence: 0.85,
+      reason: `Unlocking ${cfg?.name ?? next}`,
+    };
+  }
+
+  /**
+   * Pick the next research to start.
+   * Strategist/Meta: armor-gap adaptive. Others: static skill list.
+   */
+  private pickNext(state: GameStateSnapshot): ResearchId | null {
+    const skill = this.config.skillLevel;
+    const r = state.research;
+    if (!r) return null;
+
+    // Adaptive: the expert prefers researches that close an armor gap
+    if (this.config.knows.adaptiveResearch && state.expectedArmorDistribution) {
+      const adaptive = this.pickByArmorGap(state);
+      if (adaptive) return adaptive;
+    }
+
+    // Fallback: skill-order list; a normal player follows the expert's
+    const list = this.researchOrderBySkill[skill === 'normal' ? 'expert' : skill];
+    return list.find(id =>
+      !BOT_SKIPPED_RESEARCH.has(id) &&
+      !r.completedIds.includes(id) &&
+      !this.isActive(id, state) &&
+      this.prereqsMet(id, state)
+    ) ?? null;
+  }
+
+  /**
+   * Pick a research that unlocks a tower with good matchup against current armor distribution.
+   * Scores each tower-unlock by its effective DPS-per-cost against the armor mix.
+   *
+   * Phase 5.16: when the upcoming wave contains AIR units and the bot has
+   * no anti-air capability yet, anti-air researches (rocketry, aa-retrofit)
+   * get a hard priority bump — without it, raw armor-matrix scoring picks a
+   * tower that cannot shoot up (Gatling without AA Retrofit, 1.6× vs light)
+   * over Rocket (0.5× vs light) and the bot enters a forced-air wave
+   * defenseless.
+   */
+  private pickByArmorGap(state: GameStateSnapshot): ResearchId | null {
+    const r = state.research;
+    const dist = state.expectedArmorDistribution!;
+    const upcomingHasAir = this.upcomingWaveHasAir(state);
+    const hasAntiAir = this.hasAntiAirCapability(state);
+    const airUrgent = upcomingHasAir && !hasAntiAir;
+
+    let bestResearch: ResearchId | null = null;
+    let bestScore = -Infinity;
+
+    for (const id of getAllResearchIds()) {
+      if (BOT_SKIPPED_RESEARCH.has(id)) continue;
+      if (r.completedIds.includes(id)) continue;
+      if (this.isActive(id, state)) continue;
+      if (!this.prereqsMet(id, state)) continue;
+      const cfg = getResearch(id);
+      if (!cfg) continue;
+
+      // Score based on effect type
+      let score = 0;
+      for (const effect of cfg.effects) {
+        score += this.scoreEffect(effect, dist, state);
+      }
+      // A gate has no effects of its own, so it would score 0 and never be
+      // picked, which would put everything behind it out of reach. It is worth
+      // the best of what it opens, minus a little so a direct unlock wins.
+      if (cfg.effects.length === 0) {
+        score = 0.9 * this.bestScoreBehind(id, dist, state);
+      }
+
+      // Anti-Air urgency bump. The retrofit is the broad answer: pierce deals
+      // 1.6 against the light swarms that open the air campaign, where the
+      // rocket's siege deals 0.5. The rocket earns the bump only once armored
+      // air is coming, which is what it is priced for.
+      if (airUrgent && id === 'aa-retrofit') score += 100;
+      if (id === 'rocketry' && this.upcomingWaveHasHeavyAir(state)) score += 100;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestResearch = id;
+      }
+    }
+
+    return bestResearch;
+  }
+
+  /**
+   * The best score among the researches this one unlocks, one level down. Used
+   * for a gate, which carries no effect of its own.
+   */
+  private bestScoreBehind(
+    id: ResearchId,
+    dist: Record<ArmorType, number>,
+    state: GameStateSnapshot,
+  ): number {
+    let best = 0;
+    for (const candidate of Object.values(RESEARCH_TREE)) {
+      if (!candidate.prerequisites.includes(id)) continue;
+      let score = 0;
+      for (const effect of candidate.effects) score += this.scoreEffect(effect, dist, state);
+      best = Math.max(best, score);
+    }
+    return best;
+  }
+
+  /** True iff the upcoming wave carries air units the rocket is priced for. */
+  private upcomingWaveHasHeavyAir(state: GameStateSnapshot): boolean {
+    const mix = waveRules().enemyMix(state.waveNumber + 1);
+    if (!mix) return false;
+    return mix.some(([typeId]) => {
+      const cfg = ENEMY_TYPES[typeId as EnemyTypeId];
+      return !!cfg?.isAirUnit && cfg.armorType === 'heavy';
+    });
+  }
+
+  /** True iff the upcoming wave's enemy mix includes any air unit. */
+  private upcomingWaveHasAir(state: GameStateSnapshot): boolean {
+    // expectedArmorDistribution doesn't expose air-vs-ground, so we look up
+    // the next wave's enemy mix, where the source fixes it in advance.
+    return waveHasAir(state.waveNumber + 1, (id) => !!ENEMY_TYPES[id as EnemyTypeId]?.isAirUnit);
+  }
+
+  /**
+   * Does the defense already have an answer to air?
+   *
+   * Prefers the analysed capability, which accounts for what is actually built
+   * and can reach. Falls back to unlock flags across every air-capable tower —
+   * the old check looked only at `rocket`, so a defense full of archers (which
+   * do target air) still read as "no anti-air" and kept buying rocketry.
+   */
+  private hasAntiAirCapability(state: GameStateSnapshot): boolean {
+    if (state.defense?.capabilities) return state.defense.capabilities.hasAntiAir;
+    const r = state.research;
+    if (!r) return false;
+    if (r.airTargetingUnlocked) return true;
+    return (Object.keys(TOWER_TYPES) as TowerTypeId[]).some(
+      (id) => TOWER_TYPES[id].canTargetAir && r.towerUnlocked?.[id],
+    );
+  }
+
+  private scoreEffect(
+    effect: ResearchEffect,
+    dist: Record<ArmorType, number>,
+    state: GameStateSnapshot,
+  ): number {
+    if (effect.kind === 'unlock-tower') {
+      const towerCfg = TOWER_TYPES[effect.towerId as TowerTypeId];
+      if (!towerCfg) return 0;
+      // Score: avg damage multiplier against current armor mix, weighted by DPS/cost
+      let dps: number;
+      if (towerCfg.attackType === 'beam') {
+        dps = towerCfg.damagePerSecond ?? 0;
+      } else if (towerCfg.attackType === 'chain') {
+        // Chain hits primary + N jumps with falloff per hop.
+        const maxJumps = towerCfg.maxJumps ?? 0;
+        const falloff = towerCfg.chainFalloff ?? 1.0;
+        let chainMult = 1;
+        let term = 1;
+        for (let i = 0; i < maxJumps; i++) {
+          term *= falloff;
+          chainMult += term;
+        }
+        dps = towerCfg.damage * towerCfg.fireRate * chainMult;
+      } else {
+        dps = towerCfg.damage * towerCfg.fireRate;
+      }
+      const avgMult = ARMOR_TYPES.reduce((s, a) =>
+        s + (DAMAGE_MATRIX[towerCfg.damageType]?.[a] ?? 1) * (dist[a] ?? 0), 0);
+      // Magic, ice and lightning belong in the mix before the first ghost
+      // wave, as with a player: their unlocks go ahead of the tier line.
+      const etherealStaple = isAntiEtherealTower(effect.towerId as TowerTypeId) ? ETHEREAL_STAPLE_BONUS : 0;
+      return (dps * avgMult) / Math.max(1, towerCfg.cost) + etherealStaple;
+    }
+    if (effect.kind === 'unlock-upgrade-tier') {
+      // High priority if current max tier < unlock-tier
+      return state.research && effect.tier > state.research.maxUpgradeTier ? 2.0 : 0.2;
+    }
+    if (effect.kind === 'global-perk' || effect.kind === 'enable-targeting') {
+      return 1.0; // generic useful signal
+    }
+    return 0.5;
+  }
+
+  /** Prerequisites done and its wave reached (minWave), what the manager checks too. */
+  private prereqsMet(id: ResearchId, state: GameStateSnapshot): boolean {
+    const cfg = getResearch(id);
+    if (!cfg) return false;
+    if (researchWaitsForWave(cfg, researchWave(state.waveNumber, state.phase)) !== null) return false;
+    return cfg.prerequisites.every(p => state.research.completedIds.includes(p));
+  }
+
+  private isActive(id: ResearchId, state: GameStateSnapshot): boolean {
+    return state.research.activeIds.includes(id);
+  }
+}

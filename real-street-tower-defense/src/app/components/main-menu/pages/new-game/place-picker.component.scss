@@ -1,0 +1,39 @@
+// Layout of the place picker: the coordinates in a row, the spawn choice
+// indented, the lists scrolling, the globe beside the defended places.
+
+.pp-coords {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.pp-spawn-line > span {
+  flex: 1;
+}
+
+.pp-spawn {
+  padding-left: 22px;
+}
+
+.pp-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.pp-world {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--td-sp-4);
+  align-items: start;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pp-globe {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+}

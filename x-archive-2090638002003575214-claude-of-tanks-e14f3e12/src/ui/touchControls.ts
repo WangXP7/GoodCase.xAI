@@ -1,0 +1,888 @@
+// Blitz-style mobile battle controls. This is a presentation/input adapter:
+// every gesture enters game/input.ts as the same named action or aim/move
+// vector used by keyboard, mouse, and gamepad controls.
+
+import { FONT_STACK, FONT_COND } from './fonts.ts';
+import { installPinchZoomGuard } from './pinchZoomGuard.ts';
+import { uiIconSVG } from './uiIcons.ts';
+import { t } from './i18n.ts';
+import { ensureStyle } from './styleLayers.ts';
+import {
+  getDeviceTier, getMobilePresetChoice, getStoredChoice,
+  MOBILE_PRESET_ORDER, PRESET_ORDER, PRESETS, resolvePresetName,
+  setMobilePresetName, setPresetName,
+  type PresetName,
+} from '../engine/quality.ts';
+import type { TouchControlsOptions, TouchControlsRuntime } from './touchControlsAccess.ts';
+
+/** The tiered presets' Settings names (settings.ts's Graphics tab). */
+const TIERED_PRESET_KEYS: Readonly<Record<string, string>> = {
+  Ultra: 'settings.preset.ultra', High: 'settings.preset.high', Medium: 'settings.preset.medium', Low: 'settings.preset.low',
+};
+
+const CSS = `
+.cot-touch{position:fixed;inset:0;z-index:60;display:none;pointer-events:none;
+  font-family:${FONT_STACK};color:var(--ink-1);-webkit-user-select:none;user-select:none;
+  touch-action:none;overflow:hidden;--edge:max(14px,env(safe-area-inset-left));
+  --touch-panel:var(--hud-plate-strong);--touch-edge:var(--line-control);
+  --touch-action:var(--accent);--touch-action-soft:oklch(from var(--accent) l c h / .18);}
+.cot-touch-aim{position:fixed;inset:0;z-index:39;display:none;pointer-events:none;
+  font-family:${FONT_STACK};color:var(--ink-1);-webkit-user-select:none;user-select:none;
+  touch-action:none;overflow:hidden;}
+.cot-touch.on,.cot-touch-aim.on{display:block;}
+.cot-touch *,.cot-touch-aim *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.cot-touch button{font:inherit;color:inherit;}
+.cot-touch-aim .aimpad{position:absolute;inset:auto 0 0 auto;top:18%;width:62%;
+  pointer-events:auto;touch-action:none;}
+.cot-touch .joy{position:absolute;z-index:2;left:var(--edge);
+  bottom:max(16px,env(safe-area-inset-bottom));width:138px;height:138px;
+  border-radius:50%;pointer-events:auto;touch-action:none;
+  background:radial-gradient(circle,oklch(from var(--ink-4) l c h / .24) 0 28%,transparent 29% 45%,oklch(from var(--ink-1) l c h / .1) 46% 47%,transparent 48%),
+    conic-gradient(from 45deg,rgba(212,225,234,.08),transparent 13% 37%,rgba(212,225,234,.08) 50%,transparent 63% 87%,rgba(212,225,234,.08)),
+    radial-gradient(circle,rgba(23,31,37,.72),rgba(5,9,12,.58) 68%,rgba(2,5,8,.4));
+  border:2px solid var(--touch-edge);box-shadow:inset 0 0 0 5px oklch(from var(--surface-scene) l c h / .28),inset 0 0 25px oklch(from var(--surface-scene) l c h / .58),0 7px 20px oklch(from var(--surface-scene) l c h / .34);}
+.cot-touch .joy::before,.cot-touch .joy::after{content:"";position:absolute;left:50%;top:50%;
+  background:oklch(from var(--ink-1) l c h / .16);transform:translate(-50%,-50%);}
+.cot-touch .joy::before{width:76%;height:1px}.cot-touch .joy::after{width:1px;height:76%}
+/* (the knob over the guide lines: the ::after hairline came after it in the paint order and crossed it, gauntlet r6) */
+.cot-touch .knob{position:absolute;z-index:var(--z-lift);left:50%;top:50%;width:56px;height:56px;margin:-28px;
+  border-radius:50%;background:radial-gradient(circle at 38% 30%,oklch(from var(--ink-3) .61 c h),oklch(from var(--surface-hover) .37 c h) 35%,var(--surface-menu) 72%,var(--surface-page));
+  border:2px solid oklch(from var(--ink-1) l c h / .58);box-shadow:0 6px 14px oklch(from var(--surface-scene) l c h / .68),inset 0 1px 4px oklch(from var(--ink-1) l c h / .2);}
+.cot-touch .arrow{position:absolute;color:oklch(from var(--ink-1) l c h / .72);font-size:16px;line-height:1;
+  text-shadow:0 1px 3px var(--surface-scene)}.cot-touch .arrow.u{left:61px;top:8px}.cot-touch .arrow.d{left:61px;bottom:8px}
+.cot-touch .arrow.l{left:10px;top:58px}.cot-touch .arrow.r{right:10px;top:58px}
+/* All four arrows are the same glyph rotated, avoiding platform variants. */
+.cot-touch .arrow.d{transform:rotate(180deg)}
+.cot-touch .arrow.l{transform:rotate(-90deg)}
+.cot-touch .arrow.r{transform:rotate(90deg)}
+.cot-touch .round{position:absolute;z-index:3;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;pointer-events:auto;touch-action:none;border:2px solid var(--line-control);
+  background:radial-gradient(circle at 38% 27%,oklch(from var(--ink-4) .57 c h / .8),var(--hud-plate-strong) 48%,var(--touch-panel) 76%);
+  box-shadow:0 6px 18px oklch(from var(--surface-scene) l c h / .52),inset 0 0 0 4px oklch(from var(--surface-scene) l c h / .3),inset 0 1px 4px oklch(from var(--ink-1) l c h / .18);
+  transition:transform var(--dur-instant) ease-out;}
+.cot-touch .round::before{content:"";position:absolute;inset:7px;border-radius:50%;pointer-events:none;
+  border:1px solid var(--line-1);}
+.cot-touch .round:active,.cot-touch .round.down{transform:scale(.94);border-color:var(--accent);
+  box-shadow:0 0 18px oklch(from var(--accent) l c h / .35),inset 0 2px 7px oklch(from var(--surface-scene) l c h / .65);}
+.cot-touch .fire{right:max(20px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));
+  width:96px;height:96px;color:var(--accent-hi);border-color:oklch(from var(--accent-hi) l c h / .58);
+  background:radial-gradient(circle at 50% 48%,oklch(from var(--accent) l c h / .24),transparent 35%),
+    radial-gradient(circle at 38% 27%,rgba(118,103,75,.88),rgba(36,31,24,.97) 48%,rgba(10,10,9,.98) 76%);}
+.cot-touch .fire svg{width:34px;height:54px;filter:drop-shadow(0 2px 3px oklch(from var(--surface-scene) l c h / .8));}
+.cot-touch .fire .lb,.cot-touch .scope .lb,.cot-touch .autoaim .lb{position:absolute;bottom:-17px;line-height:1;
+  left:50%;transform:translateX(-50%);font-family:${FONT_COND};font-size:var(--battle-fs-11);font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 3px var(--surface-scene);}
+/* (the left FIRE is a secondary round control, AUTO AIM's and SCOPE's finish with the shell in the accent: a smaller twin
+   of FIRE's amber read as a second kit, gauntlet r4) */
+.cot-touch .fire.alt{left:166px;right:auto;bottom:156px;width:64px;height:64px;opacity:1;border-color:var(--line-control);
+  background:radial-gradient(circle at 38% 27%,oklch(from var(--ink-4) .57 c h / .8),var(--hud-plate-strong) 48%,var(--touch-panel) 76%);}
+/* (the left trigger names itself as every round control does, on the secondary finish: unnamed, it read as an odd button,
+   gauntlet r3 and r6; as an amber twin, a second kit, r4) */
+.cot-touch .fire.alt .lb{color:var(--ink-1);}
+.cot-touch .fire.alt svg{width:20px;height:34px}
+/* The touch kit's rounds on the HUD's plates (gauntlet r6: glossy discs with metal gradients beside the flat square plates
+   read as a second kit): the strong plate, its 2 px edge and ring; FIRE on the accent's wash; pressed, the accent's ring;
+   the stick a flat well with its guide ring and lines, its knob a raised plate */
+.cot-touch .round{background:var(--hud-plate-strong);box-shadow:var(--hud-plate-ring);}
+.cot-touch .round:active,.cot-touch .round.down{box-shadow:var(--ring-accent);}
+.cot-touch .fire{background:linear-gradient(var(--accent-wash),var(--accent-wash)),var(--hud-plate-strong);}
+.cot-touch .fire.alt{background:var(--hud-plate-strong);}
+.cot-touch .joy{background:radial-gradient(circle,transparent 45%,oklch(from var(--ink-1) l c h / .1) 46% 47%,transparent 48%),var(--hud-plate);
+  box-shadow:var(--hud-plate-ring);}
+.cot-touch .knob{background:var(--surface-raised);box-shadow:var(--hud-plate-ring),var(--e2);}
+/* out of ammo (owner 2026-10-17; critic r3 advisory): the selected gun is dry (hud.ts marks the body), so both FIRE
+   buttons dim to a muted shell on a danger rim, in colour only */
+body.cot-gun-dry .cot-touch .fire{color:var(--hud-muted,#93a3af);border-color:oklch(from var(--danger) l c h / .5);opacity:.62;
+  background:radial-gradient(circle at 38% 27%,oklch(from var(--surface-hover) .44 c h / .86),var(--hud-plate-strong) 48%,var(--hud-plate-strong) 76%);}
+.cot-touch .fire.aiming{border-color:var(--accent-hi);box-shadow:0 0 0 5px oklch(from var(--accent) l c h / .13),
+  0 0 22px rgba(240,150,40,.45),inset 0 2px 7px rgba(0,0,0,.65);}
+.cot-touch .fire.autofire{border-color:var(--accent-hi);box-shadow:0 0 0 5px oklch(from var(--accent-hi) l c h / .16),
+  0 0 25px rgba(255,147,30,.58),inset 0 0 14px rgba(255,173,58,.16);}
+.cot-touch .fire-cancel{position:fixed;z-index:5;width:56px;height:56px;margin:-28px;
+  display:flex;align-items:center;justify-content:center;pointer-events:none;visibility:hidden;
+  opacity:0;transform:scale(.78);border-radius:50%;border:1.5px solid oklch(from var(--danger) l c h / .7);
+  background:var(--battle-chip-plate);color:oklch(from var(--danger) .77 .137 h);box-shadow:0 4px 13px oklch(from var(--surface-scene) l c h / .48);
+  transition:opacity var(--dur-instant) ease,transform var(--dur-instant) ease;}
+.cot-touch .fire-cancel b{font:400 var(--battle-fs-28)/1 ${FONT_COND};}
+.cot-touch.fire-armed .fire-cancel{visibility:visible;opacity:.82;transform:scale(1);}
+.cot-touch.fire-cancel-hot .fire-cancel{opacity:1;color:var(--ink-1);border-color:var(--danger);background:oklch(from var(--danger) .35 .131 h / .94);
+  transform:scale(1.07);box-shadow:0 0 18px oklch(from var(--danger) l c h / .46);}
+.cot-touch .scope{right:134px;bottom:43px;width:62px;height:62px;color:var(--ink-1);}
+.cot-touch .scope svg{width:32px;height:24px;filter:drop-shadow(0 2px 3px var(--surface-scene));}
+/* (the kit's selected look while the sight is up, the accent's ring on its wash: it read the same scoped or not, gauntlet r6) */
+html[data-cot-scoped] .cot-touch .round.scope{border-color:var(--accent);background:linear-gradient(var(--accent-wash),var(--accent-wash)),var(--hud-plate-strong);
+  box-shadow:var(--ring-accent);color:var(--accent-hi);}
+.cot-touch .autoaim{right:206px;bottom:43px;width:58px;height:58px;color:var(--ink-1);}
+.cot-touch .jump{right:134px;bottom:124px;width:84px;height:84px;color:var(--accent-hi);border-color:oklch(from var(--accent-hi) l c h / .5);
+  background:radial-gradient(circle at 50% 42%,oklch(from var(--accent) l c h / .22),transparent 40%),
+    radial-gradient(circle at 38% 27%,rgba(96,78,48,.9),rgba(34,28,18,.97) 48%,rgba(10,10,9,.98) 76%);}
+.cot-touch .jump[hidden]{display:none!important;}
+.cot-touch .jump svg{width:40px;height:40px;filter:drop-shadow(0 2px 3px var(--surface-scene));}
+.cot-touch .jump .lb{position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-family:${FONT_COND};font-size:var(--battle-fs-11);
+  font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 3px var(--surface-scene);}
+.cot-touch .autoaim svg{width:28px;height:28px;filter:drop-shadow(0 2px 3px var(--surface-scene));}
+.cot-touch .autoaim.on{color:var(--accent-hi);border-color:var(--accent);
+  background:radial-gradient(circle at 35% 28%,oklch(from var(--accent-lo) .47 .085 h / .92),var(--hud-plate-strong) 64%,var(--hud-plate-strong));
+  box-shadow:0 0 18px oklch(from var(--accent) l c h / .42),inset 0 1px 4px oklch(from var(--accent-hi) .92 .078 h / .2);}
+/* The toolbar hangs from the window's right edge as the HUD's corner plate (owner 2026-10-24, the battle HUD's corner
+   plates on every device): its buttons sit on the plate without plates of their own. */
+.cot-touch .mobile-chrome{position:absolute;z-index:4;top:0;right:0;display:flex;gap:2px;pointer-events:auto;
+  padding:max(2px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) 2px 18px;
+  background:var(--hud-plate);clip-path:polygon(0 0,100% 0,100% 100%,14px 100%);}
+.cot-touch .mobile-chrome .quick{border-color:transparent;border-bottom-color:transparent;background:transparent;box-shadow:none;}
+body.cot-touch-layout[data-cot-orientation='portrait'] .cot-touch .mobile-chrome{
+  top:calc(env(safe-area-inset-top) + 64px);padding-top:2px;
+}
+.cot-touch .quick{width:44px;height:44px;padding:3px 2px 2px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1px;pointer-events:auto;touch-action:none;
+  border:1px solid var(--touch-edge);border-bottom:2px solid var(--line-control);border-radius:2px;
+  background:linear-gradient(180deg,var(--hud-plate-strong),var(--touch-panel));
+  color:var(--ink-1);box-shadow:0 4px 13px oklch(from var(--surface-scene) l c h / .4),inset 0 1px oklch(from var(--ink-1) l c h / .05);
+  transition:transform var(--dur-instant) ease-out;}
+.cot-touch .quick:active{transform:scale(.95);border-color:var(--accent);color:var(--accent-hi);background:var(--hud-plate-strong);}
+.cot-touch .quick svg{width:18px;height:18px;display:block;}
+.cot-touch .quick .ql{font-family:${FONT_COND};font-size:var(--battle-fs-11);font-weight:700;line-height:1;
+  letter-spacing:0em;text-transform:uppercase;white-space:nowrap;}
+/* A 44 px button holds an 11 px word of four or five letters: the sound and settings buttons speak through their icons
+   (their names stay for assistive technology), and the graphics button prints only its level under the monitor. */
+.cot-touch .quick:is(.sound,.settings) .ql{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.cot-touch .quick.muted{color:var(--danger);border-color:oklch(from var(--danger) l c h / .55);}
+/* Recompose the existing live HUD instead of duplicating ammo/state UI. */
+body.cot-touch-layout{overscroll-behavior:none;}
+body.cot-touch-layout #app canvas{touch-action:none;}
+body.cot-touch-layout .cot-hints,body.cot-touch-layout .cot-ear{display:none!important;}
+body.cot-touch-layout .cot-top{top:0;min-height:36px;padding:max(4px,env(safe-area-inset-top)) 22px 5px;column-gap:var(--s2);z-index:30;}
+body.cot-touch-layout .cot-top .fg,body.cot-touch-layout .cot-top .fe{font-size:20px;}
+body.cot-touch-layout .cot-top .tm{font-size:15px;}
+body.cot-touch-layout .cot-top .sc .bar{width:20px;}
+body.cot-touch-layout .cot-killfeed{top:48px;left:50%;transform:translateX(-50%);max-width:48%;align-items:center;}
+body.cot-touch-layout .cot-kf{font-size:var(--battle-fs-11);padding:3px 7px;}
+/* Ammo is directly above the equipment/consumable stack, leaving the top
+   edge to the three global mobile controls. */
+/* (the rail stands on the equipment column's edge, its tiles the column's 52 px: a 48 px tile 4 px right of a 48 px column
+   cut "APFSDS" at both borders, gauntlet r3) */
+body.cot-touch-layout .cot-shells{left:auto;right:max(14px,env(safe-area-inset-right));
+  top:auto;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 302px);
+  width:52px;height:52px;display:block;transform:none;z-index:24;overflow:visible;}
+body.cot-touch-layout .cot-shell{position:absolute;right:0;top:0;width:52px;height:52px;
+  opacity:0;pointer-events:none;transform:scale(.94);transform-origin:right center;
+  transition:transform var(--dur-fast) ease-out,opacity var(--dur-instant) ease-out;}
+body.cot-touch-layout .cot-shell.sel{z-index:3;opacity:1;pointer-events:auto;transform:none;}
+/* (the tray's way is the sprite's chevron, hud.ts .tchev: a typed "‹" was a glyph of its own, gauntlet bar line 3) */
+body.cot-touch-layout .cot-shell.sel .tchev{display:flex;position:absolute;left:2px;top:40%;transform:translateY(-50%);color:var(--accent-hi);}
+body.cot-touch-layout .cot-shell.sel .tchev svg{display:block;width:14px;height:14px;}
+body.cot-touch-layout .cot-shells.touch-open .cot-shell{opacity:1;pointer-events:auto;
+  transform:translateX(var(--touch-ammo-x,0));}
+body.cot-touch-layout .cot-shells.touch-open .cot-shell.sel .tchev{transform:translateY(-50%) scaleX(-1);}
+/* The type label sits on the slot's floor, and so does the shell: scaled from its base 11 px up, its tail keeps 3 px
+   from the label at every touch slot height (critic r4b: APFSDS crossed the dart's tail) */
+body.cot-touch-layout .cot-shell canvas{top:auto;bottom:11px;transform:translateX(-50%);--shell-k:.76;}
+body.cot-touch-layout .cot-shell .key,body.cot-touch-layout .cot-con .key{display:none;}
+body.cot-touch-layout .cot-shell .tip{display:none!important;}
+body.cot-touch-layout .cot-shell .ty{font-size:var(--battle-fs-fig-11);left:1px;right:1px;text-align:center;letter-spacing:0}
+body.cot-touch-layout .cot-shell .cnt{font-size:var(--battle-fs-fig-11);}
+/* the selected round in the kit's selected look, the system tiles' and the Watch bar's (the accent's ring on its wash),
+   its frame in the bright accent for a glance at phone size (gauntlet r5: a brown gradient and a 16 px glow were a fourth
+   selected state and an elevation of their own) */
+body.cot-touch-layout .cot-shell.sel{border-color:var(--accent-hi);border-bottom-color:var(--accent-hi);
+  background:linear-gradient(var(--accent-wash),var(--accent-wash)),var(--hud-plate-strong);
+  box-shadow:var(--ring-accent);}
+/* (the selected tile's code is the figures' 11 px in every locale, a hair tighter so a six-letter code clears both
+   borders: at 13 px in zh it ran past them, gauntlet r3) */
+body.cot-touch-layout .cot-shell.sel .ty{font-size:var(--battle-fs-fig-11);letter-spacing:0;}
+/* out of ammo (owner 2026-10-17): the collapsed tray shows only the selected slot, so its empty state outranks the frame */
+body.cot-touch-layout .cot-shell.sel.empty{border-color:var(--hud-edge);border-bottom-color:var(--hud-danger);
+  background:var(--hud-panel);box-shadow:inset 0 -2px 0 var(--hud-danger);}
+/* ... struck through like a spent launcher control, its count in the danger ink (critic r3: it still read as selected) */
+body.cot-touch-layout .cot-shell.sel.empty::before{content:'';position:absolute;left:11px;right:11px;top:calc(50% - .75px);
+  height:1.5px;border-radius:1px;background:var(--hud-danger);box-shadow:0 0 0 1px oklch(from var(--surface-nav) l c h / .851);transform:rotate(-45deg);z-index:2;}
+body.cot-touch-layout .cot-shell.sel.empty .cnt{color:var(--hud-danger);}
+/* endless ammo (owner 2026-10-17): the ∞ at the numeral's size, not the consumables' small mark */
+body.cot-touch-layout .cot-shell.unlimited .cnt{font-size:16px;line-height:11px;}
+/* MOBILE-UX r1 (owner: "move equipment to right side in a vertical column"):
+   the consumable tray re-parks on the RIGHT EDGE as a thumb-reachable
+   column sitting above the FIRE cluster. 48 px targets; the selection/used/
+   cooldown chrome is the same .cot-con skin the desktop tray wears. */
+body.cot-touch-layout .cot-consep{display:none;}
+body.cot-touch-layout .cot-cons{display:flex;flex-direction:column;gap:9px;position:fixed;
+  left:auto;right:max(14px,env(safe-area-inset-right));
+  bottom:calc(max(22px,env(safe-area-inset-bottom)) + 124px);z-index:24;}
+body.cot-touch-layout .cot-con{width:52px;height:52px;}
+body.cot-touch-layout .cot-con svg{transform:none;}
+/* The HUD's context-aware Special Action remains the one canonical button on
+   touch. Recompose it into the fire cluster instead of adding a second mobile
+   implementation or another input path. */
+body.cot-touch-layout .cot-net{top:max(8px,env(safe-area-inset-top));
+  left:calc(max(8px,env(safe-area-inset-left)) + 124px);right:auto;width:max-content;z-index:24;}
+/* The former Garage shortcut occupied the first 44 px of this corner. With
+   battle exit living in Settings, let the minimap own the safe-area top row. */
+/* (on the touch layout's 12 px gutter with the dial, the stick and the right column: at 8, gauntlet r5) */
+body.cot-touch-layout .cot-minimap{left:max(var(--s3),env(safe-area-inset-left));right:auto;
+  top:max(8px,env(safe-area-inset-top));bottom:auto;
+  width:calc(116px * var(--mm-k,1))!important;height:calc(116px * var(--mm-k,1))!important;opacity:.86;z-index:24;}
+body.cot-touch-layout .cot-drive{display:block!important;left:calc(max(14px,env(safe-area-inset-left)) + 150px);
+  bottom:max(16px,env(safe-area-inset-bottom));transform:scale(.82);transform-origin:left bottom;z-index:24;}
+body.cot-touch-layout[data-cot-orientation='portrait'] .cot-drive{
+  left:max(14px,env(safe-area-inset-left));bottom:calc(max(16px,env(safe-area-inset-bottom)) + 150px);transform:scale(.78);}
+/* (a touch dial, at .68-.82, sets its 11 px unit and end marks at 7.5-9 px: it keeps the needle and the figure, the
+   11 px floor; gauntlet r2) */
+body.cot-touch-layout .cot-drive :is(.unit,.zero,.limit){display:none;}
+body.cot-touch-layout .cot-dp{left:max(232px,calc(env(safe-area-inset-left) + 224px));
+  bottom:max(8px,env(safe-area-inset-bottom));
+  transform:scale(.58);transform-origin:left bottom;}
+/* Compact phones keep the canonical damage-panel HP source instead of
+   spawning a second mobile health widget. Only the expensive schematic,
+   crew and equipment detail collapse; the live HP row stays bottom-center. */
+body.cot-touch-layout[data-cot-width='compact'] .cot-dp,
+body.cot-touch-layout[data-cot-width='phone'] .cot-dp,
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-dp{
+  display:block!important;left:50%!important;bottom:max(8px,env(safe-area-inset-bottom))!important;
+  width:clamp(112px,38vw,184px);min-height:34px;padding:7px var(--s2) 6px;
+  transform:translateX(-50%)!important;transform-origin:center bottom!important;
+  z-index:var(--hud-layer-controls,24);background:linear-gradient(180deg,var(--hud-plate-strong),var(--hud-plate));
+}
+body.cot-touch-layout[data-cot-width='compact'] .cot-dp canvas,
+body.cot-touch-layout[data-cot-width='compact'] .cot-dp .crew,
+body.cot-touch-layout[data-cot-width='compact'] .cot-dp .equiprow,
+body.cot-touch-layout[data-cot-width='phone'] .cot-dp canvas,
+body.cot-touch-layout[data-cot-width='phone'] .cot-dp .crew,
+body.cot-touch-layout[data-cot-width='phone'] .cot-dp .equiprow,
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-dp canvas,
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-dp .crew,
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-dp .equiprow{display:none!important;}
+body.cot-touch-layout[data-cot-width='compact'] .cot-dp .hptrack,
+body.cot-touch-layout[data-cot-width='phone'] .cot-dp .hptrack,
+body.cot-touch-layout[data-cot-height-density='tight'] .cot-dp .hptrack{margin-bottom:0;height:6px;}
+body.cot-touch-layout .cot-alert{bottom:28%;max-width:calc(100vw - 24px);font-size:var(--battle-fs-11);white-space:normal;}
+/* (one 180 px column on touch, the gun-travel chip's and the alert's: at 214 the stack missed its room over the left FIRE
+   by 4 px at 390x844 and fell to its cramped form, three widths deep, gauntlet r4) */
+body.cot-touch-layout .cot-sixth{top:max(70px,12%);width:min(180px,calc(100vw - 24px));
+  min-height:32px;grid-template-columns:21px minmax(0,max-content);gap:var(--s2);}
+/* (its glyph and word centred on the plate as the alert's and the chip's are: a filling column set DETECTED left, gauntlet r3) */
+body.cot-touch-layout .cot-sixth .sig svg{width:21px;height:21px;}
+body.cot-touch-layout .cot-sixth .copy{padding:0;}
+body.cot-touch-layout .cot-sixth .lb{font-size:var(--battle-fs-11);}
+
+/* Shell chip label/count collision: at the 48px touch chip the
+   selected slot's long class label (APFSDS, 35px) ran under the ammo count
+   (11px overlap, both bottom-anchored). The keycap badge is hidden on touch,
+   so its top-right corner is free: the count moves there. */
+body.cot-touch-layout .cot-shell .cnt{top:2px;right:3px;bottom:auto;}
+/* A three-digit count (an autocannon's 180) reaches the slot's centre: it sets smaller in the corner and the shell
+   shrinks and steps left, out from under it (critic r4: the dart's tip ran into the 1; r4b: the 1 met it on a
+   landscape slot), standing 1 px higher so the stepped fins keep 3 px from the label (r6: 2.5 px on the phone). */
+body.cot-touch-layout .cot-shell.wide .cnt{top:1px;right:2px;font-size:var(--battle-fs-11);}
+body.cot-touch-layout .cot-shell.wide canvas{bottom:12px;transform:translateX(calc(-50% - 5px));--shell-k:.6;}
+/* Touch-target floor for garage chrome the phone shares with desktop. */
+body.cot-touch-layout .nv{padding:9px 14px;}
+body.cot-touch-layout .cot-country-chip{padding:9px var(--s3);}
+body.cot-touch-layout .cot-car-arrow{width:44px;}
+@media (prefers-reduced-motion:reduce){
+  .cot-touch .round,.cot-touch .quick,.cot-touch .fire-cancel{transition:none;}
+}
+`;
+
+const SHELL = uiIconSVG('shell', 34);
+const SCOPE = uiIconSVG('scope', 34);
+const AUTO_AIM = uiIconSVG('autoAim', 30);
+const ROCKET = uiIconSVG('rocket', 30);
+const SOUND = uiIconSVG('sound', 20);
+const SOUND_OFF = uiIconSVG('soundOff', 20);
+const GRAPHICS = uiIconSVG('graphics', 20);
+const SETTINGS = uiIconSVG('settings', 20);
+
+interface MobileFireGestureState {
+  readonly active: boolean;
+  readonly pointerId: number | null;
+  readonly dragging: boolean;
+  readonly cancelHot: boolean;
+  readonly autoFiring: boolean;
+}
+
+interface MobileFireGestureOptions {
+  onAim?(dx: number, dy: number): void;
+  onFire?(): void;
+  onHoldStart?(): void;
+  onHoldEnd?(): void;
+  onCancel?(): void;
+  isCancelPoint?(x: number, y: number): boolean;
+  deadzonePx?: number;
+  aimScale?: number;
+  holdDelayMs?: number;
+  scheduleHold?(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  cancelHold?(timer: ReturnType<typeof setTimeout>): void;
+}
+
+interface MobileFireGesture {
+  begin(id: number | null | undefined, x: number, y: number): boolean;
+  move(id: number, x: number, y: number): MobileFireGestureState;
+  end(id: number | null, x: number, y: number): boolean;
+  cancel(id?: number | null): boolean;
+  getState(): MobileFireGestureState;
+}
+
+export function nextQuickGraphicsPreset(current: string, mobile = false): PresetName {
+  const order: readonly PresetName[] = mobile ? MOBILE_PRESET_ORDER : PRESET_ORDER;
+  const i = order.indexOf(current as PresetName);
+  return order[(i < 0 ? 0 : i + 1) % order.length];
+}
+
+// Hybrid mobile Dynamic Aim: landing on FIRE arms the shot, dragging steers
+// the sight, a quick lift fires at the final position, and a sustained hold
+// becomes continuous fire. Keep the recognizer DOM-free so release/hold and
+// cancel/lost-capture behavior can be regression-tested under plain Node as
+// well as through a real CDP touch stream.
+export function createMobileFireGesture({
+  onAim = () => {},
+  onFire = () => {},
+  onHoldStart = () => {},
+  onHoldEnd = () => {},
+  onCancel = () => {},
+  isCancelPoint = () => false,
+  deadzonePx = 8,
+  aimScale = 1.18,
+  holdDelayMs = 320,
+  scheduleHold = (cb, ms) => setTimeout(cb, ms),
+  cancelHold = (id) => clearTimeout(id),
+}: MobileFireGestureOptions = {}): MobileFireGesture {
+  let pointerId: number | null = null;
+  let startX = 0, startY = 0, lastX = 0, lastY = 0;
+  let dragging = false;
+  let cancelHot = false;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let holdElapsed = false;
+  let holdStarted = false;
+  let autoFiring = false;
+  const snapshot = () => ({
+    active: pointerId !== null, pointerId, dragging, cancelHot, autoFiring,
+  });
+  const stopAutoFire = () => {
+    if (!autoFiring) return;
+    autoFiring = false;
+    onHoldEnd();
+  };
+  const maybeStartAutoFire = () => {
+    if (pointerId === null || !holdElapsed || cancelHot || autoFiring) return;
+    autoFiring = true;
+    holdStarted = true;
+    onHoldStart();
+  };
+  const clear = () => {
+    if (holdTimer !== null) cancelHold(holdTimer);
+    holdTimer = null;
+    pointerId = null; dragging = false; cancelHot = false;
+    holdElapsed = false; holdStarted = false; autoFiring = false;
+  };
+  const move = (id: number, x: number, y: number): MobileFireGestureState => {
+    if (pointerId === null || id !== pointerId) return snapshot();
+    const nx = Number(x) || 0, ny = Number(y) || 0;
+    const dx = nx - lastX, dy = ny - lastY;
+    lastX = nx; lastY = ny;
+    cancelHot = !!isCancelPoint(nx, ny);
+    if (cancelHot) {
+      stopAutoFire();
+      return snapshot(); // no aim jump or firing inside the cancel target
+    }
+    maybeStartAutoFire(); // resume if a held thumb leaves cancel again
+    if (!dragging && Math.hypot(nx - startX, ny - startY) >= deadzonePx) dragging = true;
+    if (dragging && (dx || dy)) onAim(dx * aimScale, dy * aimScale);
+    return snapshot();
+  };
+  return {
+    begin(id, x, y) {
+      if (id === null || id === undefined || pointerId !== null) return false; // one fire thumb owns the shot
+      pointerId = id;
+      startX = lastX = Number(x) || 0;
+      startY = lastY = Number(y) || 0;
+      dragging = false; cancelHot = false;
+      holdElapsed = false; holdStarted = false; autoFiring = false;
+      holdTimer = scheduleHold(() => {
+        holdTimer = null;
+        if (pointerId !== id) return;
+        holdElapsed = true;
+        maybeStartAutoFire();
+      }, Math.max(0, Number(holdDelayMs) || 0));
+      return true;
+    },
+    move,
+    end(id, x, y) {
+      if (pointerId === null || id !== pointerId) return false;
+      // A platform may deliver the final coordinate only on pointerup.
+      move(id, x, y);
+      const cancelled = cancelHot;
+      const releaseShot = !cancelled && !holdStarted;
+      stopAutoFire();
+      clear();
+      if (cancelled) onCancel(); else if (releaseShot) onFire();
+      return !cancelled;
+    },
+    cancel(id = pointerId) {
+      if (pointerId === null || id !== pointerId) return false;
+      stopAutoFire(); clear(); onCancel(); return true;
+    },
+    getState: snapshot,
+  };
+}
+
+export function createTouchControls({
+  input, bus, isBattleActive, isSniper = () => false, getFlightKind = () => undefined,
+  onOpenSettings = () => {}, onToggleSound = () => false,
+}: TouchControlsOptions): TouchControlsRuntime {
+  ensureStyle('cot-touch-style', CSS, 'surfaces');
+  const root = document.createElement('div');
+  root.className = 'cot-touch';
+  // the battle's held and dragged controls: a 500 ms hold never turns into the kit's hover tip (components/hoverTip.ts)
+  root.dataset.tipOff = '';
+  root.setAttribute('role', 'group');
+  root.setAttribute('aria-label', t('touch.rootAria'));
+  const aimLayer = document.createElement('div');
+  aimLayer.className = 'cot-touch-aim';
+  aimLayer.dataset.tipOff = '';
+  aimLayer.setAttribute('role', 'group');
+  aimLayer.setAttribute('aria-label', t('touch.aimAria'));
+  // (the pad is its own instruction: no "swipe to aim" or "landscape recommended" over the battlefield, owner 2026-10-22)
+  aimLayer.innerHTML = `<div class="aimpad" role="group" aria-label="${t('touch.aimHint')}"></div>`;
+  root.innerHTML = `<div class="mobile-chrome" role="toolbar" aria-label="${t('touch.toolbar')}">` +
+    `<button class="quick sound" type="button" aria-label="${t('touch.mute')}">${SOUND}<span class="ql">${t('touch.sound')}</span></button>` +
+    `<button class="quick graphics" type="button" aria-label="${t('touch.gfxAria')}">${GRAPHICS}<span class="ql">${t('touch.gfx')}</span></button>` +
+    `<button class="quick settings" type="button" aria-label="${t('touch.settingsAria')}">${SETTINGS}<span class="ql">${t('touch.settings')}</span></button></div>` +
+    // One triangle glyph (U+25B2, text presentation on
+    // every platform) rotated per direction — U+25C0/U+25B6 carry DEFAULT
+    // EMOJI PRESENTATION on iOS, so the left/right arrows rendered as blue
+    // emoji buttons next to the clean text up/down triangles.
+    `<div class="joy" role="group" aria-label="${t('touch.joystick')}"><span class="arrow u">&#9650;</span><span class="arrow d">&#9650;</span>` +
+    `<span class="arrow l">&#9650;</span><span class="arrow r">&#9650;</span><div class="knob"></div></div>` +
+    `<button class="round fire alt" type="button" aria-label="${t('touch.fireLeftAria')}">${SHELL}<span class="lb">${t('touch.fire')}</span></button>` +
+    `<button class="round autoaim" type="button" aria-label="${t('touch.autoAimAria')}" aria-pressed="false">${AUTO_AIM}<span class="lb">${t('touch.autoAim')}</span></button>` +
+    `<button class="round scope" type="button" aria-label="${t('touch.scopeAria')}">${SCOPE}<span class="lb">${t('touch.scope')}</span></button>` +
+    `<button class="round fire" type="button" aria-label="${t('touch.fireAria')}">${SHELL}<span class="lb">${t('touch.fire')}</span></button>` +
+    // round 30 (owner 2026-09-20): a big rocket button for the jump in rulesets that have one — the same edge
+    // flips an overturned hull, which touch players had no way to do before
+    `<button class="round jump" type="button" aria-label="${t('touch.jumpAria')}" hidden>${ROCKET}<span class="lb">${t('touch.jump')}</span></button>` +
+    `<div class="fire-cancel" aria-hidden="true"><b>&times;</b></div>`;
+  document.body.appendChild(aimLayer);
+  document.body.appendChild(root);
+
+  const joy = root.querySelector<HTMLElement>('.joy')!;
+  const knob = root.querySelector<HTMLElement>('.knob')!;
+  const aimPad = aimLayer.querySelector<HTMLElement>('.aimpad')!;
+  let battle = !!isBattleActive();
+  let layout = false;
+  let joyPointer: number | null = null;
+  let aimPointer: number | null = null;
+  let aimX = 0, aimY = 0;
+  let cancelFireGesture = (): void => {};
+  // MOBILE-UX r1 PINCH = SCOPE: live touches on the aim surface. Two or more
+  // fingers switch the pad from swipe-aim to a zoom gesture (aimPointer is
+  // parked, so the joystick and one-finger aim are never disturbed).
+  const aimPts = new Map<number, { x: number; y: number }>();
+  let pinchRef = -1;        // reference finger spread (px); -1 = not pinching
+  const PINCH_STEP_PX = 44; // one zoom step per this much spread/close
+
+  function wantsTouchLayout(): boolean {
+    return input.isTouchLayout();
+  }
+  // (improve-271 plan 024) the joystick's own release clears the drive only: the aiming thumb (and its pinch) keeps
+  // aiming; leaving the layout and a blur or a hidden page clear both (resetMove)
+  function resetJoy(): void {
+    joyPointer = null; input.setVirtualMove(0, 0); knob.style.transform = 'translate(0px,0px)';
+  }
+  function resetMove(): void {
+    resetJoy();
+    aimPointer = null; aimPts.clear(); pinchRef = -1;
+  }
+  // (U23, round 2) the climb rail's own hold. The virtual handbrake is shared (a phone pad's held button, the Watch climb
+  // rail press it too), so a layout change or a battle exit releases only the hold this rail made.
+  let climbHeld = false;
+  function releaseClimb(): void {
+    if (!climbHeld) return;
+    climbHeld = false;
+    input.releaseVirtual('handbrake');
+  }
+  function syncLayout(): void {
+    layout = wantsTouchLayout();
+    document.body.classList.toggle('cot-touch-layout', layout);
+    root.classList.toggle('on', layout && battle);
+    aimLayer.classList.toggle('on', layout && battle);
+    const scope=root.querySelector<HTMLButtonElement>('.scope')!;
+    const aircraft=getFlightKind()==='gunship';
+    // (272) every resize rebuilt the button's markup: only a change of seat (a tank's scope, a gunship's zoom) or of its
+    // words does
+    const scopeLabel=t(aircraft?'gallery.view.modeDockHelpZoom':'touch.scope');
+    const scopeKey=`${aircraft?'gunship':'tank'}|${scopeLabel}`;
+    if(scope.dataset.kind!==scopeKey){
+      scope.dataset.kind=scopeKey;
+      scope.innerHTML=`${aircraft?uiIconSVG('zoomIn',34):SCOPE}<span class="lb">${scopeLabel}</span>`;
+      scope.setAttribute('aria-label',t(aircraft?'action.zoomIn':'touch.scopeAria'));
+    }
+    // (2026-11-02 audit F8) the flight's climb rail holds the virtual handbrake: a hidden rail may never see the lift
+    if (!layout || !battle) { resetMove(); cancelFireGesture(); releaseClimb(); }
+    // (improve-271 plan 024) a preset chosen in Settings shows on the chip at the next phase, resize or rotation
+    renderGraphicsButton();
+  }
+
+  // -------------------------------------------------------------------------
+  // BROWSER PINCH-ZOOM KILL (owner: "sometimes i can zoom into the screen
+  // doing pinch to zoom — don't allow this"). Defense in depth around the
+  // index.html viewport meta (maximum-scale=1 covers spec-compliant mobile
+  // browsers). The gesture* and ctrl+wheel kills live in ui/pinchZoomGuard.ts
+  // and are installed at boot for every device (2026-09-20: this module was
+  // their only owner, and a desktop never constructs it); the call here is an
+  // idempotent no-op. The two-finger touchmove guard stays scoped to gameplay
+  // surfaces so menus/garage DOM keeps every native scroll it has.
+  installPinchZoomGuard();
+  function onGameplaySurface(t: EventTarget | null): boolean {
+    if (battle && layout) return true; // live touch battle: the frame is HUD
+    if (!(t instanceof Element)) return false;
+    return !!(t.closest('#app') || t.closest('.cot-touch') ||
+      t.closest('.cot-touch-aim') || t.closest('.cot-hud'));
+  }
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length >= 2 && onGameplaySurface(e.target)) e.preventDefault();
+  }, { passive: false });
+
+  function updateJoy(e: PointerEvent): void {
+    const r = joy.getBoundingClientRect();
+    const max = r.width * 0.34;
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px)`;
+    input.setVirtualMove(dx / max, -dy / max);
+  }
+  joy.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation(); joyPointer = e.pointerId;
+    try { joy.setPointerCapture(e.pointerId); } catch (_) { /* capture unavailable */ }
+    updateJoy(e);
+  });
+  joy.addEventListener('pointermove', (e) => { if (e.pointerId === joyPointer) updateJoy(e); });
+  const endJoy = (e: PointerEvent): void => { if (e.pointerId === joyPointer) resetJoy(); };
+  joy.addEventListener('pointerup', endJoy); joy.addEventListener('pointercancel', endJoy);
+  joy.addEventListener('lostpointercapture', endJoy);
+
+  // PINCH = SCOPE (MOBILE-UX r1, owner: pinch "should be activating scope").
+  // The gesture drives the SAME rebindable action lanes the desktop wheel
+  // and SCOPE button use (input.ts virtual taps -> main.ts wheelStep ->
+  // cameraRig.stepZoom) — no forked zoom logic:
+  //   spread from arcade  -> sniperToggle (enter scope, the SCOPE button lane)
+  //   spread in scope     -> zoomIn  (wheel-notch zoom step)
+  //   pinch in scope      -> zoomOut (stepZoom exits scope below the lowest
+  //                          step — cameraRig's own wheel-out behavior)
+  //   pinch in arcade     -> nothing (never yanks the orbit mid-fight)
+  function pinchDist(): number {
+    const it = aimPts.values();
+    const a = it.next().value;
+    const b = it.next().value;
+    return a && b ? Math.hypot(b.x - a.x, b.y - a.y) : 0;
+  }
+  // scopePending: the rig enters sniper on its NEXT update, so a fast spread
+  // that lands 2+ ratchet steps inside one pointermove must not tap
+  // sniperToggle twice (it would toggle back out) — the entry is latched for
+  // the rest of the gesture and follow-up steps become zoom steps. Both the
+  // toggle and the wheel notches are consumed in the same rig.update (shift
+  // edge first, wheel after), so enter+zoom in one frame lands correctly.
+  let scopePending = false;
+  function stepScope(dir: number): void {
+    const scoped = isSniper() || scopePending;
+    if (dir > 0) {
+      if (scoped) input.tapVirtual('zoomIn');
+      else { input.tapVirtual('sniperToggle'); scopePending = true; }
+    } else {
+      if (!scoped) return; // arcade pinch-in: never yank the orbit out
+      input.tapVirtual('zoomOut'); // stepZoom exits scope below the lowest step
+    }
+    bus.emit('ui:click', {});
+  }
+  aimPad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    aimPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { aimPad.setPointerCapture(e.pointerId); } catch (_) { /* capture unavailable */ }
+    if (aimPts.size >= 2) {
+      aimPointer = null;      // second finger: the pad is now a zoom gesture
+      pinchRef = pinchDist();
+      scopePending = false;   // fresh gesture reads the live rig mode
+    } else {
+      aimPointer = e.pointerId; aimX = e.clientX; aimY = e.clientY;
+    }
+  });
+  aimPad.addEventListener('pointermove', (e) => {
+    const p = aimPts.get(e.pointerId);
+    if (p) { p.x = e.clientX; p.y = e.clientY; }
+    if (pinchRef >= 0 && aimPts.size >= 2) {
+      // ratchet: each PINCH_STEP_PX of spread/close = one zoom step, so a
+      // long pinch walks the zoom ladder exactly like wheel notches
+      const d = pinchDist();
+      while (d - pinchRef >= PINCH_STEP_PX) { stepScope(1); pinchRef += PINCH_STEP_PX; }
+      while (pinchRef - d >= PINCH_STEP_PX) { stepScope(-1); pinchRef -= PINCH_STEP_PX; }
+      return;
+    }
+    if (e.pointerId !== aimPointer) return;
+    const dx = e.clientX - aimX, dy = e.clientY - aimY;
+    aimX = e.clientX; aimY = e.clientY;
+    input.addVirtualAim(dx * 1.18, dy * 1.18);
+  });
+  const endAim = (e: PointerEvent): void => {
+    aimPts.delete(e.pointerId);
+    if (aimPts.size < 2) pinchRef = -1;
+    if (e.pointerId === aimPointer) aimPointer = null;
+    // one finger survives the pinch: hand swipe-aim back to it seamlessly
+    if (aimPointer === null && aimPts.size === 1) {
+      const [id, point] = aimPts.entries().next().value!;
+      aimPointer = id; aimX = point.x; aimY = point.y;
+    }
+  };
+  aimPad.addEventListener('pointerup', endAim); aimPad.addEventListener('pointercancel', endAim);
+  aimPad.addEventListener('lostpointercapture', endAim);
+
+  // DYNAMIC AIM (all tanks, both fire buttons): unlike handbrake, FIRE is
+  // never pressed immediately on pointerdown. A quick tap/drag fires once on
+  // release; a 320 ms hold becomes the input layer's real held-fire state, so
+  // an IFV streams and an MBT fires again whenever reload completes. Release,
+  // pointercancel, lost capture and phase exit all drop the held state. The
+  // 8 px deadzone prevents the thumb's landing wobble from jerking the gun.
+  const fireCancel = root.querySelector<HTMLElement>('.fire-cancel')!;
+  let activeFireButton: HTMLButtonElement | null = null;
+  const isFireCancelPoint = (x: number, y: number): boolean => {
+    const r = fireCancel.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  };
+  const fireGesture = createMobileFireGesture({
+    onAim: (dx, dy) => input.addVirtualAim(dx, dy),
+    onFire: () => input.tapVirtual('fire'),
+    onHoldStart: () => { input.pressVirtual('fire'); renderFireGesture(); },
+    onHoldEnd: () => input.releaseVirtual('fire'),
+    isCancelPoint: isFireCancelPoint,
+  });
+  function renderFireGesture(): void {
+    const st = fireGesture.getState();
+    root.classList.toggle('fire-armed', st.active);
+    aimLayer.classList.toggle('fire-armed', st.active);
+    root.classList.toggle('fire-cancel-hot', st.cancelHot);
+    if (!activeFireButton) return;
+    activeFireButton.classList.toggle('down', st.active);
+    activeFireButton.classList.toggle('aiming', st.dragging);
+    activeFireButton.classList.toggle('autofire', st.autoFiring);
+    const label = activeFireButton.querySelector('.lb');
+    if (label) label.textContent = st.cancelHot ? t('touch.fire.cancel') :
+      (st.autoFiring ? t('touch.fire.auto') : (st.active ? t('touch.fire.releaseFires') : t('touch.fire')));
+    activeFireButton.setAttribute('aria-label', st.active
+      ? (st.cancelHot ? t('touch.fire.cancelAria') : (st.autoFiring
+        ? t('touch.fire.autoAria')
+        : t('touch.fire.dragAria')))
+      : (activeFireButton.classList.contains('alt') ? t('touch.fireLeftAria') : t('touch.fireAria')));
+  }
+  function parkFireCancel(button: HTMLButtonElement): void {
+    const r = button.getBoundingClientRect();
+    const side = r.left + r.width / 2 > innerWidth / 2 ? -1 : 1;
+    const x = r.left + r.width / 2 + side * Math.max(190, r.width * 2.1);
+    // Keep the release-to-cancel target above the ammo/equipment action row.
+    // The old 66 px rise parked it directly on top of Repair Kit on short
+    // landscape phones, so an aiming affordance obscured a live control.
+    const y = r.top + r.height / 2 - Math.max(132, r.height * 1.65);
+    fireCancel.style.left = `${Math.max(32, Math.min(innerWidth - 32, x)).toFixed(1)}px`;
+    fireCancel.style.top = `${Math.max(32, Math.min(innerHeight - 32, y)).toFixed(1)}px`;
+  }
+  function finishFire(e: PointerEvent, shouldFire: boolean): void {
+    if (!activeFireButton || e.pointerId !== fireGesture.getState().pointerId) return;
+    e.preventDefault(); e.stopPropagation();
+    if (shouldFire) fireGesture.end(e.pointerId, e.clientX, e.clientY);
+    else fireGesture.cancel(e.pointerId);
+    renderFireGesture();
+    activeFireButton = null;
+  }
+  for (const fire of root.querySelectorAll<HTMLButtonElement>('.fire')) {
+    fire.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!fireGesture.begin(e.pointerId, e.clientX, e.clientY)) return;
+      activeFireButton = fire; parkFireCancel(fire); renderFireGesture();
+      try { fire.setPointerCapture(e.pointerId); } catch (_) { /* capture unavailable */ }
+    });
+    fire.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== fireGesture.getState().pointerId) return;
+      e.preventDefault(); e.stopPropagation();
+      fireGesture.move(e.pointerId, e.clientX, e.clientY); renderFireGesture();
+    });
+    fire.addEventListener('pointerup', (e) => finishFire(e, true));
+    // (a key's or an assistive tool's press on FIRE fires one round, the gesture's tap)
+    fire.addEventListener('click', (e) => { if (e.detail === 0) { e.preventDefault(); input.tapVirtual('fire'); } });
+    fire.addEventListener('pointercancel', (e) => finishFire(e, false));
+    fire.addEventListener('lostpointercapture', (e) => finishFire(e, false));
+  }
+  cancelFireGesture = () => {
+    if (!fireGesture.getState().active) return;
+    fireGesture.cancel(); renderFireGesture(); activeFireButton = null;
+  };
+  // Losing the page (app switch, notification shade, tab change) must drop every held
+  // touch: the fire gesture AND the joystick / aim pad / pinch (2026-09-14 touch QA: the
+  // knob stayed 40 px off centre and the tank kept driving after a backgrounded hold).
+  const climb=document.createElement('button');climb.type='button';climb.className='flight-climb';climb.innerHTML=`${uiIconSVG('moveForward',21)}<span>${t('flight.climb')}</span>`;climb.setAttribute('aria-label',t('flight.climb'));root.append(climb);
+  climb.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();climb.setPointerCapture(e.pointerId);climbHeld=true;input.pressVirtual('handbrake');});
+  climb.addEventListener('pointerup',releaseClimb);climb.addEventListener('pointercancel',releaseClimb);climb.addEventListener('lostpointercapture',releaseClimb);
+  const releaseAllTouch = (): void => { cancelFireGesture(); resetMove(); releaseClimb(); };
+  window.addEventListener('blur', releaseAllTouch);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllTouch();
+  });
+  // (INTERACTION-REDESIGN C, the census's touch row: the round actions answer on pointerdown, so a thumb's press acts at
+  // once; a click with no pointer behind it, a key's on a focused button or an assistive tool's, acts as well, where a
+  // tap's own click, after its pointerdown already acted, does not)
+  const onKeyClick = (button: HTMLButtonElement, act: () => void): void => {
+    button.addEventListener('click', (e) => { if (e.detail === 0) { e.preventDefault(); act(); } });
+  };
+  const scopeButton = root.querySelector<HTMLButtonElement>('.scope')!;
+  const toggleScope = (): void => { input.tapVirtual(getFlightKind()==='gunship'?'zoomIn':'sniperToggle'); bus.emit('ui:click', {}); };
+  scopeButton.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation(); toggleScope();
+  });
+  onKeyClick(scopeButton, toggleScope);
+  // round 30: the rocket jump / flip button — pointerdown so it fires while the other thumb steers
+  const jumpButton = root.querySelector<HTMLButtonElement>('.jump')!;
+  const selfRight = (): void => { bus.emit('ui:selfRight', {}); bus.emit('ui:click', {}); };
+  jumpButton.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    selfRight();
+  });
+  onKeyClick(jumpButton, selfRight);
+  bus.on('ui:jumpAvailable', (payload) => {
+    const { on } = payload as { on?: boolean };
+    jumpButton.hidden = !on;
+  });
+  const autoAim = root.querySelector<HTMLButtonElement>('.autoaim')!;
+  const toggleAutoAim = (): void => { bus.emit('ui:autoAimToggle', {}); bus.emit('ui:click', {}); };
+  autoAim.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    toggleAutoAim();
+  });
+  onKeyClick(autoAim, toggleAutoAim);
+  bus.on('ui:autoAimState', (payload) => {
+    const { on } = payload as { on?: boolean };
+    autoAim.classList.toggle('on', !!on);
+    autoAim.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const label = autoAim.querySelector('.lb');
+    if (label) label.textContent = on ? t('touch.autoAim.locked') : t('touch.autoAim');
+  });
+  // QUICK BUTTONS (2026-09-14 touch QA): a tap on the toolbar must work while the other thumb
+  // steers. With a second finger down the browser treats the pair as a possible pinch: under
+  // `touch-action: manipulation` it cancelled the button's pointer (pointercancel, no lift, no
+  // click), so the toolbar now declares `touch-action: none` like the joystick and fire buttons, and
+  // each button fires on its own pointer lift — same pointer that pressed it, lifted inside the
+  // button — swallowing the click that may still follow a lone tap.
+  const tapButton = (button: HTMLButtonElement, handler: () => void): void => {
+    let pointerId: number | null = null;
+    let lastX = 0;
+    let lastY = 0;
+    let positioned = false;
+    let tappedAt = 0;
+    const remember = (e: PointerEvent): void => {
+      if (e.clientX || e.clientY) { lastX = e.clientX; lastY = e.clientY; positioned = true; }
+    };
+    button.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      pointerId = e.pointerId; positioned = false; remember(e);
+      try { button.setPointerCapture(e.pointerId); } catch (_) { /* capture unavailable */ }
+    });
+    button.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) remember(e); });
+    const lift = (e: PointerEvent): void => {
+      if (e.pointerId !== pointerId) return;
+      pointerId = null;
+      e.stopPropagation();
+      remember(e);
+      // a finger that slid off the button is not a tap — judged only when the pointer ever reported
+      // a position (synthetic secondary touches report none; the captured lift is the tap then)
+      if (positioned) {
+        const r = button.getBoundingClientRect();
+        if (lastX < r.left - 6 || lastX > r.right + 6 || lastY < r.top - 6 || lastY > r.bottom + 6) return;
+      }
+      tappedAt = performance.now();
+      handler();
+    };
+    button.addEventListener('pointerup', lift);
+    button.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) pointerId = null; });
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // keyboard / assistive activation still lands here; a pointer tap already ran
+      if (performance.now() - tappedAt < 600) { e.preventDefault(); return; }
+      handler();
+    });
+  };
+  const soundButton = root.querySelector<HTMLButtonElement>('.quick.sound')!;
+  tapButton(soundButton, () => {
+    const muted = !!onToggleSound();
+    soundButton.classList.toggle('muted', muted);
+    soundButton.innerHTML = `${muted ? SOUND_OFF : SOUND}<span class="ql">${muted ? t('touch.muted') : t('touch.sound')}</span>`;
+    soundButton.setAttribute('aria-label', muted ? t('touch.unmute') : t('touch.mute'));
+    soundButton.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  });
+  const graphicsButton = root.querySelector<HTMLButtonElement>('.quick.graphics')!;
+  function graphicsChoice(): PresetName {
+    if (getDeviceTier() === 'mobile') return getMobilePresetChoice();
+    const stored = getStoredChoice();
+    return stored === 'auto' ? resolvePresetName(stored) : stored;
+  }
+  function renderGraphicsButton(pending: PresetName | null = null): void {
+    const name = pending ?? graphicsChoice();
+    const english = PRESETS[name]?.label || name;
+    // (the four tiered presets read their Settings names in every locale: zh showed "HIGH", gauntlet r1)
+    const tiered = TIERED_PRESET_KEYS[english];
+    const label = tiered ? t(tiered) : english;
+    const short = english === 'Performance' ? t('touch.gfx.perf')
+      : english === 'Balanced' ? t('touch.gfx.bal')
+        : english === 'Quality' ? t('touch.gfx.qual')
+          : english === 'Ultra Low' ? t('touch.gfx.ultraLow')
+            : label;
+    graphicsButton.querySelector<HTMLElement>('.ql')!.textContent = short;
+    graphicsButton.setAttribute('aria-label', t('touch.gfx.aria', { label }));
+    graphicsButton.dataset.tip = t('touch.gfx.title', { label });
+  }
+  // (272) taps in quick succession step the chip and apply once, when the tapping stops: each preset reallocated the
+  // renderer's targets and relinked its programs mid-battle. A lone tap applies at once, as before.
+  const GRAPHICS_TAP_GAP_MS = 500;
+  let lastGraphicsTapMs = -Infinity;
+  let pendingGraphics: PresetName | null = null;
+  let graphicsTimer: ReturnType<typeof setTimeout> | null = null;
+  const applyGraphics = (preset: PresetName): void => {
+    if (getDeviceTier() === 'mobile') setMobilePresetName(preset); else setPresetName(preset);
+  };
+  tapButton(graphicsButton, () => {
+    const mobile = getDeviceTier() === 'mobile';
+    const nowMs = performance.now();
+    const quick = nowMs - lastGraphicsTapMs < GRAPHICS_TAP_GAP_MS;
+    lastGraphicsTapMs = nowMs;
+    const next = nextQuickGraphicsPreset(pendingGraphics ?? graphicsChoice(), mobile);
+    if (!quick) {
+      applyGraphics(next);
+      renderGraphicsButton();
+    } else {
+      pendingGraphics = next;
+      renderGraphicsButton(next);
+      if (graphicsTimer) clearTimeout(graphicsTimer);
+      graphicsTimer = setTimeout(() => {
+        graphicsTimer = null;
+        const preset = pendingGraphics;
+        pendingGraphics = null;
+        if (preset) applyGraphics(preset);
+        renderGraphicsButton();
+      }, GRAPHICS_TAP_GAP_MS);
+    }
+    bus.emit('ui:click', {});
+  });
+  renderGraphicsButton();
+  tapButton(root.querySelector<HTMLButtonElement>('.quick.settings')!, () => {
+    bus.emit('ui:click', {}); onOpenSettings();
+  });
+
+  bus.on('phase:change', (payload) => {
+    const { phase } = payload as { phase?: string };
+    battle = phase === 'battle'; syncLayout();
+  });
+  window.addEventListener('resize', syncLayout, { passive: true });
+  window.addEventListener('orientationchange', syncLayout, { passive: true });
+  syncLayout();
+
+  return {
+    root,
+    get isLayout() { return layout; },
+    refresh: syncLayout,
+  };
+}

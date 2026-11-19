@@ -1,0 +1,34 @@
+# dependencies and build output
+node_modules/
+dist/
+
+# raw downloads (PLATEAU CityGML and textures, OSM, GSI DEM): several GB per area - re-create with `npm run fetch`
+data/raw/
+data/preview/
+*.part
+
+# compiled city - re-create with `npm run compile`
+public/tiles/
+# CC0 textures - re-create with `node tools/assets/fetch_textures.mjs`
+public/textures/
+# GSI aerial photo tiles - re-create with `npm run fetch`
+public/ortho/
+
+# local settings and secrets
+.env
+.env.*
+!.env.example
+.claude/
+
+# logs, caches, editors, operating system
+*.log
+npm-debug.log*
+.vite/
+.cache/
+*.tsbuildinfo
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

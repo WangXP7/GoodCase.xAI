@@ -1,0 +1,313 @@
+// The match actor's peer-to-peer seams (P2 client lane): a ready collision world object stands in for the 'dedicated'
+// shard (released with the actor), `resume` boots the loop at the old host's tick with the countdown skipped and the
+// battle clock continued (snapshot meta and the verdict add the resumed time; the clock limit counts from it),
+// `entityForWireId` / `wireIdOf` name the entities behind the wire ids in seat-then-bot order; a fresh actor is
+// unchanged (tick 0, the countdown, no offset); invalid resume options are refused.
+import assert from 'node:assert/strict';
+import { CLOSE_REASON, MESSAGE_TYPE, NO_TICK, PHASE, PROTOCOL_VERSION } from '../../src/mp/wire/constants.ts';
+import { applySnapshotPacket, decodeMessage, encodeMessage } from '../../src/mp/wire/codec.ts';
+import { quantizeAngle, quantizePosition, quantizeVelocity } from '../../src/mp/wire/quantize.ts';
+import { createDedicatedWorldCollision } from '../dedicatedWorldCollision.ts';
+import { createLoopbackLink } from './link.ts';
+import { createMatchActor } from './matchActor.ts';
+import { planFromRoster } from '../../src/mp/host/hostPlan.ts';
+import { ensureAuthorityFleet } from '../../src/vehicles/authorityFleet.ts';
+
+// The actor reads finalized combat anatomy; production hosts load their roster's groups first (Node: all).
+await ensureAuthorityFleet();
+
+const TICK_MS = 1000 / 60;
+let nowMs = 50_000;
+const now = () => nowMs;
+const schedule = () => () => {};
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+const seats = [
+  { seat: 0, playerId: 'p1', name: 'One', team: 'alpha', specId: 'm1a1_abrams_hc' },
+  { seat: 1, playerId: 'p2', name: 'Two', team: 'bravo', specId: 't90am' },
+];
+const bots = [{ playerId: 'bot-a', name: 'Bot A', team: 'alpha', specId: 'leo2_improved' }];
+
+function attachViewer(actor, seat, playerId, team = 'alpha') {
+  const link = createLoopbackLink(playerId);
+  const viewer = { frames: [], welcome: null, closed: null, linkClose: null, history: new Map(), send: (message) => link.client.send(encodeMessage(message)) };
+  link.client.onClose?.((reason, detail) => { viewer.linkClose = { reason, detail }; });
+  link.client.onMessage((bytes) => {
+    const decoded = decodeMessage(bytes, { resolveBaseline: (tick) => viewer.history.get(tick) ?? null });
+    assert.ok(decoded.ok, decoded.ok ? '' : decoded.error.code);
+    const message = decoded.message;
+    if (message.type === MESSAGE_TYPE.WELCOME) viewer.welcome = message;
+    if (message.type === MESSAGE_TYPE.SNAPSHOT) {
+      const frame = applySnapshotPacket(message, message.keyframe ? null : viewer.history.get(message.baseTick) ?? null);
+      viewer.frames.push(frame);
+      viewer.history.set(frame.tick, frame);
+      link.client.send(encodeMessage({ type: MESSAGE_TYPE.SNAPSHOT_ACK, tick: frame.tick }));
+    }
+    if (message.type === MESSAGE_TYPE.CLOSE) viewer.closed = message;
+  });
+  const hello = { type: MESSAGE_TYPE.HELLO, protocolVersion: PROTOCOL_VERSION, capabilities: 1, token: 'x', clientBuild: 'resume' };
+  actor.attach(link.server, hello, { v: 1, roomId: actor.roomId, seat, playerId, name: playerId, team, specId: 'm1a1_abrams_hc', iat: 0, exp: 1 });
+  return viewer;
+}
+
+async function advance(actor, ticks) {
+  for (let n = 0; n < ticks; n++) { nowMs += TICK_MS; actor.advance(nowMs); await flush(); }
+}
+
+// ---- invalid resume options
+for (const resume of [{ tick: -1, battleTimeMs: 0 }, { tick: 1.5, battleTimeMs: 0 }, { tick: 3, battleTimeMs: -1 }, { tick: 3, battleTimeMs: Number.NaN }, { tick: 3, battleTimeMs: 0, dueAtMs: Number.NaN }]) {
+  assert.throws(() => createMatchActor({ roomId: 'resume-bad', mapId: 'verdant', seed: 1, seats, world: 'terrain', now, schedule, autoStart: false, resume }), /resume needs/);
+}
+
+// ---- a fresh actor: tick 0, the countdown, no offset
+{
+  const actor = createMatchActor({ roomId: 'fresh', mapId: 'verdant', seed: 11, seats, bots, world: 'terrain', countdownS: 1, now, schedule });
+  assert.equal(actor.tick, 0);
+  assert.equal(actor.resumedBattleTimeMs, 0);
+  assert.equal(actor.authority.phase, 'countdown');
+  assert.equal(actor.entityForWireId(1)?.id, 'p1');
+  assert.equal(actor.entityForWireId(2)?.id, 'p2');
+  assert.equal(actor.entityForWireId(3)?.id, 'bot-a', 'bots follow the seats');
+  assert.equal(actor.entityForWireId(4), null);
+  assert.equal(actor.wireIdOf('bot-a'), 3);
+  assert.equal(actor.wireIdOf('nobody'), null);
+  actor.stop();
+}
+
+// ---- a ready world object replaces the 'dedicated' shard and is released with the actor
+{
+  const world = createDedicatedWorldCollision('verdant', { retain: true });
+  let released = 0;
+  const wrapped = Object.assign(Object.create(world), { release: () => { released++; world.release(); } });
+  const actor = createMatchActor({ roomId: 'world-obj', mapId: 'verdant', seed: 5, seats, world: wrapped, countdownS: 0, now, schedule });
+  assert.ok(actor.authority.entities.length === 2);
+  assert.ok(typeof actor.authority.heightField === 'object', 'the authority took the world');
+  await advance(actor, 5);
+  assert.equal(actor.tick, 5);
+  actor.stop();
+  assert.equal(released, 1, 'the object world is released once on stop');
+}
+
+// ---- resume: the tick timeline continues, the countdown is skipped, the clocks carry the resumed time
+{
+  const verdicts = [];
+  const actor = createMatchActor({
+    roomId: 'resumed', mapId: 'verdant', seed: 21, seats, bots, world: 'terrain', countdownS: 5, now, schedule,
+    resume: { tick: 1200, battleTimeMs: 30_000 }, battleLimitS: 31, endedLingerTicks: 2, onVerdict: (verdict) => verdicts.push(verdict),
+  });
+  assert.equal(actor.tick, 1200, 'the loop starts at the resumed tick');
+  assert.equal(actor.resumedBattleTimeMs, 30_000);
+  assert.equal(actor.authority.phase, 'playing', 'no countdown on a resume');
+  const viewer = attachViewer(actor, 0, 'p1');
+  await flush();
+  assert.equal(viewer.welcome.serverTick, 1200, 'WELCOME names the resumed tick');
+  assert.equal(viewer.welcome.serverTimeMs, Math.round(1200 * TICK_MS), 'the server time follows the continuous tick timeline');
+  await advance(actor, 12);
+  assert.equal(actor.tick, 1212);
+  const first = viewer.frames[0];
+  assert.ok(first, 'a snapshot arrived');
+  assert.ok(first.tick > 1200 && first.tick <= 1212, `snapshot ticks continue the timeline (${first.tick})`);
+  assert.equal(first.meta.phase, PHASE.PLAYING);
+  assert.ok(first.meta.battleTimeMs >= 30_000 && first.meta.battleTimeMs < 30_400, `the battle clock continues from 30 s (${first.meta.battleTimeMs})`);
+  // the clock limit counts from the resumed time: 31 s limit − 30 s played = 1 s to the verdict
+  await advance(actor, 70);
+  assert.equal(verdicts.length, 1, 'the time limit fell 1 s after the resume');
+  assert.equal(verdicts[0].reason, 'time_limit');
+  assert.ok(verdicts[0].battleTimeMs >= 31_000 && verdicts[0].battleTimeMs < 31_300, `the verdict's battle time carries the resumed offset (${verdicts[0].battleTimeMs})`);
+  assert.ok(verdicts[0].tick > 1200);
+  await advance(actor, 4);
+  assert.equal(actor.stopped, true);
+}
+
+// ---- (267) a resume due before the loop starts: the loop starts on the old host's timeline, the ticks the world stood
+// still (the new host loading its world, holding for its seats) skipped, so server time stays the clients' clocks' time;
+// the battle clock, which only steps, skipped nothing
+{
+  const actor = createMatchActor({
+    roomId: 'resumed-due', mapId: 'verdant', seed: 21, seats, bots, world: 'terrain', countdownS: 5, now, schedule, autoStart: false,
+    resume: { tick: 1200, battleTimeMs: 30_000, dueAtMs: nowMs },
+  });
+  assert.equal(actor.tick, 1200, 'the still world sits at the resume tick');
+  nowMs += 1500;
+  actor.start();
+  assert.equal(actor.tick, 1290, `the loop starts 1.5 s on the old host's timeline (${actor.tick})`);
+  const viewer = attachViewer(actor, 0, 'p1');
+  await flush();
+  assert.equal(viewer.welcome.serverTick, 1290);
+  assert.equal(viewer.welcome.serverTimeMs, Math.round(1290 * TICK_MS), 'server time is the wall\'s since the resume tick was due');
+  await advance(actor, 6);
+  const first = viewer.frames[0];
+  assert.ok(first && first.tick > 1290 && first.tick <= 1296, `snapshots continue from there (${first?.tick})`);
+  assert.ok(first.meta.battleTimeMs >= 30_000 && first.meta.battleTimeMs < 30_200, `the battle clock skipped nothing (${first.meta.battleTimeMs})`);
+  actor.stop();
+}
+
+// ---- a resume with the ruleset's own clock: the limit counts from the resumed time
+{
+  const actor = createMatchActor({ roomId: 'resumed-ruleset', mapId: 'verdant', seed: 3, seats, world: 'terrain', now, schedule, autoStart: false, resume: { tick: 60, battleTimeMs: 12_000 } });
+  assert.equal(actor.tick, 60);
+  assert.equal(actor.authority.phase, 'loading');
+  actor.start();
+  assert.equal(actor.authority.phase, 'playing');
+  actor.stop();
+}
+// ---- the migration seed (P3b): a viewer's own-row hint is applied to a restored entity only when newer than the restored
+// row, older than the resume tick, and within the distance the hull could have driven since; once; never on a fresh actor
+{
+  const hintFor = (tick, x, z, y = 5) => ({
+    type: MESSAGE_TYPE.RESUME_HINT, tick, x: quantizePosition(x), y: quantizePosition(y), z: quantizePosition(z), speed: quantizeVelocity(3), verticalSpeed: 0,
+    yaw: quantizeAngle(0.5), pitch: 0, roll: 0, turretYaw: quantizeAngle(0.2), gunPitch: 0,
+  });
+  const actor = createMatchActor({
+    roomId: 'resumed-hint', mapId: 'verdant', seed: 33, seats: [...seats, { seat: 9, playerId: 'w', name: 'W', team: 'spectator', specId: '' }], bots, world: 'terrain', now, schedule,
+    resume: { tick: 1200, battleTimeMs: 30_000 },
+  });
+  const p1Entity = actor.entityForWireId(1);
+  const x0 = p1Entity.state.pos.x;
+  const z0 = p1Entity.state.pos.z;
+  // restored from a keyframe captured at tick 1000 (p2 is deliberately not noted: the new host saw it)
+  actor.noteRestoredRow(1, 1000, x0, z0);
+  const p1 = attachViewer(actor, 0, 'p1');
+  const p2 = attachViewer(actor, 1, 'p2', 'bravo');
+  const w = attachViewer(actor, 9, 'w', 'spectator');
+  await flush();
+  const hints = () => actor.stats().resumeHints;
+  p1.send(hintFor(900, x0 + 1, z0)); await flush();
+  assert.equal(hints().reasons.older, 1, 'a hint no newer than the restored row is refused');
+  p1.send(hintFor(1000, x0 + 1, z0)); await flush();
+  assert.equal(hints().reasons.older, 2, 'the restored tick itself is not newer');
+  p1.send(hintFor(1200, x0 + 1, z0)); await flush();
+  assert.equal(hints().reasons.future, 1, 'a hint at or past the resume tick is refused');
+  // 100 ticks after the restored row: at most 100/60 s × 25 m/s × 1.25 + 3 m ≈ 55 m — a claim of 100 m is a teleport
+  p1.send(hintFor(1100, x0 + 100, z0)); await flush();
+  assert.equal(hints().reasons.tooFar, 1, 'a hint outside the distance the hull could have driven is refused');
+  assert.ok(Math.abs(p1Entity.state.pos.x - x0) < 1e-6, 'and the entity did not move');
+  p2.send(hintFor(1100, 0, 0)); await flush();
+  assert.equal(hints().reasons.notRestored, 1, 'an entity the new host saw itself (not restored from the keyframe) takes no hint');
+  w.send(hintFor(1100, 0, 0)); await flush();
+  assert.equal(hints().reasons.noSeat, 1, 'a spectator has no hull to hint');
+  // (improve-271 plan 006) inside the horizontal bound, the other pose fields are bounded too: no hint places a hull in the
+  // air or gives it a speed past its top speed
+  const y0 = p1Entity.state.pos.y;
+  const before = JSON.stringify({ pos: p1Entity.state.pos, speed: p1Entity.state.speed, verticalSpeed: p1Entity.state.verticalSpeed, gunPitch: p1Entity.state.gunPitch });
+  p1.send(hintFor(1100, x0 + 1, z0, y0 + 500)); await flush();
+  assert.equal(hints().reasons.tooHigh, 1, 'a hint 500 m above the restored row is refused');
+  p1.send({ ...hintFor(1100, x0 + 1, z0, y0), speed: quantizeVelocity(300) }); await flush();
+  assert.equal(hints().reasons.tooFast, 1, 'a speed of 300 m/s is refused');
+  p1.send({ ...hintFor(1100, x0 + 1, z0, y0), verticalSpeed: quantizeVelocity(300) }); await flush();
+  assert.equal(hints().reasons.tooFast, 2, 'a vertical speed of 300 m/s is refused');
+  assert.equal(JSON.stringify({ pos: p1Entity.state.pos, speed: p1Entity.state.speed, verticalSpeed: p1Entity.state.verticalSpeed, gunPitch: p1Entity.state.gunPitch }), before, 'and the hull is unchanged');
+  assert.equal(hints().applied, 0);
+  p1.send(hintFor(1100, x0 + 20, z0 - 4, 7)); await flush();
+  assert.equal(hints().applied, 1, 'a newer row within the bound is applied');
+  assert.ok(Math.abs(p1Entity.state.pos.x - (x0 + 20)) < 1e-3 && Math.abs(p1Entity.state.pos.z - (z0 - 4)) < 1e-3 && Math.abs(p1Entity.state.pos.y - 7) < 1e-3, 'the pose is the hint\'s');
+  assert.ok(Math.abs(p1Entity.state.yaw - 0.5) < 1e-3 && Math.abs(p1Entity.state.turretYaw - 0.2) < 1e-3 && Math.abs(p1Entity.state.speed - 3) < 1e-3, 'yaw, turret and speed too');
+  p1.send(hintFor(1150, x0 + 25, z0)); await flush();
+  assert.equal(hints().reasons.repeated, 1, 'one hint per entity per resume');
+  assert.equal(hints().applied, 1);
+  assert.equal(hints().rejected, 10);
+  await advance(actor, 6);
+  const own = p1.frames.at(-1).entities.find((row) => row.entityId === 1);
+  assert.ok(own && Math.abs(own.x / 1000 - (x0 + 20)) < 2, `the next rows carry the hinted pose (${(own.x / 1000 - x0).toFixed(2)} m from the restored one)`);
+  actor.stop();
+}
+// ---- a revoked seat (security audit 2026-10-22): the room removed p2 mid-match (a kick); the actor detaches it at once
+// and refuses its seat token for the rest of the match, while p1 plays on
+{
+  const actor = createMatchActor({ roomId: 'revoked-seat', mapId: 'verdant', seed: 35, seats, bots, world: 'terrain', now, schedule });
+  const p1 = attachViewer(actor, 0, 'p1');
+  const p2 = attachViewer(actor, 1, 'p2', 'bravo');
+  await flush();
+  assert.ok(p1.welcome && p2.welcome, 'both seats welcomed');
+  assert.equal(actor.revokeSeat('p2'), true, 'the revoked seat was attached');
+  await flush();
+  assert.equal(p2.linkClose?.reason, CLOSE_REASON.ROOM_CLOSED, `p2's link is closed ROOM_CLOSED (${JSON.stringify(p2.linkClose)})`);
+  const again = attachViewer(actor, 1, 'p2', 'bravo');
+  await flush();
+  assert.equal(again.welcome, null, 'its token is refused afterwards');
+  assert.equal(again.linkClose?.reason, CLOSE_REASON.ROOM_CLOSED, 'refused ROOM_CLOSED');
+  assert.equal(p1.linkClose, null, 'p1 plays on');
+  assert.equal(actor.revokeSeat('nobody'), false);
+  actor.stop();
+}
+// ---- a late hint (security audit 2026-10-22): once the resumed actor has driven the hull from its seat's inputs, its
+// pose is this authority's own; a withheld hint sent afterwards (mid-fight) is refused 'late', and a new migration re-arms it
+{
+  const hintFor = (tick, x, z) => ({
+    type: MESSAGE_TYPE.RESUME_HINT, tick, x: quantizePosition(x), y: quantizePosition(5), z: quantizePosition(z), speed: 0, verticalSpeed: 0,
+    yaw: 0, pitch: 0, roll: 0, turretYaw: 0, gunPitch: 0,
+  });
+  const actor = createMatchActor({ roomId: 'resumed-late-hint', mapId: 'verdant', seed: 34, seats, bots, world: 'terrain', now, schedule, resume: { tick: 1200, battleTimeMs: 30_000 } });
+  const p1Entity = actor.entityForWireId(1);
+  const x0 = p1Entity.state.pos.x;
+  const z0 = p1Entity.state.pos.z;
+  actor.noteRestoredRow(1, 1000, x0, z0);
+  const p1 = attachViewer(actor, 0, 'p1');
+  await flush();
+  p1.send({ type: MESSAGE_TYPE.INPUT, clientTick: actor.tick + 1, snapshotAckTick: NO_TICK, interpDelayMs: 100,
+    controls: [{ throttle: 127, steer: 0, flags: 0, aimYaw: 0, aimPitch: 0, aimDistance: 0, shellSlot: 0, fireSeq: 0, actionSeq: 0, actionBits: 0 }] });
+  await flush();
+  const before = { x: p1Entity.state.pos.x, z: p1Entity.state.pos.z };
+  p1.send(hintFor(1100, x0 + 20, z0)); await flush();
+  const late = actor.stats().resumeHints;
+  assert.equal(late.reasons.late, 1, 'a hint after the seat has driven under the resumed actor is refused late');
+  assert.equal(late.applied, 0);
+  assert.ok(Math.abs(p1Entity.state.pos.x - before.x) < 1e-6 && Math.abs(p1Entity.state.pos.z - before.z) < 1e-6, 'and the hull did not move');
+  actor.noteRestoredRow(1, 1000, p1Entity.state.pos.x, p1Entity.state.pos.z); // a new migration re-arms the seed
+  p1.send(hintFor(1100, p1Entity.state.pos.x + 5, p1Entity.state.pos.z)); await flush();
+  assert.equal(actor.stats().resumeHints.applied, 1, 'a fresh migration takes one hint again');
+  actor.stop();
+  const fresh = createMatchActor({ roomId: 'fresh-hint', mapId: 'verdant', seed: 34, seats, world: 'terrain', now, schedule });
+  fresh.noteRestoredRow(1, 10, 0, 0);
+  const f1 = attachViewer(fresh, 0, 'p1');
+  await flush();
+  f1.send(hintFor(20, 1, 1)); await flush();
+  assert.equal(fresh.stats().resumeHints.reasons.noResume, 1, 'an actor that did not resume a migration refuses every hint');
+  fresh.stop();
+  console.log('matchActorResume.selftest: the migration seed — older / future / too far / unrestored / spectator / repeated refused, one bounded hint applied, none on a fresh actor');
+}
+// ---- (improve-271 plan 006) a hint's gun pitch past the gun's elevation is clamped to it, not refused: the rest of a true
+// row still lands (a rounding difference must never cost the seat its pose)
+{
+  const actor = createMatchActor({ roomId: 'resumed-hint-pitch', mapId: 'verdant', seed: 36, seats, bots, world: 'terrain', now, schedule, resume: { tick: 1200, battleTimeMs: 30_000 } });
+  const p1Entity = actor.entityForWireId(1);
+  const { x: x0, y: y0, z: z0 } = p1Entity.state.pos;
+  actor.noteRestoredRow(1, 1000, x0, z0);
+  const p1 = attachViewer(actor, 0, 'p1');
+  await flush();
+  p1.send({
+    type: MESSAGE_TYPE.RESUME_HINT, tick: 1100, x: quantizePosition(x0 + 4), y: quantizePosition(y0), z: quantizePosition(z0), speed: quantizeVelocity(5), verticalSpeed: 0,
+    yaw: 0, pitch: 0, roll: 0, turretYaw: 0, gunPitch: quantizeAngle(1.5),
+  });
+  await flush();
+  assert.equal(actor.stats().resumeHints.applied, 1, 'the row is applied');
+  const elevation = p1Entity.spec.gunElevationDeg * Math.PI / 180;
+  assert.ok(p1Entity.state.gunPitch <= elevation + 0.05 + 1e-9 && p1Entity.state.gunPitch > elevation - 1e-3, `a gun pitch of 1.5 rad is clamped to the gun's elevation (${p1Entity.state.gunPitch.toFixed(3)} rad, elevation ${elevation.toFixed(3)})`);
+  assert.ok(Math.abs(p1Entity.state.pos.x - (x0 + 4)) < 1e-3, 'and the pose lands');
+  actor.stop();
+}
+// ---- (268, item 6) host migration keeps every bot's paint: the old authority's roll rides each seat's WELCOME roster into the
+// elected host's plan (host/hostPlan.ts planFromRoster), and the resumed actor restores it instead of rolling again
+{
+  const painters = Array.from({ length: 6 }, (_, index) => ({ playerId: `bot-${index}`, name: `Bot ${index}`, team: index % 2 ? 'bravo' : 'alpha', specId: 'leo2_improved' }));
+  const old = createMatchActor({ roomId: 'paint-old', mapId: 'verdant', seed: 41, seats, bots: painters, world: 'terrain', countdownS: 1, now, schedule });
+  const viewer = attachViewer(old, 0, 'p1');
+  await flush();
+  const paintOf = (actor) => painters.map((bot) => actor.authority.entityById.get(bot.playerId).camo);
+  const before = paintOf(old);
+  assert.deepEqual(viewer.welcome.roster.filter((row) => row.bot).map((row) => row.camo), before, 'the WELCOME carries the old authority\'s paint');
+  assert.ok(before.includes('auto') && before.includes('factory'), `the roll paints both ways (${before.join(' ')})`);
+  const plan = planFromRoster(viewer.welcome.roster, null);
+  assert.deepEqual(plan.bots.map((bot) => bot.camo), before, 'the elected host\'s plan keeps each bot\'s paint');
+  const resumed = createMatchActor({ roomId: 'paint-new', mapId: 'verdant', seed: 42, seats: plan.seats, bots: plan.bots, world: 'terrain', now, schedule,
+    autoStart: false, resume: { tick: 1200, battleTimeMs: 20_000 } });
+  assert.deepEqual(paintOf(resumed), before, 'the resumed actor restores every bot\'s paint');
+  assert.deepEqual(painters.map((bot) => resumed.authority.entityById.get(bot.playerId).camoBonus), painters.map((bot) => old.authority.entityById.get(bot.playerId).camoBonus),
+    'and the bonus each earns');
+  // control: the same plan without the roster's paint rolls again on the elected host's seed and paints them otherwise
+  const rerolled = createMatchActor({ roomId: 'paint-reroll', mapId: 'verdant', seed: 42, seats: plan.seats, bots: plan.bots.map(({ camo, ...bot }) => bot),
+    world: 'terrain', now, schedule, autoStart: false, resume: { tick: 1200, battleTimeMs: 20_000 } });
+  assert.notDeepEqual(paintOf(rerolled), before, 'without the roster\'s paint the bots would be repainted');
+  for (const actor of [old, resumed, rerolled]) actor.stop();
+  console.log(`matchActorResume.selftest: a migrated host restores every bot's paint from the WELCOME roster (${before.join(' ')}); a re-roll would repaint them`);
+}
+console.log('matchActorResume.selftest: world object, resume tick/clock/countdown/limit, wire id lookups verified');

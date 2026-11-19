@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/BKcore/HexGL",
+  "commit": "6addc95a2fce3bf05f4d751823cc054c61a16d68",
+  "license": "MIT",
+  "scope": "project-snapshot",
+  "files": 197,
+  "bytes": 17246586
+}

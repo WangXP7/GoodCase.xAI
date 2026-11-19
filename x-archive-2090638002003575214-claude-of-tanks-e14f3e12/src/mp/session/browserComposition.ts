@@ -1,0 +1,1763 @@
+/**
+ * The multiplayer browser launch (charter §3 "presentation/", §6 rule 3:
+ * no client can block a start; a client joins when it is ready).
+ *
+ * The Play menu hands a v2 room connection here (`beginRoom`, its
+ * `onNetworkStart`). The composition adopts the room's session, builds one
+ * `MatchSession` on the room's `RoomClient`, and for every `match_start` the
+ * session asks it for a presentation: the round's map is loaded through the
+ * same app ports v1 uses (the loader cover, the battle-only modules, the
+ * world, the roster paint), the battle presentation is created on the world's
+ * collision, prediction is enabled once the roster is ready, the first frame
+ * warms the terrain/wrecks/panel/programs under the cover, the activation
+ * runtime transfers the world into the live battle phase, the reveal barrier
+ * and the loader fade end the entry. The verdict reaches the end overlay
+ * through the presentation's `battle:ended`; the room stays for a rematch
+ * (the lobby re-attaches to the Play menu once the result is up or the player
+ * is back in the Garage), an explicit leave closes the seat, and failures —
+ * a load that fails, the match link exhausted (`lost`), the room gone — reach
+ * the existing failure surfaces (covered Garage restore, the menu's room
+ * failure panel) instead of a spinner.
+ *
+ * Node-runnable: every app surface is a port, the session owner and the
+ * presentation factory are injectable (browserComposition.selftest.mjs drives
+ * a scripted session and a recorded presentation).
+ */
+import { MatchSession } from './matchSession.ts';
+import type { MatchSessionOptions, MatchSessionP2pOptions, MatchSessionStats, SessionP2pEvent, SessionP2pStatus, SessionPhase, SessionPresentation, SessionRound } from './matchSession.ts';
+import { NetworkStatusModel, SEAT_DROP_REASONS, closeReasonName } from './networkStatus.ts';
+import type { NetworkBanner, NetworkStatusEvent, NetworkStatusMatchSource, NetworkStatusSnapshot, NetworkStatusSummary } from './networkStatus.ts';
+import { isMultiplayerV2Session } from './playMenuAdapter.ts';
+import { seatsByTeamSize, terrainVariantFor } from '../../sim/matchRuleset.ts';
+import type { V2RoomSession } from './playMenuAdapter.ts';
+import { createBattlePresentation } from '../presentation/battlePresentation.ts';
+import type {
+  BattlePresentation, BattlePresentationOptions, EngineContext, EventBus, MatchActor, PresentationGameState, RosterPrebuild,
+  RosterPrebuildSeat, TankVisual,
+} from '../presentation/battlePresentation.ts';
+import type { ObstacleIdentity } from '../presentation/authorityObstacles.ts';
+import type { WorldCollisionLike } from '../presentation/predictionWorld.ts';
+import type { MatchFrame } from '../match/matchClient.ts';
+import type { Unsubscribe } from '../transport/transport.ts';
+import type { RtcIceConfig } from '../transport/webRtcTransport.ts';
+import { VERDICT } from '../wire/index.ts';
+import { createControlSampler } from '../presentation/controlSampler.ts';
+import type { ControlSampler } from '../presentation/controlSampler.ts';
+import type { VerdictId, WelcomeMessage, WireEvent } from '../wire/index.ts';
+import type { RoomMatchStartPayload, RoomSnapshot } from '../room/protocol.ts';
+import { getSpec } from '../../vehicles/specs.ts';
+import { programReceipt, type ProgramOriginWatch, type ProgramReceipt, type ReceiptProgram } from '../../engine/programReceipt.ts';
+import { planFromRoom } from '../host/hostPlan.ts';
+import { planBotPaints } from '../../sim/camoPaint.ts';
+import { sideFlags } from '../../sim/countries.ts';
+import type { SerializedLobby } from '../room/lobbyShape.ts';
+import { MATCH_BUILD, matchRefusalCodeOf, matchRefusalMessage, type MatchRefusalCode } from '../wire/matchBuild.ts';
+
+type MaybePromise<T> = T | PromiseLike<T>;
+type RuntimeValue = {} | null | undefined;
+type TerrainVariant = 'assault-trenches' | null;
+type RoomMode = 'private' | 'lan';
+
+// ------------------------------------------------------------ ports
+
+export interface BrowserRosterRow {
+  readonly id: string;
+  readonly kind?: 'aircraft';
+  readonly tier?: string;
+  readonly name?: string;
+  readonly isPlayer?: boolean;
+}
+
+export interface BrowserRosterPlayer {
+  id: string;
+  specId: string;
+  team?: string;
+  name?: string;
+}
+
+export interface BrowserLoadScreen {
+  readonly visible: boolean;
+  show(info: {
+    mapName: string; thumb?: string; biome?: string; mode?: string;
+    allies: readonly BrowserRosterRow[]; enemies: readonly BrowserRosterRow[];
+    /** The seats each side fields (ui/battleLoad.ts BattleLoadSeats), where the room's settings size them. */
+    seats?: { allies: number; enemies: number };
+  }): void;
+  rosters(allies: readonly BrowserRosterRow[], enemies: readonly BrowserRosterRow[],
+    teams?: { allied: string | null; enemy: string | null; alliedFills: readonly string[]; enemyFills: readonly string[] } | null,
+    seats?: { allies: number; enemies: number } | null): void;
+  progress(fraction: number, label?: string): void;
+  hide(): Promise<void>;
+}
+
+export interface BrowserEntryLifecycle {
+  run<T>(task: () => Promise<T>, busyValue: T): Promise<T>;
+  coverRendering(): void;
+  uncoverRendering(): void;
+  primeReveal(): Promise<RuntimeValue>;
+  readonly pending: boolean;
+}
+
+export interface BrowserLoadTrace {
+  version: 2;
+  mode: string;
+  map: string;
+  round: number;
+  stages: Record<string, number>;
+  startedAt: number;
+  endedAt?: number;
+  status: 'pending' | 'complete' | 'failed';
+  totalMs?: number;
+  blackCheck?: RuntimeValue;
+  /** The strict shader preparation: its windows, how it ended, and the programs left to link at the covered reveal. */
+  compile?: {
+    attempts: number; outcome: 'complete' | 'deferred'; pending: number | null;
+    /** At deferral (2026-10-13): the programs left pending, named (src/engine/programWarm.ts PendingProgramNote). */
+    programs?: readonly BrowserPendingProgram[];
+  };
+  /** Seats whose vehicles were warmed beside the world load (prewarmRoster, 2026-10-15). */
+  rosterPrewarmed?: number;
+  /**
+   * WELCOMEs after the first on this round (the link was replaced and the seat said hello again), and when each came (ms
+   * from the entry's start). The first alone marks `roster` (2026-10-15).
+   */
+  rewelcomes?: number;
+  rewelcomeAtMs?: number[];
+  /**
+   * (2026-10-27, the room-stalls lane) the programs the reveal made: those the renderer gained after the black watchdog,
+   * through the reveal, the loader's fade and the first REVEAL_PROGRAM_FRAMES frames after it (`frames`: the frames
+   * counted so far), with the first few named. The covered warm owns every program: 0 is the receipt (the rooms census
+   * found the first live frame linking the viewer's depth programs, 580-590 ms). `diffs`, beside each name: where its
+   * cache key departs from the nearest program of its type that the warm made (`index:made/warmed`), or 'new'.
+   */
+  revealPrograms?: ProgramReceipt;
+}
+
+/** One program the strict preparation left pending (programWarm's PendingProgramNote, structurally). */
+export interface BrowserPendingProgram { name: string; cacheKey: string; linked: boolean | null }
+
+export interface BrowserEntryFailure {
+  message: string;
+  matchId: string | null;
+  stage: string;
+  reason: string;
+}
+
+/**
+ * A budget the entry outran without failing (the same beacon kind the reveal and paint budgets report): the strict
+ * shader preparation extended past its first window (`compile`/`extended`), or reached its last resort and left the rest
+ * to the covered reveal (`compile`/`deferred`); the entry's own wait extended because the round was still progressing
+ * (`entry`/`extended`).
+ */
+export interface BrowserSlowEntry {
+  stage: 'compile' | 'entry';
+  code: 'extended' | 'deferred';
+  /** The stage's elapsed time when it was beaconed. */
+  ms: number;
+  /** Programs still unprepared (compile), or null. */
+  pending: number | null;
+}
+
+export interface BrowserLoadPorts {
+  battleLoad: BrowserLoadScreen;
+  audio: {
+    resume(): RuntimeValue; loadingOn(active: boolean): RuntimeValue; ambientOn(active: boolean): RuntimeValue;
+    /** Decode the round's battle sounds, the roster's powertrains first, so its countdown is heard (never awaited). */
+    warmBattleEvents?(roster: readonly string[]): RuntimeValue;
+  };
+  lighting: { setFarCascadeDormant(dormant: boolean): void };
+  ensureBattleVisuals(): MaybePromise<RuntimeValue>;
+  /** The battle-only modules a round needs before it presents (HUD, touch controls, FX, killcam, warm owners). */
+  loadModules(): MaybePromise<RuntimeValue>;
+  loadWorld(mapId: string, onProgress: (fraction: number, label: string) => void, terrainVariant?: TerrainVariant): MaybePromise<RuntimeValue>;
+  /**
+   * The authority's obstacle identities by index (its collision manifest, src/mp/host/worldCollision.ts): loaded only for
+   * a world laid out otherwise than the manifest, so the presentation can read the persistent destroyed list.
+   */
+  /** The authority's obstacle identities, from the manifest it plays (the mode's battlefield variant's when it has one). */
+  loadAuthorityObstacles?(mapId: string, signal: AbortSignal, variant?: TerrainVariant): Promise<(index: number) => ObstacleIdentity | null>;
+  /**
+   * 2026-10-15: the builders and textures of the seats the room already names, warmed beside the world load (the
+   * WELCOME's bots are painted after it). Never refuses the round; the trace records how many it warmed.
+   */
+  prewarmRoster?(seats: readonly { specId: string; camo: string; isViewer: boolean }[], signal: AbortSignal): MaybePromise<RuntimeValue>;
+  /**
+   * 2026-10-23 (item/mp-rejoin-levers-242): the named seats' vehicles built beside the world load (battlePresentation
+   * prebuildRosterVisuals), handed to the round's roster, which takes them before it builds; the round's abort stops it.
+   * Preferred over prewarmRoster where the app has it.
+   */
+  prebuildRoster?(seats: readonly RosterPrebuildSeat[], signal: AbortSignal): RosterPrebuild | null;
+  /**
+   * 2026-10-20 (item/mp-rejoin-229): the round this seat entered, kept across a reload (the app keeps it in this
+   * browser's storage), so a tab reopened on the same room's invite builds that battlefield during its boot; null
+   * forgets it (the seat left the room, or the room is gone). Never refuses the round.
+   */
+  rememberRound?(round: BrowserRememberedRound | null): void;
+  nextFrame(): MaybePromise<RuntimeValue>;
+  setAdaptiveSuspended(suspended: boolean): void;
+  now?(): number;
+  recordTrace?(trace: BrowserLoadTrace): void;
+  recordEntryFailure?(failure: BrowserEntryFailure | null): void;
+  recordSlowEntry?(beacon: BrowserSlowEntry): void;
+}
+
+/** The round a seat entered, as the app remembers it across a reload (BrowserLoadPorts.rememberRound). */
+export interface BrowserRememberedRound {
+  roomCode: string;
+  matchId: string;
+  mapId: string;
+  terrainVariant: TerrainVariant;
+}
+
+export interface BrowserRosterPorts {
+  getMap(mapId: string): { name: string; thumb: string; biome: string };
+  rows(players: BrowserRosterPlayer[], team: string, viewerId: string, gameMode?: string): BrowserRosterRow[];
+  vehicleName(specId: string): string;
+  emitBattleStart(payload: { playerId: string; specId: string; mapId: string }): void;
+  setCamoBiome(mapId: string): void;
+}
+
+export interface BrowserFxPort {
+  setFrozen(frozen: boolean): void;
+  resetAll(): void;
+}
+
+/** The roster as the warm owners see it: v1's bridge entities and v2's actors share this shape. */
+export interface BrowserWarmEntity {
+  specId: string;
+  spec: RuntimeValue;
+  visual?: RuntimeValue;
+}
+
+export interface BrowserWarmView {
+  entities: Map<string, BrowserWarmEntity>;
+}
+
+export interface BrowserWarmPorts {
+  atmosphere?(initial: { meta: { weatherSeed?: RuntimeValue } | null }): MaybePromise<void>;
+  nightLighting?(): MaybePromise<void>;
+  /**
+   * 2026-10-15 (the perf lane's finding, the MP entry): the scene's programs submitted to the driver's parallel compile
+   * once the battle's light signature is final (garage lights off, the authority's weather, the night pool), so they link
+   * while the roster is painted; the strict compile later answers them from three's cache.
+   */
+  submitPrograms?(signal?: AbortSignal): MaybePromise<RuntimeValue>;
+  terrain?(view: BrowserWarmView): MaybePromise<RuntimeValue>;
+  wrecks?(view: BrowserWarmView, signal?: AbortSignal): MaybePromise<RuntimeValue>;
+  playerPanel?(view: BrowserWarmView, viewerId: string): MaybePromise<RuntimeValue>;
+  /** (battle-spikes-253) Start linking the player panel's programs at the warm's start (no wait): the panel stage below. */
+  playerPanelPrograms?(view: BrowserWarmView, viewerId: string): void;
+  compile?(signal?: AbortSignal): MaybePromise<{ preparation?: BrowserWarmPreparation; pendingPrograms?: readonly BrowserPendingProgram[] } | null | undefined>;
+  /**
+   * The battlefield's offscreen first draws, a cohort at a time, and the opening effects. A room's entry paces them on the
+   * GPU: textures staged one at a time and every batch waiting for the GPU to catch up.
+   */
+  openingEffects?(fx: BrowserFxPort, view: BrowserWarmView, signal?: AbortSignal): MaybePromise<RuntimeValue>;
+  shotCards?(specIds: string[]): void;
+  /** The opening ground cover around the final camera (after activation). */
+  presentation?(signal?: AbortSignal): MaybePromise<RuntimeValue>;
+  finalShadows?(signal?: AbortSignal): MaybePromise<RuntimeValue>;
+}
+
+/** The strict program preparation's verdict (src/engine/programWarm.ts ProgramPreparationResult, structurally). */
+export type BrowserWarmPreparation = { status?: string; pending?: number | null; reason?: string } | null | undefined;
+
+/** Exhausting the cooperative generator is not proof the programs are ready: only a complete result with nothing pending is. */
+function preparationIncomplete(preparation: BrowserWarmPreparation): boolean {
+  return !!preparation && (preparation.status !== 'complete' || (preparation.pending ?? 0) !== 0);
+}
+
+/** The preparation itself was sound but its wall-clock deadline passed first (a starved GPU process, a cold shader cache). */
+function preparationOutOfBudget(preparation: BrowserWarmPreparation): boolean {
+  return !!preparation && preparation.status === 'incomplete' && preparation.reason === 'budget';
+}
+
+export interface BrowserScenePorts {
+  engineCtx: EngineContext;
+  game: PresentationGameState & { phase?: string };
+  bus: EventBus;
+  getWorldCollision(): WorldCollisionLike | null;
+  groundSampler(x: number, z: number): RuntimeValue;
+  getFx(): BrowserFxPort;
+  /** Remove the previous result before any new network frame can render. */
+  resetRoundState(): void;
+  clearVehicleDecals?(visual: TankVisual): void;
+  onVisualReady?(actor: MatchActor): void;
+}
+
+export interface BrowserActivationRequest {
+  viewerId: string;
+  own: { id: string; specId: string };
+  spectator: boolean;
+  mapId: string;
+  bridge: { setPerspective(entityId: string | null | undefined): void };
+  fx: BrowserFxPort;
+}
+
+export interface BrowserPresentationPorts {
+  /** v1's activation runtime: the prepared world becomes the one live battle phase. */
+  activate(request: BrowserActivationRequest): void;
+  setWaitingForPeers(waiting: boolean): void;
+  setGarageLighting(active: boolean): void;
+  runBlackWatchdog?(signal?: AbortSignal): MaybePromise<RuntimeValue>;
+  /** The renderer's live programs (renderer.info.programs: the material's type and name), for the revealPrograms receipt. */
+  programs?(): readonly ReceiptProgram[] | null;
+  /**
+   * The draws that link a program while armed (`material<object<parent<grandparent`), for the receipt's `origins`; the
+   * watch ends at stop() or on its own after a few seconds.
+   */
+  watchProgramOrigins?(): ProgramOriginWatch | null;
+}
+
+export interface BrowserActiveRoomAdapter {
+  state: SerializedLobby;
+  playerId: string;
+  role: 'host' | 'client';
+  /** The room session (`isMultiplayerV2Session`): the menu's Rejoin battle hands it back through `onNetworkStart`. */
+  session: RuntimeValue;
+  command(command: Record<string, RuntimeValue>): RuntimeValue;
+  leave(reason?: string): RuntimeValue;
+}
+
+export interface BrowserRoomMenu {
+  attachActiveRoom(adapter: BrowserActiveRoomAdapter): void;
+  updateActiveRoom(state: SerializedLobby): boolean;
+  detachActiveRoom(): void;
+  showRoomFailure(reason: string, mode?: RoomMode): void;
+  /** Open the attached room's lobby (its Rejoin battle while the match runs), naming why the last entry failed. */
+  /** `code`: a known refusal (`match_ended`, `build_*`) the menu words in the player's locale; `notice` is the fallback. */
+  showActiveRoom?(notice?: string | null, code?: string | null): boolean;
+}
+
+export interface BrowserGarageRoomStatus {
+  roomCode: string;
+  mode: string;
+  ready: boolean;
+  canSetReady: boolean;
+  readyCount: number;
+  total: number;
+}
+
+export interface BrowserRoomPorts {
+  getMenu(): Promise<BrowserRoomMenu> | null;
+  setGarageStatus(status: BrowserGarageRoomStatus | null): void;
+  emitRoomState(payload: RuntimeValue): void;
+  clearInput(): void;
+  /** The covered Garage restore after an entry failure (v1's launcher `enterGarage`). */
+  enterGarage(): MaybePromise<void>;
+  /** The transition out of a live battle (the Garage return's `leave`). */
+  returnToGarage(): Promise<void>;
+  /**
+   * (round 2, app-flow) Hand this round the scene before it covers, loads or announces anything: a Studio open in this
+   * tab leaves first, and a scene that still cannot hand over to a battle rejects (main.ts takeSceneForRound, the app
+   * lifecycle's edge). Null when it can hand over now.
+   */
+  takeSceneForRound(): Promise<void> | null;
+  getPhase(): string;
+  hasResult(): boolean;
+}
+
+/** The in-battle network status surface (src/ui/multiplayerStatus.ts) as the composition drives it. */
+export interface BrowserStatusSurface {
+  set(snapshot: Readonly<NetworkStatusSnapshot>, banner: NetworkBanner, nowMs: number): void;
+  togglePanel(open?: boolean): void;
+  pressLeave(): 'armed' | 'left' | 'ignored';
+  dispose(): void;
+}
+
+/** Why a played round's link ended (the telemetry exit code). */
+export type BrowserLinkExit = 'left' | 'verdict' | 'dropped' | 'lost' | 'failed';
+
+export interface BrowserStatusPorts {
+  /** Mount the strip for a live round (lazy: the surface module loads with the round). */
+  mount(): MaybePromise<BrowserStatusSurface>;
+  /** A reconnect attempt, a recovery or a seat drop (telemetry counts them; never per tick). */
+  event?(event: NetworkStatusEvent): void;
+  /** The link's summary when a played round ends (telemetry: a few bytes). */
+  report?(summary: NetworkStatusSummary, reason: BrowserLinkExit): void;
+}
+
+/**
+ * The peer-to-peer surfaces (P2 client lane, 2026-09-28): the ICE of each room session, the host actor's Worker, where
+ * the collision manifests are served, the device tier (the mobile tier never hosts).
+ */
+export interface BrowserP2pPorts extends Omit<MatchSessionP2pOptions, 'ice' | 'onLog'> {
+  /**
+   * The ICE resolver of one room session (2026-10-02, docs/MULTIPLAYER-V2.md §13.14): `lan` needs no server; a private
+   * room's relay credentials come from the room this seat holds (`RoomClient.requestRelay`), per peer connection.
+   */
+  createIceResolver?(mode: RoomMode, room: V2RoomSession['client']): () => Promise<RtcIceConfig>;
+}
+
+export interface BrowserCompositionPorts {
+  lifecycle: BrowserEntryLifecycle;
+  load: BrowserLoadPorts;
+  roster: BrowserRosterPorts;
+  scene: BrowserScenePorts;
+  warm?: BrowserWarmPorts;
+  presentation: BrowserPresentationPorts;
+  room: BrowserRoomPorts;
+  status?: BrowserStatusPorts;
+  p2p?: BrowserP2pPorts;
+}
+
+/** The session owner as the composition drives it (MatchSession, or the receipt's scripted one). */
+export interface SessionOwner {
+  readonly phase: SessionPhase;
+  readonly round: SessionRound | null;
+  /** The live match client (the network status model attaches to it on the `match` phase). */
+  readonly match?: NetworkStatusMatchSource | null;
+  /** The peer-to-peer facts and events (the status model attaches with the match). */
+  readonly p2p?: Readonly<SessionP2pStatus> | null;
+  onP2p?(listener: (event: SessionP2pEvent) => void): Unsubscribe;
+  /** Re-enter a match this seat still holds a `match_start` for (a Garage return kept the room). */
+  enterMatch?(payload: RoomMatchStartPayload): Promise<unknown>;
+  start(): void;
+  onPhase(listener: (change: { phase: SessionPhase; detail: string }) => void): Unsubscribe;
+  onVerdict(listener: (change: { verdict: VerdictId; reason: string; matchId: string }) => void): Unsubscribe;
+  onFrame(listener: (frame: MatchFrame) => void): Unsubscribe;
+  update(nowMs: number, elapsedS: number): MatchFrame | null;
+  /** One foreground display frame (ms): the host choice by headroom reads it (plan step 10). Optional for doubles. */
+  observeFrame?(frameMs: number): void;
+  /** The hosting tab is going away: tell the room now (plan step 11). Optional for doubles. */
+  handOffHosting?(reason: string): boolean;
+  leaveMatch(reason?: string): Promise<void>;
+  dispose(): void;
+  stats(): MatchSessionStats;
+}
+
+export interface BrowserCompositionFactories {
+  createSession(options: MatchSessionOptions): SessionOwner;
+  createPresentation(options: BattlePresentationOptions): BattlePresentation;
+}
+
+export interface BrowserLaunchRequest {
+  role?: string;
+  session?: RuntimeValue;
+  lobbyState?: {
+    mode?: string;
+    gameMode?: string;
+    mapId?: string;
+    round?: number;
+    players?: ReadonlyArray<{ id: string; specId?: string | null; team?: string; name?: string }>;
+  } | null;
+}
+
+export interface BrowserCompositionOptions {
+  ports: BrowserCompositionPorts;
+  factories?: Partial<BrowserCompositionFactories>;
+  clock?: () => number;
+  /** The HELLO's build line (default: this build's, src/mp/wire/matchBuild.ts — the host's same-wire build check). */
+  clientBuild?: string;
+  /** How long `beginRoom` waits for the room's match_start before restoring the Garage (charter §6.4). */
+  entryTimeoutMs?: number;
+  /** How long the banner naming a server-side seat drop stays readable before the Garage return. */
+  dropNoticeMs?: number;
+  schedule?: (callback: () => void) => void;
+  setTimer?: (callback: () => void, delayMs: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+  reportError?: (scope: string, error: RuntimeValue) => void;
+  /** The host's warn-level log lines (a report the room refused after an election, an elected seat that cannot host): a warning, never a console error. */
+  reportWarning?: (scope: string, detail: string) => void;
+}
+
+export interface BrowserRoundStats {
+  matchId: string;
+  round: number;
+  mapId: string;
+  mode: string;
+  spectator: boolean;
+  welcomed: boolean;
+  activated: boolean;
+  revealed: boolean;
+  frames: number;
+  actors: number;
+  events: Record<string, number>;
+  ownShots: number;
+  shotsBy: Record<string, number>;
+}
+
+export interface BrowserCompositionStats {
+  version: 2;
+  active: boolean;
+  inMatch: boolean;
+  room: { roomCode: string; mode: RoomMode; adminId: string; phase: string; players: number; playerId: string } | null;
+  session: MatchSessionStats | null;
+  round: BrowserRoundStats | null;
+  rounds: number;
+  lastFailure: BrowserEntryFailure | null;
+  network: { health: string; reason: string; rttMs: number | null; reconnects: number; roomReconnects: number; surface: boolean };
+}
+
+export interface BrowserComposition {
+  /** The Play menu's `onNetworkStart` for a v2 room: enter the room's match (resolves true once the battle is revealed, false when it could not). */
+  beginRoom(request: BrowserLaunchRequest): Promise<boolean>;
+  /** A round is loading or live: the battle frame is network-owned. */
+  readonly active: boolean;
+  /** The round has been activated into the live battle phase. */
+  readonly inMatch: boolean;
+  /**
+   * (round 2, app-flow) A round owns the screen: from its start (its scene hand-over, then its cover) until it reveals
+   * or its covered Garage restore has landed, whether a launch (`beginRoom`) or the room's session (a later match_start
+   * while the room is kept: a rematch, the next match) entered it. main's app lifecycle reads 'loading' through it, so
+   * the Studio's F8, its button and its entry refuse to open over the round meanwhile.
+   */
+  readonly entering: boolean;
+  readonly room: V2RoomSession | null;
+  readonly session: SessionOwner | null;
+  /** One display frame (the app's network pump, every phase). */
+  pump(dtSeconds: number, nowMs: number): void;
+  /** The hidden-tab cadence: the socket keeps its pings and acks. */
+  pumpBackground(nowMs: number): void;
+  /** The page is going away (pagehide): a hosting seat hands its match on at once (plan step 11). True when it did. */
+  handOffHosting(reason: string): boolean;
+  queueConsumable(slot: number): void;
+  queueAction(action: 'reloadMagazine' | 'specialAction' | 'selfRight' | 'smoke' | 'lights' | 'roofGun' | 'lightsOff' | 'drone' | 'supplyAmmo' | 'supplyHeal' | 'strikeRecon' | 'strikeArtillery' | 'strikeStrafe' | 'strikeBomb' | 'strikeGunship'): void;
+  /** The Garage return's network port: keep the room across the return? */
+  shouldPreserveRoom(): boolean;
+  /** Leave the match, keep the seat (the Garage return with a preserved room). */
+  disposePresentation(): void;
+  /** Leave the match and the room (the Garage return without one, or an explicit leave). */
+  closeMatch(reason?: string): void;
+  /** An explicit leave from the lobby or the battle: the seat goes and the admin migrates at once. */
+  leaveRoom(reason?: string): void;
+  /** The network status model's snapshot (the HUD's ping cell, diagnostics); written in place, never copied. */
+  readonly networkStatus: Readonly<NetworkStatusSnapshot>;
+  /** The network-details action: expand or collapse the strip's panel. */
+  toggleStatusPanel(open?: boolean): void;
+  /** The leave action: the surface arms on the first press and leaves on a second inside the window. */
+  pressLeave(): 'armed' | 'left' | 'ignored';
+  stats(): BrowserCompositionStats;
+  dispose(): void;
+}
+
+// ------------------------------------------------------------ composition
+
+interface ActiveRound {
+  matchId: string;
+  round: number;
+  mapId: string;
+  mode: string;
+  spectator: boolean;
+  viewerId: string;
+  ownSpecId: string;
+  presentation: BattlePresentation | null;
+  controls: ControlSampler;
+  welcome: WelcomeMessage | null;
+  welcomed: boolean;
+  /** WELCOMEs this round has had (a replaced link welcomes the seat again). */
+  welcomes: number;
+  /** The battle's lights set up at the WELCOME (garage lights off, the weather, the night pool): activation skips them. */
+  lit: boolean;
+  activating: boolean;
+  activated: boolean;
+  revealed: boolean;
+  failed: boolean;
+  /** The link summary left for telemetry. */
+  reported: boolean;
+  abort: AbortController;
+  frames: number;
+  ownShots: number;
+  events: Record<string, number>;
+  /** shell_fired events by shooter id (the e2e proves each browser saw the other's shot). */
+  shotsBy: Record<string, number>;
+  trace: BrowserLoadTrace;
+  stageAt: number;
+  /** The round's last sign of progress (a stage, world/roster progress, a shader window that linked programs). */
+  progressAt: number;
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((yes) => { resolve = yes; });
+  return { promise, resolve };
+}
+
+function messageOf(error: RuntimeValue): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function reasonOf(error: RuntimeValue): string {
+  if (error && typeof error === 'object' && 'code' in error && typeof (error as { code: RuntimeValue }).code === 'string') {
+    return (error as { code: string }).code;
+  }
+  return 'entry_failed';
+}
+
+/**
+ * The match ended while this seat was still entering it (a verdict before the reveal; 2026-10-11, prod 215 run 2: a
+ * returning seat's world loaded for 150 s while the defenders fell, and the entry then waited the whole stall window for
+ * a WELCOME the ended match could not send). Not an entry error: the lobby names it.
+ */
+class MatchEndedDuringEntryError extends Error {
+  readonly code = 'match_ended';
+  constructor() {
+    super('The match ended while you were joining.');
+    this.name = 'MatchEndedDuringEntryError';
+  }
+}
+
+/**
+ * The host refused this seat's HELLO for its build (2026-10-13, the same-wire check, or the other-wire gate): the entry
+ * fails with the refusal's code so the lobby words it in the player's locale.
+ */
+class MatchRefusedError extends Error {
+  readonly code: MatchRefusalCode;
+  constructor(code: MatchRefusalCode) {
+    super(matchRefusalMessage(code));
+    this.name = 'MatchRefusedError';
+    this.code = code;
+  }
+}
+
+class RoundSupersededError extends Error {
+  readonly superseded = true;
+  constructor(detail: string) { super(`multiplayer v2 round superseded: ${detail}`); this.name = 'RoundSupersededError'; }
+}
+
+function isSuperseded(error: RuntimeValue): boolean {
+  return error instanceof RoundSupersededError;
+}
+
+/**
+ * (2026-11-02 audit R1) A rejection that marks itself superseded: the world activation's (src/world/worldActivationRuntime.ts
+ * WorldActivationSupersededError), whose later request is often this composition's own Garage restore (setDormant(true))
+ * after a room closed or was left while loading. It is the round's own supersession once the round no longer owns its load.
+ */
+function marksSuperseded(error: RuntimeValue): boolean {
+  return !!error && typeof error === 'object' && (error as { superseded?: unknown }).superseded === true;
+}
+
+/**
+ * 2026-10-10 (the MP shader-prep lane; production 207-211: "Battle shaders could not finish preparing" refused the
+ * returning seat's entry at load 54-84, compile 5.0 s + retry 5.0 s): the strict preparation (src/engine/programWarm.ts) is
+ * a 5 s wall-clock window, and a busy GPU process links a cold cohort for longer. A window that runs out is not a failure:
+ * the next window resumes it (submitted programs are cached and reflected ones are not visited again), so the entry keeps
+ * opening windows while programs keep linking, showing how many are left. COMPILE_STALL_WINDOWS windows in a row with
+ * nothing linked, or COMPILE_CEILING_MS in all, is the last resort: a beacon, and the entry goes on, the covered reveal
+ * linking the rest under the loader as the solo entry does after its optional warm. Only a preparation that cannot
+ * succeed refuses the entry: a renderer whose context was lost or replaced (`invalidated`), a failed native query or
+ * program reflection.
+ */
+/**
+ * 2026-10-12 (the MP lane; production 218-219: every rejoin spent compile 5.0 s + compileRetry 20.1 s with the main
+ * thread idle, ending 'deferred' with the same 36 programs pending in every window): a window that links nothing is
+ * followed by more windows that link nothing, so one stalled window is the last resort. A cohort that is still linking
+ * keeps its windows (progress resets the count), and the covered reveal links whatever is left, as it already did
+ * after four.
+ */
+const COMPILE_STALL_WINDOWS = 1;
+const COMPILE_CEILING_MS = 120_000;
+/**
+ * The entry's own wait (entryTimeoutMs) refuses only a round that stopped progressing: past it, a round that showed
+ * progress within ENTRY_STALL_MS waits another ENTRY_EXTEND_MS (beaconed once), up to ENTRY_CEILING_MS in all.
+ */
+const ENTRY_STALL_MS = 120_000;
+const ENTRY_EXTEND_MS = 30_000;
+const ENTRY_CEILING_MS = 600_000;
+/** The frames after the loader's fade that the revealPrograms receipt still counts (half a second at 60 Hz). */
+const REVEAL_PROGRAM_FRAMES = 30;
+
+/** A preparation that ran out of windows made progress if it linked programs, or got its whole cohort submitted. */
+function compileProgressed(previous: BrowserWarmPreparation, current: BrowserWarmPreparation): boolean {
+  if (previous === undefined) return true;
+  const before = previous?.pending ?? null;
+  const after = current?.pending ?? null;
+  if (after === null) return false;
+  return before === null || after < before;
+}
+
+/** "name ×count (linked n/unlinked n/unqueried n)" per material, most frequent first, bounded for a console line. */
+function pendingProgramSummary(programs: readonly BrowserPendingProgram[]): string {
+  const byName = new Map<string, { count: number; linked: number; unlinked: number; unqueried: number }>();
+  for (const program of programs) {
+    const row = byName.get(program.name) ?? { count: 0, linked: 0, unlinked: 0, unqueried: 0 };
+    row.count++;
+    if (program.linked === true) row.linked++;
+    else if (program.linked === false) row.unlinked++;
+    else row.unqueried++;
+    byName.set(program.name, row);
+  }
+  return [...byName].sort((a, b) => b[1].count - a[1].count).slice(0, 16)
+    .map(([name, row]) => `${name} ×${row.count} (linked ${row.linked}/unlinked ${row.unlinked}/unqueried ${row.unqueried})`).join(', ');
+}
+
+/** The refusal for a preparation that cannot complete, with what broke. */
+function shaderPreparationFailure(preparation: BrowserWarmPreparation): Error {
+  const reason = preparation?.reason ?? 'unknown';
+  return new Error(reason === 'invalidated'
+    ? 'Battle graphics were lost while the battle prepared its shaders. Please retry from the Garage.'
+    : `Battle shaders failed to prepare on this device (${reason}). Please retry from the Garage.`);
+}
+
+const defaultFactories: BrowserCompositionFactories = {
+  createSession: (options) => new MatchSession(options),
+  createPresentation: (options) => createBattlePresentation(options),
+};
+
+function validatePorts(ports: BrowserCompositionPorts): void {
+  const required: Array<[string, RuntimeValue]> = [
+    ['lifecycle.run', ports.lifecycle?.run], ['lifecycle.coverRendering', ports.lifecycle?.coverRendering],
+    ['lifecycle.uncoverRendering', ports.lifecycle?.uncoverRendering], ['lifecycle.primeReveal', ports.lifecycle?.primeReveal],
+    ['load.battleLoad.show', ports.load?.battleLoad?.show], ['load.battleLoad.progress', ports.load?.battleLoad?.progress],
+    ['load.battleLoad.hide', ports.load?.battleLoad?.hide], ['load.audio.resume', ports.load?.audio?.resume],
+    ['load.audio.loadingOn', ports.load?.audio?.loadingOn], ['load.audio.ambientOn', ports.load?.audio?.ambientOn],
+    ['load.lighting.setFarCascadeDormant', ports.load?.lighting?.setFarCascadeDormant],
+    ['load.ensureBattleVisuals', ports.load?.ensureBattleVisuals], ['load.loadModules', ports.load?.loadModules],
+    ['load.loadWorld', ports.load?.loadWorld], ['load.nextFrame', ports.load?.nextFrame],
+    ['load.setAdaptiveSuspended', ports.load?.setAdaptiveSuspended],
+    ['roster.getMap', ports.roster?.getMap], ['roster.rows', ports.roster?.rows], ['roster.vehicleName', ports.roster?.vehicleName],
+    ['roster.emitBattleStart', ports.roster?.emitBattleStart], ['roster.setCamoBiome', ports.roster?.setCamoBiome],
+    ['scene.getWorldCollision', ports.scene?.getWorldCollision], ['scene.groundSampler', ports.scene?.groundSampler],
+    ['scene.getFx', ports.scene?.getFx], ['scene.resetRoundState', ports.scene?.resetRoundState],
+    ['presentation.activate', ports.presentation?.activate], ['presentation.setWaitingForPeers', ports.presentation?.setWaitingForPeers],
+    ['presentation.setGarageLighting', ports.presentation?.setGarageLighting],
+    ['room.getMenu', ports.room?.getMenu], ['room.setGarageStatus', ports.room?.setGarageStatus], ['room.emitRoomState', ports.room?.emitRoomState],
+    ['room.clearInput', ports.room?.clearInput], ['room.enterGarage', ports.room?.enterGarage], ['room.returnToGarage', ports.room?.returnToGarage],
+    ['room.getPhase', ports.room?.getPhase], ['room.hasResult', ports.room?.hasResult],
+    ['room.takeSceneForRound', ports.room?.takeSceneForRound],
+  ];
+  for (const [name, port] of required) {
+    if (typeof port !== 'function') throw new TypeError(`multiplayer v2 browser composition requires the ${name} port`);
+  }
+  if (!ports.scene?.engineCtx || !ports.scene.game || !ports.scene.bus) throw new TypeError('multiplayer v2 browser composition requires engineCtx, game and bus');
+}
+
+function modeLabelFor(mode: string, round: number): string {
+  const base = mode === 'lan' ? 'LAN Battle · Direct Wi-Fi' : 'Private Battle · Room Code';
+  return round > 1 ? `${base} · Round ${round}` : base;
+}
+
+export function createBrowserComposition({
+  ports,
+  factories = {},
+  clock = () => (typeof performance === 'object' ? performance.now() : Date.now()),
+  clientBuild = MATCH_BUILD,
+  entryTimeoutMs = 120_000,
+  dropNoticeMs = 3000,
+  schedule = (callback) => queueMicrotask(callback),
+  setTimer = (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimer = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  reportError = (scope, error) => console.error(`[${scope}]`, error),
+  reportWarning = (scope, detail) => console.warn(`[${scope}]`, detail),
+}: BrowserCompositionOptions): BrowserComposition {
+  validatePorts(ports);
+  const { lifecycle, load, roster, scene, presentation: activation, room: roomPorts } = ports;
+  const warm = ports.warm ?? {};
+  const createSession = factories.createSession ?? defaultFactories.createSession;
+  const createPresentation = factories.createPresentation ?? defaultFactories.createPresentation;
+  const now = load.now ?? clock;
+
+  let roomSession: V2RoomSession | null = null;
+  let session: SessionOwner | null = null;
+  let round: ActiveRound | null = null;
+  // (round 2, app-flow) a failed or lost round's covered restore still in flight (failRound, stopLoading): its round is
+  // already released, and the round still owns the screen until the loader is down (`entering`)
+  let restoring = 0;
+  let latestLobby: SerializedLobby | null = null;
+  let latestRoom: RoomSnapshot | null = null;
+  let menuAttached = false;
+  let roundsEntered = 0;
+  let lastFailure: BrowserEntryFailure | null = null;
+  let lastPumpMs: number | null = null;
+  let disposed = false;
+  let roomGeneration = 0;
+  const subscriptions: Unsubscribe[] = [];
+  const entryWaiters: Array<Deferred<boolean>> = [];
+
+  // The network status model lives with the composition: the room attaches when adopted, the match
+  // client on every `match` phase; the strip mounts once a round is activated and paints at the
+  // model's cadence from the pumps.
+  const status = new NetworkStatusModel({ clock });
+  let statusSurface: BrowserStatusSurface | null = null;
+  let statusMountGeneration = 0;
+  status.onEvent((event) => {
+    if (event.kind === 'health') return;
+    ports.status?.event?.(event);
+  });
+
+  /** A played round's link summary leaves once, with why it ended, when its presentation goes. */
+  const reportLinkExit = (active: ActiveRound): void => {
+    if (active.reported || !active.revealed || !ports.status?.report) return;
+    active.reported = true;
+    const failure = lastFailure && lastFailure.matchId === active.matchId ? lastFailure : null;
+    const reason: BrowserLinkExit = failure
+      ? failure.reason.startsWith('seat_') ? 'dropped' : failure.reason === 'match_lost' ? 'lost' : 'failed'
+      : roomPorts.hasResult() ? 'verdict' : 'left';
+    ports.status.report(status.summary(), reason);
+  };
+
+  const unmountStatus = (): void => {
+    statusMountGeneration++;
+    statusSurface?.dispose();
+    statusSurface = null;
+  };
+
+  const mountStatus = (active: ActiveRound): void => {
+    const statusPorts = ports.status;
+    if (!statusPorts || statusSurface) return;
+    const generation = ++statusMountGeneration;
+    void Promise.resolve(statusPorts.mount()).then((surface) => {
+      if (generation !== statusMountGeneration || round !== active || disposed) { surface.dispose(); return; }
+      statusSurface = surface;
+      const nowMs = clock();
+      surface.set(status.snapshot, status.banner(nowMs), nowMs);
+    }).catch((error: RuntimeValue) => reportError('multiplayer v2 status', error));
+  };
+
+  const paintStatus = (nowMs: number): void => {
+    if (status.update(nowMs) && statusSurface) statusSurface.set(status.snapshot, status.banner(nowMs), nowMs);
+  };
+
+  let dropTimer: unknown = null;
+  const cancelDropNotice = (): void => {
+    if (dropTimer !== null) { clearTimer(dropTimer); dropTimer = null; }
+  };
+
+  const settleEntry = (entered: boolean): void => {
+    for (const waiter of entryWaiters.splice(0)) waiter.resolve(entered);
+  };
+
+  const playerId = (): string => roomSession?.roomInfo.peerId ?? '';
+  const roleOf = (): 'host' | 'client' => (latestRoom && latestRoom.adminId === playerId() ? 'host' : 'client');
+  const roomMode = (): RoomMode => (roomSession?.roomInfo.mode === 'lan' ? 'lan' : 'private');
+
+  // ------------------------------------------------------------ menu / garage presence
+
+  const roomStatus = (snapshot: RoomSnapshot): BrowserGarageRoomStatus | null => {
+    const me = snapshot.players.find((player) => player.id === playerId());
+    if (!me) return null;
+    const active = snapshot.players.filter((player) => player.team !== 'spectator');
+    return {
+      roomCode: snapshot.roomCode,
+      mode: snapshot.mode,
+      ready: me.ready,
+      canSetReady: snapshot.phase === 'waiting' && me.team !== 'spectator' && !!me.specId && me.connected,
+      readyCount: active.filter((player) => player.ready).length,
+      total: active.length,
+    };
+  };
+
+  /**
+   * Show the lobby on the Play menu. Deferred while a battle is live without a
+   * result (v1's rule: the invisible lobby DOM is not rebuilt at the final
+   * combat snapshot); the attach releases the menu's acquisition so the
+   * composition alone owns the seat from here on.
+   */
+  const syncMenu = (): void => {
+    const current = roomSession;
+    const lobby = latestLobby;
+    if (!current || !lobby) return;
+    if (roomPorts.getPhase() === 'battle' && !roomPorts.hasResult()) return;
+    const menuPromise = roomPorts.getMenu();
+    if (!menuPromise) return;
+    const generation = roomGeneration;
+    menuPromise.then((menu) => {
+      if (roomSession !== current || generation !== roomGeneration || !latestLobby) return;
+      if (menuAttached) { menu.updateActiveRoom(latestLobby); return; }
+      menu.attachActiveRoom({
+        state: latestLobby,
+        playerId: playerId(),
+        role: roleOf(),
+        session: current,
+        command: (command) => (roomSession === current ? current.command(command) : false),
+        leave: (reason) => { if (roomSession === current) leaveRoom(reason || 'left_room'); },
+      });
+      menuAttached = true;
+    }).catch((error: RuntimeValue) => reportError('multiplayer v2 lobby', error));
+  };
+
+  const handleLobby = (lobby: SerializedLobby, snapshot: RoomSnapshot): void => {
+    latestLobby = lobby;
+    latestRoom = snapshot;
+    roomPorts.setGarageStatus(roomStatus(snapshot));
+    roomPorts.emitRoomState({ state: lobby, playerId: playerId(), role: roleOf() });
+    syncMenu();
+  };
+
+  // ------------------------------------------------------------ the room's lifetime
+
+  /**
+   * Drop the room: the session owner (and with it the round's presentation), the
+   * menu's lobby, the Garage status. A pending entry is settled here unless the
+   * caller still owes it a covered Garage restore.
+   */
+  const releaseRoom = ({ settle = true }: { settle?: boolean } = {}): void => {
+    const current = roomSession;
+    if (!current) return;
+    roomGeneration++;
+    for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
+    const owner = session;
+    session = null;
+    round = null;
+    roomSession = null;
+    latestLobby = null;
+    latestRoom = null;
+    cancelDropNotice();
+    unmountStatus();
+    status.detachMatch();
+    status.detachRoom();
+    owner?.dispose();
+    if (settle) settleEntry(false);
+    const wasAttached = menuAttached;
+    menuAttached = false;
+    roomPorts.setGarageStatus(null);
+    roomPorts.emitRoomState(null);
+    if (wasAttached) {
+      roomPorts.getMenu()?.then((menu) => menu.detachActiveRoom()).catch(() => { /* the menu is optional */ });
+    }
+  };
+
+  const closeRoom = (reason: string, release: { settle?: boolean } = {}): void => {
+    const current = roomSession;
+    if (!current) return;
+    releaseRoom(release);
+    const client = current.client;
+    void client.leave().catch(() => { /* the socket may already be gone */ }).finally(() => { client.dispose(); void reason; });
+  };
+
+  const presentRoomFailure = (reason: string, mode: RoomMode): void => {
+    const menuPromise = roomPorts.getMenu();
+    if (!menuPromise) return;
+    menuPromise.then((menu) => {
+      // A newly joined room must never inherit a previous room's failure UI (the menu also skips intentional reasons).
+      if (!roomSession) menu.showRoomFailure(reason, mode);
+    }).catch((error: RuntimeValue) => reportError('multiplayer v2 failure', error));
+  };
+
+  /** The room went away under a loading round: restore the Garage under the cover, then settle the entry. */
+  const restoreAfterLostRoom = (): Promise<void> => stopLoading()
+    .catch((error: RuntimeValue) => reportError('multiplayer v2 room', error))
+    .finally(() => settleEntry(false));
+
+  /** The room is gone for this seat (kicked, expired, resume denied, transport exhausted, an explicit leave). */
+  const forgetRound = (): void => {
+    try { load.rememberRound?.(null); } catch { /* nothing to forget */ }
+  };
+
+  const handleRoomClosed = (reason: string): void => {
+    const current = roomSession;
+    if (!current) return;
+    forgetRound();
+    const mode = roomMode();
+    const active = round;
+    const loading = !!active && !active.revealed;
+    const inBattle = roomPorts.getPhase() === 'battle' && !!active && active.revealed;
+    lastFailure = active ? { message: reason, matchId: active.matchId, stage: loading ? 'loading' : 'battle', reason } : lastFailure;
+    releaseRoom({ settle: !loading });
+    current.client.dispose();
+    if (loading) {
+      void restoreAfterLostRoom().then(() => presentRoomFailure(reason, mode));
+      return;
+    }
+    if (inBattle) {
+      roomPorts.clearInput();
+      void Promise.resolve(roomPorts.returnToGarage()).then(() => presentRoomFailure(reason, mode))
+        .catch((error: RuntimeValue) => reportError('multiplayer v2 room', error));
+      return;
+    }
+    presentRoomFailure(reason, mode);
+  };
+
+  const leaveRoom = (reason = 'left_room'): void => {
+    forgetRound();
+    const active = round;
+    const loading = !!active && !active.revealed;
+    const inBattle = roomPorts.getPhase() === 'battle' && !!active && active.revealed;
+    if (loading || inBattle) roomPorts.clearInput();
+    closeRoom(reason, { settle: !loading });
+    if (loading) void restoreAfterLostRoom();
+    else if (inBattle) {
+      void Promise.resolve(roomPorts.returnToGarage()).catch((error: RuntimeValue) => reportError('multiplayer v2 leave', error));
+    }
+  };
+
+  const adoptRoom = (next: V2RoomSession): SessionOwner => {
+    roomGeneration++;
+    roomSession = next;
+    latestLobby = next.lobby;
+    latestRoom = next.client.room;
+    menuAttached = false;
+    status.attachRoom(next.client);
+    subscriptions.push(next.onLobby(handleLobby));
+    subscriptions.push(next.onClosed(handleRoomClosed));
+    const p2pPorts = ports.p2p;
+    const owner = createSession({
+      room: next.client,
+      createPresentation: createRoundPresentation,
+      clock,
+      clientBuild,
+      // 2026-10-15 (the MP stream): an ordinary task as the probe of this tab's own task queue: the match client's stall
+      // clock rests while it is starved (a long entry job), so a busy seat never mistakes its own stall for a dead host
+      matchClient: { taskProbe: (callback: () => void) => { setTimeout(callback, 0); } },
+      ...(p2pPorts ? {
+        p2p: {
+          ...p2pPorts,
+          ice: p2pPorts.createIceResolver ? p2pPorts.createIceResolver(roomMode(), next.client) : undefined,
+          onLog: (level, message, fields) => {
+            const detail = fields ? `${message} ${JSON.stringify(fields)}` : message;
+            if (level === 'error') reportError(`multiplayer v2 host ${level}`, detail);
+            else if (level === 'warn') reportWarning(`multiplayer v2 host ${level}`, detail);
+          },
+        },
+      } : {}),
+    });
+    session = owner;
+    subscriptions.push(owner.onPhase(handlePhase));
+    subscriptions.push(owner.onVerdict(handleVerdict));
+    subscriptions.push(owner.onFrame(handleFrame));
+    owner.start();
+    if (latestRoom) roomPorts.setGarageStatus(roomStatus(latestRoom));
+    return owner;
+  };
+
+  // ------------------------------------------------------------ entry
+
+  const showRoundLoad = (viewerId: string, players: BrowserRosterPlayer[], own: { team?: string } | null, mapId: string | null, mode: string, roundNumber: number, fallback: string, gameMode?: string): void => {
+    const map = mapId ? roster.getMap(mapId) : { name: fallback, thumb: '', biome: 'none' };
+    const displayTeam = own?.team === 'spectator' ? 'alpha' : String(own?.team || 'alpha');
+    const allies = roster.rows(players, displayTeam, viewerId, gameMode);
+    const enemies = roster.rows(players, displayTeam === 'alpha' ? 'bravo' : 'alpha', viewerId, gameMode);
+    // (a room that fills its sides with bots fields its team size a side, planRoomBots' symmetric seating: the sheets hold
+    // those seats from this frame, the seats its players have not named yet open, never a side of one stretched card or
+    // an empty bar, owner on live 255; the role and wave modes size their sides by their rules, their rows the whole side)
+    const settings = latestRoom?.settings;
+    const sized = !!settings?.botsFill && Number.isFinite(settings.teamSize) && settings.teamSize > 0
+      && seatsByTeamSize(gameMode ?? settings.gameMode, settings.arrangement ?? null);
+    const seats = sized && settings ? { allies: settings.teamSize, enemies: settings.teamSize } : null;
+    load.battleLoad.show({ mapName: map.name, thumb: map.thumb, biome: mapId ? map.biome : 'none', mode: modeLabelFor(mode, roundNumber),
+      ...(gameMode ? { modeId: gameMode } : {}), allies, enemies, ...(seats ? { seats } : {}) });
+    // TEAM NATIONS (round 2, E10): each side's flag and fills read off its seated vehicles under MONO-NATION (the host's
+    // plan record stays on the host); RANDOM shows none
+    if (latestRoom?.settings?.arrangement?.teamNations !== 'random') {
+      const flagsOf = (team: string) => sideFlags(players.filter((player) => String(player.team || 'alpha') === team)
+        .map((player) => ({ id: player.specId, nation: getSpec(player.specId)?.nation ?? null })));
+      const own = flagsOf(displayTeam), foe = flagsOf(displayTeam === 'alpha' ? 'bravo' : 'alpha');
+      load.battleLoad.rosters(allies, enemies, { allied: own.country, enemy: foe.country, alliedFills: own.fills, enemyFills: foe.fills }, seats);
+    }
+  };
+
+  const lobbyPlayers = (players: ReadonlyArray<{ id: string; specId?: string | null; team?: string; name?: string }> | undefined): BrowserRosterPlayer[] => (
+    (players ?? []).filter((player) => !!player.specId).map((player) => ({ id: player.id, specId: String(player.specId), team: player.team, name: player.name }))
+  );
+
+  /** v1's `stopLoading`: reacquire opaque coverage, restore the Garage under it, then fade the loader. */
+  const stopLoading = async (label = 'Restoring Garage'): Promise<void> => {
+    restoring += 1; // (round 2, app-flow) the round's screen until the loader is down
+    try {
+      if (!load.battleLoad.visible) {
+        load.battleLoad.show({ mapName: 'Returning to Garage', thumb: '', biome: 'none', mode: 'Deployment ended', allies: [], enemies: [] });
+      }
+      load.battleLoad.progress(1, label);
+      lifecycle.coverRendering();
+      load.audio.loadingOn(false);
+      try {
+        await roomPorts.enterGarage();
+      } finally {
+        // 2026-10-10 (prod 211: a refused rejoin left the loader on, label empty, and no Rejoin battle): a Garage restore
+        // that throws still releases the cover and the loader; the caller reports the error.
+        lifecycle.uncoverRendering();
+        try { await load.nextFrame(); } finally { await load.battleLoad.hide(); }
+      }
+    } finally {
+      restoring -= 1;
+    }
+  };
+
+  const finishTrace = (active: ActiveRound, status: 'complete' | 'failed'): void => {
+    const at = now();
+    active.trace.status = status;
+    active.trace.endedAt = at;
+    active.trace.totalMs = Math.round(at - active.trace.startedAt);
+  };
+
+  const noteRevealPrograms = (active: ActiveRound, baseline: ReadonlySet<ReceiptProgram>, frames: number,
+    watch: ProgramOriginWatch | null): void => {
+    const live = activation.programs?.();
+    if (live) active.trace.revealPrograms = programReceipt(live, baseline, frames, watch);
+  };
+
+  /** The revealPrograms receipt through the first frames after the fade, while this round is still the live one. */
+  const countRevealPrograms = async (active: ActiveRound, baseline: ReadonlySet<ReceiptProgram>,
+    watch: ProgramOriginWatch | null): Promise<void> => {
+    try {
+      if (!activation.programs) return;
+      for (let frames = 1; frames <= REVEAL_PROGRAM_FRAMES; frames++) {
+        try { await load.nextFrame(); } catch { return; }
+        if (round !== active || active.failed) return;
+        noteRevealPrograms(active, baseline, frames, watch);
+      }
+    } finally { watch?.stop(); }
+  };
+
+  const markStage = (active: ActiveRound, stage: string): void => {
+    const at = now();
+    active.trace.stages[stage] = Math.round(at - active.stageAt);
+    active.stageAt = at;
+    active.progressAt = at;
+  };
+
+  const noteProgress = (active: ActiveRound): void => { active.progressAt = now(); };
+
+  const failRound = async (active: ActiveRound, error: RuntimeValue, stage: string): Promise<void> => {
+    if (active.failed) return;
+    active.failed = true;
+    if (!active.abort.signal.aborted) active.abort.abort(error);
+    finishTrace(active, 'failed');
+    // (audit R1) released first (releaseRoom, disposePresentation, a newer round: round !== active), then superseded by
+    // the covered Garage restore: never a failed entry (no beacon, no report), as the release's own check('world') was
+    const superseded = isSuperseded(error) || (round !== active && marksSuperseded(error));
+    if (!superseded) {
+      lastFailure = { message: messageOf(error), matchId: active.matchId, stage, reason: reasonOf(error) };
+      load.recordEntryFailure?.(lastFailure);
+      if (error instanceof MatchEndedDuringEntryError) reportWarning('multiplayer v2 entry', messageOf(error));
+      else reportError('multiplayer v2 entry', error);
+    }
+    if (round !== active) { settleEntry(false); return; }
+    round = null;
+    // 2026-10-13 (MU.03; prod 219: shown 16 s late, prod 221: not shown within 20 s): the refusal reached the player only
+    // through the lobby, after the covered Garage restore — which under load is the slowest step of the teardown (a 72 s
+    // Garage task in 219). The loader still covering the entry now names it at once, before the seat leaves the match and
+    // before the restore; the lobby repeats it once the loader fades.
+    const notice = !superseded && error instanceof MatchEndedDuringEntryError ? messageOf(error) : null;
+    if (notice) {
+      load.battleLoad.show({ mapName: notice, thumb: '', biome: 'none', mode: 'Deployment ended', allies: [], enemies: [] });
+      load.battleLoad.progress(1, 'Returning to Garage');
+    }
+    // (round 2, app-flow) released above (nothing ran in between), and the round keeps the screen through the leave and
+    // the covered restore below
+    restoring += 1;
+    try {
+      if (session) await session.leaveMatch(superseded ? 'superseded' : 'entry_failed');
+      await stopLoading(notice ? 'Returning to Garage' : undefined);
+    } catch (restoreError) {
+      reportError('multiplayer v2 entry', restoreError);
+    } finally {
+      restoring -= 1;
+      settleEntry(false);
+      if (!superseded) {
+        syncMenu();
+        offerRoomAfterFailure(messageOf(error), reasonOf(error));
+      }
+    }
+  };
+
+  /**
+   * 2026-10-10 (prod 211: the returning seat's failed entry left it in the Garage with no way back but a hidden room
+   * reminder): after any refused entry the held room's lobby opens again, naming why, with Rejoin battle while its
+   * match still runs. Joins syncMenu's attach on the same menu promise, so the room is attached first.
+   */
+  const offerRoomAfterFailure = (message: string, code: string | null = null): void => {
+    const current = roomSession;
+    const menuPromise = current ? roomPorts.getMenu() : null;
+    if (!current || !menuPromise) return;
+    const generation = roomGeneration;
+    menuPromise.then((menu) => {
+      if (disposed || roomSession !== current || generation !== roomGeneration || !menuAttached || round) return;
+      menu.showActiveRoom?.(message, code);
+    }).catch((error: RuntimeValue) => reportError('multiplayer v2 lobby', error));
+  };
+
+  /** The MatchSession's `createPresentation`: the round's map, the battle presentation, the controls. */
+  async function createRoundPresentation(sessionRound: SessionRound): Promise<SessionPresentation> {
+    const current = roomSession;
+    if (!current || disposed) throw new Error('multiplayer v2 room is not held');
+    const { matchStart } = sessionRound;
+    const viewerId = sessionRound.playerId;
+    const ownPlayer = sessionRound.room.players.find((player) => player.id === viewerId) ?? null;
+    const startedAt = now();
+    const active: ActiveRound = {
+      matchId: matchStart.matchId, round: matchStart.round, mapId: matchStart.mapId, mode: matchStart.mode,
+      spectator: sessionRound.spectator, viewerId, ownSpecId: ownPlayer?.specId || (sessionRound.spectator ? 'spectator' : ''),
+      presentation: null, controls: createControlSampler(() => active.presentation?.ownActor ?? null),
+      welcome: null, welcomed: false, welcomes: 0, lit: false, activating: false, activated: false, revealed: false, failed: false, reported: false,
+      abort: new AbortController(), frames: 0, ownShots: 0, events: {}, shotsBy: {},
+      trace: { version: 2, mode: modeLabelFor(sessionRound.room.mode, matchStart.round), map: matchStart.mapId, round: matchStart.round, stages: {}, startedAt, status: 'pending' },
+      stageAt: startedAt,
+      progressAt: startedAt,
+    };
+    round = active;
+    roundsEntered++;
+    load.recordEntryFailure?.(null);
+    load.recordTrace?.(active.trace);
+    const check = (detail: string): void => {
+      if (active.abort.signal.aborted || round !== active || disposed) throw new RoundSupersededError(detail);
+    };
+    try {
+      if (!active.spectator && !active.ownSpecId) throw new Error('The lobby vehicle selection is unavailable.');
+      // (round 2, app-flow) the round takes the scene first, before its cover, its world or its announcement: a Studio
+      // open in this tab leaves (a later round while the room is kept), and a scene that still cannot hand over refuses
+      // the round here (the activation refused it only after the round had covered and loaded its world over the Studio)
+      const handOver = roomPorts.takeSceneForRound();
+      if (handOver) {
+        try { await handOver; } catch (error) { await failRound(active, error, 'scene'); throw error; }
+        check('scene');
+      }
+      const terrainVariant: TerrainVariant = terrainVariantFor(active.mode); // the mode's battlefield (sim/matchRuleset.ts)
+      try {
+        load.rememberRound?.({ roomCode: sessionRound.room.roomCode, matchId: active.matchId, mapId: active.mapId, terrainVariant });
+      } catch { /* a reload only loses the head start */ }
+      scene.resetRoundState();
+      roster.setCamoBiome(active.mapId);
+      roster.emitBattleStart({ playerId: viewerId, specId: active.ownSpecId, mapId: active.mapId });
+      showRoundLoad(viewerId, lobbyPlayers(sessionRound.room.players), ownPlayer, active.mapId, sessionRound.room.mode, active.round, 'Battle', sessionRound.room.settings.gameMode);
+      load.audio.resume();
+      // (round 8 Y1 s1-04) every round loads in silence, as every other entry does: a rematch from the result screen is
+      // still the battle phase, so the last battlefield's scene played under the loader until this round's activation
+      // edge, where the engine's battle edge ends the intent (audioEngine.ts modeEdge). The intent now ends with the
+      // loader's start: in a battle it stops the scene; ambientOn(true) at the reveal below brings the new map's scene.
+      // roundLoaderAmbience.selftest reads the audio calls from showRoundLoad to the first await and plays them on the
+      // real engine, so they stay in that span
+      load.audio.ambientOn(false);
+      load.audio.loadingOn(true);
+      // the lobby's vehicles (ours first): their engines, with the map's beds and the running gear, decode ahead of the
+      // combat banks while the round loads, so its countdown sounds (2026-10-14)
+      const rosterSpecs = [...new Set([active.spectator ? '' : active.ownSpecId,
+        ...lobbyPlayers(sessionRound.room.players).filter((player) => player.team !== 'spectator').map((player) => player.specId)])].filter(Boolean);
+      void Promise.resolve().then(() => load.audio.warmBattleEvents?.(rosterSpecs)).catch(() => {});
+      load.lighting.setFarCascadeDormant(false);
+      load.battleLoad.progress(0.02, 'Securing match channel');
+      await load.nextFrame();
+      check('cover');
+      load.battleLoad.progress(0.08, 'Loading battlefield');
+      // 2026-10-15 (the MP stream): the named seats' vehicles warm beside the world (prewarmRoster). Never awaited here: it
+      // must not lengthen the world's stage, and prepareRoster joins whatever is still in flight (the bakes coalesce).
+      // (2026-10-23, item/mp-rejoin-levers-242) an AC-130 room's alpha players fly the gunship: no tank to build for them
+      const gunshipSeat = (team: string): boolean => sessionRound.room.settings.gameMode === 'ac130' && team === 'alpha';
+      const seats = sessionRound.room.players.flatMap((player) => (player.team !== 'spectator' && player.specId && !gunshipSeat(player.team)
+        ? [{ playerId: player.id, specId: player.specId, camo: player.camo || 'factory', isViewer: !active.spectator && player.id === viewerId }] : []));
+      // 2026-10-21 (item/mp-rejoin-232, lever 7): the bots arrive only with the WELCOME, and their textures (baked in a worker
+      // after it) held the 231 rejoins' roster stage about 2 s. The host plans them from this room and seed (host/hostPlan.ts
+      // planFromRoom, the real room's match_start carries no plan), so the same plan names them here and their bakes join
+      // the world load; a wrong guess is a spare bake, never a different roster.
+      // (268, item 6) each with the paint the authority will roll at its roster index: the match actor's own rule
+      // (sim/camoPaint.ts planBotPaints, round 8 Y1 s4-06), so its bake is the one the WELCOME's roster names
+      try {
+        const plan = planFromRoom(sessionRound.room, { seed: matchStart.seed });
+        const paints = planBotPaints(plan.seats, plan.bots, matchStart.seed, matchStart.mapId);
+        plan.bots.forEach((bot, ordinal) => {
+          if (bot.specId) seats.push({ playerId: bot.playerId, specId: bot.specId, camo: paints[ordinal]!, isViewer: false });
+        });
+      } catch { /* no plan from this snapshot: the WELCOME paints them */ }
+      // 2026-10-23 (item/mp-rejoin-levers-242): where the app can, the seats' vehicles themselves are built beside the world
+      // (prebuildRoster; the roster takes them after the WELCOME), else their builders and textures are warmed
+      let prebuilt: RosterPrebuild | null = null;
+      if (load.prebuildRoster && seats.length) {
+        try { prebuilt = load.prebuildRoster(seats, active.abort.signal); } catch { prebuilt = null; }
+        if (prebuilt) void prebuilt.settled.then(() => { active.trace.rosterPrewarmed = seats.length; }, () => { /* the roster builds them */ });
+      } else if (load.prewarmRoster && seats.length) {
+        let warming: MaybePromise<RuntimeValue>;
+        try { warming = load.prewarmRoster(seats, active.abort.signal); } catch { warming = undefined; }
+        void Promise.resolve(warming).then(() => { active.trace.rosterPrewarmed = seats.length; }, () => { /* the roster paints them itself */ });
+      }
+      await Promise.all([
+        load.loadModules(),
+        load.ensureBattleVisuals(),
+        load.loadWorld(active.mapId, (fraction, label) => {
+          if (round !== active) return;
+          noteProgress(active);
+          load.battleLoad.progress(0.08 + fraction * 0.48, label);
+        }, terrainVariant),
+      ]);
+      check('world');
+      markStage(active, 'modulesAndWorld');
+      const camoOf = new Map(sessionRound.room.players.map((player) => [player.id, player.camo || 'factory']));
+      const battlePresentation = createPresentation({
+        engineCtx: scene.engineCtx,
+        game: scene.game,
+        bus: scene.bus,
+        spectator: active.spectator,
+        worldCollision: scene.getWorldCollision(),
+        clock,
+        ...(scene.clearVehicleDecals ? { clearVehicleDecals: scene.clearVehicleDecals } : {}),
+        ...(scene.onVisualReady ? { onVisualReady: scene.onVisualReady } : {}),
+        // (268, item 6) a bot wears the paint the authority rolled, as the roster carries it; a seat its room camo
+        camoFor: (entry) => (entry.bot ? entry.camo : camoOf.get(entry.playerId)) ?? 'factory',
+        prebuilt,
+        onRosterProgress: (fraction, specId) => {
+          if (round !== active) return;
+          noteProgress(active);
+          load.battleLoad.progress(0.56 + fraction * 0.27, `Painting ${roster.vehicleName(specId)}`);
+        },
+      });
+      active.presentation = battlePresentation;
+      // A world laid out otherwise than the authority's manifest (the mobile tier, Frontline Assault's trench works) finds
+      // every live fall by the event's own identity, and reads the persistent destroyed list through the manifest's
+      // (ghost-crunch lane, 2026-10-02). Loaded beside the roster and never awaited: until it lands the list waits.
+      if (!battlePresentation.sharesAuthorityIndices && load.loadAuthorityObstacles) {
+        void Promise.resolve().then(() => load.loadAuthorityObstacles!(active.mapId, active.abort.signal, terrainVariant)).then((identity) => {
+          if (round === active && !disposed) battlePresentation.setAuthorityObstacles(identity);
+        }).catch((error) => {
+          if (!active.abort.signal.aborted) reportWarning('multiplayer v2 authority obstacles', messageOf(error));
+        });
+      }
+      load.battleLoad.progress(0.56, 'Opening match channel');
+      const sessionPresentation: SessionPresentation = {
+        adapter: battlePresentation,
+        controls: active.spectator ? null : active.controls.sample,
+        prediction: null,
+        onWelcome: async (welcome) => {
+          // 2026-10-15 (the MP stream, the §7 side-by-side): a later WELCOME on this round (its link was replaced and the
+          // seat said hello again; every main rejoin opened a second link 7 s in) re-seats the presentation but never marks
+          // `roster` again. The second mark overwrote the first's value with the time since it, and 6.7-10 s of every
+          // rejoin's trace belonged to no stage. It is counted instead.
+          const first = active.welcomes === 0;
+          active.welcomes++;
+          if (!first) {
+            active.trace.rewelcomes = active.welcomes - 1;
+            (active.trace.rewelcomeAtMs ??= []).push(Math.round(now() - active.trace.startedAt));
+          }
+          try {
+            active.welcome = welcome;
+            // 2026-10-15 (the MP stream, after the perf lane's census: 187 programs on main against 149 on Sept 30, each
+            // reaching the driver in the strict compile after the roster, the first covered draw waiting in getUniforms for
+            // the whole queue): the light signature is final once the authority's weather and the night pool stand, so they
+            // are set up now and the scene's programs go to the driver while the roster is painted below.
+            if (!active.lit && warm.submitPrograms) {
+              active.lit = true;
+              activation.setGarageLighting(false);
+              await warm.atmosphere?.({ meta: { weatherSeed: welcome.seed } });
+              check('atmosphere');
+              await warm.nightLighting?.();
+              check('nightLighting');
+              const submitted = warm.submitPrograms(active.abort.signal);
+              void Promise.resolve(submitted).catch((error) => {
+                if (!active.abort.signal.aborted) reportWarning('multiplayer v2 entry', `early program submission: ${messageOf(error)}`);
+              });
+            }
+            await battlePresentation.rosterReady();
+            check('roster');
+            for (const actor of battlePresentation.actors.values()) actor.visual.setGroundSampler?.(scene.groundSampler);
+            if (!active.spectator) {
+              const own = battlePresentation.ownActor;
+              if (!own) throw new Error('The local network vehicle is unavailable.');
+              const world = battlePresentation.predictionWorld();
+              if (world) sessionPresentation.prediction = { world, specFor: (specId) => (specId === own.specId ? own.spec : getSpec(specId)) };
+            }
+            if (first) markStage(active, 'roster');
+            active.welcomed = true;
+            load.battleLoad.progress(0.84, 'Synchronizing authority');
+          } catch (error) {
+            await failRound(active, error, 'roster');
+            throw error;
+          }
+        },
+        onVerdict: (verdict, reason) => { if (verdict !== VERDICT.NONE) battlePresentation.settleVerdict(verdict, reason); },
+        dispose: () => {
+          reportLinkExit(active);
+          unmountStatus();
+          battlePresentation.dispose();
+          if (round === active) round = null;
+          if (!active.revealed) settleEntry(false);
+        },
+      };
+      return sessionPresentation;
+    } catch (error) {
+      await failRound(active, error, 'world');
+      throw error;
+    }
+  }
+
+  /**
+   * The strict shader preparation, window after window while programs keep linking (COMPILE_STALL_WINDOWS,
+   * COMPILE_CEILING_MS above). The trace keeps the first window as `compile` and every later one as `compileRetry`.
+   */
+  const prepareCombatShaders = async (active: ActiveRound, signal: AbortSignal, check: (detail: string) => void): Promise<void> => {
+    const startedAt = now();
+    let previous: BrowserWarmPreparation = undefined;
+    let attempts = 0;
+    let stalled = 0;
+    let retried = false;
+    let programs: readonly BrowserPendingProgram[] | undefined;
+    const finish = (outcome: 'complete' | 'deferred', pending: number | null): void => {
+      markStage(active, retried ? 'compileRetry' : 'compile');
+      active.trace.compile = { attempts, outcome, pending, ...(outcome === 'deferred' && programs?.length ? { programs } : {}) };
+    };
+    while (true) {
+      attempts++;
+      const compiled = await warm.compile?.(signal);
+      check(retried ? 'compileRetry' : 'compile');
+      programs = Array.isArray(compiled?.pendingPrograms) ? compiled.pendingPrograms : undefined;
+      const preparation = compiled?.preparation;
+      if (!preparationIncomplete(preparation)) { finish('complete', 0); return; }
+      if (!preparationOutOfBudget(preparation)) throw shaderPreparationFailure(preparation);
+      const pending = preparation?.pending ?? null;
+      const progressed = compileProgressed(previous, preparation);
+      previous = preparation;
+      stalled = progressed ? 0 : stalled + 1;
+      if (progressed) noteProgress(active);
+      if (!retried) {
+        // The first window's duration stays `compile`; the extension is a beacon, never a failed entry.
+        load.recordSlowEntry?.({ stage: 'compile', code: 'extended', ms: Math.round(now() - startedAt), pending });
+        markStage(active, 'compile');
+        retried = true;
+      }
+      if (stalled >= COMPILE_STALL_WINDOWS || now() - startedAt >= COMPILE_CEILING_MS) {
+        // The last resort reports and goes on: the covered reveal links the rest under the loader.
+        load.recordSlowEntry?.({ stage: 'compile', code: 'deferred', ms: Math.round(now() - startedAt), pending });
+        finish('deferred', pending);
+        // 2026-10-13 (MP stream, plan step 4): name the programs that never link — every traced production rejoin ended
+        // "deferred, pending 36" — by material and link state; the full cache keys stay in the trace (__NETWORK_LOAD)
+        if (programs?.length) reportWarning('multiplayer v2 entry', `shader preparation deferred with ${pending ?? programs.length} pending: ${pendingProgramSummary(programs)}`);
+        return;
+      }
+      load.battleLoad.progress(0.87, pending === null
+        ? 'Compiling combat shaders (still preparing)'
+        : `Compiling combat shaders (${pending} still linking)`);
+      await load.nextFrame();
+      check('compileRetry');
+    }
+  };
+
+  /** The first frame with the roster in place: warm under the cover, activate, prove the frame, reveal. */
+  const activateRound = async (active: ActiveRound): Promise<void> => {
+    const battlePresentation = active.presentation;
+    if (!battlePresentation) return;
+    const signal = active.abort.signal;
+    const view: BrowserWarmView = { entities: battlePresentation.actors };
+    const check = (detail: string): void => {
+      if (signal.aborted || round !== active || disposed) throw new RoundSupersededError(detail);
+    };
+    // (2026-10-19, black-screen-228) the black-world guard, armed under this cover (engine/blackWorldGuard.ts): fresh
+    // temporal histories before the reveal, the revealed state snapshotted on the first battle frame; optional
+    void import('../../engine/blackWorldGuardInstall.ts').then(({ armBlackWorldGuard }) => {
+      const engine = scene.engineCtx as EngineContext & { renderer?: unknown; camera?: unknown; post?: unknown };
+      if (round === active && engine.post) {
+        armBlackWorldGuard({ renderer: engine.renderer, scene: engine.scene as never, camera: engine.camera,
+          post: engine.post, game: scene.game, lifecycle: lifecycle as { pending?: boolean; renderingCovered?: boolean } });
+      }
+    }).catch(() => { /* the guard is optional */ });
+    try {
+      // (battle-spikes-253) the panel's mask programs link through the stages before it (a guest's link outlasted the
+      // mask wait when it began at the panel stage)
+      if (!active.spectator && battlePresentation.ownActor) {
+        try { warm.playerPanelPrograms?.(view, active.viewerId); } catch { /* the panel stage compiles them */ }
+      }
+      if (!active.lit) {
+        activation.setGarageLighting(false);
+        await warm.atmosphere?.({ meta: { weatherSeed: active.welcome?.seed } });
+        check('atmosphere');
+        await warm.nightLighting?.();
+        check('nightLighting');
+      }
+      markStage(active, 'atmosphere');
+      load.battleLoad.progress(0.845, 'Warming suspension terrain');
+      await warm.terrain?.(view);
+      check('terrain');
+      markStage(active, 'terrainGrid');
+      load.battleLoad.progress(0.85, 'Priming wreck variants');
+      await warm.wrecks?.(view, signal);
+      check('wrecks');
+      markStage(active, 'wreckWarm');
+      load.battleLoad.progress(0.86, 'Compiling combat shaders');
+      await load.nextFrame();
+      check('compile');
+      await prepareCombatShaders(active, signal, check);
+      // (battle-spikes-253) the player panel after the strict compile: its mask programs, started at the warm's start,
+      // link behind the scene's programs submitted at the WELCOME, and before the compile the panel waited for that whole
+      // queue on its own (nav-perf's root-r rooms: hullCompile 1.9 s of a 2.0-3.2 s panel stage). After it they are linked.
+      if (!active.spectator && battlePresentation.ownActor) {
+        load.battleLoad.progress(0.87, 'Preparing player panel');
+        await warm.playerPanel?.(view, active.viewerId);
+        check('panel');
+      }
+      markStage(active, 'panel');
+      load.battleLoad.progress(0.88, 'Priming combat effects');
+      const fx = scene.getFx();
+      await warm.openingEffects?.(fx, view, signal);
+      check('openingEffects');
+      warm.shotCards?.([...battlePresentation.actors.values()].map((actor) => actor.specId));
+      markStage(active, 'combatWarm');
+      activation.activate({
+        viewerId: active.viewerId,
+        own: { id: active.viewerId, specId: active.ownSpecId },
+        spectator: active.spectator,
+        mapId: active.mapId,
+        bridge: {
+          setPerspective: (entityId) => {
+            const actor = entityId ? battlePresentation.actors.get(String(entityId)) : null;
+            if (actor) battlePresentation.setPerspective(actor.entityId);
+          },
+        },
+        fx,
+      });
+      active.activated = true;
+      activation.setWaitingForPeers(false);
+      mountStatus(active);
+      markStage(active, 'activation');
+      await warm.presentation?.(signal);
+      check('openingGroundCover');
+      if (!active.spectator) {
+        await warm.finalShadows?.(signal);
+        check('finalShadows');
+      }
+      markStage(active, 'finalShadows');
+      if (activation.runBlackWatchdog) {
+        let blackCheck: RuntimeValue;
+        try {
+          blackCheck = await activation.runBlackWatchdog(signal);
+        } catch (error) {
+          blackCheck = { failed: true, error: messageOf(error) };
+        }
+        active.trace.blackCheck = blackCheck;
+        check('blackWatchdog');
+        if (blackCheck && typeof blackCheck === 'object' && 'failed' in blackCheck && (blackCheck as { failed: RuntimeValue }).failed === true) {
+          throw new Error('Battle graphics could not be verified. Please retry from the Garage.');
+        }
+      }
+      markStage(active, 'blackWatchdog');
+      const revealBaseline = new Set(activation.programs?.() ?? []);
+      const revealWatch = activation.programs ? activation.watchProgramOrigins?.() ?? null : null;
+      load.audio.loadingOn(false);
+      load.audio.ambientOn(true);
+      load.battleLoad.progress(1, 'Ready');
+      await lifecycle.primeReveal();
+      check('reveal');
+      markStage(active, 'primeReveal');
+      await load.battleLoad.hide();
+      check('loaderFade');
+      markStage(active, 'loaderFade');
+      load.setAdaptiveSuspended(false);
+      active.revealed = true;
+      finishTrace(active, 'complete');
+      noteRevealPrograms(active, revealBaseline, 0, revealWatch);
+      settleEntry(true);
+      void countRevealPrograms(active, revealBaseline, revealWatch);
+    } catch (error) {
+      await failRound(active, error, active.activated ? 'reveal' : 'warm');
+    }
+  };
+
+  const countEvent = (active: ActiveRound, event: WireEvent): void => {
+    active.events[event.kind] = (active.events[event.kind] ?? 0) + 1;
+    if (event.kind === 'shell_fired') {
+      const shooter = String(event.payload.shooterId ?? '');
+      active.shotsBy[shooter] = (active.shotsBy[shooter] ?? 0) + 1;
+    }
+  };
+
+  const countEvents = (active: ActiveRound, frame: MatchFrame): void => {
+    active.frames++;
+    for (const shot of frame.ownShots) {
+      active.ownShots++;
+      countEvent(active, shot.event);
+    }
+    for (const event of frame.events) countEvent(active, event);
+  };
+
+  const handleFrame = (frame: MatchFrame): void => {
+    const active = round;
+    if (!active || !active.presentation) return;
+    countEvents(active, frame);
+    if (active.activating || !active.welcomed || active.failed) return;
+    if (!active.spectator && !active.presentation.ownActor) return;
+    active.activating = true;
+    void activateRound(active);
+  };
+
+  const handlePhase = ({ phase, detail }: { phase: SessionPhase; detail: string }): void => {
+    if (phase === 'match') {
+      const client = session?.match;
+      if (client) status.attachMatch(client);
+      const owner = session;
+      if (owner && typeof owner.onP2p === 'function') status.attachP2p({ get p2p() { return owner.p2p ?? null; }, onP2p: (listener) => owner.onP2p!(listener) });
+    } else if (phase === 'lobby') {
+      status.detachMatch();
+      status.detachP2p();
+    }
+    if (phase !== 'lost') return;
+    const active = round;
+    if (!active) return;
+    const closeReason = session?.match?.lastCloseReason ?? null;
+    const dropped = closeReason !== null && SEAT_DROP_REASONS.has(closeReason);
+    if (active.revealed && dropped) {
+      // The server ended this seat (a kick, an idle timeout, a replacement): the strip's banner names the wire
+      // reason for `dropNoticeMs`, then the round takes the same clean return as Leave battle — the Garage, the
+      // room kept (the room decides the seat; a room-level kick reaches handleRoomClosed instead).
+      const reason = closeReasonName(closeReason) ?? 'dropped';
+      lastFailure = { message: detail || reason, matchId: active.matchId, stage: 'battle', reason: `seat_${reason}` };
+      roomPorts.clearInput();
+      const nowMs = clock();
+      status.update(nowMs);
+      statusSurface?.set(status.snapshot, status.banner(nowMs), nowMs);
+      cancelDropNotice();
+      const returnNow = (): void => {
+        dropTimer = null;
+        if (round !== active || disposed) return;
+        void Promise.resolve(roomPorts.returnToGarage()).catch((error: RuntimeValue) => reportError('multiplayer v2 drop', error));
+      };
+      if (dropNoticeMs > 0) dropTimer = setTimer(returnNow, dropNoticeMs);
+      else returnNow();
+      return;
+    }
+    if (active.revealed) {
+      // A live round whose match link is exhausted ends as a disconnect once (the end overlay offers the Garage; the room stays).
+      lastFailure = { message: detail || 'match_lost', matchId: active.matchId, stage: 'battle', reason: 'match_lost' };
+      active.presentation?.endDisconnected();
+      return;
+    }
+    const refusal = matchRefusalCodeOf(detail);
+    void failRound(active, refusal ? new MatchRefusedError(refusal) : new Error(detail || 'The match link was lost while loading.'), 'connect');
+  };
+
+  const handleVerdict = (): void => {
+    // A round still entering when its match ends is refused at once (MatchEndedDuringEntryError): no WELCOME can come.
+    const active = round;
+    if (active && !active.revealed && !active.failed) {
+      void failRound(active, new MatchEndedDuringEntryError(), 'ended');
+      return;
+    }
+    // The presentation already presented the verdict; the lobby follows on the room's next state.
+    schedule(syncMenu);
+  };
+
+  const beginRoom = (request: BrowserLaunchRequest): Promise<boolean> => {
+    if (disposed) return Promise.resolve(false);
+    const candidate = request?.session;
+    if (!isMultiplayerV2Session(candidate)) throw new TypeError('multiplayer v2 launch requires a v2 room session');
+    if (roomSession && roomSession !== candidate) closeRoom('room_connection_superseded');
+    return lifecycle.run(async () => {
+      // The synchronous prefix mounts the opaque cover before the first await, like v1's launcher.
+      lifecycle.coverRendering();
+      scene.resetRoundState();
+      const viewerId = candidate.roomInfo.peerId;
+      const lobby = request.lobbyState ?? null;
+      const players = lobbyPlayers(lobby?.players);
+      const own = lobby?.players?.find((player) => player.id === viewerId) ?? null;
+      const requestedMap = String(lobby?.mapId || candidate.lobby?.mapId || 'random');
+      showRoundLoad(viewerId, players, own, requestedMap === 'random' ? null : requestedMap, String(lobby?.mode || candidate.roomInfo.mode), Number(lobby?.round) || 0, 'Random battlefield', lobby?.gameMode);
+      load.battleLoad.progress(0.01, 'Opening battle channel');
+      if (!roomSession) adoptRoom(candidate);
+      else if (!round && session?.enterMatch) {
+        // A Garage return kept the room and the seat still holds a match_start for the match the room says is
+        // running (charter §5: players come and go freely): re-enter it instead of waiting for a start that will not come.
+        const pending = candidate.client.matchStart;
+        const current = latestRoom?.match ?? null;
+        if (pending && current && current.id === pending.matchId && (current.status === 'starting' || current.status === 'playing')) {
+          void session.enterMatch(pending).catch((error: RuntimeValue) => reportError('multiplayer v2 re-entry', error));
+        }
+      }
+      if (round?.revealed) return true;
+      const waiter = deferred<boolean>();
+      entryWaiters.push(waiter);
+      const waitStartedAt = now();
+      let windowMs = entryTimeoutMs;
+      let extended = false;
+      while (true) {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const timeout = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), windowMs); });
+        const outcome = await Promise.race([waiter.promise, timeout]);
+        if (timer) clearTimeout(timer);
+        if (outcome !== 'timeout') return outcome;
+        // 2026-10-10 (the MP shader-prep lane): a round still loading, warming or linking shaders is slow, not stuck.
+        const progressing = round && !round.failed && now() - round.progressAt < ENTRY_STALL_MS;
+        if (!progressing || now() - waitStartedAt >= ENTRY_CEILING_MS) break;
+        if (!extended) {
+          extended = true;
+          load.recordSlowEntry?.({ stage: 'entry', code: 'extended', ms: Math.round(now() - waitStartedAt), pending: null });
+        }
+        windowMs = ENTRY_EXTEND_MS;
+      }
+      const active = round;
+      if (active) {
+        await failRound(active, new Error('The match did not present in time. Please retry from the room.'), 'timeout');
+      } else {
+        lastFailure = { message: 'The room did not start a match in time.', matchId: null, stage: 'start', reason: 'match_start_timeout' };
+        load.recordEntryFailure?.(lastFailure);
+        try { await stopLoading(); } catch (error) { reportError('multiplayer v2 entry', error); }
+        settleEntry(false);
+        syncMenu();
+      }
+      return false;
+    }, false);
+  };
+
+  // ------------------------------------------------------------ frame hooks and garage return
+
+  const pump = (dtSeconds: number, nowMs: number): void => {
+    lastPumpMs = nowMs;
+    // plan step 10: the foreground frames say whether this tab can host well (pumpBackground's are not a measure)
+    session?.observeFrame?.(dtSeconds * 1000);
+    session?.update(nowMs, Math.max(0, Math.min(0.25, dtSeconds)));
+    paintStatus(nowMs);
+  };
+
+  const handOffHosting = (reason: string): boolean => session?.handOffHosting?.(reason) ?? false;
+
+  const pumpBackground = (nowMs: number): void => {
+    const elapsedS = lastPumpMs === null ? 0 : Math.max(0, Math.min(0.25, (nowMs - lastPumpMs) / 1000));
+    lastPumpMs = nowMs;
+    session?.update(nowMs, elapsedS);
+    paintStatus(nowMs);
+  };
+
+  const disposePresentation = (): void => {
+    const active = round;
+    round = null;
+    cancelDropNotice();
+    if (active) {
+      active.abort.abort('returned_to_garage');
+      if (!active.revealed) settleEntry(false);
+    }
+    if (session) void session.leaveMatch('returned_to_garage');
+    // The Garage return sets the phase after this port; the lobby attaches once it has.
+    schedule(syncMenu);
+  };
+
+  return {
+    beginRoom,
+    get active() { return round !== null; },
+    get inMatch() { return !!round && round.activated; },
+    get entering() { return (round !== null && !round.revealed) || restoring > 0; },
+    get room() { return roomSession; },
+    get session() { return session; },
+    pump,
+    pumpBackground,
+    handOffHosting,
+    queueConsumable: (slot) => { round?.controls.queueConsumable(slot); },
+    queueAction: (action) => { round?.controls.queueAction(action); },
+    shouldPreserveRoom: () => !!roomSession && roomSession.client.phase !== 'closed',
+    disposePresentation,
+    closeMatch: (reason = 'network_match_closed') => { closeRoom(reason); },
+    leaveRoom,
+    get networkStatus() { return status.snapshot; },
+    toggleStatusPanel: (open) => { statusSurface?.togglePanel(open); },
+    pressLeave: () => statusSurface?.pressLeave() ?? 'ignored',
+    stats: () => ({
+      version: 2,
+      active: round !== null,
+      inMatch: !!round && round.activated,
+      room: roomSession ? {
+        roomCode: roomSession.roomInfo.roomCode,
+        mode: roomMode(),
+        adminId: latestRoom?.adminId ?? roomSession.roomInfo.hostId,
+        phase: latestRoom?.phase ?? 'waiting',
+        players: latestRoom?.players.length ?? 0,
+        playerId: playerId(),
+      } : null,
+      session: session?.stats() ?? null,
+      round: round ? {
+        matchId: round.matchId, round: round.round, mapId: round.mapId, mode: round.mode, spectator: round.spectator,
+        welcomed: round.welcomed, activated: round.activated, revealed: round.revealed, frames: round.frames,
+        actors: round.presentation?.actors.size ?? 0, events: { ...round.events }, ownShots: round.ownShots, shotsBy: { ...round.shotsBy },
+      } : null,
+      rounds: roundsEntered,
+      lastFailure,
+      network: {
+        health: status.snapshot.health, reason: status.snapshot.healthReason, rttMs: status.snapshot.rttMs,
+        reconnects: status.snapshot.reconnects, roomReconnects: status.snapshot.roomReconnects, surface: statusSurface !== null,
+      },
+    }),
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      closeRoom('dispose');
+      status.dispose();
+    },
+  };
+}

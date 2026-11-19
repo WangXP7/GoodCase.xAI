@@ -1,0 +1,378 @@
+/**
+ * The Play menu's room connection (Multiplayer v2, the only multiplayer since the
+ * cutover of 2026-09-29 — docs/MULTIPLAYER-V2.md §13.10). `src/ui/playMenu.ts`
+ * stays the entry boundary and drives this contract — connect, observe, close,
+ * forget, current, connecting — over a `RoomClient`: the menu renders the
+ * lobby shape `roomToLobby` produces, sends the room's commands (`set_ready`,
+ * `set_team`, `select_vehicle`, `set_map`, `start`, …), and hands the match off
+ * through `onHostStart` for every seat once the room's `match_start` arrives.
+ * Node-runnable: no DOM.
+ */
+import { RoomClient } from '../room/roomClient.ts';
+import type { TeamArrangement } from '../../sim/matchRuleset.ts';
+import type { RoomClientOptions, StorageLike } from '../room/roomClient.ts';
+import { ROOM_MAX_TEAM_SIZE, normalizeRoomCode } from '../room/protocol.ts';
+import type { RoomChatEntry, RoomMatchStartPayload, RoomMode, RoomSnapshot } from '../room/protocol.ts';
+import { roomToLobby } from '../room/roomPolicy.ts';
+import { RoomServiceLimitError, type RoomServiceLimit } from './roomServiceLimit.ts';
+import type { SerializedLobby } from '../room/lobbyShape.ts';
+
+type Unsubscribe = () => void;
+type RoomCommand = Record<string, unknown>;
+
+/** Marks a menu session object as a room session (main.ts routes the start on it). */
+export const MULTIPLAYER_V2_SESSION: unique symbol = Symbol.for('cot.mp.v2.session');
+
+/** What the menu (and the browser session owner) receives as `connection.session`. */
+export interface V2RoomSession {
+  readonly [MULTIPLAYER_V2_SESSION]: true;
+  readonly roomInfo: { roomCode: string; peerId: string; hostId: string; hostName: string; mode: RoomMode };
+  readonly client: RoomClient;
+  /** The newest lobby the room published, in the shape the menu renders. */
+  readonly lobby: SerializedLobby;
+  readonly lastMatchStart: RoomMatchStartPayload | null;
+  /** A policy command; rejections carry the room's code (`RoomError`). */
+  command(command: RoomCommand): Promise<Record<string, unknown>>;
+  /** The same as `command` (kept for callers that distinguish a host's command from a seat's submission). */
+  submit(command: RoomCommand): Promise<Record<string, unknown>>;
+  chat(text: string): Promise<void>;
+  onLobby(listener: (lobby: SerializedLobby, room: RoomSnapshot) => void): Unsubscribe;
+  onChat(listener: (entry: RoomChatEntry) => void): Unsubscribe;
+  /** The room is gone for this seat (kicked, expired, resume denied, left, transport exhausted). */
+  onClosed(listener: (reason: string) => void): Unsubscribe;
+  /** Explicit leave (the seat goes, an admin migrates at once) and release. */
+  close(reason?: string): void;
+}
+
+export interface RoomConnection {
+  readonly generation: number;
+  /** The admin seat is the room's host for the menu's controls; it follows the room's `adminId` (a migration moves it). */
+  readonly role: 'host' | 'client';
+  readonly mode: RoomMode;
+  readonly roomInfo: V2RoomSession['roomInfo'];
+  readonly session: V2RoomSession;
+  readonly runtime: { onState(listener: (state: SerializedLobby) => void): Unsubscribe };
+}
+
+interface RoomConnectRequest {
+  kind: 'create' | 'join';
+  mode: 'private' | 'lan';
+  /** The room host's ws:// or wss:// origin (src/mp/session/endpoint.ts). */
+  roomsUrl: string;
+  roomCode?: string;
+  player: { id: string; name: string };
+  selection: {
+    specId: string; mapId: string; gameMode?: string; equipment: string[]; consumables?: string[]; camo: string;
+    arrangement?: TeamArrangement | null;
+  };
+  teamSize: number;
+}
+
+export interface RoomConnectionOptions {
+  /** Private capabilities (localStorage in the browser, a memory map headless). */
+  storage?: StorageLike | null;
+  clientBuild?: string;
+  /** Receipts inject a client bound to an in-process host or a scripted transport. */
+  createRoomClient?: (options: RoomClientOptions) => RoomClient;
+  /**
+   * The rooms Worker's daily limit (roomServiceLimit.ts): asked after a failed admission or an interrupted room, and
+   * before an admission while a remembered limit lasts, so no socket is opened into the limit. Null: never asked.
+   */
+  serviceLimit?: RoomServiceLimit | null;
+  /**
+   * The room's `match_start` reached this seat: enter the match (every seat, the host included). `owner` names whose seat
+   * it is (audit F6, 2026-11-02): the menu's own, or one it released to the session owner with `forget()` — a later
+   * round of the battle owner's room, which the menu must not take back as its own.
+   */
+  onHostStart?(state: SerializedLobby, connection: RoomConnection, owner: 'menu' | 'released'): void;
+  /** The room is gone for the menu-owned seat (never after `forget()`: the session owner holds it then). */
+  onClose?(reason: string): void;
+  onStatus?(status: { state: 'connecting' | 'reconnecting' | 'connected' }): void;
+  onError?(error: unknown): void;
+}
+
+export interface RoomConnectionRuntime {
+  connect(request: RoomConnectRequest): Promise<RoomConnection | null>;
+  observe(listener: (state: SerializedLobby) => void): Unsubscribe;
+  close(reason?: string, options?: { transportAlreadyClosed?: boolean }): void;
+  forget(): void;
+  readonly current: RoomConnection | null;
+  readonly connecting: boolean;
+}
+
+export function isMultiplayerV2Session(value: unknown): value is V2RoomSession {
+  return !!value && typeof value === 'object' && (value as Record<PropertyKey, unknown>)[MULTIPLAYER_V2_SESSION] === true;
+}
+
+/** `roomToLobby` produces the lobby shape; the menu renders it without a second validation. */
+function lobbyOf(room: RoomSnapshot): SerializedLobby {
+  return roomToLobby(room);
+}
+
+/** One create or join of the menu's; its client is null while the daily-limit check runs (no socket yet). */
+interface RoomAttempt { generation: number; client: RoomClient | null }
+
+/**
+ * What the adapter holds for the menu (audit F6 round 2, U8): one declared state, written only by `moveHold`
+ * (HOLD_MOVES). It used to be three nullable variables (`pending`, `current`, `released`) beside the menu's seat.
+ * - idle: no room of the menu's own.
+ * - connecting: the menu's create or join is in flight.
+ * - held: the menu's own room; its match_start reaches onHostStart as 'menu'.
+ * The seat the menu released to the session owner (`forget()`) is not part of the hold: it outlives it, the battle
+ * owner playing rounds on it while the menu holds nothing or a new room of its own, so it stays one separate slot
+ * (`released`) that only forget() fills.
+ */
+type AdapterHold =
+  | { state: 'idle' }
+  | { state: 'connecting'; attempt: RoomAttempt }
+  | { state: 'held'; connection: RoomConnection };
+
+const HOLD_MOVES: Readonly<Record<AdapterHold['state'], readonly AdapterHold['state'][]>> = {
+  idle: ['connecting'],
+  connecting: ['held', 'idle'],
+  held: ['idle'],
+};
+
+function connectFailure(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
+function validateConnectRequest(request: RoomConnectRequest): void {
+  const validKind = request?.kind === 'create' || request?.kind === 'join';
+  const validTeamSize = Number.isSafeInteger(request?.teamSize) && request.teamSize >= 1
+    && request.teamSize <= ROOM_MAX_TEAM_SIZE;
+  const complete = validKind && Boolean(request.mode) && Boolean(request.player?.id) && Boolean(request.player?.name)
+    && Boolean(request.selection?.specId) && Boolean(request.selection?.mapId) && validTeamSize;
+  if (!complete) throw new TypeError('room connect request is incomplete');
+  if (!String(request.roomsUrl ?? '').trim()) throw connectFailure('room_unconfigured', 'no room host is configured for this deployment');
+  if (request.kind === 'join' && normalizeRoomCode(request.roomCode).length !== 6) throw connectFailure('invalid_room_code', 'Enter a six-character room code');
+}
+
+/**
+ * Own one room acquisition for the Play menu. A superseded attempt (the menu
+ * closed or switched modes while connecting) disposes its client instead of
+ * publishing a stale lobby; a connected room keeps one state observation,
+ * hands the match off, and survives `forget()` unchanged so the session owner
+ * that took the connection keeps the seat, the capability and the socket.
+ */
+export function createRoomConnectionAdapter({
+  storage = null,
+  clientBuild = 'dev',
+  createRoomClient = (options) => new RoomClient(options),
+  serviceLimit = null,
+  onHostStart = () => {},
+  onClose = () => {},
+  onStatus = () => {},
+  onError = () => {},
+}: RoomConnectionOptions = {}): RoomConnectionRuntime {
+  const required = [onHostStart, onClose, onStatus, onError, createRoomClient];
+  if (required.some((entry) => typeof entry !== 'function')) throw new TypeError('room connection adapter requires every lifecycle port');
+
+  let generation = 0;
+  let hold: AdapterHold = { state: 'idle' };
+  /** The hold's one writer; a move HOLD_MOVES does not list is refused (a same-state move stands). */
+  const moveHold = (next: AdapterHold): boolean => {
+    if (next.state !== hold.state && !HOLD_MOVES[hold.state].includes(next.state)) return false;
+    hold = next;
+    return true;
+  };
+  const pendingAttempt = (): RoomAttempt | null => (hold.state === 'connecting' ? hold.attempt : null);
+  const currentConnection = (): RoomConnection | null => (hold.state === 'held' ? hold.connection : null);
+  /** After `forget()` the session owner holds the room; the menu's onClose stays silent. */
+  let released: RoomConnection | null = null;
+  let unsubscribeObservation: Unsubscribe | null = null;
+
+  const clearObservation = () => { unsubscribeObservation?.(); unsubscribeObservation = null; };
+
+  const buildConnection = (client: RoomClient, room: RoomSnapshot, mode: RoomMode, attemptGeneration: number): RoomConnection => {
+    let lobby = lobbyOf(room);
+    let lastMatchStart: RoomMatchStartPayload | null = client.matchStart;
+    const lobbyListeners = new Set<(lobby: SerializedLobby, room: RoomSnapshot) => void>();
+    const closedListeners = new Set<(reason: string) => void>();
+    const subscriptions: Unsubscribe[] = [];
+    const hostName = () => room.players.find((player) => player.id === room.adminId)?.name ?? '';
+    const roomInfo = {
+      get roomCode() { return room.roomCode; },
+      peerId: client.playerId,
+      get hostId() { return room.adminId; },
+      get hostName() { return hostName(); },
+      mode,
+    };
+    const session: V2RoomSession = {
+      [MULTIPLAYER_V2_SESSION]: true,
+      roomInfo,
+      client,
+      get lobby() { return lobby; },
+      get lastMatchStart() { return lastMatchStart; },
+      command: (command) => client.command(command),
+      submit: (command) => client.command(command),
+      chat: (text) => client.chat(text),
+      onLobby: (listener) => { lobbyListeners.add(listener); return () => { lobbyListeners.delete(listener); }; },
+      onChat: (listener) => client.onChat(listener),
+      onClosed: (listener) => { closedListeners.add(listener); return () => { closedListeners.delete(listener); }; },
+      close: (reason = 'room_connection_closed') => {
+        void reason;
+        // The menu's own seat closes through the menu; a released seat (the session owner's) leaves on its own.
+        if (currentConnection() === connection) { close(); return; }
+        if (released === connection) released = null;
+        leave(connection, false);
+      },
+    };
+    const connection: RoomConnection = {
+      generation: attemptGeneration,
+      get role() { return room.adminId === client.playerId ? 'host' : 'client'; },
+      mode,
+      roomInfo,
+      session,
+      runtime: { onState: (listener) => session.onLobby((next) => listener(next)) },
+    };
+    subscriptions.push(client.onState((next) => {
+      room = next;
+      lobby = lobbyOf(next);
+      for (const listener of lobbyListeners) listener(lobby, next);
+    }));
+    subscriptions.push(client.onMatchStart((payload) => {
+      lastMatchStart = payload;
+      if (currentConnection() === connection) onHostStart(lobby, connection, 'menu');
+      else if (released === connection) onHostStart(lobby, connection, 'released');
+    }));
+    let limitAsked = false;
+    subscriptions.push(client.onPhase(({ phase }) => {
+      if (phase === 'reconnecting') {
+        onStatus({ state: 'reconnecting' });
+        // once per interruption: a room at its daily limit ends here instead of reconnecting into the refusal
+        if (!limitAsked && serviceLimit?.appliesTo(client.endpoint)) {
+          limitAsked = true;
+          void serviceLimit.check().then((state) => {
+            if (state === 'limited' && currentConnection() === connection && client.phase === 'reconnecting') client.stop('room_service_limited');
+          });
+        }
+      } else if (phase === 'joined') {
+        limitAsked = false;
+        onStatus({ state: 'connected' });
+      }
+    }));
+    subscriptions.push(client.onClosed(({ reason }) => {
+      for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
+      for (const listener of closedListeners) listener(reason);
+      if (released === connection) { released = null; return; }
+      if (currentConnection() !== connection) return;
+      generation++;
+      clearObservation();
+      moveHold({ state: 'idle' });
+      onClose(reason);
+    }));
+    return connection;
+  };
+
+  /** Leave the room on this connection's socket and release the client (or only release it when the socket is gone). */
+  const leave = (connection: RoomConnection, transportAlreadyClosed: boolean) => {
+    const client = connection.session.client;
+    if (transportAlreadyClosed) { client.dispose(); return; }
+    void client.leave().finally(() => client.dispose());
+  };
+
+  const close = (reason = 'room_connection_closed', { transportAlreadyClosed = false }: { transportAlreadyClosed?: boolean } = {}) => {
+    void reason; // the menu names a reason for its presentation; a leave is the seat's explicit departure
+    generation++;
+    clearObservation();
+    const before = hold;
+    moveHold({ state: 'idle' });
+    released = null;
+    if (before.state === 'connecting') before.attempt.client?.dispose();
+    if (before.state === 'held') leave(before.connection, transportAlreadyClosed);
+  };
+
+  const connect = async (request: RoomConnectRequest): Promise<RoomConnection | null> => {
+    validateConnectRequest(request);
+    if (hold.state !== 'idle') throw new Error('a room connection already owns this menu');
+    const roomsUrl = String(request.roomsUrl).trim();
+    const limited = serviceLimit?.appliesTo(roomsUrl) ? serviceLimit : null;
+    // The attempt is this menu's before anything is awaited (audit F6, 2026-11-02): the daily-limit check used to run
+    // first, so a close during it found nothing to cancel and the connect went on to seat the player in a room the menu
+    // had left (and two connects inside it both passed the one-owner guard above).
+    const attemptGeneration = ++generation;
+    const attempt: RoomAttempt = { generation: attemptGeneration, client: null };
+    moveHold({ state: 'connecting', attempt });
+    const superseded = (): boolean => pendingAttempt() !== attempt || generation !== attemptGeneration;
+    if (limited?.until() != null) {
+      let state: Awaited<ReturnType<RoomServiceLimit['check']>> | null = null;
+      try { state = await limited.check(); } catch { state = null; }
+      if (superseded()) return null;
+      if (state === 'limited') {
+        // a remembered limit that still holds: no socket into the refusal
+        moveHold({ state: 'idle' });
+        const refusal = new RoomServiceLimitError(limited.until() ?? 0);
+        onError(refusal);
+        throw refusal;
+      }
+    }
+    const client = createRoomClient({
+      endpoint: roomsUrl,
+      player: { id: request.player.id, name: request.player.name },
+      storage,
+      clientBuild,
+    });
+    attempt.client = client;
+    onStatus({ state: 'connecting' });
+    const mode: RoomMode = request.mode === 'lan' ? 'lan' : 'private';
+    const selection = {
+      specId: request.selection.specId, equipment: [...(request.selection.equipment || [])],
+      consumables: [...(request.selection.consumables || [])], camo: request.selection.camo || 'factory',
+    };
+    try {
+      const room = request.kind === 'create'
+        ? await client.create({
+          mode, selection,
+          settings: { teamSize: request.teamSize, mapId: request.selection.mapId, gameMode: request.selection.gameMode || 'standard', arrangement: request.selection.arrangement },
+        })
+        : await client.join({ roomCode: normalizeRoomCode(request.roomCode), selection });
+      if (superseded()) { client.dispose(); return null; }
+      const connection = buildConnection(client, room, room.mode, attemptGeneration);
+      moveHold({ state: 'held', connection });
+      onStatus({ state: 'connected' });
+      return connection;
+    } catch (error) {
+      const canceled = superseded();
+      if (pendingAttempt() === attempt) moveHold({ state: 'idle' });
+      client.dispose();
+      if (canceled) return null;
+      // an unreachable room host on the daily-capped Worker: one status ask says whether it is the limit
+      if (limited && (error as { code?: unknown })?.code === 'room_unreachable' && await limited.check() === 'limited') {
+        const refusal = new RoomServiceLimitError(limited.until() ?? 0);
+        onError(refusal);
+        throw refusal;
+      }
+      onError(error);
+      // The room's own refusal carries the room's code (RoomError); an unreachable host carries `room_unreachable`
+      // (RoomConnectError): both reach the menu's classifier as `error.code`.
+      throw error;
+    }
+  };
+
+  return {
+    connect,
+    observe(listener) {
+      if (typeof listener !== 'function') throw new TypeError('room state listener is required');
+      clearObservation();
+      const observed = currentConnection();
+      if (!observed) return () => {};
+      const guarded = (state: SerializedLobby) => { if (currentConnection() === observed) listener(state); };
+      unsubscribeObservation = observed.runtime.onState(guarded);
+      guarded(observed.session.lobby);
+      return () => { if (currentConnection() === observed) clearObservation(); };
+    },
+    close,
+    forget() {
+      // The session owner took the connection: keep the seat, the capability and the socket alive.
+      const before = hold;
+      if (before.state === 'held') released = before.connection;
+      generation++;
+      clearObservation();
+      moveHold({ state: 'idle' });
+      if (before.state === 'connecting') before.attempt.client?.dispose();
+    },
+    get current() { return currentConnection(); },
+    get connecting() { return hold.state === 'connecting'; },
+  };
+}

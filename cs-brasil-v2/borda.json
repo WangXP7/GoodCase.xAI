@@ -1,0 +1,519 @@
+{
+  "redirects": [
+    {
+      "source": "/discord",
+      "destination": "https://discord.gg/XQHAFBcrhv",
+      "permanent": false
+    },
+    {
+      "source": "/telegram",
+      "destination": "https://t.me/corosolto",
+      "permanent": false
+    },
+    {
+      "source": "/docs/en/status{/}?",
+      "destination": "/docs/en/estado",
+      "permanent": true
+    },
+    {
+      "source": "/docs/en/architecture{/}?",
+      "destination": "/docs/en/arquitetura",
+      "permanent": true
+    },
+    {
+      "source": "/docs/en/contributing{/}?",
+      "destination": "/docs/en/colaborar",
+      "permanent": true
+    },
+    {
+      "source": "/docs/en/ai-instrumentation{/}?",
+      "destination": "/docs/en/instrumentacao-ai",
+      "permanent": true
+    },
+    {
+      "source": "/jogar{/}?",
+      "destination": "/",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "janela",
+          "value": "configuracoes"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/configuracoes",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "partida",
+          "value": "multiplayer"
+        },
+        {
+          "type": "query",
+          "key": "servidor",
+          "value": "privado"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/jogar/multiplayer/privado",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "partida",
+          "value": "multiplayer"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/jogar/multiplayer",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "janela",
+          "value": "(?<janela>perfil|mapas|personagens|confirmar)"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/jogar/:janela",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "loja"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/loja",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        },
+        {
+          "type": "query",
+          "key": "social",
+          "value": "friends"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade/amigos",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        },
+        {
+          "type": "query",
+          "key": "social",
+          "value": "ranking"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade/ranking",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        },
+        {
+          "type": "query",
+          "key": "social",
+          "value": "notifications"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade/notificacoes",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        },
+        {
+          "type": "query",
+          "key": "social",
+          "value": "feed"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade/feed",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        },
+        {
+          "type": "query",
+          "key": "social",
+          "value": "settings"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade/configuracoes",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "comunidade"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/comunidade",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "sobre"
+        },
+        {
+          "type": "query",
+          "key": "guia",
+          "value": "(?<guia>sobre|como-jogar|personagens|armas|mapas|mapa|changelog|apoie|privacidade|termos|excluir-dados|regras-de-uso|clans)"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/guia/:guia",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "sobre"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/guia",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "feedback"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/feedback",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "apoie"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/apoiar",
+      "statusCode": 301
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "secao",
+          "value": "ranking"
+        }
+      ],
+      "missing": [
+        {
+          "type": "query",
+          "key": "perfil"
+        }
+      ],
+      "destination": "/ranking",
+      "statusCode": 301
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), camera=(), microphone=(), payment=(), usb=(), midi=(), serial=(), browsing-topics=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains"
+        },
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "off"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: https://assets.corosolto.com.br wss://*.corosolto.com.br blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://*.crazygames.com https://*.itch.io https://*.itch.zone https://*.gamedistribution.com; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
+      "source": "/vendor/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/models/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/audio/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/audio/a/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/audio/manifest.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/private-assets/viewmodels/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    },
+    {
+      "source": "/private-assets/viewmodels/(.*)\\.glb",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "model/gltf-binary"
+        }
+      ]
+    },
+    {
+      "source": "/private-assets/viewmodels/((?!shared/)[^/]+/[^/]+-runtime\\.glb)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/private-assets/viewmodels/shared/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/private-assets/viewmodels/recoil.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/og-image.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800"
+        }
+      ]
+    },
+    {
+      "source": "/img/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/posters/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/logo.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ]
+}

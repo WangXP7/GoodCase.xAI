@@ -1,0 +1,130 @@
+---
+name: src-engine-skill
+description: Work on renderer, lighting, camera, postprocessing, device quality, and frame diagnostics.
+---
+
+# claude-of-tanks / src/engine
+
+## Purpose
+<!-- agent-docs:fill:purpose -->
+Own the Three.js rendering platform and adaptive quality without changing game
+simulation.
+
+## Mental model & key files
+<!-- agent-docs:fill:model -->
+`renderer.ts` creates WebGL; `viewportRuntime.ts` owns atomic resize and 0x0
+first-layout recovery; `frameLoopScheduler.ts` owns rAF delivery, bounded
+hidden-pane recovery, and visible Garage clock sleep; `garageFramePacer.ts`
+suppresses redundant settled Garage frames while keeping interaction at display
+cadence; `lighting.ts` reuses proven static Garage depth maps until explicit
+presentation invalidation, then forces a complete refresh before motion;
+`shadowStability.ts` owns texel snapping and cascade-scaled receiver bias;
+`simplexFast.ts` owns allocation-free, reference-identical terrain noise;
+`post.ts` and `sky.ts` build the frame; `lightModel.ts` (2026-10-01) turns a
+map's sky preset and the atmosphere's summary into the light — the sun through
+the atmosphere, the sky's own image-based light (the environment baked without
+the sun disc, the shaded ground below the horizon), the overcast deck, the
+exposure law and the per-map grade — and `lighting.ts` applies it (the Garage,
+an enclosed presentation, a galaxy sky and the Preetham tier keep the authored
+rig). The physical sun is derived on every preset from its elevation,
+atmosphere and cloudscape (a map's authored `sunIntensity`/`sunColorHex` light
+only the legacy rig and the night's moon); a sky block's `lighting` block holds
+the map levers (ground albedo, exposure EV, grade); the output pass tone-maps
+with AgX. `cinemaPost.ts` is the Studio-only picture stack (depth of field, HDR
+highlights/exposure/white balance, display grade, per-output-frame finish)
+inserted into post.ts' composer at runtime only while a stage is non-neutral and
+removed on Studio exit; `filmAccumulation.ts` is the Studio-only float
+accumulation pass the film renderer inserts after late FX for the length of a
+film (never constructed in battle or Garage), and `LensFlarePass.fixedDt` lets it
+ease the flare on the film clock. `temporalAoPolicy.ts` owns the
+asymmetric stale-dark release used by temporal GTAO; `renderLayers.ts` owns
+presentation/shadow-only routing for authored proxy casters;
+`phaseSceneResidency.ts` detaches mutually exclusive Garage and battlefield
+roots while retaining their exact reusable objects;
+`phaseGpuResidency.ts` owns renewable WebGL suspension and covered restoration;
+`resourceLifetime.ts` owns phase/cache disposal. `blackWorldGuard.ts` (lazy; armed
+under the covered solo and network entries by `blackWorldGuardInstall.ts`) wraps
+`post.render` and `sceneAA.render` on their instances, probes the resolved scene
+every 12 frames and heals a black world (receipts in `window.__GL_DIAG.blackWorld`,
+telemetry `render-black-world:<class>:<step>`, at most two records a page). Its NaN test
+reads the bits: the sun disc saturates the half-float scene target (65504, or +Inf), and
+saturated HDR is light, never a fault; `guard.timing` measures its own cost; `postLazyPasses.ts` is the post
+chain's demand-loaded half (SMAA and the first-frame warm). Inactive retained phases may
+release geometry buffers and textures, but preserve compiled materials and
+restore through a covered real render rather than isolated `compileAsync`;
+`cameraRig.ts` owns player/cinematic poses; `chaseFraming.ts` (battle-camera-264) solves the
+chase's framing from the HUD's bands (`ui/battleSight.ts`): the pivot over the roof, the default
+step's distance and a lens shift that raises the picture and the sight together, so the hull and
+tracks clear the bottom band at every layout, with the player's camera settings (height, distance,
+shoulder, framing, field of view) over it; the rig writes the shift into `camera.view` (never
+`setViewOffset`, which also resets the aspect) and takes it off in sniper, isometric, aerial,
+death, spectate, external poses and whenever another owner drives the camera (`suspendFraming`); its field of view and lens shift are compared against the live camera, never a cache, since the flight, Watch, the Studio and couch panes write them too (drone-aim-camera-274, `cameraViewRoundTrip.selftest.mjs`); `watchCamera.ts` owns Watch mode's two cameras (the spectator drone, eased and terrain-following, with its orbit lock, and the ride-along on the player's chase and sight poses); settled showroom framing is pumped
+only by the Garage watchdog or visible motion; `quality.ts` and `deviceDiag.ts`
+own tiering and rescue behavior. `adaptiveQualityPolicy.ts` owns the typed,
+side-effect-free decision ladder for measured shading trim, resolution relief,
+and hardware-capped auto-tier recovery; `post.ts` only samples frames and
+applies the returned WebGL action.
+
+## Patterns to follow / invariants
+<!-- agent-docs:fill:patterns -->
+Measure before adding passes, keep quality changes reversible, reuse render
+targets/materials, and avoid shader compilation during live control windows.
+Mark geometry built only to cast shadows with `markShadowOnly()`; a
+color-write-disabled material alone does not stop Three.js from submitting it
+in the forward pass.
+Every asynchronous Garage producer that changes visible state must invalidate
+presentation; the five-second paint is a safety watchdog, not its delivery
+mechanism.
+Do not dispose inactive-phase materials merely to lower the live program count:
+returning can create a larger cache of light-count variants and a visible
+compile spike. Gate programs, buffers, textures, heap, objects, calls and
+triangles independently with `npm run perf:resources:gate`.
+Studio picture passes must stay out of the battle composer: never import
+`cinemaPost.ts` from boot or battle modules, and keep its stage gating in
+`game/studioPicture.ts` so the neutral picture stays byte-identical.
+The entry chunk is budgeted (`tools/bundle-budget.mjs` entryRaw): one map's
+sky data loads with that map's world, never statically from `sky.ts`. The
+Moon's land mask (`earthLandMask.ts`) goes through `earthLandAccess.ts`, which
+`world/map.ts` awaits before the world exists. It, the grounded light model
+(`battleAtmosphereAccess.ts` `groundedLightChunk`; `loadGroundedLightModel` is
+the capture staging's) and the cloudscapes (`cloudPresets.ts`) are
+`app/lazyChunk.ts` chunks: the Studio asks them on every sun-dial move, with
+the atmosphere runtime and the map's air (`world/mapAmbienceAccess.ts`), and a
+failure is asked again only under the policy's backoff. A battle's entry asks
+the runtime, the light model, the cloudscapes, the map's air and, for a sky
+that draws the Earth, the land mask at once whatever that backoff
+(`prepare(..., { entry: true })`). A Studio apply waits on a first ask only,
+never a re-ask; what it lit without is its prepare's `landing`, and the Studio
+lights the same light again once that lands (`game/studio.ts`
+prepareAtmosphere, `{ relight: true }`), once per apply however many land
+together; a relight's landing leaves out a part its light was lit with.
+`app/lazyChunkSites.selftest.mjs` EDGE_ASKS holds these edge asks to their
+listed callers, the relight in the spellings it reads (the option by name as
+an object key, studio.ts's pass-throughs by their arity, the port's `how`).
+Keep each rate-capped far-cascade projection paired with the depth map rendered
+from that pose. Do not move its light fit on an unscheduled frame. Shadow visual
+changes must pass both the raw CSM motion comparison and composed temporal-AO
+motion gate in `tools/render-stability-audit.mjs`.
+
+## Common tasks → first action
+<!-- agent-docs:fill:tasks -->
+Capture baseline boot/frame probes on the target tier, change one cost center,
+then compare both visual evidence and worst-frame metrics. For a shadow flash,
+first force all CSM cascades to distinguish raw shadow-map cadence from the
+GTAO/post composition before changing quality or refresh policy.
+
+## Gotchas
+<!-- agent-docs:fill:gotchas -->
+A warm that runs in a revealed battle (the deferred rare warm) restores every
+visibility, layer, cascade fit and pass flag before each yield: the frames
+between its steps are the player's (black-screen-228). A lazy module must not
+import a module the game entry carries (it splits that module into its own boot
+chunk): pass ports instead.
+Garage and battle have different active worlds/lights. A lower draw count is
+not a win if it causes first-use shader or transition spikes. Passive Garage
+dwell must not construct a battlefield or retain resources without a ceiling.
+A material's `envMapIntensity` only reaches the screen through
+`setupShadowMaterial` (`materialEnvIntensity.ts`): three overwrites the uniform
+with `scene.environmentIntensity` for every material that reads the scene
+environment. Below 1 it takes a share of the sky light, which is 80–99 % of a
+shaded matte face's light, so a trim is a visible change, not a no-op.

@@ -1,0 +1,11 @@
+// Layout of the bot window: the game speed, the backend, the director, the
+// bot with its levels.
+
+.bot-debug-content {
+  min-width: 260px;
+}
+
+.quick-buttons > button {
+  flex: 1 1 0;
+  min-width: 0;
+}

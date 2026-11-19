@@ -1,0 +1,2440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TinyWorld Builder — Tinyverse</title>
+<link rel="icon" href="assets/twlogo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Space+Grotesk:wght@400..700&display=swap">
+<link rel="stylesheet" href="styles/tiny-world.css">
+<link rel="stylesheet" href="vendor/driverjs/driver.css">
+<script>
+  (function cardRevealAuthBootstrap() {
+    window.__tinyworldAuthReady = window.__tinyworldAuthReady || new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #030405; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  /* Builder stylesheet adds viewport blur/vignette layers above z-index 2 — disable on reveal. */
+  body.tinyverse-reveal-page::before,
+  body.tinyverse-reveal-page::after {
+    display: none !important;
+  }
+  body.tinyverse-reveal-page #app {
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    transform: none !important;
+    overflow: hidden;
+    z-index: 2;
+  }
+  body.tinyverse-reveal-page #app canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  #app { position: fixed; inset: 0; z-index: 2; }
+  canvas { display: block; }
+
+  .hud {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 0 24px 38px; pointer-events: none; z-index: 10;
+  }
+  .prompt {
+    color: #9aa4ae; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 600; opacity: 0; transition: opacity .5s ease;
+    text-shadow: 0 2px 14px rgba(0,0,0,.9); text-align: center;
+  }
+  .prompt.show { opacity: 1; }
+  .btn {
+    pointer-events: auto; cursor: pointer;
+    padding: 13px 30px; border-radius: 12px;
+    background: linear-gradient(180deg, #161b22, #0c1015);
+    border: 1px solid rgba(90,140,200,.22);
+    color: #c8d0d8; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    box-shadow: 0 6px 24px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+    opacity: 0; transform: translateY(10px); transition: opacity .4s ease, transform .4s ease, background .2s;
+    pointer-events: none;
+  }
+  .btn.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .btn:active { background: linear-gradient(180deg, #1e2530, #12161c); }
+
+  .title {
+    position: fixed; top: 0; left: 0; right: 0; padding: 26px 24px 0;
+    text-align: center; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity .6s ease;
+  }
+  .title.show { opacity: 1; }
+  .title h1 {
+    font-size: 12px; letter-spacing: 0.3em; font-weight: 800; text-transform: uppercase;
+    background: linear-gradient(90deg, #7fd34f, #4fb3d3, #b07fd3);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 2px 20px rgba(0,0,0,.4);
+  }
+  .title p { margin-top: 6px; font-size: 10px; letter-spacing: 0.18em; color: #5a6573; text-transform: uppercase; }
+
+  .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background: radial-gradient(ellipse 68% 58% at 50% 42%, rgba(25,34,44,.34) 0%, rgba(3,4,5,.9) 100%); }
+
+  .pack-shop {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 12;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 18px 22px; pointer-events: none;
+  }
+  .pack-shop > * { pointer-events: auto; }
+  .gold-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 999px;
+    background: rgba(8,12,18,0.82); border: 1px solid rgba(224,169,58,0.35);
+    color: #ffe27d; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.55);
+  }
+  .shop-btn {
+    cursor: pointer; padding: 8px 14px; border-radius: 10px;
+    background: linear-gradient(180deg, #161b22, #0c1015);
+    border: 1px solid rgba(90,140,200,.22);
+    color: #c8d0d8; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .shop-btn:active { background: linear-gradient(180deg, #1e2530, #12161c); }
+
+  .collection-overlay {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    background: rgba(2,4,7,0.72); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .collection-overlay.show { display: flex; }
+  .collection-panel {
+    width: min(520px, 100%); max-height: min(72vh, 640px); overflow: hidden;
+    display: flex; flex-direction: column; border-radius: 16px;
+    background: linear-gradient(180deg, #12161d, #080b10);
+    border: 1px solid rgba(90,140,200,0.22);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.65);
+  }
+  .collection-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .collection-head h2 {
+    font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: #dfe7ef;
+  }
+  .collection-list {
+    overflow: auto; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .collection-item {
+    display: grid; grid-template-columns: 88px 1fr auto; gap: 8px 12px; align-items: center;
+    padding: 12px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  }
+  .collection-preview-wrap {
+    grid-row: 1 / span 2; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1); background: #070911;
+  }
+  .collection-preview, .collection-thumb {
+    display: block; width: 88px; height: 56px; object-fit: cover;
+  }
+  .collection-item strong { color: #f2f6fa; font-size: 14px; }
+  .collection-item span { color: #9aa7b3; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .collection-item button {
+    grid-column: 3; grid-row: 1 / span 2;
+    cursor: pointer; padding: 8px 12px; border-radius: 8px;
+    background: #1a2430; border: 1px solid rgba(127,211,79,0.35);
+    color: #b8f08a; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .collection-empty { color: #7f8b98; font-size: 13px; text-align: center; padding: 28px 12px; }
+
+  body.tinyverse-gate-locked #app,
+  body.tinyverse-gate-locked .pack-shop,
+  body.tinyverse-gate-locked .hud,
+  body.tinyverse-gate-locked .title,
+  body.tinyverse-gate-locked .vignette {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .tinyverse-auth-gate {
+    position: fixed; inset: 0; z-index: 40; display: none;
+    align-items: center; justify-content: center; padding: 24px;
+    background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(18,28,38,.92) 0%, rgba(3,4,5,.98) 100%);
+  }
+  .tinyverse-auth-gate.show { display: flex; }
+  .tinyverse-auth-panel {
+    width: min(440px, 100%); padding: 28px 26px 24px; border-radius: 18px;
+    background: linear-gradient(180deg, #141a22, #090d12);
+    border: 1px solid rgba(90,140,200,0.24);
+    box-shadow: 0 22px 54px rgba(0,0,0,0.72);
+    text-align: center;
+  }
+  .tinyverse-auth-panel h2 {
+    font-size: 13px; letter-spacing: 0.24em; text-transform: uppercase; color: #eef4fb;
+    margin-bottom: 12px;
+  }
+  .tinyverse-auth-panel p {
+    color: #9aa7b3; font-size: 14px; line-height: 1.55; margin-bottom: 22px;
+  }
+  .tinyverse-auth-actions {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+  }
+  .tinyverse-auth-actions button {
+    cursor: pointer; padding: 12px 18px; border-radius: 10px; font-size: 12px;
+    font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .tinyverse-auth-signin {
+    background: linear-gradient(180deg, #7fd34f, #4f9f35);
+    border: 1px solid rgba(255,255,255,0.18); color: #071109;
+  }
+  .tinyverse-auth-back {
+    background: linear-gradient(180deg, #161b22, #0c1015);
+    border: 1px solid rgba(90,140,200,.22); color: #c8d0d8;
+  }
+
+  /* -------- Tinyverse hub (matches builder sky + glass UI) -------- */
+  body.tinyverse-hub-active,
+  body.tinyverse-gate-locked:not(.tinyverse-theater-active) {
+    overflow: auto;
+    background:
+      radial-gradient(circle at 86% 15%, rgba(255, 214, 154, 0.45), transparent 32%),
+      radial-gradient(circle at 18% 18%, rgba(26, 103, 210, 0.45), transparent 36%),
+      radial-gradient(circle at 70% 86%, rgba(255, 188, 126, 0.18), transparent 36%),
+      linear-gradient(135deg, rgb(106, 168, 235) 0%, rgb(188, 220, 244) 48%, #fff0d1 100%);
+    background-attachment: fixed;
+    color: #2a2722;
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  }
+  .tinyverse-store-hub {
+    position: fixed; inset: 0; z-index: 14; display: none; overflow: auto;
+    background: transparent;
+  }
+  .tinyverse-store-hub.show { display: block; }
+  body.tinyverse-hub-active #app,
+  body.tinyverse-hub-active .vignette,
+  body.tinyverse-hub-active .pack-shop,
+  body.tinyverse-hub-active .hud,
+  body.tinyverse-hub-active .title {
+    visibility: hidden; pointer-events: none;
+  }
+  body.tinyverse-gate-locked .tinyverse-store-hub { visibility: hidden; pointer-events: none; }
+
+  /* Builder chrome on hub + auth gate; hidden during pack theater. */
+  body.tinyverse-chrome-active .brand,
+  body.tinyverse-chrome-active .appbar,
+  body.tinyverse-chrome-active #top-corner-chrome {
+    z-index: 22;
+  }
+  body.tinyverse-chrome-active .brand-home-btn { pointer-events: auto; cursor: pointer; }
+  body.tinyverse-theater-active .brand,
+  body.tinyverse-theater-active .appbar,
+  body.tinyverse-theater-active #top-corner-chrome {
+    visibility: hidden; pointer-events: none;
+  }
+  body.tinyverse-hub-active .tv-hub-shell,
+  body.tinyverse-gate-locked:not(.tinyverse-theater-active) .tinyverse-auth-gate {
+    padding-top: 122px;
+  }
+
+  .tv-hub-shell {
+    --tv-hub-width: min(1320px, calc(100vw - 48px));
+    min-height: 100%; padding: 24px 24px 48px;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+  }
+  .tv-hub-pills {
+    width: var(--tv-hub-width);
+    display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px;
+  }
+  .tv-hub-layout {
+    width: var(--tv-hub-width);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 980px) {
+    .tv-hub-layout { grid-template-columns: 1fr; }
+  }
+  .tv-pill {
+    padding: 6px 11px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.04em;
+    background: rgba(255,255,255,0.62); border: 1px solid rgba(255,255,255,0.75);
+    color: #1e428a; box-shadow: 0 2px 8px -4px rgba(20,30,50,0.2);
+  }
+  .tv-pill-collection { color: #3a6511; }
+  .tv-ghost-btn, .tv-cta {
+    cursor: pointer; font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-weight: 700; border-radius: 14px; transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .tv-ghost-btn, .tv-ghost-link {
+    --tv-outline: #2f3b57;
+    padding: 10px 14px; font-size: 13px; text-decoration: none; color: var(--tv-outline);
+    background: rgba(255,255,255,0.72); border: 1.5px solid var(--tv-outline);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.92), inset 0 -3px 0 rgba(47,59,87,0.18);
+    display: inline-flex; align-items: center;
+  }
+  .tv-ghost-btn:active, .tv-ghost-link:active { transform: translateY(1px); }
+
+  .tv-hub-card {
+    width: 100%;
+    padding: 22px 24px 26px; border-radius: 26px;
+    background: rgba(255,255,255,0.74);
+    border: 1px solid rgba(255,255,255,0.62);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 30px 70px -24px rgba(20,30,50,0.28);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+  .tv-section-head { margin-bottom: 14px; }
+  .tv-section-head h1, .tv-section-head h2 {
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: #111b45;
+  }
+  .tv-section-head p { margin-top: 6px; color: #6f695f; font-size: 14px; line-height: 1.5; }
+
+  .tv-pack-hero {
+    display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 20px; align-items: center;
+    padding: 16px 18px; border-radius: 18px; margin-bottom: 20px;
+    background: rgba(255,255,255,0.55); border: 1px solid rgba(235,227,210,0.9);
+  }
+  @media (max-width: 640px) { .tv-pack-hero { grid-template-columns: 1fr; } }
+  .tv-pack-visual {
+    position: relative; min-height: 220px; border-radius: 16px; overflow: hidden;
+    background: linear-gradient(160deg, #b7ddff 0%, #8ccaff 55%, #d8ecff 100%);
+    border: 1.5px solid #1e428a;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tv-pack-art-wrap {
+    position: relative;
+    width: 78%;
+    max-height: 94%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tv-pack-art {
+    display: block;
+    width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 18px rgba(18,52,117,0.28));
+    pointer-events: none;
+    background: transparent;
+  }
+  .tv-pack-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    font-size: clamp(16px, 5.2vw, 24px);
+    font-weight: 700;
+    color: rgba(186, 198, 224, 0.42);
+    letter-spacing: 0.06em;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 2;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .tv-pack-title-top { top: 27%; }
+  .tv-pack-title-mid { top: 50%; }
+  .tv-pack-title-bot { top: 80%; }
+  .tv-pack-badge {
+    position: absolute; top: 10px; left: 10px; z-index: 2;
+    padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 800;
+    background: rgba(255,255,255,0.88); border: 1px solid #1e428a; color: #1e428a;
+  }
+  .tv-pack-cards-label {
+    position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2;
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    font-size: 15px; color: #123475; text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+  }
+  .tv-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #3a72c8; margin-bottom: 4px;
+  }
+  .tv-pack-copy h3 {
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    font-size: 20px; color: #111b45; margin-bottom: 2px;
+  }
+  .tv-pack-sub { font-size: 12px; font-weight: 600; color: #6f695f; }
+  .tv-pack-desc { margin-top: 8px; color: #4a453c; font-size: 14px; line-height: 1.5; }
+  .tv-pack-foot { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tv-free-opens { font-size: 13px; font-weight: 700; color: #1e428a; }
+
+  .tv-cta {
+    --tv-outline: #1e428a;
+    --tv-bevel: rgba(30, 66, 138, 0.22);
+    padding: 12px 20px; font-size: 15px; border: 1.5px solid var(--tv-outline);
+    background: rgba(23, 107, 235, 0.13); color: var(--tv-outline);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.92), inset 0 -4px 0 var(--tv-bevel), 0 3px 5px -2px rgba(20,30,50,0.2);
+  }
+  .tv-cta:hover { transform: translateY(-1px); }
+  .tv-cta:active { transform: translateY(1px); }
+  .tv-cta.is-disabled, .tv-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .tv-cta-sm { padding: 9px 14px; font-size: 13px; --tv-outline: #3a6511; --tv-bevel: rgba(58,101,17,0.22); background: rgba(123,194,48,0.14); color: #3a6511; }
+
+  .tv-collection-section {
+    padding-top: 18px; border-top: 1px solid rgba(235,227,210,0.95);
+  }
+  .tv-collection-empty {
+    color: #6f695f; font-size: 14px; line-height: 1.55; padding: 16px;
+    border-radius: 14px; background: rgba(255,255,255,0.45); border: 1px dashed #ebe3d2;
+  }
+  .tv-collection-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
+  }
+  .tv-island-card {
+    display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px;
+    background: rgba(255,255,255,0.58); border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 8px 24px -16px rgba(20,30,50,0.22);
+  }
+  .tv-island-preview-wrap {
+    border-radius: 12px; overflow: hidden; cursor: pointer;
+    border: 1px solid rgba(30,66,138,0.18);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+    background: #070911;
+  }
+  .tv-island-preview, .tv-island-thumb {
+    display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover;
+  }
+  .tv-island-card-head strong { display: block; color: #2a2722; font-size: 15px; margin-bottom: 3px; }
+  .tv-island-card-head span { font-size: 11px; font-weight: 600; color: #6f695f; text-transform: uppercase; }
+
+  .tv-toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(12px);
+    padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 700;
+    background: rgba(255,255,255,0.92); border: 1.5px solid #1e428a; color: #123475;
+    opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 30;
+    box-shadow: 0 12px 32px -12px rgba(20,30,50,0.35);
+  }
+  .tv-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .tv-hub-empty { padding: 48px 24px; text-align: center; color: #6f695f; }
+
+  .tv-activity-card {
+    position: sticky; top: 88px;
+    padding: 18px 16px 14px; border-radius: 22px;
+    background: rgba(255,255,255,0.74);
+    border: 1px solid rgba(255,255,255,0.62);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 24px 56px -22px rgba(20,30,50,0.24);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+  .tv-activity-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .tv-activity-head h2 {
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #111b45;
+  }
+  .tv-activity-live {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 800;
+    letter-spacing: 0.06em; text-transform: uppercase; color: #3a6511;
+    background: rgba(123,194,48,0.16); border: 1px solid rgba(58,101,17,0.22);
+  }
+  .tv-activity-live::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: #5fbf2a; box-shadow: 0 0 0 0 rgba(95,191,42,0.55);
+    animation: tv-live-pulse 2s ease-out infinite;
+  }
+  @keyframes tv-live-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(95,191,42,0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(95,191,42,0); }
+    100% { box-shadow: 0 0 0 0 rgba(95,191,42,0); }
+  }
+  .tv-activity-sub {
+    margin: -6px 0 12px; color: #6f695f; font-size: 12px; line-height: 1.45;
+  }
+  .tv-activity-list {
+    list-style: none; display: flex; flex-direction: column; gap: 8px;
+    max-height: min(72vh, 640px); overflow: auto; padding-right: 2px;
+  }
+  .tv-activity-empty {
+    padding: 18px 12px; text-align: center; color: #8a8478; font-size: 13px;
+    line-height: 1.5; background: rgba(255,255,255,0.4);
+    border: 1px dashed rgba(120,110,90,0.35); border-radius: 14px;
+  }
+  /* Binky pulling cards — decorative, bottom-right of the unpack screen. */
+  .reveal-binky-wrap {
+    position: fixed;
+    right: 8px;
+    bottom: 0;
+    width: clamp(300px, 30vw, 480px);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .reveal-binky-cards {
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 16px 30px rgba(8, 14, 30, 0.45));
+  }
+  .reveal-binky-badge {
+    position: absolute;
+    top: 56%;
+    left: 54%;
+    width: 17%;
+    height: auto;
+    transform: rotate(6deg);
+    filter: drop-shadow(0 2px 4px rgba(8, 14, 30, 0.35));
+  }
+  @media (max-width: 1180px) { .reveal-binky-wrap { display: none; } }
+  .tv-activity-item {
+    display: grid; grid-template-columns: 36px 1fr; gap: 10px; align-items: start;
+    padding: 10px; border-radius: 14px;
+    background: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.72);
+    transform: translateY(0);
+    will-change: transform, opacity;
+  }
+  .tv-activity-item.is-shifting {
+    transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .tv-activity-item.is-entering {
+    animation: tv-activity-enter 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .tv-activity-item.is-exiting {
+    animation: tv-activity-exit 0.32s ease forwards;
+    pointer-events: none;
+  }
+  @keyframes tv-activity-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-18px) scale(0.97);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+  @keyframes tv-activity-exit {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      max-height: 120px;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+      max-height: 0;
+      margin-top: -8px;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+  .tv-activity-avatar {
+    width: 36px; height: 36px; border-radius: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
+    color: #1e428a; background: linear-gradient(160deg, #d8ecff, #b7ddff);
+    border: 1px solid rgba(30,66,138,0.18);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55);
+  }
+  .tv-activity-body strong {
+    display: block; color: #2a2722; font-size: 13px; margin-bottom: 2px;
+  }
+  .tv-activity-body p {
+    margin: 0; color: #4a453c; font-size: 12px; line-height: 1.45;
+  }
+  .tv-activity-body em {
+    font-style: normal; font-weight: 700; color: #111b45;
+  }
+  .tv-activity-meta {
+    display: block; margin-top: 4px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; color: #6f695f;
+  }
+  .tv-activity-item.is-legendary .tv-activity-meta { color: #8a5a12; }
+  .tv-activity-item.is-epic .tv-activity-meta { color: #5a2f8a; }
+  .tv-activity-item.is-rare .tv-activity-meta { color: #1e5a8a; }
+
+  body.tinyverse-gate-locked .tinyverse-auth-gate {
+    background: transparent;
+  }
+  body.tinyverse-gate-locked .tinyverse-auth-panel {
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(255,255,255,0.62);
+    box-shadow: 0 30px 70px -24px rgba(20,30,50,0.32);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+  body.tinyverse-gate-locked .tinyverse-auth-panel h2 {
+    font-family: 'Pixelify Sans', ui-monospace, monospace;
+    color: #111b45;
+  }
+  body.tinyverse-gate-locked .tinyverse-auth-panel p { color: #6f695f; }
+  body.tinyverse-gate-locked .tinyverse-auth-signin {
+    border: 1.5px solid #1e428a; background: rgba(23,107,235,0.13); color: #1e428a;
+    font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700;
+  }
+  body.tinyverse-gate-locked .tinyverse-auth-back {
+    border: 1.5px solid #2f3b57; background: rgba(255,255,255,0.72); color: #2f3b57;
+    font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700;
+  }
+</style>
+</head>
+<body class="tinyverse-reveal-page tinyverse-gate-locked tinyverse-chrome-active">
+<div class="reveal-binky-wrap" aria-hidden="true">
+  <img class="reveal-binky-cards" src="assets/binky_cards.png" alt="" width="1373" height="1145" />
+  <img class="reveal-binky-badge" src="assets/binky_badge_sm.png" alt="" width="400" height="267" />
+</div>
+<button type="button" class="brand brand-home-btn" id="brand-home-btn" data-pos-type="neutral" data-tooltip="Home" data-i18n-tooltip="chrome.home" aria-label="Home" data-i18n-aria-label="chrome.home">
+  <img class="brand-logo" src="assets/twlogo-wordmark.png" alt="" width="1064" height="403" aria-hidden="true">
+</button>
+<div id="top-corner-chrome" class="top-corner-chrome">
+  <button type="button" id="auth-login-btn-top" class="corner-chrome-btn corner-chrome-btn--label" data-pos-type="neutral" data-tooltip="Menu" data-i18n-tooltip="chrome.menu" aria-label="Sign in" data-i18n-aria-label="chrome.menuSignIn" hidden>
+    <span class="corner-chrome-label" data-i18n="chrome.menu">Menu</span>
+  </button>
+  <button type="button" id="auth-logout-btn" class="corner-chrome-btn corner-chrome-btn--label" data-pos-type="neutral" data-tooltip="Menu" data-i18n-tooltip="chrome.menu" aria-label="Sign out" data-i18n-aria-label="chrome.menuSignOut" hidden>
+    <span class="corner-chrome-label" data-i18n="chrome.menu">Menu</span>
+  </button>
+</div>
+<div class="appbar">
+  <div class="language-picker" id="language-picker">
+    <button class="language-trigger" id="language-trigger" type="button" data-pos-type="neutral" aria-label="Language: English" aria-haspopup="menu" aria-expanded="false" aria-controls="language-menu" data-tooltip="Language">
+      <span class="language-current-flag" id="language-current-flag" aria-hidden="true">
+        <svg viewBox="0 0 30 20">
+          <rect width="30" height="20" fill="#012169"/>
+          <path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4"/>
+          <path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="2"/>
+          <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6"/>
+          <path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.5"/>
+        </svg>
+      </span>
+      <span class="sr-only" id="language-current-label">English</span>
+      <svg class="language-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+    </button>
+    <div class="language-menu" id="language-menu" role="menu" aria-label="Language" hidden>
+      <button class="language-option" type="button" role="menuitemradio" data-lang="en" aria-label="English" aria-checked="false">
+        <span class="language-flag-svg" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#012169"/>
+            <path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4"/>
+            <path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="2"/>
+            <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6"/>
+            <path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.5"/>
+          </svg>
+        </span>
+        <span class="language-label">English</span>
+      </button>
+      <button class="language-option" type="button" role="menuitemradio" data-lang="fr" aria-label="Français" aria-checked="false">
+        <span class="language-flag-svg" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#fff"/>
+            <rect width="10" height="20" fill="#0055A4"/>
+            <rect x="20" width="10" height="20" fill="#EF4135"/>
+          </svg>
+        </span>
+        <span class="language-label">Français</span>
+      </button>
+      <button class="language-option" type="button" role="menuitemradio" data-lang="es" aria-label="Español" aria-checked="false">
+        <span class="language-flag-svg" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#AA151B"/>
+            <rect y="5" width="30" height="10" fill="#F1BF00"/>
+          </svg>
+        </span>
+        <span class="language-label">Español</span>
+      </button>
+      <button class="language-option" type="button" role="menuitemradio" data-lang="zh" aria-label="中文" aria-checked="false">
+        <span class="language-flag-svg" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#EE1C25"/>
+            <g fill="#FFDE00">
+              <path d="M6 2.4 7.27 6.31 3.95 3.89H8.05L4.73 6.31Z"/>
+              <path d="M11.5 2.2 11.99 3.18 11.06 2.6H12.18L11.25 3.18Z"/>
+              <path d="M13.5 4.3 13.78 5.32 13.06 4.66H14.18L13.46 5.32Z"/>
+              <path d="M13.5 7.1 13.78 8.12 13.06 7.46H14.18L13.46 8.12Z"/>
+              <path d="M11.5 9.2 11.99 10.18 11.06 9.6H12.18L11.25 10.18Z"/>
+            </g>
+          </svg>
+        </span>
+        <span class="language-label">中文</span>
+      </button>
+      <button class="language-option" type="button" role="menuitemradio" data-lang="th" aria-label="ไทย" aria-checked="false">
+        <span class="language-flag-svg" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#A51931"/>
+            <rect y="3" width="30" height="14" fill="#F4F5F8"/>
+            <rect y="6" width="30" height="8" fill="#2D2A4A"/>
+          </svg>
+        </span>
+        <span class="language-label">ไทย</span>
+      </button>
+      <div class="language-menu-divider" role="separator" aria-hidden="true"></div>
+      <button class="language-menu-action" type="button" id="language-menu-signout" role="menuitem" data-i18n="chrome.menuSignOut" hidden>Sign out</button>
+    </div>
+  </div>
+</div>
+<div class="tinyverse-auth-gate show" id="tinyverse-auth-gate" role="dialog" aria-modal="true" aria-labelledby="tinyverse-auth-gate-title">
+  <div class="tinyverse-auth-panel">
+    <h2 id="tinyverse-auth-gate-title">Checking access…</h2>
+    <p id="tinyverse-auth-gate-body">Sign in is required before opening Tinyverse packs.</p>
+    <div class="tinyverse-auth-actions">
+      <button class="tinyverse-auth-signin" id="tinyverse-auth-signin" type="button">Sign in</button>
+      <button class="tinyverse-auth-back" id="tinyverse-auth-back" type="button">Back to builder</button>
+    </div>
+  </div>
+</div>
+<div id="tinyverseStoreHub" class="tinyverse-store-hub" hidden></div>
+<div id="app"></div>
+<div class="vignette"></div>
+<div class="pack-shop" id="packShop">
+  <button class="shop-btn" id="hubBackBtn" type="button" hidden>Store</button>
+  <div class="gold-pill" id="goldPill">— free opens</div>
+  <button class="shop-btn" id="collectionBtn" type="button">Collection</button>
+</div>
+<div class="collection-overlay" id="collectionOverlay" hidden>
+  <div class="collection-panel" role="dialog" aria-labelledby="collectionTitle">
+    <div class="collection-head">
+      <h2 id="collectionTitle">Your Islands</h2>
+      <button class="shop-btn" id="collectionClose" type="button">Close</button>
+    </div>
+    <div class="collection-list" id="collectionList"></div>
+  </div>
+</div>
+<div class="title" id="title"><h1>Island Pack</h1><p>1 procedural island</p></div>
+<div class="hud">
+  <div class="prompt" id="prompt"></div>
+  <button class="btn" id="btn"></button>
+</div>
+
+<script type="application/json" id="pack-data">
+{
+  "packTitle": "Island Pack",
+  "packSubtitle": "1 procedural island",
+  "packLabel": "1 Island",
+  "cards": [
+    {
+      "id": "raw-yield-island",
+      "kind": "island",
+      "name": "Cliff Haven",
+      "rarity": "Common",
+      "backIndex": 0,
+      "accent": "#7fd34f",
+      "rim": "#3a6b22",
+      "icon": "tree",
+      "description": "Common - Raw Yield 169",
+      "tags": ["COMMON", "CROP-LED", "YIELD 169"],
+      "stats": { "Raw Yield": 169, "Buildings": 36, "Total Rank": 205 }
+    }
+  ]
+}
+</script>
+<script src="vendor/three/tinyworld-three.r185.min.js"></script>
+<script src="scripts/random-island-economy-prelude.js"></script>
+<script src="engine/world/26b-random-island-economy-profile.js"></script>
+<script src="scripts/island-viewer-sequential-generator.js"></script>
+<script src="scripts/world-preview.js"></script>
+<script src="scripts/tinyverse-collectibles.js"></script>
+<script src="scripts/tinyverse-store-catalog.js"></script>
+<script src="scripts/tinyverse-store-hub.js"></script>
+<script src="vendor/driverjs/driver.js.iife.js"></script>
+<script src="scripts/tinyverse-hub-onboarding.js"></script>
+<script src="scripts/tinyverse-auth-gate.js"></script>
+<script defer src="engine/i18n/en.js"></script>
+<script defer src="engine/i18n/fr.js"></script>
+<script defer src="engine/i18n/es.js"></script>
+<script defer src="engine/i18n/zh.js"></script>
+<script defer src="engine/i18n/th.js"></script>
+<script defer src="engine/i18n/i18n-core.js"></script>
+<script defer src="scripts/tinyverse-chrome.js"></script>
+<script src="scripts/tinyverse-pack-audio.js"></script>
+<script>
+const THREE_NS = window.THREE;
+
+/* ============================================================
+   PACK DATA — replace #pack-data JSON or window.TINYWORLD_PACK_DATA
+   ============================================================ */
+const CARD_SHEET_URL = 'cards.jpeg';
+const PACK_WRAPPER_URL = 'assets/pack-wrapper-foil.png';
+const CARD_BACK_CROPS = [
+  { x: 58, y: 108, w: 298, h: 402 },
+  { x: 423, y: 108, w: 298, h: 402 },
+  { x: 788, y: 108, w: 314, h: 402 },
+  { x: 1168, y: 108, w: 290, h: 402 },
+  { x: 58, y: 556, w: 298, h: 406 },
+  { x: 423, y: 556, w: 298, h: 406 },
+  { x: 788, y: 556, w: 314, h: 406 },
+  { x: 1168, y: 556, w: 290, h: 406 },
+];
+const RARITY_COLOR = {
+  COMMON:'#9aa7b3',
+  UNCOMMON:'#7fd34f',
+  RARE:'#4f9fe0',
+  EPIC:'#b054e0',
+  LEGENDARY:'#e0a93a',
+  BONUS:'#e06a3a',
+};
+const KIND_LABEL = {
+  island: 'ISLAND',
+  artifact: 'ARTIFACT',
+  sticker: 'STICKER',
+  bonus: 'BONUS ITEM',
+};
+const DEFAULT_COLORS = [
+  ['#7fd34f', '#3a6b22', 'tree'],
+  ['#4f9fe0', '#1f5a8a', 'wave'],
+  ['#a069e0', '#5a2f8a', 'shield'],
+  ['#e0b454', '#8a6a1f', 'compass'],
+  ['#c8d4e0', '#5a6573', 'mountain'],
+  ['#b054e0', '#6a1f8a', 'orb'],
+  ['#4fc3f0', '#1f6a8a', 'floating'],
+  ['#e06a3a', '#8a3a1f', 'volcano'],
+];
+
+function normalizeHex(value, fallback){
+  if(typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed : fallback;
+}
+function colorHexToNumber(hex){
+  return parseInt(hex.replace('#',''), 16);
+}
+function rarityKey(value){
+  const key = String(value || 'Common').trim().toUpperCase();
+  return RARITY_COLOR[key] ? key : 'COMMON';
+}
+function normalizeStats(stats){
+  if(!stats || typeof stats !== 'object') return {};
+  const out = {};
+  Object.entries(stats).forEach(([key, value])=>{
+    const number = Number(value);
+    if(Number.isFinite(number) && number <= 0) return;
+    const label = String(key || 'Stat').slice(0, 18);
+    out[label] = value;
+  });
+  return Object.fromEntries(Object.entries(out).slice(0, 3));
+}
+function normalizePackCard(card, idx){
+  const defaults = DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+  const accent = normalizeHex(card && card.accent, defaults[0]);
+  const rim = normalizeHex(card && card.rim, defaults[1]);
+  const kind = String((card && card.kind) || 'island').toLowerCase();
+  const safeKind = KIND_LABEL[kind] ? kind : 'island';
+  const name = String((card && card.name) || `Card ${idx + 1}`).trim();
+  return {
+    id: String((card && card.id) || name.toLowerCase().replace(/[^a-z0-9]+/g,'-') || `card-${idx + 1}`),
+    kind: safeKind,
+    name: name.toUpperCase(),
+    displayName: name,
+    rarity: rarityKey(card && card.rarity),
+    backIndex: Number.isFinite(card && card.backIndex) ? card.backIndex : idx,
+    accent,
+    rim,
+    glow: colorHexToNumber(accent),
+    icon: String((card && card.icon) || defaults[2]),
+    description: String((card && card.description) || '').slice(0, 130),
+    tags: Array.isArray(card && card.tags) ? card.tags.slice(0, 3).map(tag => String(tag).toUpperCase()) : [],
+    reward: String((card && card.reward) || ''),
+    quantity: Number.isFinite(card && card.quantity) ? card.quantity : null,
+    stats: normalizeStats(card && card.stats),
+    rawYield: card && card.rawYield ? card.rawYield : card && card.profile && card.profile.rawYield || null,
+    seed: String((card && card.seed) || ''),
+    packSeed: String((card && card.packSeed) || ''),
+    world: card && card.world ? card.world : null,
+    profile: card && card.profile ? card.profile : null,
+    preview: card && card.preview ? card.preview : null,
+    collectibleReady: !!(card && card.collectibleReady),
+    goldGrant: Number.isFinite(card && card.goldGrant) ? card.goldGrant : 0,
+  };
+}
+function normalizePackConfig(raw){
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+  return {
+    packTitle: String(data.packTitle || 'Island Pack'),
+    packSubtitle: String(data.packSubtitle || '1 procedural island'),
+    packLabel: String(data.packLabel || '1 Island'),
+    cards: cards.length ? cards.map(normalizePackCard) : [normalizePackCard({
+      id: 'raw-yield-island',
+      kind: 'island',
+      name: 'Cliff Haven',
+      rarity: 'Common',
+      backIndex: 0,
+      accent: DEFAULT_COLORS[0][0],
+      rim: DEFAULT_COLORS[0][1],
+      icon: DEFAULT_COLORS[0][2],
+      description: 'Common - Raw Yield 169',
+      tags: ['COMMON', 'CROP-LED', 'YIELD 169'],
+      stats: { 'Raw Yield': 169, Buildings: 36, 'Total Rank': 205 },
+    }, 0)],
+  };
+}
+function loadPackConfig(){
+  if(window.TINYWORLD_PACK_DATA) return normalizePackConfig(window.TINYWORLD_PACK_DATA);
+  const node = document.getElementById('pack-data');
+  if(node){
+    try { return normalizePackConfig(JSON.parse(node.textContent)); }
+    catch(err){ console.warn('Pack JSON failed to parse, using fallback data.', err); }
+  }
+  return normalizePackConfig(null);
+}
+const PACK_CONFIG = loadPackConfig();
+
+/* ============================================================
+   PROCEDURAL TEXTURE GENERATION (canvas)
+   ============================================================ */
+const CW = 512, CH = 716; // card aspect
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function stoneFrame(ctx){
+  // dark stone/wood frame base
+  const g = ctx.createLinearGradient(0,0,CW,CH);
+  g.addColorStop(0,'#14171c'); g.addColorStop(0.5,'#0a0c10'); g.addColorStop(1,'#121419');
+  ctx.fillStyle = g; roundRect(ctx,0,0,CW,CH,40); ctx.fill();
+
+  // stone speckle
+  ctx.save(); roundRect(ctx,0,0,CW,CH,40); ctx.clip();
+  for(let i=0;i<700;i++){
+    const x=Math.random()*CW, y=Math.random()*CH, s=Math.random()*2.4;
+    ctx.fillStyle=`rgba(${120+Math.random()*40|0},${120+Math.random()*40|0},${130+Math.random()*40|0},${Math.random()*0.05})`;
+    ctx.fillRect(x,y,s,s);
+  }
+  // cracks
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.2;
+  for(let i=0;i<14;i++){
+    ctx.beginPath();
+    let x=Math.random()*CW, y=Math.random()*CH;
+    ctx.moveTo(x,y);
+    for(let j=0;j<5;j++){ x+=(Math.random()-0.5)*70; y+=(Math.random()-0.5)*70; ctx.lineTo(x,y); }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function metalCorners(ctx, accent){
+  // four metal corner brackets with rivets
+  const inset=18, len=92, t=20;
+  ctx.fillStyle='#2e3540';
+  const corners=[[inset,inset,1,1],[CW-inset,inset,-1,1],[inset,CH-inset,1,-1],[CW-inset,CH-inset,-1,-1]];
+  corners.forEach(([cx,cy,sx,sy])=>{
+    ctx.save(); ctx.translate(cx,cy); ctx.scale(sx,sy);
+    // L-bracket
+    const grd=ctx.createLinearGradient(0,0,len,len);
+    grd.addColorStop(0,'#4a5462'); grd.addColorStop(1,'#262c34');
+    ctx.fillStyle=grd;
+    ctx.fillRect(0,0,len,t); ctx.fillRect(0,0,t,len);
+    // bevel highlight
+    ctx.fillStyle='rgba(255,255,255,0.10)';
+    ctx.fillRect(0,0,len,3); ctx.fillRect(0,0,3,len);
+    // rivet
+    const rg=ctx.createRadialGradient(t/2-2,t/2-2,1,t/2,t/2,9);
+    rg.addColorStop(0,'#9fb0c0'); rg.addColorStop(1,'#363d47');
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(t/2,t/2,8,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawIcon(ctx, type, cx, cy, R, color){
+  ctx.save(); ctx.translate(cx,cy);
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=R*0.07;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  const sh=(blur)=>{ctx.shadowColor=color;ctx.shadowBlur=blur;};
+  sh(R*0.5);
+  switch(type){
+    case 'tree':
+      ctx.beginPath();
+      ctx.moveTo(0,-R*0.7);
+      ctx.lineTo(R*0.5,R*0.05); ctx.lineTo(R*0.18,R*0.05);
+      ctx.lineTo(R*0.5,R*0.45); ctx.lineTo(-R*0.5,R*0.45);
+      ctx.lineTo(-R*0.18,R*0.05); ctx.lineTo(-R*0.5,R*0.05);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(-R*0.08,R*0.45,R*0.16,R*0.3); break;
+    case 'wave':
+      for(let k=-1;k<=1;k++){
+        ctx.beginPath();
+        for(let a=-R*0.7;a<=R*0.7;a+=4){
+          const yy=Math.sin(a/R*Math.PI*2)*R*0.18 + k*R*0.32;
+          a===-R*0.7?ctx.moveTo(a,yy):ctx.lineTo(a,yy);
+        }
+        ctx.stroke();
+      } break;
+    case 'shield':
+      ctx.beginPath();
+      ctx.moveTo(0,-R*0.75);
+      ctx.lineTo(R*0.55,-R*0.45); ctx.lineTo(R*0.55,R*0.2);
+      ctx.quadraticCurveTo(R*0.55,R*0.6,0,R*0.8);
+      ctx.quadraticCurveTo(-R*0.55,R*0.6,-R*0.55,R*0.2);
+      ctx.lineTo(-R*0.55,-R*0.45); ctx.closePath();
+      ctx.lineWidth=R*0.1; ctx.stroke();
+      // crown
+      ctx.beginPath(); ctx.moveTo(-R*0.28,-R*0.05);
+      ctx.lineTo(-R*0.28,-R*0.35); ctx.lineTo(-R*0.1,-R*0.18);
+      ctx.lineTo(0,-R*0.4); ctx.lineTo(R*0.1,-R*0.18);
+      ctx.lineTo(R*0.28,-R*0.35); ctx.lineTo(R*0.28,-R*0.05);
+      ctx.closePath(); ctx.fill(); break;
+    case 'compass':
+      ctx.beginPath(); ctx.arc(0,0,R*0.7,0,Math.PI*2); ctx.lineWidth=R*0.06; ctx.stroke();
+      for(let a=0;a<8;a++){
+        const ang=a*Math.PI/4, long=(a%2===0);
+        const r1=long?R*0.62:R*0.4;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(ang-0.12)*r1*0.4,Math.sin(ang-0.12)*r1*0.4);
+        ctx.lineTo(Math.cos(ang)*r1,Math.sin(ang)*r1);
+        ctx.lineTo(Math.cos(ang+0.12)*r1*0.4,Math.sin(ang+0.12)*r1*0.4);
+        ctx.closePath(); ctx.fill();
+      } break;
+    case 'mountain':
+      ctx.beginPath();
+      ctx.moveTo(-R*0.7,R*0.5);
+      ctx.lineTo(-R*0.15,-R*0.6); ctx.lineTo(R*0.1,-R*0.1);
+      ctx.lineTo(R*0.35,-R*0.45); ctx.lineTo(R*0.7,R*0.5);
+      ctx.closePath(); ctx.lineWidth=R*0.09; ctx.stroke();
+      // snow cap
+      ctx.fillStyle=color; ctx.beginPath();
+      ctx.moveTo(-R*0.15,-R*0.6); ctx.lineTo(-R*0.32,-R*0.25);
+      ctx.lineTo(0,-R*0.3); ctx.lineTo(R*0.1,-R*0.1);
+      ctx.lineTo(R*0.05,-R*0.42); ctx.closePath(); ctx.fill(); break;
+    case 'orb':
+      ctx.beginPath(); ctx.arc(0,0,R*0.45,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=0.5;
+      ctx.beginPath(); ctx.arc(0,0,R*0.68,0,Math.PI*2); ctx.lineWidth=R*0.05; ctx.stroke();
+      ctx.globalAlpha=1; break;
+    case 'floating':
+      // floating island chunk
+      ctx.beginPath();
+      ctx.moveTo(-R*0.55,-R*0.1);
+      ctx.lineTo(R*0.55,-R*0.1);
+      ctx.lineTo(R*0.3,R*0.2); ctx.lineTo(R*0.1,R*0.55);
+      ctx.lineTo(-R*0.1,R*0.25); ctx.lineTo(-R*0.35,R*0.35);
+      ctx.closePath(); ctx.fill();
+      // tree on top
+      ctx.beginPath(); ctx.moveTo(0,-R*0.55); ctx.lineTo(R*0.22,-R*0.12);
+      ctx.lineTo(-R*0.22,-R*0.12); ctx.closePath(); ctx.fill(); break;
+    case 'volcano':
+      ctx.beginPath();
+      ctx.moveTo(-R*0.65,R*0.5);
+      ctx.lineTo(-R*0.2,-R*0.5); ctx.lineTo(R*0.2,-R*0.5);
+      ctx.lineTo(R*0.65,R*0.5); ctx.closePath();
+      ctx.lineWidth=R*0.09; ctx.stroke();
+      // lava
+      ctx.fillStyle=color; ctx.beginPath();
+      ctx.moveTo(-R*0.2,-R*0.5); ctx.lineTo(-R*0.05,-R*0.7);
+      ctx.lineTo(R*0.05,-R*0.55); ctx.lineTo(R*0.15,-R*0.75);
+      ctx.lineTo(R*0.2,-R*0.5); ctx.closePath(); ctx.fill(); break;
+    case 'sticker':
+      ctx.fillStyle=color;
+      roundRect(ctx,-R*0.58,-R*0.42,R*1.16,R*0.84,R*0.18); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.58)';
+      ctx.beginPath(); ctx.moveTo(R*0.18,R*0.42); ctx.lineTo(R*0.58,R*0.1); ctx.lineTo(R*0.58,R*0.42); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=R*0.06;
+      ctx.beginPath(); ctx.moveTo(-R*0.28,0); ctx.lineTo(-R*0.08,R*0.22); ctx.lineTo(R*0.34,-R*0.22); ctx.stroke(); break;
+    case 'star':
+      ctx.beginPath();
+      for(let i=0;i<10;i++){
+        const a=-Math.PI/2+i*Math.PI/5, rr=i%2===0?R*0.72:R*0.32;
+        const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.closePath(); ctx.fill(); break;
+    case 'chest':
+      ctx.fillStyle=color; roundRect(ctx,-R*0.6,-R*0.18,R*1.2,R*0.62,R*0.08); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-R*0.58,-R*0.18); ctx.quadraticCurveTo(0,-R*0.72,R*0.58,-R*0.18); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.38)'; ctx.lineWidth=R*0.08;
+      ctx.beginPath(); ctx.moveTo(-R*0.6,-R*0.16); ctx.lineTo(R*0.6,-R*0.16); ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,0.48)'; roundRect(ctx,-R*0.12,-R*0.08,R*0.24,R*0.28,R*0.04); ctx.fill(); break;
+    default:
+      ctx.beginPath(); ctx.arc(0,0,R*0.45,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=0.45;
+      ctx.beginPath(); ctx.arc(0,0,R*0.68,0,Math.PI*2); ctx.lineWidth=R*0.05; ctx.stroke();
+      ctx.globalAlpha=1; break;
+  }
+  ctx.restore();
+}
+
+function portalRing(ctx, cx, cy, R, color, hexColor){
+  ctx.save();
+  // outer glow
+  const og=ctx.createRadialGradient(cx,cy,R*0.55,cx,cy,R*1.25);
+  og.addColorStop(0,'rgba(0,0,0,0)');
+  og.addColorStop(0.55,hexToRGBA(hexColor,0.0));
+  og.addColorStop(0.72,hexToRGBA(hexColor,0.55));
+  og.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=og; ctx.fillRect(cx-R*1.4,cy-R*1.4,R*2.8,R*2.8);
+  // main ring
+  ctx.shadowColor=hexColor; ctx.shadowBlur=R*0.55;
+  ctx.strokeStyle=hexColor; ctx.lineWidth=R*0.12;
+  ctx.beginPath(); ctx.arc(cx,cy,R*0.92,0,Math.PI*2); ctx.stroke();
+  // bright inner core line
+  ctx.shadowBlur=R*0.25; ctx.strokeStyle='#ffffff'; ctx.globalAlpha=0.7; ctx.lineWidth=R*0.04;
+  ctx.beginPath(); ctx.arc(cx,cy,R*0.92,0,Math.PI*2); ctx.stroke();
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+  // energy spikes around ring
+  ctx.strokeStyle=hexColor; ctx.shadowColor=hexColor; ctx.shadowBlur=R*0.4; ctx.lineWidth=R*0.05;
+  for(let a=0;a<12;a++){
+    const ang=a*Math.PI/6;
+    const r1=R*1.04, r2=R*1.04+R*(0.12+Math.random()*0.16);
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(ang)*r1, cy+Math.sin(ang)*r1);
+    ctx.lineTo(cx+Math.cos(ang)*r2, cy+Math.sin(ang)*r2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function hexToRGBA(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines){
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach((word)=>{
+    const test = line ? `${line} ${word}` : word;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  lines.slice(0, maxLines).forEach((txt, idx)=>{
+    const trimmed = idx === maxLines - 1 && lines.length > maxLines ? `${txt.replace(/\s+\S+$/,'')}...` : txt;
+    ctx.fillText(trimmed, x, y + idx * lineHeight);
+  });
+  return Math.min(lines.length, maxLines) * lineHeight;
+}
+function fitText(ctx, text, maxWidth, fontTemplate, maxSize, minSize){
+  let size = maxSize;
+  do {
+    ctx.font = fontTemplate.replace('{size}', size);
+    if(ctx.measureText(text).width <= maxWidth || size <= minSize) break;
+    size -= 2;
+  } while(size > minSize);
+}
+function drawTypeBadge(ctx, card, x, y, w){
+  const label = KIND_LABEL[card.kind] || 'CARD';
+  const h = 28;
+  const fill = ctx.createLinearGradient(x, y, x + w, y);
+  fill.addColorStop(0, hexToRGBA(card.accent, 0.22));
+  fill.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+  fill.addColorStop(1, hexToRGBA(card.accent, 0.22));
+  ctx.fillStyle = fill;
+  roundRect(ctx, x, y, w, h, 8); ctx.fill();
+  ctx.strokeStyle = hexToRGBA(card.accent, 0.62); ctx.lineWidth = 1.5;
+  roundRect(ctx, x, y, w, h, 8); ctx.stroke();
+  ctx.fillStyle = '#eef5fb'; ctx.font = '800 14px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+}
+function drawTags(ctx, tags, x, y, accent){
+  let tx = x;
+  tags.forEach((tag)=>{
+    const label = String(tag).slice(0, 14);
+    ctx.font = '800 11px system-ui';
+    const tw = Math.min(110, ctx.measureText(label).width + 18);
+    ctx.fillStyle = 'rgba(10,13,17,0.78)';
+    roundRect(ctx, tx, y, tw, 23, 8); ctx.fill();
+    ctx.strokeStyle = hexToRGBA(accent, 0.36); ctx.lineWidth = 1;
+    roundRect(ctx, tx, y, tw, 23, 8); ctx.stroke();
+    ctx.fillStyle = '#cfd8e1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, tx + tw / 2, y + 12);
+    tx += tw + 8;
+  });
+}
+function statEntries(stats){
+  return Object.entries(stats || {})
+    .filter(([, value])=>{
+      const number = Number(value);
+      return !Number.isFinite(number) || number > 0;
+    })
+    .slice(0, 3)
+    .map(([label, value])=>({
+      label: String(label).toUpperCase(),
+      value,
+      number: Number(value),
+    }));
+}
+function cropForCard(card){
+  const idx = ((card.backIndex % CARD_BACK_CROPS.length) + CARD_BACK_CROPS.length) % CARD_BACK_CROPS.length;
+  return CARD_BACK_CROPS[idx];
+}
+let cardsSheetImage = null;
+let cardsSheetError = false;
+let packWrapperImage = null;
+let packWrapperError = false;
+const dynamicTextures = [];
+function drawSheetCrop(ctx, card, x, y, w, h, radius){
+  if(!cardsSheetImage) return false;
+  const crop = cropForCard(card);
+  ctx.save();
+  roundRect(ctx, x, y, w, h, radius); ctx.clip();
+  ctx.filter = 'contrast(1.18) saturate(1.2) brightness(1.08)';
+  ctx.drawImage(cardsSheetImage, crop.x, crop.y, crop.w, crop.h, x, y, w, h);
+  ctx.filter = 'none';
+  ctx.restore();
+  return true;
+}
+function registerDynamicTexture(canvas, tex, draw){
+  dynamicTextures.push({ canvas, tex, draw });
+  draw();
+  tex.needsUpdate = true;
+}
+function redrawDynamicTextures(){
+  dynamicTextures.forEach(({ tex, draw })=>{
+    draw();
+    tex.needsUpdate = true;
+  });
+}
+const sheetLoader = new Image();
+sheetLoader.onload = ()=>{
+  cardsSheetImage = sheetLoader;
+  redrawDynamicTextures();
+  if(window.__tinyworldPackReveal) window.__tinyworldPackReveal.sheetReady = true;
+};
+sheetLoader.onerror = ()=>{
+  cardsSheetError = true;
+  if(window.__tinyworldPackReveal) window.__tinyworldPackReveal.sheetError = true;
+};
+sheetLoader.src = CARD_SHEET_URL;
+
+const packWrapperLoader = new Image();
+packWrapperLoader.onload = ()=>{
+  packWrapperImage = packWrapperLoader;
+  redrawDynamicTextures();
+  if(window.__tinyworldPackReveal) window.__tinyworldPackReveal.wrapperReady = true;
+};
+packWrapperLoader.onerror = ()=>{
+  packWrapperError = true;
+  if(window.__tinyworldPackReveal) window.__tinyworldPackReveal.wrapperError = true;
+};
+packWrapperLoader.src = PACK_WRAPPER_URL;
+
+/* ---- BACK FACE: cropped from cards.jpeg with live redraw fallback ---- */
+function drawCardBackCanvas(ctx, card){
+  ctx.clearRect(0,0,CW,CH);
+  const usedSheet = drawSheetCrop(ctx, card, 0, 0, CW, CH, 40);
+  if(!usedSheet){
+    stoneFrame(ctx);
+    ctx.save(); roundRect(ctx,36,36,CW-72,CH-72,28); ctx.clip();
+    const ig=ctx.createRadialGradient(CW/2,CH/2,40,CW/2,CH/2,CH*0.6);
+    ig.addColorStop(0,hexToRGBA(card.accent,0.26)); ig.addColorStop(1,'#05070a');
+    ctx.fillStyle=ig; ctx.fillRect(0,0,CW,CH);
+    ctx.restore();
+    portalRing(ctx,CW/2,CH/2-22,CW*0.31,card.glow,card.accent);
+    drawIcon(ctx, card.icon, CW/2, CH/2-22, CW*0.16, '#f5efe0');
+  }
+
+  ctx.save();
+  roundRect(ctx,0,0,CW,CH,40); ctx.clip();
+  const shadeTop = ctx.createLinearGradient(0,0,0,CH);
+  shadeTop.addColorStop(0,'rgba(255,255,255,0.05)');
+  shadeTop.addColorStop(0.35,'rgba(255,255,255,0)');
+  shadeTop.addColorStop(1,'rgba(0,0,0,0.10)');
+  ctx.fillStyle = shadeTop; ctx.fillRect(0,0,CW,CH);
+  const gleam = ctx.createLinearGradient(40,0,CW-120,CH);
+  gleam.addColorStop(0,'rgba(255,255,255,0)');
+  gleam.addColorStop(0.48,'rgba(255,255,255,0.07)');
+  gleam.addColorStop(0.58,'rgba(255,255,255,0)');
+  ctx.fillStyle = gleam; ctx.fillRect(0,0,CW,CH);
+  ctx.restore();
+
+  drawTypeBadge(ctx, card, 126, 28, 260);
+  const plateW=CW*0.68, plateH=52, px=(CW-plateW)/2, py=CH-92;
+  const pg=ctx.createLinearGradient(0,py,0,py+plateH);
+  pg.addColorStop(0,'rgba(20,25,31,0.88)');
+  pg.addColorStop(1,'rgba(5,7,10,0.92)');
+  ctx.fillStyle=pg; roundRect(ctx,px,py,plateW,plateH,12); ctx.fill();
+  ctx.strokeStyle=hexToRGBA(card.accent,0.68); ctx.lineWidth=2; roundRect(ctx,px,py,plateW,plateH,12); ctx.stroke();
+  ctx.fillStyle='#f5f0df'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='#000'; ctx.shadowBlur=8;
+  fitText(ctx, card.name, plateW - 28, '900 {size}px system-ui', 24, 16);
+  ctx.fillText(card.name, CW/2, py+plateH/2+1);
+  ctx.shadowBlur=0;
+
+  if(!usedSheet) metalCorners(ctx, card.accent);
+  ctx.strokeStyle=hexToRGBA(card.accent,0.55); ctx.lineWidth=3;
+  roundRect(ctx,10,10,CW-20,CH-20,34); ctx.stroke();
+}
+function makeBackTexture(card){
+  const c=document.createElement('canvas'); c.width=CW; c.height=CH;
+  const ctx=c.getContext('2d');
+  drawCardBackCanvas(ctx, card);
+  const tex=new THREE_NS.Texture(c); tex.needsUpdate=true; tex.anisotropy=8;
+  registerDynamicTexture(c, tex, ()=>drawCardBackCanvas(ctx, card));
+  return tex;
+}
+
+/* ---- FRONT FACE: JSON-driven island/artifact/sticker/bonus cards ---- */
+function drawFrontArt(ctx, card, ax, ay, aw, ah){
+  ctx.save(); roundRect(ctx,ax,ay,aw,ah,18); ctx.clip();
+  const sky=ctx.createLinearGradient(0,ay,0,ay+ah);
+  sky.addColorStop(0,shade(card.accent,0.52));
+  sky.addColorStop(1,shade(card.rim,-0.28));
+  ctx.fillStyle=sky; ctx.fillRect(ax,ay,aw,ah);
+  ctx.globalAlpha = cardsSheetImage ? 0.22 : 0;
+  drawSheetCrop(ctx, card, ax, ay, aw, ah, 18);
+  ctx.globalAlpha = 1;
+
+  if(card.kind === 'artifact') drawArtifactArt(ctx, card, ax, ay, aw, ah);
+  else if(card.kind === 'sticker') drawStickerArt(ctx, card, ax, ay, aw, ah);
+  else if(card.kind === 'bonus') drawBonusArt(ctx, card, ax, ay, aw, ah);
+  else drawScene(ctx, card, ax, ay, aw, ah);
+
+  const av=ctx.createRadialGradient(ax+aw/2,ay+ah/2,ah*0.2,ax+aw/2,ay+ah/2,ah*0.78);
+  av.addColorStop(0,'rgba(0,0,0,0)');
+  av.addColorStop(1,'rgba(0,0,0,0.48)');
+  ctx.fillStyle=av; ctx.fillRect(ax,ay,aw,ah);
+  ctx.restore();
+  ctx.strokeStyle='#7a6535'; ctx.lineWidth=4; roundRect(ctx,ax,ay,aw,ah,18); ctx.stroke();
+  ctx.strokeStyle=hexToRGBA(card.accent,0.46); ctx.lineWidth=1.5; roundRect(ctx,ax+4,ay+4,aw-8,ah-8,14); ctx.stroke();
+}
+function drawArtifactArt(ctx, card, ax, ay, aw, ah){
+  const cx=ax+aw/2, cy=ay+ah*0.48;
+  const g=ctx.createRadialGradient(cx,cy,10,cx,cy,ah*0.58);
+  g.addColorStop(0,hexToRGBA(card.accent,0.55)); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(ax,ay,aw,ah);
+  ctx.strokeStyle=hexToRGBA(card.accent,0.58); ctx.lineWidth=3;
+  for(let r=58;r<=138;r+=40){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); }
+  ctx.fillStyle='rgba(0,0,0,0.32)'; roundRect(ctx,cx-84,cy+86,168,30,10); ctx.fill();
+  drawIcon(ctx, card.icon || 'compass', cx, cy, 86, '#f8e6a0');
+  drawIcon(ctx, card.icon || 'compass', cx, cy, 62, card.accent);
+}
+function drawStickerArt(ctx, card, ax, ay, aw, ah){
+  const labels = [card.displayName, ...(card.tags.length ? card.tags : ['FOIL','BUILD'])];
+  labels.slice(0, 4).forEach((label, i)=>{
+    const x=ax+48+(i%2)*150, y=ay+42+Math.floor(i/2)*116;
+    const rot=(i%2 ? 0.08 : -0.08);
+    ctx.save(); ctx.translate(x+58,y+42); ctx.rotate(rot);
+    ctx.fillStyle='rgba(255,255,255,0.9)'; roundRect(ctx,-58,-42,116,84,18); ctx.fill();
+    ctx.strokeStyle=hexToRGBA(card.accent,0.62); ctx.lineWidth=5; roundRect(ctx,-58,-42,116,84,18); ctx.stroke();
+    ctx.fillStyle=shade(card.accent,-0.08); ctx.font='900 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(String(label).toUpperCase().slice(0, 12), 0, 24);
+    drawIcon(ctx, i === 0 ? (card.icon || 'sticker') : 'star', 0, -10, 22, shade(card.accent,-0.12));
+    ctx.restore();
+  });
+  ctx.fillStyle=hexToRGBA(card.accent,0.16);
+  for(let i=0;i<20;i++){ ctx.fillRect(ax+Math.random()*aw, ay+Math.random()*ah, 4+Math.random()*10, 4+Math.random()*10); }
+}
+function drawBonusArt(ctx, card, ax, ay, aw, ah){
+  const cx=ax+aw/2, cy=ay+ah*0.53;
+  const g=ctx.createRadialGradient(cx,cy,20,cx,cy,ah*0.62);
+  g.addColorStop(0,hexToRGBA(card.accent,0.42)); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(ax,ay,aw,ah);
+  ctx.fillStyle='rgba(30,16,6,0.72)'; roundRect(ctx,cx-112,cy-48,224,124,20); ctx.fill();
+  ctx.fillStyle=shade(card.accent,0.08); roundRect(ctx,cx-110,cy-56,220,44,18); ctx.fill();
+  ctx.strokeStyle='#f5cf71'; ctx.lineWidth=5; roundRect(ctx,cx-112,cy-56,224,132,20); ctx.stroke();
+  ctx.fillStyle='#f5cf71'; roundRect(ctx,cx-18,cy-22,36,38,8); ctx.fill();
+  drawIcon(ctx, card.icon || 'chest', cx, cy-94, 42, '#ffe8a4');
+  const qty = card.quantity === null ? 'BONUS' : `x${card.quantity}`;
+  ctx.fillStyle='#fff4c0'; ctx.font='900 36px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor=card.accent; ctx.shadowBlur=16; ctx.fillText(qty, cx, cy+38); ctx.shadowBlur=0;
+}
+function drawCardScores(ctx, card, y){
+  const rows = statEntries(card.stats);
+  rows.forEach((row, idx)=>{
+    const sy = y + idx * 36;
+    ctx.fillStyle='#aeb8c4'; ctx.font='800 14px system-ui'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText(row.label.slice(0, 16), 64, sy);
+    ctx.fillStyle=hexToRGBA(card.accent,0.16);
+    roundRect(ctx,270,sy-19,178,28,9); ctx.fill();
+    ctx.strokeStyle=hexToRGBA(card.accent,0.34); ctx.lineWidth=1;
+    roundRect(ctx,270,sy-19,178,28,9); ctx.stroke();
+    ctx.fillStyle='#edf4fb'; ctx.font='900 16px system-ui'; ctx.textAlign='right';
+    ctx.fillText(Number.isFinite(row.number) ? String(Math.round(row.number)) : String(row.value).toUpperCase().slice(0, 10), CW-78, sy);
+  });
+}
+function drawCardFrontCanvas(ctx, card){
+  ctx.clearRect(0,0,CW,CH);
+  stoneFrame(ctx);
+  if(cardsSheetImage){
+    ctx.save(); roundRect(ctx,0,0,CW,CH,40); ctx.clip();
+    ctx.globalAlpha=0.18; drawSheetCrop(ctx, card, 0, 0, CW, CH, 40); ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(2,4,7,0.72)'; ctx.fillRect(0,0,CW,CH);
+    ctx.restore();
+  }
+
+  const ax=44, ay=44, aw=CW-88, ah=CH*0.43;
+  drawFrontArt(ctx, card, ax, ay, aw, ah);
+  drawTypeBadge(ctx, card, 64, ay+ah+18, 132);
+
+  const rarityColor = RARITY_COLOR[card.rarity] || RARITY_COLOR.COMMON;
+  ctx.fillStyle=rarityColor; ctx.shadowColor=rarityColor; ctx.shadowBlur=12;
+  ctx.font='900 14px system-ui'; ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(card.rarity, CW-64, ay+ah+32);
+  ctx.shadowBlur=0;
+
+  fitText(ctx, card.name, CW-100, '900 {size}px system-ui', 30, 18);
+  ctx.fillStyle='#f2f6fa'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.shadowColor='#000'; ctx.shadowBlur=7;
+  ctx.fillText(card.name, CW/2, ay+ah+82); ctx.shadowBlur=0;
+
+  ctx.fillStyle='#b9c3ce'; ctx.font='600 16px system-ui'; ctx.textAlign='center'; ctx.textBaseline='top';
+  wrapText(ctx, card.description, CW/2, ay+ah+102, CW-110, 20, 3);
+
+  drawTags(ctx, card.tags, 62, CH-184, card.accent);
+  drawCardScores(ctx, card, CH-108);
+  drawIcon(ctx, card.icon, CW-72, CH-54, 26, hexToRGBA(card.accent,0.72));
+
+  if(!cardsSheetImage) metalCorners(ctx, card.accent);
+  ctx.strokeStyle=hexToRGBA(card.accent,0.48); ctx.lineWidth=2.5; roundRect(ctx,10,10,CW-20,CH-20,34); ctx.stroke();
+}
+function makeFrontTexture(card){
+  const c=document.createElement('canvas'); c.width=CW; c.height=CH;
+  const ctx=c.getContext('2d');
+  drawCardFrontCanvas(ctx, card);
+  const tex=new THREE_NS.Texture(c); tex.needsUpdate=true; tex.anisotropy=8;
+  registerDynamicTexture(c, tex, ()=>drawCardFrontCanvas(ctx, card));
+  return tex;
+}
+
+function drawScene(ctx, card, ax, ay, aw, ah){
+  if(card.preview && Array.isArray(card.preview.cells) && window.TinyWorldPreview && typeof window.TinyWorldPreview.renderPreview === 'function'){
+    const previewCanvas = document.createElement('canvas');
+    previewCanvas.width = Math.max(64, Math.round(aw));
+    previewCanvas.height = Math.max(64, Math.round(ah));
+    try {
+      window.TinyWorldPreview.renderPreview(previewCanvas, card.preview);
+      ctx.save();
+      roundRect(ctx, ax, ay, aw, ah, 18);
+      ctx.clip();
+      ctx.drawImage(previewCanvas, ax, ay, aw, ah);
+      ctx.restore();
+      ctx.strokeStyle='#7a6535'; ctx.lineWidth=4; roundRect(ctx,ax,ay,aw,ah,18); ctx.stroke();
+      return;
+    } catch (_) {}
+  }
+  const cx=ax+aw/2, base=ay+ah;
+  // clouds
+  ctx.fillStyle='rgba(255,255,255,0.25)';
+  for(let i=0;i<5;i++){ const x=ax+Math.random()*aw, y=ay+10+Math.random()*ah*0.4, r=18+Math.random()*30;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.arc(x+r*0.8,y+5,r*0.7,0,Math.PI*2); ctx.fill(); }
+  // ground / island shape depends on type
+  ctx.fillStyle=shade(card.rim,0.1);
+  switch(card.icon){
+    case 'mountain': case 'volcano':
+      ctx.beginPath(); ctx.moveTo(ax,base);
+      ctx.lineTo(ax+aw*0.3,base-ah*0.5); ctx.lineTo(ax+aw*0.5,base-ah*0.2);
+      ctx.lineTo(ax+aw*0.7,base-ah*0.6); ctx.lineTo(ax+aw,base); ctx.closePath(); ctx.fill();
+      if(card.icon==='volcano'){ ctx.fillStyle=hexToRGBA(card.accent,0.9);
+        ctx.beginPath(); ctx.arc(ax+aw*0.7,base-ah*0.6,8,0,Math.PI*2); ctx.fill(); }
+      break;
+    case 'wave':
+      ctx.fillStyle=hexToRGBA(card.accent,0.5);
+      for(let k=0;k<3;k++){ ctx.beginPath();
+        for(let x=ax;x<=ax+aw;x+=6){ const y=base-ah*0.18*k-10+Math.sin((x+k*40)/30)*8; x===ax?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+        ctx.lineTo(ax+aw,base); ctx.lineTo(ax,base); ctx.closePath(); ctx.fill(); }
+      break;
+    case 'floating':
+      ctx.beginPath(); ctx.ellipse(cx,base-ah*0.3,aw*0.32,ah*0.12,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx-aw*0.22,base-ah*0.3); ctx.lineTo(cx,base-ah*0.02); ctx.lineTo(cx+aw*0.22,base-ah*0.3); ctx.fill();
+      // trees
+      ctx.fillStyle=shade(card.rim,0.3);
+      for(let i=-1;i<=1;i++){ const tx=cx+i*30; ctx.beginPath(); ctx.moveTo(tx,base-ah*0.55); ctx.lineTo(tx+14,base-ah*0.32); ctx.lineTo(tx-14,base-ah*0.32); ctx.closePath(); ctx.fill(); }
+      break;
+    default:
+      ctx.beginPath(); ctx.moveTo(ax,base); ctx.lineTo(ax,base-ah*0.25);
+      ctx.quadraticCurveTo(cx,base-ah*0.4,ax+aw,base-ah*0.25); ctx.lineTo(ax+aw,base); ctx.closePath(); ctx.fill();
+      // trees/details
+      ctx.fillStyle=shade(card.rim,0.35);
+      for(let i=0;i<6;i++){ const tx=ax+aw*0.12+i*aw*0.14; const ty=base-ah*0.28-Math.random()*ah*0.05;
+        ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(tx+16,ty+34); ctx.lineTo(tx-16,ty+34); ctx.closePath(); ctx.fill(); }
+  }
+  // central glowing emblem in the art
+  ctx.globalAlpha=0.9; drawIcon(ctx, card.icon, cx, ay+ah*0.42, ah*0.16, '#ffffff'); ctx.globalAlpha=1;
+}
+
+function shade(hex, amt){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  if(amt>0){ r+=(255-r)*amt; g+=(255-g)*amt; b+=(255-b)*amt; }
+  else { r*=(1+amt); g*=(1+amt); b*=(1+amt); }
+  return `rgb(${r|0},${g|0},${b|0})`;
+}
+
+/* ---- PACK WRAPPER texture ---- */
+function drawGeneratedPackWrapper(ctx, config){
+  ctx.save();
+  roundRect(ctx,0,0,512,716,26); ctx.clip();
+  const matte=document.createElement('canvas');
+  matte.width=512; matte.height=716;
+  const mctx=matte.getContext('2d', { willReadFrequently: true });
+  mctx.filter='contrast(1.08) saturate(1.08) brightness(1.04)';
+  mctx.drawImage(packWrapperImage, 106, 54, 812, 1428, 0, 0, 512, 716);
+  mctx.filter='none';
+  const img=mctx.getImageData(0,0,512,716);
+  const px=img.data;
+  for(let i=0;i<px.length;i+=4){
+    const r=px[i], g=px[i+1], b=px[i+2];
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    if(max > 230 && max - min < 26) px[i+3]=0;
+  }
+  mctx.putImageData(img,0,0);
+  ctx.drawImage(matte,0,0);
+  ctx.filter='none';
+  ctx.restore();
+
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(0,0,0,0.86)';
+  ctx.shadowBlur=10;
+  ctx.fillStyle='#f2f8ff';
+  fitText(ctx, config.packSubtitle.toUpperCase().slice(0, 28), 286, '900 {size}px system-ui', 18, 12);
+  ctx.fillText(config.packSubtitle.toUpperCase().slice(0, 28), 256, 154);
+
+  fitText(ctx, config.packTitle, 338, '950 {size}px system-ui', 42, 24);
+  ctx.fillStyle='#9af06b';
+  ctx.fillText(config.packTitle, 256, 356);
+  ctx.font='950 52px system-ui';
+  ctx.fillStyle='#ffe27d';
+  ctx.fillText('BOOSTER', 256, 408);
+  ctx.shadowBlur=7;
+  ctx.fillStyle='#eef6ff';
+  fitText(ctx, config.packLabel.toUpperCase(), 248, '950 {size}px system-ui', 24, 15);
+  ctx.fillText(config.packLabel.toUpperCase(), 256, 636);
+  ctx.shadowBlur=0;
+}
+function drawPackTextureCanvas(ctx, config){
+  ctx.clearRect(0,0,512,716);
+  if(packWrapperImage){
+    drawGeneratedPackWrapper(ctx, config);
+    return;
+  }
+  const x=40, y=22, w=432, h=672;
+  ctx.save();
+  roundRect(ctx,x,y,w,h,34); ctx.clip();
+  const base=ctx.createLinearGradient(x,y,x+w,y+h);
+  base.addColorStop(0,'#34c4cf');
+  base.addColorStop(0.18,'#0b6681');
+  base.addColorStop(0.46,'#132245');
+  base.addColorStop(0.72,'#0b5172');
+  base.addColorStop(1,'#77f0d1');
+  ctx.fillStyle=base; ctx.fillRect(x,y,w,h);
+
+  for(let i=0;i<10;i++){
+    const bx=x-150+i*75;
+    const band=ctx.createLinearGradient(bx,y,bx+130,y+h);
+    band.addColorStop(0,'rgba(255,255,255,0)');
+    band.addColorStop(0.45,`rgba(${120+i*10},${210-i*4},255,0.18)`);
+    band.addColorStop(0.55,'rgba(255,240,170,0.16)');
+    band.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=band; ctx.fillRect(bx,y,130,h);
+  }
+  for(let i=0;i<34;i++){
+    const yy=y+28+i*18;
+    ctx.strokeStyle=i%2?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.12)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(x+16, yy);
+    ctx.bezierCurveTo(x+130, yy+Math.sin(i)*10, x+300, yy-Math.cos(i)*8, x+w-16, yy+Math.sin(i*1.7)*7);
+    ctx.stroke();
+  }
+
+  const crimp=ctx.createLinearGradient(0,y,0,y+84);
+  crimp.addColorStop(0,'rgba(255,255,255,0.44)');
+  crimp.addColorStop(0.42,'rgba(40,65,84,0.2)');
+  crimp.addColorStop(1,'rgba(0,0,0,0.22)');
+  ctx.fillStyle=crimp; ctx.fillRect(x,y,w,84);
+  ctx.save(); ctx.translate(0,y+h-84); ctx.scale(1,-1); ctx.fillStyle=crimp; ctx.fillRect(x,-84,w,84); ctx.restore();
+  for(let i=0;i<18;i++){
+    const px=x+i*w/17;
+    ctx.strokeStyle=i%2?'rgba(255,255,255,0.24)':'rgba(0,0,0,0.24)';
+    ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(px,y+4); ctx.lineTo(px+Math.sin(i)*8,y+80); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px,y+h-4); ctx.lineTo(px+Math.cos(i)*8,y+h-80); ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=22; ctx.shadowOffsetY=10;
+  ctx.strokeStyle='rgba(0,0,0,0.55)'; ctx.lineWidth=12; roundRect(ctx,x,y,w,h,34); ctx.stroke();
+  ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  ctx.strokeStyle='rgba(255,239,174,0.88)'; ctx.lineWidth=5; roundRect(ctx,x+10,y+10,w-20,h-20,28); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.38)'; ctx.lineWidth=2; roundRect(ctx,x+22,y+22,w-44,h-44,22); ctx.stroke();
+
+  ctx.save(); ctx.translate(256,252);
+  const med=ctx.createRadialGradient(0,0,18,0,0,154);
+  med.addColorStop(0,'rgba(255,242,170,0.7)');
+  med.addColorStop(0.48,'rgba(255,204,98,0.24)');
+  med.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=med; ctx.fillRect(-170,-170,340,340);
+  ctx.strokeStyle='rgba(255,232,142,0.76)'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,118,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='rgba(0,0,0,0.26)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,126,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='rgba(255,227,126,0.86)';
+  for(let a=0;a<8;a++){
+    const ang=a*Math.PI/4, r=(a%2===0)?126:78;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang-0.12)*24,Math.sin(ang-0.12)*24);
+    ctx.lineTo(Math.cos(ang)*r,Math.sin(ang)*r);
+    ctx.lineTo(Math.cos(ang+0.12)*24,Math.sin(ang+0.12)*24);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle='#74d461';
+  ctx.beginPath(); ctx.ellipse(0,56,96,26,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#8b5b35';
+  ctx.beginPath(); ctx.moveTo(-72,62); ctx.lineTo(0,120); ctx.lineTo(72,62); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#2d7b43';
+  [-48,-16,18,52].forEach((tx)=>{
+    ctx.beginPath(); ctx.moveTo(tx,18); ctx.lineTo(tx+18,58); ctx.lineTo(tx-18,58); ctx.closePath(); ctx.fill();
+  });
+  ctx.restore();
+
+  const label=ctx.createLinearGradient(0,408,0,602);
+  label.addColorStop(0,'rgba(7,15,24,0.82)');
+  label.addColorStop(1,'rgba(3,6,10,0.92)');
+  ctx.fillStyle=label; roundRect(ctx,76,408,360,184,22); ctx.fill();
+  ctx.strokeStyle='rgba(255,233,150,0.66)'; ctx.lineWidth=3; roundRect(ctx,76,408,360,184,22); ctx.stroke();
+  ctx.textAlign='center';
+  fitText(ctx, config.packTitle, 330, '900 {size}px system-ui', 42, 26);
+  ctx.fillStyle='#91ee73'; ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=10;
+  ctx.fillText(config.packTitle, 256, 468);
+  ctx.fillStyle='#ffe180'; ctx.font='900 56px system-ui'; ctx.fillText('BOOSTER', 256, 528);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#dfe7ef'; ctx.font='900 17px system-ui';
+  ctx.fillText(config.packLabel.toUpperCase(), 256, 566);
+
+  ctx.fillStyle='rgba(5,9,14,0.74)'; roundRect(ctx,92,94,328,42,12); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1.5; roundRect(ctx,92,94,328,42,12); ctx.stroke();
+  ctx.fillStyle='#eef7ff'; ctx.font='800 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(config.packSubtitle.toUpperCase().slice(0, 32), 256, 116);
+}
+function makePackTexture(config){
+  const c=document.createElement('canvas'); c.width=512; c.height=716;
+  const ctx=c.getContext('2d');
+  drawPackTextureCanvas(ctx, config);
+
+  const tex=new THREE_NS.Texture(c); tex.needsUpdate=true; tex.anisotropy=8;
+  registerDynamicTexture(c, tex, ()=>drawPackTextureCanvas(ctx, config));
+  return tex;
+}
+
+function edgeTexture(){
+  const c=document.createElement('canvas'); c.width=16; c.height=16; const x=c.getContext('2d');
+  x.fillStyle='#2a3038'; x.fillRect(0,0,16,16);
+  const tex=new THREE_NS.Texture(c); tex.needsUpdate=true; return tex;
+}
+
+/* ============================================================
+   THREE.JS SCENE
+   ============================================================ */
+const T = THREE_NS;
+const app = document.getElementById('app');
+const W0 = window.innerWidth, H0 = window.innerHeight;
+
+const renderer = new T.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(W0,H0);
+if('outputColorSpace' in renderer && T.SRGBColorSpace) renderer.outputColorSpace = T.SRGBColorSpace;
+else renderer.outputEncoding = T.sRGBEncoding;
+renderer.setClearColor(0x030405, 1);
+app.appendChild(renderer.domElement);
+
+const scene = new T.Scene();
+scene.fog = new T.FogExp2(0x030405, 0.026);
+
+const camera = new T.PerspectiveCamera(42, W0/H0, 0.1, 100);
+camera.position.set(0, 0, 16);
+camera.lookAt(0,0,0);
+
+// lights — kept low so the portal glows are the dominant light source
+scene.add(new T.AmbientLight(0x3a4452, 0.32));
+const key = new T.DirectionalLight(0xb8c4d4, 0.42); key.position.set(4,8,10); scene.add(key);
+const rim = new T.PointLight(0x4a6cc0, 0.9, 38); rim.position.set(-6,2,8); scene.add(rim);
+const warm = new T.PointLight(0xc06a3a, 0.4, 38); warm.position.set(6,-3,6); scene.add(warm);
+
+// starfield backdrop
+(function stars(){
+  const g=new T.BufferGeometry(); const N=400; const p=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ p[i*3]=(Math.random()-0.5)*60; p[i*3+1]=(Math.random()-0.5)*40; p[i*3+2]=-10-Math.random()*30; }
+  g.setAttribute('position', new T.BufferAttribute(p,3));
+  const m=new T.PointsMaterial({ color:0x2a3850, size:0.07, transparent:true, opacity:0.4 });
+  scene.add(new T.Points(g,m));
+})();
+
+const CARD_W = 3.0, CARD_H = 4.19, CARD_D = 0.05;
+
+function makePreviewPackConfig(){
+  const api = window.TinyverseCollectibles;
+  if(!api || typeof api.rollPack !== 'function') return null;
+  try {
+    const preview = api.rollPack('card-reveal-preview-fish-1');
+    return preview && Array.isArray(preview.cards) && preview.cards.length ? preview : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+let activePackConfig = makePreviewPackConfig() || PACK_CONFIG;
+let packData = activePackConfig.cards;
+let currentPackRoll = null;
+
+function disposeCardGroup(grp){
+  if(!grp) return;
+  grp.traverse(obj => {
+    if(obj.geometry) obj.geometry.dispose();
+    if(obj.material){
+      if(Array.isArray(obj.material)) obj.material.forEach(mat => { if(mat.map) mat.map.dispose(); mat.dispose(); });
+      else { if(obj.material.map) obj.material.map.dispose(); obj.material.dispose(); }
+    }
+  });
+  scene.remove(grp);
+}
+
+// ---- PACK MESH ----
+const packTex = makePackTexture(activePackConfig);
+const edge = edgeTexture();
+const packGeo = new T.BoxGeometry(CARD_W*1.06, CARD_H*1.04, 0.5);
+const packMat = [
+  new T.MeshStandardMaterial({ map:edge, roughness:0.6, metalness:0.3, fog:false }),
+  new T.MeshStandardMaterial({ map:edge, roughness:0.6, metalness:0.3, fog:false }),
+  new T.MeshStandardMaterial({ map:edge, roughness:0.6, metalness:0.3, fog:false }),
+  new T.MeshStandardMaterial({ map:edge, roughness:0.6, metalness:0.3, fog:false }),
+  new T.MeshBasicMaterial({ map:packTex, fog:false, transparent:true, alphaTest:0.05 }),
+  new T.MeshBasicMaterial({ map:packTex, fog:false, transparent:true, alphaTest:0.05 }),
+];
+const pack = new T.Mesh(packGeo, packMat);
+scene.add(pack);
+
+// pack glow sprite
+const glowTex=(function(){ const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+  const g=x.createRadialGradient(128,128,10,128,128,128); g.addColorStop(0,'rgba(120,170,255,0.5)'); g.addColorStop(1,'rgba(120,170,255,0)');
+  x.fillStyle=g;x.fillRect(0,0,256,256); const t=new T.Texture(c);t.needsUpdate=true;return t;})();
+const packGlow = new T.Sprite(new T.SpriteMaterial({ map:glowTex, transparent:true, opacity:0.8, depthWrite:false }));
+packGlow.scale.set(7,9,1); packGlow.position.z=-0.3; pack.add(packGlow);
+
+// ---- CARD MESHES ----
+const cards = [];
+let focusCard = null;
+function buildCard(card, idx){
+  const grp = new T.Group();
+  const front = makeFrontTexture(card);
+  const back  = makeBackTexture(card);
+  const geo = new T.BoxGeometry(CARD_W, CARD_H, CARD_D);
+  // material order: +x,-x,+y,-y,+z,-z
+  // +z faces the camera at rest -> show the card back first; flip (rot Y = PI) reveals art/stats on -z
+  const edgeMat = new T.MeshStandardMaterial({ color:0x1a1f26, roughness:0.5, metalness:0.4, fog:false });
+  const backMatObj = new T.MeshBasicMaterial({ map:back, fog:false });
+  const frontMatObj = new T.MeshBasicMaterial({ map:front, fog:false });
+  const mat = [
+    edgeMat, edgeMat, edgeMat, edgeMat,
+    backMatObj,   // +z  -> portal back (visible first)
+    frontMatObj,  // -z  -> island art + stats (revealed on flip)
+  ];
+  const mesh = new T.Mesh(geo, mat);
+  grp.add(mesh);
+
+  // per-card rim glow sprite
+  const gs = new T.Sprite(new T.SpriteMaterial({ map:glowTex, transparent:true, opacity:0, depthWrite:false, color:card.glow }));
+  gs.scale.set(5,6,1); gs.position.z=-0.2; grp.add(gs);
+
+  grp.userData = {
+    card, idx, mesh, glow:gs, backMat:backMatObj,
+    flipped:false, flipTarget:0, hover:0,
+    homePos:new T.Vector3(), homeRot:new T.Euler(),
+  };
+  grp.visible=false;
+  scene.add(grp);
+  return grp;
+}
+function rebuildCardsFromPack(pack){
+  while(cards.length){
+    const grp = cards.pop();
+    disposeCardGroup(grp);
+  }
+  activePackConfig = pack;
+  packData = pack.cards.map((card, idx) => normalizePackCard(card, idx));
+  packData.forEach((card, i) => cards.push(buildCard(card, i)));
+  computeFan();
+  focusCard = null;
+}
+
+rebuildCardsFromPack(activePackConfig);
+
+// fan layout positions
+function computeFan(){
+  const n=cards.length;
+  const spread=2.55, arc=0.16, lift=0.24;
+  cards.forEach((c,i)=>{
+    const t=(i-(n-1)/2);
+    c.userData.homePos.set(t*spread, -Math.abs(t)*lift, -Math.abs(t)*0.18);
+    c.userData.homeRot.set(0, -t*0.08, -t*arc);
+  });
+}
+computeFan();
+
+/* ============================================================
+   STATE MACHINE + ANIMATION
+   ============================================================ */
+let phase = 'hub';   // hub -> intro -> shop -> pack -> bursting -> fan -> inspect
+let t0 = performance.now();
+const prompt = document.getElementById('prompt');
+const btn = document.getElementById('btn');
+const titleEl = document.getElementById('title');
+const goldPill = document.getElementById('goldPill');
+const collectionBtn = document.getElementById('collectionBtn');
+const collectionOverlay = document.getElementById('collectionOverlay');
+const collectionList = document.getElementById('collectionList');
+const collectionClose = document.getElementById('collectionClose');
+const pageParams = new URLSearchParams(window.location.search);
+const TC = window.TinyverseCollectibles;
+const PACK_COST = TC ? TC.PACK_COST : 250;
+const PA = window.TinyversePackAudio;
+const StoreHub = window.TinyverseStoreHub;
+let packExperienceStarted = false;
+let selectedCatalogPack = null;
+const hubBackBtn = document.getElementById('hubBackBtn');
+
+function setPrompt(txt){ prompt.textContent=txt; prompt.classList.toggle('show', !!txt); }
+function setBtn(txt, onClick){
+  if(txt){
+    btn.textContent=txt;
+    btn.classList.add('show');
+    btn.onclick = onClick || null;
+  } else {
+    btn.classList.remove('show');
+    btn.onclick = null;
+  }
+}
+
+function freeOpensLabel(){
+  if(!TC || typeof TC.getFreePacksRemaining !== 'function') return '—';
+  const left = TC.getFreePacksRemaining();
+  const limit = TC.FREE_PACK_LIMIT || 3;
+  return left + ' of ' + limit + ' free';
+}
+
+function refreshGoldHud(){
+  if(goldPill && TC) goldPill.textContent = freeOpensLabel();
+  if(StoreHub && typeof StoreHub.refresh === 'function') StoreHub.refresh();
+}
+
+async function bindPackUserFromAuth(){
+  if(!TC || typeof TC.setFreePackUser !== 'function') return;
+  try {
+    const gate = window.TinyverseAuthGate;
+    if(gate && typeof gate.getUserEmail === 'function'){
+      const email = await gate.getUserEmail();
+      if(email) { TC.setFreePackUser(email); return; }
+    }
+    const Auth = window.TinyWorldAuth;
+    if(Auth && typeof Auth.getUser === 'function'){
+      const user = await Auth.getUser();
+      if(user && user.email) TC.setFreePackUser(user.email);
+    }
+  } catch (_) {}
+}
+
+function collectiblePreviewFromRow(row){
+  if(!row) return null;
+  if(row.preview && Array.isArray(row.preview.cells) && row.preview.cells.length) return row.preview;
+  if(!row.world) return null;
+  return {
+    gridSize: row.world.gridSize || 8,
+    cells: Array.isArray(row.world.cells) ? row.world.cells : [],
+  };
+}
+
+function paintCollection(){
+  if(!collectionList || !TC) return;
+  const rows = TC.list().filter(row => row && row.kind === 'island');
+  collectionList.innerHTML = '';
+  if(!rows.length){
+    const empty = document.createElement('div');
+    empty.className = 'collection-empty';
+    empty.textContent = 'No islands yet. Open a free pack to reveal your first island.';
+    collectionList.appendChild(empty);
+    return;
+  }
+  rows.forEach(row => {
+    const item = document.createElement('div');
+    item.className = 'collection-item';
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'collection-preview-wrap';
+    let thumbUrl = row.thumbnailUrl || '';
+    if(!thumbUrl && typeof TC.ensureThumbnail === 'function') thumbUrl = TC.ensureThumbnail(row) || '';
+    if(thumbUrl){
+      const thumbImg = document.createElement('img');
+      thumbImg.className = 'collection-thumb';
+      thumbImg.src = thumbUrl;
+      thumbImg.alt = '';
+      thumbImg.loading = 'lazy';
+      previewWrap.appendChild(thumbImg);
+    } else {
+      const previewCanvas = document.createElement('canvas');
+      previewCanvas.className = 'collection-preview';
+      previewCanvas.width = 176;
+      previewCanvas.height = 112;
+      previewWrap.appendChild(previewCanvas);
+      const preview = collectiblePreviewFromRow(row);
+      if(preview && window.TinyWorldPreview && typeof window.TinyWorldPreview.renderPreview === 'function'){
+        try { window.TinyWorldPreview.renderPreview(previewCanvas, preview); } catch (_) {}
+      }
+    }
+    const title = document.createElement('strong');
+    title.textContent = row.name || 'Island';
+    const meta = document.createElement('span');
+    const yieldLabel = TC && typeof TC.rawYieldLabel === 'function' ? TC.rawYieldLabel(row) : 'Raw Yield unavailable';
+    meta.textContent = yieldLabel;
+    const visit = document.createElement('button');
+    visit.type = 'button';
+    visit.textContent = 'Visit';
+    visit.addEventListener('click', () => {
+      TC.handoffToBuilder(row.id);
+    });
+    item.appendChild(previewWrap);
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.appendChild(visit);
+    collectionList.appendChild(item);
+  });
+}
+
+function openCollection(){
+  if(PA) PA.collectionOpen();
+  paintCollection();
+  if(collectionOverlay){
+    collectionOverlay.hidden = false;
+    collectionOverlay.classList.add('show');
+  }
+}
+function closeCollection(){
+  if(collectionOverlay){
+    collectionOverlay.hidden = true;
+    collectionOverlay.classList.remove('show');
+  }
+}
+
+function activePackCost(){
+  return selectedCatalogPack && Number.isFinite(Number(selectedCatalogPack.cost))
+    ? Math.floor(Number(selectedCatalogPack.cost))
+    : PACK_COST;
+}
+
+function showTheaterUi(){
+  document.body.classList.add('tinyverse-theater-active');
+  document.body.style.background = '#030405';
+  if(hubBackBtn) hubBackBtn.hidden = false;
+  if(titleEl) titleEl.classList.add('show');
+}
+
+function hideTheaterUi(){
+  document.body.classList.remove('tinyverse-theater-active');
+  document.body.style.background = '';
+  if(hubBackBtn) hubBackBtn.hidden = true;
+  setPrompt(''); setBtn('');
+  if(titleEl) titleEl.classList.remove('show');
+  pack.visible = false;
+}
+
+function returnToHub(){
+  phase = 'hub';
+  selectedCatalogPack = null;
+  currentPackRoll = null;
+  focusCard = null;
+  hideTheaterUi();
+  cards.forEach(c => { c.visible = false; });
+  pack.visible = false;
+  pack.scale.setScalar(0.78);
+  packGlow.material.opacity = 0.6;
+  if(collectionOverlay) closeCollection();
+  if(StoreHub && typeof StoreHub.show === 'function'){
+    StoreHub.show({
+      onOpenPack: enterPackTheater,
+    });
+  }
+  refreshGoldHud();
+}
+
+function enterPackTheater(catalogPack){
+  if(!catalogPack) return;
+  if(TC && typeof TC.canOpenFreePack === 'function' && !TC.canOpenFreePack()){
+    setPrompt('All 3 free packs used');
+    setBtn('');
+    returnToHub();
+    return;
+  }
+  selectedCatalogPack = catalogPack;
+  currentPackRoll = null;
+  if(StoreHub && typeof StoreHub.hide === 'function') StoreHub.hide();
+  showTheaterUi();
+  phase = 'shop';
+  titleEl.querySelector('h1').textContent = catalogPack.name || PACK_CONFIG.packTitle;
+  titleEl.querySelector('p').textContent = catalogPack.subtitle || PACK_CONFIG.packSubtitle;
+  pack.visible = true;
+  pack.scale.setScalar(1.28);
+  refreshGoldHud();
+  setPrompt('Free preview · ' + freeOpensLabel() + ' opens left');
+  setBtn('Open free pack', () => {
+    if(!ensurePackPurchased()){
+      setPrompt('No free packs remaining');
+      refreshGoldHud();
+      return;
+    }
+    openPack();
+  });
+  if(pageParams.has('autoOpen') && ensurePackPurchased()) setTimeout(openPack, 250);
+}
+
+function ensurePackPurchased(){
+  if(currentPackRoll) return currentPackRoll;
+  if(!TC || typeof TC.openPack !== 'function') return null;
+  if(typeof TC.canOpenFreePack === 'function' && !TC.canOpenFreePack()) return null;
+  const pack = TC.openPack(selectedCatalogPack || null);
+  if(!pack) return null;
+  currentPackRoll = pack;
+  if(PA) PA.packBuy();
+  rebuildCardsFromPack({
+    packTitle: pack.packTitle || PACK_CONFIG.packTitle,
+    packSubtitle: pack.packSubtitle || PACK_CONFIG.packSubtitle,
+    packLabel: pack.packLabel || PACK_CONFIG.packLabel,
+    cards: pack.cards,
+  });
+  titleEl.querySelector('h1').textContent = activePackConfig.packTitle;
+  titleEl.querySelector('p').textContent = activePackConfig.packSubtitle;
+  if(pack.savedCollectible) paintCollection();
+  refreshGoldHud();
+  pack.visible = true;
+  pack.scale.setScalar(phase === 'intro' ? 0.78 : 1.28);
+  return pack;
+}
+
+function grantBonusCards(){
+  if(!TC || !packData) return;
+  packData.forEach(card => {
+    if(card.kind === 'bonus' && card.goldGrant > 0) {
+      TC.applyBonusGold(card);
+      if(PA) PA.bonusGold();
+    }
+  });
+  refreshGoldHud();
+}
+
+function visitFocusedIsland(){
+  if(!focusCard || !TC) return;
+  const card = focusCard.userData.card;
+  if(!card || card.kind !== 'island' || !card.world) return;
+  const saved = TC.saveIslandFromCard(card, { packSeed: currentPackRoll && currentPackRoll.packSeed });
+  if(!saved) return;
+  if(PA) PA.visitIsland();
+  paintCollection();
+  TC.handoffToBuilder(saved.id);
+}
+
+titleEl.querySelector('h1').textContent = activePackConfig.packTitle;
+titleEl.querySelector('p').textContent = activePackConfig.packSubtitle;
+refreshGoldHud();
+if(collectionBtn) collectionBtn.addEventListener('click', openCollection);
+if(collectionClose) collectionClose.addEventListener('click', closeCollection);
+if(collectionOverlay) collectionOverlay.addEventListener('click', e => { if(e.target === collectionOverlay) closeCollection(); });
+if(hubBackBtn) hubBackBtn.addEventListener('click', returnToHub);
+
+async function startPackExperience(){
+  if(packExperienceStarted) return;
+  packExperienceStarted = true;
+  await bindPackUserFromAuth();
+  if(PA) PA.unlock();
+  phase = 'hub';
+  hideTheaterUi();
+  if(StoreHub && typeof StoreHub.show === 'function'){
+    StoreHub.show({
+      onOpenPack: enterPackTheater,
+    });
+  } else {
+    const fallback = window.TinyverseStoreCatalog && typeof window.TinyverseStoreCatalog.getFeaturedPack === 'function'
+      ? window.TinyverseStoreCatalog.getFeaturedPack()
+      : null;
+    setTimeout(() => enterPackTheater(fallback || { id: 'island-pack', name: 'Island Pack', cost: 0 }), 300);
+  }
+  if(pageParams.has('pack')){
+    const packId = pageParams.get('pack');
+    const catalog = window.TinyverseStoreCatalog;
+    const pack = catalog && typeof catalog.getPack === 'function' ? catalog.getPack(packId) : null;
+    if(pack) setTimeout(() => enterPackTheater(pack), 400);
+  }
+}
+
+window.__tinyversePackRevealStart = startPackExperience;
+
+async function bootTinyverseRevealGate(){
+  const gate = window.TinyverseAuthGate;
+  if(!gate || typeof gate.require !== 'function'){
+    startPackExperience();
+    return;
+  }
+  try {
+    if (window.__tinyworldAuthReady && typeof window.__tinyworldAuthReady.then === 'function') {
+      await Promise.race([
+        window.__tinyworldAuthReady,
+        new Promise(resolve => setTimeout(resolve, 4000)),
+      ]);
+    }
+  } catch (_) {}
+  if (typeof gate.wireControls === 'function') gate.wireControls();
+  await gate.require({ onReady: startPackExperience });
+}
+bootTinyverseRevealGate();
+
+let burstParticles = null;
+const wrapperShards = [];
+function spawnBurst(){
+  const N=160; const g=new T.BufferGeometry();
+  const pos=new Float32Array(N*3), vel=[];
+  const col=new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    pos[i*3]=0; pos[i*3+1]=0; pos[i*3+2]=0;
+    const a=Math.random()*Math.PI*2, b=(Math.random()-0.5)*Math.PI;
+    const sp=2+Math.random()*5;
+    vel.push(new T.Vector3(Math.cos(a)*Math.cos(b)*sp, Math.sin(b)*sp+1, Math.sin(a)*Math.cos(b)*sp));
+    const c=new T.Color().setHSL(0.55+Math.random()*0.15,0.8,0.65);
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  g.setAttribute('position',new T.BufferAttribute(pos,3));
+  g.setAttribute('color',new T.BufferAttribute(col,3));
+  const m=new T.PointsMaterial({ size:0.18, vertexColors:true, transparent:true, opacity:1, depthWrite:false, blending:T.AdditiveBlending });
+  const pts=new T.Points(g,m); scene.add(pts);
+  burstParticles={ pts, vel, life:0 };
+}
+function spawnWrapperShards(){
+  const palette = activePackConfig.cards.map(card => card.glow);
+  for(let i=0;i<34;i++){
+    const w=0.18+Math.random()*0.34, h=0.28+Math.random()*0.48;
+    const geo=new T.PlaneGeometry(w,h);
+    const color=palette[i % palette.length] || 0x4f9fe0;
+    const mat=new T.MeshStandardMaterial({
+      color,
+      metalness:0.72,
+      roughness:0.22,
+      emissive:color,
+      emissiveIntensity:0.08,
+      side:T.DoubleSide,
+      transparent:true,
+      opacity:0.92,
+    });
+    const shard=new T.Mesh(geo,mat);
+    shard.position.set((Math.random()-0.5)*0.5,(Math.random()-0.5)*0.4,0.72+Math.random()*0.2);
+    shard.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    const a=Math.random()*Math.PI*2;
+    shard.userData.vel = new T.Vector3(Math.cos(a)*(1.6+Math.random()*4.2), Math.sin(a)*(1.1+Math.random()*3.2)+1.2, (Math.random()-0.5)*2.4);
+    shard.userData.spin = new T.Vector3((Math.random()-0.5)*10, (Math.random()-0.5)*10, (Math.random()-0.5)*10);
+    shard.userData.life = 0;
+    wrapperShards.push(shard);
+    scene.add(shard);
+  }
+}
+
+function openPack(){
+  if(phase !== 'pack' && phase !== 'shop') return;
+  if(!currentPackRoll && !ensurePackPurchased()){
+    setPrompt('No free packs remaining');
+    refreshGoldHud();
+    return;
+  }
+  phase='bursting';
+  setPrompt(''); setBtn('');
+  if(PA) PA.packBurst();
+  t0=performance.now();
+  spawnBurst();
+  spawnWrapperShards();
+  grantBonusCards();
+  // reveal cards stacked at pack center
+  cards.forEach((c,i)=>{ c.visible=true; c.position.set(0,0,0.3); c.rotation.set(0,0,0); c.scale.setScalar(0.6); });
+}
+
+btn.addEventListener('click',(e)=>{ e.stopPropagation();
+  if(phase==='shop'){
+    if(!ensurePackPurchased()){
+      setPrompt('No free packs remaining');
+      refreshGoldHud();
+      return;
+    }
+    phase='pack';
+    openPack();
+    return;
+  }
+  if(phase==='pack') openPack();
+  else if(phase==='inspect' && focusCard && focusCard.userData.flipped && focusCard.userData.card && focusCard.userData.card.kind === 'island'){
+    visitFocusedIsland();
+  }
+  else if(phase==='inspect') returnToFan();
+});
+
+// pointer pick for flipping
+const ray = new T.Raycaster();
+const ptr = new T.Vector2();
+function pick(clientX, clientY){
+  ptr.x=(clientX/window.innerWidth)*2-1;
+  ptr.y=-(clientY/window.innerHeight)*2+1;
+  ray.setFromCamera(ptr,camera);
+  const meshes=cards.filter(c=>c.visible).map(c=>c.userData.mesh);
+  const hit=ray.intersectObjects(meshes,false);
+  return hit.length? hit[0].object.parent : null;
+}
+
+renderer.domElement.addEventListener('pointerdown',(e)=>{
+  if(phase==='shop'){
+    if(!ensurePackPurchased()){
+      setPrompt('No free packs remaining');
+      refreshGoldHud();
+      return;
+    }
+    phase='pack';
+    openPack();
+    return;
+  }
+  if(phase==='pack'){ openPack(); return; }
+  if(phase!=='fan' && phase!=='inspect') return;
+  const c=pick(e.clientX,e.clientY);
+  if(!c) { if(phase==='inspect') returnToFan(); return; }
+  if(phase==='fan'){ focusOn(c); }
+  else if(phase==='inspect'){
+    if(c===focusCard){
+      c.userData.flipTarget = c.userData.flipped?0:1;
+      c.userData.flipped=!c.userData.flipped;
+      if(PA) PA.cardFlip();
+      updateInspectHud();
+    }
+    else focusOn(c);
+  }
+});
+
+function focusOn(card){
+  phase='inspect'; focusCard=card;
+  card.userData.flipTarget = card.userData.flipped?1:0;
+  if(PA) PA.cardFocus();
+  updateInspectHud();
+}
+function updateInspectHud(){
+  if(!focusCard){
+    setPrompt('Tap a card to inspect');
+    setBtn('');
+    return;
+  }
+  const card = focusCard.userData.card;
+  if(card && card.kind === 'island' && focusCard.userData.flipped){
+    setPrompt('Island collectible · visit in play mode');
+    setBtn('Visit Island', visitFocusedIsland);
+    return;
+  }
+  setPrompt('Tap card to flip · tap away to go back');
+  setBtn('Back to spread', returnToFan);
+}
+function returnToFan(){
+  phase='fan'; focusCard=null;
+  if(cards.length === 1 && cards[0] && cards[0].visible){
+    const c = cards[0];
+    c.userData.flipped = true;
+    c.userData.flipTarget = 1;
+    focusOn(c);
+    return;
+  }
+  setPrompt('Tap a card to inspect');
+  setBtn('');
+}
+
+window.__tinyworldPackReveal = {
+  sheetReady: !!cardsSheetImage,
+  sheetError: cardsSheetError,
+  wrapperReady: !!packWrapperImage,
+  wrapperError: packWrapperError,
+  getData: () => activePackConfig,
+  getCards: () => packData,
+  getPhase: () => phase,
+  getGold: () => (TC ? TC.getGold() : 0),
+  buyPack: () => ensurePackPurchased(),
+  open: () => openPack(),
+  redraw: () => redrawDynamicTextures(),
+  listCollectibles: () => (TC ? TC.list() : []),
+  visitIsland: visitFocusedIsland,
+  setData(data){
+    const node = document.getElementById('pack-data');
+    if(node) node.textContent = JSON.stringify(data, null, 2);
+    window.TINYWORLD_PACK_DATA = data;
+    location.reload();
+  },
+};
+
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+/* ---------- main loop ---------- */
+const TMPV = new T.Vector3();
+let lastFrameTime = performance.now();
+function lerp(a,b,t){ return a+(b-a)*t; }
+function damp(cur,tar,lambda,dt){ return lerp(cur,tar,1-Math.exp(-lambda*dt)); }
+
+function animate(){
+  requestAnimationFrame(animate);
+  const now=performance.now();
+  const dt=Math.min((now-lastFrameTime)/1000,0.05);
+  lastFrameTime=now;
+  const tphase=(now-t0)/1000;
+
+  // ambient pack float
+  if(phase==='hub'){
+    renderer.render(scene, camera);
+    return;
+  }
+  if(phase==='intro'||phase==='shop'||phase==='pack'){
+    pack.position.y = Math.sin(now*0.0012)*0.18;
+    pack.rotation.y = Math.sin(now*0.0009)*0.18;
+    pack.rotation.x = Math.sin(now*0.0011)*0.06;
+    const pulse=0.6+Math.sin(now*0.004)*0.2;
+    packGlow.material.opacity=pulse;
+    pack.scale.setScalar(damp(pack.scale.x, phase==='intro'?0.78:1.28, 6, dt));
+  }
+
+  // bursting: pack flies apart, cards scatter then settle into fan
+  if(phase==='bursting'){
+    // pack scales/fades out
+    pack.scale.setScalar(damp(pack.scale.x, 0.01, 8, dt));
+    packGlow.material.opacity=damp(packGlow.material.opacity,0,8,dt);
+    pack.rotation.z += dt*2;
+    if(pack.scale.x<0.05) pack.visible=false;
+
+    // particles
+    if(burstParticles){
+      burstParticles.life+=dt;
+      const p=burstParticles.pts.geometry.attributes.position;
+      for(let i=0;i<burstParticles.vel.length;i++){
+        const v=burstParticles.vel[i]; v.y-=dt*3.0; // gravity
+        p.array[i*3]+=v.x*dt; p.array[i*3+1]+=v.y*dt; p.array[i*3+2]+=v.z*dt;
+      }
+      p.needsUpdate=true;
+      burstParticles.pts.material.opacity=Math.max(0,1-burstParticles.life/1.3);
+      if(burstParticles.life>1.4){ scene.remove(burstParticles.pts); burstParticles=null; }
+    }
+
+    // cards animate from center to fan with stagger
+    let allHome=true;
+    cards.forEach((c,i)=>{
+      const d=c.userData;
+      const delay=i*0.08;
+      const lt=Math.max(0,tphase-0.15-delay);
+      const k=Math.min(1, lt*1.4);
+      const ease=1-Math.pow(1-k,3);
+      c.position.lerpVectors(new T.Vector3(0,0,0.3), d.homePos, ease);
+      c.rotation.x=lerp(0,d.homeRot.x,ease);
+      c.rotation.y=lerp(0,d.homeRot.y,ease);
+      c.rotation.z=lerp(0,d.homeRot.z,ease);
+      c.scale.setScalar(lerp(0.6,1,ease));
+      // back portal lights up as card emerges
+      const e=ease;
+      d.backMat.emissiveIntensity=lerp(0,0.8,e);
+      d.glow.material.opacity=lerp(0,0.6,e);
+      if(k<0.999) allHome=false;
+    });
+    if(allHome && tphase>1.2){ returnToFan(); }
+  }
+
+  if(wrapperShards.length){
+    for(let i=wrapperShards.length-1;i>=0;i--){
+      const shard=wrapperShards[i], d=shard.userData;
+      d.life+=dt;
+      d.vel.y-=dt*3.2;
+      shard.position.addScaledVector(d.vel, dt);
+      shard.rotation.x+=d.spin.x*dt;
+      shard.rotation.y+=d.spin.y*dt;
+      shard.rotation.z+=d.spin.z*dt;
+      shard.material.opacity=Math.max(0,0.92-d.life/1.55);
+      if(d.life>1.55){
+        scene.remove(shard);
+        shard.geometry.dispose();
+        shard.material.dispose();
+        wrapperShards.splice(i,1);
+      }
+    }
+  }
+
+  // fan idle: gentle bob + hover response
+  if(phase==='fan'){
+    cards.forEach((c,i)=>{
+      const d=c.userData;
+      const bob=Math.sin(now*0.0015+i*0.7)*0.05;
+      c.position.x=damp(c.position.x,d.homePos.x,8,dt);
+      c.position.y=damp(c.position.y,d.homePos.y+bob,8,dt);
+      c.position.z=damp(c.position.z,d.homePos.z,8,dt);
+      c.rotation.x=damp(c.rotation.x,d.homeRot.x,8,dt);
+      c.rotation.y=damp(c.rotation.y,d.homeRot.y+Math.sin(now*0.0012+i)*0.02,8,dt);
+      c.rotation.z=damp(c.rotation.z,d.homeRot.z,8,dt);
+      c.scale.setScalar(damp(c.scale.x,1,8,dt));
+      // pulsing portal glow on back
+      const pl=0.62+Math.sin(now*0.003+i*1.3)*0.2;
+      d.backMat.emissiveIntensity=damp(d.backMat.emissiveIntensity,pl,5,dt);
+      d.glow.material.opacity=damp(d.glow.material.opacity,pl*0.9,5,dt);
+    });
+  }
+
+  // inspect: focused card center+flip, others slide to background
+  if(phase==='inspect' && focusCard){
+    cards.forEach((c)=>{
+      const d=c.userData;
+      if(c===focusCard){
+        // bring to center front
+        c.position.x=damp(c.position.x,0,9,dt);
+        c.position.y=damp(c.position.y,0,9,dt);
+        c.position.z=damp(c.position.z,2.65,9,dt);
+        c.scale.setScalar(damp(c.scale.x,1.28,9,dt));
+        // flip rotation toward target
+        const targetY = d.flipTarget*Math.PI; // 0=back showing? handle below
+        d.rotation_target = targetY;
+        c.rotation.x=damp(c.rotation.x,0,9,dt);
+        c.rotation.z=damp(c.rotation.z,0,9,dt);
+        // smooth flip
+        c.rotation.y=damp(c.rotation.y, d.flipTarget*Math.PI, 7, dt);
+        // gentle tilt toward pointer for life
+        c.rotation.x += Math.sin(now*0.002)*0.02;
+        // glow when back faces us
+        const backFacing = Math.cos(c.rotation.y)>0;
+        d.backMat.emissiveIntensity=damp(d.backMat.emissiveIntensity, backFacing?0.85:0.0, 6, dt);
+        d.glow.material.opacity=damp(d.glow.material.opacity, backFacing?0.7:0.1, 6, dt);
+      } else {
+        // push others back + dim
+        const dir=Math.sign(d.homePos.x||0.001);
+        c.position.x=damp(c.position.x, d.homePos.x*2.85 + dir*3.4, 7, dt);
+        c.position.y=damp(c.position.y, d.homePos.y-0.92, 7, dt);
+        c.position.z=damp(c.position.z, -4.2 - Math.abs(d.homePos.x)*0.18, 7, dt);
+        c.scale.setScalar(damp(c.scale.x,0.58,7,dt));
+        c.rotation.y=damp(c.rotation.y, d.homeRot.y, 7, dt);
+        c.rotation.z=damp(c.rotation.z, d.homeRot.z*1.5, 7, dt);
+        d.backMat.emissiveIntensity=damp(d.backMat.emissiveIntensity,0.15,5,dt);
+        d.glow.material.opacity=damp(d.glow.material.opacity,0.12,5,dt);
+      }
+    });
+  }
+
+  // subtle camera parallax breathing
+  camera.position.x = damp(camera.position.x, Math.sin(now*0.0004)*0.4, 2, dt);
+  camera.position.y = damp(camera.position.y, Math.cos(now*0.0005)*0.25, 2, dt);
+  camera.lookAt(0,0,0);
+
+  // light drift
+  rim.position.x = Math.sin(now*0.0008)*6;
+  warm.position.y = Math.cos(now*0.0007)*4;
+
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

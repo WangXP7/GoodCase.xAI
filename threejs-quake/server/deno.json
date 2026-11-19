@@ -1,0 +1,17 @@
+{
+	"name": "@three-quake/server",
+	"version": "1.0.0",
+	"exports": "./main.ts",
+	"tasks": {
+		"start": "deno run --allow-net --allow-read --allow-env --cert cert.pem main.ts",
+		"dev": "deno run --allow-net --allow-read --allow-env --watch main.ts"
+	},
+	"compilerOptions": {
+		"lib": ["deno.window"],
+		"strict": true
+	},
+	"imports": {
+		"@std/path": "jsr:@std/path@^1",
+		"three": "./browser_shim.js"
+	}
+}

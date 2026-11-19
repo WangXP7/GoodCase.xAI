@@ -1,0 +1,15 @@
+// Layout of the attributions: a group per category, a row per item with
+// name and author left, licence and source right.
+
+.at-head {
+  gap: var(--td-sp-2);
+}
+
+.at-info {
+  min-width: 0;
+}
+
+.at-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}

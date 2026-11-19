@@ -1,0 +1,77 @@
+// Layout of the coop chat over the map: the last lines, the open field, the
+// marking prompt, the keys until the first message. Strips of td-overlay;
+// player colours are data.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+}
+
+.line {
+  display: flex;
+  gap: 8px;
+  line-height: 1.4;
+
+  b {
+    flex: 0 0 auto;
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--td-text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  &.is-old {
+    opacity: 0.45;
+  }
+
+  &.is-sys span {
+    color: var(--td-text-muted);
+  }
+
+  &.is-sys.is-warn span {
+    color: var(--td-warn-text);
+  }
+}
+
+.open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  pointer-events: auto;
+
+  .td-input {
+    flex: 1;
+  }
+}
+
+.to {
+  color: var(--td-brass);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 5px 12px;
+}
+
+.armed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--td-brass-light);
+}

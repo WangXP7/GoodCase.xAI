@@ -1,0 +1,995 @@
+# LittleJS Frequently Asked Questions
+
+Welcome to the LittleJS FAQ!
+This document addresses common questions and issues to help developers get started and troubleshoot their projects.
+If you don't find an answer here, feel free to ask the community or check the documentation.
+
+**Getting Started**
+- [What is LittleJS, and how is it different from other JavaScript game engines?](#what-is-littlejs-and-how-is-it-different-from-other-javascript-game-engines)
+- [How do I set up a basic LittleJS project?](#how-do-i-set-up-a-basic-littlejs-project)
+- [How do I use LittleJS as an ES module?](#how-do-i-use-littlejs-as-an-es-module)
+- [How do I use LittleJS with TypeScript?](#how-do-i-use-littlejs-with-typescript)
+- [Why do I see a blank screen when I run my game?](#why-do-i-see-a-blank-screen-when-i-run-my-game)
+- [Why does my game say a name "has already been declared"?](#why-does-my-game-say-a-name-has-already-been-declared)
+- [Do I need a local server to run LittleJS games, and how do I set one up?](#do-i-need-a-local-server-to-run-littlejs-games-and-how-do-i-set-one-up)
+- [Which browsers does LittleJS run in?](#which-browsers-does-littlejs-run-in)
+- [How far can my world go, and how long can my game run?](#how-far-can-my-world-go-and-how-long-can-my-game-run)
+- [How does the camera and world coordinate systems work?](#how-does-the-camera-and-world-coordinate-systems-work)
+- [How do I configure engine settings?](#how-do-i-configure-engine-settings)
+- [What plugins ship with LittleJS?](#what-plugins-ship-with-littlejs)
+- [How do I use Vite with LittleJS?](#how-do-i-use-vite-with-littlejs)
+- [How do I use Box2D with Vite?](#how-do-i-use-box2d-with-vite)
+- [How do I build and publish my game?](#how-do-i-build-and-publish-my-game)
+- [How do I shrink my game for js13kGames?](#how-do-i-shrink-my-game-for-js13kgames)
+
+**Graphics and Sound**
+- [How do I load and add images to my game?](#how-do-i-load-and-add-images-to-my-game)
+- [What is the tile function and how do tile indexes work?](#what-is-the-tile-function-and-how-do-tile-indexes-work)
+- [Can I add and switch between multiple sprites for a game object?](#can-i-add-and-switch-between-multiple-sprites-for-a-game-object)
+- [There are thin lines around my sprites sometimes, how can I fix that?](#there-are-thin-lines-around-my-sprites-sometimes-how-can-i-fix-that)
+- [How do I handle animations in LittleJS?](#how-do-i-handle-animations-in-littlejs)
+- [How do I control the camera in LittleJS?](#how-do-i-control-the-camera-in-littlejs)
+- [How do I add lights and shadows to a 2D game?](#how-do-i-add-lights-and-shadows-to-a-2d-game)
+- [Can I make a 3D game with LittleJS?](#can-i-make-a-3d-game-with-littlejs)
+- [How do I use post-processing shaders?](#how-do-i-use-post-processing-shaders)
+- [How do I play sounds in LittleJS?](#how-do-i-play-sounds-in-littlejs)
+- [How do I play music?](#how-do-i-play-music)
+- [Why doesn't my audio play until the user clicks something?](#why-doesnt-my-audio-play-until-the-user-clicks-something)
+- [If I load several images, how do I control which is used?](#if-i-load-several-images-how-do-i-control-which-is-used)
+- [How can I check if an object is on screen?](#how-can-i-check-if-an-object-is-on-screen)
+
+**Gameplay and Programming**
+- [How do I add keyboard or mouse input to my game?](#how-do-i-add-keyboard-or-mouse-input-to-my-game)
+- [How does touch input work on mobile?](#how-does-touch-input-work-on-mobile)
+- [How do I create and update game objects?](#how-do-i-create-and-update-game-objects)
+- [How do I use parent/child objects?](#how-do-i-use-parentchild-objects)
+- [How do collisions work?](#how-do-collisions-work)
+- [How can I load a 2D level map?](#how-can-i-load-a-2d-level-map)
+- [How do I use the level editor?](#how-do-i-use-the-level-editor)
+- [Can I use physics with LittleJS?](#can-i-use-physics-with-littlejs)
+- [How do I add particle effects to my game?](#how-do-i-add-particle-effects-to-my-game)
+- [How do I use timers?](#how-do-i-use-timers)
+- [How do I save and load game state?](#how-do-i-save-and-load-game-state)
+- [How do I use the medals (achievements) system?](#how-do-i-use-the-medals-achievements-system)
+
+**Debugging and Development**
+- [How do I debug my game in LittleJS?](#how-do-i-debug-my-game-in-littlejs)
+- [How do I record a smooth video of my game, like a trailer?](#how-do-i-record-a-smooth-video-of-my-game-like-a-trailer)
+
+---
+
+## Getting Started
+### What is LittleJS, and how is it different from other JavaScript game engines?
+
+LittleJS is a lightweight, high-performance JavaScript game engine designed for simplicity and speed.
+It offers a hybrid rendering system that combines the advantages of WebGL and 2D Canvas, and [bench/](bench/) runs the same scenes in it and in three.js, PixiJS and Phaser.
+Unlike those feature-heavy engines, LittleJS keeps to a comprehensive set of simple, easy to use features, for 2D games first, with a 3D renderer of its own as well.
+LittleJS is perfect for developers who want a minimal yet powerful engine to bring their 2D game ideas to life without the complexity of larger frameworks, and it's especially well suited for size-constrained competitions like js13kGames.
+
+### How do I set up a basic LittleJS project?
+
+The quickest start is one HTML file beside the engine, in the [README's Quick Start](README.md#quick-start), and the [Vite starter](#how-do-i-use-vite-with-littlejs) is a whole project in four commands. To work from the examples, which is what this answer covers, get the repository.
+
+Clone the LittleJS repository, or use Download ZIP on its GitHub page: the examples are only there, the npm package and the release zip hold the engine alone.
+Include one of the LittleJS builds from the dist folder.
+Several examples are included for you to build on, and they need a local web server: serve the repository's root, for example with `npx http-server`, and open `http://localhost:8080/examples/empty/` (see [Do I need a local server](#do-i-need-a-local-server-to-run-littlejs-games-and-how-do-i-set-one-up)).
+The most basic example is just an empty project. Its `import '../../dist/littlejs.esm.js'` finds the engine from inside the repository, so a copy of the folder somewhere else changes that path to where the engine is.
+
+[Empty Example HTML file:](https://github.com/KilledByAPixel/LittleJS/blob/main/examples/empty/index.html)
+```html
+<!DOCTYPE html><head>
+<title>LittleJS Hello World Demo</title>
+<meta charset=utf-8>
+</head><body>
+<script src=game.js type=module></script>
+```
+
+[Empty Example JavaScript file:](https://github.com/KilledByAPixel/LittleJS/blob/main/examples/empty/game.js)
+```javascript
+/*
+    Little JS Hello World Demo
+    - Just prints 'Hello World!'
+    - A good starting point for new projects
+*/
+
+'use strict';
+
+// import LittleJS module
+import * as LJS from '../../dist/littlejs.esm.js';
+const {vec2, hsl} = LJS;
+
+///////////////////////////////////////////////////////////////////////////////
+function gameInit()
+{
+    // called once after the engine starts up
+    // setup the game
+}
+
+///////////////////////////////////////////////////////////////////////////////
+function gameUpdate()
+{
+    // called every frame at 60 frames per second
+    // handle input and update the game state
+}
+
+///////////////////////////////////////////////////////////////////////////////
+function gameUpdatePost()
+{
+    // called after physics and objects are updated
+    // setup camera and prepare for render
+}
+
+///////////////////////////////////////////////////////////////////////////////
+function gameRender()
+{
+    // called before objects are rendered
+    // draw any background effects that appear behind objects
+}
+
+///////////////////////////////////////////////////////////////////////////////
+function gameRenderPost()
+{
+    // called after objects are rendered
+    // draw effects or hud that appear above all objects
+    LJS.drawTextScreen('Hello World!', LJS.mainCanvasSize.scale(.5), 80);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Startup LittleJS Engine
+LJS.engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+The empty example is an ES module, so engine names come from the `LJS` namespace. For a classic setup where the engine is a plain `<script src=../../dist/littlejs.js>` tag and every engine name is a global, start from [examples/starter](https://github.com/KilledByAPixel/LittleJS/tree/main/examples/starter) instead.
+
+This is the simplest setup — three files served by a local web server. If you'd rather start from a bundler-based project with hot reload, see [How do I use Vite with LittleJS?](#how-do-i-use-vite-with-littlejs) for the official Vite starter template.
+
+### How do I use LittleJS as an ES module?
+
+If you're using a bundler (Vite, Rollup, webpack, etc.) or just want to use native ES modules, install via npm and import what you need:
+
+```
+npm install littlejsengine
+```
+
+```javascript
+import { engineInit, drawText, vec2 } from 'littlejsengine';
+
+function gameInit() {}
+function gameUpdate() {}
+function gameUpdatePost() {}
+function gameRender() {}
+function gameRenderPost() {
+    drawText('Hello!', vec2(0,0), 4);
+}
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+You can also import everything under a namespace:
+
+```javascript
+import * as LJS from 'littlejsengine';
+LJS.drawText('Hello!', LJS.vec2(0,0), 4);
+```
+
+For a working example, see [examples/module/](examples/module/). That example imports from a relative path (`'../../dist/littlejs.esm.js'`) since it runs straight out of the repo without `npm install` — once you've installed the package, replace that with `'littlejsengine'` as shown above. The Vite section below shows the full bundler-based setup.
+
+### How do I use LittleJS with TypeScript?
+
+LittleJS ships with type definitions in `dist/littlejs.d.ts`, which the npm package wires up automatically. Install via npm and you get type checking with no extra setup:
+
+```
+npm install littlejsengine
+```
+
+```typescript
+import { engineInit, drawText, vec2 } from 'littlejsengine';
+
+function gameInit(): void {}
+function gameUpdate(): void {}
+function gameUpdatePost(): void {}
+function gameRender(): void {}
+function gameRenderPost(): void {
+    drawText('Hello!', vec2(0,0), 4);
+}
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+See [examples/typescript/](examples/typescript/) for a complete TypeScript project with `tsconfig.json`. You can also adapt the Vite starter — Vite supports TypeScript out of the box, just rename `src/main.js` to `src/main.ts` and update the `index.html` script reference.
+
+### Why do I see a blank screen when I run my game?
+
+If you are seeing a blank screen, first try opening the dev tools console (F12 in most browsers).
+This will show you any errors that occur and allows stepping through code to help debug.
+A common issue is the game opened from a file on disk with no web server: the console then says an image was "blocked by CORS policy" from origin 'null' and `failed to load image: tiles.png`, or that a module script was blocked, and the game runs with no sprites or not at all.
+Serve it from a local web server, see [Do I need a local server](#do-i-need-a-local-server-to-run-littlejs-games-and-how-do-i-set-one-up).
+
+### Why does my game say a name "has already been declared"?
+
+In a script tag build the engine's names are globals, so a top-level `let`, `const` or `class` in your game with the same name is an error, as is any declaration of a name the engine declares with `let` or `const`, like `time`. A `function` or `var` named like an engine function replaces it instead, which breaks the engine wherever it calls that function. The names most likely to clash are the short ones: `time`, `frame`, `paused`, `debug`, `gravity`, `tile`, `rand`, `percent`, `lerp`, `clamp`, `mod`, `sign`, `min`, `max`, `abs`, `floor`, `round`, `ceil`, `sin`, `cos`, `tan`, `PI`, the colors (`RED`, `GREEN`, `BLUE`, `GRAY`, `WHITE`, `BLACK` and the rest), `mousePos`, `cameraPos`, `medals`, `speak`, `vibrate`, `tweak`, the classes `Timer`, `Sound`, `Color`, `Light`, `Mesh`, `Particle` and `Shader`, and the plugin objects `box2d`, `render3D`, `uiSystem`, `postProcess` and `levelEditor`. [REFERENCE.md](REFERENCE.md) lists every name.
+
+Rename yours, keep your game's state inside an object or class, or use the ES module build, where nothing is global and you import only the names you use (`import * as LJS from 'littlejsengine'` keeps them all under `LJS`).
+
+### Do I need a local server to run LittleJS games, and how do I set one up?
+
+For most games, yes. Browsers do not let a page opened from a file on disk load images or ES modules, so a game that loads a tile sheet, or that imports the engine as a module, has to be opened through a local web server. A game in one HTML file that loads no images, like the Hello World in the README, runs straight from the file.
+
+It is quick to set up. Any one of these does it:
+
+- **Node**: run `npx http-server` in your project's folder and open `http://localhost:8080`. To run the repository's examples, run it in the repository's root and open `http://localhost:8080/examples/`.
+- **Python**: run `python -m http.server` and open `http://localhost:8000`.
+- **[Visual Studio Code](https://code.visualstudio.com/)**: the [Live Preview extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.live-server) serves the folder you have open.
+- **Vite**: `npm run dev` in a project made from the [Vite starter](#how-do-i-use-vite-with-littlejs) is a server already.
+
+### Which browsers does LittleJS run in?
+
+Current Chrome, Edge, Firefox and Safari, on desktop and on phones. The oldest it aims to support is Safari 15 (iOS 15) and the other browsers from 2021 on. Where WebGL2 is missing, 2D games fall back to Canvas2D rendering on their own; the 3D plugin needs WebGL2.
+
+### How does the camera and world coordinate systems work?
+
+LittleJS drawing functions are all handled in world coordinates by default.
+The conversion from world to screen is determined by the camera position and scale as well as the canvas size in pixels.
+Camera scale determines how many screen pixels equals 1 world unit while the cameraPos is the offset in world units.
+There is also a function you can use called getCameraSize() to get the viewable camera window in world coordinates.
+
+One thing to keep in mind: in **world space**, Y increases *upward* and tile coordinates use a bottom-left origin. This often surprises developers coming from Canvas2D or other 2D libraries. **Screen space** (used when you pass `screenSpace=true` to a draw function, or when reading `mousePosScreen`) follows the Canvas2D convention instead — Y increases *downward* with a top-left origin. Pick the right one for what you're doing: world space for gameplay, screen space for HUDs and UI overlays.
+
+### How far can my world go, and how long can my game run?
+
+The GPU draws with 32-bit floats, which hold about 7 digits, so precision runs out far from the origin and late in a long run. These are limits every engine has, not bugs, and most games never come near them:
+- **Distance:** positions go to the GPU as they are, in world units, not relative to the camera. A 32-bit float steps by about .001 at 10,000 units from the origin and .008 at 100,000, so far out sprites and meshes start to jitter as they move. Keep the play area within about ±10,000 units, and a game that travels farther can move the world and the camera back toward the origin together now and then.
+- **Time:** `time` itself is a 64-bit number and is fine, but shaders see it as the 32-bit `iTime`, which steps by about .0002 seconds after an hour and .008, half a frame, after a day, so a shader animated by it gets choppy in a game left running for days. A post process can be given a time of its own that wraps, through `postProcess.values`.
+
+### How do I configure engine settings?
+
+LittleJS exposes settings through `setX()` functions for every tunable value. Most settings need to be applied **before** `engineInit()` because they affect canvas creation, WebGL setup, or input registration:
+
+```javascript
+setCanvasFixedSize(vec2(640, 480));   // lock canvas to a fixed resolution
+setCanvasPixelated(true);             // crisp pixel-art scaling
+setGLEnable(false);                   // Canvas2D only (no WebGL)
+setShowSplashScreen(false);           // skip the LittleJS splash
+setGravity(vec2(0, -.02));            // global gravity for physics
+setTileDefaultSize(vec2(8));          // default tile size for tile()
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+A few common categories of settings:
+
+- **Canvas** — `setCanvasFixedSize`, `setCanvasMaxSize`, `setCanvasMinAspect`, `setCanvasMaxAspect`, `setCanvasPixelated`, `setCanvasPixelRatio`
+- **Rendering** — `setGLEnable`, `setTilesPixelated`, `setCanvasClearColor`
+- **Physics** — `setGravity`, `setObjectDefaultDamping`, `setObjectDefaultRestitution`, `setEnablePhysicsSolver`
+- **Audio** — `setSoundEnable`, `setSoundVolume`, `setSoundDefaultRange`
+- **Input** — `setTouchInputEnable`, `setTouchGamepadEnable`, `setInputWASDEmulateDirection`
+
+Camera settings (`setCameraPos`, `setCameraScale`, `setCameraAngle`) are safe to call at runtime — typically from `gameInit` or `gameUpdate`. See [src/engineSettings.js](src/engineSettings.js) for the full list with defaults.
+
+### What plugins ship with LittleJS?
+
+Plugins are self-contained features that live alongside the engine but aren't part of it — nothing in the core engine source references them, and they only depend on the public engine API. Drop in only what you need:
+
+| Plugin | Purpose |
+|--------|---------|
+| `math3d.js` | `Vector3` and `Matrix4` for 3D games and plugins, with 3D collision and raycast helpers |
+| `render3d.js` | The built-in 3D renderer: the camera, lighting, shadows and fog, into the same canvas as the 2D scene (needs `math3d.js`) |
+| `render3dMesh.js` | Meshes and the basic shape builders, `buildBox`, `buildSphere`, `buildGrid`, `buildLathe` and `buildSky` (goes after `render3d.js`) |
+| `render3dObject.js` | `EngineObject3D`, `InstancedMesh3D` and the lights (goes after `render3dMesh.js`) |
+| `render3dExtras.js` | The rest of the 3D toolkit on top of it: more shape builders, terrain, camera controls, 3D particles and trails, and the OBJ loader |
+| `gltf.js` | Loads glTF and GLB models onto the 3D renderer: meshes, node placement and node animations, colors and textures |
+| `threejs.js` | Renders a Three.js scene behind the LittleJS canvas, an alternative to `render3d.js` |
+| `box2d.js` | Full Box2D physics via WebAssembly (more realistic than the built-in arcade physics) |
+| `lightSystem.js` | 2D dynamic lighting, lights accumulate into a lightmap that darkens the unlit scene |
+| `textureSheet.js` | Packs images into texture sheets as they load, and imports TexturePacker and Aseprite atlases |
+| `postProcess.js` | Shadertoy-style fragment shaders for screen-wide effects |
+| `uiSystem.js` | Lightweight in-engine UI widgets (buttons, text, checkboxes, sliders, text input, video, layout) |
+| `tweenSystem.js` | Tween any property over time with easing curves |
+| `pathFinder.js` | Grid-based A* pathfinding with optional path smoothing |
+| `tweakables.js` | A debug panel to change values live while the game runs, press 9 with the debug overlay open |
+| `medalSystem.js` | Achievement / medal tracking with popup notifications |
+| `newgrounds.js` | Newgrounds.io integration (medals held on the server, scoreboards, cloud saves, events) |
+| `wavedash.js` | Wavedash integration (achievements, leaderboards, cloud saves, stats, presence), the same shape as the Newgrounds one |
+| `audioEffects.js` | Web Audio effects like filter, reverb, delay, distortion and compressor, for a group of sounds or everything |
+| `drawUtilities.js` | Higher-level drawing helpers like nine-slice and three-slice |
+| `render3dVoxels.js` | `VoxelMap`, a 3D grid of blocks that draws itself and that objects collide with |
+| `render3dLevel.js` | 3D levels as JSON: object types, prefabs, a scene block, block maps and terrain, loaded with `level3DLoad` |
+| `render3dDebug.js` | 3D debug draws (`debugBox3D`, `debugSphere3D`, `debugLine3D`), in debug builds only |
+| `render3dEditor.js` | The free camera and the 3D level editor, in debug builds only |
+| `sceneSystem.js` | Scenes as plain objects, switched with `setScene` |
+| `parallax.js` | `ParallaxLayer`, a background that follows the camera at its own depth and repeats |
+| `camera.js` | `FollowCamera`, a 2D camera that follows a target smoothly, with a dead zone, look ahead and bounds |
+| `particleEffects.js` | A library of ready made particle effects, and their designer's file format |
+
+This self-contained design means the community can also ship plugins independently of the main repo — you can write your own plugin as just a JavaScript file that uses the engine's public API.
+
+### How do I use Vite with LittleJS?
+
+There is an official [Vite](https://vite.dev) starter template in `examples/vite-starter`. The fastest way to start a new project from it is with [degit](https://github.com/Rich-Harris/degit):
+
+```
+npx degit KilledByAPixel/LittleJS/examples/vite-starter my-game
+cd my-game
+npm install
+npm run dev
+```
+
+Vite will print a local URL (usually `http://localhost:5173/`) — open it and you should see the LittleJS logo tile and "LittleJS + Vite" text.
+
+Key things the template sets up for you:
+- `base: './'` in `vite.config.js` so the build works on GitHub Pages, itch.io, and other subdirectory hosts without further config.
+- Assets in `public/` (like `tiles.png`) are served at the site root in dev and copied to the build output, so `engineInit(..., ['tiles.png'])` works in both modes without a separate import.
+- A `public/.nojekyll` marker so GitHub Pages serves Vite's `_`-prefixed chunk files correctly.
+- A full page reload on save instead of partial HMR, since LittleJS has engine-level global state (canvas, WebGL, input listeners, the RAF loop) that doesn't survive a module hot swap. The full reload is a small plugin in `vite.config.js`.
+
+Requires Node 22.12+. Other community projects like [Michael Haynie's LittleJS Jam project](https://github.com/michael-dean-haynie/littlejs-game-jam-2024) are good real-world references for more elaborate Vite setups.
+
+### How do I use Box2D with Vite?
+
+Box2D ships as two separate files in the npm package: `box2d.wasm.js` (the Emscripten loader, ~300KB) and `box2d.wasm.wasm` (the binary, ~167KB). Both live in `node_modules/littlejsengine/dist/`.
+
+The catch: `box2d.wasm.js` fetches the `.wasm` from **its own script directory** using `document.currentScript.src`. That means the two files have to be served side by side, and `box2d.wasm.js` has to be loaded as a classic `<script>` tag — not a module, no `defer`, no `async` — so `document.currentScript` resolves correctly.
+
+**To add Box2D to the Vite starter:**
+
+1. Copy both files into `public/`:
+
+```
+public/
+  box2d.wasm.js
+  box2d.wasm.wasm
+```
+
+2. Add a script tag to `index.html` *before* your module script:
+
+```html
+<script src=./box2d.wasm.js></script>
+<script src=./src/main.js type=module></script>
+```
+
+Vite may print an informational warning during build that the classic script can't be bundled without `type=module` — this is expected and harmless. The classic-script form is exactly what's needed so Emscripten can read `document.currentScript.src` to locate the `.wasm` file.
+
+3. Await `box2dInit()` in `main.js` before `engineInit`:
+
+```javascript
+import { box2dInit, engineInit } from 'littlejsengine';
+
+await box2dInit();
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+To avoid copying the files by hand on every fresh install, add a `postinstall` script to `package.json`:
+
+```json
+"scripts": {
+  "postinstall": "node -e \"['box2d.wasm.js','box2d.wasm.wasm'].forEach(f=>require('fs').copyFileSync('node_modules/littlejsengine/dist/'+f,'public/'+f))\""
+}
+```
+
+Then `npm install` keeps `public/box2d.wasm.*` in sync with whatever version of `littlejsengine` you have installed. Add them to `.gitignore` if you don't want the binaries in your repo.
+
+### How do I build and publish my game?
+
+It depends on how your project is set up:
+
+**Plain script-tag projects** (like `examples/starter`) are already deployable as-is. For production, swap the debug bundle for a release build to strip asserts and shrink the file:
+
+```html
+<!-- During development -->
+<script src=dist/littlejs.js></script>
+
+<!-- For production: stripped asserts, smaller -->
+<script src=dist/littlejs.release.js></script>
+
+<!-- Smallest: minified release -->
+<script src=dist/littlejs.min.js></script>
+```
+
+Then zip up your game folder for itch.io or push to GitHub Pages.
+
+**Vite / module projects** — run `npm run build` and deploy the output `dist/` folder.
+
+**For GitHub Pages**, use relative asset paths (the Vite starter sets `base: './'` in `vite.config.js` for this), and include an empty `.nojekyll` file in your output so files starting with `_` aren't ignored by Jekyll.
+
+**For itch.io**, zip your build output and upload as an HTML5 game. Tick "This file will be played in the browser" in the upload settings.
+
+**For size coding competitions** like js13kGames, see the [js13k branch](https://github.com/KilledByAPixel/LittleJS/tree/js13k) which provides a build that fits in 7KB zipped.
+
+### How do I shrink my game for js13kGames?
+
+LittleJS has a dedicated [js13k branch](https://github.com/KilledByAPixel/LittleJS/tree/js13k) that builds to about 7KB zipped, leaving most of the 13KB budget for your game. A few practical tips for hitting tiny sizes:
+
+- **Use Canvas2D instead of WebGL**: call `setGLEnable(false)` before `engineInit`. Stripping the WebGL renderer saves a significant chunk of bytes, and for most pixel-art and low-sprite-count games the visual difference is imperceptible. A nice side effect: once the jam is over, you can flip WebGL back on with a single setting change for a big performance boost when publishing the game elsewhere.
+- **Drop unused plugins**: every plugin is self-contained, so only include what you actually use. Skip `uiSystem.js`, `box2d.js`, `pathFinder.js`, etc. unless you need them.
+- **Lean on built-ins to avoid asset files**: `Sound` with ZzFX parameters generates sound effects from a tiny array, and built-in shape drawing avoids shipping image assets.
+- **Use a packer**: the js13k branch is set up to compress the final bundle with Roadroller or a similar packer. Check the branch's build script for the current toolchain.
+
+For normal production (non-13KB) builds, the engine ships `dist/littlejs.release.js` (asserts stripped, about 1.9 MB with every plugin and its comments) and `dist/littlejs.min.js` (minified, about 540 KB, about 165 KB gzipped). A bundler like Vite leaves out the plugins a game does not use, which makes a small game far smaller.
+
+---
+
+## Graphics and Sound
+
+### How do I load and add images to my game?
+
+First you need to load an image file. For LittleJS this is typically done on startup via a parameter to engineInit that is a list of images to load. The engine will ensure that all images are loaded before starting. Most modern devices support textures up to 4096x4096 or larger, though some older mobile devices cap out at 2048x2048 — keep that lower limit in mind if you need broad compatibility. Most games only need one texture, but you can load as many as you need.
+
+```javascript
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['tiles.png']);
+```
+
+LittleJS works best when your tile sheet is broken up into grids of tiles because the rendering system can be batched up. To draw a tile from a source image you can call drawTile and pass in TileInfo object. Another common approach is to create an EngineObject and set its tileInfo, it will automatically be rendered.
+
+```javascript
+drawTile(vec2(21,5), vec2(4.5), tile(3,128));
+```
+
+Once loaded, the underlying images are available via `textureInfos[0].image`, `textureInfos[1].image`, etc. This is useful for tasks like reading pixel data to generate a level — the [Level Editor short](https://killedbyapixel.github.io/LittleJS/examples/?example=Level%20Editor) loads a level from data instead, and [examples/module/game.js](examples/module/game.js) builds one from a string.
+
+### What is the tile function and how do tile indexes work?
+
+The `tile` function returns a `TileInfo` object pointing at a region of a loaded image, ready to pass to `drawTile`, an `EngineObject`, a particle emitter, etc.
+
+```javascript
+tile(2)                       // index 2 at the default tile size (16x16)
+tile(5, 8)                    // index 5 at 8x8 tile size
+tile(1, 16, 3)                // index 1 of size 16 on texture 3 (multi-image projects)
+tile(vec2(4,8), vec2(30,10))  // explicit (x,y) tile position with a 30x10 region
+```
+
+When you pass a numeric index, the engine multiplies it by the tile size to get pixel coordinates inside the texture. Indexes count left-to-right, top-to-bottom — so for a 16x16 tile sheet, `tile(0, 16)` is the top-left tile, `tile(1, 16)` is the one to its right, `tile(8, 16)` wraps to the next row if your sheet is 8 tiles wide, etc.
+
+The full signature is `tile(index, size, texture, padding, bleed)`:
+- `texture` — which loaded image to read from (index into the array you passed to `engineInit`, default 0)
+- `padding` — pixels of padding between tiles in the sheet, if you laid them out with space around each
+- `bleed` — shrink the sampled region slightly to avoid edge bleeding (see the tile-bleed entry below)
+
+### Can I add and switch between multiple sprites for a game object?
+
+Yes — there are several ways depending on what you need.
+
+**Set the sprite when creating the object** via the `tileInfo` parameter on `EngineObject`:
+
+```javascript
+class Player extends EngineObject {
+    constructor(pos) {
+        super(pos, vec2(1), tile(0, 16)); // start with tile index 0
+    }
+}
+```
+
+**Swap the sprite at runtime** by assigning a new `TileInfo`:
+
+```javascript
+this.tileInfo = tile(3, 16); // now showing tile index 3
+```
+
+**For frame-based animation**, store a base `TileInfo` and use `.frame(n)` to offset along the row:
+
+```javascript
+const baseSprite = tile(2, 16);
+this.tileInfo = baseSprite.frame(animationFrame); // 0, 1, 2... walks to the right
+```
+
+**To draw an arbitrary sprite without an object**, call `drawTile` directly:
+
+```javascript
+drawTile(pos, vec2(1), tile(5, 16));
+```
+
+### There are thin lines around my sprites sometimes, how can I fix that?
+
+That's called tile bleeding — pixels from one tile blend into a neighboring tile when sampling at sub-pixel positions. Two ways to fix it:
+
+1. Call `setTileDefaultBleed(.5)` (or pass a `bleed` parameter to `tile()` / the `TileInfo` constructor). This shrinks each tile slightly when sampling. A value around `.5` usually eliminates the issue with no noticeable visual difference. Smaller values like `.1` are sometimes enough.
+
+2. Add 1 pixel of padding around each sprite in your spritesheet, then pass that padding to `tile(index, size, texture, padding)` so the engine accounts for it.
+
+### How do I handle animations in LittleJS?
+
+Use `SpriteAnimation`, which steps through frames laid out left-to-right on your sprite sheet, and can loop, play once or ping-pong, pausing with the game:
+
+```javascript
+const walk = new SpriteAnimation(tile(0, 16), 4, .1); // four frames, a tenth of a second each
+const attack = new SpriteAnimation(tile(4, 16), 3, .05).play(); // once, then holds the last frame
+
+// in update()
+this.tileInfo = (attack.isDone ? walk : attack).tileInfo;
+```
+
+To do it by hand, use the `TileInfo.frame(n)` method to offset along the row of frames from a base sprite:
+
+```javascript
+// store the base sprite (the first frame of the animation)
+const playerSprite = tile(0, 16);
+
+// inside update(), advance the frame based on time
+const animationFrame = Math.floor(time * 10) % 4; // 4-frame loop at 10 FPS
+this.tileInfo = playerSprite.frame(animationFrame);
+```
+
+`time` is a global updated by the engine each frame (in seconds). The `% 4` keeps the index inside the 4 frames you actually drew on the sheet — adjust to match your animation length.
+
+### How do I control the camera in LittleJS?
+
+LittleJS uses a world space rendering system, so objects can move independently of the camera.
+The camera is `cameraPos`, its position in the world, and `cameraScale`, how many pixels one world unit is.
+The default cameraScale is 32 while the default cameraPos is the origin.
+It is also possible to draw using screen space pixel coordinates by passing in true as the screenSpace parameter to most drawing functions.
+
+```javascript
+setCameraPos(vec2(22,5)); // move camera to world position (22,5)
+setCameraScale(20);  // zoom camera to 20 pixels per world unit
+```
+
+To follow the player, make a `FollowCamera` and it sets `cameraPos` for you each frame, after the objects have moved:
+
+```javascript
+const camera = new FollowCamera(player, .2); // catch up over about .2 seconds
+camera.deadZone = vec2(4, 2);    // the player moves this far before the view does
+camera.lookAhead = vec2(3, 0);   // show more of the way the player is going
+camera.boundsMin = vec2(0, 0);   // keep the view over the level
+camera.boundsMax = levelSize;
+```
+
+`cameraShake(amount)` shakes the view for a hit or an explosion and fades by itself, with or without a camera object. The [Camera Shake](https://killedbyapixel.github.io/LittleJS/examples/?example=Camera%20Shake) and [Platform Physics](https://killedbyapixel.github.io/LittleJS/examples/?example=Platform%20Physics) examples show both.
+
+### How do I add lights and shadows to a 2D game?
+
+The light system plugin darkens the scene and lets lights add back into it. Make the plugin in `gameInit`, set how dark it is with no light, and make lights:
+
+```javascript
+new LightSystemPlugin;
+lightSystem.ambientColor = hsl(.6, .5, .2);         // the scene with no light on it
+const lamp = new Light(vec2(5, 5), 12, hsl(.1, 1, .6)); // pos, radius, color
+lightSystem.shadows = true;                         // objects block the light
+```
+
+A `Light` is an engine object, so it can be moved, attached to another object with `addChild`, and destroyed. There is also a `DirectionalLight` for a sun with long shadows, cones and gels for spotlights, and normal maps. See the [Light System](https://killedbyapixel.github.io/LittleJS/examples/?example=Light%20System), [Light Shadows](https://killedbyapixel.github.io/LittleJS/examples/?example=Light%20Shadows) and [Normal Maps](https://killedbyapixel.github.io/LittleJS/examples/?example=Normal%20Maps) examples.
+
+### Can I make a 3D game with LittleJS?
+
+Yes. LittleJS has a 3D renderer of its own, a set of plugins included in every build, that draws into the same canvas as your 2D game. A 3D object is an `EngineObject3D`, with the same update, physics, children and timers as a 2D one. Make the plugin in `gameInit`:
+
+```javascript
+function gameInit()
+{
+    new Render3DPlugin;
+    render3D.setSky(hsl(.6,.5,.4), hsl(.6,.5,.8)); // the sky's colors, top and horizon
+    render3D.shadows = true;
+    new CameraControl3D(vec3(0,1,0), 15, .3);      // an orbit camera: drag to turn, wheel to zoom
+
+    // a floor and a spinning cube
+    new EngineObject3D(vec3(), buildGrid(vec2(30)));
+    const cube = new EngineObject3D(vec3(0,1.5,0), render3D.boxMesh);
+    cube.scale3D = vec3(3);
+    cube.color = hsl(.55,.8,.6);
+    cube.angleVelocity3D = vec3(0, .01, 0);
+}
+```
+
+Y is up, as in 2D. From there it has shape builders, OBJ and glTF models, terrain, voxels, lights, shadows, particles, custom shaders and a 3D level editor. The examples in the 3D section of the [example browser](https://killedbyapixel.github.io/LittleJS/examples/?example=3D%20Basics) each show one of them, starting with 3D Basics, and [REFERENCE.md](REFERENCE.md) has a "Coming from three.js" section. 2D drawing still works over the 3D scene, for a HUD. If you would rather render with [Three.js](https://threejs.org), the `threejs.js` plugin does that with LittleJS running the game.
+
+### How do I use post-processing shaders?
+
+LittleJS supports Shadertoy-style fragment shaders as a final pass on the rendered output via the post-process plugin. Create the plugin with your shader source in `gameInit`, once `engineInit` has set up WebGL:
+
+```javascript
+const shader = `
+void mainImage(out vec4 c, vec2 p) {
+    vec2 uv = p / iResolution.xy;
+    c = texture(iChannel0, uv);
+    c.rgb *= 1.0 - distance(uv, vec2(0.5)) * 0.7; // vignette
+}`;
+
+function gameInit()
+{
+    new PostProcessPlugin(shader);
+}
+
+engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost);
+```
+
+The shader gets these uniforms automatically:
+
+- `iChannel0` (`sampler2D`) — the rendered game frame
+- `iChannel1` (`sampler2D`) — the shader's own output from the previous frame, when `feedbackTexture` is on
+- `iResolution` (`vec3`) — canvas width, height, and `1`
+- `iTime` (`float`) — seconds since engine start
+
+The constructor has two optional positional arguments after the shader source:
+
+```javascript
+new PostProcessPlugin(shader, includeMainCanvas, feedbackTexture);
+```
+
+- `includeMainCanvas` (default `false`) composites the Canvas2D layer (where some debug and text rendering goes) onto the WebGL canvas before the shader runs. Pass `true` if your post-process effect should apply to *everything* on screen, not just the WebGL-rendered objects.
+- `feedbackTexture` (default `false`) also passes the shader's own output from the previous frame as `iChannel1`, for effects like motion trails or feedback loops; `iChannel0` is still the frame just drawn. Mutually exclusive with `includeMainCanvas`.
+
+See [plugins/postProcess.js](plugins/postProcess.js) and the [Breakout example](https://killedbyapixel.github.io/LittleJS/examples/breakout/) for working post-process effects.
+
+### How do I play sounds in LittleJS?
+
+Sounds can either be generated on startup using ZzFX or loaded from a wave or mp3 file.
+[ZzFX sounds can be created using the sound designer app.](https://killedbyapixel.github.io/ZzFX/)
+Once loaded sounds can be played by calling Sound.play with some parameters to control how it is played.
+
+```javascript
+const sound_click = new Sound([1,.5]); // create a ZzFX sound
+const sound_jump = new Sound('jump.mp3'); // load an mp3 sound
+sound_click.play(pos, volume, pitch); // play a sound
+```
+
+### How do I play music?
+
+Load an mp3 or ogg file with the regular `Sound` class and play it with `playMusic`, which loops by default.
+
+```javascript
+// load an mp3/ogg and loop it
+const track = new Sound('music.mp3');
+const trackInstance = track.playMusic(1, true); // volume, loop
+```
+
+Music pauses automatically when the tab loses focus (audio context suspends) and resumes when it comes back. `playMusic` returns a `SoundInstance`; keep it and call `trackInstance.stop()` to halt playback.
+
+### Why doesn't my audio play until the user clicks something?
+
+Browsers require a user interaction (click, key press, touch) before audio is allowed to play — this is a hard rule from the browser's autoplay policy, not something the engine can bypass. LittleJS handles the actual resume for you: the audio context starts in a suspended state and is automatically resumed on the first input event. You don't need to call `audioContext.resume()` yourself.
+
+A sound played before that, in `gameInit()` or on the first frames, waits and starts once audio runs, so music started in `gameInit()` begins on the player's first click or key press.
+
+### If I load several images, how do I control which is used?
+
+Pass multiple image paths to `engineInit` and select between them with the third argument to `tile()` (the `texture` index):
+
+```javascript
+// load two images
+engineInit(..., ['tiles.png', 'background.png']);
+
+// later, draw a tile from each
+const fgTile = tile(0, 16);       // texture 0 → tiles.png
+const bgTile = tile(0, 16, 1);    // texture 1 → background.png
+```
+
+The `texture` argument defaults to `0`, so single-image projects can ignore it. One thing to keep in mind for large games: switching between textures forces WebGL to flush its current render batch, so frequently alternating between textures within a single frame can hurt performance. Group draws by texture where you can.
+
+### How can I check if an object is on screen?
+
+You can use the `isOverlapping` function to check the object against the camera's viewable window. For culling you might want to enlarge the object size slightly to account for attached objects or rotation — I usually do `this.size.scale(2)`.
+
+```javascript
+if (!isOverlapping(this.pos, this.size, cameraPos, getCameraSize()))
+    return;
+```
+
+`getCameraSize()` returns the viewable window in world units (canvas pixel size divided by `cameraScale`).
+
+---
+
+## Gameplay and Programming
+
+### How do I add keyboard or mouse input to my game?
+
+LittleJS provides input handling functions for keyboard, mouse, and gamepads. Touch input is also routed to the mouse. There are functions for isDown, wasPressed, and wasReleased. Input can only be checked during the update and should not be called from render functions.
+
+```javascript
+if (keyIsDown('ArrowLeft')) // Left arrow key
+   obj.pos.x -= 5;
+if (mouseWasReleased(0)) // Left mouse button
+   console.log('Mouse clicked at:', mousePos);
+if (gamepadWasPressed(0)) // Gamepad button 0
+   console.log('Gamepad pressed, stick is:', gamepadStick(0));
+```
+
+Keyboard keys are identified by `KeyboardEvent.code` strings (e.g. `'KeyA'`, `'Space'`, `'ArrowUp'`, `'Enter'`). See the [MDN code reference](https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values) for the full list.
+
+### How does touch input work on mobile?
+
+Touch input is routed to the mouse functions automatically — `mouseIsDown(0)`, `mouseWasPressed(0)`, and `mousePos` all work with a finger tap on the canvas. Games written for mouse usually work on mobile without code changes.
+
+For games that need movement and multiple buttons, enable the built-in on-screen gamepad:
+
+```javascript
+setTouchGamepadEnable(true);
+```
+
+Once enabled, an analog stick and face buttons appear on touch devices, and the regular gamepad input functions (`gamepadIsDown`, `gamepadStick`) work normally — so the same code can drive both a physical gamepad and the touch overlay. Customization helpers like `setTouchGamepadSize`, `setTouchGamepadAnalog`, `setTouchGamepadButtonCount`, and `setTouchGamepadAlpha` let you tune the appearance.
+
+You can also branch behavior on `isTouchDevice` if you need to detect touch hardware explicitly.
+
+### How do I create and update game objects?
+
+LittleJS can be used as an object oriented system by extending the base class [EngineObject](https://github.com/KilledByAPixel/LittleJS/blob/main/src/engineObject.js) with your own. This lightweight class provides many useful features including physics, collision, parent/child system, and sorted rendering. These objects are added to the global list of objects where they will automatically be updated and rendered until destroyed.
+
+Here is a template you can use to make objects that behave however you want. See the examples for a complete demonstration.
+
+```javascript
+class MyObject extends EngineObject 
+{
+    constructor(pos, size, tileInfo)
+    {
+        super(pos, size, tileInfo);
+        // setup object
+    }
+
+    update()
+    {
+        // custom logic; physics runs separately in updatePhysics
+        super.update(); 
+    }
+
+    render()
+    {
+        // draw object as a sprite
+        super.render();
+    }
+}
+
+// spawn one of those objects
+const object = new MyObject(pos, size, tileInfo);
+```
+
+Common things you'll do on an `EngineObject`:
+
+- `this.setCollision()` — opt in to tile collision and object-object collision
+- `this.tileInfo = tile(7, 16)` — swap the sprite at runtime
+- `this.velocity = vec2(.1, 0)` — physics is applied automatically each frame
+- `this.gravityScale = 0` — disable gravity for this object (e.g. UI or floating objects)
+- `this.destroy()` — remove from the world (calls cleanup on children too)
+
+### How do I use parent/child objects?
+
+`EngineObject` supports a parent/child hierarchy with local transforms. Attached children automatically follow their parent's position, angle, and mirror state each frame:
+
+```javascript
+const ship = new EngineObject(vec2(10, 5), vec2(2));
+const turret = new EngineObject(vec2(), vec2(.5));
+ship.addChild(turret, vec2(0, .5));  // turret sits .5 units above the ship in local space
+```
+
+`addChild(child, localPos, localAngle)` attaches the child with a local offset; the child's world-space `pos` and `angle` are recomputed each frame from the parent's transform. To detach, call `parent.removeChild(child)` — or just `child.destroy()`, which also detaches it (and destroying a parent destroys all its children).
+
+A few things to know:
+- **Mirroring a parent flips children** — a mirrored ship has its turret on the correct side automatically (`localPos.x` and `localAngle` are inverted).
+- **Children have no physics of their own** — they follow the parent's transform, so a child's velocity, gravity and collision do nothing while it is attached. Detach it with `removeChild` to let physics move it again.
+
+### How do collisions work?
+
+Opt in to collision on an `EngineObject` by calling `setCollision()` — by default it's off so most objects don't pay the collision cost.
+
+```javascript
+class Player extends EngineObject {
+    constructor(pos) {
+        super(pos, vec2(1), tile(0, 16));
+        this.setCollision(); // collide with solid objects and tile map
+    }
+}
+```
+
+`setCollision(collideSolidObjects, isSolid, collideLevel, collideRaycast)` — all default to `true`. Pass `false` to opt out of any of them (e.g. a ghost that passes through walls: `setCollision(false, false, false)`).
+
+For custom collision logic, override `collideWithObject(other)` and `collideWithTile(tileData, pos)` on your subclass. Return `true` to actually block the collision, `false` to pass through. Both fire during the physics step, and `collideWithTile` can fire several times a frame for the same tile, including for positions the object only tries, so guard side effects like damage to once a frame:
+
+```javascript
+class Bullet extends EngineObject {
+    collideWithObject(other) {
+        if (other instanceof Enemy) {
+            other.damage(1);
+            this.destroy();
+            return false; // don't physically bounce off the enemy
+        }
+        return true; // solid collision with everything else
+    }
+}
+```
+
+For raycasting against the tile collision map (line-of-sight checks, hitscan weapons, etc.), use `tileCollisionRaycast(start, end)` which returns the hit position or `undefined`.
+
+### How can I load a 2D level map?
+
+A level is made of tile layers. A `TileCollisionLayer` is a grid of tiles drawn once into a texture, so a whole level costs one draw a frame, with a grid of collision values the physics tests objects against. A level can have several layers, for a background and a foreground.
+
+The quickest way to make one is from a file. `tileLayersLoad` reads a map in [Tiled](https://www.mapeditor.org/)'s JSON format and makes its layers:
+
+```javascript
+async function gameInit()
+{
+    const map = await fetchJSON('level.json');
+    // the map, the tile sheet's tiles, render order, and which layer is solid
+    const layers = tileLayersLoad(map, tile(0, 16), 0, 'Collision');
+    objectLayersLoad(map); // make the map's objects, see below
+}
+```
+
+The map can come from Tiled, from the built-in level editor (see the next answer), or from [LDtk](https://ldtk.io/) through `tileLayersFromLDtk(project, level)`, which turns an LDtk level into the same kind of map.
+
+A map's object layers place your game's own objects. Name each type once with `objectLayersAddType`, and `objectLayersLoad` makes one for every object of that name in the map:
+
+```javascript
+objectLayersAddType('Enemy', Enemy, {health: 3}); // made with new Enemy(pos), then its properties are set
+```
+
+You can also build a layer in code with `setData` and `setCollisionData`, as the [Tile Layer](https://killedbyapixel.github.io/LittleJS/examples/?example=Tile%20Layer) example does. The [Level Editor](https://killedbyapixel.github.io/LittleJS/examples/?example=Level%20Editor) example loads a map with objects, and the [platformer](https://killedbyapixel.github.io/LittleJS/examples/platformer/) is a whole game built on one.
+
+### How do I use the level editor?
+
+The debug build has a level editor that edits your game's level while the game is paused. Press `Esc` for the debug overlay, then `0`. Paint tiles with the left button, pick one with a right click, and place and move objects on an object layer; `?` lists every key. Press `Esc` to play what you made and again to go back to editing.
+
+The editor changes the map your game gave `tileLayersLoad`. Every change is autosaved in the browser and comes back after a reload, and Save writes the map as Tiled JSON, the file your game loads, which Tiled can open too. A game with a 3D level gets the 3D level editor on the same key.
+
+A few hooks tell the editor about your game: `levelEditor.onTile` for what a painted tile does, `onRestart` to rebuild the level, and `objectLayersAddType` for the objects it can place. [EDITOR.md](EDITOR.md) is the guide to making it your own game's editor, with your own keys, buttons and tools. None of the editor is in the release builds.
+
+### Can I use physics with LittleJS?
+
+Yes! LittleJS comes with a fast arcade physics system. Call `setCollision()` on an `EngineObject` and it moves by its `velocity`, falls with `gravity`, and collides with tile layers and other solid objects. A few properties tune each object:
+
+- `mass` — 0 makes it static, like a wall or a moving platform that nothing pushes
+- `restitution` — how much speed it keeps at a bounce, 0 to 1
+- `damping` and `friction` — how fast it slows in the air and along the ground
+- `gravityScale` — how much gravity pulls it, 0 for none
+- `isBullet` — sweeps its move so a small fast object never passes through a wall
+
+Velocity and gravity are in world units per frame, at 60 frames a second, so a velocity of `.1` is 6 units a second. The [Physics](https://killedbyapixel.github.io/LittleJS/examples/?example=Physics) and [Platform Physics](https://killedbyapixel.github.io/LittleJS/examples/?example=Platform%20Physics) examples show these, with one-way platforms and lifts, and the platformer example has a character class to start from.
+
+For realistic physics, with turning bodies, joints and stacks that hold, there is [a plugin using Box2D.](https://killedbyapixel.github.io/LittleJS/examples/box2d/)
+
+### How do I add particle effects to my game?
+
+The quickest way is the library of ready made effects. One line makes one, sized and colored for the use:
+
+```javascript
+particleEffect('explosion', pos);                     // a one-shot that ends itself
+const fire = particleEffect('fire', pos, {scale: 3}); // goes on until fire.destroy()
+particleEffect('sparks', pos, {hue: .5, emitRate: 200}); // any emitter setting by name
+```
+
+The [Particle Effects](https://killedbyapixel.github.io/LittleJS/examples/?example=Particle%20Effects) example shows every effect in the library.
+
+For an effect of your own, [the particle system designer](https://killedbyapixel.github.io/LittleJS/examples/particles/) lets you design one and copy its code. That code makes a `ParticleEmitter`, which you can also write by hand:
+
+```javascript
+// fire particle system
+new ParticleEmitter(
+    pos, 0,                         // pos, angle
+    1, .1, 100, PI,                 // emitSize, emitTime, emitRate, emitCone
+    undefined,                      // tileInfo (undefined = untextured)
+    rgb(1,.5,.1), rgb(1,.1,.1),     // colorStartA, colorStartB
+    rgb(1,.5,.1,0), rgb(1,.1,.1,0), // colorEndA, colorEndB
+    .7, .8, .2, .2, .05,  // time, sizeStart, sizeEnd, speed, angleSpeed
+    .9, 1, -.2, PI, .05,  // damp, angleDamp, gravity, particleCone, fade
+    .5, 0, 1, 0, 1e9      // randomness, collide, additive, colorLinear, renderOrder
+);
+```
+
+An emitter is an engine object: attach it to another object with `addChild` and it follows, and an `emitTime` of 0 keeps it going until it is destroyed.
+
+### How do I use timers?
+
+The `Timer` class is a small but very useful utility for anything that needs to happen *after some time has passed* — cooldowns, animation timing, delayed spawns, fades, etc. It tracks elapsed time automatically, so you don't have to add `timeDelta` to a variable every frame.
+
+```javascript
+const cooldown = new Timer(2); // 2-second timer, starts immediately
+
+function gameUpdate() {
+    if (cooldown.elapsed()) {
+        fireWeapon();
+        cooldown.set(2); // restart it
+    }
+}
+```
+
+Useful methods:
+- `set(seconds)` — start or restart the timer
+- `unset()` — disable it (`isSet()` becomes false)
+- `active()` / `elapsed()` — boolean checks
+- `get()` — seconds elapsed (negative while still counting down)
+- `getPercent()` — 0 → 1 progress, handy for easing animations
+
+By default, a timer ticks on **game time** — it pauses when the game is paused and slows down or speeds up with `setTimeScale`. For UI animations, on-screen notifications, or anything that should keep running regardless of game state, use a real-time timer:
+
+```javascript
+const uiFade = new Timer(.5, true); // useRealTime = true
+```
+
+Real-time timers track `timeReal` instead of `time` — unaffected by pause or time scale. You can also flip an existing timer between modes with `timer.setUseRealTime(true)` while it's unset.
+
+### How do I save and load game state?
+
+LittleJS has built-in helpers for localStorage-backed save data — no need to roll your own JSON serialization:
+
+```javascript
+// Read save data, falling back to defaults if nothing is saved yet
+const saveData = readSaveData('MyGame', { highScore: 0, level: 1 });
+
+// Write save data
+writeSaveData('MyGame', { highScore: 99999, level: 5 });
+```
+
+The `saveName` should be unique per game so multiple LittleJS games on the same host don't collide. The data object must be JSON-serializable (no functions, no circular references). Under the hood these are thin wrappers around `localStorage` + `JSON.stringify` / `JSON.parse`.
+
+### How do I use the medals (achievements) system?
+
+LittleJS includes a medals plugin for tracking unlockable achievements with popup notifications:
+
+```javascript
+// Create medals — each needs a unique id, optional emoji icon
+const medal_firstWin = new Medal(0, 'First Win', 'Win your first match', '🏆');
+const medal_perfect  = new Medal(1, 'Perfect Score', 'Score 100%', '⭐');
+
+// Initialize medals — saveName persists unlocks to localStorage, a different name from your save data
+medalsInit('MyGame medals');
+
+// Unlock a medal (shows a popup, persists across visits)
+medal_firstWin.unlock();
+```
+
+You can pass an image URL as the fifth argument to `Medal` instead of an emoji icon. The `saveName` you pass to `medalsInit` is used to track which medals have been unlocked in localStorage, so unlocks persist across visits. Give it a name of its own, not the one you pass to `readSaveData` and `writeSaveData`, or the medals and your save data overwrite each other.
+
+The plugin also supports [Newgrounds](https://www.newgrounds.com) scoreboards and medals held on the server through [plugins/newgrounds.js](plugins/newgrounds.js): create each medal as a `NewgroundsMedal` with the id Newgrounds gave it, call `medalsInit` as usual, then `new NewgroundsPlugin(app_id, cipher)`. The "LittleJS Medals & Newgrounds" section of REFERENCE.md has a short example. [plugins/wavedash.js](plugins/wavedash.js) does the same for [Wavedash](https://wavedash.com/) with `WavedashMedal` and `WavedashPlugin`, and both have `cloudSave(slot, data)` and `cloudLoad(slot)` to keep a player's save on the platform.
+
+---
+
+## Debugging and Development
+
+### How do I debug my game in LittleJS?
+
+In addition to your browser's built-in developer tools, LittleJS has its own debug overlay. Press `Esc` to show it — the overlay lists the available toggles and their number-key bindings, so you don't have to memorize them. `+` and `-` adjust the time scale, which is great for slowing tricky moments down or speeding past a slow section.
+
+Three bigger tools are on the overlay's keys too:
+- `9` shows the **tweakables panel**. Name a value with `tweak` and it gets a slider there, to tune it while the game runs. The [Tweakables](https://killedbyapixel.github.io/LittleJS/examples/?example=Tweakables) example shows how.
+- `0` opens the **level editor**, see [How do I use the level editor?](#how-do-i-use-the-level-editor)
+- `C` is the **free camera** of a 3D game: fly around the scene while the game runs on.
+
+**Debug draw functions** let you visualize state directly in the world without committing to permanent UI. They're drawn for one frame and only render in debug builds:
+
+```javascript
+debugRect(pos, size, color);           // outline a rectangle
+debugCircle(pos, diameter, color);     // outline a circle
+debugLine(posA, posB, color);          // a line between two points
+debugText(string, pos, size, color);   // text at a world position
+debugPoint(pos, color);                // small marker
+```
+
+These are perfect for "where exactly is this AI heading?" or "is this hitbox where I think it is?" investigations — drop a call into your update or render code, see the answer, then delete it.
+
+**`ASSERT` and `LOG`** are similar to `console.assert` / `console.log`, but they're *stripped from release builds* (`littlejs.release.js`, `littlejs.min.js`). That means you can leave them in your code with no cost to shipped users. Don't rely on side effects inside the arguments — they won't run in release.
+
+```javascript
+ASSERT(player.health > 0, 'player damaged below zero', player);
+LOG('spawned enemy at', pos);
+```
+
+### How do I record a smooth video of my game, like a trailer?
+
+A screen recorder such as OBS, the Xbox Game Bar or the macOS screen recorder is the quickest. For every frame at exactly 60 fps, even on a machine that cannot keep up, step the engine yourself and save each frame as an image: with `setEngineManualStep(true)` the game moves only when `engineStep` is called, one update of 1/60 of a second and its render, however long that takes.
+
+```javascript
+// record a number of seconds of the game, one image every 1/60 of a second
+function recordFrames(seconds)
+{
+    setEngineManualStep(true);       // the engine moves only when engineStep is called
+    let frame = 0;
+    const next = ()=>
+    {
+        engineStep(1);               // one update of 1/60 second, and its render
+        combineCanvases();           // the WebGL and 2D canvases as one image
+        saveCanvas(mainCanvas, 'frame' + String(frame).padStart(5, '0'));
+        if (++frame < seconds * 60)
+            setTimeout(next, 100);   // a moment for the browser to save each one
+        else
+            setEngineManualStep(false); // back to real time
+    };
+    next();
+}
+```
+
+The browser asks once to allow many downloads. The game plays slower than real time while it records, so this suits a scripted or replayed scene. Then make the video from the images, with ffmpeg for example: `ffmpeg -framerate 60 -i frame%05d.png -pix_fmt yuv420p trailer.mp4`.
+
+---
+
+## Contribute to the FAQ
+If you have additional questions or think something should be added to this FAQ, please open an issue or pull request on the [LittleJS GitHub repository](https://github.com/KilledByAPixel/LittleJS).
+
+---
+
+Happy coding with LittleJS! 🎮🚂💨

@@ -1,0 +1,569 @@
+import { Injectable, inject } from '@angular/core';
+import { Vector3 } from 'three';
+import { GlobalRouteGridService } from '../world/global-route-grid.service';
+import { StatusEffectService } from './status-effect.service';
+import { CombatVfxService } from './combat-vfx.service';
+import { DamageApplicationService } from './damage-application.service';
+import { NO_RESEARCH, type SimResearch } from '../../managers/research.manager';
+import { Enemy } from '../../entities/enemy.entity';
+import { canTargetAirEffective } from '../../entities/tower-targeting.util';
+import { TOWER_TYPES, type TowerTypeConfig } from '../../configs/tower-types.config';
+import { Projectile } from '../../entities/projectile.entity';
+import { GeoPosition } from '../../models/game.types';
+import { GAME_BALANCE } from '../../configs/game-balance.config';
+import { TIMING } from '../../configs/timing.config';
+import { geoDistanceFast } from '../../utils/geo-utils';
+import { TowerManager } from '../../managers/tower.manager';
+import { EnemyManager } from '../../managers/enemy.manager';
+import { GameEventBus, SubscriptionBag } from '../../game-engine/game-event-bus';
+import { DamageType, DamageResult, DamageEffectiveness } from '../../configs/combat/combat.types';
+import {
+  DAMAGE_MATRIX,
+  EFFECTIVENESS_COLORS,
+  EFFECTIVENESS_SCALES,
+  getEffectiveness,
+} from '../../configs/combat/damage-matrix.config';
+import { ABILITY_DEATH_BLOOD_CAP } from '../../configs/visual-effects.config';
+import { enemyHitSpot } from '../../utils/enemy-hit-spot';
+import { ROUTE_BODY_AIM_HEIGHT_M, type RouteBodyContact } from '../../utils/route-body';
+import type { AbilityHaltStatus } from '../../configs/abilities.config';
+import { SimCoords } from '../../sim/core/sim-coords';
+import { SimOps, type SimSink } from '../../sim/core/sim-sink';
+
+/**
+ * CombatEffectService - Orchestrates projectile hits
+ *
+ * Event-driven: Subscribes to projectile:hit events from GameEventBus.
+ * Delegates to:
+ * - DamageApplicationService for damage + kills
+ * - CombatVfxService for visual effects
+ * - StatusEffectService for slow/burn/poison
+ */
+@Injectable()
+export class CombatEffectService {
+  private readonly globalRouteGrid = inject(GlobalRouteGridService);
+  private readonly statusEffectService = inject(StatusEffectService);
+  private readonly vfx = inject(CombatVfxService);
+  private readonly damageService = inject(DamageApplicationService);
+  private readonly coords = inject(SimCoords);
+  private readonly sink: SimSink = inject(SimOps).sink;
+
+  /** The game's research once initialized */
+  private research: SimResearch = NO_RESEARCH;
+  /** The game's towers once initialized: whose research a shot's splash follows */
+  private towerManager: TowerManager | null = null;
+  private eventBus: GameEventBus | null = null;
+  private readonly eventBusSubs = new SubscriptionBag();
+
+  // Scratch für applySplashDamage: Kandidaten und ihre Abstände, pro Treffer
+  // neu befüllt. Schadensanwendung löst keinen weiteren Splash synchron aus.
+  private readonly _splashScratch: Enemy[] = [];
+  private readonly _splashDistScratch: number[] = [];
+  /** What nearestHittable() found, the scratch above as the grid hands it back */
+  private _splashHits: Enemy[] = this._splashScratch;
+  // Scratch für keepHitOnBody
+  private readonly _hitLocal = new Vector3();
+  private readonly _hitContact: RouteBodyContact = { station: 0, offset: 0, distance: 0 };
+
+  /** Whether damage numbers are shown on hits (display option, SimConfig.damageNumbers) */
+  damageNumbersEnabled = true;
+
+  /** The owner of the tower that fired; '' (read as the first player) for one sold since. */
+  private ownerOf(towerId: string): string {
+    return this.towerManager?.getById(towerId)?.ownerId ?? '';
+  }
+
+  /**
+   * Dispose event subscriptions. Call from GameStateManager.dispose().
+   */
+  destroy(): void {
+    this.eventBusSubs.disposeAll();
+  }
+
+  /**
+   * Initialize with the game's bus, towers, enemies and research, and subscribe to events
+   */
+  initialize(
+    eventBus: GameEventBus,
+    towerManager: TowerManager,
+    enemyManager: EnemyManager,
+    research: SimResearch,
+  ): void {
+    // Clean up previous subscriptions on re-init
+    this.eventBusSubs.disposeAll();
+
+    this.eventBus = eventBus;
+    this.research = research;
+    this.towerManager = towerManager;
+
+    // Initialize sub-services
+    this.vfx.initialize(eventBus);
+    this.damageService.initialize(towerManager, enemyManager, eventBus);
+
+    // Subscribe to projectile:hit events
+    this.eventBusSubs.add(this.eventBus.on('projectile:hit', (event) => {
+      this.handleProjectileHit(event.projectile, event.target, event.damageType);
+    }));
+
+    // Subscribe to DOT damage events (poison and burn ticks)
+    this.eventBusSubs.add(this.eventBus.on('dot:damage', (event) => {
+      this.handleDotDamage(event.enemy, event.damage, event.damageType, event.effectType, event.sourceId);
+    }));
+  }
+
+  /**
+   * Handle projectile hitting an enemy.
+   * Processes splash damage and visual effects.
+   */
+  private handleProjectileHit(projectile: Projectile, enemy: Enemy, damageType: DamageType): void {
+    const splashRadius = projectile.typeConfig.splashRadius;
+    const hasSplash = splashRadius && splashRadius > 0;
+    const isIceShard = projectile.typeConfig.id === 'ice-shard';
+    const isPoisonGlob = projectile.typeConfig.id === 'poison-glob';
+    // Primary target died mid-flight: skip direct-hit effects, but still
+    // detonate splash at the impact point (see projectile.manager emit guard).
+    const targetLost = projectile.targetLost;
+
+    // Ice burst and frost decals for the ice shard. When targetLost, the
+    // projectile homed to the target's death position (_lastTargetPosition) and
+    // the dead enemy doesn't move, so enemy.position == the impact point —
+    // the burst and the splash centre (projectile.position, below) coincide.
+    // Cannon and poison impacts get their explosion from vfx:projectile-impact
+    // alone (VFXService).
+    if (hasSplash && isIceShard) {
+      this.vfx.emitIceExplosion(enemy);
+    }
+
+    // A body along the route: the hit lands where the shot does (its aim point)
+    const body = enemy.body;
+    if (!targetLost && body) {
+      body.setHitGeo(
+        projectile.position.lat,
+        projectile.position.lon,
+        (projectile.aimPoint?.height ?? projectile.flightHeight) - ROUTE_BODY_AIM_HEIGHT_M,
+      );
+    }
+
+    if (!targetLost) {
+      // Apply damage to primary target (suppress blood for ice and poison)
+      const suppressBlood = isIceShard || isPoisonGlob;
+      const result = this.damageService.applyDamage(
+        this.vfx,
+        enemy,
+        projectile.damage,
+        damageType,
+        projectile.sourceTowerId,
+        false,
+        suppressBlood
+      );
+
+      // Spawn damage number for direct hit (color/size based on effectiveness)
+      if (result) {
+        this.spawnDamageNumberFromResult(enemy, result);
+      }
+
+      // Apply slow effect for ice-shard
+      if (isIceShard) {
+        this.statusEffectService.applySlow(
+          enemy,
+          GAME_BALANCE.effects.ice.slowAmount,
+          GAME_BALANCE.effects.ice.duration,
+          projectile.sourceTowerId
+        );
+      }
+
+      // Apply poison DOT for poison-glob
+      if (isPoisonGlob) {
+        this.statusEffectService.applyPoison(
+          enemy,
+          this.poisonDotDps(projectile),
+          GAME_BALANCE.effects.poison.duration,
+          projectile.sourceTowerId
+        );
+      }
+    }
+
+    // Apply splash damage to nearby enemies. When the primary target is gone,
+    // centre the splash on the projectile's actual impact position instead of
+    // the (now stale) target, and don't exclude any enemy. On a body along
+    // the route the impact is the aim point, not the body's tip.
+    if (hasSplash) {
+      const originPos = targetLost || body ? projectile.position : enemy.position;
+      const excludeId = targetLost ? undefined : enemy.id;
+      this.applySplashDamage(projectile, originPos, excludeId, splashRadius, damageType, isIceShard, isPoisonGlob);
+    }
+  }
+
+  /**
+   * Apply splash damage to enemies near the impact point.
+   */
+  private applySplashDamage(
+    projectile: Projectile,
+    originPos: GeoPosition,
+    excludeId: string | undefined,
+    splashRadius: number,
+    damageType: DamageType,
+    isIceShard: boolean,
+    isPoisonGlob = false
+  ): void {
+    // Splash trifft nur, was der Quell-Tower auch anvisieren darf. Die
+    // Umkreissuche kennt nur den 2D-Abstand, ohne diesen Filter traf die
+    // Cannon Fledermäuse 15 m über dem Boden, obwohl sie nicht auf Luft zielt.
+    // Ein Schuss ohne Tower (der Held) zielt auf Boden und Luft.
+    const sourceType = projectile.sourceTowerType;
+    const hitsAir = sourceType === null
+      || canTargetAirEffective(sourceType, this.research.airTargetingFor(this.ownerOf(projectile.sourceTowerId)));
+    const hitsGround = sourceType === null || (TOWER_TYPES[sourceType].canTargetGround ?? true);
+
+    const maxTargets = this.nearestHittable(
+      originPos, splashRadius, excludeId, hitsAir, hitsGround, projectile.typeConfig.splashMaxTargets,
+    );
+    const candidates = this._splashHits;
+    const dists = this._splashDistScratch;
+
+    for (let i = 0; i < maxTargets; i++) {
+      const nearbyEnemy = candidates[i];
+      // Always with falloff, no switch: Firefox's optimising JIT skipped a branch on one
+      // here after about a quarter of an hour of play, and its splash hit at full damage
+      // while every other client fell off with the distance (coop desync, TODO E64)
+      const splashDamage = Math.floor(projectile.damage * (1 - dists[i] / splashRadius));
+
+      if (splashDamage > 0) {
+        const result = this.damageService.applyDamage(
+          this.vfx,
+          nearbyEnemy,
+          splashDamage,
+          damageType,
+          projectile.sourceTowerId,
+          true,
+          isIceShard || isPoisonGlob
+        );
+
+        // Spawn damage number for splash hit
+        if (result) {
+          this.spawnDamageNumberFromResult(nearbyEnemy, result);
+        }
+      }
+
+      // Apply slow effect and ice decal to splash targets
+      if (isIceShard) {
+        this.statusEffectService.applySlow(
+          nearbyEnemy,
+          GAME_BALANCE.effects.ice.slowAmount,
+          GAME_BALANCE.effects.ice.duration,
+          projectile.sourceTowerId
+        );
+        this.vfx.emitIceDecal(nearbyEnemy);
+      }
+
+      // Apply poison DOT to splash targets
+      if (isPoisonGlob) {
+        this.statusEffectService.applyPoison(
+          nearbyEnemy,
+          this.poisonDotDps(projectile),
+          GAME_BALANCE.effects.poison.duration,
+          projectile.sourceTowerId
+        );
+      }
+    }
+  }
+
+  /**
+   * DOT DPS of a poison glob. It grows with the tower's damage track: a glob
+   * that hits for twice the Poison Tower's base damage poisons for twice the
+   * base DOT.
+   */
+  private poisonDotDps(projectile: Projectile): number {
+    const upgradeMultiplier = projectile.damage / TOWER_TYPES.poison.damage;
+    return GAME_BALANCE.effects.poison.dotDamagePerSecond * upgradeMultiplier;
+  }
+
+  /**
+   * Spawn a floating damage number with effectiveness-based color and scale.
+   */
+  private spawnDamageNumberFromResult(enemy: Enemy, result: DamageResult): void {
+    this.spawnDamageNumber(enemy, result.finalDamage, result.effectiveness);
+  }
+
+  private spawnDamageNumber(enemy: Enemy, damage: number, effectiveness: DamageEffectiveness): void {
+    if (!this.damageNumbersEnabled) return;
+    const rounded = Math.round(damage);
+    const color = EFFECTIVENESS_COLORS[effectiveness];
+    const effectivenessScale = EFFECTIVENESS_SCALES[effectiveness];
+    // Scale text size with damage: small splash hits → small, big direct hits → large
+    const t = Math.min(rounded / 80, 1);
+    const baseScale = 0.25 + t * 0.3; // 0.25 (low dmg) → 0.55 (high dmg)
+    const scale = baseScale * effectivenessScale;
+    const spot = enemyHitSpot(enemy);
+    this.sink.effects.spawnFloatingText(
+      `-${rounded}`,
+      spot.lat,
+      spot.lon,
+      spot.height + 5,
+      {
+        color,
+        duration: TIMING.damagePopupDuration,
+        floatSpeed: 1.2,
+        scale,
+        lateralOffset: -1.2,
+        lateralDrift: -1.0,
+      }
+    );
+  }
+
+  /**
+   * Handle DOT damage tick (poison, burn).
+   * Applies damage through the matrix, credits a kill to the source tower and
+   * spawns a damage number in the effect's colour.
+   */
+  private handleDotDamage(
+    enemy: Enemy,
+    damage: number,
+    damageType: DamageType,
+    effectType: 'poison' | 'burn',
+    sourceTowerId: string,
+  ): void {
+    if (!enemy.alive) return;
+    if (enemy.body) this.keepHitOnBody(enemy);
+
+    const result = this.damageService.applyDamage(
+      this.vfx,
+      enemy,
+      damage,
+      damageType,
+      sourceTowerId,
+      false,
+      true // suppress blood for DOT
+    );
+
+    // Green for poison, orange for burn (regardless of effectiveness)
+    if (this.damageNumbersEnabled && result) {
+      const rounded = Math.round(result.finalDamage);
+      const spot = enemyHitSpot(enemy);
+      this.sink.effects.spawnFloatingText(
+        `-${rounded}`,
+        spot.lat,
+        spot.lon,
+        spot.height + 5,
+        {
+          color: effectType === 'burn' ? '#FF8C1A' : '#44CC22',
+          duration: TIMING.damagePopupDuration,
+          floatSpeed: 1.2,
+          scale: 0.2,
+          lateralOffset: -1.2,
+          lateralDrift: -1.0,
+        }
+      );
+    }
+  }
+
+  /**
+   * A DoT tick on a body along the route (the ooze) brings no hit of its
+   * own: its number goes where the last hit landed, or where a radius query
+   * last touched the body. The tail may have moved up past that point since,
+   * so the hit moves to the point of the body nearest to it.
+   */
+  private keepHitOnBody(enemy: Enemy): void {
+    const body = enemy.body!;
+    const hit = body.hit;
+    const st = body.stations;
+    const local = this.coords.sync.geoToLocalSimpleInto(hit.lat, hit.lon, 0, this._hitLocal);
+    const { station: k, offset } = body.nearest(local.x, local.z, this._hitContact);
+    const groundY = this.globalRouteGrid.getGroundLocalYAt(st.x[k] + st.rightX[k] * offset, st.z[k] + st.rightZ[k] * offset)
+      ?? hit.height - st.originHeight;
+    body.setHit(k, offset, groundY);
+  }
+
+  /**
+   * The enemies within `radius` of `origin` a source may hit, the nearest
+   * `maxTargets` of them first: fills `_splashHits` and `_splashDistScratch`
+   * and returns how many of them to take.
+   */
+  private nearestHittable(
+    origin: GeoPosition,
+    radius: number,
+    excludeId: string | undefined,
+    hitsAir: boolean,
+    hitsGround: boolean,
+    maxTargets: number | undefined,
+  ): number {
+    const candidates = this.globalRouteGrid.getEnemiesInRadiusGeo(origin, radius, excludeId, this._splashScratch);
+    this._splashHits = candidates;
+
+    // Treffbare Ziele samt Abstand nach vorne kompaktieren. Ein Körper entlang
+    // der Route zählt mit dem Abstand zu seinem nächsten Punkt, den die
+    // Umkreissuche gerade gemessen hat (RouteBody.hitDistanceM).
+    const dists = this._splashDistScratch;
+    let count = 0;
+    // Schreibt nur auf Indizes, die die Schleife schon hinter sich hat.
+    for (const enemy of candidates) {
+      if (enemy.typeConfig.isAirUnit ? !hitsAir : !hitsGround) continue;
+      candidates[count] = enemy;
+      dists[count] = enemy.body ? enemy.body.hitDistanceM : geoDistanceFast(origin, enemy.position);
+      count++;
+    }
+
+    // Höchstens maxTargets Opfer, die nächsten zuerst. Teilweiser
+    // Selection-Sort: k ist klein, n selten mehr als ein paar Dutzend, und
+    // Gleichstand bleibt in Grid-Reihenfolge (deterministisch).
+    const take = Math.min(count, maxTargets ?? count);
+    if (take < count) {
+      for (let i = 0; i < take; i++) {
+        let nearest = i;
+        for (let j = i + 1; j < count; j++) {
+          if (dists[j] < dists[nearest]) nearest = j;
+        }
+        if (nearest !== i) {
+          const enemy = candidates[i];
+          candidates[i] = candidates[nearest];
+          candidates[nearest] = enemy;
+          const dist = dists[i];
+          dists[i] = dists[nearest];
+          dists[nearest] = dist;
+        }
+      }
+    }
+    return take;
+  }
+
+  // =====================================================
+  // PUBLIC METHODS FOR BEAM TOWERS
+  // =====================================================
+
+  /**
+   * Apply melee damage to an enemy.
+   * Used by Tentacle Tower direct strikes. With `slam` the strike also hits
+   * the ground enemies around its target (TowerTypeConfig.meleeSlam).
+   */
+  applyMeleeDamage(
+    enemy: Enemy,
+    damage: number,
+    damageType: DamageType,
+    sourceTowerId: string,
+    slam?: TowerTypeConfig['meleeSlam'],
+  ): void {
+    const result = this.damageService.applyBeamDamage(this.vfx, enemy, damage, damageType, sourceTowerId, true);
+
+    // Spawn damage number with effectiveness feedback
+    if (result) {
+      this.spawnDamageNumberFromResult(enemy, result);
+    }
+
+    if (!slam) return;
+    const count = this.nearestHittable(enemy.position, slam.radius, enemy.id, false, true, slam.maxTargets);
+    const slamDamage = damage * slam.share;
+    for (let i = 0; i < count; i++) {
+      const nearby = this._splashHits[i];
+      const hit = this.damageService.applyBeamDamage(this.vfx, nearby, slamDamage, damageType, sourceTowerId, true);
+      if (hit) this.spawnDamageNumberFromResult(nearby, hit);
+    }
+  }
+
+  /**
+   * Apply continuous beam damage to an enemy.
+   * Used by Fire Tower flamethrower effect.
+   */
+  applyBeamDamage(
+    enemy: Enemy,
+    damage: number,
+    damageType: DamageType,
+    sourceTowerId: string,
+    showBloodEffects = false
+  ): void {
+    this.damageService.applyBeamDamage(this.vfx, enemy, damage, damageType, sourceTowerId, showBloodEffects);
+  }
+
+  /**
+   * Set or refresh a fire beam's burn on an enemy in its cone.
+   * Called every sub-step while the enemy stays in the cone.
+   */
+  applyBurn(enemy: Enemy, dotDps: number, sourceTowerId: string): void {
+    this.statusEffectService.applyBurn(enemy, dotDps, GAME_BALANCE.effects.burn.duration, sourceTowerId);
+  }
+
+  /**
+   * Apply chain-lightning damage to a single enemy. No blood effects (electric, not physical).
+   * Used by Lightning Tower hitscan chain. Spawns a damage number per hit and
+   * triggers a brief electric-blue tint flash on the target.
+   */
+  applyChainDamage(
+    enemy: Enemy,
+    damage: number,
+    damageType: DamageType,
+    sourceTowerId: string,
+  ): void {
+    const result = this.damageService.applyBeamDamage(this.vfx, enemy, damage, damageType, sourceTowerId, false);
+    if (result) {
+      this.spawnDamageNumberFromResult(enemy, result);
+    }
+    this.sink.enemies.triggerHitFlash(enemy.id);
+  }
+
+  /**
+   * Ability strike: every target loses `fractionOf(enemy)` of its max HP,
+   * matrix-free (DamageApplicationService.applyMaxHpFraction). Death blood
+   * for the first ABILITY_DEATH_BLOOD_CAP kills only, a strike hits up to a
+   * few hundred enemies at once. The damage numbers come from
+   * showAbilityDamage, when the AbilityManager asks for them.
+   *
+   * @returns the number of enemies the strike killed
+   */
+  applyAbilityStrike(targets: readonly Enemy[], fractionOf: (enemy: Enemy) => number, ownerId?: string): number {
+    let kills = 0;
+    for (const enemy of targets) {
+      if (!enemy.alive) continue;
+      const showDeathBlood = kills < ABILITY_DEATH_BLOOD_CAP;
+      if (this.damageService.applyMaxHpFraction(this.vfx, enemy, fractionOf(enemy), showDeathBlood, ownerId)) {
+        kills++;
+      }
+    }
+    return kills;
+  }
+
+  /** HP the abilities of `ownerId` took so far (DamageApplicationService.abilityDamageOf) */
+  abilityDamageOf(ownerId: string): number {
+    return this.damageService.abilityDamageOf(ownerId);
+  }
+
+  /** A new run counts the abilities' damage from 0 */
+  resetAbilityDamage(): void {
+    this.damageService.resetAbilityDamage();
+  }
+
+  /**
+   * Damage number for an ability: `fraction` of the enemy's max HP, drawn
+   * like a tower hit. A beam's `damageType` colours it by how it does
+   * against the armor, damage past the matrix (null) shows as a normal hit.
+   * A number that rounds to 0 is left out.
+   */
+  showAbilityDamage(enemy: Enemy, fraction: number, damageType: DamageType | null): void {
+    const damage = enemy.health.maxHp * fraction;
+    if (Math.round(damage) <= 0) return;
+    const multiplier = damageType ? DAMAGE_MATRIX[damageType][enemy.getEffectiveArmorType()] : 1;
+    this.spawnDamageNumber(enemy, damage, getEffectiveness(multiplier));
+  }
+
+  /**
+   * Ability halt: every living target halts with `status` for
+   * `durationMsOf(enemy)` game ms (StatusEffectService), the effect kept
+   * under the ability's `sourceId`, so a second strike of it refreshes.
+   */
+  applyAbilityHalt(
+    targets: readonly Enemy[],
+    status: AbilityHaltStatus,
+    durationMsOf: (enemy: Enemy) => number,
+    sourceId: string,
+  ): void {
+    for (const enemy of targets) {
+      if (!enemy.alive) continue;
+      switch (status) {
+        case 'freeze':
+          this.statusEffectService.applyFreeze(enemy, durationMsOf(enemy), sourceId);
+          break;
+        case 'stun':
+          this.statusEffectService.applyStun(enemy, durationMsOf(enemy), sourceId);
+          break;
+      }
+    }
+  }
+}

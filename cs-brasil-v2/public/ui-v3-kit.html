@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR" data-ui="v3">
+<head>
+<meta charset="utf-8">
+<title>Kit Treta Pop (UI v3)</title>
+<!-- Bancada local: podada do deploy (scripts/prune-dist.mjs). Compara com design/treta-pop-2026-10-14/png/00-main.png.
+     ?prancha=2 mostra abas, gaveta, toast e cartões; &movimento=reduzido liga data-motion. -->
+<link rel="stylesheet" href="/style.css">
+<style>
+  html,body{overflow:auto}
+  body{margin:0;background:var(--tp-asfalto)}
+  .prancha{width:1536px;height:1024px;box-sizing:border-box;padding:56px 64px;display:flex;flex-direction:column;gap:32px;overflow:hidden;color:var(--tp-tinta-1);font-family:var(--tp-ui);
+    background:radial-gradient(1200px 700px at 85% -10%,rgba(42,35,18,1) 0%,rgba(42,35,18,0) 60%),radial-gradient(900px 600px at -10% 110%,rgba(28,42,18,1) 0%,rgba(28,42,18,0) 60%),var(--tp-asfalto)}
+  .prancha[hidden]{display:none}
+  .grade3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+  .cor{display:flex;flex-direction:column;gap:8px}
+  .cor>div{height:84px;border-radius:8px}
+  .cor b{font-weight:700;font-size:14px}
+  .cor span{font-size:12px;color:var(--tp-tinta-3)}
+  .tag{font-weight:700;font-size:13px;letter-spacing:.12em;padding:6px 10px;border:1px solid rgba(255,255,255,.18);border-radius:4px}
+  .palco{position:relative;height:300px;border-radius:8px;background:var(--tp-fundo);overflow:hidden}
+  .lobby{position:absolute;inset:14px 160px 14px 14px;border-radius:6px;background:linear-gradient(135deg,rgba(58,48,22,1),var(--tp-fundo-2))}
+  .palco .tp-gaveta{position:absolute;width:320px}
+  .palco .tp-toasts{position:absolute}
+</style>
+</head>
+<body>
+<section class="prancha" id="prancha-1">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:24px">
+      <img src="/logo.png" alt="" style="width:132px;height:auto">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span class="tp-rotulo">Kit visual · proposta</span>
+        <h1 class="tp-disp" style="margin:0;font-size:72px"><span class="tp-ital">Treta <span style="color:var(--tp-ambar)">Pop</span></span></h1>
+      </div>
+    </div>
+    <p style="margin:0;max-width:520px;font-size:19px;line-height:1.35;color:var(--tp-tinta-2);font-weight:500">As cores que o jogo já usa (asfalto quente, lima e âmbar), agora organizadas: lima só para ação, âmbar para T$ e destaques, raridades no padrão que o jogador já lê, e três famílias tipográficas no lugar de cinco.</p>
+  </div>
+
+  <div class="grade3">
+    <div class="tp-painel" style="padding:28px;display:flex;flex-direction:column;gap:14px;min-height:300px">
+      <span class="tp-rotulo">Display · Anton (OFL)</span>
+      <div class="tp-disp" style="font-size:112px;color:var(--tp-ambar)"><span class="tp-ital">Vitória</span></div>
+      <div class="tp-disp" style="font-size:40px"><span class="tp-ital">Treta na Amazônia</span></div>
+      <p style="margin:auto 0 0;font-size:16px;color:var(--tp-tinta-3);line-height:1.4">Títulos, botões grandes, nomes de mapa e skin. Itálico por <span class="tp-num" style="font-size:14px;color:var(--tp-tinta-1)">skewX(-8°)</span>: o mesmo gesto do Burbank do Fortnite, sem licença paga.</p>
+    </div>
+    <div class="tp-painel" style="padding:28px;display:flex;flex-direction:column;gap:14px">
+      <span class="tp-rotulo">Interface · Barlow Semi Condensed</span>
+      <div style="font-size:34px;font-weight:800;line-height:1.05">Faça 10 abates com a AWP na Praça</div>
+      <div style="font-size:20px;font-weight:600;color:var(--tp-tinta-2);line-height:1.35">Corpo, labels, abas e descrições. Mesma família Barlow que o jogo já carrega: troca barata, mais legível que a Condensed em 13–16 px.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:auto">
+        <span class="tag">LABEL 13/700</span>
+        <span class="tag" style="font-weight:600;font-size:16px;letter-spacing:0">Corpo 16/600</span>
+        <span class="tag" style="font-weight:800;font-size:22px;letter-spacing:0;padding:4px 10px">Título 22/800</span>
+      </div>
+    </div>
+    <div class="tp-painel" style="padding:28px;display:flex;flex-direction:column;gap:14px">
+      <span class="tp-rotulo">Números · JetBrains Mono tabular</span>
+      <div style="display:flex;align-items:baseline;gap:10px"><span class="tp-num" style="font-size:88px;font-weight:800;line-height:1">30</span><span class="tp-num" style="font-size:36px;color:var(--tp-tinta-3);font-weight:700">/ 90</span></div>
+      <div style="display:flex;gap:18px;align-items:baseline"><span class="tp-num" style="font-size:36px;font-weight:800;color:var(--tp-ambar)">1:38</span><span class="tp-num" style="font-size:28px;font-weight:700">T$ 1.240</span><span class="tp-num" style="font-size:28px;font-weight:700;color:var(--tp-ganho)">+125 XP</span></div>
+      <p style="margin:auto 0 0;font-size:16px;color:var(--tp-tinta-3);line-height:1.4">Munição, HP, timer, K/D e T$ não "pulam" quando mudam. Substitui Share Tech Mono e Rajdhani.</p>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;flex:1">
+    <div class="tp-painel" style="padding:28px;display:flex;flex-direction:column;gap:18px">
+      <span class="tp-rotulo">Cores · base, ação e times</span>
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px">
+        <div class="cor"><div style="background:var(--tp-asfalto);border:1px solid rgba(255,255,255,.14)"></div><b>Asfalto</b><span class="tp-num">#090704</span></div>
+        <div class="cor"><div style="background:var(--tp-painel)"></div><b>Painel</b><span class="tp-num">#131418</span></div>
+        <div class="cor"><div style="background:var(--tp-elevado)"></div><b>Elevado</b><span class="tp-num">#26221B</span></div>
+        <div class="cor"><div style="background:var(--tp-lima)"></div><b>Lima</b><span class="tp-num">#B4D92E · ação</span></div>
+        <div class="cor"><div style="background:var(--tp-ambar)"></div><b>Âmbar</b><span class="tp-num">#F3B958 · T$</span></div>
+        <div class="cor"><div style="background:var(--tp-esq)"></div><b>Esquerda</b><span class="tp-num">#E03232</span></div>
+        <div class="cor"><div style="background:var(--tp-dir)"></div><b>Direita</b><span class="tp-num">#2F55E0</span></div>
+      </div>
+      <span class="tp-rotulo" style="margin-top:6px">Raridade · padrão da indústria + série própria</span>
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px">
+        <div class="tp-card" style="height:64px"><span class="tp-card__raridade">Comum</span></div>
+        <div class="tp-card" data-raridade="incomum" style="height:64px"><span class="tp-card__raridade">Incomum</span></div>
+        <div class="tp-card" data-raridade="raro" style="height:64px"><span class="tp-card__raridade">Raro</span></div>
+        <div class="tp-card" data-raridade="epico" style="height:64px"><span class="tp-card__raridade">Épico</span></div>
+        <div class="tp-card" data-raridade="lendario" style="height:64px"><span class="tp-card__raridade">Lendário</span></div>
+        <div class="tp-card" data-raridade="mitico" style="height:64px"><span class="tp-card__raridade">Mítico</span></div>
+        <div class="tp-card" data-raridade="gambiarra" style="height:64px"><span class="tp-card__raridade">Gambiarra</span></div>
+      </div>
+    </div>
+
+    <div class="tp-painel" style="padding:28px;display:flex;flex-direction:column;gap:20px">
+      <span class="tp-rotulo">Componentes</span>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <button class="tp-btn tp-btn--primario" type="button"><span class="tp-ital">Jogar</span></button>
+        <button class="tp-btn" type="button">Trocar mapa</button>
+        <button class="tp-btn tp-btn--fantasma" type="button">Lobby</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="tp-chip tp-chip--novo">Novo</span>
+        <span class="tp-chip tp-chip--timer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>SAI EM 13H</span>
+        <span class="tp-pill-ts">T$ 1.240</span>
+        <span class="tp-nivel"><span class="tp-anel" style="--p:.68">12</span>Nível 12</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between"><span style="font-weight:700;font-size:16px">Abates de faca no Escadão</span><span class="tp-num" style="font-size:14px;color:var(--tp-tinta-3)">3 / 5</span></div>
+        <div class="tp-barra" style="--p:.6"><i></i></div>
+      </div>
+      <p style="margin:0;font-size:15px;color:var(--tp-tinta-3);line-height:1.4">Regra: só um botão lima por tela. Âmbar para T$ e destaques, verde #46E08A só para ganho (XP, quest concluída). Vermelho e azul só para os times.</p>
+    </div>
+  </div>
+</section>
+
+<section class="prancha" id="prancha-2" hidden>
+  <h1 class="tp-disp" style="margin:0;font-size:52px"><span class="tp-ital">Abas, gaveta e <span style="color:var(--tp-lima)">toast</span></span></h1>
+  <div class="grade3">
+    <div class="tp-painel" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <span class="tp-rotulo">Abas · um risco só, 180 ms</span>
+      <div class="tp-abas" role="tablist" aria-label="Seções">
+        <button class="tp-aba" role="tab" type="button" aria-selected="true">Jogar</button>
+        <button class="tp-aba" role="tab" type="button" aria-selected="false">Loja</button>
+        <button class="tp-aba" role="tab" type="button" aria-selected="false">Passe</button>
+        <button class="tp-aba" role="tab" type="button" aria-selected="false">Armário</button>
+        <i class="tp-abas__risco" aria-hidden="true"></i>
+      </div>
+    </div>
+    <div class="tp-painel" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <span class="tp-rotulo">Cartão · sobe 8 px com o brilho da raridade</span>
+      <div style="display:flex;gap:14px;justify-content:center;padding-top:12px">
+        <div class="tp-card" data-raridade="raro" style="width:84px;height:116px" tabindex="0"></div>
+        <div class="tp-card" data-raridade="epico" style="width:84px;height:116px" tabindex="0" id="card-alvo"></div>
+        <div class="tp-card" style="width:84px;height:116px" tabindex="0"></div>
+      </div>
+    </div>
+    <div class="tp-painel" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+      <span class="tp-rotulo">Barra e anel · 480 ms</span>
+      <div class="tp-barra" id="barra" style="--p:.2"><i></i></div>
+      <span class="tp-nivel" style="align-self:flex-start"><span class="tp-anel" style="--p:.35">7</span>Nível 7</span>
+    </div>
+  </div>
+  <div class="tp-painel" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+    <span class="tp-rotulo">Lobby → gaveta (280 ms) e recompensa sem modal</span>
+    <div class="palco">
+      <div class="lobby" id="lobby"></div>
+      <aside class="tp-gaveta" id="gaveta" aria-label="Resenha"><div style="padding:20px" class="tp-disp"><span class="tp-ital">Resenha</span></div></aside>
+      <div class="tp-toasts"><div class="tp-toast" id="toast" role="status">+T$ 30 · quest concluída</div></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <button class="tp-btn" type="button" id="abre">Abrir gaveta</button>
+      <button class="tp-btn tp-btn--fantasma" type="button" id="toastar">Toast</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get('movimento') === 'reduzido') document.documentElement.dataset.motion = 'reduzido';
+  if (q.get('prancha') === '2') { document.getElementById('prancha-1').hidden = true; document.getElementById('prancha-2').hidden = false; }
+
+  for (const lista of document.querySelectorAll('.tp-abas')) {
+    const risco = lista.querySelector('.tp-abas__risco');
+    const abas = [...lista.querySelectorAll('.tp-aba')];
+    const mover = (aba) => { risco.style.setProperty('--x', aba.offsetLeft + 'px'); risco.style.setProperty('--w', aba.offsetWidth); };
+    const escolher = (aba) => { for (const a of abas) a.setAttribute('aria-selected', String(a === aba)); mover(aba); };
+    abas.forEach((a) => a.addEventListener('click', () => escolher(a)));
+    document.fonts.ready.then(() => mover(abas.find((a) => a.getAttribute('aria-selected') === 'true')));
+    const i = Number(q.get('aba'));
+    if (i) document.fonts.ready.then(() => escolher(abas[i]));
+  }
+  const gaveta = document.getElementById('gaveta'), lobby = document.getElementById('lobby'), toast = document.getElementById('toast');
+  const abrir = (sim) => { gaveta.toggleAttribute('data-aberta', sim); lobby.classList.toggle('tp-recuado', sim); };
+  document.getElementById('abre').addEventListener('click', () => abrir(!gaveta.hasAttribute('data-aberta')));
+  document.getElementById('toastar').addEventListener('click', () => { toast.setAttribute('data-visivel', ''); setTimeout(() => toast.removeAttribute('data-visivel'), 2500); });
+  if (q.has('gaveta')) abrir(true);
+  if (q.has('toast')) toast.setAttribute('data-visivel', '');
+  if (q.has('barra')) requestAnimationFrame(() => document.getElementById('barra').style.setProperty('--p', '1'));
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+// Layout of the benchmark card, top centre of the map: a dense dialog with
+// the progress, the environment line, the results table and its actions.
+
+.bm {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  width: max-content;
+  min-width: 320px;
+  max-width: min(760px, calc(100% - 32px));
+  gap: 8px;
+  padding-bottom: 12px;
+
+  > :not(.bm-head) {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+}
+
+.bm-table {
+  font-variant-numeric: tabular-nums;
+}

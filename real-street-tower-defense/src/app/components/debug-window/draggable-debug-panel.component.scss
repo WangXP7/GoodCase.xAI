@@ -1,0 +1,51 @@
+// Layout of a debug window: a dense dialog the player drags by its head and
+// sizes at its corner. The stored size is the outer size, so the viewport
+// clamp can use it.
+
+.debug-panel {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+}
+
+.debug-panel-header {
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.debug-panel-name {
+  gap: 6px;
+}
+
+.debug-panel-icon {
+  color: var(--td-brass);
+}
+
+.debug-panel-content {
+  padding-bottom: 12px;
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--td-text-muted);
+  cursor: nwse-resize;
+
+  &:hover {
+    color: var(--td-brass-light);
+  }
+
+  td-icon {
+    transform: rotate(-45deg);
+  }
+}

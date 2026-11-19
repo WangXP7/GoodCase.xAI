@@ -1,0 +1,1301 @@
+#!/usr/bin/env node
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Script as VMScript, createContext } from 'node:vm';
+import sharp from 'sharp';
+import { langFromCountry } from '../../src/lib/geo.ts';
+
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const cli = process.argv.slice(2);
+if (cli.length > 1 || cli.some((a) => !/^--mutante=[a-z0-9-]+$/.test(a))) {
+  console.error('uso: redesign-check.mjs [--mutante=<nome>]'); process.exit(2);
+}
+const MUTANTE = cli[0]?.slice('--mutante='.length) || '';
+const alvoPorMutante = {
+  'asset-ausente': 'UIA1',
+  'resultado-nao-auditado': 'UIA1',
+  'video-dimensao': 'UIA2',
+  'video-container': 'UIA2',
+  'splash-sem-wallpaper': 'UIA3',
+  'lote-nao-auditado': 'UIA4',
+  'loading-sem-canvas': 'UIA5',
+  'loading-uma-acao': 'UIA6',
+  'loading-clipe-falso': 'UIA6',
+  'sem-i18n': 'UIR1',
+  'loading-sem-tr': 'UIR1',
+  'loading-fallback-fora-tr': 'UIR1',
+  'loading-triplo-fora-tr': 'UIR1',
+  'preview-render': 'UIR2',
+  'preview-decode': 'UIR3',
+  'mapa-esconde-um': 'UIR4',
+  'mapa-sem-miniaturas': 'UIR4',
+  'mapa-sem-navegacao': 'UIR4',
+  'mapa-navega-global': 'UIR4',
+  'mapa-acervo-deitado': 'UIR4',
+  'mapa-acervo-nao-rola': 'UIR4',
+  'mapa-card-achatado': 'UIR4',
+  'mapa-palco-sem-scrim': 'UIR4',
+  'mapa-header-empilhado': 'UIR4',
+  'mapa-palco-wall-do-setup': 'UIR4',
+  'mapa-rodape-junto': 'UIR4',
+  'mapa-palco-sem-wallpaper': 'UIR4',
+  'mapa-plays-inventado': 'UIR4',
+  'mapa-todos-sem-ranking': 'UIR4',
+  'mapa-plays-sem-guarda': 'UIR4',
+  'mapa-categoria-errada': 'UIR4',
+  'i18n-duplicada': 'UIR5',
+  'arma-unica': 'UIR6',
+  'placar-sem-cap': 'UIR7',
+  'placar-labels-curtos': 'UIR7',
+  'mount-sem-resize': 'UIR8',
+  'gerador-engole-erro': 'UIR9',
+  'i18n-dinamica-restante': 'UIR10',
+  'setup-sem-i18n': 'UIR10',
+  'video-vaza': 'UIR11',
+  'preview-sem-interacao': 'UIR12',
+  'selecao-tres-colunas': 'UIR13',
+  'selecao-thumbs-pequenos': 'UIR13',
+  'selecao-rail-descentrado': 'UIR13',
+  'selecao-controle-colide': 'UIR13',
+  'selecao-grade-sem-rolagem': 'UIR13',
+  'selecao-rail-sem-piso': 'UIR13',
+  'selecao-rail-linha-morta': 'UIR13',
+  'selecao-teto-fixo-volta': 'UIR13',
+  'preview-gira-sozinho': 'UIR14',
+  'resultado-em-video': 'UIR15',
+  'resultado-personagem-antigo': 'UIR15',
+  'loading-sem-wallpaper': 'UIR16',
+  'loading-uma-faccao': 'UIR16',
+  'hud-score-volta-preto': 'UIR17',
+  'resultado-corta-personagem': 'UIR19',
+  'resultado-sem-alpha': 'UIR19',
+  'resultado-derrota-sem-alpha': 'UIR19',
+  'idioma-por-navegador': 'UIR20',
+  'idioma-prerender': 'UIR20',
+  'loading-volta-grande': 'UIR21',
+  'loading-vira-esquerda': 'UIR21',
+  'loading-rotulo-volta': 'UIR21',
+  'config-volta-cartao': 'UIR22',
+  'config-mostra-media': 'UIR22',
+  'placar-volta-opaco': 'UIR23',
+  'placar-abre-pausa': 'UIR23',
+  'hud-fonte-bebas': 'UIR17',
+  'hud-sem-vinheta-baixa': 'UIR24',
+  'killfeed-volta-svg': 'UIR25',
+  'modo-volta-setup': 'UIR26',
+  'ctf-some-home': 'UIR26',
+  'toggle-sem-arena': 'UIR26',
+  'personagem-dificuldade-volta': 'UIR27',
+  'punk-avatar-nao-auditado': 'UIR28',
+  'perfil-volta-iniciais': 'UIR29',
+  'suporte-sai-do-menu': 'UIR30',
+  'mouse-invertido-ignorado': 'UIR31',
+  'loading-wall-cover-unico': 'UIR32',
+  'menu-wall-sem-3x2': 'UIR32',
+  'menu-wall-contain-volta': 'UIR32',
+  'opcoes-mapa-decorativas': 'UIR33',
+  'borda-tracejada-volta': 'UIR34',
+  'splash-sem-personagem': 'UIR35',
+  'splash-conteudo-atras': 'UIR35',
+  'placar-sem-brasoes': 'UIR36',
+  'placar-volta-topo': 'UIR37',
+  'backend-aviso-volta': 'UIR38',
+  'faccao-mostra-antes-da-arte': 'UIR39',
+  'troca-m-abre-pausa': 'UIR40',
+  'm-lado-antigo': 'UIR40',
+  'resultado-emenda-volta': 'UIR41',
+  'versao-menu-volta-rodape': 'UIR42',
+  'sem-autoria': 'UIR43',
+  'filtro-autor-morto': 'UIR4',   // mistura comunidade nos OFICIAIS de novo (reverte o #368)
+  'sem-badge-oficial': 'UIR43',
+  'card-escalacao-encolhe': 'UIR44',
+};
+if (MUTANTE && !alvoPorMutante[MUTANTE]) {
+  console.error(`mutante desconhecido: ${MUTANTE}`);
+  process.exit(2);
+}
+
+// As mutações da grade exigem nominal verde e só UIR13 vermelha.
+const GRADE_MUTANTES = new Set(['selecao-tres-colunas', 'selecao-thumbs-pequenos', 'selecao-rail-descentrado', 'selecao-controle-colide', 'selecao-grade-sem-rolagem', 'selecao-rail-sem-piso', 'selecao-rail-linha-morta', 'selecao-teto-fixo-volta']);
+if (GRADE_MUTANTES.has(MUTANTE) && process.env.CSBR_REDESIGN_GRADE_CHILD !== '1') {
+  const rodar = (args, child = false) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...args], {
+    encoding: 'utf8', env: { ...process.env, CSBR_REDESIGN_GRADE_CHILD: child ? '1' : '' }, maxBuffer: 4 * 1024 * 1024,
+  });
+  const linhas = (r) => [...(r.stdout || '').matchAll(/^([✓✗]) ([A-Z]+[0-9]+) ·/gm)].map((m) => ({ id: m[2], verde: m[1] === '✓' }));
+  const infra = (msg) => { console.error('INFRA UIR13: ' + msg); process.exit(78); };
+  const nominal = rodar([]), antes = linhas(nominal);
+  if (nominal.error || nominal.signal || nominal.status !== 0 || !antes.some((r) => r.id === 'UIR13')
+      || antes.some((r) => !r.verde) || new Set(antes.map((r) => r.id)).size !== antes.length)
+    infra('nominal não verde ou protocolo inválido; mutação não executada');
+  const variante = rodar([`--mutante=${MUTANTE}`], true), depois = linhas(variante);
+  if (variante.error || variante.signal || ![0, 1].includes(variante.status)) infra(`variante exit=${variante.status}`);
+  if (JSON.stringify(antes.map((r) => r.id)) !== JSON.stringify(depois.map((r) => r.id))) infra('cláusulas da variante diferem do nominal');
+  const vermelhas = depois.filter((r) => !r.verde).map((r) => r.id);
+  process.stdout.write(variante.stdout || '');
+  if (variante.status !== 0 || JSON.stringify(vermelhas) !== JSON.stringify(['UIR13'])) {
+    console.error(`mutante ${MUTANTE}: falhas fora do conjunto exato: ${JSON.stringify(vermelhas)}`); process.exit(1);
+  }
+  console.log(`✓ grade ${MUTANTE}: nominal verde e somente UIR13 vermelha`); process.exit(0);
+}
+
+let main = readFileSync(join(ROOT, 'public/js/main.js'), 'utf8');
+/* O catálogo dos mapas (categoria/autoria/data) saiu do main.js para o mapcat.js quando o
+   servidor de multiplayer passou a precisar do MESMO recorte oficial/comunidade — main.js é
+   código de tela e não sobe fora do navegador. As cobranças abaixo seguem as mesmas, só
+   apontam para onde a tabela mora agora. */
+let mapcat = readFileSync(join(ROOT, 'public/js/mapcat.js'), 'utf8');
+let css = readFileSync(join(ROOT, 'public/style.css'), 'utf8');
+let i18n = readFileSync(join(ROOT, 'public/js/i18n.js'), 'utf8');
+let astro = readFileSync(join(ROOT, 'src/pages/index.astro'), 'utf8');
+/* A rota /api/map-plays saiu deste repositório (ver docs/APIS.md). O que ela faz por dentro
+   agora é cobrado no backend; aqui fica o que é do CLIENTE: que a tela chame a rota e aguente
+   a resposta não chegar. */
+const characters = readFileSync(join(ROOT, 'public/js/characters.js'), 'utf8');
+let videoGenerator = readFileSync(join(ROOT, 'tools/eval/char-native-vids.mjs'), 'utf8');
+let game = readFileSync(join(ROOT, 'public/js/game.js'), 'utf8');
+let mounttest = readFileSync(join(ROOT, 'public/mounttest.html'), 'utf8');
+let dev = readFileSync(join(ROOT, 'public/dev.html'), 'utf8');
+let mediaAudit = existsSync(join(ROOT, 'tools/eval/char-native-audit.json'))
+  ? readFileSync(join(ROOT, 'tools/eval/char-native-audit.json'), 'utf8') : '';
+let staticAudit = existsSync(join(ROOT, 'tools/eval/redesign-static-audit.json'))
+  ? readFileSync(join(ROOT, 'tools/eval/redesign-static-audit.json'), 'utf8') : '';
+let loading3d = existsSync(join(ROOT, 'public/js/loading3d.js'))
+  ? readFileSync(join(ROOT, 'public/js/loading3d.js'), 'utf8') : '';
+const apiGeoLang = existsSync(join(ROOT, 'src/pages/api/geo-lang.ts'))
+  ? readFileSync(join(ROOT, 'src/pages/api/geo-lang.ts'), 'utf8') : '';
+let mutacaoAplicou = !MUTANTE;
+const muta = (nome, texto, antes, depois) => {
+  if (MUTANTE !== nome) return texto;
+  const alterado = texto.replace(antes, depois);
+  mutacaoAplicou = alterado !== texto;
+  return alterado;
+};
+staticAudit = muta('resultado-nao-auditado', staticAudit,
+  '"resultImagesSha256":',
+  '"resultImagesSha256Mutado":');
+staticAudit = muta('punk-avatar-nao-auditado', staticAudit,
+  '"punkAvatarSha256":',
+  '"punkAvatarSha256Mutado":');
+astro = muta('loading-sem-canvas', astro,
+  '<canvas id="load-character-3d"',
+  '<canvas id="load-character-3d-mutado"');
+astro = muta('splash-sem-personagem', astro,
+  '<div id="splash-character-stage" aria-hidden="true">',
+  '<div id="splash-character-stage-mutado" aria-hidden="true">');
+loading3d = muta('loading-uma-acao', loading3d,
+  "{ name: 'ready'",
+  "{ name: 'run'");
+loading3d = muta('loading-clipe-falso', loading3d,
+  'find(([, clip]) => clip === this.ctrl.cur)',
+  'find(() => true)');
+loading3d = muta('loading-uma-faccao', loading3d,
+  "U: 'blackmetal'",
+  "U: 'canarinho'");
+
+main = muta('loading-sem-tr', main, 'a.textContent = tr(nomeTimeJavaporcos', 'a.textContent = (nomeTimeJavaporcos');
+main = muta('loading-fallback-fora-tr', main,
+  "a.textContent = tr(nomeTimeJavaporcos(ehMapaJavaporcos(currentMap) ? 'horde' : '', 'E') || FACTION_NAME[currentTeam] || '')",
+  "a.textContent = tr('') || (FACTION_NAME[currentTeam] || '')");
+main = muta('loading-triplo-fora-tr', main,
+  "b.textContent = tr(ehMapaJavaporcos(currentMap) && settings.javaporcos?.times === 3 ? 'TIME B × JAVAPORCOS' : nomeTimeJavaporcos(ehMapaJavaporcos(currentMap) ? 'horde' : '', 'B') || FACTION_NAME[ladoDele] || '')",
+  "b.textContent = ehMapaJavaporcos(currentMap) && settings.javaporcos?.times === 3 ? 'TIME B × JAVAPORCOS' : tr(nomeTimeJavaporcos(ehMapaJavaporcos(currentMap) ? 'horde' : '', 'B') || FACTION_NAME[ladoDele] || '')");
+main = muta('sem-i18n', main,
+  "`${tr('MAPA')} ${MAPAS_MENU.indexOf(currentMap) + 1} ${tr('DE')} ${MAPAS_MENU.length}`",
+  "`MAPA ${MAPAS_MENU.indexOf(currentMap) + 1} DE ${MAPAS_MENU.length}`");
+main = muta('preview-render', main,
+  "if (pv && pv.model && previewModelActive(csOpen,hubPreviewOpen)) {",
+  "if (pv && pv.model && (csOpen || hubPreviewOpen)) {");
+main = muta('preview-decode', main,
+  "if (id !== 'char-select') pvStopVideo();",
+  '');
+i18n = muta('i18n-duplicada', i18n,
+  "  'PERSONAGENS': 'CHARACTERS', 'PERSONAGEM': 'CHARACTER',",
+  "  'PERSONAGENS': 'CHARACTERS', 'PERSONAGENS': 'CHARACTERS', 'PERSONAGEM': 'CHARACTER',");
+videoGenerator = muta('arma-unica', videoGenerator,
+  "const weapon = weaponById[id] || 'ak';",
+  "const weapon = 'ak';");
+game = muta('placar-sem-cap', game,
+  "${this.ctf ? '<span class=\"sb-cap\">CAP.</span>' : ''}",
+  "${this.ctf ? '' : ''}");
+game = muta('placar-labels-curtos', game,
+  '<span>K</span><span>D</span><span>SCORE</span><span>PING</span>',
+  '<span>K</span><span>D</span>');
+game = muta('placar-sem-brasoes', game,
+  '<img class="sb-crest" src="/${urlDoBrasao(crest(side))}" alt="">',
+  '');
+css = muta('loading-wall-cover-unico', css,
+  'background-size:cover,contain;background-position:center;background-repeat:no-repeat}',
+  'background-size:cover,cover;background-position:center;background-repeat:no-repeat}');
+css = muta('menu-wall-sem-3x2', css,
+  "background-image:var(--menu-wall-3x2,var(--menu-wall))",
+  'background-image:var(--menu-wall)');
+css = muta('menu-wall-contain-volta', css,
+  '.cs-wallpaper::after{inset:0;z-index:1;background-size:cover}',
+  '.cs-wallpaper::after{inset:0;z-index:1;background-size:contain}');
+main = muta('opcoes-mapa-decorativas', main,
+  'roundsMax: sessao ? (sanitizeRounds(sessao.net.meta.roundsMax) || undefined) : matchRounds(),',
+  'roundsMax: 5,');
+css = muta('borda-tracejada-volta', css,
+  'background:transparent;border:1px solid var(--line);color:var(--ink3);padding:10px}',
+  'background:transparent;border:1px dashed var(--br-faixa);color:var(--ink3);padding:10px}');
+css = muta('splash-conteudo-atras', css,
+  '#boot-splash .splash-frame{position:relative;z-index:2}',
+  '#boot-splash .splash-frame{position:relative;z-index:1}');
+css = muta('placar-volta-topo', css,
+  '#scoreboard .sb-center{position:absolute;inset:0 64px;display:flex;flex-direction:column;justify-content:center;',
+  '#scoreboard .sb-center{position:absolute;inset:0 64px;display:flex;flex-direction:column;justify-content:flex-start;');
+mediaAudit = muta('lote-nao-auditado', mediaAudit,
+  '"mediaSha256":',
+  '"mediaSha256Mutado":');
+mounttest = muta('mount-sem-resize', mounttest,
+  "addEventListener('resize', resizeMount);",
+  '');
+videoGenerator = muta('gerador-engole-erro', videoGenerator,
+  'const pageErrors = [];',
+  'const pageErrors = null;');
+main = muta('i18n-dinamica-restante', main,
+  "$('char-info-blurb').textContent = tr(c.blurb);",
+  "$('char-info-blurb').textContent = c.blurb;");
+main = muta('setup-sem-i18n', main,
+  "if (st) st.textContent = tr(matchMode === 'arena' ? 'PASSO 1 · VIRA-CASACA' : (matchMode === 'ctf' ? 'PASSO 1 · A PARTIDA (CTF)' : 'PASSO 1 · A PARTIDA'));",
+  "if (st) st.textContent = (matchMode === 'arena' ? 'PASSO 1 · VIRA-CASACA' : (matchMode === 'ctf' ? 'PASSO 1 · A PARTIDA (CTF)' : 'PASSO 1 · A PARTIDA'));");
+astro = muta('video-vaza', astro,
+  '<div id="load-overlay" class="hidden">',
+  '<div id="load-overlay" class="hidden"><video id="load-char" autoplay></video>');
+main = muta('preview-sem-interacao', main,
+  'if (staticPreviews) pvSetVideo(c); else pvStopVideo();',
+  'pvSetVideo(c);');
+main = muta('preview-gira-sozinho', main,
+  "if (!pv.travado && !pvReducedMotion.matches) {\n        if (pv.ctrl) pv.ctrl.update(pvDt, 0, false, 0); else if (pv.mixer) pv.mixer.update(pvDt);",
+  "if (!pvDrag) pv.model.rotation.y += pvDt * 0.9;\n      if (!pv.travado && !pvReducedMotion.matches) {\n        if (pv.ctrl) pv.ctrl.update(pvDt, 0, false, 0); else if (pv.mixer) pv.mixer.update(pvDt);");
+main = muta('mapa-esconde-um', main,
+  "return mapCategory === 'TODOS' ? MAP_IDS : MAP_IDS.filter((id) => MAP_CAT[id] === mapCategory);",
+  "return mapCategory === 'TODOS' ? MAP_IDS.slice(0, -1) : MAP_IDS.filter((id) => MAP_CAT[id] === mapCategory);");
+main = muta('mapa-sem-miniaturas', main,
+  '`<span class="ms-thumb-media"><img class="ms-thumb-img" loading="lazy" decoding="async" src="${mapPreviewPoster(id, VERSION)}" alt=""></span>` +',
+  "'' +");
+main = muta('mapa-navega-global', main,
+  "$('ms-next').onclick = () => stepMap(1, visibleMapIds());",
+  "$('ms-next').onclick = () => stepMap(1);");
+/* 21/08: a faixa horizontal virou GRADE elástica no corpo. Cada mutação abaixo desfaz
+   UMA decisão da tela e tem de acender a UIR4 sozinha. */
+css = muta('mapa-acervo-deitado', css,     // grade elástica vira fileira de largura fixa
+  '.ms-strip{--map-count:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr))',
+  '.ms-strip{--map-count:1;display:grid;grid-template-columns:repeat(var(--map-count),196px)');
+css = muta('mapa-header-empilhado', css,   // a linha de três colunas vira pilha de novo
+  '.ms-head{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr) auto;',
+  '.ms-head{display:grid;grid-template-columns:minmax(0,1fr);');
+css = muta('mapa-rodape-junto', css,           // VOLTAR e CONTINUAR deixam de ir pros cantos
+  '.ms-foot{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between',
+  '.ms-foot{position:relative;z-index:2;display:flex;align-items:center;justify-content:flex-start');
+css = muta('mapa-palco-sem-wallpaper', css,    // o borrão do wallpaper some: volta o preto chapado
+  '.ms-bg::before{inset:-24px;z-index:0;background-size:cover;filter:blur(18px) brightness(.48) saturate(.72)}',
+  '.ms-bg::before{inset:-24px;z-index:0;background-size:auto;filter:none}');
+main = muta('mapa-palco-wall-do-setup', main,  // volta a divergir do menu principal
+  "palco.style.setProperty('--wall', HOME_WALL)",
+  "palco.style.setProperty('--wall', SETUP_WALL)");
+main = muta('mapa-plays-inventado', main,      // zero vira "0 partidas" em vez de sumir
+  '    plays.hidden = !n;',
+  '    plays.hidden = false;');
+main = muta('mapa-todos-sem-ranking', main,    // TODOS deixa de ordenar por partidas jogadas
+  'return MAP_IDS.slice().sort((a, b) => playsDe(b) - playsDe(a) || MAP_IDS.indexOf(a) - MAP_IDS.indexOf(b));',
+  'return MAP_IDS.slice();');
+// (mutante 'mapa-plays-sem-guarda' foi junto com a rota, para o backend)
+const _mapPlaysApiRemovido = muta('mapa-plays-sem-guarda', '',   // sem banco, a rota passa a estourar
+  '  if (!supabaseAdmin) return resposta({ plays: {} });',
+  '  // guarda removida');
+css = muta('mapa-card-achatado', css,          // volta ao px fixo: o card deixa de ser quadrado
+  '.ms-thumb-img{display:block;width:100%;height:auto;aspect-ratio:4/3',
+  '.ms-thumb-img{display:block;width:100%;height:96px');
+css = muta('mapa-palco-sem-scrim', css,        // preview sem véu: ficha some em mapa claro
+  '.ms-scrim{position:absolute;inset:0;pointer-events:none;z-index:1;\n  background:linear-gradient(90deg',
+  '.ms-scrim{position:absolute;inset:0;pointer-events:none;z-index:1;\n  background:none;--morto:linear-gradient(90deg');
+css = muta('mapa-acervo-nao-rola', css,
+  '.ms-viewport{flex:1;min-height:0;overflow-y:auto',
+  '.ms-viewport{flex:1;min-height:0;overflow-y:visible');
+main = muta('sem-autoria', main,
+  "const byline = $('ms-byline');",
+  "const byline = null;");
+main = muta('filtro-autor-morto', main,
+  "mapCategory === 'TODOS' ? !catsDe(id).includes('COMUNIDADE') : catsDe(id).includes(mapCategory)",
+  "mapCategory === 'TODOS' ? true : catsDe(id).includes(mapCategory)");
+css = muta('card-escalacao-encolhe', css,
+  '.hub-roster-cell>button:not(.hub-roster-pin){width:100%;height:100%}',
+  '.hub-roster-cell>button{width:100%;height:100%}');
+main = muta('sem-badge-oficial', main,
+  'class="ms-badge-oficial"',
+  'class="ms-badge-x"');   // remove o crachá de verdade: trocar a CONDIÇÃO não mordia (a string ficava)
+main = muta('mapa-categoria-errada', main,
+  "piscina_treta: ['ARENA', 'COMUNIDADE'], posto_treta: ['ARENA', 'COMUNIDADE'], atacadao_treta: ['ARENA', 'COMUNIDADE'],",
+  "piscina_treta: ['CIDADES'], posto_treta: ['ARENA', 'COMUNIDADE'], atacadao_treta: ['CIDADES'],");
+astro = muta('mapa-sem-navegacao', astro,
+  '<button id="ms-prev" class="ms-arrow"',
+  '<button id="ms-prev-mutado" class="ms-arrow"');
+css = muta('selecao-tres-colunas', css,   // palco ganha terceira coluna: ficha perde o lugar
+  'grid-template-columns:minmax(280px,360px) minmax(0,1fr);',
+  'grid-template-columns:96px minmax(280px,360px) minmax(0,1fr);');
+css = muta('selecao-thumbs-pequenos', css, // grade de 72 vira miniatura de 36 (não o stage 114)
+  '--char-thumb:72px;display:grid;',
+  '--char-thumb:36px;display:grid;');
+css = muta('selecao-rail-descentrado', css, // filmstrip deixa de esticar: a grade encolhe ao conteúdo
+  '.char-filmstrip{grid-area:rail;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;',
+  '.char-filmstrip{grid-area:rail;display:grid;grid-template-columns:44px 160px 44px;');
+css = muta('selecao-grade-sem-rolagem', css, // grade estoura sem rolagem própria
+  'overflow-y:auto;overflow-x:hidden;',
+  'overflow-y:visible;overflow-x:visible;');
+css = muta('selecao-controle-colide', css,  // preview invade a linha do elenco
+  'max-height:calc(100% - 28px);',
+  'max-height:none;');
+css = muta('selecao-rail-sem-piso', css,   // rail volta a auto: sem piso a ficha corta a lista (#1179)
+  'grid-template-rows:auto minmax(84px,1fr);grid-template-areas:"sheet preview" "rail rail";',
+  'grid-template-rows:auto auto;grid-template-areas:"sheet preview" "rail rail";');
+css = muta('selecao-rail-linha-morta', css, // grade estoura a grid-area do rail em vez de rolar dentro
+  '  grid-template-rows:minmax(0,1fr);\n  align-items:center',
+  '  grid-template-rows:auto;\n  align-items:center');
+css = muta('selecao-teto-fixo-volta', css,  // teto do rail volta a px fixo de fileiras
+  'max-height:100%;overflow-y:auto;overflow-x:hidden;\n  overscroll-behavior:contain;',
+  'max-height:calc(var(--char-thumb) * 3 + 48px);overflow-y:auto;overflow-x:hidden;\n  overscroll-behavior:contain;');
+game = muta('resultado-em-video', game,
+  'setHeroArt(this.playerCharId || rep);',
+  "setHeroArt(this.playerCharId || rep);\n    void '/video/resultado/personagem-vitoria.webm';");
+game = muta('resultado-personagem-antigo', game,
+  'if (charId) { this.playerDef = byId(charId); this.playerCharId = charId; p.def = this.playerDef; }',
+  'if (charId) { this.playerDef = byId(charId); p.def = this.playerDef; }');
+main = muta('loading-sem-wallpaper', main,
+  "_lo.box.style.setProperty('--loading-wall', _loadWallFixa ? `url('${_loadWallFixa}')` : loadingWallUrl(_loadWallI++));",
+  "_lo.box.style.setProperty('--loading-wall', 'none');");
+main = muta('splash-sem-wallpaper', main,
+  "splash.style.setProperty('--loading-wall', loadingWallUrl(_wallK));",
+  "splash.style.setProperty('--loading-wall', 'none');");
+css = muta('hud-score-volta-preto', css,
+  '#hud-top .team-score{min-height:42px;padding:7px 16px;background:transparent;border:0;color:#ecebe6!important}',
+  '#hud-top .team-score{min-height:42px;padding:7px 16px;background:rgba(10,10,12,.78);border:0;color:#ecebe6!important}');
+css = muta('resultado-corta-personagem', css,
+  'background:var(--me-art,none) right bottom/contain no-repeat',
+  'background:var(--me-art,none) center top/cover no-repeat;');
+css = muta('resultado-emenda-volta', css,
+  '.me-wrap{position:relative;',
+  '.me-wrap::after{content:"";position:absolute;inset:0 0 0 44%;background:radial-gradient(ellipse at 88% 58%,rgba(73,168,70,.2),transparent 78%)}\n.me-wrap{position:relative;');
+astro = muta('versao-menu-volta-rodape', astro,
+  '<span class="menu-version" id="mf-ver"></span>',
+  '<span class="mf-ver" id="mf-ver"></span>');
+css = muta('loading-volta-grande', css,
+  'width:min(86px,6.8vw);height:min(144px,15.2vh);pointer-events:none;',
+  'width:min(430px,34vw);height:min(720px,76vh);pointer-events:none;');
+css = muta('loading-rotulo-volta', css,
+  'color:var(--ink-200);display:none}',
+  'color:var(--ink-200);display:block}');
+css = muta('config-volta-cartao', css,
+  '#settings-panel .settings-wrap{width:980px;',
+  '#settings-panel .settings-wrap{width:560px;');
+main = muta('config-mostra-media', main,
+  "$('set-quality').value = 'high'; show('settings-panel'); return;",
+  "$('set-quality').value = 'medium'; show('settings-panel'); return;");
+css = muta('placar-volta-opaco', css,
+  'background:radial-gradient(ellipse at 50% 40%,rgba(8,8,10,.5) 0%,rgba(8,8,10,.88) 100%);',
+  'background:rgba(8,8,10,.98);');
+main = muta('placar-abre-pausa', main,
+  "game.paused = true; game.keys = {}; game.el.pause.classList.add('hidden'); game._showScoreboard(true); return;",
+  "game.setPaused(true); game._showScoreboard(true); return;");
+css = muta('hud-fonte-bebas', css,
+  '#round-time{font-family:var(--font);',
+  '#round-time{font-family:var(--aaa-font-display);');
+css = muta('hud-sem-vinheta-baixa', css,
+  '#hud:has(#hp-num.low) #damage-vignette{opacity:1}',
+  '#hud:has(#hp-num.low) #damage-vignette{opacity:0}');
+game = muta('killfeed-volta-svg', game,
+  '${this._killfeedWeaponIcon(weap)}',
+  '${this._wpnIcon(weap)}');
+astro = muta('ctf-some-home', astro, 'data-act="ctf"', 'data-act="ctf-removido"');
+main = muta('modo-volta-setup', main,
+  "case 'sp':    openModeMap('rounds', 'MATA-MATA', 'sp'); break;",
+  "case 'sp':    openSetup('rounds', 'MATA-MATA', 'sp'); break;");
+main = muta('personagem-dificuldade-volta', main,
+  ".map(([l, v]) => `<div class=\"attr\"><span>${tr(l)}</span><div class=\"attr-bar\"><i style=\"width:${v * 20}%\"></i></div><b>${v}</b></div>`).join('');",
+  ".map(([l, v]) => `<div class=\"attr\"><span>${tr(l)}</span><div class=\"attr-bar\"><i style=\"width:${v * 20}%\"></i></div><b>${v}</b></div>`).join('') + `<div class=\"attr attr-dif\">DIFICULDADE</div>`;");
+main = muta('perfil-volta-iniciais', main,
+  'applyPlayerAvatar($(\'pp-avatar\'), nick);',
+  "$('pp-avatar').textContent = (nick || 'CS').slice(0, 2);");
+astro = muta('suporte-sai-do-menu', astro,
+  '<button class="cs-item" data-act="feedback" type="button"><span class="cs-tick">▸</span>ENVIE SEU FEEDBACK</button>',
+  '');
+game = muta('mouse-invertido-ignorado', game,
+  'const invertY = this.settings.invertY ? -1 : 1;',
+  'const invertY = this.settings.invertY ? 1 : 1;');
+loading3d = muta('loading-vira-esquerda', loading3d,
+  'built.group.rotation.y = 0.42;',
+  'built.group.rotation.y = -0.42;');
+main = muta('idioma-por-navegador', main,
+  'await resolveGeoLang();\n', '');
+astro = muta('idioma-prerender', astro,
+  "import pkg from '../../package.json';",
+  "export const prerender = false;\nimport pkg from '../../package.json';");
+main = muta('backend-aviso-volta', main,
+  "function submitNote(msg) {\n  console.warn('[ranking]', msg);\n}",
+  "function submitNote(msg) {\n  console.warn('[ranking]', msg);\n  const el = document.getElementById('match-stats');\n  if (el) el.textContent += ` SUPABASE_SERVICE_ROLE_KEY ${msg}`;\n}");
+main = muta('faccao-mostra-antes-da-arte', main,
+  "await factionArtReady;\n  setTeamStep('side');",
+  "setTeamStep('side');");
+main = muta('troca-m-abre-pausa', main,
+  "game.setPaused(true);\n    switchMode = true;",
+  "if (document.pointerLockElement) document.exitPointerLock();\n    switchMode = true;");
+main = muta('toggle-sem-arena', main,
+  "if (modoObjetivoAtual() || !['rounds', 'ctf', 'arena'].includes(mode)) return;",
+  "if (modoObjetivoAtual() || !['rounds', 'ctf'].includes(mode)) return;");
+main = muta('m-lado-antigo', main,
+  "pickTeam(game._factionOf(game.player.team === 'E' ? 'B' : 'E'));",
+  "pickTeam(game.enemyFaction);");
+
+function literalIds() {
+  const bloco = characters.match(/export const CHARACTERS = \[([\s\S]*?)\n\];\nexport const byId/);
+  return bloco ? [...bloco[1].matchAll(/\{\s*id:\s*'([^']+)'/g)].map((m) => m[1]) : [];
+}
+function arrayInline(nome) {
+  const bloco = astro.match(new RegExp(`var ${nome} = \\[([\\s\\S]*?)\\];`));
+  return bloco ? [...bloco[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+}
+function arrayFonte(fonte, nome) {
+  const bloco = fonte.match(new RegExp(`(?:const|let|var) ${nome} = \\[([\\s\\S]*?)\\];`));
+  return bloco ? [...bloco[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+}
+function nomes(dir, filtro = () => true) {
+  return readdirSync(join(ROOT, dir)).filter(filtro).sort();
+}
+function iguais(a, b) {
+  return a.length === b.length && a.every((valor, i) => valor === b[i]);
+}
+function diff(a, b) {
+  const B = new Set(b);
+  return a.filter((x) => !B.has(x));
+}
+function metaWebm(rel) {
+  const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height:format=format_name', '-of', 'json', join(ROOT, rel)], { encoding: 'utf8' });
+  if (probe.status !== 0) return { webm: false, vp9: false, width: null, height: null };
+  const info = JSON.parse(probe.stdout);
+  const stream = info.streams?.[0] || {};
+  const formatos = String(info.format?.format_name || '').split(',');
+  return { webm: formatos.includes('webm'), vp9: stream.codec_name === 'vp9', width: stream.width, height: stream.height };
+}
+function metaWebpAlpha(buf) {
+  const chunk = buf.indexOf(Buffer.from('VP8X'));
+  if (chunk < 0 || chunk + 18 > buf.length) return { alpha: false, width: null, height: null };
+  const byte24 = (offset) => buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16);
+  return {
+    alpha: Boolean(buf[chunk + 8] & 0x10) && buf.includes(Buffer.from('ALPH')),
+    width: byte24(chunk + 12) + 1,
+    height: byte24(chunk + 15) + 1,
+  };
+}
+async function alphaBounds(buf) {
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const cols = new Uint32Array(info.width);
+  const rows = new Uint32Array(info.height);
+  let total = 0;
+  for (let y = 0, p = 3; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++, p += info.channels) {
+      if (data[p] <= 8) continue;
+      cols[x]++; rows[y]++; total++;
+    }
+  }
+  const quantile = (hist, q) => {
+    const target = total * q;
+    let acc = 0;
+    for (let i = 0; i < hist.length; i++) {
+      acc += hist[i];
+      if (acc >= target) return i;
+    }
+    return hist.length - 1;
+  };
+  const left = quantile(cols, .002), right = quantile(cols, .998);
+  const top = quantile(rows, .002), bottom = quantile(rows, .998);
+  return {
+    width: info.width, height: info.height, total,
+    left: left / info.width, right: (info.width - 1 - right) / info.width,
+    top: top / info.height, bottom: (info.height - 1 - bottom) / info.height,
+  };
+}
+function blocoFuncao(fonte, nome) {
+  const inicio = fonte.indexOf(`function ${nome}(`);
+  if (inicio < 0) return '';
+  const abre = fonte.indexOf('{', inicio);
+  let nivel = 0;
+  for (let i = abre; i < fonte.length; i++) {
+    if (fonte[i] === '{') nivel++;
+    else if (fonte[i] === '}' && --nivel === 0) return fonte.slice(inicio, i + 1);
+  }
+  return '';
+}
+
+const ids = literalIds().sort();
+const esperadoResultado = ids.flatMap((id) => [`${id}-derrota.webp`, `${id}-vitoria.webp`]).sort();
+const esperadoResultadoVideo = esperadoResultado.map((f) => f.replace('.webp', '.webm'));
+let avatares = nomes('public/img/chars/avatars', (f) => f.endsWith('.webp'));
+if (MUTANTE === 'asset-ausente' && avatares.length) { avatares = avatares.slice(1); mutacaoAplicou = true; }
+const selecao = nomes('public/video/chars', (f) => f.endsWith('.webm'));
+const resultadoImg = nomes('public/img/resultado', (f) => /-(?:derrota|vitoria)\.webp$/.test(f));
+const resultadoVideo = nomes('public/video/resultado', (f) => /-(?:derrota|vitoria)\.webm$/.test(f));
+/* Ordena depois do sufixo, como `nomes()`: 'capitao-caveira.webp' vem antes de 'capitao.webp'
+   ('-' < '.'), embora 'capitao' venha antes de 'capitao-caveira' como id. */
+const esperadoAvatar = ids.map((id) => `${id}.webp`).sort();
+const esperadoSelecao = ids.map((id) => `${id}.webm`).sort();
+const hashResultado = createHash('sha256');
+for (const arquivo of resultadoImg) {
+  const rel = `public/img/resultado/${arquivo}`;
+  hashResultado.update(rel).update('\0').update(readFileSync(join(ROOT, rel))).update('\0');
+}
+const resultImagesSha256 = hashResultado.digest('hex');
+const resultadoBufPorArquivo = new Map(resultadoImg.map((arquivo) => [
+  arquivo,
+  readFileSync(join(ROOT, 'public/img/resultado', arquivo)),
+]));
+if (MUTANTE === 'resultado-sem-alpha') {
+  const resultadoHeroBuf = Buffer.from(resultadoBufPorArquivo.get('mst-vitoria.webp'));
+  const chunk = resultadoHeroBuf.indexOf(Buffer.from('VP8X'));
+  if (chunk >= 0) {
+    resultadoHeroBuf[chunk + 8] &= ~0x10;
+    resultadoBufPorArquivo.set('mst-vitoria.webp', resultadoHeroBuf);
+    mutacaoAplicou = true;
+  }
+}
+if (MUTANTE === 'resultado-derrota-sem-alpha') {
+  const resultadoDerrotaBuf = Buffer.from(resultadoBufPorArquivo.get('mst-derrota.webp'));
+  const chunk = resultadoDerrotaBuf.indexOf(Buffer.from('VP8X'));
+  if (chunk >= 0) {
+    resultadoDerrotaBuf[chunk + 8] &= ~0x10;
+    resultadoBufPorArquivo.set('mst-derrota.webp', resultadoDerrotaBuf);
+    mutacaoAplicou = true;
+  }
+}
+const resultadoVisual = await Promise.all([...resultadoBufPorArquivo].map(async ([arquivo, buf]) => ({
+  arquivo,
+  pose: arquivo.endsWith('-vitoria.webp') ? 'vitoria' : 'derrota',
+  meta: metaWebpAlpha(buf),
+  bounds: await alphaBounds(buf),
+})));
+const resultadoRuins = resultadoVisual.filter(({ meta, bounds }) => {
+  const [width, height] = [1024, 1536];
+  const usoPrincipal = 1 - bounds.top - bounds.bottom;
+  return !meta.alpha || meta.width !== width || meta.height !== height
+    || bounds.total < width * height * .01
+    || bounds.top < .015 || bounds.top > .20
+    || bounds.bottom < .015 || bounds.bottom > .20
+    || bounds.right < .015 || bounds.right > .08
+    || bounds.left < .015 || bounds.left > .65
+    || usoPrincipal < .72;
+});
+let resultAudit = {};
+try { resultAudit = JSON.parse(staticAudit); } catch { /* ausência ou JSON inválido reprova UIA1 */ }
+const punkAvatarSha256 = createHash('sha256').update(readFileSync(join(ROOT, 'public/img/chars/avatars/punk.webp'))).digest('hex');
+const gotinhaAvatarSha256 = createHash('sha256').update(readFileSync(join(ROOT, 'public/img/chars/avatars/gotinha.webp'))).digest('hex');
+const assetOk = iguais(avatares, esperadoAvatar) && iguais(selecao, esperadoSelecao)
+  && iguais(resultadoImg, esperadoResultado) && resultAudit.resultImagesSha256 === resultImagesSha256;
+const assetEvid = assetOk ? `${ids.length} personagens com avatar, seleção e dois resultados estáticos`
+  : `faltam avatar=${diff(esperadoAvatar, avatares).join(',') || '-'} seleção=${diff(esperadoSelecao, selecao).join(',') || '-'} imagem=${diff(esperadoResultado, resultadoImg).join(',') || '-'} auditoria=${resultAudit.resultImagesSha256 ? 'divergente' : 'ausente/inválida'}`;
+const avatarIdentidadeOk = resultAudit.punkAvatarSha256 === punkAvatarSha256
+  && resultAudit.gotinhaAvatarSha256 === gotinhaAvatarSha256
+  && resultAudit.avatarReference === 'public/video/chars/{punk,gotinha}.webm@1.0s';
+
+const metas = [
+  ...selecao.map((f) => ({ arquivo: `public/video/chars/${f}`, esperado: [640, 854] })),
+  ...resultadoVideo.map((f) => ({ arquivo: `public/video/resultado/${f}`, esperado: [640, 640] })),
+].map(({ arquivo, esperado }) => ({ arquivo, esperado, meta: metaWebm(arquivo) }));
+const caminhosMidia = metas.map(({ arquivo }) => arquivo).sort();
+if (MUTANTE === 'video-dimensao' && metas.length) { metas[0].meta.width = 320; mutacaoAplicou = true; }
+if (MUTANTE === 'video-container' && metas.length) {
+  const arquivo = 'public/video/landing/gameplay-vertical.mp4';
+  const meta = metaWebm(arquivo);
+  // MP4 real legível; codec e dimensões ficam válidos para isolar a recusa do contêiner.
+  metas[0] = { arquivo, esperado: [meta.width, meta.height], meta: { ...meta, vp9: true } };
+  mutacaoAplicou = !meta.webm;
+}
+const videosRuins = metas.filter(({ esperado: [w, h], meta }) => !meta.webm || !meta.vp9 || meta.width !== w || meta.height !== h);
+
+const hashMidia = createHash('sha256');
+for (const arquivo of caminhosMidia) {
+  hashMidia.update(arquivo).update('\0').update(readFileSync(join(ROOT, arquivo))).update('\0');
+}
+const weaponBlock = characters.match(/export const CHAR_WEAPON = \{([\s\S]*?)\n\};/);
+const weaponMap = Object.fromEntries(
+  [...(weaponBlock?.[1] || '').matchAll(/(?:'([^']+)'|([\w-]+)):\s*'([^']+)'/g)]
+    .map((m) => [m[1] || m[2], m[3]]).sort(([a], [b]) => a.localeCompare(b)),
+);
+let audit = {};
+try { audit = JSON.parse(mediaAudit); } catch { /* ausência ou JSON inválido reprova UIA4 */ }
+const mediaSha256 = hashMidia.digest('hex');
+const weaponMapSha256 = createHash('sha256').update(JSON.stringify(weaponMap)).digest('hex');
+const loteAuditado = audit.mediaSha256 === mediaSha256 && audit.weaponMapSha256 === weaponMapSha256;
+
+let wallManifest = {};
+try { wallManifest = JSON.parse(readFileSync(join(ROOT, 'public/img/walls.json'), 'utf8')); } catch { /* manifesto ausente reprova UIA3 */ }
+const splash = arrayFonte(main, 'LOADING_WALLS');
+const loadingManifest = Array.isArray(wallManifest.loading) ? wallManifest.loading : [];
+const splashOk = iguais(splash, loadingManifest)
+  && !/id="splash-video"/.test(astro)
+  && !/var (?:ANIMADOS|MOLDE) =/.test(astro)
+  && /splash\.style\.setProperty\('--loading-wall', loadingWallUrl\(_wallK\)\)/.test(main);
+
+const loadingActions = [...loading3d.matchAll(/\{ name: '([^']+)'/g)].map((match) => match[1]);
+const loadingCharacterIds = [...loading3d.matchAll(/[EBUCF]: '([^']+)'/g)].map((match) => match[1]);
+const loadingCanvas3d = /id="load-character-3d"[^>]*><\/canvas>/.test(astro)
+  && !/id="load-char" class="loading-runner"/.test(astro)
+  && /export class LoadingCharacterStage/.test(loading3d)
+  && /preloadCharacterAssets\(\[id\](,\s*\{[\s\S]*?\})?\)/.test(loading3d)
+  && /buildCharacterModel\(def, \{ weaponId: charWeapon\(id\), preview: true \}\)/.test(loading3d)
+  && /criaRenderer\(\{ canvas, alpha: true/.test(loading3d)
+  && /this\.renderer\.render\(this\.scene, this\.camera\)/.test(loading3d);
+const loadingAcoes3d = new Set(loadingActions).size >= 6
+  && ['run', 'ready', 'shoot', 'crouch', 'crouchwalk', 'jump', 'walkfire'].every((name) => loadingActions.includes(name))
+  && /this\.ctrl\.shoot\(\)/.test(loading3d)
+  && /this\.ctrl\.jump\(\)/.test(loading3d)
+  && /this\.ctrl\.setCrouch\(/.test(loading3d)
+  && /this\.ctrl\.update\(dt, moving, hasTarget, speed\)/.test(loading3d)
+  && /this\.canvas\.dataset\.clip = Object\.entries\(this\.ctrl\.actions\)\.find\(\(\[, clip\]\) => clip === this\.ctrl\.cur\)/.test(loading3d)
+  && /loadingStage\.update\(/.test(main);   // chamada importa, não a forma do clamp (#300 fatia dtReal)
+
+const funcLoop = blocoFuncao(main, 'loop');
+const funcShow = blocoFuncao(main, 'show');
+const funcMap = blocoFuncao(main, 'renderMapScreen');
+const mainLoadingI18n = main.replace(/nomeTimeJavaporcos\(ehMapaJavaporcos\(currentMap\) \? 'horde' : '', '[EB]'\) \|\| /g, '')
+  .replace("tr(ehMapaJavaporcos(currentMap) && settings.javaporcos?.times === 3 ? 'TIME B × JAVAPORCOS' : ", 'tr(');
+const i18nDinamico = /\$\{tr\('MAPA'\)\}[\s\S]{0,100}\$\{tr\('DE'\)\}/.test(main)
+  && /tr\(FACTION_NAME\[c\.team\] \|\| ''\)[\s\S]{0,160}tr\('PERSONAGENS'\)/.test(main)
+  && /a\.textContent = tr\(FACTION_NAME\[currentTeam\] \|\| ''\)/.test(mainLoadingI18n)
+  && /b\.textContent = tr\(FACTION_NAME\[ladoDele\] \|\| ''\)/.test(mainLoadingI18n)
+  && /chip\.textContent = `\$\{n\} \$\{tr\('PERSONAGENS'\)\}`/.test(main)
+  && /ms-desc'\)\.textContent = tr\(MAP_DESC\[currentMap\] \|\| ''\)/.test(main)
+  && /frase\('escolhaAdversario', tr\(FACTION_NAME\[myFaction\]/.test(main)
+  && /continuar\.textContent = frase\('continuarSetup'\)/.test(main)
+  && /rEl\.textContent = tr\(RARITIES\[tier\]\[0\]\)/.test(main)
+  && /char-spec-name'\)\.textContent = tr\(specName\)/.test(main);
+const previewUso = /if \(pv && pv\.model && previewModelActive\(csOpen,hubPreviewOpen\)\)/.test(funcLoop)
+  && /!previewVideoVisible\(\)/.test(blocoFuncao(main, 'previewModelActive'))
+  && /classList\.contains\('has-video'\)/.test(blocoFuncao(main, 'previewVideoVisible'));
+const previewPausa = /id !== 'char-select'[\s\S]{0,60}pvStopVideo\(\)/.test(funcShow)
+  && /video\.pause\(\)/.test(blocoFuncao(main, 'pvStopVideo'));
+const strip = (css.match(/\.ms-strip\{([^}]*)\}/) || [])[1] || '';
+const fundoMapa = (css.match(/\.ms-bg\{([^}]*)\}/) || [])[1] || '';
+const autoriaNaFicha = /const MAP_AUTOR = \{/.test(mapcat)
+  && /const MAP_DATA = \{/.test(mapcat)
+  && /const AUTOR_CASA = 'Ruben Marcus';/.test(mapcat)
+  && /const byline = \$\('ms-byline'\);/.test(funcMap)
+  && /\$\{autorDe\(currentMap\)\}<\/strong> · \$\{MAP_DATA\[currentMap\] \|\| ''\}/.test(funcMap)
+  && /ms-badge-oficial/.test(funcMap)
+  && /ms-badge-comunidade/.test(funcMap)
+  // #368: o sub-filtro por autor saiu — COMUNIDADE lista todos. Guardava o elemento ESCONDIDO;
+  // agora guarda a AUSÊNCIA dele (marcação morta é lixo que confunde quem lê — achado do #368).
+  && !/ms-authors/.test(astro)
+  && !/ms-authors/.test(main)
+  && !/ms-authors/.test(mapcat)
+  && !/ms-authors/.test(css);
+const mapaReferencia = /const shown = visibleMapIds\(\);/.test(funcMap)
+  && /ferro_velho: \['ARENA'\], quebrada: \['FAVELA'\]/.test(mapcat)
+  && /piscina_treta: \['ARENA', 'COMUNIDADE'\], posto_treta: \['ARENA', 'COMUNIDADE'\], atacadao_treta: \['ARENA', 'COMUNIDADE'\]/.test(mapcat)
+  && /const catsDe = \(id\) => MAP_CATS\[id\] \|\| \['ARENA'\];/.test(mapcat)
+  /* main.js consome do catálogo em vez de guardar uma segunda cópia: duas tabelas fariam a
+     sala oficial do multiplayer sortear um mapa que a tela chama de comunidade. */
+  && /import \{[^}]*MAP_CATS[^}]*\} from '\.\/mapcat\.js';/.test(main)
+  /* TODOS voltou a ser o acervo INTEIRO (21/08) e ordena por partidas jogadas; OFICIAIS
+     virou aba própria. Sem o desempate por índice a lista dança entre renders. */
+  /* A lista do MENU é MAPAS_MENU (= mapasDoMenu(oficina)), não MAP_IDS. MAP_IDS continua
+     sendo o registro inteiro, de onde as réguas vivem; o jogador só vê os JOGÁVEIS, com os
+     parados para retrabalho de fora — a menos que entre pela oficina (?oficina=1). */
+  && /if \(mapCategory === 'TODOS'\) \{[\s\S]{0,240}playsDe\(b\) - playsDe\(a\) \|\| MAPAS_MENU\.indexOf\(a\) - MAPAS_MENU\.indexOf\(b\)/.test(main)
+  && /if \(mapCategory === 'OFICIAIS'\) return MAPAS_MENU\.filter\(\(id\) => !catsDe\(id\)\.includes\('COMUNIDADE'\)\)/.test(main)
+  && /return MAPAS_MENU\.filter\(\(id\) => catsDe\(id\)\.includes\(mapCategory\)\)/.test(main)
+  /* a estatística sai do contador REAL (picks_daily via /api/pick), nunca de número local,
+     e a tela tem de abrir sem ela: rede caída não pode derrubar a escolha de mapa. */
+  && /fetch(?:ComRetry)?\(apiUrl\('\/api\/map-plays'\)\)/.test(main)   // com retry no cold start (06/09), a mesma rota
+  && /let mapPlays = \{\};/.test(main)
+  && /\.catch\(\(\) => \{ \/\* sem banco\/rede/.test(main)
+
+  /* zero partidas é AUSÊNCIA de medida, não medida de zero: o crachá some em vez de mentir */
+  && /plays\.hidden = !n;/.test(funcMap)
+  && /function stepMap\(dir, ids = MAPAS_MENU\)/.test(main)
+  && /const pool = ids\.length \? ids : MAPAS_MENU;/.test(main)
+  && /const nextId = pool\[\(Math\.max\(0, pool\.indexOf\(currentMap\)\) \+ dir \+ pool\.length\) % pool\.length\];/.test(main)
+  && /gotoMap\(MAPAS_MENU\.indexOf\(nextId\)\)/.test(main)
+  && /\$\('ms-prev'\)\.onclick = \(\) => stepMap\(-1, visibleMapIds\(\)\)/.test(main)
+  && /\$\('ms-next'\)\.onclick = \(\) => stepMap\(1, visibleMapIds\(\)\)/.test(main)
+  && /e\.key === 'ArrowLeft'[\s\S]{0,100}stepMap\(-1, visibleMapIds\(\)\)/.test(main)
+  && /e\.key === 'ArrowRight'[\s\S]{0,100}stepMap\(1, visibleMapIds\(\)\)/.test(main)
+  && /\$\('ms-strip'\)\.innerHTML = shown\.map\(\(id\) =>/.test(funcMap)
+  && /\$\('ms-strip'\)\.style\.setProperty\('--map-count', shown\.length\)/.test(funcMap)
+  && /aria-pressed="\$\{id === currentMap\}"/.test(funcMap)
+  && /<img class="ms-thumb-img" loading="lazy" decoding="async" src="\$\{mapPreviewPoster\(id, VERSION\)\}" alt="">/.test(funcMap)
+  && /id="ms-tabs"/.test(astro) && /id="ms-prev"/.test(astro) && /id="ms-next"/.test(astro)
+  && /id="ms-dashes"/.test(astro) && /class="ms-carousel"/.test(astro)
+  // As três abas: TODOS (acervo inteiro, por partidas), OFICIAIS e COMUNIDADE. O #368
+  // tinha fundido TODOS e OFICIAIS numa só; 21/08 separou de novo, a pedido do dono.
+  && /data-cat="TODOS"[^>]*>TODOS</.test(astro)
+  && /data-cat="OFICIAIS"[^>]*>OFICIAIS</.test(astro)
+  && /data-cat="COMUNIDADE"/.test(astro)
+  && main.includes("$('ms-dashes').innerHTML = '';")
+  /* geometria de 21/08 (3ª rodada): CABEÇALHO + ACERVO + RODAPÉ em três faixas. O corpo
+     é só a grade; ficha e opções da partida moram no cabeçalho; VOLTAR e CONTINUAR nos
+     cantos opostos do rodapé. */
+  && /#map-screen\{[^}]*grid-template-rows:auto minmax\(0,1fr\) auto/.test(css)
+  /* o cabeçalho é UMA linha de três colunas (navegação | ficha | opções), não uma pilha */
+  && /\.ms-head\{display:grid;grid-template-columns:minmax\(300px,340px\) minmax\(0,1fr\) auto/.test(css)
+  && /class="ms-head"[\s\S]{0,120}class="ms-nav"/.test(astro)
+  /* ficha e opções da partida moram DENTRO do cabeçalho, antes do corpo — é o que
+     libera o corpo inteiro para a grade. A ordem na marcação é a prova. */
+  && /class="ms-topbar"[\s\S]*?class="ms-head"[\s\S]*?id="ms-match-options"[\s\S]*?class="ms-body"[\s\S]*?class="ms-foot"/.test(astro)
+  && /\.ms-foot\{[^}]*justify-content:space-between/.test(css)
+  && /\.ms-name\{[^}]*font-size:40px/.test(css)
+  && /\.ms-viewport\{[^}]*overflow-y:auto/.test(css)
+  && /--map-count:1/.test(strip)
+  && /display:grid/.test(strip)
+  /* a grade decide o número de colunas pela largura real (até 3), e o card é quase
+     quadrado por PROPORÇÃO — px fixo volta a achatar a arte quando a faixa estica. */
+  && /grid-template-columns:repeat\(auto-fill,minmax\(360px,1fr\)\)/.test(strip)
+  && /max-width:1180px/.test(strip)
+  && /width:100%/.test(strip)
+  && /\.ms-thumb\{[^}]*width:100%[^}]*min-width:0/.test(css)
+  && /\.ms-thumb-img\{[^}]*aspect-ratio:4\/3[^}]*object-fit:cover/.test(css)
+  /* o palco é o WALLPAPER, não a preview: o `<img>` fica só para a sonda de tela ler o src */
+  && /inset:\s*0/.test(fundoMapa)
+  /* e é o MESMO wallpaper do menu, pintado pela mesma regra: borrão por baixo, arte
+     inteira por cima e a variante 3:2 na mesma faixa de proporção. */
+  && /\.ms-bg::before\{[^}]*background-size:cover;filter:blur\(18px\) brightness\(\.48\) saturate\(\.72\)/.test(css)
+  && /\.ms-bg::after\{[^}]*background-size:contain/.test(css)
+  && /\.ms-bg::before,\.ms-bg::after\{background-image:var\(--wall-3x2,var\(--wall\)\)/.test(css)
+  && /\.ms-bg img\{display:none\}/.test(css)
+  && /palco\.style\.setProperty\('--wall', HOME_WALL\)[\s\S]{0,80}'--wall-3x2', HOME_WALL_3X2/.test(funcMap)
+  && /\.ms-scrim\{[^}]*linear-gradient\(90deg[^}]*linear-gradient\(0deg/.test(css)
+  && !/class="ms-rail/.test(funcMap);
+const dict = (i18n.match(/const DICT = \{([\s\S]*?)\n\};/) || [])[1] || '';
+const chaves = [...dict.matchAll(/'((?:\\.|[^'\\])*)'\s*:/g)].map((m) => m[1]);
+const repetidas = [...new Set(chaves.filter((chave, i) => chaves.indexOf(chave) !== i))];
+const blurbs = [...characters.matchAll(/blurb:\s*'((?:\\.|[^'\\])*)'/g)].map((m) => m[1]);
+const blurbsSemIngles = blurbs.filter((blurb) => !chaves.includes(blurb));
+const geradorArma = /CHAR_WEAPON/.test(videoGenerator)
+  && /const weaponById = Object\.fromEntries/.test(videoGenerator)
+  && videoGenerator.includes("(?:'([^']+)'|([\\w-]+))")
+  && /const weapon = weaponById\[id\] \|\| 'ak'/.test(videoGenerator)
+  && /w=\$\{encodeURIComponent\(weapon\)\}/.test(videoGenerator);
+const placarCap = /class="sb-chead"[\s\S]{0,500}class="sb-cap">CAP\.<\/span>/.test(game)
+  && /<span>K<\/span><span>D<\/span><span>SCORE<\/span><span>PING<\/span>/.test(game)
+  && /<th>K<\/th><th>D<\/th><th>SCORE<\/th><th>PING<\/th>/.test(game)
+  && /--sb-grid:minmax\(0,1fr\) 46px 46px 72px 52px/.test(css)
+  && /\.sb-col\.ctf\{--sb-grid:minmax\(0,1fr\)[^}]*46px/.test(css)
+  && /\.sb-chead\{[^}]*grid-template-columns:var\(--sb-grid\)/.test(css)
+  && /\.sb-col tbody tr\{[^}]*grid-template-columns:var\(--sb-grid\)/.test(css);
+const mountResize = /const resizeMount = \(\) => \{[\s\S]{0,240}cam\.aspect\s*=\s*innerWidth\s*\/\s*innerHeight[\s\S]{0,180}renderer\.setSize\(innerWidth,\s*innerHeight\)[\s\S]{0,120}addEventListener\('resize', resizeMount\)/.test(mounttest);
+const geradorFalhaFechado = /const pageErrors = \[\]/.test(videoGenerator)
+  && /page\.on\('pageerror',[\s\S]{0,120}pageErrors\.push/.test(videoGenerator)
+  && /catch \{ throw new Error\(`\$\{id\}: mounttest não ficou pronto`\); \}/.test(videoGenerator)
+  && /if \(pageErrors\.length\) throw new Error\(`Falhas no browser:/.test(videoGenerator);
+/* UIR10 — o título da etapa do setup deixou de ser checagem estática: o corpo REAL de
+   setSetupStep, extraído do main pelo helper blocoFuncao (âncora única, sem cópia falsa),
+   é EXECUTADO num node:vm com timeout 1s e contexto mínimo (menuSetup/$/trspy/matchMode/
+   setupTitle), nos dois idiomas, nos passos 'match' e 'profile' dos modos rounds/ctf/arena.
+   O trspy registra cada chave que pediu tradução: sem tr() no st.textContent do bloco REAL
+   o passo EN devolve PT cru e reprova — nada de aprovar por fallback/substring. */
+let setupTraduzOk = false;
+const setupEvidencia = [];
+try {
+  const corpoSetSetupStep = blocoFuncao(main, 'setSetupStep');
+  const corpoDict = (i18n.match(/const DICT = (\{[\s\S]*?\n\});/) || [])[1];
+  if (!corpoSetSetupStep) throw new Error('setSetupStep ausente no main');
+  if (main.split('function setSetupStep(').length !== 2) throw new Error('setSetupStep duplicada no main');
+  if (!corpoDict) throw new Error('DICT ilegível no i18n');
+  const dict = new VMScript(`(${corpoDict})`).runInNewContext({}, { timeout: 1000 });
+  const cenarios = [
+    { passo: 'match', modo: 'rounds', titulo: 'MATA-MATA' },
+    { passo: 'match', modo: 'ctf', titulo: 'CAPTURE THE FLAG' },
+    { passo: 'match', modo: 'arena', titulo: 'VIRA-CASACA' },
+    { passo: 'profile', modo: 'rounds', titulo: 'MATA-MATA' },
+    { passo: 'profile', modo: 'ctf', titulo: 'CAPTURE THE FLAG' },
+    { passo: 'profile', modo: 'arena', titulo: 'VIRA-CASACA' },
+  ];
+  const trspy = new Set();
+  const saidas = {};
+  for (const lang of ['pt', 'en']) {
+    saidas[lang] = {};
+    for (const c of cenarios) {
+      const elementos = {};
+      const ctx = {
+        menuSetup: { dataset: {} },
+        $: (id) => (elementos[id] ??= { textContent: '' }),
+        tr: (s) => { trspy.add(s); return lang === 'pt' ? s : (dict[s] ?? s); },
+        matchMode: c.modo,
+        setupTitle: c.titulo,
+      };
+      ctx.setSetupStep = new VMScript(`(${corpoSetSetupStep})`).runInNewContext(ctx, { timeout: 1000 });
+      new VMScript(`setSetupStep(${JSON.stringify(c.passo)})`).runInNewContext(ctx, { timeout: 1000 });
+      saidas[lang][`${c.modo}:${c.passo}`] = {
+        step: elementos['setup-step'].textContent,
+        title: elementos['setup-title'].textContent,
+        dataStep: ctx.menuSetup.dataset.step,
+      };
+    }
+  }
+  const esperado = {
+    pt: {
+      'rounds:match': ['PASSO 1 · A PARTIDA', 'MATA-MATA'],
+      'ctf:match': ['PASSO 1 · A PARTIDA (CTF)', 'CAPTURE THE FLAG'],
+      'arena:match': ['PASSO 1 · VIRA-CASACA', 'VIRA-CASACA'],
+      'rounds:profile': ['PASSO À PARTE · NOME NA CAMISA', 'SEU PERFIL'],
+      'ctf:profile': ['PASSO À PARTE · NOME NA CAMISA', 'SEU PERFIL'],
+      'arena:profile': ['PASSO À PARTE · NOME NA CAMISA', 'SEU PERFIL'],
+    },
+    en: {
+      'rounds:match': ['STEP 1 · THE MATCH', 'DEATHMATCH'],
+      'ctf:match': ['STEP 1 · THE MATCH (CTF)', 'CAPTURE THE FLAG'],
+      'arena:match': ['STEP 1 · TURNCOAT', 'TURNCOAT'],
+      'rounds:profile': ['SIDE STEP · NAME ON THE JERSEY', 'YOUR PROFILE'],
+      'ctf:profile': ['SIDE STEP · NAME ON THE JERSEY', 'YOUR PROFILE'],
+      'arena:profile': ['SIDE STEP · NAME ON THE JERSEY', 'YOUR PROFILE'],
+    },
+  };
+  for (const cenario of Object.keys(esperado.en)) {
+    for (const lang of ['pt', 'en']) {
+      const [step, title] = esperado[lang][cenario];
+      if (saidas[lang][cenario].step !== step) setupEvidencia.push(`${lang} ${cenario} step=${JSON.stringify(saidas[lang][cenario].step)}≠${JSON.stringify(step)}`);
+      if (saidas[lang][cenario].title !== title) setupEvidencia.push(`${lang} ${cenario} title=${JSON.stringify(saidas[lang][cenario].title)}≠${JSON.stringify(title)}`);
+    }
+    if (saidas.pt[cenario].dataStep !== cenario.split(':')[1]) setupEvidencia.push(`data-step ${cenario}=${JSON.stringify(saidas.pt[cenario].dataStep)}`);
+  }
+  const chavesSpy = ['PASSO 1 · A PARTIDA', 'PASSO 1 · A PARTIDA (CTF)', 'PASSO 1 · VIRA-CASACA',
+    'PASSO À PARTE · NOME NA CAMISA', 'SEU PERFIL', 'MATA-MATA', 'CAPTURE THE FLAG', 'VIRA-CASACA'];
+  for (const chave of chavesSpy) if (!trspy.has(chave)) setupEvidencia.push(`trspy sem ${JSON.stringify(chave)}`);
+  setupTraduzOk = setupEvidencia.length === 0;
+} catch (erro) {
+  setupEvidencia.push(`execução falhou: ${erro && erro.message}`);
+}
+const i18nRestante = setupTraduzOk
+  && (main.match(/nick \|\| tr\('SEM NICK'\)/g) || []).length >= 1
+  && /char-info-blurb'\)\.textContent = tr\(c\.blurb\)/.test(main)
+  && blurbsSemIngles.length === 0;
+const cicloVideos = !/id="(?:splash-video|me-video)"/.test(astro)
+  && !/<video id="load-char"/.test(astro)
+  && !/video\/resultado|meVideo/.test(game)
+  && !/\.me-hero video/.test(css)
+  && previewPausa;
+const previewInterativo = /removeAttribute\('src'\)/.test(blocoFuncao(main, 'pvStopVideo'))
+  && /if \(staticPreviews\) pvSetVideo\(c\); else pvStopVideo\(\);/.test(main);
+const charStage = (css.match(/\.char-stage\{([^}]*)\}/) || [])[1] || '';
+const charFilmstrip = (css.match(/\.char-filmstrip\{([^}]*)\}/) || [])[1] || '';
+const charList = (css.match(/\.char-list\{([^}]*)\}/) || [])[1] || '';
+const charRow = (css.match(/\.char-row\{([^}]*)\}/) || [])[1] || '';
+const charPreview = (css.match(/(?:^|\n)#char-preview\{([^}]*)\}/) || [])[1] || '';
+/* UIR13 — GRADE do elenco (aceite R26, #1179/0e1fe896a): ficha + preview nas duas
+   colunas; o rail elástico conserva o piso de uma fileira e rola dentro da altura disponível. */
+const selecaoDuasColunas = /grid-template-columns:minmax\(280px,360px\) minmax\(0,1fr\)/.test(charStage)
+  && /grid-template-areas:"sheet preview" "rail rail"/.test(charStage)
+  && /grid-template-rows:auto minmax\(84px,1fr\)/.test(charStage)
+  && /grid-area:rail/.test(charFilmstrip) && /display:grid/.test(charFilmstrip)
+  && /grid-template-columns:44px minmax\(0,1fr\) 44px/.test(charFilmstrip) && /align-items:center/.test(charFilmstrip)
+  && /grid-template-rows:minmax\(0,1fr\)/.test(charFilmstrip) && /min-height:0/.test(charFilmstrip)
+  && /--char-thumb:72px/.test(charList) && /display:grid/.test(charList)
+  && /grid-template-columns:repeat\(auto-fill,minmax\(var\(--char-thumb\),1fr\)\)/.test(charList)
+  && /width:100%;max-width:100%/.test(charList)
+  && /min-height:calc\(var\(--char-thumb\) \+ 12px\)/.test(charList)
+  && /max-height:100%/.test(charList)
+  && /overflow-y:auto/.test(charList) && /overflow-x:hidden/.test(charList)
+  && /overscroll-behavior:contain/.test(charList)
+  && /grid-template-rows:\s*auto minmax\(84px,\s*1fr\)/.test(css)
+  && /\.char-filmstrip\s*\{\s*grid-template-rows:\s*minmax\(0,\s*1fr\)\s*;?\s*\}/.test(css)
+  && /\.char-list\s*\{\s*height:\s*100%;\s*max-height:\s*none\s*;?\s*\}/.test(css)
+  && /width:var\(--char-thumb\)/.test(charRow) && /height:var\(--char-thumb\)/.test(charRow)
+  && /max-height:calc\(100% - 28px\)/.test(charPreview)
+  && /\.pv-hints\{[^}]*flex:0 0 auto/.test(css);
+const previewSobControle = !/pv\.model\.rotation\.y \+= (?:pvDt|dt)/.test(funcLoop)
+  && /pointermove[\s\S]{0,180}pv\.model\.rotation\.y = pvDrag\.yaw/.test(main);
+const resultadoEstatico = /--me-art/.test(game)
+  && !/video\/resultado|meVideo/.test(game)
+  && !/id="me-video"/.test(astro)
+  && !/\.me-hero video/.test(css)
+  /* A troca de lado tem de RESSINCRONIZAR a identidade (playerDef, playerCharId e p.def)
+     — é ela que faz o resultado apontar para a arte do personagem ATUAL (BUG-168).
+     Aqui se mede a sincronia, não o texto: a versão anterior colava a linha inteira
+     (`if (charId) { this.playerDef = byId(charId); ... }`) e ficou vermelha sozinha
+     quando o guarda ganhou reserva de facção, sem que nada do contrato mudasse. */
+  && /_switchTeam\(charId\)[\s\S]{0,900}?this\.playerDef =[\s\S]{0,400}?this\.playerCharId = this\.playerDef\.id;[\s\S]{0,200}?p\.def = this\.playerDef;/.test(game);
+const loadingWallAplicada = main.includes("_lo.box.style.setProperty('--loading-wall', _loadWallFixa ? `url('${_loadWallFixa}')` : loadingWallUrl(_loadWallI++));");
+const loadingWallpaper = /const loadingWallUrl = \(i\) =>/.test(main)
+  && loadingWallAplicada
+  && /splash\.style\.setProperty\('--loading-wall', loadingWallUrl\(_wallK\)\)/.test(main)
+  && loadingCharacterIds.length === 5 && new Set(loadingCharacterIds).size === 5
+  && /E: 'gotinha'[\s\S]*?B: 'canarinho'[\s\S]*?U: 'blackmetal'[\s\S]*?C: 'bonzo'[\s\S]*?F: 'mandrake'/.test(loading3d)
+  && /loadingStage\.show\(ehMapaJavaporcos\(currentMap\) \? 'J' : currentFaction\)/.test(main)
+  && /loadingStage\.hide\(\)/.test(main)
+  && !/loading-runner/.test(astro)
+  && !/loading-runner-frames/.test(css);
+const hudTopoReferencia = /#hud-top \.team-score\{min-height:42px;padding:7px 16px;background:transparent;border:0;color:#ecebe6!important\}/.test(css)
+  && /#hud-mid\{min-height:42px;padding:7px 18px;background:transparent\}/.test(css)
+  && /#hud-top \.team-score b\{[^}]*font-family:var\(--font\)/.test(css)
+  && /#round-time\{[^}]*font-family:var\(--font\)/.test(css);
+const resultadoIntegrado = /\.me-hero\{[^}]*position:absolute[^}]*inset:2\.5% 0 0 44%[^}]*overflow:visible/.test(css)
+  && /\.me-hero\{[^}]*background:var\(--me-art,none\) right bottom\/contain no-repeat/.test(css)
+  && !/\.me-hero\{[^}]*(?:mask-image|-webkit-mask-image)/.test(css)
+  && resultadoRuins.length === 0;
+const loadingStageCss = (css.match(/#load-character-stage\{([^}]*)\}/) || [])[1] || '';
+const loadingCompactoDireita = /width:min\(86px,6\.8vw\)/.test(loadingStageCss)
+  && /height:min\(144px,15\.2vh\)/.test(loadingStageCss)
+  && /built\.group\.rotation\.y = 0\.42/.test(loading3d)
+  && /#load-character-action\{[^}]*display:none/.test(css);
+const configuracoesReferencia = /id="settings-close"/.test(astro)
+  && /id="settings-restore"/.test(astro) && /id="settings-apply"/.test(astro)
+  && /class="set-preview-caption"/.test(astro)
+  && /#settings-panel\{[^}]*font-family:var\(--aaa-font-body\)/.test(css)
+  && /#settings-panel \.settings-wrap\{[^}]*width:980px[^}]*background:rgba\(16,17,20,\.96\)[^}]*clip-path:var\(--aaa-cut-lg\)/.test(css)
+  && /#settings-panel \.set-cols\{[^}]*gap:36px[^}]*padding:26px 32px/.test(css)
+  && /#settings-panel \.set-preview\{[^}]*width:360px[^}]*height:200px/.test(css)
+  && /#settings-panel \.set-actions\{[^}]*padding:18px 32px 22px/.test(css)
+  && /\$\('set-quality'\)\.value = 'high'; show\('settings-panel'\); return;/.test(main);
+const placarReferencia = /class="sb-clock"/.test(game)
+  && /class="sb-team-name"/.test(game) && /class="sb-score-num"/.test(game)
+  && /<span>SCORE<\/span><span>PING<\/span>/.test(game)
+  && /#scoreboard\{[^}]*background:radial-gradient\(ellipse at 50% 40%,rgba\(8,8,10,\.5\) 0%,rgba\(8,8,10,\.88\) 100%\)/.test(css)
+  && /#scoreboard\{[^}]*backdrop-filter:blur\(5px\) brightness\(\.32\)/.test(css)
+  && /#scoreboard h3\{[^}]*top:44px/.test(css)
+  && /#scoreboard \.sb-cols\{[^}]*left:64px[^}]*right:64px[^}]*top:190px[^}]*column-gap:32px/.test(css)
+  && /#scoreboard \.sb-col\.tp\{[^}]*border-top:2px solid #e0762a/.test(css)
+  && /#scoreboard \.sb-col\.tb\{[^}]*border-top:2px solid #5a7bff/.test(css)
+  && /const totalRounds = this\._inspectionTotalRounds \|\|/.test(game)
+  && /game\.ctf = false; game\._inspectionTotalRounds = 5;/.test(main)
+  && /game\.paused = true; game\.keys = \{\}; game\.el\.pause\.classList\.add\('hidden'\); game\._showScoreboard\(true\)/.test(main);
+const hudTipografiaReferencia = /#hud\{[^}]*font-family:var\(--aaa-font-body\)/.test(css)
+  && /#hp-num\{[^}]*font-size:42px[^}]*font-family:var\(--font\)/.test(css)
+  && /#ammo\{[^}]*font-family:var\(--font\)[^}]*font-size:42px/.test(css)
+  && /#weapon-name\{[^}]*font-size:11px[^}]*letter-spacing:3px/.test(css)
+  && /#damage-vignette\{[^}]*160px 50px rgba\(200,30,24,\.5\)/.test(css)
+  && /#hud:has\(#hp-num\.low\) #damage-vignette\{opacity:1\}/.test(css);
+const killfeedArma2D = /_killfeedWeaponIcon\(short\) \{/.test(game)
+  && /Object\.entries\(WEAPONS\)\.find\(\(\[, weapon\]\) => weapon\.short === short\)/.test(game)
+  && /class="kf-weapon-mask" style="--weapon-mask:url\('\/img\/weapons\/\$\{id\}\.webp'\)"/.test(game)
+  && /\$\{this\._killfeedWeaponIcon\(weap\)\}/.test(game)
+  && /\.kf-weapon-mask\{[^}]*background:currentColor[^}]*mask:var\(--weapon-mask\) center\/contain no-repeat/.test(css)
+  && /\.kf-weapon-2d:has\(\.kf-weapon-mask\) \.kf-fallback\{display:none\}/.test(css);
+const funcAttrs = blocoFuncao(main, 'renderCharAttrs');
+// Executa o select e o listener reais; o DOM abaixo só captura o registro do clique.
+let modoCicloOk = false;
+const modoCicloEvid = [];
+try {
+  const corpoSelect = blocoFuncao(main, 'selectMatchMode');
+  const objetivoHelpers = [...main.matchAll(/^const modoObjetivoAtual = \(\) => MAPS\[currentMap\]\?\.objectiveMode \|\| '';$/gm)];
+  if (objetivoHelpers.length !== 1) throw new Error('helper real de objetivo sem âncora única');
+  const ancora = "\n{\n  const mm = $('map-mode');";
+  const inicio = main.indexOf(ancora);
+  if (!corpoSelect || (main.match(/function selectMatchMode\(/g) || []).length !== 1
+      || inicio < 0 || main.indexOf(ancora, inicio + 1) !== -1) throw new Error('modo sem âncora única');
+  let nivel = 0, fim = -1;
+  for (let i = inicio + 1; i < main.length; i++) {
+    if (main[i] === '{') nivel++;
+    else if (main[i] === '}' && --nivel === 0) { fim = i + 1; break; }
+  }
+  if (fim < 0) throw new Error('listener de modo incompleto');
+  const vistos = [], passos = [], sons = [];
+  let renders = 0;
+  const ctx = {
+    matchMode: 'rounds', modoEscolhido: false, setupTitle: '', handler: null,
+    MAPS: { classico: {}, horde: { objectiveMode: 'horde' }, escort: { objectiveMode: 'escort' } },
+    currentMap: 'classico',
+    $: (id) => id === 'map-mode' ? { addEventListener: (tipo, fn) => {
+      if (tipo !== 'click') throw new Error('evento de modo errado');
+      ctx.handler = fn;
+    } } : null,
+    ui: { click: () => sons.push('click') },
+    setMapMode: () => vistos.push([ctx.matchMode, ctx.modoEscolhido, ctx.setupTitle]),
+    setSetupStep: (passo) => passos.push(passo), renderMapScreen: () => renders++,
+  };
+  const contexto = createContext(ctx);
+  new VMScript(`${objetivoHelpers[0][0]}\n${corpoSelect}\n${main.slice(inicio + 1, fim)}\nfor (let i=0;i<3;i++) handler(); selectMatchMode('abate', false);`)
+    .runInContext(contexto, { timeout: 1000 });
+  const esperado = [['ctf', true, 'CAPTURE THE FLAG'], ['arena', true, 'VIRA-CASACA'], ['rounds', true, 'MATA-MATA']];
+  if (JSON.stringify(vistos) !== JSON.stringify(esperado)) modoCicloEvid.push(`ciclo/estado=${JSON.stringify(vistos)}`);
+  if (ctx.matchMode !== 'rounds' || !ctx.modoEscolhido || ctx.setupTitle !== 'MATA-MATA'
+      || renders !== 3 || sons.length !== 3 || JSON.stringify(passos) !== '["match","match","match"]') modoCicloEvid.push('fluxo de mapa/estado inválido');
+  for (const mapa of ['horde', 'escort']) {
+    ctx.currentMap = mapa;
+    new VMScript("handler(); selectMatchMode('arena');").runInContext(contexto, { timeout: 1000 });
+    if (vistos.length !== 3 || renders !== 3 || sons.length !== 3 || passos.length !== 3
+        || ctx.matchMode !== 'rounds' || ctx.setupTitle !== 'MATA-MATA') modoCicloEvid.push(`objetivo ${mapa} alterou o modo`);
+  }
+  modoCicloOk = modoCicloEvid.length === 0;
+} catch (erro) { modoCicloEvid.push(`execução falhou: ${erro.message}`); }
+/* Multiplayer abre direto. Single Player abre seu submenu, que contém os dois modos locais.
+   O relato de 06/09 confirmou que CTF não pode virar uma terceira entrada solta na home.
+   O mutante ctf-some-home remove o acesso do submenu. */
+const modoMapaPadrao = /<button class="cs-item cs-prime" data-act="mp"[^>]*>[\s\S]*?MULTIPLAYER[\s\S]*?<\/button>\s*\n\s*<button class="cs-item cs-prime" data-act="single-player"[^>]*>[\s\S]*?SINGLE PLAYER[\s\S]*?<\/button>/.test(astro)
+  && /<button class="cs-item cs-prime" data-act="single-player"[^>]*aria-controls="cs-modos"[^>]*>[\s\S]*?SINGLE PLAYER[\s\S]*?<\/button>\s*\n\s*<div class="cs-sub" id="cs-modos" hidden>[\s\S]*?<button class="cs-item cs-sub-item" data-act="sp"[^>]*>[\s\S]*?MATA-MATA[\s\S]*?<\/button>[\s\S]*?<button class="cs-item cs-sub-item" data-act="ctf"[^>]*>[\s\S]*?CAPTURE A BANDEIRA[\s\S]*?<\/button>[\s\S]*?<\/div>/.test(astro)
+  && !/>ABATE<\/button>/.test(astro)
+  && /function toggleModeMenu\(\) \{[\s\S]{0,160}modeMenu\.hidden = !open;[\s\S]{0,160}singlePlayerButton\.setAttribute\('aria-expanded', String\(open\)\);/.test(main)
+  && /case 'single-player': toggleModeMenu\(\); break;/.test(main)
+  && /function openModeMap\(mode, title, act\) \{[\s\S]{0,180}openSetup\(mode, title, act\);[\s\S]{0,100}renderMapScreen\(\);[\s\S]{0,80}show\('map-screen'\);/.test(main)
+  && /case 'sp':\s+openModeMap\('rounds', 'MATA-MATA', 'sp'\); break;/.test(main)
+  && /case 'ctf':\s+openModeMap\('ctf', 'CAPTURE THE FLAG', 'ctf'\); break;/.test(main)
+  && /case 'arena':\s+openModeMap\('arena', 'VIRA-CASACA', 'arena'\); break;/.test(main)
+  // o modo continua alternável pelo jogador nos TRÊS modos (ciclo provado por EXECUÇÃO acima),
+  // senão o CTF vira inalcançável ao sair do menu
+  && modoCicloOk;
+const personagemSemDificuldade = !!funcAttrs && !/attr-dif|DIFICULDADE|undefined/.test(funcAttrs);
+const perfilComAvatar = /const PLAYER_AVATAR_KEY = 'awpbr_player_avatar'/.test(main)
+  && /function fallbackPlayerAvatar\(seed\)[\s\S]{0,420}\/img\/chars\/avatars\/\$\{character\.id\}\.webp/.test(main)
+  && /function applyPlayerAvatar\(el, seed\)/.test(main)
+  && /applyPlayerAvatar\(\$\('pp-avatar'\), nick\);/.test(main)
+  && /res && res\.ok && res\.url[\s\S]{0,220}localStorage\.setItem\(PLAYER_AVATAR_KEY, res\.url\)[\s\S]{0,160}renderPlayerPlate\(\)/.test(main)
+  && /#menu-bottombar \.pp-avatar\{[^}]*background-size:cover[^}]*background-position:center/.test(css);
+const suporteNoMenu = /<button class="cs-item" data-act="feedback" type="button"><span class="cs-tick">▸<\/span>ENVIE SEU FEEDBACK<\/button>/.test(astro)
+  && /case 'feedback': markCurrent\('feedback'\); show\('feedback-panel'\); break;/.test(main);
+const mouseVerticalConfiguravel = /invertY: false/.test(main)
+  && /id="set-invert-y" type="checkbox"/.test(astro)
+  && /invertEl = \$\('set-invert-y'\)/.test(main)
+  && /settings\.invertY = invertEl\.checked/.test(main)
+  && /const invertY = this\.settings\.invertY \? -1 : 1;[\s\S]{0,400}this\.player\.pitch -= e\.movementY \* s \* invertY;/.test(game);
+const menuWallSources = readdirSync(join(ROOT, 'public', 'img')).filter((file) => /^wall-\d+\.webp$/.test(file));
+const menuWall3x2AssetsOk = menuWallSources.length > 0 && (await Promise.all(menuWallSources.map(async (name) => {
+  const file = join(ROOT, 'public', 'img', 'walls-3x2', name);
+  if (!existsSync(file)) return false;
+  const sourceMeta = await sharp(join(ROOT, 'public', 'img', name)).metadata();
+  const meta = await sharp(file).metadata();
+  return meta.width === sourceMeta.width && meta.height === Math.round(sourceMeta.width / 1.5);
+}))).every(Boolean);
+const wallpaperLoadingResponsivo = /setProperty\('--loading-wall', loadingWallUrl\(_wallK\)\)/.test(main)
+  && loadingWallAplicada
+  && /setProperty\('--menu-wall', HOME_WALL\)/.test(main)
+  && /setProperty\('--menu-wall', SETUP_WALL\)/.test(main)
+  && /setProperty\('--menu-wall-3x2', HOME_WALL_3X2\)/.test(main)
+  && /setProperty\('--menu-wall-3x2', SETUP_WALL_3X2\)/.test(main)
+  && /\.cs-wallpaper::before,\.cs-wallpaper::after\{[^}]*background-image:var\(--menu-wall\);[^}]*background-repeat:no-repeat/.test(css)
+  && /\.cs-wallpaper::before\{[^}]*background-size:cover;[^}]*filter:blur\(18px\)/.test(css)
+  && css.includes('.cs-wallpaper::after{inset:0;z-index:1;background-size:cover}')
+  && /@media \(min-aspect-ratio:37\/25\) and \(max-aspect-ratio:38\/25\)\{[\s\S]{0,240}background-image:var\(--menu-wall-3x2,var\(--menu-wall\)\)[\s\S]{0,180}\.cs-wallpaper::after\{background-size:cover\}/.test(css)
+  && menuWall3x2AssetsOk
+  && /#boot-splash::before,#load-overlay::before\{[^}]*background-image:var\(--loading-wall\);background-size:cover;[^}]*filter:blur\(18px\)/.test(css)
+  && /#boot-splash::after\{[^}]*background-image:[^}]*var\(--loading-wall\);[^}]*background-size:cover,contain;/.test(css)
+  && /#load-overlay::after\{[^}]*background-image:[^}]*var\(--loading-wall\);[^}]*background-size:cover,contain;/.test(css);
+/* Opções da partida na tela de mapa: formato LIVRE (ally/enemy bots separados — 1v4,
+   solo vs 8) e rounds CUSTOMIZADOS (1–15, sanitizeRounds do game.js como régua única). */
+const opcoesPartidaNoMapa = /id="ms-wpn-mode"/.test(astro)
+  && /id="ms-ally-bots"/.test(astro)
+  && /id="ms-enemy-bots"/.test(astro)
+  && /id="ms-rounds"/.test(astro)
+  && /settings\.wpnMode = msWpnMode\.value/.test(main)
+  && /settings\.allyBots = Math\.max\(0, Math\.min\(7, msAlly\.value \| 0\)\)/.test(main)
+  && /settings\.enemyBots = Math\.max\(1, Math\.min\(8, msEnemy\.value \| 0\)\)/.test(main)
+  && /settings\[modoEfetivoAtual\(\) === 'ctf' \? 'ctfRounds' : 'rounds'\] = sanitizeRounds\(msRounds\.value\) \|\| \(modoEfetivoAtual\(\) === 'ctf' \? 3 : 5\);/.test(main)
+  && /function matchRounds\(\)[\s\S]{0,400}settings\.ctfRounds[\s\S]{0,400}settings\.rounds/.test(main)
+  && /roundsMax:[^\n]*sanitizeRounds\(sessao\.net\.meta\.roundsMax\)[^\n]*matchRounds\(\)/.test(main)
+  && /roundsMax:[^\n]*ehMapaJavaporcos\(currentMap\) \? 1/.test(main)
+  && /constructor\(\{[^\n]*\broundsMax\b/.test(game)
+  && /export const sanitizeRounds[\s\S]{0,200}ROUNDS_CUSTOM_MAX \? n : 0;/.test(game)
+  && /const requestedRounds = sanitizeRounds\(roundsMax\);/.test(game)
+  && /if \(this\.ctf\) return this\.roundNum >= this\.roundsMax \|\| this\.ctfMatchLeft <= 0;[\s\S]{0,80}return this\.roundNum >= this\.roundsMax;/.test(game)
+  && /get roundsMax\(\) \{ return this\._roundsMax; \}/.test(game);
+const semBordaTracejada = !/(?:--hazard|var\(--hazard\)|border(?:-(?:bottom|top|left|right|style))?[^;}{]*(?:dashed|dotted))/i.test(css)
+  && !/border(?:-(?:bottom|top|left|right|style))?[^;}{]*(?:dashed|dotted)/i.test(dev);
+const personagemNoSplash = /id="splash-character-stage"[^>]*>[\s\S]{0,100}<canvas id="load-character-3d"><\/canvas>/.test(astro)
+  && /const loadingStage = new LoadingCharacterStage\(document\.getElementById\('load-character-3d'\)/.test(main)
+  && /loadingStage\.show\('B'\)/.test(main)
+  && /function dockLoadingCharacter\(\)[\s\S]{0,260}stage\.prepend\(canvas\)/.test(main)
+  && /#splash-character-stage\{[^}]*width:min\(86px,18vw\)[^}]*height:min\(144px,23vh\)/.test(css)
+  && /#boot-splash \.splash-frame\{position:relative;z-index:2\}/.test(css)
+  && /#splash-enter\{[^}]*font-family:var\(--aaa-font-display\)/.test(css);
+const brasoesNoPlacar = /const crest = \(side\) => String\(side \|\| 'E'\)\.toLowerCase\(\)/.test(game)
+  && /<img class="sb-crest" src="\/\$\{urlDoBrasao\(crest\('E'\)\)\}" alt="">/.test(game)
+  && /<img class="sb-crest" src="\/\$\{urlDoBrasao\(crest\('B'\)\)\}" alt="">/.test(game)
+  && /<img class="sb-crest" src="\/\$\{urlDoBrasao\(crest\(side\)\)\}" alt="">/.test(game)
+  && /#scoreboard \.sb-score \.sb-crest\{[^}]*width:48px[^}]*height:48px[^}]*object-fit:contain/.test(css)
+  && /#scoreboard \.sb-chead \.sb-crest\{[^}]*width:24px[^}]*height:24px[^}]*object-fit:contain/.test(css);
+const placarCentralizado = /<div class="sb-center">[\s\S]{0,180}<h3>CORO SOLTO - PLACAR<\/h3>[\s\S]{0,220}<div class="sb-cols" id="sb-cols"><\/div>[\s\S]{0,40}<\/div>/.test(astro)
+  && /#scoreboard \.sb-center\{position:absolute;inset:0 64px;display:flex;flex-direction:column;justify-content:center;/.test(css)
+  && /#scoreboard \.sb-center>h3\{position:static;[^}]*width:100%/.test(css)
+  && /#scoreboard \.sb-center>\.sb-cols\{position:static;[^}]*width:100%/.test(css);
+const submitNoteBlock = blocoFuncao(main, 'submitNote');
+const backendSoNoConsole = /console\.warn\('\[ranking\]', msg\)/.test(submitNoteBlock)
+  && !/(?:document|appendChild|match-stats|SUPABASE_)/.test(submitNoteBlock);
+const faccaoPreloadBloqueante = /const TEAM_ART_URLS = \[[^\]]*time-e\.webp[^\]]*time-b\.webp[^\]]*\]/s.test(main)
+  && /const teamArtImages = TEAM_ART_URLS\.map/.test(main)
+  && /const factionArtReady = Promise\.all\(teamArtImages\.map/.test(main)
+  && /\$\('btn-jogar'\)\.onclick = async \(\) => \{[\s\S]{0,900}await factionArtReady;[\s\S]{0,120}show\('team-select'\)/.test(main)
+  && /target\.screen === 'faction'[\s\S]{0,80}await factionArtReady;[\s\S]{0,120}show\('team-select'\)/.test(main);
+// O hook real usa o lado atual; o mapeamento real do Game continua fixo ao lado inicial.
+let trocaExecOk = false;
+const trocaExecEvid = [];
+try {
+  const corpoHook = blocoFuncao(main, 'armSwitchHook');
+  const faccoes = [...game.matchAll(/^  _factionOf\(side\) \{[^\n]+\}$/gm)];
+  if (!corpoHook || (main.match(/function armSwitchHook\(/g) || []).length !== 1 || faccoes.length !== 1) throw new Error('hook/facção sem âncora única');
+  for (const mapa of [{ inicial: 'E', propria: 'P', inimiga: 'B' }, { inicial: 'B', propria: 'U', inimiga: 'F' }]) {
+    for (const atual of ['E', 'B']) {
+      const ordem = [];
+      const oposto = atual === 'E' ? 'B' : 'E';
+      const esperado = oposto === mapa.inicial ? mapa.propria : mapa.inimiga;
+      const ctx = {
+        mpSessao: null, switchMode: false, pick: null, pausado: false,
+        pickTeam: (f) => { ctx.pick = f; ordem.push(ctx.pausado ? 'pick-pausado' : 'pick-ativo'); },
+        abrirTrocaOnline: () => ordem.push('online'),
+        document: { pointerLockElement: null, exitPointerLock: () => ordem.push('exitlock') },
+        game: { player: { team: atual }, playerTeam: mapa.inicial, playerFaction: mapa.propria, enemyFaction: mapa.inimiga,
+          setPaused: (valor) => { ctx.pausado = valor; ordem.push('pausa'); } },
+      };
+      new VMScript(`game._factionOf = ({${faccoes[0][0]}})._factionOf; ${corpoHook}\narmSwitchHook(); game.onRequestSwitch();`)
+        .runInNewContext(ctx, { timeout: 1000 });
+      if (JSON.stringify(ordem) !== '["pausa","pick-pausado"]' || ctx.pick !== esperado || ctx.switchMode !== true) {
+        trocaExecEvid.push(`${mapa.inicial}/${atual}: ordem=${ordem.join(',')} pick=${ctx.pick} esperado=${esperado}`);
+      }
+    }
+  }
+  const ordemOnline = [];
+  const ctx = { mpSessao: {}, switchMode: false, game: { setPaused: () => ordemOnline.push('pausa') },
+    pickTeam: () => ordemOnline.push('pick'), abrirTrocaOnline: () => ordemOnline.push('online') };
+  new VMScript(`${corpoHook}\narmSwitchHook(); game.onRequestSwitch();`).runInNewContext(ctx, { timeout: 1000 });
+  if (JSON.stringify(ordemOnline) !== '["online"]' || ctx.switchMode !== false) trocaExecEvid.push('hook online não delegou exclusivamente');
+  trocaExecOk = trocaExecEvid.length === 0;
+} catch (erro) { trocaExecEvid.push(`execução falhou: ${erro.message}`); }
+const trocaMConsistente = trocaExecOk
+  // VOLTAR durante a troca retoma a partida em vez de abandonar o fluxo.
+  && /\$\('char-back'\)\.onclick = \(\) => \{[\s\S]{0,400}if \(switchMode && game\)[\s\S]{0,300}game\.resume\(\)/.test(main);
+const resultadoFundoContinuo = !/\.me-(?:wrap|hero)::after\{/.test(css)
+  && !/--me-accent-rgb/.test(`${css}\n${main}\n${game}`);
+/* UIR44 — a escalação embrulha cada card numa célula (card + chip ＋). Sem o card ocupar a
+   célula inteira, o botão encolhe ao conteúdo: cards de larguras diferentes, nome longo
+   vazando por cima do vizinho (visto no aceite do #809). O chip ＋ é irmão do card dentro da
+   célula: a regra tem que excluí-lo, senão ele cresce e cobre o retrato. Mutante: regra
+   sem o :not (o chip vira um bloco do tamanho do card). */
+const cardEscalacaoInteiro = /\.hub-roster-cell\{position:relative[^}]*\}/.test(css)
+  && /\.hub-roster-cell>button:not\(\.hub-roster-pin\)\{width:100%;height:100%\}/.test(css)
+  && !/\.hub-roster-cell>button\{[^}]*width:100%/.test(css)   // sem o :not o chip ＋ vira um bloco do tamanho do card
+  && /cell\.className = 'hub-roster-cell'/.test(main);
+const versaoMenuNoCanto = /<\/div>\s*<span class="menu-version" id="mf-ver"><\/span>\s*<\/div>\s*<!-- PAINEL DE SETUP/.test(astro)
+  && /\.menu-version\{[^}]*position:fixed[^}]*right:min\(4vw,42px\)[^}]*bottom:14px/.test(css)
+  && /\.menu-footer\{[^}]*bottom:48px/.test(css);
+const idiomaGeo = !/export const prerender = false/.test(astro)
+  && /window\.__GEO_LANG__/.test(astro)
+  && langFromCountry('US') === 'en'
+  && langFromCountry('GB') === 'en'
+  && langFromCountry('PT') === 'pt'
+  && langFromCountry('BR') === 'pt'
+  && langFromCountry(null) === 'pt'
+  && /export const prerender = false/.test(apiGeoLang)
+  && /langFromCountry/.test(apiGeoLang)
+  && /export async function resolveGeoLang/.test(i18n)
+  && /navigator\.language/.test(i18n)
+  // Sem top-level await: o contrato autoritativo é a cadeia que traduz antes de finishBoot.
+  && /window\.__CS_LANG_READY__\s*=\s*moduleSequencingReady\.then\(\(\)\s*=>\s*resolveGeoLang\(\)\)\.then/.test(main)
+  && /void window\.__CS_LANG_READY__\.then\(finishBoot\)\.catch/.test(main);
+
+const resultados = [
+  ['UIA1', 'elenco inteiro tem avatar, seleção e dois resultados estáticos', assetOk, assetEvid],
+  ['UIA2', 'vídeos são WebM VP9 no quadro nativo declarado', videosRuins.length === 0,
+    videosRuins.length ? videosRuins.slice(0, 5).map(({ arquivo, meta }) => `${basename(arquivo)}=${meta.width}x${meta.height} vp9=${meta.vp9}`).join(' · ') : `${metas.length} vídeos conferidos`],
+  ['UIA3', 'entrada usa exatamente o lote de wallpapers de loading', splashOk,
+    splashOk ? `${splash.length} wallpapers do manifesto; nenhum vídeo de personagem` : 'manifesto, fonte e composição da splash divergiram'],
+  ['UIA4', 'lote visualmente auditado corresponde aos vídeos e ao mapa de armas publicados', loteAuditado,
+    loteAuditado ? `mídia=${mediaSha256.slice(0, 12)} mapa=${weaponMapSha256.slice(0, 12)}`
+      : `auditoria=${audit.mediaSha256 ? 'divergente' : 'ausente/inválida'} mídia=${mediaSha256.slice(0, 12)} mapa=${weaponMapSha256.slice(0, 12)}`],
+  ['UIA5', 'loading usa personagem GLB renderizado ao vivo num canvas Three.js transparente', loadingCanvas3d,
+    loadingCanvas3d ? 'canvas + renderer + GLB real + câmera/luz próprios' : 'canvas, renderer ou integração GLB ausente'],
+  ['UIA6', 'loading alterna múltiplas ações reais do rig em vez de repetir uma corrida', loadingAcoes3d,
+    `${new Set(loadingActions).size} ações: ${[...new Set(loadingActions)].join(', ') || 'nenhuma'}`],
+  ['UIR1', 'texto dinâmico novo passa pela camada i18n', i18nDinamico,
+    'mapa/descrição/nível, facção/personagens, loading e confronto'],
+  ['UIR2', 'canvas 3D não renderiza atrás do vídeo de seleção', previewUso, 'o uso de pv.r.render consulta previewVideoVisible()'],
+  ['UIR3', 'vídeo de seleção pausa ao sair da tela', previewPausa, 'show() pausa #char-preview-video fora de char-select'],
+  ['UIR4', 'mapas: três abas com TODOS por partidas, ficha e opções no cabeçalho, acervo dono do corpo', mapaReferencia,
+    `render usa MAP_IDS completo; aba TODOS exclui COMUNIDADE; coluna=${strip.replace(/\s+/g, ' ').trim()} palco=${fundoMapa.replace(/\s+/g, ' ').trim() || 'vazio'}`],
+  ['UIR5', 'dicionário i18n não tem chave duplicada', repetidas.length === 0, repetidas.join(', ') || `${chaves.length} chaves únicas`],
+  ['UIR6', 'gerador de captura recebe a arma declarada de cada personagem', geradorArma,
+    'gerador deriva weaponById de CHAR_WEAPON e envia a arma ao mounttest'],
+  ['UIR7', 'placar alinha JOGADOR/K/D/SCORE/PING e preserva CAP. no CTF', placarCap,
+    'cabeçalho e linhas compartilham --sb-grid; CTF acrescenta CAP.'],
+  ['UIR8', 'captura quadrada redimensiona renderer e câmera, não só o contêiner', mountResize,
+    'mounttest atualiza aspect e backing store também durante PLAY'],
+  ['UIR9', 'gerador falha fechado em timeout e pageerror', geradorFalhaFechado,
+    'falha de captura não pode preservar artefato velho com saída zero'],
+  ['UIR10', 'strings dinâmicas restantes passam por i18n', i18nRestante,
+    [setupTraduzOk ? '' : setupEvidencia.slice(0, 3).join(' · '),
+      blurbsSemIngles.length ? `blurbs sem inglês: ${blurbsSemIngles.slice(0, 3).join(' · ')}` : '',
+      (main.match(/nick \|\| tr\('SEM NICK'\)/g) || []).length >= 1 ? '' : 'SEM NICK cru',
+      /char-info-blurb'\)\.textContent = tr\(c\.blurb\)/.test(main) ? '' : 'blurb sem tr',
+    ].filter(Boolean).join(' · ') || 'setSetupStep executada de verdade (pt+en · match/profile · rounds/ctf/arena), nick vazio e todo blurb do elenco'],
+  ['UIR11', 'só o fallback da seleção mantém decoder de vídeo', cicloVideos,
+    'entrada, loading e resultado não têm vídeo; fallback 3D pausa ao sair'],
+  ['UIR12', 'vídeo de seleção é fallback e preserva o preview 3D interativo', previewInterativo,
+    'WebGL mantém GIRAR/ZOOM; vídeo só entra quando o renderer não existe'],
+  ['UIR13', 'seleção: ficha + preview em duas colunas e grade elástica de thumbs 72 com rolagem própria', selecaoDuasColunas,
+    'grade auto-fill minmax(72,1fr) no rail elástico (piso 84px, teto 100%); filmstrip estica; preview respeita a linha inferior'],
+  ['UIR14', 'preview preserva a pose de apresentação até o jogador girar', previewSobControle,
+    'animação idle continua; yaw só responde ao arraste'],
+  ['UIR15', 'resultado usa exclusivamente arte estática do personagem atual', resultadoEstatico,
+    'game.js sincroniza troca no meio da partida e só aponta --me-art; DOM/CSS não têm vídeo'],
+  ['UIR16', 'loading combina wallpaper com um personagem 3D distinto por facção', loadingWallpaper,
+    `${new Set(loadingCharacterIds).size}/5 representantes GLB distintos; sem GIF ou sprite sheet no DOM`],
+  ['UIR17', 'placar superior in-game fica solto sobre a cena e usa números Rajdhani', hudTopoReferencia,
+    'times e relógio sem placa preta; números em Rajdhani'],
+  ['UIR19', 'resultado enquadra o personagem inteiro como recorte alpha', resultadoIntegrado,
+    resultadoRuins.length
+      ? `${resultadoRuins.length}/${resultadoVisual.length} artes cortadas, opacas ou no quadro errado: ${resultadoRuins.slice(0, 4).map(({ arquivo, meta, bounds }) => `${arquivo} ${meta.width}×${meta.height} alpha=${meta.alpha} margens=${[bounds.left, bounds.right, bounds.top, bounds.bottom].map((v) => (v * 100).toFixed(1)).join('/')}`).join(' · ')}`
+      : `${resultadoVisual.length}/${resultadoVisual.length} recortes alpha do elenco inteiro, com folga nos quatro lados`],
+  ['UIR20', 'idioma automático usa país conhecido e português como fallback', idiomaGeo,
+    'home estática; /api/geo-lang decide pelo país antes do boot; sem API (host estático) cai no navegador'],
+  ['UIR21', 'loading ocupa um quinto do palco anterior e olha para o avanço da barra', loadingCompactoDireita,
+    'palco 86×144 no desktop; yaw positivo acompanha a barra da esquerda para a direita'],
+  ['UIR22', 'configurações reproduzem painel 980px, prévia 360×200, cabeçalho e rodapé da tela 07', configuracoesReferencia,
+    'Barlow no corpo; ESC, restaurar, aplicar e salvar presentes'],
+  ['UIR23', 'placar reproduz cabeçalho e duas tabelas translúcidas da tela 08', placarReferencia,
+    'fundo de jogo borrado; rodada no topo; JOGADOR/K/D/SCORE/PING em duas colunas'],
+  ['UIR24', 'HUD usa Barlow no corpo e Rajdhani nos números, com estado de vida baixa', hudTipografiaReferencia,
+    'vida e munição 42px; nome 11px; vinheta e vermelho crítico medidos na tela 05'],
+  ['UIR25', 'killfeed usa a mesma silhueta 2D alfa da arma que realizou o abate', killfeedArma2D,
+    'short da arma resolve o WebP publicado; máscara monocromática substitui o SVG no evento real'],
+  ['UIR26', 'Single Player abre o submenu com mata-mata, CTF e vira-casaca; os três modos entram pela seleção de mapas', modoMapaPadrao,
+    [modoCicloOk ? 'ciclo rounds→ctf→arena→rounds EXECUTADO no handler real do #map-mode (node:vm 1s)' : modoCicloEvid.slice(0, 2).join(' · '),
+      'os três modos preservam estado no setup e abrem a tela 04 antes de facção/personagem'].filter(Boolean).join(' · ')],
+  ['UIR27', 'ficha do personagem não inventa dificuldade sem contrato', personagemSemDificuldade,
+    'renderCharAttrs publica somente VIDA, VELOCIDADE, PRECISÃO e MEME; nenhum undefined'],
+  ['UIR28', 'avatares de Punk e Gotinha correspondem às identidades 3D auditadas', avatarIdentidadeOk,
+    `punk=${punkAvatarSha256.slice(0, 12)} gotinha=${gotinhaAvatarSha256.slice(0, 12)} referência=${resultAudit.avatarReference || 'ausente'}`],
+  ['UIR29', 'perfil usa avatar estável do elenco e troca imediatamente pela foto enviada', perfilComAvatar,
+    'fallback é derivado do UID/nick; upload bem-sucedido persiste a URL e redesenha o card'],
+  ['UIR30', 'menu principal convida o jogador a enviar feedback pelo canal existente', suporteNoMenu,
+    'ENVIE SEU FEEDBACK abre o painel funcional sem criar rota morta'],
+  ['UIR31', 'configuração de eixo vertical chega ao mouse-look real', mouseVerticalConfiguravel,
+    'checkbox persistido inverte somente movementY; movimento horizontal permanece igual'],
+  ['UIR32', 'menu preenche o viewport em qualquer proporção; splash e loading preservam a arte inteira', wallpaperLoadingResponsivo,
+    'cada wallpaper cobre o viewport; 3:2 usa variante derivada da arte real'],
+  ['UIR33', 'tela cheia de mapas configura armas, jogadores e número real de rounds', opcoesPartidaNoMapa,
+    'os três controles persistem no estado; roundsMax atravessa main.js e governa o encerramento em game.js'],
+  ['UIR34', 'interface pública não usa borda tracejada ou faixa hazard', semBordaTracejada,
+    'menu, painéis, seleção, resultado, links e arnês público ficam sem dashed/dotted'],
+  ['UIR35', 'splash inicial mostra chamada de clique junto do personagem animado', personagemNoSplash,
+    'o mesmo canvas Three.js transparente nasce na entrada e é reaproveitado no loading da partida'],
+  ['UIR36', 'placar do TAB mostra os brasões das duas facções', brasoesNoPlacar,
+    'cabeçalho geral e cada tabela resolvem /img/brasoes pelo lado (E/B), não pela categoria do corpo'],
+  ['UIR37', 'conteúdo do placar do TAB fica centralizado verticalmente', placarCentralizado,
+    'cabeçalho e tabelas formam um único bloco flex centrado no viewport'],
+  ['UIR38', 'falha de ranking nunca vaza detalhe de backend na interface', backendSoNoConsole,
+    'submitNote preserva diagnóstico no console e não escreve no DOM nem publica nomes de variáveis'],
+  ['UIR39', 'as duas artes de time terminam de decodificar antes da tela aparecer', faccaoPreloadBloqueante,
+    'o preload começa no boot e o primeiro acesso aguarda o mesmo Promise antes de mostrar team-select'],
+  ['UIR40', 'troca com M pausa uma única camada e mantém facção, lado e volta coerentes', trocaMConsistente,
+    [trocaExecOk ? 'hook e mapeamento reais: pausa antes do pick, quatro casos lado inicial/atual; online delega abrirTrocaOnline' : trocaExecEvid.slice(0, 2).join(' · '),
+      'VOLTAR retoma a partida'].filter(Boolean).join(' · ')],
+  ['UIR41', 'resultado usa um único fundo preto contínuo atrás da arte alpha', resultadoFundoContinuo,
+    'nenhum halo ou degradê limitado à metade direita pode criar emenda no palco do personagem'],
+  ['UIR42', 'menu preenche o viewport e fixa a versão no canto inferior direito', versaoMenuNoCanto,
+    'a versão fica em camada própria abaixo do rodapé, sem participar da fileira de links'],
+  ['UIR44', 'card da escalação ocupa a célula inteira (larguras iguais, nome não vaza)', cardEscalacaoInteiro,
+    'o botão do personagem preenche .hub-roster-cell; o chip ＋ fica por cima, no canto'],
+  ['UIR43', 'ficha do mapa traz autor, data e crachá OFICIAL/COMUNIDADE (sub-filtro de autor removido, #368)', autoriaNaFicha,
+    'MAP_AUTOR/MAP_DATA por mapa; byline renderiza; badge OFICIAL pra casa e COMUNIDADE pra fora; sem marcação morta de chips de autor'],
+];
+
+for (const [id, desc, ok, evid] of resultados) console.log(`${ok ? '✓' : '✗'} ${id} · ${desc}\n  ${evid}`);
+if (!mutacaoAplicou) {
+  console.error(`MUTAÇÃO IMPOSSÍVEL: ${MUTANTE} não encontrou o uso de produção esperado`);
+  process.exit(2);
+}
+if (MUTANTE) {
+  const alvo = alvoPorMutante[MUTANTE];
+  const vermelho = resultados.find(([id]) => id === alvo)?.[2] === false;
+  console.log(vermelho ? `\n✓ mutante ${MUTANTE}: ${alvo} ficou VERMELHA; a régua morde`
+    : `\n✗ mutante ${MUTANTE}: ${alvo} sobreviveu`);
+  process.exit(vermelho ? 0 : 1);
+}
+process.exit(resultados.every(([, , ok]) => ok) ? 0 : 1);

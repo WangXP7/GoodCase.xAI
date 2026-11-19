@@ -1,0 +1,1260 @@
+import { InstancedMesh, Vector3 } from 'three';
+import { Enemy } from '../entities/enemy.entity';
+import { GeoPosition, RouteWaypoint } from '../models/game.types';
+import { CoordinateSync } from '../three-engine/renderers';
+import type { ColumnSample, ColumnSampler, TerrainPeekLOD } from '../three-engine/column-sample';
+import type { PortalClipUniforms } from '../three-engine/renderers/portal-clip';
+import { LosResolveContext } from './gpu-cube-resolve';
+import { RouteCell } from './route-cell';
+import { LOS_SLOT_AIR, LOS_SLOT_GROUND, LosMask, createLosBits, readLosSlot, writeLosSlot } from './los-mask';
+import { resolveTowerLos, resolveTowerLosIncremental, countSight, SightCount } from './route-grid-los';
+import { RouteCellLattice, claimRouteCells } from './route-grid-builder';
+import {
+  HeightResetResult,
+  RouteCellBox,
+  RouteCellDump,
+  RouteCellProbe,
+  RouteCellSpot,
+  RouteGridSampleStats,
+  RouteGridView,
+  TowerRangeReport,
+  collectCellsInBox,
+  collectCentreLineCells,
+  collectHeightOutliers,
+  findCorridorHoles,
+  probeCellsAround,
+  resetFallbackHeights,
+  summarizeCellSamples,
+  summarizeTowerRange,
+} from './route-grid-diagnostics';
+import { RouteGridAggregateViz } from './route-grid-aggregate-viz';
+import { CellMiss, RouteCellSampler } from './route-cell-sampler';
+import { WalkGround, cellWalkable, judgeWalk, portalGround } from './corridor-walk';
+import type { BandStation } from './corridor-band';
+import { logGrid } from './route-grid-log';
+import { corridorTrace } from './corridor-trace';
+import type { RouteBodyContact } from './route-body';
+import { RouteCellNeighbours } from './route-cell-neighbours';
+
+/** Distance from `v` to the span [start, start + size] along one axis, 0 inside it. */
+const gapToSpan = (v: number, start: number, size: number): number =>
+  v < start ? start - v : v > start + size ? v - start - size : 0;
+
+/**
+ * GlobalRouteGrid - Unified Cell System for Enemy Tracking and LOS
+ *
+ * Replaces both EnemySpatialGrid and RouteLosGrid with a single global system.
+ * Cells are pre-generated along enemy routes and store:
+ * - Terrain height (for visualization)
+ * - Current enemies in the cell
+ * - LOS visibility per tower
+ *
+ * Benefits:
+ * - Single point of truth for cell-based queries
+ * - O(1) enemy position updates
+ * - O(1) LOS checks (pre-computed per tower)
+ * - Unified visualization
+ */
+export class GlobalRouteGrid {
+  /** Map of cell keys to RouteCell data */
+  private readonly cells = new Map<number, RouteCell>();
+
+  /** Map of enemy ID to current cell key (for fast cell transitions) */
+  private enemyCellKeys = new Map<string, number>();
+
+  /** Unique across instances, so an enemy's cell memo can never match another grid. */
+  private static nextGeneration = 0;
+
+  /**
+   * Bumped whenever `cells` and `enemyCellKeys` are rebuilt or dropped
+   * (generateFromRoutes, clear). Between bumps the cell set is fixed (cells
+   * are only ever created inside generateFromRoutes), which is what lets an
+   * enemy's cell memo (Enemy.routeCell*) stand in for the Map lookups.
+   */
+  private generation = GlobalRouteGrid.nextGeneration++;
+
+  /**
+   * Last set of routes that `generateFromRoutes` was called with. Used
+   * by the air-route-tube debug overlay to re-render along the same
+   * geometry the grid was built from. Empty until `generateFromRoutes`
+   * runs at least once.
+   */
+  private cachedRoutes: RouteWaypoint[][] = [];
+
+  /** Cached enemy routes (geo-coordinate polylines) for debug overlays. */
+  getCachedRoutes(): RouteWaypoint[][] {
+    return this.cachedRoutes;
+  }
+
+  /** Grid cell size in meters (matches original CELL_SIZE) */
+  private readonly CELL_SIZE = 2;
+
+  /** Cached inverse cell size for fast multiplication instead of division */
+  private readonly INV_CELL_SIZE = 1 / this.CELL_SIZE;
+
+  /**
+   * Cell size and keying rule for route-grid-builder, which creates the
+   * cells: the intCellKey / cellIndex every lookup here uses as well.
+   */
+  private readonly lattice: RouteCellLattice = {
+    cellSize: this.CELL_SIZE,
+    index: (v) => this.cellIndex(v),
+    key: (gx, gz) => this.intCellKey(gx, gz),
+  };
+
+  /** Reused scratch for per-enemy geo→local conversion in getEnemiesInRadius. */
+  private readonly _radiusScanScratch = new Vector3();
+
+  /** Heights from a cell's neighbours: medians, pairs, estimates */
+  private readonly neighbours = new RouteCellNeighbours(this.cells, this.lattice);
+
+  /** Integer hash for cell key (avoids string allocation in hot path) */
+  private intCellKey(cx: number, cz: number): number {
+    return ((cx & 0xFFFF) << 16) | (cz & 0xFFFF);
+  }
+
+  /**
+   * Grid index of a local coordinate. The one keying rule: cells are created
+   * with it, so every lookup has to use it as well. `Math.floor`, not `| 0`:
+   * truncation rounds negative coordinates toward zero and lands them in the
+   * neighbour cell on the origin side.
+   */
+  private cellIndex(v: number): number {
+    return Math.floor(v * this.INV_CELL_SIZE);
+  }
+
+  /**
+   * Terrain-Sampling der Cells (`sampleCellY`) mit Proben und Sweep-Zählern.
+   * A tunnel portal takes the street under the band station there instead of
+   * a hit on a roof over the street, or of no hit at all (portalGround).
+   */
+  private readonly sampler = new RouteCellSampler(
+    (cell, minDepth) => this.medianOfStableNeighbourY(cell, minDepth),
+    (x, z, y) => portalGround(x, z, y, this.walkGround),
+  );
+
+  /**
+   * The band station nearest to a local point, set by PathAndRouteService
+   * once it has built the band of the routes in use (setBand); null before
+   * that, and while the routes are being replaced.
+   */
+  private bandStation: ((x: number, z: number) => BandStation | null) | null = null;
+
+  /**
+   * What the walk check reads off this grid (corridor-walk.ts): the
+   * sampler's column probe, beside a seam as well, and the band of the
+   * routes in use.
+   */
+  private readonly walkGround: WalkGround = {
+    column: (x, z) => this.sampler.columnNear(x, z),
+    station: (x, z) => this.bandStation?.(x, z) ?? null,
+  };
+
+  /**
+   * Where the walkable band of the routes in use stands: its station
+   * nearest to a local point (PathAndRouteService.bandStationAt). The cells
+   * of a tunnel portal and the diagnosis of `__corridor.pick()` read it;
+   * null takes the band away again.
+   */
+  setBand(stationAt: ((x: number, z: number) => BandStation | null) | null): void {
+    this.bandStation = stationAt;
+  }
+
+  /**
+   * The column at local (x, z) as the cells and the walk check read it: the
+   * engine's cached column probe, half a metre beside it on a seam. Null
+   * before initialize() and where no tile is. The walkable band of the
+   * routes is built on these columns (PathAndRouteService.buildBands,
+   * corridor-band.ts).
+   */
+  columnNear(x: number, z: number): ColumnSample | null {
+    return this.sampler.columnNear(x, z);
+  }
+
+  /** cellWalkable for one cell of this grid, for the diagnostics. */
+  private readonly walkable = (cell: RouteCell) => cellWalkable(cell, this.walkGround);
+
+  /** judgeWalk for one cell of this grid, for `__corridor.pick()`. */
+  private readonly walkJudgement = (cell: RouteCell) => judgeWalk(cell, this.walkGround);
+
+  /** Coordinate sync for geo <-> local conversions */
+  private coordinateSync: CoordinateSync | null = null;
+
+  /** Aggregat-Debug-Viz (`grid` / `gridAir`), liest dieselbe Cell-Map. */
+  private readonly aggregateViz = new RouteGridAggregateViz(this.cells, this.CELL_SIZE, (cell) => this.standHeight(cell));
+
+  /**
+   * Height enemies stand on in a cell, what getGroundLocalYAt answers at its
+   * centre: its sample, or for a cell without one the median of its sampled
+   * neighbours instead of the route anchor, which can be far off. The
+   * overlay draws the cell there, and the tower LOS samples above it.
+   */
+  private readonly standHeight = (cell: RouteCell): number => {
+    if (cell.heightSampled) return cell.terrainHeight;
+    return this.estimateTerrainY(cell.x, cell.z) ?? cell.terrainHeight;
+  };
+
+  /** See RouteCellNeighbours.medianOfStable */
+  private medianOfStableNeighbourY(cell: RouteCell, minDepth = 0): number | null {
+    return this.neighbours.medianOfStable(cell, minDepth);
+  }
+
+  /**
+   * Heights for the cells among `cells` without a usable sample of their
+   * own: an unsampled cell, or a stable one more than
+   * RouteCellSampler.OUTLIER_M off the median of its neighbours sampled at
+   * least as deep (a hit that got in before those neighbours had one).
+   *
+   * - Between stable cells of its surface on opposite sides, such a cell
+   *   takes the mean over those pairs and is `filled`
+   *   (RouteCellSampler.fill): a seam between two tile meshes that no
+   *   column near the cell got past.
+   * - Without such a pair, where at least three stable cells of its surface
+   *   touch it, it takes their median and is `filled` as well: a cell at the
+   *   edge of the corridor whose columns meet nothing, a hole in the mesh
+   *   at the foot of a facade (playtest 2026-09-16, Rothenburg, seven cells
+   *   before the Laubengang of the town hall). The band reached the cells beside it on
+   *   the ground and passed over this one (corridor-band.ts, walkSide), and
+   *   the fallback level found no column there either. Three measured cells
+   *   around it bound its height as a pair does: along the edge the middle
+   *   one, across it the cell next to it.
+   * - Only stable cells count, so a fill never spreads from one filled cell
+   *   to the next.
+   * - A stable one with neither loses its sample.
+   * - Tunnel cells take their height from the portals and are left alone.
+   *
+   * O(cells given), eight neighbour lookups each.
+   * @returns the cells whose height changed
+   */
+  private fillGaps(cells: Iterable<RouteCell>): RouteCell[] {
+    const changed: RouteCell[] = [];
+    for (const cell of cells) {
+      if (cell.surface === 'tunnel') continue;
+      if (cell.sample.state === 'stable') {
+        const median = this.medianOfStableNeighbourY(cell, cell.sample.tileDepth);
+        if (median === null || Math.abs(cell.terrainHeight - median) <= RouteCellSampler.OUTLIER_M) continue;
+      }
+      const y = this.neighbours.heightBetween(cell) ?? this.medianOfStableNeighbourY(cell);
+      if (y !== null) {
+        if (this.sampler.fill(cell, y)) changed.push(cell);
+      } else if (cell.sample.state === 'stable') {
+        this.sampler.resetToUnsampled(cell);
+        this.misses.set(cell.key, 'refused');
+        changed.push(cell);
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * Best-effort terrain-Y estimate at an arbitrary local (x, z) from the
+   * nearest sampled cells, see RouteCellNeighbours.estimateY.
+   */
+  estimateTerrainY(x: number, z: number): number | null {
+    return this.neighbours.estimateY(x, z);
+  }
+
+  /**
+   * Initialize the grid with required dependencies.
+   * @param columnSampler Vertical terrain probe (ground + tile LOD)
+   * @param coordinateSync Coordinate sync for geo <-> local conversions
+   * @param terrainPeekLOD Optional cheap LOD probe used to skip re-sampling
+   */
+  initialize(
+    columnSampler: ColumnSampler,
+    coordinateSync: CoordinateSync,
+    terrainPeekLOD?: TerrainPeekLOD,
+  ): void {
+    this.sampler.columnSampler = columnSampler;
+    this.sampler.terrainPeekLOD = terrainPeekLOD ?? null;
+    this.coordinateSync = coordinateSync;
+  }
+
+  /**
+   * Get the CoordinateSync instance (for DPS profile computation)
+   */
+  getCoordinateSync(): CoordinateSync | null {
+    return this.coordinateSync;
+  }
+
+  /**
+   * Height per cell key, NaN for a cell without one: the cells a rebuild
+   * starts from and ends with, for the corridor trace (cellDelta).
+   */
+  snapshotHeights(): Map<number, number> {
+    const heights = new Map<number, number>();
+    for (const cell of this.cells.values()) heights.set(cell.key, cell.heightSampled ? cell.terrainHeight : NaN);
+    return heights;
+  }
+
+  /**
+   * Every cell with a height as [key, height, state] (1 stable, 2 filled),
+   * in the order the cells were claimed: what a coop joiner needs on top of
+   * the routes to stand on the same ground (restoreHeights).
+   */
+  exportHeights(): [number, number, number][] {
+    const out: [number, number, number][] = [];
+    for (const cell of this.cells.values()) {
+      if (!cell.heightSampled) continue;
+      out.push([cell.key, cell.terrainHeight, cell.sample.state === 'stable' ? 1 : 2]);
+    }
+    return out;
+  }
+
+  /**
+   * Take the heights of exportHeights() over, for a grid generated from the
+   * same routes: exactly, a cell not in `heights` goes back to no height, as
+   * it had none where they were taken. Returns the keys it had no cell for;
+   * empty when the cells match.
+   */
+  restoreHeights(heights: readonly (readonly [number, number, number])[]): number[] {
+    const listed = new Set<number>();
+    for (const [key] of heights) listed.add(key);
+    for (const cell of this.cells.values()) {
+      if (!listed.has(cell.key) && cell.heightSampled) this.sampler.resetToUnsampled(cell);
+    }
+    const missing: number[] = [];
+    for (const [key, y, state] of heights) {
+      const cell = this.cells.get(key);
+      if (!cell) {
+        missing.push(key);
+        continue;
+      }
+      this.sampler.restore(cell, y, state === 1 ? 'stable' : 'filled');
+    }
+    this.aggregateViz.refreshPositions();
+    return missing;
+  }
+
+  /** Cells without a height, neither a sample of their own nor one filled in from their neighbours (fillGaps). */
+  cellsWithoutHeight(): number {
+    let count = 0;
+    for (const cell of this.cells.values()) if (!cell.heightSampled) count++;
+    return count;
+  }
+
+  /** Why each cell's last sample failed (RouteCellSampler.lastMiss), by cell key; see sample(). */
+  private readonly misses = new Map<number, CellMiss>();
+
+  /** Cells describeCellsWithoutHeight lists by position; the rest it counts. */
+  private static readonly LISTED_CELLS = 10;
+
+  /**
+   * The cells without a height (cellsWithoutHeight), for the corridor trace:
+   * `why`, how many of them failed for each reason (CellMiss), and `at`,
+   * where the first LISTED_CELLS of them stand (local x,z) and how many
+   * more there are. O(cells).
+   */
+  describeCellsWithoutHeight(): { why: string; at: string } {
+    const counts = new Map<CellMiss, number>();
+    const at: string[] = [];
+    let more = 0;
+    for (const cell of this.cells.values()) {
+      const miss = this.missOf(cell);
+      if (miss === null) continue;
+      counts.set(miss, (counts.get(miss) ?? 0) + 1);
+      if (at.length < GlobalRouteGrid.LISTED_CELLS) at.push(`${cell.x},${cell.z}`);
+      else more++;
+    }
+    return {
+      why: [...counts].map(([miss, n]) => `${miss}:${n}`).join(','),
+      at: at.join(';') + (more > 0 ? `;+${more}` : ''),
+    };
+  }
+
+  /**
+   * Why a cell has no height (CellMiss, as describeCellsWithoutHeight counts
+   * it; `noColumn` for one never tried), null for a cell with one, sampled
+   * or filled.
+   */
+  missOf(cell: RouteCell): CellMiss | null {
+    return cell.heightSampled ? null : this.misses.get(cell.key) ?? 'noColumn';
+  }
+
+  /** sampleCellY for one cell of this grid, keeping why it failed (misses). */
+  private sample(cell: RouteCell): boolean {
+    const sampled = this.sampler.sampleCellY(cell);
+    const miss = this.sampler.lastMiss;
+    if (miss === null) this.misses.delete(cell.key);
+    else this.misses.set(cell.key, miss);
+    return sampled;
+  }
+
+  /**
+   * Generate grid cells from enemy routes and sample their terrain height.
+   *
+   * A cell belongs to the corridor if its centre lies within the half width
+   * of a route segment on its side (`corridorLeft` / `corridorRight` of the
+   * segment's start waypoint, see route-corridor.ts). Cell centres therefore
+   * stay on the free street, the cells the centre line runs through belong
+   * to it at any width, and every
+   * point within `lateralLimit(halfWidth)` of the centre line on that side
+   * lies in a cell: the cell containing it has its centre at most half a
+   * cell diagonal further out. That is how far MovementComponent lets
+   * enemies spread, so no enemy walks outside the cells towers look at.
+   *
+   * Cells of a segment on a bridge (`onBridge`) sample the deck, the top of
+   * the column, instead of the ground under the bridge. A cell holds one
+   * height: where the bridge and its approach meet, a cell takes the
+   * surface of the segment it lies along, not of the one that reaches it
+   * only with a round end; a cell both reach along their length (a street
+   * under the bridge) stays on the ground (claimSegmentCells). Cells of the
+   * route off a bridge end, up to DECK_APPROACH_M past it, and of the leg to
+   * the HQ (`offStreet`) take the hit of their column nearest to the height
+   * the route carries there from the bridge end or the street, but not one
+   * far above it (`approach`, carried-height.ts).
+   *
+   * Cells of a segment in a tunnel or covered passage (`inTunnel`) take their
+   * height between the ground just outside the two mouths of the stretch,
+   * since their own column sees only the hill or the building above. A cell
+   * a tunnel segment reaches is a tunnel cell, whatever else reaches it.
+   * @param routes Array of route paths
+   */
+  generateFromRoutes(routes: RouteWaypoint[][]): void {
+    const sync = this.coordinateSync;
+    if (!sync || !this.sampler.columnSampler) {
+      console.error('[GlobalRouteGrid] Cannot generate - not initialized');
+      return;
+    }
+
+    const t0 = performance.now();
+    this.cells.clear();
+    this.misses.clear();
+    this.enemyCellKeys.clear();
+    this.generation = GlobalRouteGrid.nextGeneration++;
+    this.cachedRoutes = routes;
+
+    const alongClaims = new Set<number>();
+    for (const route of routes) {
+      if (route.length < 2) continue;
+      const points = route.map((p) => sync.geoToLocalSimple(p.lat, p.lon, p.height ?? 0));
+      claimRouteCells(this.cells, this.lattice, route, points, alongClaims);
+    }
+
+    // Sampled only once every segment has claimed its cells: which surface
+    // a cell samples depends on all segments that reach it. Then the gaps
+    // between sampled cells, see fillGaps.
+    for (const cell of this.cells.values()) this.sample(cell);
+    this.fillGaps(this.cells.values());
+
+    const ms = performance.now() - t0;
+    corridorTrace.log('grid.generate', { cells: this.cells.size, routes: routes.length, ms });
+    corridorTrace.cost('grid.generate', ms);
+  }
+
+  /**
+   * Retry sampling for cells that have no sample of their own
+   * (`unsampled` or `filled`). Cheap: only walks that subset. A promotion
+   * may close a gap next to a cell still waiting, see fillGaps.
+   *
+   * The corridor build calls it on the fallback level for the cells the
+   * finest level gave no column (CorridorBuild); nothing else samples cells
+   * after a build.
+   */
+  retryUnsampledCells(): { promoted: number } {
+    if (!this.sampler.columnSampler) {
+      return { promoted: 0 };
+    }
+
+    const promoted: RouteCell[] = [];
+    const waiting: RouteCell[] = [];
+    let totalUnsampled = 0;
+
+    for (const cell of this.cells.values()) {
+      // A filled cell has a height but no sample of its own: retried as well.
+      if (cell.sample.state === 'stable') continue;
+      totalUnsampled++;
+      if (this.sample(cell)) {
+        promoted.push(cell);
+      } else {
+        waiting.push(cell);
+      }
+    }
+
+    logGrid(
+      'HEIGHT_UPDATE',
+      `retryUnsampled unsampledBefore=${totalUnsampled} promoted=${promoted.length}`,
+    );
+
+    if (promoted.length === 0) return { promoted: 0 };
+
+    // The new samples may close gaps around the cells still waiting.
+    this.fillGaps(waiting);
+    this.aggregateViz.refreshPositions();
+    return { promoted: promoted.length };
+  }
+
+  /**
+   * Visit every grid spot in a tower's reach: the spots whose square reaches
+   * into the disc of `range` around (centerX, centerZ) (nearer than `range`;
+   * a square that only touches its rim is out, as the bounding box of the
+   * floored indices leaves it out on the low side), in a fixed order (grid x,
+   * then grid z, both ascending) that follows from position, range and cell
+   * size alone. `cell` is undefined for a spot without a cell; `slot`
+   * counts the spots visited so far (LosMask). Returns the number of slots.
+   * O(spots in the bounding box), not O(total cells).
+   *
+   * A square rather than the centre: an enemy within range can stand in a
+   * cell whose centre lies up to half a diagonal beyond it, and that cell
+   * needs an answer (D2 in SIMULATOR_PLAN.md: combat treats a missing
+   * answer as not visible).
+   */
+  forEachSlotInReach(
+    centerX: number,
+    centerZ: number,
+    range: number,
+    visit: (cell: RouteCell | undefined, slot: number) => void,
+  ): number {
+    const size = this.CELL_SIZE;
+    const rangeSq = range * range;
+    const gx0 = this.cellIndex(centerX - range);
+    const gx1 = this.cellIndex(centerX + range);
+    const gz0 = this.cellIndex(centerZ - range);
+    const gz1 = this.cellIndex(centerZ + range);
+    let slot = 0;
+    for (let gx = gx0; gx <= gx1; gx++) {
+      const dx = gapToSpan(centerX, gx * size, size);
+      const dxSq = dx * dx;
+      if (dxSq >= rangeSq) continue;
+      for (let gz = gz0; gz <= gz1; gz++) {
+        const dz = gapToSpan(centerZ, gz * size, size);
+        if (dxSq + dz * dz >= rangeSq) continue;
+        visit(this.cells.get(this.intCellKey(gx, gz)), slot++);
+      }
+    }
+    return slot;
+  }
+
+  /**
+   * The cells in a tower's reach (forEachSlotInReach), in slot order. The
+   * reach only grows with the range (range upgrades), so a larger range
+   * covers every cell a smaller one held an entry in.
+   */
+  private cellsInReach(centerX: number, centerZ: number, range: number): RouteCell[] {
+    const cells: RouteCell[] = [];
+    this.forEachSlotInReach(centerX, centerZ, range, (cell) => {
+      if (cell) cells.push(cell);
+    });
+    return cells;
+  }
+
+  /**
+   * Register a tower and compute LOS for all cells in its reach
+   * (forEachSlotInReach). Pre-computes ground LOS and/or air LOS depending
+   * on the tower's targeting capabilities, on the heights the corridor
+   * build froze.
+   *
+   * Visible cells are the UNION of ground- and air-visible cells: a cell
+   * counts as visible if the tower can see *something* in it (ground level
+   * OR the air sample altitude), so the tower-targeting fast path picks up
+   * enemies of either type.
+   *
+   * @param towerId Tower unique ID
+   * @param towerX Tower X position (local coordinates)
+   * @param towerZ Tower Z position (local coordinates)
+   * @param range Tower targeting range
+   * @param ctx GPU-cube resolve context (built by caller via TowerShadowMapper)
+   * @param canTargetGround Whether tower targets ground enemies (default true)
+   * @param canTargetAir Whether tower targets air enemies (default false)
+   * @returns Array of cells visible from this tower (ground or air)
+   */
+  registerTower(
+    towerId: string,
+    towerX: number,
+    towerZ: number,
+    range: number,
+    ctx: LosResolveContext,
+    canTargetGround = true,
+    canTargetAir = false
+  ): RouteCell[] {
+    return resolveTowerLos(
+      this.cellsInReach(towerX, towerZ, range), towerId, towerX, towerZ, ctx, canTargetGround, canTargetAir,
+      this.standHeight,
+    );
+  }
+
+  /**
+   * What a tower at (towerX, towerZ) would see of the cells in its reach,
+   * counted with the same test as registerTower, but no cell keeps an
+   * answer: a spot the bot only considers (countSight).
+   */
+  sightFrom(
+    towerX: number,
+    towerZ: number,
+    range: number,
+    ctx: LosResolveContext,
+    canTargetGround: boolean,
+    canTargetAir: boolean,
+  ): SightCount {
+    return countSight(
+      this.cellsInReach(towerX, towerZ, range), towerX, towerZ, ctx, canTargetGround, canTargetAir, this.standHeight,
+    );
+  }
+
+  /**
+   * Re-register a tower after a range change (e.g. range upgrade) without
+   * discarding existing LOS data.
+   *
+   * Behaves like `registerTower`, but for cells already having an entry for
+   * this tower (in either visibility map), the cached value is reused, no
+   * cube sample. This means a range-upgrade only samples the *new* cells
+   * (the ring between old and new reach), not the entire disc.
+   */
+  registerTowerIncremental(
+    towerId: string,
+    towerX: number,
+    towerZ: number,
+    range: number,
+    ctx: LosResolveContext,
+    canTargetGround = true,
+    canTargetAir = false,
+  ): RouteCell[] {
+    return resolveTowerLosIncremental(
+      this.cellsInReach(towerX, towerZ, range), towerId, towerX, towerZ, ctx, canTargetGround, canTargetAir,
+      this.standHeight,
+    );
+  }
+
+  /**
+   * The tower's answers in its reach as a LosMask. Read after registerTower
+   * or registerTowerIncremental with the same position, range and
+   * capabilities.
+   */
+  encodeLosMask(
+    towerId: string,
+    towerX: number,
+    towerZ: number,
+    range: number,
+    canTargetGround: boolean,
+    canTargetAir: boolean,
+  ): LosMask {
+    const slots = this.forEachSlotInReach(towerX, towerZ, range, () => undefined);
+    const bits = createLosBits(slots);
+    this.forEachSlotInReach(towerX, towerZ, range, (cell, slot) => {
+      if (!cell) return;
+      const value =
+        (canTargetGround && cell.towerVisibility.get(towerId) === true ? LOS_SLOT_GROUND : 0) |
+        (canTargetAir && cell.airVisibility.get(towerId) === true ? LOS_SLOT_AIR : 0);
+      if (value !== 0) writeLosSlot(bits, slot, value);
+    });
+    return { range, ground: canTargetGround, air: canTargetAir, bits };
+  }
+
+  /**
+   * Write the answers of `mask` into the cells of the tower's reach, no GPU
+   * work: every cell in reach gets a ground answer if the mask has ground
+   * answers and an air answer if it has air answers, an answer the mask
+   * lacks is removed. Returns the cells the tower sees something in, as
+   * registerTower does. Throws on a mask whose slot count does not fit the
+   * position and range: it was taken on another grid spot.
+   */
+  applyLosMask(towerId: string, towerX: number, towerZ: number, mask: LosMask): RouteCell[] {
+    const slots = this.forEachSlotInReach(towerX, towerZ, mask.range, () => undefined);
+    if (Math.ceil(slots / 4) !== mask.bits.length) {
+      throw new Error(`LosMask of ${towerId}: ${mask.bits.length} B for ${slots} slots at range ${mask.range}`);
+    }
+    const visibleCells: RouteCell[] = [];
+    this.forEachSlotInReach(towerX, towerZ, mask.range, (cell, slot) => {
+      if (!cell) return;
+      const value = readLosSlot(mask.bits, slot);
+      const ground = mask.ground && (value & LOS_SLOT_GROUND) !== 0;
+      const air = mask.air && (value & LOS_SLOT_AIR) !== 0;
+      if (mask.ground) cell.towerVisibility.set(towerId, ground);
+      else cell.towerVisibility.delete(towerId);
+      if (mask.air) cell.airVisibility.set(towerId, air);
+      else cell.airVisibility.delete(towerId);
+      if (ground || air) visibleCells.push(cell);
+    });
+    return visibleCells;
+  }
+
+  /**
+   * Unregister a tower (remove LOS data from all cells)
+   * @param towerId Tower ID to unregister
+   */
+  unregisterTower(towerId: string): void {
+    for (const cell of this.cells.values()) {
+      cell.towerVisibility.delete(towerId);
+      cell.airVisibility.delete(towerId);
+    }
+  }
+
+  /**
+   * Update enemy position in the grid
+   * Handles cell transitions efficiently
+   * @param enemy Enemy entity
+   * @param localX New X position (local coordinates)
+   * @param localZ New Z position (local coordinates)
+   */
+  updateEnemyPosition(enemy: Enemy, localX: number, localZ: number): void {
+    const newCellKey = this.intCellKey(this.cellIndex(localX), this.cellIndex(localZ));
+
+    // Same cell as this enemy's last evaluation, same generation: provably a
+    // no-op, and the common case (a 2 m cell takes dozens of sub-steps to
+    // cross). Inside the corridor enemyCellKeys already holds this key;
+    // outside it the cell still does not exist (cells only change with a
+    // generation bump) and there is no entry to drop. The memo lives on the
+    // enemy, so this costs no string-keyed lookup; for an enemy outside the
+    // corridor it replaces three Map probes per sub-step.
+    if (enemy.routeCellGen === this.generation && enemy.routeCellKey === newCellKey) return;
+
+    const currentCellKey = this.enemyCellKeys.get(enemy.id);
+    const newCell = this.cells.get(newCellKey);
+
+    // If enemy is in same cell, nothing to do
+    if (currentCellKey !== newCellKey) {
+      // Remove from old cell (key 0 is the valid cell (0,0) — test definedness, not truthiness)
+      if (currentCellKey !== undefined) {
+        const oldCell = this.cells.get(currentCellKey);
+        if (oldCell) {
+          oldCell.enemies.delete(enemy);
+        }
+      }
+
+      // Add to new cell (if cell exists in our grid)
+      if (newCell) {
+        newCell.enemies.add(enemy);
+        this.enemyCellKeys.set(enemy.id, newCellKey);
+      } else if (this.enemyCellKeys.has(enemy.id)) {
+        // Enemy moved outside tracked corridor cells — no longer targetable by route-grid towers
+        this.enemyCellKeys.delete(enemy.id);
+      }
+    }
+
+    enemy.routeCellGen = this.generation;
+    enemy.routeCellKey = newCellKey;
+    enemy.routeCell = newCell;
+  }
+
+  /**
+   * [cell key, enemy ids] of every cell with enemies, each in the order its
+   * set holds them: radius queries walk that order (snapshot mid-wave).
+   */
+  captureEnemyCells(): [number, string[]][] {
+    const out: [number, string[]][] = [];
+    for (const [key, cell] of this.cells) {
+      if (cell.enemies.size > 0) out.push([key, [...cell.enemies].map((enemy) => enemy.id)]);
+    }
+    return out;
+  }
+
+  /**
+   * Put the enemies back into their cells as captureEnemyCells() found them;
+   * their memos come back with restoreEnemyMemo().
+   */
+  restoreEnemyCells(cells: readonly (readonly [number, readonly string[]])[], byId: (id: string) => Enemy | null): void {
+    for (const [key, ids] of cells) {
+      const cell = this.cells.get(key);
+      if (!cell) continue;
+      for (const id of ids) {
+        const enemy = byId(id);
+        if (!enemy) continue;
+        cell.enemies.add(enemy);
+        this.enemyCellKeys.set(enemy.id, key);
+      }
+    }
+  }
+
+  /** Whether `enemy`'s cell memo is of this grid's generation (updateEnemyPosition) */
+  enemyMemoCurrent(enemy: Enemy): boolean {
+    return enemy.routeCellGen === this.generation;
+  }
+
+  /** Make `enemy`'s memo current again after a restore: its key stays, its cell comes from the key */
+  restoreEnemyMemo(enemy: Enemy, current: boolean): void {
+    if (!current) {
+      enemy.routeCellGen = -1;
+      enemy.routeCell = undefined;
+      return;
+    }
+    enemy.routeCellGen = this.generation;
+    enemy.routeCell = this.cells.get(enemy.routeCellKey);
+  }
+
+  /**
+   * Remove enemy from grid (call when enemy dies or is removed)
+   * @param enemy Enemy entity
+   */
+  removeEnemy(enemy: Enemy): void {
+    // Drop the memo as well: a later updateEnemyPosition() must re-add the
+    // enemy rather than take the same-cell shortcut.
+    enemy.routeCellGen = -1;
+    enemy.routeCell = undefined;
+    const currentCellKey = this.enemyCellKeys.get(enemy.id);
+    if (currentCellKey !== undefined) {
+      const cell = this.cells.get(currentCellKey);
+      if (cell) {
+        cell.enemies.delete(enemy);
+      }
+      this.enemyCellKeys.delete(enemy.id);
+    }
+  }
+
+  // ========================================
+  // BODIES ALONG THE ROUTE (Enemy.body, the ooze, see utils/route-body.ts)
+  // ========================================
+
+  /**
+   * Enemies whose body lies along the route. They are in no cell: a body
+   * covers dozens of them. Radius queries test the body instead
+   * (getEnemiesInRadius), and TowerCombatService adds them to every tower's
+   * candidates and aims at the nearest body point (BodyAim).
+   */
+  private readonly bodyEnemies: Enemy[] = [];
+  private readonly _bodyContact: RouteBodyContact = { station: 0, offset: 0, distance: 0 };
+
+  /** Track an enemy with a body (EnemyManager at its spawn). */
+  addBodyEnemy(enemy: Enemy): void {
+    if (enemy.body && !this.bodyEnemies.includes(enemy)) this.bodyEnemies.push(enemy);
+  }
+
+  removeBodyEnemy(enemy: Enemy): void {
+    const i = this.bodyEnemies.indexOf(enemy);
+    if (i >= 0) this.bodyEnemies.splice(i, 1);
+  }
+
+  /** The tracked enemies with a body, dead ones included until they are removed. */
+  getBodyEnemies(): readonly Enemy[] {
+    return this.bodyEnemies;
+  }
+
+  /** Whether a living body reaches within `radius` of local (x, z). */
+  hasBodyWithin(x: number, z: number, radius: number): boolean {
+    for (const enemy of this.bodyEnemies) {
+      if (enemy.alive && enemy.body!.touches(x, z, radius, this._bodyContact)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Bumped whenever the cells are rebuilt or dropped. Whoever keeps cells
+   * across frames (BodyAim) compares it to know they are still the grid's.
+   */
+  getGeneration(): number {
+    return this.generation;
+  }
+
+  /**
+   * Get enemies for tower targeting (from visible cells)
+   * @param visibleCells Array of cells the tower can see
+   * @returns Array of alive enemies in those cells
+   */
+  getEnemiesForTower(visibleCells: RouteCell[], out?: Enemy[]): Enemy[] {
+    const enemies = out ?? [];
+    if (out) out.length = 0;
+    for (const cell of visibleCells) {
+      for (const enemy of cell.enemies) {
+        if (enemy.alive) {
+          enemies.push(enemy);
+        }
+      }
+    }
+    return enemies;
+  }
+
+  /**
+   * Get cell at local coordinates
+   * @param localX Local X coordinate
+   * @param localZ Local Z coordinate
+   * @returns RouteCell or undefined if not in grid
+   */
+  getCellAt(localX: number, localZ: number): RouteCell | undefined {
+    return this.cells.get(this.intCellKey(this.cellIndex(localX), this.cellIndex(localZ)));
+  }
+
+  /**
+   * The cell whose centre lies nearest to (localX, localZ) and no further
+   * than `maxDistanceM`, or undefined when there is none. Scans the square of
+   * grid spots around the point, O((maxDistance / cell size)²) lookups rather
+   * than O(cells). Equal distances keep the first cell in scan order, so the
+   * answer does not depend on how the cells were inserted.
+   */
+  findNearestCell(localX: number, localZ: number, maxDistanceM: number): RouteCell | undefined {
+    const reach = Math.ceil(maxDistanceM * this.INV_CELL_SIZE);
+    const centerX = this.cellIndex(localX);
+    const centerZ = this.cellIndex(localZ);
+    const maxSq = maxDistanceM * maxDistanceM;
+    let best: RouteCell | undefined;
+    let bestSq = Infinity;
+    for (let dx = -reach; dx <= reach; dx++) {
+      for (let dz = -reach; dz <= reach; dz++) {
+        const cell = this.cells.get(this.intCellKey(centerX + dx, centerZ + dz));
+        if (!cell) continue;
+        const distSq = (cell.x - localX) ** 2 + (cell.z - localZ) ** 2;
+        if (distSq <= maxSq && distSq < bestSq) {
+          best = cell;
+          bestSq = distSq;
+        }
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Single source of truth for ground terrain Y at an arbitrary local
+   * (x, z) position. Used by enemy movement (per-frame), spawn
+   * initialization and the red route-line builder so every consumer
+   * reads the SAME height the LOS pipeline reads.
+   *
+   * Resolution chain:
+   *   1. Cell at (x,z) with `heightSampled === true` → `cell.terrainHeight`.
+   *   2. `estimateTerrainY` (3×3 then 5×5 median of stable neighbours).
+   *   3. `null` when no stable neighbour exists at all.
+   *
+   * Lookup is a single `Map.get` + 2 floors → ~50 ns. Safe to call
+   * per-frame for every enemy.
+   */
+  getGroundLocalYAt(localX: number, localZ: number): number | null {
+    const cell = this.cells.get(this.intCellKey(this.cellIndex(localX), this.cellIndex(localZ)));
+    if (cell && cell.heightSampled) return cell.terrainHeight;
+    return this.estimateTerrainY(localX, localZ);
+  }
+
+  /**
+   * getGroundLocalYAt() with the tile error behind it: a sampled cell's
+   * height and the geometric error of the tile it came from, or the
+   * neighbour estimate with an infinite error. For callers that have to tell
+   * a fine-tile height from a coarse one (the overview frame).
+   */
+  getGroundSampleAt(localX: number, localZ: number): { y: number; tileError: number } | null {
+    const cell = this.cells.get(this.intCellKey(this.cellIndex(localX), this.cellIndex(localZ)));
+    if (cell && cell.heightSampled) return { y: cell.terrainHeight, tileError: cell.sample.tileGeometricError };
+    const y = this.estimateTerrainY(localX, localZ);
+    return y === null ? null : { y, tileError: Infinity };
+  }
+
+  /**
+   * getGroundLocalYAt() for an enemy whose position was just passed to
+   * updateEnemyPosition(): reuses the cell that call looked up instead of
+   * probing `cells` again. The memo holds `cells.get(key)` from the current
+   * generation, and the cell set does not change within one, so the result
+   * is identical. Falls back to the lookup when the memo does not cover
+   * this position.
+   */
+  getGroundLocalYForEnemy(enemy: Enemy, localX: number, localZ: number): number | null {
+    if (enemy.routeCellGen === this.generation) {
+      if (this.intCellKey(this.cellIndex(localX), this.cellIndex(localZ)) === enemy.routeCellKey) {
+        const cell = enemy.routeCell;
+        if (cell && cell.heightSampled) return cell.terrainHeight;
+        return this.estimateTerrainY(localX, localZ);
+      }
+    }
+    return this.getGroundLocalYAt(localX, localZ);
+  }
+
+  /**
+   * Get all alive enemies within a radius of a local position
+   * Optimized: O(cells_in_radius) instead of O(all_enemies)
+   *
+   * @param localX Center X position (local coordinates)
+   * @param localZ Center Z position (local coordinates)
+   * @param radiusMeters Radius in meters
+   * @param excludeId Optional enemy ID to exclude (e.g., the primary target)
+   * @returns Array of alive enemies within radius
+   */
+  getEnemiesInRadius(
+    localX: number,
+    localZ: number,
+    radiusMeters: number,
+    excludeId?: string,
+    out?: Enemy[]
+  ): Enemy[] {
+    if (out) out.length = 0;
+    if (!this.coordinateSync) return out ?? [];
+
+    const enemies = out ?? [];
+    const radiusSq = radiusMeters * radiusMeters;
+
+    // Calculate cell range to check
+    const cellRadius = Math.ceil(radiusMeters * this.INV_CELL_SIZE);
+    const centerCellX = this.cellIndex(localX);
+    const centerCellZ = this.cellIndex(localZ);
+
+    // Iterate only over cells within radius
+    for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+      for (let dz = -cellRadius; dz <= cellRadius; dz++) {
+        const cellKey = this.intCellKey(centerCellX + dx, centerCellZ + dz);
+        const cell = this.cells.get(cellKey);
+        if (!cell) continue;
+
+        // Check each enemy in cell
+        for (const enemy of cell.enemies) {
+          if (!enemy.alive) continue;
+          if (excludeId && enemy.id === excludeId) continue;
+
+          // Convert enemy geo position to local for precise distance check.
+          // Use the allocation-free *Into variant with a reused scratch —
+          // this runs for every enemy in every scanned cell.
+          const enemyLocal = this.coordinateSync.geoToLocalSimpleInto(
+            enemy.position.lat,
+            enemy.position.lon,
+            0,
+            this._radiusScanScratch
+          );
+          const distSq = (enemyLocal.x - localX) ** 2 + (enemyLocal.z - localZ) ** 2;
+          if (distSq <= radiusSq) {
+            enemies.push(enemy);
+          }
+        }
+      }
+    }
+
+    // A body along the route that reaches into the circle is in it, once.
+    // Its hit goes on the point it reaches in with, so the splash or strike
+    // that asked lands there (RouteBody.hit, hitDistanceM for the falloff).
+    for (const enemy of this.bodyEnemies) {
+      if (!enemy.alive || (excludeId && enemy.id === excludeId)) continue;
+      const body = enemy.body!;
+      const contact = this._bodyContact;
+      if (!body.touches(localX, localZ, radiusMeters, contact)) continue;
+      const st = body.stations;
+      const k = contact.station;
+      const groundY = this.getGroundLocalYAt(
+        st.x[k] + st.rightX[k] * contact.offset,
+        st.z[k] + st.rightZ[k] * contact.offset,
+      ) ?? enemy.transform.terrainHeight - st.originHeight;
+      body.setHit(k, contact.offset, groundY);
+      body.hitDistanceM = contact.distance;
+      enemies.push(enemy);
+    }
+
+    return enemies;
+  }
+
+  /**
+   * Get all alive enemies within a radius of a geo position
+   * Convenience method that converts geo to local coordinates
+   *
+   * @param center Center point (lat, lon)
+   * @param radiusMeters Radius in meters
+   * @param excludeId Optional enemy ID to exclude
+   * @param out Optional array to fill instead of allocating one
+   * @returns Array of alive enemies within radius
+   */
+  getEnemiesInRadiusGeo(
+    center: GeoPosition,
+    radiusMeters: number,
+    excludeId?: string,
+    out?: Enemy[]
+  ): Enemy[] {
+    if (!this.coordinateSync) {
+      console.warn('[GlobalRouteGrid] getEnemiesInRadiusGeo called before initialization');
+      if (out) out.length = 0;
+      return out ?? [];
+    }
+
+    const local = this.coordinateSync.geoToLocalSimple(center.lat, center.lon, center.height ?? 0);
+    return this.getEnemiesInRadius(local.x, local.z, radiusMeters, excludeId, out);
+  }
+
+  /**
+   * Whether the tower sees a ground target at the position, by the answer
+   * of the cell there (pre-computed LOS). No cell, or a cell without an
+   * answer of this tower (off the corridor, beyond its reach, not resolved
+   * yet), counts as not visible (D2 in SIMULATOR_PLAN.md).
+   * @param towerId Tower ID
+   * @param localX Target X (local coordinates)
+   * @param localZ Target Z (local coordinates)
+   */
+  isPositionVisibleFromTower(towerId: string, localX: number, localZ: number): boolean {
+    return this.getCellAt(localX, localZ)?.towerVisibility.get(towerId) === true;
+  }
+
+  /**
+   * isPositionVisibleFromTower for air targets, pre-computed against
+   * {@link getAirTargetY}. Distinct from ground visibility because a tall
+   * building can block one altitude but not the other. No answer counts as
+   * not visible.
+   */
+  isAirPositionVisibleFromTower(towerId: string, localX: number, localZ: number): boolean {
+    return this.getCellAt(localX, localZ)?.airVisibility.get(towerId) === true;
+  }
+
+
+  /**
+   * Get grid statistics
+   */
+  getStats(): { totalCells: number; trackedEnemies: number; occupiedCells: number } {
+    let occupiedCells = 0;
+    for (const cell of this.cells.values()) {
+      if (cell.enemies.size > 0) occupiedCells++;
+    }
+    return {
+      totalCells: this.cells.size,
+      trackedEnemies: this.enemyCellKeys.size,
+      occupiedCells,
+    };
+  }
+
+  // ========================================
+  // DIAGNOSTICS: __rg.* debug API, see route-grid-diagnostics.ts
+  // ========================================
+
+  /** Sample-Zustand aller Cells im Ausschnitt, siehe `collectCellsInBox`. */
+  dumpCellsInBox(box: RouteCellBox): RouteCellDump[] {
+    return collectCellsInBox(this.cells, box);
+  }
+
+  /** Histogramm-Zusammenfassung über alle Cells, siehe `summarizeCellSamples`. */
+  dumpStats(): RouteGridSampleStats {
+    return summarizeCellSamples(this.cells, this.sampler.sampleFrame);
+  }
+
+  /** Cells weit weg von ihrem Route-Anker, siehe `collectHeightOutliers`. */
+  dumpOutliers(thresholdM = 20): RouteCellDump[] {
+    return collectHeightOutliers(this.cells, thresholdM);
+  }
+
+  /** Fallback-Samples zurücksetzen und neu sampeln, siehe `resetFallbackHeights`. */
+  resetHeightsAndRetry(): HeightResetResult {
+    return resetFallbackHeights(this.cells, this.sampler, () => this.retryUnsampledCells());
+  }
+
+  /**
+   * Grid positions within `range` of (x, z) that have no cell while the four
+   * positions next to them along the axes all have one: holes in the
+   * corridor, which the LOS display would show as gaps in the street. Every
+   * segment claims a convex region of cells, so there should be none.
+   */
+  findHolesInRange(x: number, z: number, range: number): RouteCellSpot[] {
+    return findCorridorHoles(this.view, x, z, range);
+  }
+
+  /** What the grid holds in a tower's range, see `summarizeTowerRange`. */
+  describeTowerRange(towerId: string, x: number, z: number, range: number): TowerRangeReport {
+    return summarizeTowerRange(
+      this.cellsInReach(x, z, range), towerId, this.findHolesInRange(x, z, range), (cell) => this.medianOfStableNeighbourY(cell), this.walkable,
+    );
+  }
+
+  /**
+   * The cells the route centre lines run through within `range` of (x, z),
+   * probed every half metre along each segment, and the spots on a centre
+   * line without a cell. A row missing along the red line shows up here.
+   */
+  centreLineCells(x: number, z: number, range: number): { cells: RouteCell[]; missing: RouteCellSpot[] } {
+    return collectCentreLineCells(this.view, x, z, range);
+  }
+
+  /** `describeTowerRange` for the centre line cells only; `holes` lists every centre spot without a cell. */
+  describeCentreLine(towerId: string, x: number, z: number, range: number): TowerRangeReport {
+    const { cells, missing } = this.centreLineCells(x, z, range);
+    return summarizeTowerRange(cells, towerId, missing, (cell) => this.medianOfStableNeighbourY(cell), this.walkable);
+  }
+
+  /**
+   * Every grid spot within `radius` of (x, z) and what the grid holds there,
+   * nearest to the route line first, for `__corridor.pick()`. `towerId`
+   * adds that tower's answers.
+   */
+  describeCellsAround(x: number, z: number, radius: number, towerId: string | null): RouteCellProbe[] {
+    return probeCellsAround(this.view, x, z, radius, towerId, (cell) => this.medianOfStableNeighbourY(cell), this.walkJudgement);
+  }
+
+  /** The grid as the spatial probes in route-grid-diagnostics read it. Diagnostics only. */
+  private get view(): RouteGridView {
+    return { cells: this.cells, lattice: this.lattice, routes: this.cachedRoutes, sync: this.coordinateSync };
+  }
+
+  // ========================================
+  // VISUALIZATION: aggregate debug meshes, see route-grid-aggregate-viz.ts
+  // ========================================
+
+  /**
+   * Create visualization mesh (InstancedMesh with shader)
+   * Call once, then use updateVisualization() each frame for color updates only
+   */
+  createVisualization(portalClip?: PortalClipUniforms): InstancedMesh {
+    return this.aggregateViz.createVisualization(portalClip);
+  }
+
+  /** Create the air-layer mirror of the global aggregate viz. */
+  createAirVisualization(portalClip?: PortalClipUniforms): InstancedMesh {
+    return this.aggregateViz.createAirVisualization(portalClip);
+  }
+
+  /**
+   * Update visualization colors only (call each frame when visible)
+   */
+  updateVisualization(occupied?: ReadonlySet<RouteCell>): void {
+    this.aggregateViz.updateVisualization(occupied);
+  }
+
+  /**
+   * Update animation time (call each frame)
+   * @param deltaTime Delta time in milliseconds
+   */
+  updateAnimation(deltaTime: number): void {
+    this.aggregateViz.updateAnimation(deltaTime);
+  }
+
+  /** Get visualization mesh */
+  getVisualization(): InstancedMesh | null {
+    return this.aggregateViz.getVisualization();
+  }
+
+  /** Dispose ground visualization resources. */
+  disposeVisualization(): void {
+    this.aggregateViz.disposeVisualization();
+  }
+
+  /** Dispose air-layer aggregate viz. */
+  disposeAirVisualization(): void {
+    this.aggregateViz.disposeAirVisualization();
+  }
+
+  // ========================================
+  // CELLS-IN-RANGE QUERY (GPU-LOS-Pipeline)
+  // ========================================
+
+  /**
+   * Die Cells in Reichweite (`forEachSlotInReach`: Fläche schneidet die
+   * Reichweite an, dieselben Zellen, für die ein Tower Antworten hat), deren
+   * Terrain-Sample eine Höhe hat. Wird von der GPU-LOS-Viz-Pipeline
+   * (TowerLosViz / TowerLosLayerBuilder) als Cell-Set genutzt.
+   */
+  getCellsInRange(x: number, z: number, range: number): RouteCell[] {
+    // A range far beyond the grid (a debug dump of every cell) scans the cells instead of the box
+    const span = 2 * range * this.INV_CELL_SIZE + 2;
+    if (span * span <= this.cells.size) return this.cellsInReach(x, z, range).filter((cell) => cell.heightSampled);
+    const rangeSq = range * range;
+    const result: RouteCell[] = [];
+    for (const cell of this.cells.values()) {
+      if (!cell.heightSampled) continue;
+      const size = this.CELL_SIZE;
+      const dx = gapToSpan(x, this.cellIndex(cell.x) * size, size);
+      const dz = gapToSpan(z, this.cellIndex(cell.z) * size, size);
+      if (dx * dx + dz * dz < rangeSq) result.push(cell);
+    }
+    return result;
+  }
+
+  /** Grid-Cell-Size (m). */
+  getCellSize(): number {
+    return this.CELL_SIZE;
+  }
+
+
+  /**
+   * Clear all data
+   */
+  clear(): void {
+    this.cells.clear();
+    this.misses.clear();
+    this.enemyCellKeys.clear();
+    this.bodyEnemies.length = 0;
+    this.generation = GlobalRouteGrid.nextGeneration++;
+    this.disposeVisualization();
+    this.disposeAirVisualization();
+  }
+
+  /**
+   * Dispose all resources
+   */
+  dispose(): void {
+    this.clear();
+    this.sampler.columnSampler = null;
+    this.sampler.terrainPeekLOD = null;
+    this.coordinateSync = null;
+  }
+}

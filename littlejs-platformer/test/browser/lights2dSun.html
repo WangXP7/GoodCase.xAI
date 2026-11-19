@@ -1,0 +1,182 @@
+<!DOCTYPE html><meta charset=utf-8>
+<title>LittleJS smoke: the 2D directional light</title>
+<script src=../../dist/littlejs.js></script>
+<script src=smoke.js></script>
+<pre id=result>PENDING</pre>
+<script>
+'use strict';
+
+// the 2D directional light: a sun from the left over a white floor, a block that throws a long shadow to the right, and
+// a background area dark inside and lit at its left edge
+// the view is 16 units across, so a place (x, y) is at (.5 + x / 16, .5 + y / 16) of the canvas; the block is at
+// (-4, 0), 1 by 2, the background area spans x 1 to 7 and y -6.5 to -3.5
+smokeRun(async ()=>
+{
+    setShowSplashScreen(false);
+    setDebugWatermark(false);
+    setEngineManualStep(true);
+    setCanvasFixedSize(vec2(128));
+    setCanvasClearColor(rgb(0, 0, 0));
+    const bright = (x, y)=> smokePixel(.5 + x / 16, .5 + y / 16)[0];
+    let block, back;
+    await engineInit(()=>
+    {
+        setCameraScale(8);
+        new LightSystemPlugin; // pitch dark where no light reaches
+        block = new EngineObject(vec2(-4, 0), vec2(1, 2), tile(1, 16)); // white, it casts
+        back = new EngineObject(vec2(4, -5), vec2(6, 3), tile(1, 16)); // white, a background area
+        back.castShadow = false;
+        back.castBackgroundShadow = true;
+    }, ()=> {}, ()=> {}, ()=>
+    {
+        drawTile(vec2(), vec2(40), tile(1, 16)); // a white floor past the whole view, turned too
+    }, ()=> {}, [smokeSheet('#888', '#fff')]);
+
+    engineStep(3);
+    check('with no directional light there is no background map', !lightSystem.backgroundMap);
+    check('nor any of its textures', !lightSystem.directionalTexture);
+    check('and the floor is dark', bright(-2, 3) < 40, bright(-2, 3));
+
+    const sun = new DirectionalLight(vec2(-1, 0), rgb(1, 1, 1)); // the sun to the left, shining right
+    engineStep(3);
+    check('a directional light makes the background map', !!lightSystem.backgroundMap);
+    check('and the shadow map, with shadows off', !!lightSystem.shadowMap && !lightSystem.shadows);
+    check('but not the point lights\' shadow textures or programs', !lightSystem.shadowTextureA &&
+        !lightSystem.shadowTextureB && !lightSystem.shadowCopyShader && !lightSystem.shadowStretchShader);
+    check('open floor is lit in the color of the light', bright(-6, 4) > 200, bright(-6, 4));
+    check('the block throws a long shadow to its right', bright(0, 0) < 120, bright(0, 0));
+    check('which fades the further it goes', bright(6, 0) > bright(0, 0) + 20, [bright(6, 0), bright(0, 0)]);
+    check('above the shadow is lit', bright(0, 3) > 200, bright(0, 3));
+    check('the side of the block facing the light is lit, its far side is not',
+        bright(-4.4, 0) > bright(-3.6, 0) + 30, [bright(-4.4, 0), bright(-3.6, 0)]);
+    check('the background area is lit at its edge facing the light', bright(1.3, -5) > 80, bright(1.3, -5));
+    check('and dark inside', bright(6.5, -5) < 40, bright(6.5, -5));
+
+    sun.sunDirection = vec2(0, 1); // the sun straight up, shining down
+    engineStep(3);
+    check('a vertical light casts straight down', bright(-4, -3) < 120 && bright(-2, -3) > 200,
+        [bright(-4, -3), bright(-2, -3)]);
+
+    // panning, the area the sun is built over moves by whole texels of its own textures, or a still caster's shadow
+    // edge jumps back and forth a map texel as the camera moves
+    const offsets = [];
+    for (let i = 0; i < 8; ++i)
+    {
+        setCameraPos(vec2(i * .06, i * .04));
+        engineStep();
+        const texel = lightSystem.shadowMapWorldSize / lightSystem.directionalTextureSize;
+        const place = lightSystem.shadowMapOrigin.scale(1 / texel);
+        offsets.push(+Math.max(Math.abs(place.x - Math.round(place.x)), Math.abs(place.y - Math.round(place.y))).toFixed(3));
+    }
+    check('panning moves the sun\'s area by whole texels of its own', offsets.every((o)=> o < .01), offsets);
+    setCameraPos(vec2());
+    engineStep(2);
+
+    // a lost context takes its textures with it, and they are made again once it is back
+    sun.sunDirection = vec2(-1, 0);
+    const lose = glContext.getExtension('WEBGL_lose_context');
+    const event = (name)=> new Promise((resolve, reject)=>
+    {
+        glCanvas.addEventListener(name, resolve, {once: true});
+        setTimeout(()=> reject(name + ' never came'), 3e3);
+    });
+    const lost = event('webglcontextlost');
+    lose.loseContext();
+    await lost;
+    await new Promise((resolve)=> setTimeout(resolve)); // a restore is allowed only once the lost event is through
+    engineStep(2);
+    check('a lost context lets go of its textures', !lightSystem.directionalTexture && !lightSystem.backgroundMap);
+    const restored = event('webglcontextrestored');
+    lose.restoreContext();
+    await restored;
+    await new Promise((resolve)=> setTimeout(resolve));
+    engineStep(3);
+    check('and once it is back the light and its shadow draw again', bright(-6, 4) > 200 && bright(0, 0) < 120,
+        [bright(-6, 4), bright(0, 0)]);
+
+    sun.castShadow = false;
+    let shadowDraws = 0;
+    const renderShadow = block.renderShadow;
+    block.renderShadow = function() { ++shadowDraws; renderShadow.call(this); };
+    engineStep(3);
+    check('with castShadow off there is no long shadow', bright(0, 0) > 200, bright(0, 0));
+    check('and the foreground map is not drawn, nothing reads it', shadowDraws === 0, shadowDraws);
+    block.renderShadow = renderShadow;
+
+    // a diagonal sun, up and to the left: the block's shadow goes down and to the right
+    sun.castShadow = true;
+    sun.sunDirection = vec2(-1, 1);
+    engineStep(3);
+    check('a diagonal sun casts down and to the right', bright(-1, -3) < 120 && bright(-7, -3) > 200,
+        [bright(-1, -3), bright(-7, -3)]);
+    sun.sunDirection = vec2(-1, 0);
+
+    // a long shadow past what 10 passes reach on a big texture still fades out, it is not cut off: a caster at x -15,
+    // off screen but in the map, its shadow 40 long, which at 2048 texels over the map's 32 units is 2560 texels
+    sun.castShadow = true;
+    const seedProgram = lightSystem.directionalPrograms.seed;
+    lightSystem.directionalTextureSize = 2048;
+    sun.shadowLength = 40;
+    const far = new EngineObject(vec2(-15, 5), vec2(1, 2), tile(1, 16));
+    engineStep(3);
+    check('a long shadow on a big texture fades on, not cut off where the passes end', bright(3, 5) < 200,
+        bright(3, 5));
+    check('a new texture size keeps the shaders', lightSystem.directionalPrograms.seed === seedProgram);
+    far.destroy();
+    lightSystem.directionalTextureSize = 512;
+    sun.shadowLength = 20;
+
+    // the sun reaches the corners of a turned view whose shadow map covers no more than it
+    lightSystem.shadowMapScale = 1;
+    setCameraAngle(.5);
+    engineStep(3);
+    check('a turned view with a small shadow map is lit to its corners', bright(-7.5, 7.5) > 200, bright(-7.5, 7.5));
+    setCameraAngle(0);
+    lightSystem.shadowMapScale = 2;
+
+    // with no background caster the background map and its leak are not drawn, the common case costs less
+    const drawsInAStep = ()=>
+    {
+        const drawArrays = glContext.drawArrays;
+        let draws = 0;
+        glContext.drawArrays = function(...a) { ++draws; return drawArrays.apply(this, a); };
+        try { engineStep(); } finally { glContext.drawArrays = drawArrays; }
+        return draws;
+    };
+    // a see through caster, half dark in the shadow map, is lit the same inside whether or not a background caster is
+    // somewhere in the scene, its far side most of all
+    const glass = new EngineObject(vec2(-2, 5), vec2(2, 2), tile(1, 16), 0, rgb(1, 1, 1, .5));
+    sun.castShadow = true;
+    engineStep(3);
+    const glassWithBack = bright(-1.2, 5);
+    const withBack = drawsInAStep();
+    back.destroy();
+    engineStep();
+    const withoutBack = drawsInAStep();
+    check('a see through caster is lit the same with a background caster in the scene or without',
+        Math.abs(bright(-1.2, 5) - glassWithBack) < 8, [glassWithBack, bright(-1.2, 5)]);
+    glass.destroy();
+    check('with no background caster its leak is not drawn', withBack - withoutBack >= 6, [withBack, withoutBack]);
+    check('and the light still draws, its long shadow too', bright(-6, 4) > 200 && bright(0, 0) < 120,
+        [bright(-6, 4), bright(0, 0)]);
+
+    sun.destroy();
+    engineStep(3);
+    check('destroyed, it adds nothing', bright(-6, 4) < 40, bright(-6, 4));
+    check('and its textures are let go', !lightSystem.directionalTexture && !lightSystem.backgroundMap);
+    check('and the shadow map it made, with shadows off', !lightSystem.shadowMap);
+    const kept = lightSystem.directionalPrograms.seed;
+    check('its shaders are kept for the next sun', !!kept);
+    const next = new DirectionalLight(vec2(-1, 0));
+    engineStep(2);
+    check('which draws with them, not compiled again', lightSystem.directionalPrograms.seed === kept && bright(-6, 4) > 200,
+        bright(-6, 4));
+    lightSystem.shadows = true;
+    engineStep();
+    check('shadows turned on make the point lights\' textures and programs', !!lightSystem.shadowTextureA &&
+        !!lightSystem.shadowTextureB && !!lightSystem.shadowCopyShader && !!lightSystem.shadowStretchShader);
+    lightSystem.shadows = false;
+    next.destroy();
+    checkGLError();
+});
+</script>

@@ -1,0 +1,19 @@
+// Layout of the tower window: the tower to tune, its values as slider rows,
+// the JSON of all towers at the foot.
+
+.tower-debug-content {
+  min-width: 300px;
+}
+
+.json-section {
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.json-preview {
+  max-height: 150px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre;
+}

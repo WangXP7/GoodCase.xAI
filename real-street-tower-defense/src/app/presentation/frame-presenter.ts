@@ -1,0 +1,454 @@
+import { Vector3 } from 'three';
+import type { ThreeTilesEngine } from '../three-engine';
+import type { EnemyInstanceState } from '../three-engine/renderers/instanced-enemy/enemy-instance.manager';
+import type { HeroRenderer } from '../three-engine/renderers/hero.renderer';
+import { ENEMY_TYPES, type EnemyTypeConfig, type EnemyTypeId } from '../configs/enemy-types.config';
+import { PROJECTILE_TYPES, type ProjectileTypeConfig } from '../configs/projectile-types.config';
+import { WORM_SOUNDS } from '../configs/audio.config';
+import { veteranLevel } from '../configs/veteran-ranks.config';
+import {
+  E_ANIM_SPEED,
+  E_FLAGS,
+  E_HOFF,
+  E_HP,
+  E_ID,
+  E_LAT,
+  E_LON,
+  E_MAXHP,
+  E_ROT,
+  E_TERRAIN,
+  E_TYPE,
+  ENEMY_TYPE_IDS,
+  EF_ALIVE,
+  EF_ANY_STATUS,
+  EF_CAMO,
+  EF_REVEALED,
+  EF_BODY,
+  EF_MOVING,
+  EF_RUNNING,
+  EF_RUSH,
+  ENEMY_STRIDE,
+  P_DX,
+  P_DY,
+  P_DZ,
+  P_FLAGS,
+  P_HEIGHT,
+  P_ID,
+  P_LAT,
+  P_LON,
+  P_TYPE,
+  PF_ROTATES,
+  PROJECTILE_STRIDE,
+  PROJECTILE_TYPE_IDS,
+  T_ID,
+  T_KILLS,
+  TOWER_STRIDE,
+  type HeroFrame,
+  type SimFramePacket,
+} from '../sim/protocol/packet';
+import { EnemyStatusVisuals } from './enemy-status-visuals';
+import { MARK_LOOKS, NO_MARK, enemyMarkOf } from './enemy-marks';
+import { EnemySounds } from './enemy-sounds';
+import { OozePresenter, type PresentationGround } from './ooze-presenter';
+import { WormSounds } from './worm-sounds';
+
+/**
+ * Spawn one trail-particle burst per this many meters travelled.
+ * Distance-based gating gives uniform trails at any framerate / speed.
+ */
+export const TRAIL_SPAWN_DISTANCE_M = 0.5;
+
+/** The engine members the presenter drives */
+export type PresenterEngine = Pick<
+  ThreeTilesEngine,
+  | 'sync'
+  | 'enemies'
+  | 'effects'
+  | 'oozes'
+  | 'projectiles'
+  | 'trailStreaks'
+  | 'towerBadges'
+  | 'hero'
+  | 'spatialAudio'
+  | 'createPartnerHero'
+  | 'disposePartnerHero'
+>;
+
+/** An enemy the presenter has seen, by its number */
+interface EnemyRecord {
+  readonly id: string;
+  /** Its type (E_TYPE); a row of another type under the same number is a new enemy */
+  readonly type: EnemyTypeConfig;
+  /** Its render slot, resolved once; a released slot is resolved again */
+  slot: EnemyInstanceState | null;
+  /** The frame that last had it in the table */
+  seen: number;
+  /** Offset of its row in that frame's table while alive, -1 while dying (the worms' heads, during present() only) */
+  row: number;
+  /** It had a status effect in the last frame: its looks are checked once more when it ends */
+  status: boolean;
+  /** The mark its slot shows (enemy-marks.ts) */
+  mark: number;
+  /** The camouflage set on its slot (setCamo): 1 hidden, 0.5 revealed, 0 none */
+  camo: number;
+}
+
+/** A projectile the presenter has seen: its trail's distance */
+interface ProjectileRecord {
+  readonly id: string;
+  readonly type: ProjectileTypeConfig;
+  /** Local position of the last frame, before the tail offset */
+  readonly last: Vector3;
+  /** Metres flown since the last trail burst */
+  trailAcc: number;
+  seen: number;
+}
+
+/**
+ * The tables of a frame packet to the renderers (SimPresenterApi.present):
+ * enemies to their instance slots with the walk or run clip, status looks
+ * and their own sounds; oozes to their bands and loops; worms' voices;
+ * projectiles to their instances, trail bursts and streaks; heroes, the
+ * local player's on engine.hero and each partner's on a renderer of its
+ * own; veteran badges from the kills. What is created and removed comes as
+ * ops (OpPlayer); here only the frame's state, in presented frames. What
+ * the presenter keeps per entity goes when the entity is no longer in the
+ * table of a presented frame. The tables are views into shared memory
+ * (sim/protocol/table-store.ts): read during present(), never kept.
+ */
+export class FramePresenter {
+  readonly statusVisuals = new EnemyStatusVisuals();
+  readonly enemySounds = new EnemySounds();
+  readonly oozes: OozePresenter;
+  readonly wormSounds = new WormSounds();
+
+  private readonly enemies = new Map<number, EnemyRecord>();
+  private readonly projectiles = new Map<number, ProjectileRecord>();
+  /** Kills per tower as last shown by its badge */
+  private readonly towerKills = new Map<number, number>();
+  private readonly partnerHeroes = new Map<string, HeroRenderer>();
+  private readonly partnerColors = new Map<string, number | null>();
+  private frame = 0;
+  private lastGameTimeMs: number | null = null;
+  private enemyTable: Float64Array | null = null;
+
+  private readonly local = new Vector3();
+  private readonly trailPos = new Vector3();
+  private readonly lead = new Vector3();
+  private readonly direction = { dx: 0, dy: 0, dz: 0 };
+  private readonly headAt = (num: number, out: Vector3): boolean => this.wormHead(num, out);
+
+  constructor(
+    private readonly engine: PresenterEngine,
+    private readonly ground: PresentationGround,
+  ) {
+    this.oozes = new OozePresenter(ground);
+  }
+
+  present(packet: SimFramePacket): void {
+    if (packet.presented) {
+      const frame = ++this.frame;
+      const gameTimeMs = packet.scalars.gameTimeMs;
+      const deltaMs = this.lastGameTimeMs === null ? 0 : Math.max(0, gameTimeMs - this.lastGameTimeMs);
+      this.lastGameTimeMs = gameTimeMs;
+      // Bodies slide from where they are shown to this state (state-lerp.ts): enemies, projectiles, heroes
+      const carry = this.engine.enemies.beginState(performance.now());
+      this.engine.projectiles.beginState(carry);
+      this.landProjectiles();
+      this.presentEnemies(packet, frame, gameTimeMs, deltaMs);
+      this.oozes.present(packet.oozes, this.engine);
+      this.wormSounds.present(packet.worms, this.headAt, this.engine.spatialAudio ?? null, gameTimeMs);
+      this.presentProjectiles(packet, frame);
+      this.presentHeroes(packet.heroes, packet.scalars.localPlayerId, carry);
+      this.presentBadges(packet);
+      this.engine.spatialAudio?.rebalanceEnemyLoops();
+      // The tables are views into shared memory, valid during present() only
+      this.enemyTable = null;
+    } else {
+      // No state to slide with: what hit goes now, or it piles up while rendering is off
+      this.engine.projectiles.settleHits();
+      this.landProjectiles();
+    }
+    this.oozes.endFrame();
+  }
+
+  /** A coop partner's hero in his lane colour; null takes the ring off. Kept for a hero not shown yet. */
+  setPartnerHeroColor(playerId: string, color: number | null): void {
+    this.partnerColors.set(playerId, color);
+    this.partnerHeroes.get(playerId)?.setOwnerColor(color);
+  }
+
+  /**
+   * Forget every enemy the presenter keeps (a snapshot restore, a new
+   * run): their loops end, the status looks are forgotten without being
+   * stopped (effects.clear took them), slots are resolved again.
+   */
+  forgetEnemies(): void {
+    const audio = this.engine.spatialAudio ?? null;
+    this.enemySounds.clear(audio);
+    this.statusVisuals.reset();
+    this.enemies.clear();
+  }
+
+  /** Every enemy gone at once (op `enemies.clear`): auras and crystals stop, loops end. */
+  clearEnemies(): void {
+    this.enemySounds.clear(this.engine.spatialAudio ?? null);
+    this.statusVisuals.clear(this.engine);
+    this.enemies.clear();
+  }
+
+  /** Enemy `num` was spawned anew (its id may have come back after a restore): its record is built on its next frame. */
+  forgetEnemy(num: number): void {
+    const record = this.enemies.get(num);
+    if (record === undefined) return;
+    this.enemies.delete(num);
+    this.enemySounds.forget(num, this.engine.spatialAudio ?? null);
+    this.statusVisuals.forget(record.id, this.engine);
+  }
+
+  /** Everything forgotten and stopped (SimPresenterApi.clear). */
+  clear(): void {
+    const audio = this.engine.spatialAudio ?? null;
+    this.enemySounds.clear(audio);
+    this.statusVisuals.clear(this.engine);
+    this.oozes.clear(this.engine);
+    this.wormSounds.clear(audio);
+    this.enemies.clear();
+    this.projectiles.clear();
+    this.towerKills.clear();
+    for (const view of this.partnerHeroes.values()) this.engine.disposePartnerHero(view);
+    this.partnerHeroes.clear();
+    this.lastGameTimeMs = null;
+    this.enemyTable = null;
+  }
+
+  private presentEnemies(packet: SimFramePacket, frame: number, gameTimeMs: number, deltaMs: number): void {
+    const engine = this.engine;
+    const audio = engine.spatialAudio ?? null;
+    const originHeight = engine.sync.getOrigin().height;
+    const table = packet.enemies;
+    const d = table.data;
+    const pos = this.local;
+    this.enemyTable = d;
+    this.statusVisuals.beginFrame();
+
+    for (let r = 0; r < table.count; r++) {
+      const o = r * ENEMY_STRIDE;
+      const num = d[o + E_ID];
+      const type = ENEMY_TYPES[ENEMY_TYPE_IDS[d[o + E_TYPE]] as EnemyTypeId];
+      if (!type) continue;
+      let record = this.enemies.get(num);
+      if (record !== undefined && record.type !== type) {
+        this.forgetEnemy(num);
+        record = undefined;
+      }
+      if (record === undefined) {
+        record = { id: `enemy-${num}`, type, slot: null, seen: frame, row: -1, status: false, mark: NO_MARK, camo: 0 };
+        this.enemies.set(num, record);
+      }
+      record.seen = frame;
+      const flags = d[o + E_FLAGS];
+      if ((flags & EF_ALIVE) === 0) {
+        record.row = -1;
+        // Dying: its loop ended with its walk
+        if (this.enemySounds.has(num)) this.enemySounds.forget(num, audio);
+        continue;
+      }
+      record.row = o;
+
+      const lat = d[o + E_LAT];
+      const lon = d[o + E_LON];
+      const bodyHeight = d[o + E_TERRAIN] + d[o + E_HOFF];
+      engine.sync.geoToLocalSimpleInto(lat, lon, 0, pos);
+      pos.y = bodyHeight - originHeight;
+
+      if (audio !== null) {
+        this.enemySounds.present(num, record.type, (flags & EF_MOVING) !== 0, pos, lat, lon, bodyHeight, deltaMs, audio);
+      }
+
+      // An ooze has no instance: its body goes to the ooze renderer
+      if ((flags & EF_BODY) !== 0) {
+        this.oozes.noteTerrain(num, d[o + E_TERRAIN]);
+        continue;
+      }
+
+      let slot = record.slot;
+      if (slot === null || slot.released) {
+        slot = record.slot = engine.enemies.resolveSlot(record.id);
+        // A slot resolved anew starts without a mark: set it again below
+        record.mark = NO_MARK;
+        record.camo = 0;
+      }
+      if (slot !== null) {
+        // A mark of the simulation (a raging boss): set on the slot when it changes
+        const mark = enemyMarkOf(flags);
+        if (mark !== record.mark) {
+          const look = MARK_LOOKS[mark];
+          engine.enemies.setMark(record.id, look.scale, look.tint);
+          record.mark = mark;
+        }
+        const camo = (flags & EF_CAMO) === 0 ? 0 : (flags & EF_REVEALED) !== 0 ? 0.5 : 1;
+        if (camo !== record.camo) {
+          engine.enemies.setCamo(record.id, camo);
+          record.camo = camo;
+        }
+        // Show the walk/run state the simulation decided. Mismatch only
+        // right after a switch, so the id-based call runs once per switch.
+        if ((flags & EF_RUSH) !== 0) {
+          const running = (flags & EF_RUNNING) !== 0;
+          if (slot.isWalking === running) {
+            if (running) engine.enemies.startRunAnimation(record.id);
+            else engine.enemies.startWalkAnimation(record.id);
+          }
+        }
+        const maxHp = d[o + E_MAXHP];
+        engine.enemies.updateSlot(slot, pos, d[o + E_ROT], maxHp > 0 ? d[o + E_HP] / maxHp : 0, d[o + E_ANIM_SPEED], camo !== 1);
+      }
+
+      // Almost no enemy carries an effect: the looks are looked at only while one does, and once after
+      const status = (flags & EF_ANY_STATUS) !== 0;
+      if (status || record.status) this.statusVisuals.present(record.id, flags, lat, lon, bodyHeight, engine, pos, gameTimeMs);
+      record.status = status;
+    }
+
+    for (const [num, record] of this.enemies) {
+      if (record.seen === frame) continue;
+      this.enemies.delete(num);
+      this.enemySounds.forget(num, audio);
+      this.statusVisuals.forget(record.id, engine);
+    }
+  }
+
+  /** The head of a worm chain: local position of enemy `num` lifted to where its voice sits. */
+  private wormHead(num: number, out: Vector3): boolean {
+    const record = this.enemies.get(num);
+    const d = this.enemyTable;
+    if (record === undefined || record.seen !== this.frame || record.row < 0 || d === null) return false;
+    const o = record.row;
+    const sync = this.engine.sync;
+    sync.geoToLocalSimpleInto(d[o + E_LAT], d[o + E_LON], 0, out);
+    out.y = d[o + E_TERRAIN] + d[o + E_HOFF] + WORM_SOUNDS.voice.liftM - sync.getOrigin().height;
+    return true;
+  }
+
+  /** Trails of the projectiles sliding to their hit point go with them, and go when they land */
+  private landProjectiles(): void {
+    const { projectiles, trailStreaks } = this.engine;
+    if (!trailStreaks) return;
+    for (const id of projectiles.landed) trailStreaks.remove(id);
+    for (const landing of projectiles.landingNow) trailStreaks.pushPosition(landing.id, landing.shown, landing.lead);
+  }
+
+  private presentProjectiles(packet: SimFramePacket, frame: number): void {
+    const engine = this.engine;
+    const table = packet.projectiles;
+    const d = table.data;
+    const pos = this.trailPos;
+    for (let r = 0; r < table.count; r++) {
+      const o = r * PROJECTILE_STRIDE;
+      const num = d[o + P_ID];
+      const lat = d[o + P_LAT];
+      const lon = d[o + P_LON];
+      const height = d[o + P_HEIGHT];
+      engine.sync.geoToLocalSimpleInto(lat, lon, height, pos);
+
+      let record = this.projectiles.get(num);
+      if (record === undefined) {
+        const type = PROJECTILE_TYPES[PROJECTILE_TYPE_IDS[d[o + P_TYPE]]];
+        if (!type) continue;
+        record = { id: `projectile-${num}`, type, last: pos.clone(), trailAcc: 0, seen: frame };
+        this.projectiles.set(num, record);
+      } else {
+        record.trailAcc += record.last.distanceTo(pos);
+        record.last.copy(pos);
+      }
+      record.seen = frame;
+
+      const dir = this.direction;
+      dir.dx = d[o + P_DX];
+      dir.dy = d[o + P_DY];
+      dir.dz = d[o + P_DZ];
+      // Homing and arcing projectiles turn along their flight, the others keep their rotation
+      if ((d[o + P_FLAGS] & PF_ROTATES) !== 0) engine.projectiles.updateWithRotation(record.id, lat, lon, height, dir);
+      else engine.projectiles.update(record.id, lat, lon, height);
+
+      const tailOffset = record.type.tailOffset ?? 0;
+      if (tailOffset > 0) {
+        // Trails start at the tail (rocket nozzle), not the mesh centre
+        pos.x -= dir.dx * tailOffset;
+        pos.y -= dir.dy * tailOffset;
+        pos.z -= dir.dz * tailOffset;
+      }
+      // And where the body is shown now, not ahead of it at its new state: it slides there (state-lerp.ts)
+      const slide = engine.projectiles.lastOffset;
+      pos.add(slide);
+      this.lead.copy(slide).negate();
+
+      // One trail burst per TRAIL_SPAWN_DISTANCE_M flown, laid back along
+      // the flight one gate apart instead of stacked on the current position.
+      // Only for the way the body has been shown on so far: it is shown
+      // `behind` short of its new state, and the rest waits for the next.
+      // Laid back from the shown place for all the way flown, the bursts of
+      // a shot's first stretch lay behind the muzzle.
+      const trailConfig = record.type.trailParticles;
+      if (trailConfig?.enabled) {
+        const behind = slide.length();
+        let back = 0;
+        while (record.trailAcc - behind >= TRAIL_SPAWN_DISTANCE_M) {
+          record.trailAcc -= TRAIL_SPAWN_DISTANCE_M;
+          engine.effects.spawnConfigurableTrail(pos.x - dir.dx * back, pos.y - dir.dy * back, pos.z - dir.dz * back, trailConfig);
+          back += TRAIL_SPAWN_DISTANCE_M;
+        }
+      } else {
+        record.trailAcc = 0;
+      }
+
+      // pushPosition copies the vectors; the streak's head goes on with the body
+      engine.trailStreaks?.pushPosition(record.id, pos, this.lead);
+    }
+    for (const [num, record] of this.projectiles) {
+      if (record.seen !== frame) this.projectiles.delete(num);
+    }
+  }
+
+  private presentHeroes(heroes: readonly HeroFrame[], localPlayerId: string, carry: number): void {
+    for (const hero of heroes) {
+      if (hero.present === null) continue;
+      const view = hero.playerId === localPlayerId ? this.engine.hero : this.partnerHero(hero.playerId);
+      view.present(hero.present, carry);
+    }
+  }
+
+  private partnerHero(playerId: string): HeroRenderer {
+    let view = this.partnerHeroes.get(playerId);
+    if (view === undefined) {
+      view = this.engine.createPartnerHero();
+      view.setGround(this.ground);
+      const color = this.partnerColors.get(playerId);
+      if (color !== undefined) view.setOwnerColor(color);
+      this.partnerHeroes.set(playerId, view);
+    }
+    return view;
+  }
+
+  /** A tower's badge follows its kills; setRank only when they changed. */
+  private presentBadges(packet: SimFramePacket): void {
+    const table = packet.towers;
+    const d = table.data;
+    for (let r = 0; r < table.count; r++) {
+      const o = r * TOWER_STRIDE;
+      const num = d[o + T_ID];
+      const kills = d[o + T_KILLS];
+      if (this.towerKills.get(num) === kills) continue;
+      this.towerKills.set(num, kills);
+      this.engine.towerBadges.setRank(`tower-${num}`, veteranLevel(kills));
+    }
+    if (this.towerKills.size > table.count) {
+      const standing = new Set<number>();
+      for (let r = 0; r < table.count; r++) standing.add(d[r * TOWER_STRIDE + T_ID]);
+      for (const num of this.towerKills.keys()) {
+        if (!standing.has(num)) this.towerKills.delete(num);
+      }
+    }
+  }
+}

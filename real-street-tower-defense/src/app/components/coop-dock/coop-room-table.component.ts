@@ -1,0 +1,72 @@
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TdIconComponent } from '../icon/icon.component';
+import { PingBarsComponent } from '../coop-ui/ping-bars.component';
+import { CoopService } from '../../services/coop.service';
+import { TowerDefenseStore } from '../../store/tower-defense.store';
+import { CameraControlService } from '../../services/camera-control.service';
+import { MAX_PLAYERS } from '../../coop/protocol';
+import { clientLabel } from '../../coop/client-info';
+import { roomTable, type LaneRow } from './coop-dock-view';
+
+/**
+ * Lanes and players of the coop room as one table (docs/archive/COOP_UI_REWORK_PLAN.md,
+ * U4): a row per lane with its colour, length and the player on it, their
+ * ready state and ping, and what the host and the player may do there; the
+ * players without a lane after it; a free seat while alone. In the lobby and
+ * in the game, the lane tools only in the lobby.
+ */
+@Component({
+  selector: 'app-coop-room-table',
+  standalone: true,
+  imports: [NgTemplateOutlet, MatTooltipModule, TdIconComponent, PingBarsComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './coop-room-table.component.html',
+  styleUrl: './coop-room-table.component.scss',
+})
+export class CoopRoomTableComponent {
+  readonly coop = inject(CoopService);
+  private readonly store = inject(TowerDefenseStore);
+  private readonly camera = inject(CameraControlService);
+
+  /** The free seat's invite button: the dock copies the link */
+  readonly invite = output<void>();
+  /** The dock copied the link a moment ago: the button says so */
+  readonly inviteCopied = input(false);
+
+  protected readonly maxPlayers = MAX_PLAYERS;
+  protected readonly clientLabel = clientLabel;
+
+  readonly room = this.coop.room;
+  readonly table = computed(() => {
+    const room = this.room();
+    if (!room) return { lanes: [], seatless: [] };
+    return roomTable({
+      room,
+      myId: this.coop.playerId(),
+      lanes: this.coop.lanes(),
+      latencyOf: (id) => this.coop.latencyTo(id),
+      laggingOf: (id) => this.coop.lagging(id),
+      leftIds: this.coop.leftIds(),
+    });
+  });
+  readonly freeSeat = computed(() => (this.room()?.players.length ?? 0) < 2);
+
+  /** The first lane row that is mine: the only one where my name can be edited */
+  isFirstOwnLane(lane: LaneRow): boolean {
+    return this.table().lanes.find((l) => l.player?.me) === lane;
+  }
+
+  /** A free lane: take it as one more; one of the own: give it back. Only in the lobby */
+  take(lane: LaneRow): void {
+    if (this.room()?.started || (lane.player && !lane.player.me)) return;
+    this.coop.pick(lane.spawnId, !lane.player?.me);
+  }
+
+  /** The camera to the lane's spawn */
+  flyTo(spawnId: string): void {
+    const spawn = this.store.spawnPoints().find((s) => s.id === spawnId);
+    if (spawn) this.camera.focusGeo(spawn.lat, spawn.lon);
+  }
+}

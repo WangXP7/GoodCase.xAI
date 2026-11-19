@@ -1,0 +1,89 @@
+// Layout of the wave window: two tabs (the run's plan, a custom wave); the
+// plan shows the source, why this wave (the budget as a grid and a table)
+// and the jump; the custom wave its values, groups and pattern.
+
+.wave-debug-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 320px;
+}
+
+[role='tabpanel'] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.budget-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.budget-types {
+  .budget-at-limit td {
+    color: var(--td-warn-text);
+  }
+
+  .budget-unhurt td {
+    color: var(--td-text-muted);
+  }
+}
+
+.why-reasons {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.select-row {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.wide-btn {
+  width: 100%;
+}
+
+.group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.group-row {
+  flex-wrap: nowrap;
+  gap: 6px;
+
+  .td-select {
+    flex: 1;
+  }
+
+}
+
+.count-input {
+  width: 64px;
+}
+
+.mult-input {
+  width: 52px;
+}
+
+.delay-input {
+  width: 64px;
+}
+
+.pattern-grid {
+  flex-wrap: wrap;
+
+  > button {
+    flex: 1 1 30%;
+    align-items: center;
+  }
+}

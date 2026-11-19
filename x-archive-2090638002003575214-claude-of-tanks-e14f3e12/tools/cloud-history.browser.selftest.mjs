@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+// Source-pinned native pixel regression; no game quality or capture overrides.
+import { launchGuardedBrowser } from './browser-launch.mjs';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import puppeteer from 'puppeteer';
+import { createServer } from 'vite';
+import { openCaptureHold } from './capture-hold.mjs';
+import { nativeBrowserLaunchOptions, verifyNativeBrowserLaunch } from './native-browser-launch.mjs';
+
+function sourceHash() {
+  const hash = createHash('sha256');
+  for (const file of ['./cloud-history.browser.selftest.mjs', './cloud-history.browser.fixture.mjs',
+    '../src/engine/volumetricClouds.ts', '../src/engine/cloudShaders.ts', '../package-lock.json']) hash.update(readFileSync(new URL(file, import.meta.url)));
+  return hash.digest('hex');
+}
+async function bounded(promise, ms, label) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+let hold;
+const report = { sourceHash: sourceHash(), errors: [] };
+let server, browser;
+try {
+  hold = await openCaptureHold({ label: 'cloud-history.browser.selftest', timeoutMs: 45 * 60_000 });
+  server = await createServer({ root: process.cwd(), logLevel: 'error',
+    server: { host: '127.0.0.1', port: 0, hmr: false, watch: null },
+    plugins: [{ name: 'cloud-history-fixture', enforce: 'pre', configureServer(instance) {
+      instance.middlewares.use((request, response, next) => {
+        if (request.url !== '/__cloud_history_fixture') return next();
+        response.setHeader('Content-Type', 'text/html');
+        response.end('<!doctype html><html><head><link rel="icon" href="data:,"></head><body data-cloud-fixture="1"></body></html>');
+      });
+    } }],
+  });
+  await server.listen();
+  browser = await launchGuardedBrowser(puppeteer, nativeBrowserLaunchOptions({ headless: 'new',
+    timeout: 30_000, protocolTimeout: 60_000,
+    args: ['--use-gl=angle', '--enable-webgl', '--no-sandbox', '--disable-dev-shm-usage'] }));
+  report.launch = verifyNativeBrowserLaunch(browser);
+  const page = await browser.newPage();
+  page.on('pageerror', error => report.errors.push(String(error)));
+  page.on('console', message => { if (message.type() === 'error') report.errors.push(message.text()); });
+  const response = await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__cloud_history_fixture`, { waitUntil: 'domcontentloaded' });
+  assert.equal(response.status(), 200);
+  assert.equal(await page.evaluate(() => document.body.dataset.cloudFixture), '1');
+  report.fixture = await bounded(page.evaluate(async () => {
+    const { checkCloudHistory } = await import('/tools/cloud-history.browser.fixture.mjs');
+    return checkCloudHistory();
+  }), 60_000, 'cloud pixel regression');
+  assert.equal(sourceHash(), report.sourceHash, 'source changed during acquisition');
+  assert.equal(report.fixture.cases.length, 4);
+} catch (error) {
+  report.errors.push(String(error));
+} finally {
+  if (browser) {
+    try { await bounded(browser.close(), 15_000, 'browser close'); }
+    catch (error) { browser.process()?.kill('SIGKILL'); report.errors.push(String(error)); }
+  }
+  if (server) {
+    try { await bounded(server.close(), 10_000, 'server close'); }
+    catch (error) { report.errors.push(String(error)); }
+  }
+  await hold?.release();
+}
+report.ok = report.errors.length === 0;
+console.log(JSON.stringify(report, null, 2));
+if (!report.ok) process.exitCode = 1;

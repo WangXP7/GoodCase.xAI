@@ -1,0 +1,670 @@
+/**
+ * Per-vehicle continuous sound: the engine bank, the running gear and the
+ * hull machinery of one tank, driven every frame by the vehicle audio model.
+ *
+ *   engine bank  – idle/low/mid/high loops of the powertrain family,
+ *                  pitched by RPM (≤ ±30 %) and crossfaded by RPM band,
+ *                  brightened by load, roughened by damage
+ *   running gear – slow/fast track loops for the surface under the hull,
+ *                  rate-locked to track speed, crossfaded across surfaces;
+ *                  pivot scrub, brake skid, fording wash
+ *   machinery    – turret drive and gun servo (occupied hull), recorded
+ *                  gear-mesh / turbo / electric-drive whine loops pitched by
+ *                  speed or rpm, cabin hum and rattle in the gunner's sight,
+ *                  fire on the engine deck
+ *
+ * Every layer is a recorded loop: a bank still decoding is silent (there is
+ * no synthesized stand-in).
+ *
+ * Level of detail: the occupied hull gets everything; near tanks get three
+ * engine bands, both track loops and the scrub; far tanks one engine band.
+ * Every rig ends in one gain → lowpass → stereo pan chain on its bus.
+ */
+
+import {
+  airAbsorptionCutoffHz, bandWeight, clamp, dbToGain, distanceAttenuationDb,
+  type AtmosphereProfile, type RelativePosition,
+} from './audioMath.ts';
+import type { AssetLibrary } from './assetLibrary.ts';
+import type { Mixer } from './mixer.ts';
+import type { VoicePool } from './voicePool.ts';
+import {
+  createVehicleAudioEvents, createVehicleAudioState, stepVehicleAudio,
+  type ModuleHealth, type SurfaceId, type VehicleAudioInput, type VehicleAudioState,
+} from './vehicleAudioModel.ts';
+import {
+  ENGINE_FAMILIES, type ShiftStyle, type TrackClass, type TurretDrive, type VehicleAudioIdentity,
+} from './vehicleAudioProfiles.ts';
+
+export type RigLod = 'own' | 'near' | 'far';
+
+type WhineKind = 'gear' | 'turbo' | 'electric' | 'turbine';
+const WHINE_KINDS: readonly WhineKind[] = ['gear', 'turbo', 'electric', 'turbine'];
+const WHINE_ASSET: Readonly<Record<WhineKind, string>> = Object.freeze({
+  gear: 'gear_whine_loop', turbo: 'turbo_whistle_loop', electric: 'electric_drive_loop', turbine: 'turbo_whistle_loop',
+});
+
+interface RigDeps {
+  readonly mixer: Mixer;
+  readonly library: AssetLibrary;
+  readonly pool: VoicePool;
+  readonly random: () => number;
+  readonly reverb: boolean;
+}
+
+/** Per-frame facts the engine resolves for a rig. */
+export interface RigFrame {
+  dtS: number;
+  rel: RelativePosition;
+  x: number;
+  y: number;
+  z: number;
+  own: boolean;
+  scoped: boolean;
+  surface: SurfaceId;
+  waterDepthM: number;
+  atmosphere: AtmosphereProfile;
+  occluded: number;
+  doppler: number;
+  /** Turret slew rate (rad/s) and gun pitch rate (rad/s), occupied hull only. */
+  turretRate: number;
+  pitchRate: number;
+  cabin: number;
+  /** The hull wears a field net and garnish (ghillieSuit.ts userData.fieldSuit): it rustles as it moves (V7). */
+  suited: boolean;
+  input: VehicleAudioInput;
+}
+
+interface Layer {
+  asset: string;
+  source: AudioBufferSourceNode | null;
+  gain: GainNode;
+  baseRate: number;
+  lastGain: number;
+  lastRate: number;
+}
+
+const BAND_NAMES = ['idle', 'low', 'mid', 'high'] as const;
+/** The field net's rustle (V7). */
+const NET_ASSET = 'net_rustle_loop';
+/** Slow/fast track loop centres, m/s of track speed. */
+const TRACK_CENTRES: readonly number[] = [2.5, 10];
+
+/** The track recordings by the ground they were recorded on (`tracks_<class>_<set>_<speed>`). */
+type TrackSet = 'earth' | 'hard' | 'sand' | 'snow' | 'mud';
+
+/**
+ * How each ground takes the running gear (world-sfx-269, 2026-11-03): the track set it plays and its level, and how a
+ * pivot and a skid sound on it. Steel only screeches on hard ground: a pivot on mud, sand or snow ploughs and churns
+ * the ground (the soft scrub), on packed earth it does both; until this table every pivot screeched like steel on
+ * concrete. Exhaustive over SurfaceId, so a new ground fails typecheck until it is named here.
+ */
+interface RunningSurface {
+  readonly tracks: TrackSet;
+  /** Track loop level (a hull in water is heard mostly as the water). */
+  readonly gear: number;
+  /** Pivot: the steel squeal and the soft-ground scrub, each × the model's scrub. */
+  readonly squeal: number;
+  readonly scrub: number;
+  /** Locked tracks sliding (the skid loop is steel on concrete). */
+  readonly skid: number;
+}
+export const RUNNING_SURFACE: Readonly<Record<SurfaceId, RunningSurface>> = Object.freeze({
+  hard: Object.freeze({ tracks: 'hard', gear: 1, squeal: 0.85, scrub: 0, skid: 0.9 }),
+  earth: Object.freeze({ tracks: 'earth', gear: 1, squeal: 0.4, scrub: 0.65, skid: 0.55 }),
+  sand: Object.freeze({ tracks: 'sand', gear: 1, squeal: 0.12, scrub: 0.8, skid: 0.25 }),
+  snow: Object.freeze({ tracks: 'snow', gear: 1, squeal: 0.18, scrub: 0.6, skid: 0.25 }),
+  mud: Object.freeze({ tracks: 'mud', gear: 1, squeal: 0.1, scrub: 0.8, skid: 0.25 }),
+  water: Object.freeze({ tracks: 'mud', gear: 0.35, squeal: 0.08, scrub: 0.35, skid: 0.15 }),
+});
+/** The soft-ground pivot loop (RUNNING_SURFACE.scrub). */
+const SCRUB_ASSET = 'track_scrub_soft_loop';
+
+/** The turret drive's loop, its start as it takes up the turret's weight and its stop (an electric and a hydraulic drive differ). */
+export const TURRET_DRIVE_SOUND: Readonly<Record<TurretDrive, { readonly loop: string; readonly start: string; readonly stop: string }>> = Object.freeze({
+  electric: Object.freeze({ loop: 'turret_electric_loop', start: 'turret_start', stop: 'turret_stop' }),
+  hydraulic: Object.freeze({ loop: 'turret_hydraulic_loop', start: 'turret_start_hydraulic', stop: 'turret_stop_hydraulic' }),
+});
+
+/** A gear change by gearbox: a manual box's clunk, an automatic's hydraulic shift; a turbine does not shift. */
+export const SHIFT_SOUND: Readonly<Record<ShiftStyle, string | null>> = Object.freeze({
+  manual: 'gear_shift', automatic: 'gear_shift_auto', none: null,
+});
+
+/** A bump and a landing by the hull's class: a 14 t IFV's suspension is not a 60 t tank's. */
+export const SUSPENSION_SOUND: Readonly<Record<TrackClass, { readonly bump: string; readonly land: string }>> = Object.freeze({
+  light: Object.freeze({ bump: 'susp_bump_light', land: 'susp_land_light' }),
+  heavy: Object.freeze({ bump: 'susp_bump', land: 'susp_land' }),
+});
+
+/**
+ * Water under any hull (world-sfx-269): a ford's splash as it drives in (a plunge when it goes in fast or deep), and the
+ * water pouring off it as it climbs out. Until this only the occupied hull splashed, only past 1.25 m, and nothing
+ * left the water audibly. The depth's hysteresis keeps a hull riding the waterline from splashing every frame.
+ */
+export const WATER_SOUND = Object.freeze({
+  splash: 'water_splash_in', plunge: 'water_enter', exit: 'water_exit',
+  inM: 0.45, outM: 0.15, minSpeedMps: 1.2, plungeMps: 6, plungeM: 1.1, gapS: 2, minStayS: 1.5,
+});
+
+function bandsFor(lod: RigLod): readonly (typeof BAND_NAMES[number])[] {
+  if (lod === 'own') return BAND_NAMES;
+  if (lod === 'near') return ['idle', 'mid', 'high'];
+  return ['mid'];
+}
+
+function bandCentres(idle: number, names: readonly string[]): number[] {
+  const table: Record<string, number> = { idle, low: 0.5, mid: 0.72, high: 0.95 };
+  return names.map((n) => table[n]);
+}
+
+export interface VehicleRig {
+  readonly id: string;
+  readonly lod: RigLod;
+  readonly state: VehicleAudioState;
+  readonly identity: VehicleAudioIdentity;
+  readonly lastGain: number;
+  readonly lastDistance: number;
+  /** Rig-level lowpass (air absorption + occlusion), Hz. */
+  readonly lastCutoff: number;
+  /** The air-absorption part of that lowpass alone, Hz. */
+  readonly lastAirHz: number;
+  /** The field net's rustle level last set (0: no net, or standing still). */
+  readonly netGain: number;
+  /** The ground under the hull the running gear last played (null before the first frame). */
+  readonly surface: SurfaceId | null;
+  setLod(lod: RigLod): void;
+  setBurning(burning: boolean): void;
+  /**
+   * The occupied hull's start-up: the starter's recording, the bank fading in under it. False while that recording
+   * has not decoded (the bank stays down; ask again), true once it fired or for a hull that is not ours.
+   */
+  startEngine(): boolean;
+  update(frame: RigFrame): void;
+  kill(fadeS?: number): void;
+}
+
+export function createVehicleRig(deps: RigDeps, id: string, identity: VehicleAudioIdentity, initialLod: RigLod): VehicleRig {
+  const { mixer, library, pool, random } = deps;
+  const ctx = mixer.ctx;
+  const family = ENGINE_FAMILIES[identity.engine];
+  const state = createVehicleAudioState(family);
+  const events = createVehicleAudioEvents();
+  let lod: RigLod = initialLod;
+  let dead = false;
+  let lastGain = 0;
+  let lastDistance = 0;
+  let lastCutoff = 20000;
+  let lastAirHz = 20000;
+  let surface: SurfaceId | null = null;
+  let engineStartAt = 0;
+  let burning = false;
+  let netGain = 0;
+  // Water under the hull (WATER_SOUND): known after the first frame (a rig born in a river does not splash), the
+  // waterline crossed with hysteresis, the last splash or drain for the gap between them.
+  let waterKnown = false;
+  let inWater = false;
+  let waterInAt = 0;
+  let lastWaterSoundAt = -Infinity;
+
+  // ---- output chain.
+  const output = ctx.createGain();
+  output.gain.value = 0;
+  const lowpass = ctx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 20000;
+  lowpass.Q.value = 0.55;
+  const panner = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
+  const engineTone = ctx.createBiquadFilter();
+  engineTone.type = 'lowpass';
+  engineTone.frequency.value = 9000;
+  engineTone.Q.value = 0.5;
+  const engineSum = ctx.createGain();
+  const gearSum = ctx.createGain();
+  engineSum.connect(engineTone);
+  engineTone.connect(output);
+  gearSum.connect(output);
+  output.connect(lowpass);
+  if (panner) lowpass.connect(panner);
+  let sendGain: GainNode | null = null;
+  const initialBus = initialLod === 'own' ? 'own' : 'vehicles';
+  let busNode: AudioNode = mixer.input(initialBus);
+  // the reverb send follows the bus, so its channel scales it (mixer.reverbSend)
+  let sendNode: AudioNode = mixer.reverbSend(initialBus);
+  const tail: AudioNode = panner ?? lowpass;
+  tail.connect(busNode);
+  if (deps.reverb) {
+    sendGain = ctx.createGain();
+    sendGain.gain.value = 0.06;
+    tail.connect(sendGain);
+    sendGain.connect(sendNode);
+  }
+
+  const engineLayers = new Map<string, Layer>();
+  const gearLayers = new Map<string, Layer>();
+  // Engine band assets of the current LOD and their RPM centres (rebuilt on LOD change).
+  let bandAssets: string[] = [];
+  let bandCentresNow: number[] = [];
+  // Drivetrain whines: gear mesh on every hull near enough to hear it, a turbo whistle or a turbine on the engines
+  // that have one, the electric drive on hybrids. The turbine shares the turbo's whistle, pitched higher.
+  const whines = new Map<WhineKind, Layer>();
+
+  function makeLayer(asset: string, dest: AudioNode): Layer {
+    // A live loop's buffer must outlive the library's idle eviction (the rigs' pins: the engine releases them with the
+    // battle's rigs, never the battle warm).
+    library.pin([asset], false, 'rigs');
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(dest);
+    return { asset, source: null, gain, baseRate: 1, lastGain: 0, lastRate: 1 };
+  }
+
+  /** Start a layer's loop once its buffer has decoded (no-op until then). */
+  function ensureSource(layer: Layer): boolean {
+    if (layer.source) return true;
+    const buffer = library.variant(layer.asset, 0);
+    if (!buffer) {
+      library.pick(layer.asset, random); // kick the load
+      return false;
+    }
+    const record = library.record(layer.asset);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const loop = record?.l;
+    if (loop) {
+      source.loopStart = loop[0];
+      source.loopEnd = Math.min(loop[1], buffer.duration);
+    }
+    source.connect(layer.gain);
+    const span = loop ? loop[1] - loop[0] : buffer.duration;
+    const offset = (loop ? loop[0] : 0) + random() * Math.max(0.01, span);
+    source.start(ctx.currentTime + 0.01, offset);
+    layer.source = source;
+    return true;
+  }
+
+  function setLayer(layer: Layer, gain: number, rate: number): void {
+    if (!ensureSource(layer)) return;
+    const t = ctx.currentTime;
+    if (Math.abs(gain - layer.lastGain) > 0.004) {
+      layer.gain.gain.setTargetAtTime(gain, t, 0.06);
+      layer.lastGain = gain;
+    }
+    const r = clamp(rate, 0.5, 2);
+    if (Math.abs(r - layer.lastRate) > 0.002) {
+      layer.source!.playbackRate.setTargetAtTime(r, t, 0.05);
+      layer.lastRate = r;
+    }
+  }
+
+  function dropLayer(layer: Layer, fadeS = 0.35): void {
+    const t = ctx.currentTime;
+    layer.gain.gain.cancelScheduledValues(t);
+    layer.gain.gain.setValueAtTime(layer.gain.gain.value, t);
+    layer.gain.gain.linearRampToValueAtTime(0, t + fadeS);
+    if (layer.source) {
+      try { layer.source.stop(t + fadeS + 0.02); } catch { /* stopped */ }
+      const g = layer.gain;
+      layer.source.onended = () => { try { g.disconnect(); } catch { /* detached */ } };
+    } else {
+      try { layer.gain.disconnect(); } catch { /* detached */ }
+    }
+  }
+
+  function engineAsset(band: string): string {
+    return `engine_${identity.engine}_${band}`;
+  }
+
+  function rebuildEngine(): void {
+    const names = bandsFor(lod);
+    bandAssets = names.map(engineAsset);
+    bandCentresNow = bandCentres(family.idleRpm, names);
+    const wanted = new Set(bandAssets);
+    for (const [asset, layer] of engineLayers) {
+      if (!wanted.has(asset)) { dropLayer(layer); engineLayers.delete(asset); }
+    }
+    for (const asset of wanted) if (!engineLayers.has(asset)) engineLayers.set(asset, makeLayer(asset, engineSum));
+  }
+
+  function gearAsset(kind: string, speed: 'slow' | 'fast'): string {
+    return `tracks_${identity.tracks}_${kind}_${speed}`;
+  }
+
+  function trackSurfaceAsset(s: SurfaceId): string {
+    return RUNNING_SURFACE[s].tracks;
+  }
+
+  function retrack(next: SurfaceId): void {
+    surface = next;
+    const kind = trackSurfaceAsset(next);
+    const speeds: ('slow' | 'fast')[] = lod === 'far' ? ['fast'] : ['slow', 'fast'];
+    const wanted = new Set(speeds.map((sp) => gearAsset(kind, sp)));
+    for (const [asset, layer] of gearLayers) {
+      if (asset.startsWith('tracks_') && !wanted.has(asset)) {
+        dropLayer(layer, 0.45);
+        gearLayers.delete(asset);
+      }
+    }
+    for (const asset of wanted) if (!gearLayers.has(asset)) gearLayers.set(asset, makeLayer(asset, gearSum));
+    if (lod !== 'far') {
+      for (const asset of ['track_squeal_loop', SCRUB_ASSET, 'track_skid_loop', 'water_wade_loop', 'engine_knock_loop']) {
+        if (!gearLayers.has(asset)) gearLayers.set(asset, makeLayer(asset, asset === 'engine_knock_loop' ? engineSum : gearSum));
+      }
+    } else {
+      for (const asset of ['track_squeal_loop', SCRUB_ASSET, 'track_skid_loop', 'water_wade_loop', 'engine_knock_loop']) {
+        const layer = gearLayers.get(asset);
+        if (layer) { dropLayer(layer); gearLayers.delete(asset); }
+      }
+    }
+    library.load([...wanted]);
+  }
+
+  function ownExtras(on: boolean): void {
+    const extras = [TURRET_DRIVE_SOUND[identity.turretDrive].loop, 'elevation_servo_loop', 'interior_hum_loop', 'interior_rattle_loop'];
+    for (const asset of extras) {
+      const layer = gearLayers.get(asset);
+      if (on && !layer) gearLayers.set(asset, makeLayer(asset, asset.startsWith('interior') ? mixer.input('interior') : gearSum));
+      if (!on && layer) { dropLayer(layer); gearLayers.delete(asset); }
+    }
+    if (on) library.load(extras);
+  }
+
+  function syncWhines(): void {
+    const near = lod !== 'far';
+    const want: Record<WhineKind, boolean> = {
+      gear: near,
+      turbo: near && identity.turboWhistle > 0.3,
+      electric: near && identity.electricDrive > 0,
+      turbine: near && identity.turbineAux > 0,
+    };
+    for (const kind of WHINE_KINDS) {
+      const layer = whines.get(kind);
+      if (want[kind] && !layer) whines.set(kind, makeLayer(WHINE_ASSET[kind], kind === 'gear' || kind === 'electric' ? gearSum : engineSum));
+      else if (!want[kind] && layer) { dropLayer(layer, 0.2); whines.delete(kind); }
+    }
+    if (whines.size) library.load([...whines.values()].map((layer) => layer.asset));
+  }
+
+  function applyLod(next: RigLod): void {
+    const busId = next === 'own' ? 'own' : 'vehicles';
+    const nextBus = mixer.input(busId);
+    if (nextBus !== busNode) {
+      try { tail.disconnect(busNode); } catch { /* detached */ }
+      tail.connect(nextBus);
+      busNode = nextBus;
+    }
+    const nextSend = mixer.reverbSend(busId);
+    if (sendGain && nextSend !== sendNode) {
+      try { sendGain.disconnect(sendNode); } catch { /* detached */ }
+      sendGain.connect(nextSend);
+      sendNode = nextSend;
+    }
+    lod = next;
+    rebuildEngine();
+    if (surface) retrack(surface);
+    ownExtras(next === 'own');
+    syncWhines();
+    library.load(bandsFor(next).map(engineAsset));
+  }
+
+  applyLod(initialLod);
+
+  function emitEvents(frame: RigFrame): void {
+    for (let i = 0; i < events.count; i++) {
+      const event = events.items[i];
+      const hull = frame.own;
+      const at = hull ? { space: 'hull' as const, bus: 'own' as const } : { x: frame.x, y: frame.y, z: frame.z };
+      switch (event.type) {
+        case 'shiftUp':
+        case 'shiftDown': {
+          const shift = SHIFT_SOUND[family.shift];
+          if (lod !== 'far' && shift) pool.play(shift, { ...at, gainDb: -4 + 6 * event.strength });
+          break;
+        }
+        case 'brakeSqueal':
+          if (lod !== 'far') pool.play('brake_squeal', { ...at, gainDb: -8 + 8 * event.strength });
+          break;
+        case 'skidStart':
+          if (lod !== 'far' && (frame.surface === 'hard' || frame.surface === 'earth')) pool.play('brake_hiss', { ...at, gainDb: -6 });
+          break;
+        case 'land':
+          pool.play(SUSPENSION_SOUND[identity.tracks].land, { ...at, gainDb: -10 + 12 * event.strength + 4 * identity.mass });
+          if (hull && event.strength > 0.35) pool.play('susp_creak', { space: 'hull', bus: 'own', delayS: 0.25, gainDb: -6 });
+          break;
+        case 'bump':
+          if (lod !== 'far') pool.play(SUSPENSION_SOUND[identity.tracks].bump, { ...at, gainDb: -12 + 10 * event.strength });
+          break;
+        case 'stall':
+          // The powertrain's own wind-down (a turbine spools down, a diesel
+          // coughs out), pinned with the battle's roster: never a generic
+          // stall standing in for it (owner 2026-10-04, no fallbacks).
+          pool.play(`engine_${identity.engine}_stop`, { ...at, gainDb: -2 });
+          break;
+        case 'restart':
+          pool.play(`engine_${identity.engine}_start`, { ...at, gainDb: -3 });
+          engineStartAt = ctx.currentTime + 1.4;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  /** The hull crossing the waterline: a splash driving in (a plunge fast or deep), the water pouring off driving out. */
+  function waterEdges(frame: RigFrame): void {
+    const depth = frame.waterDepthM;
+    if (!waterKnown) { waterKnown = true; inWater = depth > WATER_SOUND.inM; return; }
+    const t = ctx.currentTime;
+    const speed = Math.abs(frame.input.speedMps);
+    const at = frame.own ? { space: 'hull' as const, bus: 'own' as const } : { x: frame.x, y: frame.y, z: frame.z };
+    if (!inWater && depth > WATER_SOUND.inM) {
+      inWater = true;
+      waterInAt = t;
+      if (speed > WATER_SOUND.minSpeedMps && t - lastWaterSoundAt > WATER_SOUND.gapS) {
+        lastWaterSoundAt = t;
+        const plunge = speed > WATER_SOUND.plungeMps || depth > WATER_SOUND.plungeM;
+        pool.play(plunge ? WATER_SOUND.plunge : WATER_SOUND.splash, { ...at, gainDb: -9 + 9 * clamp(speed / 8, 0, 1) + 3 * identity.mass });
+      }
+    } else if (inWater && depth < WATER_SOUND.outM) {
+      inWater = false;
+      if (t - waterInAt > WATER_SOUND.minStayS && speed > 0.8 && t - lastWaterSoundAt > WATER_SOUND.gapS) {
+        lastWaterSoundAt = t;
+        pool.play(WATER_SOUND.exit, { ...at, gainDb: -8 + 4 * identity.mass });
+      }
+    }
+  }
+
+  function update(frame: RigFrame): void {
+    if (dead) return;
+    stepVehicleAudio(state, family, frame.input, events);
+    emitEvents(frame);
+    waterEdges(frame);
+    if (frame.surface !== surface) retrack(frame.surface);
+    const t = ctx.currentTime;
+
+    // ---- spatial level, filter and pan.
+    let levelDb: number;
+    let cutoff: number;
+    if (frame.own) {
+      levelDb = 0;
+      cutoff = 20000;
+      if (panner) panner.pan.setTargetAtTime(0, t, 0.1);
+    } else {
+      levelDb = distanceAttenuationDb(frame.rel.distance, 10, 1, 5) + frame.atmosphere.transmissionDb - 9 * frame.occluded;
+      lastAirHz = airAbsorptionCutoffHz(frame.rel.distance, frame.atmosphere, 0.8);
+      cutoff = Math.min(lastAirHz, 20000 * Math.pow(0.06, frame.occluded));
+      const pan = frame.rel.distance > 0.01 ? clamp(frame.rel.right / frame.rel.distance, -1, 1) * 0.9 : 0;
+      if (panner) panner.pan.setTargetAtTime(pan, t, 0.08);
+    }
+    const startFade = engineStartAt > t ? clamp(1 - (engineStartAt - t) / 1.4, 0, 1) : 1;
+    const gain = dbToGain(levelDb);
+    output.gain.setTargetAtTime(gain, t, 0.08);
+    lowpass.frequency.setTargetAtTime(clamp(cutoff, 120, 20000), t, 0.08);
+    if (sendGain) sendGain.gain.setTargetAtTime(frame.own ? 0.04 : clamp(0.06 + frame.rel.distance / 1400, 0, 0.5), t, 0.2);
+    lastGain = gain;
+    lastDistance = frame.rel.distance;
+    lastCutoff = clamp(cutoff, 120, 20000);
+
+    // ---- engine bank.
+    const running = state.running ? 1 : 0;
+    const engineLevel = running * startFade * (0.3 + 0.7 * state.load) * (lod === 'far' ? 0.9 : 1);
+    const rpm = Math.max(family.idleRpm * 0.5, state.rpm);
+    for (let i = 0; i < bandAssets.length; i++) {
+      const layer = engineLayers.get(bandAssets[i]);
+      if (!layer) continue;
+      const weight = bandAssets.length === 1 ? 1 : bandWeight(rpm, bandCentresNow, i);
+      const rate = clamp(rpm / bandCentresNow[i], 0.78, 1.32) * identity.enginePitch * frame.doppler;
+      setLayer(layer, weight * engineLevel, rate);
+    }
+    engineTone.frequency.setTargetAtTime(2600 + 14000 * Math.max(state.load, frame.own ? 0.35 : 0.6), t, 0.12);
+
+    // ---- running gear.
+    const speed = state.trackMps;
+    const kind = trackSurfaceAsset(frame.surface);
+    const slow = gearLayers.get(gearAsset(kind, 'slow'));
+    const fast = gearLayers.get(gearAsset(kind, 'fast'));
+    const ground = RUNNING_SURFACE[frame.surface];
+    const gearLevel = clamp(speed / 1.6, 0, 1) * ground.gear * (0.7 + 0.5 * identity.mass);
+    if (slow) setLayer(slow, gearLevel * bandWeight(speed, TRACK_CENTRES, 0), clamp(speed / 3, 0.6, 1.5) * frame.doppler);
+    if (fast) setLayer(fast, gearLevel * (slow ? bandWeight(speed, TRACK_CENTRES, 1) : clamp((speed - 2) / 6, 0, 1)), clamp(speed / 10, 0.65, 1.45) * frame.doppler);
+    const squeal = gearLayers.get('track_squeal_loop');
+    if (squeal) setLayer(squeal, state.scrub * ground.squeal, 0.9 + 0.2 * state.scrub);
+    // the soft-ground scrub starts the first time it is heard: a hull that never pivots on soft ground runs no silent loop
+    // (and draws nothing from the shared stream the crew radio's takes come from)
+    const scrub = gearLayers.get(SCRUB_ASSET);
+    const scrubGain = state.scrub * ground.scrub;
+    if (scrub && (scrub.source || scrubGain > 0.002)) setLayer(scrub, scrubGain, 0.85 + 0.25 * state.scrub);
+    const skid = gearLayers.get('track_skid_loop');
+    if (skid) setLayer(skid, state.skid * ground.skid, 0.95 + 0.1 * state.skid);
+    const wade = gearLayers.get('water_wade_loop');
+    if (wade) setLayer(wade, clamp(frame.waterDepthM / 1.1, 0, 1) * clamp(0.25 + speed / 7, 0, 1), 0.9 + speed * 0.02);
+    const knock = gearLayers.get('engine_knock_loop');
+    if (knock) setLayer(knock, state.rough * running * 0.8, clamp(0.85 + state.rpm * 0.4, 0.7, 1.4));
+    // ---- a field net and garnish rustling and flapping in the wind of the hull's motion (V7, 2026-10-13); the near LOD
+    // only, under the running gear, a touch nearer on our own hull (heard from the hatch)
+    let net = gearLayers.get(NET_ASSET);
+    const wantNet = frame.suited && lod !== 'far';
+    if (wantNet && !net) { net = makeLayer(NET_ASSET, gearSum); gearLayers.set(NET_ASSET, net); library.load([NET_ASSET]); }
+    else if (!wantNet && net) { dropLayer(net); gearLayers.delete(NET_ASSET); net = undefined; }
+    netGain = net ? clamp((speed - 0.8) / 7, 0, 1) * (lod === 'own' ? 0.5 : 0.38) : 0;
+    if (net) setLayer(net, netGain, 0.9 + clamp(speed, 0, 14) * 0.015);
+
+    // ---- occupied-hull machinery.
+    if (lod === 'own') {
+      const turret = gearLayers.get(TURRET_DRIVE_SOUND[identity.turretDrive].loop);
+      const slew = clamp(Math.abs(frame.turretRate) / 0.45, 0, 1);
+      if (turret) setLayer(turret, slew * 0.75, 0.82 + 0.3 * slew);
+      const servo = gearLayers.get('elevation_servo_loop');
+      const pitch = clamp(Math.abs(frame.pitchRate) / 0.3, 0, 1);
+      if (servo) setLayer(servo, pitch > 0.05 ? pitch * 0.5 : 0, 0.9 + 0.25 * pitch);
+      const hum = gearLayers.get('interior_hum_loop');
+      if (hum) setLayer(hum, frame.cabin * 0.9, 1);
+      const rattle = gearLayers.get('interior_rattle_loop');
+      if (rattle) setLayer(rattle, frame.cabin * clamp(speed / 6, 0, 1), 0.85 + speed * 0.025);
+    }
+
+    // ---- drivetrain whines. Rates are re each loop's recorded pitch (gear ≈ 1.65 kHz, electric ≈ 445 Hz, turbo
+    // ≈ 740 Hz); levels match the oscillator whines they replaced (2026-10-03), the gear mesh 5 dB under them
+    // because its recording sits four times higher, where the ear is more sensitive.
+    const gearWhine = whines.get('gear');
+    if (gearWhine) setLayer(gearWhine, clamp(speed / 12, 0, 1) * (0.22 + 0.45 * state.load) * (0.6 + family.whine), (0.5 + speed / 16) * frame.doppler);
+    const turbo = whines.get('turbo');
+    if (turbo) setLayer(turbo, identity.turboWhistle * state.load * state.rpm * 0.29 * running, (0.7 + 0.6 * state.rpm) * frame.doppler);
+    const electric = whines.get('electric');
+    if (electric) setLayer(electric, identity.electricDrive * clamp(speed / 5, 0, 1) * 0.6, (0.6 + speed / 14) * frame.doppler);
+    const turbine = whines.get('turbine');
+    if (turbine) setLayer(turbine, identity.turbineAux * 0.11 * running, (1.2 + 0.5 * state.rpm) * frame.doppler);
+
+    // ---- engine-deck fire rides the rig, so it follows a tank that keeps driving.
+    const fire = gearLayers.get('fire_small_loop');
+    if (fire) setLayer(fire, burning ? 0.8 : 0, 1);
+  }
+
+  return {
+    id,
+    get lod() { return lod; },
+    state,
+    identity,
+    get lastGain() { return lastGain; },
+    get lastDistance() { return lastDistance; },
+    get lastCutoff() { return lastCutoff; },
+    get lastAirHz() { return lastAirHz; },
+    get netGain() { return netGain; },
+    get surface() { return surface; },
+    setLod(next) {
+      if (next !== lod && !dead) applyLod(next);
+    },
+    setBurning(on) {
+      if (on === burning || dead) return;
+      burning = on;
+      const existing = gearLayers.get('fire_small_loop');
+      if (on && !existing) {
+        gearLayers.set('fire_small_loop', makeLayer('fire_small_loop', gearSum));
+        library.load(['fire_small_loop']);
+      } else if (!on && existing) {
+        dropLayer(existing, 0.8);
+        gearLayers.delete('fire_small_loop');
+      }
+    },
+    startEngine() {
+      // Only the occupied hull hears its own start-up; remote engines are already idling.
+      if (lod !== 'own' || dead) return true;
+      engineStartAt = ctx.currentTime + 1.6;
+      return !!pool.play(`engine_${identity.engine}_start`, { space: 'hull', bus: 'own', gainDb: -2 });
+    },
+    update,
+    kill(fadeS = 0.4) {
+      if (dead) return;
+      dead = true;
+      for (const layer of engineLayers.values()) dropLayer(layer, fadeS);
+      for (const layer of gearLayers.values()) dropLayer(layer, fadeS);
+      for (const layer of whines.values()) dropLayer(layer, fadeS);
+      engineLayers.clear();
+      gearLayers.clear();
+      whines.clear();
+      const t = ctx.currentTime;
+      output.gain.cancelScheduledValues(t);
+      output.gain.setValueAtTime(output.gain.value, t);
+      output.gain.linearRampToValueAtTime(0, t + fadeS);
+      setTimeout(() => {
+        for (const node of [output, lowpass, engineTone, engineSum, gearSum, ...(panner ? [panner] : []), ...(sendGain ? [sendGain] : [])]) {
+          try { node.disconnect(); } catch { /* detached */ }
+        }
+      }, (fadeS + 0.1) * 1000);
+    },
+  };
+}
+
+/** Build the model input from a runtime entity without allocating. */
+export function fillVehicleInput(
+  target: VehicleAudioInput,
+  dtS: number,
+  speed: number,
+  topSpeedMps: number,
+  reverseTopMps: number,
+  throttle: number,
+  brake: boolean,
+  yawRate: number,
+  grounded: boolean,
+  verticalSpeed: number,
+  landingImpactMps: number,
+  gripLost: boolean,
+  engine: ModuleHealth,
+  immobilized: boolean,
+): VehicleAudioInput {
+  target.dtS = dtS;
+  target.speedMps = speed;
+  target.topSpeedMps = topSpeedMps;
+  target.reverseTopMps = reverseTopMps;
+  target.throttle = throttle;
+  target.brake = brake;
+  target.yawRate = yawRate;
+  target.grounded = grounded;
+  target.verticalSpeedMps = verticalSpeed;
+  target.landingImpactMps = landingImpactMps;
+  target.gripLost = gripLost;
+  target.engine = engine;
+  target.immobilized = immobilized;
+  return target;
+}

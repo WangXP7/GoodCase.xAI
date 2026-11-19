@@ -1,0 +1,375 @@
+@use '../../styles/game-ui' as ui;
+
+// Tech tree: edges as one SVG layer, nodes as buttons on top of it. Both are
+// positioned from the same layout numbers, so nothing here may add offsets of
+// its own; padding and borders live inside the node box.
+//
+// A node is a stone plate (the raised relief of the design system) with its
+// icon in a sunken square, its name and a state flag, cost and time under it.
+// Its state shows in its fill and in a mark down its left side; the state and
+// strand colours are tokens (--td-node-*, --td-branch-*) because they carry
+// information.
+
+.td-tech-tree {
+  position: relative;
+}
+
+.td-tech-tree-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+// === Edges ===
+// Each one reads from the pair it joins, so a finished chain stays visible as
+// a chain and a shut branch recedes into the board.
+
+.td-tech-edge {
+  fill: none;
+  stroke-width: 1.5;
+  transition: opacity var(--td-dur-fast) var(--td-ease-out);
+
+  &.td-edge-locked {
+    stroke: var(--td-tree-line);
+    stroke-dasharray: 3 5;
+  }
+
+  &.td-edge-open {
+    stroke: var(--td-brass-dark);
+  }
+
+  &.td-edge-done {
+    stroke: var(--td-green-dark);
+  }
+
+  // Its source is running or queued: the path is coming, not open yet
+  &.td-edge-pending {
+    stroke: var(--td-teal-dark);
+    stroke-dasharray: 4 6;
+    opacity: 0.75;
+  }
+
+  &.td-edge-active {
+    stroke: var(--td-teal);
+    stroke-dasharray: 7 9;
+    animation: td-tech-flow 1.1s linear infinite;
+  }
+}
+
+@keyframes td-tech-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+.td-tech-edge-cap {
+  fill: var(--td-tree-line);
+  transition: opacity var(--td-dur-fast) var(--td-ease-out);
+
+  &.td-edge-done {
+    fill: var(--td-green-dark);
+  }
+
+  &.td-edge-active,
+  &.td-edge-pending {
+    fill: var(--td-teal-dark);
+  }
+
+  &.td-edge-open {
+    fill: var(--td-brass);
+  }
+}
+
+// === Node ===
+
+.td-tech-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  padding: 10px 11px 9px 13px;
+  border: 1px solid var(--td-node-locked-edge);
+  border-radius: var(--td-radius);
+  background: var(--td-node);
+  box-shadow: var(--td-raised-quiet);
+  font-family: inherit;
+  font-size: var(--td-fs-body);
+  text-align: left;
+  color: var(--td-text-primary);
+  cursor: default;
+  transition:
+    border-color var(--td-dur-fast) var(--td-ease-out),
+    transform var(--td-dur-fast) var(--td-ease-out),
+    opacity var(--td-dur-fast) var(--td-ease-out);
+
+  // The state mark down the left side
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 3px;
+    border-radius: var(--td-radius) 0 0 var(--td-radius);
+    background: var(--node-mark, transparent);
+  }
+}
+
+.td-tech-node-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+// The icon in a sunken square, tinted by the strand of the tree
+.td-tech-node-plate {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--td-text-disabled);
+}
+
+.td-tech-node-title {
+  flex: 1;
+  font-weight: 600;
+  color: var(--td-text-secondary);
+}
+
+.td-tech-node-flag {
+  flex: none;
+  display: inline-flex;
+  color: var(--td-text-disabled);
+}
+
+.td-tech-node-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--td-fs-small);
+  font-weight: 600;
+  color: var(--td-text-disabled);
+
+  .td-time {
+    color: var(--td-text-muted);
+  }
+}
+
+.td-tech-node-bar {
+  height: 6px;
+}
+
+// Position in the queue, in the corner of the node
+.td-tech-node-ord {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  color: var(--td-brass-light);
+}
+
+// === States ===
+
+// Locked is the resting state: shut, but still readable
+.td-state-locked,
+.td-state-pending {
+  background: var(--td-node-locked);
+
+  .td-tech-node-title {
+    color: var(--td-node-locked-title);
+  }
+
+  .td-tech-node-foot {
+    color: var(--td-node-locked-foot);
+  }
+}
+
+// Open and affordable: the brass mark carries the whole signal
+.td-state-available {
+  --node-mark: var(--td-brass);
+  background: var(--td-node-open);
+  border-color: var(--td-frame-mid);
+  cursor: pointer;
+
+  .td-tech-node-title {
+    color: var(--td-text-primary);
+  }
+
+  .td-tech-node-plate {
+    color: var(--td-brass);
+  }
+
+  .td-cost {
+    color: var(--td-brass-light);
+  }
+
+  &:hover {
+    border-color: var(--td-brass-dark);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
+// Open, but the purse is short. Same shape, warmer and dimmer.
+.td-state-poor {
+  --node-mark: var(--td-node-poor-mark);
+  border-color: var(--td-node-poor-edge);
+  cursor: pointer;
+
+  .td-tech-node-title {
+    color: var(--td-text-secondary);
+  }
+
+  .td-tech-node-plate {
+    color: var(--td-node-poor-glyph);
+  }
+
+  .td-cost {
+    color: var(--td-warn-text);
+  }
+
+  &:hover {
+    border-color: var(--td-node-poor-hover);
+  }
+}
+
+.td-state-active {
+  --node-mark: var(--td-teal);
+  background: var(--td-node-active);
+  border-color: var(--td-teal);
+
+  .td-tech-node-title {
+    color: var(--td-teal-light);
+  }
+
+  .td-tech-node-plate {
+    color: var(--td-teal-light);
+  }
+
+  .td-tech-node-foot {
+    color: var(--td-teal);
+  }
+
+  .td-tech-node-flag {
+    color: var(--td-teal-dark);
+  }
+}
+
+.td-state-queued {
+  --node-mark: var(--td-brass-dark);
+  background: var(--td-node-queued);
+  border-color: var(--td-brass-dark);
+  border-style: dashed;
+  cursor: pointer;
+
+  .td-tech-node-title {
+    color: var(--td-brass-light);
+  }
+
+  .td-tech-node-plate {
+    color: var(--td-brass);
+  }
+
+  .td-tech-node-foot {
+    color: var(--td-brass-dark);
+  }
+
+  &:hover {
+    border-color: var(--td-brass);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
+// Done: green, the theme's colour for "positive", with a green mark like the
+// brass one on an open node, so a finished chain reads at a glance and never
+// looks like a locked one
+.td-state-completed {
+  --node-mark: var(--td-green-dark);
+  background: var(--td-node-done);
+  border-color: var(--td-node-done-edge);
+
+  .td-tech-node-title {
+    color: var(--td-text-primary);
+  }
+
+  .td-tech-node-plate,
+  .td-tech-node-flag,
+  .td-tech-node-foot {
+    color: var(--td-green);
+  }
+}
+
+// Strand tint on the icon, for everything still in play (data-branch sets
+// --td-mark globally; ballistics keeps the plate's colour)
+.td-tech-node:not(.td-state-locked):not(.td-state-pending):not(.td-state-completed) {
+  .td-tech-node-plate[data-branch]:not([data-branch='ballistics']) {
+    color: var(--td-mark);
+  }
+}
+
+// The node the panel beside the tree is showing
+.td-sel {
+  border-color: var(--td-frame-light);
+
+  &.td-state-available {
+    border-color: var(--td-brass);
+  }
+
+  &.td-state-active {
+    border-color: var(--td-teal-light);
+  }
+}
+
+// === Hover: light the chain back to the roots ===
+// Everything that is not on the way dims, so a deep research reads as the
+// steps it costs instead of as one price.
+
+.td-focus {
+  .td-tech-node {
+    opacity: 0.3;
+  }
+
+  .td-tech-node.td-rel {
+    opacity: 1;
+  }
+
+  .td-tech-node.td-chain {
+    border-color: var(--td-brass-dark);
+  }
+
+  .td-tech-edge {
+    opacity: 0.1;
+  }
+
+  .td-tech-edge.td-rel {
+    opacity: 1;
+    stroke: var(--td-brass);
+    stroke-width: 2;
+    stroke-dasharray: none;
+    animation: none;
+  }
+
+  .td-tech-edge-cap {
+    opacity: 0.12;
+  }
+}
+
+@include ui.reduced-motion {
+  .td-tech-edge.td-edge-active {
+    animation: none;
+  }
+
+  .td-tech-node:hover,
+  .td-tech-node:active {
+    transform: none;
+  }
+}

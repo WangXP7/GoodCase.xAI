@@ -1,0 +1,571 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CorridorBuild, type CorridorBuildDeps, type CorridorMeasurement } from './corridor-build';
+import { MUTED_CAMERA_ERROR_TARGET, QUIET_MS } from '../../three-engine/tiles-lod-debug';
+import { ROUTE_CORRIDOR_COARSE_ERROR_TARGET, ROUTE_CORRIDOR_ERROR_TARGET } from '../../three-engine/route-corridor-region';
+import { getRouteProfile, resetCorridorConfig, setCorridorConfig, sizeRouteCorners } from '../../utils/route-corridor';
+import { METERS_PER_DEGREE_LAT } from '../../utils/geo-utils';
+import type { RouteWaypoint } from '../../models/game.types';
+import { corridorTrace } from '../../utils/corridor-trace';
+
+/**
+ * CorridorBuild builds the route corridor once per route set and freezes it:
+ * camera muted and region at the finest level until the tiles are quiet,
+ * every station measured in slices, the fallback level for stations and
+ * cells the finest has no column for, the walkable band on those columns
+ * with routes and cells in it, the route line last, camera and region back. These
+ * tests drive it on a fake clock (16 ms a frame) against a fake tile handle,
+ * route service and grid, and pin the order of what it asks of them.
+ */
+describe('CorridorBuild', () => {
+  const FRAME_MS = 16;
+  const SPAWNS = [{ id: 'spawn-1' }];
+  const PATHS = new Map([['spawn-1', []]]);
+  const FINE = `region ${ROUTE_CORRIDOR_ERROR_TARGET}`;
+  /** The build falls back to this level, and the region rests at it once the build freezes. */
+  const COARSE = `region ${ROUTE_CORRIDOR_COARSE_ERROR_TARGET}`;
+  const MUTED = `camera ${MUTED_CAMERA_ERROR_TARGET}`;
+
+  let clock: number;
+  let calls: string[];
+  let camera: number;
+  let runs: (CorridorMeasurement & { budgets: number[] })[];
+  let state: {
+    towers: number;
+    enemies: number;
+    phase: string;
+    wave: number;
+    coop: boolean;
+    engine: boolean;
+    tiles: boolean;
+    /** The tiles load until this time on the clock; Infinity: they never settle. */
+    loadingUntil: number;
+    epoch: number;
+    /** Slices each measurement takes. */
+    slices: number;
+    /** What unmeasuredStations answers, one per call, the last one repeats. */
+    unmeasured: number[];
+    /** Cells without a height, and how many of them the fallback level gives one. */
+    bare: number;
+    promoted: number;
+    animation: boolean;
+    /** Active tiles the region reports; null: no region, the build waits for none. */
+    regionTiles: () => number | null;
+    /** The routes the route service hands out, and how far the clock moves each time the build reads it, ms. */
+    paths: Map<string, RouteWaypoint[]>;
+    tick: number;
+  };
+  let corridor: CorridorBuild;
+
+  function create(): CorridorBuild {
+    const tiles = {
+      snapshot: () => ({ cameraErrorTarget: camera }),
+      busy: () => clock < state.loadingUntil,
+      setRegionErrorTarget: (metres: number) => {
+        calls.push(`region ${metres}`);
+        return true;
+      },
+      setCameraErrorTarget: (px: number) => {
+        calls.push(`camera ${px}`);
+        camera = px;
+      },
+      requestUpdate: () => calls.push('requestUpdate'),
+      holdSettled: vi.fn(),
+    };
+    const engine = {
+      tilesLodDebug: () => (state.tiles ? tiles : null),
+      terrain: { clearHeightCache: () => calls.push('clearColumns') },
+      routeCorridorLod: () => {
+        const count = state.regionTiles();
+        return count === null ? null : { tiles: count };
+      },
+      refreshRouteCorridorFrame: () => false,
+    };
+    const grid = {
+      getStats: () => ({ totalCells: 42 }),
+      snapshotHeights: () => new Map(),
+      cellsWithoutHeight: () => state.bare,
+      describeCellsWithoutHeight: () => ({ why: `noColumn:${state.bare}`, at: '13,5' }),
+      retryUnsampledCells: () => {
+        calls.push('retryCells');
+        state.bare = Math.max(0, state.bare - state.promoted);
+        return { promoted: state.promoted };
+      },
+      initSpatialGridVisualizationIfEnabled: () => calls.push('overlays'),
+      initAirSpatialGridVisualizationIfEnabled: vi.fn(),
+      initAirRouteLayerIfEnabled: vi.fn(),
+    };
+    const pathRoute = {
+      routesEpoch: () => state.epoch,
+      beginClearanceMeasurement: () => {
+        calls.push('measure');
+        let left = state.slices;
+        const run = {
+          open: true,
+          budgets: [] as number[],
+          get progress() {
+            return { done: state.slices - left, total: state.slices };
+          },
+          step: (budget: number) => {
+            run.budgets.push(budget);
+            left = budget === Infinity ? 0 : left - 1;
+            return left <= 0;
+          },
+          commit: () => {
+            calls.push('commit');
+            run.open = false;
+            return true;
+          },
+          cancel: (reason: string) => {
+            calls.push(`cancel ${reason}`);
+            run.open = false;
+          },
+        };
+        runs.push(run);
+        return run;
+      },
+      unmeasuredStations: () => (state.unmeasured.length > 1 ? state.unmeasured.shift()! : state.unmeasured[0]),
+      buildBands: () => {
+        calls.push('band');
+        return { routes: 1, stations: 30, passages: 1, maxSlopeM: 0.2, maxCurvature: 0.04 };
+      },
+      clearCorridorMeasurements: () => calls.push('clearMeasurements'),
+      refreshRouteLines: (spawns: unknown) => {
+        expect(spawns).toBe(SPAWNS);
+        calls.push('routes');
+      },
+      getCachedPaths: () => state.paths,
+    };
+    return new CorridorBuild({
+      world: { rebuildCells: () => calls.push('cells'), sendToSim: () => calls.push('sim') },
+      grid,
+      gridViz: grid,
+      scalars: () => ({ towerCount: state.towers, enemiesAlive: state.enemies, phase: state.phase, waveNumber: state.wave }),
+      coopInGame: () => state.coop,
+      engineInit: { getEngine: () => (state.engine ? engine : null) },
+      pathRoute,
+      routeAnimation: { isRunning: () => state.animation, startAnimation: () => calls.push('animation') },
+      store: { spawnPoints: () => SPAWNS },
+      nextFrame: async () => {
+        clock += FRAME_MS;
+      },
+      now: () => (clock += state.tick),
+    } as unknown as CorridorBuildDeps);
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    clock = 0;
+    calls = [];
+    camera = 20;
+    runs = [];
+    state = {
+      towers: 0, enemies: 0, phase: 'setup', wave: 0, coop: false, engine: true, tiles: true, loadingUntil: 0, epoch: 1, slices: 1,
+      unmeasured: [0], bare: 0, promoted: 0, animation: false,
+      regionTiles: () => null, paths: PATHS, tick: 0,
+    };
+    corridor = create();
+  });
+
+  afterEach(() => {
+    corridor.dispose();
+    resetCorridorConfig();
+    vi.restoreAllMocks();
+  });
+
+  describe('build', () => {
+    it('mutes the camera, loads the region at the finest level, measures in slices, builds the band, routes and cells, then the line; camera back', async () => {
+      state.loadingUntil = 100;
+      state.slices = 3;
+
+      const result = await corridor.build('location load');
+
+      expect(calls).toEqual([
+        MUTED, FINE,
+        // Columns from these tiles only
+        'clearColumns', 'measure', 'commit',
+        // The street's line, the band on its columns, the line in the band, its cells
+        'routes', 'band', 'routes', 'cells',
+        'routes', 'overlays', 'sim',
+        'camera 20', COARSE,
+      ]);
+      expect(runs[0].budgets).toEqual([CorridorBuild.SLICE_MS, CorridorBuild.SLICE_MS, CorridorBuild.SLICE_MS]);
+      expect(result).toMatchObject({
+        stations: 3, unmeasured: 0, bandStations: 30, passages: 1, timedOut: false, fallbackStations: 0, fallbackCells: 0, cells: 42,
+      });
+      // The tiles loaded until 100 ms, then half a second of quiet
+      expect(clock).toBeGreaterThanOrEqual(100 + QUIET_MS);
+      expect(vi.mocked(console.log)).toHaveBeenCalledWith(expect.stringMatching(
+        /^\[Corridor\] build: reason=location load tiles=\d+\.\d measure=\d+\.\d fallback=0\.0 band=30 \(\d+\.\d\) corners=\d+\.\d lines=\d+\.\d wall=\d+\.\dms stations=3 unmeasured=0 cells=42$/,
+      ));
+    });
+
+    it('is pending from expect() until the corridor is frozen', async () => {
+      const ticket = corridor.expect();
+      expect(corridor.pending()).toBe(true);
+      const building = corridor.build('location load', undefined, ticket);
+      expect(corridor.pending()).toBe(true);
+      await building;
+      expect(corridor.pending()).toBe(false);
+    });
+
+    it('reports its steps and the share of the stations measured', async () => {
+      state.slices = 4;
+      const steps: string[] = [];
+      await corridor.build('location load', ({ step, percent }) => steps.push(percent === null ? step : `${step} ${percent}`));
+      expect(steps).toEqual([
+        'Loading the corridor tiles',
+        'Measuring the corridor 25', 'Measuring the corridor 50', 'Measuring the corridor 75',
+        'Building the corridor',
+      ]);
+    });
+
+    /**
+     * Browser check 2026-09-16, Erlenbach in a background tab: the wait ended
+     * 1 s in with `tiles=0 pending=0`, every station measured `none`, and the
+     * corridor froze at OSM width. Nothing was loading because nothing had
+     * been asked for: in a background tab rAF stands, so the renderer never
+     * traverses. Quiet is not "loaded" until the region holds a tile.
+     */
+    it('waits for the first tile of the region instead of taking quiet for loaded, and nudges the renderer', async () => {
+      const appearAt = 4000;
+      state.regionTiles = () => (clock >= appearAt ? 3 : 0);
+
+      const result = await corridor.build('location load');
+
+      expect(result?.timedOut).toBe(false);
+      expect(clock).toBeGreaterThanOrEqual(appearAt + QUIET_MS);
+      expect(calls.filter((call) => call === 'requestUpdate').length).toBeGreaterThan(0);
+      expect(calls).toContain('measure');
+    });
+
+    it('warns when no station found a tile: the corridor stays at the OSM width until the next build', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      state.regionTiles = () => 0;
+      state.slices = 3;
+      state.unmeasured = [3];
+
+      const result = await corridor.build('location load');
+
+      expect(result).toMatchObject({ stations: 3, unmeasured: 3, timedOut: true, fallbackStations: 0 });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(
+        'no station found a tile (3 stations, and the tiles never settled)',
+      ));
+      expect(corridor.frozeBlind()).toBe(true);
+    });
+
+    it('warns when the stations measured but no cell got a height', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      // Every cell of the fake grid, and the fallback level promotes none.
+      state.bare = 42;
+      state.promoted = 0;
+
+      const result = await corridor.build('location load');
+
+      expect(result).toMatchObject({ cells: 42, cellsWithoutHeight: 42, unmeasured: 0, fallbackCells: 0 });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no cell got a height (42 cells)'));
+      expect(corridor.frozeBlind()).toBe(true);
+    });
+
+    it('calls no build blind that measured its stations and sampled its cells', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      state.bare = 3;
+      state.promoted = 3;
+
+      const result = await corridor.build('location load');
+
+      expect(result).toMatchObject({ cellsWithoutHeight: 0, fallbackCells: 3 });
+      expect(warn).not.toHaveBeenCalled();
+      expect(corridor.frozeBlind()).toBe(false);
+    });
+
+    it('builds with what came when the tiles do not settle within the timeout, and says so', async () => {
+      state.loadingUntil = Infinity;
+      const result = await corridor.build('location load');
+      expect(result?.timedOut).toBe(true);
+      expect(clock).toBeGreaterThanOrEqual(CorridorBuild.TILES_TIMEOUT_MS);
+      expect(calls).toContain('measure');
+      expect(vi.mocked(console.log)).toHaveBeenCalledWith(expect.stringMatching(/ tiles timed out$/));
+    });
+
+    it('measures the stations the finest level has no column for on the fallback level, then goes back', async () => {
+      state.unmeasured = [4, 0];
+      const result = await corridor.build('location load');
+
+      expect(calls.slice(0, 13)).toEqual([
+        MUTED, FINE, 'clearColumns', 'measure', 'commit',
+        COARSE, 'clearColumns', 'measure', 'commit', FINE, 'clearColumns',
+        'routes', 'band',
+      ]);
+      // What is left, in one go
+      expect(runs[1].budgets).toEqual([Infinity]);
+      expect(result).toMatchObject({ fallbackStations: 4, unmeasured: 0 });
+    });
+
+    it('goes back to the finest level when it stops on the fallback level for the stations', async () => {
+      state.unmeasured = [4, 0];
+      // The routes are replaced once the region is on the fallback level.
+      Object.defineProperty(state, 'epoch', { get: () => (calls.includes(COARSE) ? 2 : 1) });
+
+      expect(await corridor.build('location load')).toBeNull();
+
+      expect(calls).toEqual([
+        MUTED, FINE, 'clearColumns', 'measure', 'commit',
+        COARSE, FINE,
+        'camera 20', COARSE,
+      ]);
+    });
+
+    it('gives cells without a height a sample on the coarse level after the band, before the line', async () => {
+      state.bare = 3;
+      state.promoted = 2;
+      const result = await corridor.build('location load');
+
+      const retry = calls.indexOf('retryCells');
+      expect(calls.slice(retry - 3, retry + 2)).toEqual(['cells', COARSE, 'clearColumns', 'retryCells', 'routes']);
+      expect(result?.fallbackCells).toBe(2);
+    });
+
+    /**
+     * Playtest 2026-09-16: the fallback took 1036 ms in Rothenburg, for cells.
+     * After the cells nothing reads a column, and the freeze leaves the
+     * region at the coarse level: the way back to the finest level waited
+     * for tiles no one measured on. The stations still go back, their band
+     * and cells measure on the finest level.
+     */
+    it('waits for the tiles once for the cells, twice for the stations', async () => {
+      const fallbackMs = () => Number(/ fallback=(\d+\.\d)/.exec(
+        vi.mocked(console.log).mock.calls.map(([line]) => String(line)).find((line) => line.startsWith('[Corridor] build:'))!,
+      )![1]);
+      state.bare = 3;
+      state.promoted = 3;
+      await corridor.build('location load');
+      expect(calls.filter((call) => call === FINE)).toHaveLength(1);
+      expect(fallbackMs()).toBeGreaterThanOrEqual(QUIET_MS);
+      expect(fallbackMs()).toBeLessThan(2 * QUIET_MS);
+
+      vi.mocked(console.log).mockClear();
+      calls.length = 0;
+      state.bare = 0;
+      state.unmeasured = [4, 0];
+      await corridor.build('location load');
+      expect(calls.filter((call) => call === FINE)).toHaveLength(2);
+      expect(fallbackMs()).toBeGreaterThanOrEqual(2 * QUIET_MS);
+    });
+
+    it('says in the trace why cells have no height, before the fallback level and at the freeze', async () => {
+      const lines: string[] = [];
+      vi.mocked(console.log).mockImplementation((line: unknown) => {
+        if (typeof line === 'string' && line.startsWith('[CorridorTrace]')) lines.push(line);
+      });
+      corridorTrace.setEnabled(true);
+      try {
+        state.bare = 3;
+        state.promoted = 1;
+        await corridor.build('location load');
+      } finally {
+        corridorTrace.setEnabled(false);
+      }
+
+      expect(lines.find((line) => line.includes('build.fallback'))).toContain('what=cells missing=3 found=1 why=noColumn:3');
+      const freeze = lines.find((line) => line.includes('build.freeze'));
+      expect(freeze).toContain('cellsWithoutHeight=2 ');
+      expect(freeze).toContain('why=noColumn:2 at=13,5');
+    });
+
+    /**
+     * Only a build needs the finest level. Holding it for the whole session
+     * cost 39 to 166 MB of active tiles (phase 0). The region stays, at the
+     * coarse level: it keeps the corridor tiles active off screen, which the
+     * tower LOS cubemap and the CPU raycast fallback need.
+     */
+    it('leaves the region at the coarse level when it freezes, and raises it again for the next build', async () => {
+      await corridor.build('location load');
+      expect(calls.slice(-2)).toEqual(['camera 20', COARSE]);
+
+      calls.length = 0;
+      await corridor.build('HQ moved in place');
+      expect(calls.slice(0, 2)).toEqual([MUTED, FINE]);
+      expect(calls.slice(-2)).toEqual(['camera 20', COARSE]);
+    });
+
+    it('without tiles (DevWorld) measures and builds at once: no tile wait, no fallback level', async () => {
+      state.tiles = false;
+      state.unmeasured = [4];
+      state.bare = 3;
+      const result = await corridor.build('location load');
+
+      expect(calls).toEqual(['clearColumns', 'measure', 'commit', 'routes', 'band', 'routes', 'cells', 'routes', 'overlays', 'sim']);
+      expect(clock).toBe(0);
+      expect(result).toMatchObject({ unmeasured: 4, fallbackStations: 0, fallbackCells: 0 });
+    });
+
+    it('sizes the corner arcs of the routes it hands out before the freeze, in slices of SLICE_MS a frame', async () => {
+      state.tiles = false;
+      // Ten right angles 20 m apart, twice: arcs to size for a while
+      const zigzag = (east: number): RouteWaypoint[] =>
+        Array.from({ length: 12 }, (_, i) => ({
+          lat: (20 * Math.ceil(i / 2)) / METERS_PER_DEGREE_LAT,
+          lon: (east + 20 * Math.floor(i / 2)) / METERS_PER_DEGREE_LAT,
+        }));
+      state.paths = new Map([['spawn-1', zigzag(0)], ['spawn-2', zigzag(100)]]);
+      // Each look at the clock takes 4 ms, so slices end
+      state.tick = 4;
+      const steps: string[] = [];
+
+      await corridor.build('location load', ({ step, percent }) => steps.push(percent === null ? step : `${step} ${percent}`));
+
+      expect(steps.filter((step) => step.startsWith('Rounding the corners')).length).toBeGreaterThan(1);
+      // After the route line, before the overlays
+      expect(calls.slice(-3)).toEqual(['routes', 'overlays', 'sim']);
+      for (const path of state.paths.values()) {
+        // They stand: nothing left to size, not even a step
+        expect(sizeRouteCorners(path, -1)).toBe(true);
+        expect(getRouteProfile(path).corners.radius.length).toBe(10);
+      }
+    });
+
+    it('stops sizing the corner arcs when the routes are replaced in the middle of it', async () => {
+      state.tiles = false;
+      const zigzag: RouteWaypoint[] = Array.from({ length: 22 }, (_, i) => ({
+        lat: (20 * Math.ceil(i / 2)) / METERS_PER_DEGREE_LAT,
+        lon: (20 * Math.floor(i / 2)) / METERS_PER_DEGREE_LAT,
+      }));
+      state.paths = new Map([['spawn-1', zigzag]]);
+      state.tick = 4;
+      const building = corridor.build('location load', ({ step }) => {
+        if (step === 'Rounding the corners') state.epoch++;
+      });
+      expect(await building).toBeNull();
+      expect(calls).not.toContain('overlays');
+    });
+
+    it('restarts a running route animation on the frozen routes', async () => {
+      state.animation = true;
+      await corridor.build('location load');
+      expect(calls.slice(-6, -2)).toEqual(['routes', 'overlays', 'animation', 'sim']);
+    });
+  });
+
+  describe('stopping', () => {
+    it('stops when a newer build begins; the newer one gives the camera back', async () => {
+      state.loadingUntil = 1000;
+      const first = corridor.build('location load');
+      const second = corridor.build('HQ moved in place');
+
+      expect(await first).toBeNull();
+      expect(await second).not.toBeNull();
+      expect(calls.filter((call) => call === 'measure')).toHaveLength(1);
+      expect(camera).toBe(20);
+      expect(corridor.pending()).toBe(false);
+    });
+
+    it('stops when the routes are replaced while the tiles load, and gives the camera back', async () => {
+      state.loadingUntil = 1000;
+      const building = corridor.build('location load');
+      state.epoch++;
+      expect(await building).toBeNull();
+      expect(calls).toEqual([MUTED, FINE, 'camera 20', COARSE]);
+      expect(corridor.pending()).toBe(false);
+    });
+
+    it('cancels its measurement when the routes are replaced in the middle of it', async () => {
+      state.tiles = false;
+      state.slices = 5;
+      const building = corridor.build('location load');
+      state.epoch++;
+      expect(await building).toBeNull();
+      expect(calls).toEqual(['clearColumns', 'measure', 'cancel routes replaced']);
+    });
+
+    /**
+     * The flag described the build that froze last, and nothing dropped it
+     * on a location change: this class is a singleton and dispose() only
+     * runs when the app shuts down. A blind location, then one whose build
+     * stops early, and the flag was still up from the location before
+     * (review-corridor.md).
+     */
+    it('forgets a blind freeze when the next build cycle starts', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      // Location 1 in a hidden tab: no station found a tile.
+      state.regionTiles = () => 0;
+      state.slices = 1;
+      state.unmeasured = [1];
+      await corridor.build('location load');
+      expect(corridor.frozeBlind()).toBe(true);
+
+      // Location 2: its build stops early, so it never freezes.
+      state.tiles = false;
+      state.slices = 5;
+      const building = corridor.build('location load');
+      state.epoch++;
+
+      expect(await building).toBeNull();
+      expect(corridor.frozeBlind()).toBe(false);
+    });
+
+    it('forgets a blind freeze on dispose', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      state.regionTiles = () => 0;
+      state.unmeasured = [1];
+      await corridor.build('location load');
+      expect(corridor.frozeBlind()).toBe(true);
+
+      corridor.dispose();
+
+      expect(corridor.frozeBlind()).toBe(false);
+    });
+
+    it('stops a build under way on dispose and gives the camera back at once', async () => {
+      state.loadingUntil = 1000;
+      const building = corridor.build('location load');
+      corridor.dispose();
+      expect(camera).toBe(20);
+      expect(corridor.pending()).toBe(false);
+      expect(await building).toBeNull();
+      expect(calls).not.toContain('measure');
+    });
+  });
+
+  describe('change, for __corridor.set() and reset()', () => {
+    it('refuses without a location, under towers, a wave, enemies, a played run or a coop game, and while a build is under way', async () => {
+      state.engine = false;
+      expect(await corridor.change(() => [])).toBe('Not changed: no location loaded.');
+      state.engine = true;
+      state.towers = 1;
+      expect(await corridor.change(() => [])).toBe('Not changed: towers stand on the map, sell them first.');
+      state.towers = 0;
+      state.phase = 'wave';
+      expect(await corridor.change(() => [])).toBe('Not changed: a wave is running.');
+      state.phase = 'setup';
+      state.enemies = 1;
+      expect(await corridor.change(() => [])).toBe('Not changed: enemies are on the map.');
+      state.enemies = 0;
+      // A build ends in a fresh run: not once the run played a wave, not in a coop game (only here would start over)
+      state.wave = 3;
+      expect(await corridor.change(() => [])).toBe('Not changed: the run has played 3 wave(s), restart it first.');
+      state.wave = 0;
+      state.coop = true;
+      expect(await corridor.change(() => [])).toBe('Not changed: a coop game is running.');
+      state.coop = false;
+      corridor.expect();
+      expect(await corridor.change(() => [])).toBe('Not changed: the corridor is being built.');
+      expect(calls).toEqual([]);
+    });
+
+    it('builds with the new settings, measuring every station again where they move the stations or the rays', async () => {
+      await expect(corridor.change(() => setCorridorConfig({ bulgeLength: 12 })))
+        .resolves.toBe('Corridor rebuilt: 42 cells. Widths per stretch: __routes.describe()');
+      expect(calls).not.toContain('clearMeasurements');
+
+      calls.length = 0;
+      await expect(corridor.change(() => setCorridorConfig({ maxHalfWidth: 6 })))
+        .resolves.toBe('Corridor rebuilt, measured again: 42 cells. Widths per stretch: __routes.describe()');
+      expect(calls.indexOf('clearMeasurements')).toBeLessThan(calls.indexOf('measure'));
+    });
+
+    it('passes the problems of a rejected setting on and builds nothing', async () => {
+      expect(await corridor.change(() => ['noSuchSetting is no corridor setting'])).toBe('Not changed: noSuchSetting is no corridor setting.');
+      expect(calls).toEqual([]);
+    });
+  });
+});

@@ -1,0 +1,1029 @@
+/**
+ * LittleJS Engine Settings
+ * - All settings for the engine are here
+ * @namespace Settings
+ */
+
+'use strict';
+
+///////////////////////////////////////////////////////////////////////////////
+// Camera settings
+
+/** Position of camera in world space
+ *  @type {Vector2}
+ *  @default Vector2()
+ *  @memberof Settings */
+let cameraPos = vec2();
+
+/** Rotation angle of camera in world space
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let cameraAngle = 0;
+
+/** Scale of camera in world space
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let cameraScale = 32;
+
+/** How far a full camera shake moves the view, in world units, see cameraShake
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let cameraShakeDistance = .5;
+
+/** How far a full camera shake turns the view, in radians, see cameraShake
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let cameraShakeAngle = .05;
+
+/** How much camera shake fades each second, 1 takes a full shake to nothing in a second, see cameraShake
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let cameraShakeDecay = 1;
+
+///////////////////////////////////////////////////////////////////////////////
+// Time settings
+
+/** Scale applied to engine time, can be used for slow motion or fast forward
+ *  - 1 is normal speed, 2 is double speed, 0.5 is half speed
+ *  - 0 freezes the game like a pause without setting the paused flag, gameUpdatePost and input still run
+ *  - Should be >= 0; stacks multiplicatively with the debug +/- shortcut
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let timeScale = 1;
+
+///////////////////////////////////////////////////////////////////////////////
+// Display settings
+
+/** Enable applying color to tiles when using canvas2d
+ *  - This is slower but should be the same as WebGL rendering
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let canvasColorTiles = true;
+
+/** Color to clear the canvas to before render, does not clear if alpha is 0
+ *  @type {Color}
+ *  @memberof Settings */
+let canvasClearColor = CLEAR_BLACK;
+
+/** The max size of the canvas in css pixels, centered if window is larger
+ *  - Not affected by canvasPixelRatio, the backing store may be larger than this
+ *  @type {Vector2}
+ *  @default Vector2(3840,2160)
+ *  @memberof Settings */
+let canvasMaxSize = vec2(3840, 2160);
+
+/** Minimum aspect ratio of the canvas (width/height), unused if 0
+ *  Can be used with canvasMaxAspect to limit aspect ratio
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let canvasMinAspect = 0;
+
+/** Maximum aspect ratio of the canvas (width/height), unused if 0
+ *  Can be used with canvasMinAspect to limit aspect ratio
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let canvasMaxAspect = 0;
+
+/** Fixed size of the canvas in css pixels, if enabled canvas size never changes
+ * - canvasPixelRatio still applies, it only scales the backing store
+ *  @type {Vector2}
+ *  @default Vector2()
+ *  @memberof Settings */
+let canvasFixedSize = vec2();
+
+/** Use nearest canvas scaling for more pixelated look
+ *  - If enabled sets css image-rendering:pixelated
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let canvasPixelated = false;
+
+/** Disables texture filtering for crisper pixel art
+ *  - Leave true for pixel art so sprites stay sharp when scaled (uses NEAREST filtering)
+ *  - Set false for smooth/high-resolution art to enable bilinear filtering and mipmaps; those textures upload
+ *    premultiplied, so filtering does not pull dark from see through texels into the edges
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let tilesPixelated = true;
+
+/** Scale factor applied to the canvas resolution for sharper rendering
+ *  Pass 1 for no scaling, a number for an explicit ratio, or undefined to track devicePixelRatio each frame.
+ *  - Only the backing store scales, so this changes sharpness and nothing else
+ *  - mainCanvasSize, cameraScale, mousePos and screen space stay in css pixels,
+ *    so the same code draws the same size at any ratio
+ *  - Pixel art usually looks best left at 1 or set to whole numbers,
+ *    a fractional ratio samples texels unevenly
+ *  @type {number|undefined}
+ *  @default
+ *  @memberof Settings */
+let canvasPixelRatio = 1;
+
+/** Default font used for text rendering
+ *  @type {string}
+ *  @default
+ *  @memberof Settings */
+let fontDefault = 'arial';
+
+/** Enable to show the LittleJS splash screen on startup, must be set before engineInit
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let showSplashScreen = false;
+
+/** The loading screen, drawn after the splash while the images, gameInit and what they load are loading, once that
+ *  takes more than half a second: a function given the part done, 0 to 1, or undefined for none, which leaves the
+ *  screen blank; the default says Loading over a bar
+ *  @type {LoadingScreenCallback|undefined}
+ *  @memberof Settings */
+let loadingScreen = drawLoadingScreen;
+
+/** Disables all rendering, audio, and input for servers, must be set before engineInit
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let headlessMode = false;
+
+/** Disables the automatic requestAnimationFrame loop so the engine only
+ *  advances when engineStep is called, for tests and frame-stepping tools
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let engineManualStep = false;
+
+/** Run one update per display frame with timeDelta the time it covers, in place of fixed updates at frameRate
+ *  - Per-frame values are not scaled: velocity, gravity, damping and particle speeds act once per update, so a
+ *    game that turns this on scales its own movement by timeDelta
+ *  - Values in seconds follow real time as they are: time, timers, particle emit rate and life, animation, Box2D
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let engineVariableStep = false;
+
+///////////////////////////////////////////////////////////////////////////////
+// WebGL settings
+
+/** Enable WebGL accelerated rendering
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let glEnable = true;
+
+/** Draw in screen space by default: what the screenSpace parameter of the draw and debug functions defaults to, so a
+ *  heads up display, or a 3D game that only draws 2D on the screen, can turn it on and leave the flag out
+ *  - The engine says its own space when it draws, so objects, tile layers and particles stay in world space, but a
+ *    game's own draws follow it, a render() override included: turn it on around the hud, or pass false there
+ *  - Sizes and widths keep their defaults, which are world sized, so pass them in pixels
+ *  - drawText has no screenSpace and stays in world space, drawTextScreen is the one for the screen
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let drawScreenSpace = false;
+
+/** How many sided poly to use when drawing circles and ellipses with WebGL
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let glCircleSides = 32;
+
+///////////////////////////////////////////////////////////////////////////////
+// Tile sheet settings
+
+/** Default size of tiles in pixels
+ *  @type {Vector2}
+ *  @default Vector2(16,16)
+ *  @memberof Settings */
+let tileDefaultSize = vec2(16);
+
+/** Default padding pixels around tiles
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let tileDefaultPadding = 0;
+
+/** Default amount of pixels smaller to draw tiles to prevent neighbor bleeding
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let tileDefaultBleed = 0;
+
+///////////////////////////////////////////////////////////////////////////////
+// Object settings
+
+/** Enable physics solver for collisions, between objects and with tiles
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let enablePhysicsSolver = true;
+
+/** Default object mass for collision calculations (how heavy objects are)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectDefaultMass = 1;
+
+/** Fraction of velocity objects keep each frame, 1 keeps all of it, 0 stops at once
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectDefaultDamping = 1;
+
+/** Fraction of angular velocity objects keep each frame, 1 keeps all of it, 0 stops at once
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectDefaultAngleDamping = 1;
+
+/** How much to bounce when a collision occurs (0-1)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectDefaultRestitution = 0;
+
+/** Fraction of sliding speed objects keep each frame on the ground, 1 is no friction, 0 stops at once
+ *  - The more slippery of an object and its ground is used
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectDefaultFriction = .8;
+
+/** Clamp max speed to avoid fast objects missing collisions, in world units per frame on each axis
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let objectMaxSpeed = 1;
+
+/** How much gravity to apply to objects, negative Y is down, in world units per frame per frame
+ *  @type {Vector2}
+ *  @default
+ *  @memberof Settings */
+let gravity = vec2();
+
+/** Scales emit rate of particles, useful for low graphics mode (0 disables particle emitters)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let particleEmitRateScale = 1;
+
+///////////////////////////////////////////////////////////////////////////////
+// Input settings
+
+/** Should gamepads be allowed
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let gamepadsEnable = true;
+
+/** If true, the dpad input is also routed to the left analog stick (for better accessibility)
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let gamepadDirectionEmulateStick = true;
+
+/** If true, axes that do not rest near center are ignored on gamepads without
+ *  standard mapping. Steering wheels and flight sticks report pedal and throttle
+ *  axes that rest at full deflection, which otherwise reads as a stick held down.
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let gamepadAxisFilterEnable = true;
+
+/** If true the WASD keys are also routed to the direction keys (for better accessibility)
+ *  - Turn it off for a game with two players on one keyboard, one on WASD and one on the arrows
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let inputWASDEmulateDirection = true;
+
+/** True if touch input is enabled for mobile devices
+ *  - Touch events will be routed to mouse events
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchInputEnable = true;
+
+/** True if touch gamepad should appear on mobile devices
+ *  - Supports left analog stick, 4 face buttons and start button (button 9)
+ *  - setTouchGamepadRightStick(true) for a right analog stick in place of the face buttons
+ *  - Analog stick buttons 10 and 11 are also activated when virtual sticks are touched
+ *  - Rendered as a full-viewport HTML/SVG overlay, so controls may sit outside the game canvas
+ *  - It is gamepad 0 once touched; a real gamepad being used takes over and hides it until the screen is touched again
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadEnable = false;
+
+/** True if touches outside the gamepad controls should still drive mouse/touch input
+ *  - When false (the default), enabling the touch gamepad suppresses touch-to-mouse input entirely
+ *  - Set true to also pass touches outside the controls through to the game as mouse/touch input
+ *  - Touches on the gamepad controls never drive the mouse regardless of this setting
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadPassthrough = false;
+
+/** True if a pinch of two fingers turns the mouse wheel: touchPinch is added to mouseWheel, so what zooms with
+ *  the wheel zooms with a pinch, the mouse is between the two fingers, and a second finger lets go of the button
+ *  the first pressed, since a pinch is not a drag; turn it off for a game with its own use for two fingers, the
+ *  first finger stays the mouse and touchPinch can still be read
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchPinchWheel = true;
+
+/** Bends each mouse and touch position as it comes in, for a game that bends the picture after it is drawn, like a
+ *  curved screen, so the mouse points at what is drawn under it: given a screen position, it returns the screen
+ *  position of what shows there; undefined leaves positions as they are; not applied while a level editor is open,
+ *  which draws flat over the picture
+ *  @type {MouseScreenTransform|undefined}
+ *  @memberof Settings */
+let mouseScreenTransform;
+
+/**
+ * @callback MouseScreenTransform - Where on the screen the picture shown at a screen position is drawn
+ * @param {Vector2} pos - The mouse or touch position on the screen
+ * @return {Vector2}
+ * @memberof Settings
+ */
+
+/** Size of center button if touch gamepad should have start button in the center
+ *  - Prevents activating when pressed near virtual stick or face buttons
+ *  - When the game is paused, any touch will press the button
+ *  - Measured in viewport CSS pixels
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadCenterButtonSize = 0;
+
+/** Number of buttons on the right side of the touch gamepad (0-4), using gamepad buttons 0-3
+ *  - A count of 1 is a single large button (the size of a stick)
+ *  - Ignored when touchGamepadRightStick is set (the right side is a stick instead)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadButtonCount = 4;
+
+/** True if the touch gamepad should have a left analog stick (or dpad)
+ *  - When false, the left side is face buttons (touchGamepadLeftButtonCount) or nothing
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadLeftStick = true;
+
+/** Number of buttons on the left side of the touch gamepad (0-4), using gamepad buttons 4-7
+ *  - Only used when touchGamepadLeftStick is false (otherwise the left side is a stick)
+ *  - A count of 1 is a single large button (the size of a stick)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadLeftButtonCount = 0;
+
+/** True if the touch gamepad right side should be an analog stick (or dpad) instead of face buttons
+ *  - When set, touchGamepadButtonCount is ignored and the right side is a stick
+ *  - Uses an analog stick when touchGamepadAnalog is true, otherwise an 8 way dpad
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadRightStick = false;
+
+/** True if touch gamepad should be analog stick or false to use if 8 way dpad
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadAnalog = true;
+
+/** True if touch gamepad directional controls should float to where you press
+ *  - Only affects analog sticks and dpads, not face buttons
+ *  - Directional controls re-anchor to where you press within the bottom ~60% of their screen half; the top ~40% passes through to the game
+ *  - The right side floats only when it acts as the right analog stick (touchGamepadRightStick is set)
+ *  - A center button (touchGamepadCenterButtonSize) still works since it ignores touches near the sticks
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadFloating = false;
+
+/** Size of virtual gamepad for touch devices in viewport CSS pixels
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadSize = 100;
+
+/** Transparency of touch gamepad overlay
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadAlpha = .3;
+
+/** How long to display the touch gamepad on screen in seconds, set to 0 to always display,
+ *  from the start on a touch device; using a real gamepad still hides it until the screen is touched
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadDisplayTime = 3;
+
+/** Duration in ms to vibrate when a touch gamepad face button or start button is pressed
+ *  - Set to 0 to disable, also requires vibrateEnable and hardware support (ignored on iOS)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let touchGamepadVibration = 0;
+
+/** Allow vibration hardware if it exists
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let vibrateEnable = true;
+
+///////////////////////////////////////////////////////////////////////////////
+// Audio settings
+
+/** All audio code can be disabled and removed from build
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let soundEnable = true;
+
+/** Play sound with an iPhone's silent switch on, as media does; off by default, so the switch mutes the game as it
+ *  does a ringtone, and the player's own music keeps playing beside it; Safari 16.4 and up, elsewhere it does nothing
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let soundIgnoreSilentSwitch = false;
+
+/** Volume scale to apply to all sound, music and speech
+ *  Use setSoundVolume to also update the audio master gain immediately
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let soundVolume = .3;
+
+/** Default range where sound no longer plays
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let soundDefaultRange = 40;
+
+/** Default range percent to start tapering off sound (0-1)
+ *  @type {number}
+ *  @default
+ *  @memberof Settings */
+let soundDefaultTaper = .7;
+
+/** Pause all sound while the page is hidden, and pick up where it was when it shows again
+ *  - A hidden page stops the game, so without this a looping sound plays on over a frozen game
+ *  - Turn it off to keep music playing in a background tab
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let soundPauseWhenHidden = true;
+
+/** Pause all sound while the window does not have focus, and pick up where it was when it comes back
+ *  - The game keeps running behind another window, only its sound stops
+ *  - Off by default, since many players like the music to play on while they look at something else
+ *  @type {boolean}
+ *  @default
+ *  @memberof Settings */
+let soundPauseWhenBlurred = false;
+
+///////////////////////////////////////////////////////////////////////////////
+// Setters for global variables
+
+/** Set position of camera in world space
+ *  @param {Vector2} pos
+ *  @memberof Settings */
+function setCameraPos(pos)
+{
+    ASSERT(isVector2(pos), 'setCameraPos: pos is a vec2, like vec2(5, 2)', pos);
+    cameraPos = pos.copy();
+}
+
+/** Set angle of camera in world space
+ *  @param {number} angle
+ *  @memberof Settings */
+function setCameraAngle(angle) { cameraAngle = angle; }
+
+/** Set scale of camera in world space
+ *  @param {number} scale - Pixels per world unit, above 0
+ *  @memberof Settings */
+function setCameraScale(scale)
+{
+    ASSERT(scale > 0, 'camera scale must be above 0');
+    cameraScale = scale;
+}
+
+/** Set how far a full camera shake moves the view, in world units
+ *  @param {number} distance
+ *  @memberof Settings */
+function setCameraShakeDistance(distance) { cameraShakeDistance = distance; }
+
+/** Set how far a full camera shake turns the view, in radians
+ *  @param {number} angle
+ *  @memberof Settings */
+function setCameraShakeAngle(angle) { cameraShakeAngle = angle; }
+
+/** Set how much camera shake fades each second
+ *  @param {number} decay
+ *  @memberof Settings */
+function setCameraShakeDecay(decay) { cameraShakeDecay = decay; }
+
+/** Set scale applied to engine time
+ *  - 0 freezes the game like a pause, gameUpdatePost and input still run so the game can set it back
+ *  - Above 1 the fixed step runs that many updates each frame, so a large scale costs as many updates
+ *  @param {number} scale - 0 or more
+ *  @memberof Settings */
+function setTimeScale(scale)
+{
+    ASSERT(scale >= 0, 'time scale must be 0 or more');
+    timeScale = max(0, scale); // a negative scale would build a debt of time the game then waits out
+}
+
+/** Set if tiles should be colorized when using canvas2d
+ *  This can be slower but results should look nearly identical to WebGL rendering
+ *  It can be enabled/disabled at any time
+ *  Optimized for performance, and will use faster method if color is white or untextured
+ *  @param {boolean} colorTiles
+ *  @memberof Settings */
+function setCanvasColorTiles(colorTiles) { canvasColorTiles = colorTiles; }
+
+/** Set color to clear the canvas to before render, does not clear if alpha is 0
+ *  @param {Color} color
+ *  @memberof Settings */
+function setCanvasClearColor(color)
+{
+    ASSERT(isColor(color), 'setCanvasClearColor: color is a Color, like hsl(.6, .5, .2)', color);
+    canvasClearColor = color.copy();
+}
+
+/** Set max size of the canvas
+ *  @param {Vector2} size
+ *  @memberof Settings */
+function setCanvasMaxSize(size)
+{
+    ASSERT(isVector2(size), 'setCanvasMaxSize: size is a vec2, like vec2(1920, 1080)', size);
+    canvasMaxSize = size.copy();
+}
+
+/** Set minimum aspect ratio of the canvas (width/height), unused if 0
+ *  @param {number} aspect
+ *  @memberof Settings */
+function setCanvasMinAspect(aspect) { canvasMinAspect = aspect; }
+
+/** Set maximum aspect ratio of the canvas (width/height), unused if 0
+ *  @param {number} aspect
+ *  @memberof Settings */
+function setCanvasMaxAspect(aspect) { canvasMaxAspect = aspect; }
+
+/** Set fixed size of the canvas
+ *  @param {Vector2} size
+ *  @memberof Settings */
+function setCanvasFixedSize(size)
+{
+    ASSERT(isVector2(size), 'setCanvasFixedSize: size is a vec2, like vec2(1280, 720)', size);
+    canvasFixedSize = size.copy();
+}
+
+/** Use nearest scaling algorithm for canvas for more pixelated look
+ *  @param {boolean} pixelated
+ *  @memberof Settings */
+function setCanvasPixelated(pixelated)
+{
+    canvasPixelated = pixelated;
+    if (mainCanvas)
+        mainCanvas.style.imageRendering = pixelated ? 'pixelated' : '';
+    if (glCanvas)
+        glCanvas.style.imageRendering = pixelated ? 'pixelated' : '';
+}
+
+/** Disables texture filtering for crisper pixel art
+ *  - Leave true for pixel art; set false for smooth/high-resolution art
+ *  - Set it before engineInit, a texture already loaded keeps the filtering it was made with
+ *  @param {boolean} pixelated
+ *  @memberof Settings */
+function setTilesPixelated(pixelated) { tilesPixelated = pixelated; }
+
+/** Set the canvas pixel ratio, scales the render resolution for sharper output
+ *  Pass a number for an explicit ratio, or call with no argument to track devicePixelRatio each frame.
+ *  - The canvas stays the same size on screen and everything draws the same
+ *    size, it just renders at a higher resolution so nothing looks blurry
+ *  - Game code is unaffected, it always works in css pixels
+ *  @param {number} [pixelRatio]
+ *  @example
+ *  // render at native resolution, capped so phones don't pay for 3x
+ *  setCanvasPixelRatio(min(devicePixelRatio, 2));
+ *  @memberof Settings */
+function setCanvasPixelRatio(pixelRatio)
+{
+    ASSERT(pixelRatio === undefined || pixelRatio > 0, 'pixel ratio must be above 0, or undefined to track the device');
+    canvasPixelRatio = pixelRatio;
+}
+
+/** Get the pixel ratio currently applied to the canvas backing store
+ *  - Resolves canvasPixelRatio, falling back to devicePixelRatio when it is undefined
+ *  - Game code works in css pixels so this is rarely needed, it is for sizing
+ *    render targets and viewports that must match the backing store
+ *  @return {number}
+ *  @memberof Settings */
+function getCanvasPixelRatio() { return canvasPixelRatio ?? (devicePixelRatio || 1); }
+
+/** Set default font used for text rendering
+ *  - A family name with spaces or digits goes in quotes, as "'Press Start 2P'", or the canvas does not take it
+ *  @param {string} font
+ *  @memberof Settings */
+function setFontDefault(font) { fontDefault = font; }
+
+/** Set if the LittleJS splash screen should be shown on startup, must be set before engineInit
+ *  @param {boolean} show
+ *  @memberof Settings */
+function setShowSplashScreen(show) { showSplashScreen = show; }
+
+/** Set the loading screen, drawn after the splash while the game loads, once that takes more than half a second
+ *  @param {LoadingScreenCallback} [callback] - Draws on mainContext given the part done, 0 to 1; undefined for none
+ *  @memberof Settings */
+function setLoadingScreen(callback)
+{
+    ASSERT(!callback || typeof callback == 'function', 'setLoadingScreen takes a function or undefined');
+    loadingScreen = callback;
+}
+
+/** Set to disable rendering, audio, and input for servers, must be set before engineInit
+ *  @param {boolean} headless
+ *  @memberof Settings */
+function setHeadlessMode(headless) { headlessMode = headless; }
+
+/** Set if the engine only advances when engineStep is called
+ *  Set before engineInit for a test or a server; turned on in a running game it stops the loop, and turned off
+ *  again it starts the loop from real time; engineStep works once engineInit's promise has resolved
+ *  @param {boolean} [enable]
+ *  @memberof Settings */
+function setEngineManualStep(enable=true)
+{
+    const resume = engineManualStep && !enable;
+    if (enable && !engineManualStep)
+        frameTimeBufferMS = -.5e3 / frameRate; // half a frame short, so each engineStep frame runs one update,
+                                               // not one more from time the last real frame left over
+    engineManualStep = enable;
+    if (resume && engineUpdateInternal)
+    {
+        // engineStep may have run the clock ahead of real time, start from now so that is not waited out
+        frameTimeLastMS = performance.now();
+        engineScheduleFrame();
+    }
+}
+
+/** Set if the engine runs one update per display frame with timeDelta the time it covers
+ *  Can be set before engineInit or while running; turned off it goes back to fixed updates at frameRate
+ *  @param {boolean} [enable]
+ *  @memberof Settings */
+function setEngineVariableStep(enable=true)
+{
+    if (engineVariableStep && !enable)
+    {
+        // fixed time goes on one fixed step after the last update, if one ran, and timeDelta is the fixed step again
+        timeFixedStart = frame ? time + 1 / frameRate : time;
+        frameFixedStart = frame;
+        timeDelta = 1 / frameRate;
+        frameTimeBufferMS = engineManualStep ? -.5e3 / frameRate : 0;
+    }
+    engineVariableStep = enable;
+}
+
+/** Set whether the draw and debug functions draw in screen space when a call leaves screenSpace out
+ *  @param {boolean} screenSpace
+ *  @memberof Settings */
+function setDrawScreenSpace(screenSpace) { drawScreenSpace = screenSpace; }
+
+/** Set if WebGL rendering is enabled
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setGLEnable(enable)
+{
+    if (enable && !glCanBeEnabled)
+    {
+        console.warn('Can not enable WebGL if it was disabled on start.');
+        return;
+    }
+    if (glContext?.isContextLost())
+    {
+        // it has no textures till the context comes back, which turns WebGL on or off as asked here
+        glEnableBeforeLoss = enable;
+        return;
+    }
+    !enable && glEnable && glFlush(); // what was queued is drawn, not kept for when it is on again
+    glEnable = enable;
+    if (glCanvas) // hide glCanvas if WebGL is disabled
+        glCanvas.style.display = enable ? '' : 'none';
+}
+
+/** Set how many sided polygons to use when drawing circles and ellipses with WebGL
+ *  @param {number} sides
+ *  @memberof Settings */
+function setGLCircleSides(sides)
+{
+    ASSERT(isNumber(sides) && sides >= 3, 'circles need at least 3 sides');
+    glCircleSides = sides;
+}
+
+/** Set default size of tiles in pixels
+ *  @param {Vector2} size
+ *  @memberof Settings */
+function setTileDefaultSize(size)
+{
+    ASSERT(isVector2(size), 'setTileDefaultSize: size is a vec2, like vec2(16)', size);
+    tileDefaultSize = size.copy();
+}
+
+/** Default padding pixels around tiles
+ *  @param {number} padding
+ *  @memberof Settings */
+function setTileDefaultPadding(padding) { tileDefaultPadding = padding; }
+
+/** Default amount of pixels smaller to draw tiles to prevent neighbor bleeding
+ *  @param {number} bleed
+ *  @memberof Settings */
+function setTileDefaultBleed(bleed) { tileDefaultBleed = bleed; }
+
+/** Set if collisions are enabled, between objects and with tiles
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setEnablePhysicsSolver(enable) { enablePhysicsSolver = enable; }
+
+/** Set default object mass for collision calculations
+ *  @param {number} mass
+ *  @memberof Settings */
+function setObjectDefaultMass(mass) { objectDefaultMass = mass; }
+
+/** Set the fraction of velocity objects keep each frame, 1 keeps all of it, 0 stops at once
+ *  @param {number} damp
+ *  @memberof Settings */
+function setObjectDefaultDamping(damp)
+{
+    ASSERT(damp >= 0 && damp <= 1,
+        'setObjectDefaultDamping: damping is 0 to 1, the fraction of velocity kept each frame', damp);
+    objectDefaultDamping = damp;
+}
+
+/** Set the fraction of angular velocity objects keep each frame, 1 keeps all of it, 0 stops at once
+ *  @param {number} damp
+ *  @memberof Settings */
+function setObjectDefaultAngleDamping(damp)
+{
+    ASSERT(damp >= 0 && damp <= 1,
+        'setObjectDefaultAngleDamping: angle damping is 0 to 1, the fraction of angular velocity kept each frame',
+        damp);
+    objectDefaultAngleDamping = damp;
+}
+
+/** Set how much to bounce when a collision occurs
+ *  @param {number} restitution
+ *  @memberof Settings */
+function setObjectDefaultRestitution(restitution) { objectDefaultRestitution = restitution; }
+
+/** Set the fraction of sliding speed objects keep each frame on the ground, 1 is no friction, 0 stops at once
+ *  @param {number} friction
+ *  @memberof Settings */
+function setObjectDefaultFriction(friction)
+{
+    ASSERT(friction >= 0 && friction <= 1, 'friction must be 0 to 1, the fraction of sliding speed kept each frame');
+    objectDefaultFriction = friction;
+}
+
+/** Set max speed to avoid fast objects missing collisions
+ *  @param {number} speed - 0 or more
+ *  @memberof Settings */
+function setObjectMaxSpeed(speed)
+{
+    ASSERT(speed >= 0, 'max speed must be 0 or more');
+    objectMaxSpeed = speed;
+}
+
+/** Set how much gravity to apply to objects
+ *  @param {Vector2} newGravity
+ *  @memberof Settings */
+function setGravity(newGravity)
+{
+    ASSERT(isVector2(newGravity), 'setGravity: newGravity is a vec2, like vec2(0, -.01)', newGravity);
+    gravity = newGravity.copy();
+}
+
+/** Set the scale for the emit rate of particles, 0 disables particle emitters
+ *  @param {number} scale
+ *  @memberof Settings */
+function setParticleEmitRateScale(scale) { particleEmitRateScale = scale; }
+
+/** Set if gamepads are enabled
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setGamepadsEnable(enable) { gamepadsEnable = enable; }
+
+/** Set if the dpad input is also routed to the left analog stick
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setGamepadDirectionEmulateStick(enable) { gamepadDirectionEmulateStick = enable; }
+
+/** Set if axes that do not rest near center are ignored on non-standard gamepads
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setGamepadAxisFilterEnable(enable) { gamepadAxisFilterEnable = enable; }
+
+/** Set if the WASD keys are also routed to the direction keys
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setInputWASDEmulateDirection(enable) { inputWASDEmulateDirection = enable; }
+
+/** Set if touch input is allowed
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setTouchInputEnable(enable) { touchInputEnable = enable; }
+
+/** Set if touch gamepad should appear on mobile devices
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setTouchGamepadEnable(enable) { touchGamepadEnable = enable; }
+
+/** Set if a pinch of two fingers turns the mouse wheel
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setTouchPinchWheel(enable) { touchPinchWheel = enable; }
+
+/** Set how mouse and touch positions are bent as they come in, to match a picture bent after it is drawn
+ *  - Only what is drawn into the bent picture lines up with the mouse; what is drawn flat over it, the debug overlay
+ *    among them, does not, and the level editors, which draw flat too, get the mouse unbent
+ *  @param {MouseScreenTransform} [transform] - Undefined leaves positions as they are
+ *  @example
+ *  setMouseScreenTransform(postProcessCurveMouse(.1)); // the mouse follows postProcessCurve(.1)
+ *  @memberof Settings */
+function setMouseScreenTransform(transform)
+{
+    ASSERT(!transform || typeof transform == 'function', 'setMouseScreenTransform takes a function or undefined');
+    mouseScreenTransform = transform;
+}
+
+/** Set if touches outside the gamepad controls should still drive mouse/touch input
+ *  @param {boolean} passthrough
+ *  @memberof Settings */
+function setTouchGamepadPassthrough(passthrough) { touchGamepadPassthrough = passthrough; }
+
+/** Set if touch gamepad should have start button in the center
+ *  - Set size to enable the center button
+ *  - When the game is paused, any touch will press the button
+ *  @param {number} size
+ *  @memberof Settings */
+function setTouchGamepadCenterButtonSize(size) { touchGamepadCenterButtonSize = size; }
+
+/** Set number of buttons on the right side of the touch gamepad (0-4, gamepad buttons 0-3)
+ *  @param {number} count
+ *  @memberof Settings */
+function setTouchGamepadButtonCount(count)
+{
+    touchGamepadButtonCount = count;
+    if (count > 0)
+        touchGamepadRightStick = false;
+}
+
+/** Set if the touch gamepad should have a left analog stick (or dpad)
+ *  - Turning it on sets the left button count to 0, and turning it off does not set it back
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setTouchGamepadLeftStick(enable)
+{
+    touchGamepadLeftStick = enable;
+    if (enable)
+        touchGamepadLeftButtonCount = 0;
+}
+
+/** Set number of buttons on the left side of the touch gamepad (0-4, gamepad buttons 4-7)
+ *  - Only used when touchGamepadLeftStick is false
+ *  @param {number} count
+ *  @memberof Settings */
+function setTouchGamepadLeftButtonCount(count)
+{
+    touchGamepadLeftButtonCount = count;
+    if (count > 0)
+        touchGamepadLeftStick = false;
+}
+
+/** Set if the touch gamepad right side is an analog stick (or dpad) instead of face buttons
+ *  - Turning it on sets the button count to 0, and turning it off does not set it back
+ *  @param {boolean} rightStick
+ *  @memberof Settings */
+function setTouchGamepadRightStick(rightStick)
+{
+    touchGamepadRightStick = rightStick;
+    if (rightStick)
+        touchGamepadButtonCount = 0;
+}
+
+/** Set if touch gamepad should be analog stick or 8 way dpad
+ *  @param {boolean} analog
+ *  @memberof Settings */
+function setTouchGamepadAnalog(analog) { touchGamepadAnalog = analog; }
+
+/** Set if touch gamepad directional controls should float to where you press
+ *  @param {boolean} floating
+ *  @memberof Settings */
+function setTouchGamepadFloating(floating) { touchGamepadFloating = floating; }
+
+/** Set size of virtual gamepad for touch devices in viewport CSS pixels
+ *  @param {number} size
+ *  @memberof Settings */
+function setTouchGamepadSize(size) { touchGamepadSize = size; }
+
+/** Set transparency of touch gamepad overlay
+ *  @param {number} alpha
+ *  @memberof Settings */
+function setTouchGamepadAlpha(alpha) { touchGamepadAlpha = alpha; }
+
+/** Set how long to display the touch gamepad on screen in seconds, set to 0 to always display,
+ *  from the start on a touch device; using a real gamepad still hides it until the screen is touched
+ *  @param {number} time
+ *  @memberof Settings */
+function setTouchGamepadDisplayTime(time) { touchGamepadDisplayTime = time; }
+
+/** Set duration in ms to vibrate when a touch gamepad face or start button is pressed (0 disables)
+ *  @param {number} ms
+ *  @memberof Settings */
+function setTouchGamepadVibration(ms) { touchGamepadVibration = ms; }
+
+/** Set to allow vibration hardware if it exists
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setVibrateEnable(enable) { vibrateEnable = enable; }
+
+/** Set if audio is enabled, false turns all sound off; a setting for before sounds are made, since a sound made
+ *  while it is off has nothing to play and one already playing goes on; to mute while the game runs, setSoundVolume(0)
+ *  @param {boolean} enable
+ *  @memberof Settings */
+function setSoundEnable(enable) { soundEnable = enable; }
+
+/** Set if sound plays with an iPhone's silent switch on, as media does, which also pauses the player's own music
+ *  @param {boolean} ignore
+ *  @memberof Settings */
+function setSoundIgnoreSilentSwitch(ignore)
+{
+    soundIgnoreSilentSwitch = ignore;
+    audioSetSession();
+}
+
+/** Set volume scale to apply to all sound, music and speech
+ *  @param {number} volume
+ *  @memberof Settings */
+function setSoundVolume(volume)
+{
+    ASSERT(isNumber(volume) && abs(volume) < Infinity, 'setSoundVolume: volume must be a finite number, 1 is full', volume);
+    soundVolume = volume;
+    audioUpdateVolume(); // update gain immediately, sound off or not
+}
+
+/** Set default range where sound no longer plays
+ *  @param {number} range
+ *  @memberof Settings */
+function setSoundDefaultRange(range) { soundDefaultRange = range; }
+
+/** Set default range percent to start tapering off sound
+ *  @param {number} taper
+ *  @memberof Settings */
+function setSoundDefaultTaper(taper) { soundDefaultTaper = taper; }
+
+/** Set if all sound pauses while the page is hidden, taking effect at once
+ *  @param {boolean} pause
+ *  @memberof Settings */
+function setSoundPauseWhenHidden(pause) { soundPauseWhenHidden = pause; audioPageChange(); }
+
+/** Set if all sound pauses while the window does not have focus, taking effect at once
+ *  @param {boolean} pause
+ *  @memberof Settings */
+function setSoundPauseWhenBlurred(pause) { soundPauseWhenBlurred = pause; audioPageChange(); }
+
+/** Set if watermark with FPS should be shown
+ *  @param {boolean} show
+ *  @memberof Debug */
+function setDebugWatermark(show) { debugWatermark = show; }
+
+/** Set the width in pixels of the outlines debug shapes are drawn with
+ *  @param {number} width
+ *  @memberof Debug */
+function setDebugLineWidth(width) { debugLineWidth = width; }
+
+/** Set key code used to toggle debug mode, Esc by default
+ *  @param {string} key
+ *  @memberof Debug */
+function setDebugKey(key) { debugKey = key; }
+
+/** Set if the debug keys work while the overlay is closed, the number keys and the +/- time keys
+ *  @param {boolean} [enable]
+ *  @memberof Debug */
+function setDebugKeysAlways(enable=true) { debugKeysAlways = enable; }
+
+/** Set if the tweakables panel is shown, as 9 does while the debug overlay is open
+ *  @param {boolean} [show]
+ *  @memberof Debug */
+function setDebugTweakables(show=true) { debugTweakables = show; }

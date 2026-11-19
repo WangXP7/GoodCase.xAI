@@ -1,0 +1,34 @@
+// Layout of the room options: a head that folds them, the game mode, the
+// options as chips or, unfolded, a segment row each.
+@use '../../styles/game-ui' as ui;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px var(--td-dock-gutter);
+}
+
+.sec-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  @include ui.button-reset;
+  width: 100%;
+
+  &:hover .toggle-label {
+    color: var(--td-brass-light);
+  }
+}
+
+.set {
+  min-height: 32px;
+}
+
+.chips {
+  gap: 4px;
+}
+
+.sets {
+  gap: 2px;
+}

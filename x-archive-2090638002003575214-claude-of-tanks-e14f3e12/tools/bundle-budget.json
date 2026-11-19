@@ -1,0 +1,59 @@
+{
+  "note": "Static bundle budget (tools/bundle-budget.mjs): the bytes and requests each page loads before its entry runs. Generated at +3 % over a reviewed build; npm run check:bundle enforces it after npm run build.",
+  "headroom": 0.03,
+  "pages": {
+    "game": {
+      "requests": 151,
+      "raw": 4965235,
+      "gzip": 1531089,
+      "brotli": 1288229,
+      "inlineCss": 5174,
+      "entryRaw": 932364,
+      "entryBrotli": 257558
+    },
+    "home": {
+      "requests": 9,
+      "raw": 113992,
+      "gzip": 33490,
+      "brotli": 29855,
+      "inlineCss": 976
+    },
+    "docs": {
+      "requests": 13,
+      "raw": 151830,
+      "gzip": 43701,
+      "brotli": 38424,
+      "inlineCss": 954
+    },
+    "gallery": {
+      "requests": 86,
+      "raw": 3229073,
+      "gzip": 973099,
+      "brotli": 814055,
+      "inlineCss": 980
+    },
+    "notFound": {
+      "requests": 8,
+      "raw": 69792,
+      "gzip": 21832,
+      "brotli": 19366,
+      "inlineCss": 803
+    },
+    "cn": {
+      "requests": 152,
+      "raw": 5135050,
+      "gzip": 1590095,
+      "brotli": 1335680,
+      "inlineCss": 5534,
+      "entryRaw": 932364,
+      "entryBrotli": 257558
+    },
+    "pad": {
+      "requests": 15,
+      "raw": 111761,
+      "gzip": 40524,
+      "brotli": 36064,
+      "inlineCss": 877
+    }
+  }
+}

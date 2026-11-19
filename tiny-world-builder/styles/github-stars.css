@@ -1,0 +1,94 @@
+/* GitHub stars social-proof pill. Glass-pill aesthetic shared
+   with the countdown chip so it reads as part of the same design language. */
+.gh-stars-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  min-height: 36px;
+  margin-top: 16px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 2px rgba(20, 30, 50, 0.06),
+    0 16px 40px -22px rgba(10, 35, 90, 0.42);
+  color: #111b45;
+  font-family: var(--body-font, 'Space Grotesk', system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.site-nav .gh-stars-nav {
+  min-height: 42px;
+  margin-top: 0;
+  padding: 0 13px;
+  border-radius: var(--radius-md, 12px);
+}
+
+.site-nav .gh-stars-nav:hover {
+  transform: none;
+}
+
+.gh-stars-pill:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 2px rgba(20, 30, 50, 0.08),
+    0 22px 48px -22px rgba(10, 35, 90, 0.5);
+}
+
+.gh-stars-pill:focus-visible {
+  outline: 2px solid var(--accent, #3a72c8);
+  outline-offset: 3px;
+}
+
+.gh-stars-mark {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
+
+.gh-stars-text {
+  display: block;
+}
+
+.gh-stars-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(58, 114, 200, 0.12);
+  color: var(--accent, #3a72c8);
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+}
+
+.gh-stars-count[hidden] {
+  display: none;
+}
+
+.gh-stars-star {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: #f5a623;
+}
+
+@media (max-width: 620px) {
+  .gh-stars-pill {
+    font-size: 12px;
+    max-width: 100%;
+  }
+}

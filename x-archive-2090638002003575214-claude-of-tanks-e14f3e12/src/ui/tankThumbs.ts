@@ -1,0 +1,1301 @@
+import type { RuntimeValue } from '../runtimeTypes.ts';
+// src/ui/tankThumbs.ts — stable garage tank portraits.
+//
+// The old implementation rebuilt every portrait in an offscreen WebGL
+// renderer after the garage opened. It created a WebGL context per vehicle,
+// adding avoidable garage stalls and making the result GPU/driver dependent.
+//
+// The icon generator already renders the final, fully loaded vehicle models
+// into transparent PNGs in public/icons/. Use those deterministic assets in
+// every UI surface and keep this module as the small compatibility layer used
+// by the garage and screenshot harness.
+
+import { iconUrl } from './icons.ts';
+import {
+  containedPortraitPlacement,
+  measurePortraitCoreBounds,
+  type PortraitPixelBounds,
+} from './portraitFraming.ts';
+// TOP-DOWN MASK RIG (damage panel r9) — see the section at the bottom of this
+// file: an offscreen orthographic render of the ACTUAL built vehicle (hull
+// layer and turret+gun layer separately), replacing the baked one-piece
+// top_silhouette.png the damage panel used to stretch.
+import * as THREE from 'three';
+import { createTank, createTankSteps, ensureTankBuilder, offThreadDecorPlanner } from '../vehicles/fleetFactory.ts';
+import { nextFrame } from '../engine/frameScheduler.ts';
+import { beginRgba8Readback, type Rgba8ReadbackStage } from '../engine/rgba8Readback.ts';
+import { waitForTopMaskPrograms, type TopMaskProgram, type TopMaskProgramPreparation } from './topMaskProgramWarm.ts';
+import { applyTopMaskCoverage } from './topMaskCoverage.ts';
+import { scratchCanvas } from './uiCanvas.ts';
+
+const PORTRAIT_SOURCES = ['thumb-angle', 'angle', 'side', 'side_silhouette'] as const;
+let errorGuardInstalled = false;
+let portraitObserver: IntersectionObserver | null = null;
+let portraitResizeObserver: ResizeObserver | null = null;
+let portraitNormalizationScheduled = false;
+const portraitNormalizationQueue: HTMLImageElement[] = [];
+const queuedPortraits = new WeakSet<HTMLImageElement>();
+
+interface PortraitBounds extends PortraitPixelBounds {
+  naturalWidth: number;
+  naturalHeight: number;
+}
+
+const portraitBoundsByUrl = new Map<string, Promise<PortraitBounds | null>>();
+
+interface TopMaskEngineContext {
+  renderer: THREE.WebGLRenderer;
+}
+
+export interface TankMaskVisual {
+  root: THREE.Object3D;
+  dispose(): void;
+}
+
+export interface TankMaskSpec {
+  id: string;
+  dims?: {
+    overallLengthM?: number;
+    hullLengthM?: number;
+  };
+  armor?: {
+    turretPivot?: readonly [number, number, number];
+    gunBarrel?: {
+      lengthM?: number;
+    };
+    /** A casemate (Strv 103): rig_turret stays empty by design, the gun is fused into the hull (profiles/casemate.ts). */
+    turretless?: boolean;
+  };
+}
+
+interface MaskPassResult {
+  canvas: HTMLCanvasElement;
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+export interface TopDownMaskEntry {
+  ready: true;
+  hull: {
+    canvas: HTMLCanvasElement;
+    camX: number;
+    camZ: number;
+    halfM: number;
+    cx: number;
+    cz: number;
+    radiusM: number;
+    widthM: number;
+    lengthM: number;
+  };
+  turret: {
+    canvas: HTMLCanvasElement;
+    camX: number;
+    camZ: number;
+    halfM: number;
+    radiusM: number;
+  };
+  pivot: [number, number];
+  pxPerM: number;
+}
+
+/** Why the last top-down mask build for a spec failed; getTopDownMasks hands it to its subscriber. */
+export interface TopDownMaskFailure {
+  /** The pipeline's thrown code (`top_mask_source_disposed`, `rgba8_readback_timeout`, …) or the error name. */
+  readonly code: string;
+  readonly message: string;
+  /** Hard (negatively cached) builds attempted for this spec this session. */
+  readonly attempts: number;
+  /** False once the per-session attempt cap is reached: no later request rebuilds. */
+  readonly retryable: boolean;
+}
+
+/** `ready` false carries the failure; zero-argument subscribers keep working. */
+type TopDownMaskSubscriber = (ready: boolean, failure?: TopDownMaskFailure | null) => void;
+
+type MaskCacheValue = TopDownMaskEntry | 'failed';
+
+type TopMaskLoadStage = 'clone' | 'build' | 'hullCompile' | 'hullRender' | 'hullReadback' | 'hullCanvas'
+  | 'turretCompile' | 'turretRender' | 'turretReadback' | 'turretCanvas';
+
+interface TopMaskLoadInterval {
+  stage: TopMaskLoadStage;
+  /** Page performance.now() timebase, matching long-task startTime. */
+  startTime: number;
+  endTime?: number;
+}
+
+interface TopMaskLoadTrace {
+  status: 'pending' | 'complete' | 'failed';
+  startedAt: number;
+  endedAt?: number;
+  intervals: TopMaskLoadInterval[];
+  readbacks: Partial<Record<'hull' | 'turret', Partial<Record<Rgba8ReadbackStage, number>>>>;
+}
+
+declare global {
+  interface Window { __TOP_MASK_LOAD?: TopMaskLoadTrace }
+}
+
+function beginTopMaskLoad(): TopMaskLoadTrace {
+  const trace: TopMaskLoadTrace = { status: 'pending', startedAt: performance.now(), intervals: [], readbacks: {} };
+  // Only the latest new bake is published. Older pending callbacks retain their
+  // own trace and cannot replace it; cache hits do not erase useful timings.
+  try { if (typeof window !== 'undefined') window.__TOP_MASK_LOAD = trace; }
+  catch { /* Diagnostics must not prevent the mask build. */ }
+  return trace;
+}
+
+function finishTopMaskLoad(trace: TopMaskLoadTrace, status: 'complete' | 'failed'): void {
+  trace.status = status;
+  trace.endedAt = performance.now();
+}
+
+function measureTopMaskStage<Value>(
+  trace: TopMaskLoadTrace,
+  stage: TopMaskLoadStage,
+  operation: () => Value,
+): Value {
+  const interval: TopMaskLoadInterval = { stage, startTime: performance.now() };
+  trace.intervals.push(interval);
+  try { return operation(); }
+  finally { interval.endTime = performance.now(); }
+}
+
+function canvas2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('tankThumbs.ts: Canvas2D is unavailable');
+  return context;
+}
+
+function asTopMaskEngineContext(value: RuntimeValue): TopMaskEngineContext | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as { renderer?: RuntimeValue };
+  return candidate.renderer instanceof THREE.WebGLRenderer
+    ? { renderer: candidate.renderer }
+    : null;
+}
+
+function errorMessage(error: RuntimeValue): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Stable portrait URL for a tank. @param {string} specId */
+function getTankThumb(specId: string): string {
+  return `/icons/thumbs/${specId}_angle.webp`;
+}
+
+function portraitUrl(specId: string, index: number): string {
+  const source = PORTRAIT_SOURCES[index] || PORTRAIT_SOURCES[0];
+  return source === 'thumb-angle' ? getTankThumb(specId) : iconUrl(specId, source);
+}
+
+function measurePortraitBounds(img: HTMLImageElement): PortraitBounds | null {
+  if (!(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
+  const canvas = scratchCanvas(img.naturalWidth, img.naturalHeight);
+  const context = canvas2d(canvas);
+  context.drawImage(img, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  // Fit the load-bearing visual mass rather than the full alpha envelope.
+  // Sparse cannon tips, antennae, cage corners and the generated grounding
+  // shadow used to make Tagil/Burlak/Bradley cards shrink by 25-40 percent.
+  const bounds = measurePortraitCoreBounds(pixels, canvas.width, canvas.height);
+  if (!bounds) return null;
+  return {
+    ...bounds,
+    naturalWidth: canvas.width,
+    naturalHeight: canvas.height,
+  };
+}
+
+function revealPortrait(img: HTMLImageElement): void {
+  img.dataset.cotPortraitReady = 'true';
+}
+
+function applyPortraitFrame(img: HTMLImageElement, bounds: PortraitBounds): boolean {
+  const boxWidth = img.clientWidth;
+  const boxHeight = img.clientHeight;
+  if (!(boxWidth > 0) || !(boxHeight > 0)) return false;
+  const { x, y, scale } = containedPortraitPlacement(
+    bounds,
+    bounds.naturalWidth,
+    bounds.naturalHeight,
+    boxWidth,
+    boxHeight,
+  );
+  img.style.setProperty('--cot-thumb-x', `${x.toFixed(2)}px`);
+  img.style.setProperty('--cot-thumb-y', `${y.toFixed(2)}px`);
+  img.style.setProperty('--cot-thumb-scale', scale.toFixed(4));
+  img.dataset.cotPortraitFramed = 'true';
+  revealPortrait(img);
+  return true;
+}
+
+async function normalizePortrait(img: HTMLImageElement): Promise<void> {
+  if (!(img.complete && img.naturalWidth > 0)) return;
+  const url = img.currentSrc || img.src;
+  try {
+    await img.decode();
+  } catch (_) {
+    // A completed same-origin image can still be measured when decode() is
+    // unavailable or rejects after the load event. The error guard owns true
+    // resource failures and advances to the next packaged portrait.
+  }
+  if (!(img.complete && img.naturalWidth > 0) || (img.currentSrc || img.src) !== url) return;
+  let pending = portraitBoundsByUrl.get(url);
+  if (!pending) {
+    pending = Promise.resolve().then(() => measurePortraitBounds(img)).catch(() => null);
+    portraitBoundsByUrl.set(url, pending);
+  }
+  const bounds = await pending;
+  if ((img.currentSrc || img.src) !== url) return;
+  // Same-origin generated portraits always provide measurable alpha bounds.
+  // If a browser blocks canvas readback, reveal the already loaded image with
+  // the CSS fallback frame rather than leaving a permanent empty card.
+  if (!bounds) {
+    img.dataset.cotPortraitFramed = 'fallback';
+    revealPortrait(img);
+    return;
+  }
+  const framed = applyPortraitFrame(img, bounds);
+  if (typeof ResizeObserver === 'function') {
+    portraitResizeObserver ||= new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (!(entry.target instanceof HTMLImageElement)) continue;
+        const currentUrl = entry.target.currentSrc || entry.target.src;
+        void portraitBoundsByUrl.get(currentUrl)?.then((currentBounds) => {
+          if (currentBounds) applyPortraitFrame(entry.target as HTMLImageElement, currentBounds);
+        });
+      }
+    });
+    portraitResizeObserver.observe(img);
+  } else if (!framed) {
+    // Legacy browsers without ResizeObserver cannot retry after a hidden card
+    // gains dimensions, so keep their loaded portrait available at the stable
+    // CSS frame instead of leaving it transparent forever.
+    img.dataset.cotPortraitFramed = 'fallback';
+    revealPortrait(img);
+  }
+}
+
+function scheduleNextPortraitNormalization(): void {
+  if (portraitNormalizationScheduled || portraitNormalizationQueue.length === 0) return;
+  portraitNormalizationScheduled = true;
+  const run = (): void => {
+    portraitNormalizationScheduled = false;
+    const img = portraitNormalizationQueue.shift();
+    if (!img) return;
+    queuedPortraits.delete(img);
+    // Pixel readback and alpha-bound measurement are deliberately serialized.
+    // Revealing a national fleet can load dozens of portraits together; doing
+    // every 256x256 canvas scan in one microtask burst used to block the menu.
+    void normalizePortrait(img).finally(scheduleNextPortraitNormalization);
+  };
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 500 });
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
+function enqueuePortraitNormalization(img: HTMLImageElement): void {
+  if (queuedPortraits.has(img)) return;
+  queuedPortraits.add(img);
+  portraitNormalizationQueue.push(img);
+  scheduleNextPortraitNormalization();
+}
+
+function queuePortraitNormalization(img: HTMLImageElement): void {
+  if (img.dataset.cotPortraitListener !== 'true') {
+    img.dataset.cotPortraitListener = 'true';
+    img.addEventListener('load', () => enqueuePortraitNormalization(img), { passive: true });
+  }
+  if (img.complete && img.naturalWidth > 0) enqueuePortraitNormalization(img);
+}
+
+function advanceFallback(img: HTMLImageElement): void {
+  const id = img && img.dataset && img.dataset.cotThumb;
+  if (!id) return;
+  const next = Number(img.dataset.cotIconFallback || 0) + 1;
+  if (next < PORTRAIT_SOURCES.length) {
+    img.dataset.cotPortraitFramed = 'false';
+    img.dataset.cotPortraitReady = 'false';
+    img.style.removeProperty('--cot-thumb-x');
+    img.style.removeProperty('--cot-thumb-y');
+    img.style.removeProperty('--cot-thumb-scale');
+    img.dataset.cotIconFallback = String(next);
+    img.src = portraitUrl(id, next);
+    return;
+  }
+
+  // A missing asset should never expose the browser's broken-image glyph or
+  // a blank rectangular plate. Preserve layout while hiding only the image.
+  img.dataset.cotIconFallback = String(PORTRAIT_SOURCES.length);
+  img.dataset.cotPortraitReady = 'false';
+  img.style.visibility = 'hidden';
+}
+
+function installErrorGuard(): void {
+  if (errorGuardInstalled || typeof document === 'undefined') return;
+  errorGuardInstalled = true;
+  // Resource errors do not bubble, so listen during capture. This also covers
+  // garage cards created after the initial setup.
+  document.addEventListener('error', (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset.cotThumb) return;
+    advanceFallback(img);
+  }, true);
+}
+
+/**
+ * Normalize every tank portrait under `root` to its packaged transparent PNG.
+ * @param {Document|Element} root
+ */
+function revealTankThumb(img: HTMLImageElement): void {
+  installErrorGuard();
+  const id = img.dataset.cotThumb;
+  if (!id) return;
+  portraitObserver?.unobserve(img);
+  const savedFallback = Number(img.dataset.cotIconFallback || 0);
+  const fallback = Math.min(Math.max(savedFallback, 0), PORTRAIT_SOURCES.length - 1);
+  const expected = portraitUrl(id, fallback);
+  if ((img.getAttribute('src') || '') !== expected) {
+    img.dataset.cotIconFallback = String(fallback);
+    img.dataset.cotPortraitFramed = 'false';
+    img.dataset.cotPortraitReady = 'false';
+    img.style.visibility = '';
+    img.src = expected;
+  }
+  img.decoding = 'async';
+  img.draggable = false;
+  queuePortraitNormalization(img);
+  if (img.complete && !img.naturalWidth) advanceFallback(img);
+}
+
+function observeTankThumb(img: HTMLImageElement): void {
+  if (img.getAttribute('src')) return;
+  if (typeof IntersectionObserver !== 'function') {
+    revealTankThumb(img);
+    return;
+  }
+  portraitObserver ||= new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting && entry.target instanceof HTMLImageElement) {
+        revealTankThumb(entry.target);
+      }
+    }
+  }, { rootMargin: '240px 420px' });
+  portraitObserver.observe(img);
+}
+
+function observeTankThumbs(root: ParentNode): void {
+  if (!root || !root.querySelectorAll) return;
+  installErrorGuard();
+  for (const img of root.querySelectorAll<HTMLImageElement>('img[data-cot-thumb]')) {
+    observeTankThumb(img);
+  }
+}
+
+function applyTankThumbs(root: ParentNode): void {
+  if (!root || !root.querySelectorAll) return;
+  for (const img of root.querySelectorAll<HTMLImageElement>('img[data-cot-thumb]')) {
+    revealTankThumb(img);
+  }
+}
+
+/** Re-apply one portrait (or all portraits) without doing any GPU work. */
+export function requeueTankThumbs(specId: string | null = null): void {
+  if (typeof document === 'undefined') return;
+  installErrorGuard();
+  for (const img of document.querySelectorAll<HTMLImageElement>('img[data-cot-thumb]')) {
+    if (specId != null && img.dataset.cotThumb !== specId) continue;
+    if (specId == null) observeTankThumb(img);
+    else revealTankThumb(img);
+  }
+}
+
+/** Screenshot compatibility: packaged icons need no render queue to drain. */
+export function drainTankThumbs(): void {
+  if (typeof document !== 'undefined') applyTankThumbs(document);
+}
+
+/**
+ * Compatibility entry point used by garage setup. The specs/options are kept
+ * in the signature so callers do not need special cases.
+ */
+export function ensureTankThumbs(_specs: RuntimeValue, _opts: RuntimeValue = {}): void {
+  if (typeof document === 'undefined') return;
+  observeTankThumbs(document);
+  document.dispatchEvent(new CustomEvent('cot:tank-thumbs'));
+}
+
+// ---------------------------------------------------------------------------
+// TOP-DOWN MASK RIG (damage panel r9) — real per-tank plan-view layers.
+//
+// The damage panel needs orthographic top-down masks of the vehicle THE
+// PLAYER ACTUALLY FIELDS (the first-party procedural build), split into a
+// HULL layer and a TURRET+GUN layer so the panel can
+// rotate them independently (hull with true heading, turret with hull+turret
+// bearing). Baked icons can't do that — they are one fused nose-up image —
+// so this rig builds the vehicle offscreen via the real tankFactory and
+// renders each layer's ALPHA coverage into a cached white-on-transparent
+// canvas.
+//
+// Render specifics:
+//  - Uses the game's own renderer via a WebGLRenderTarget (no second GL
+//    context). Only alpha coverage is read, so each mesh draws with a
+//    coverage-only stand-in of its material (topMaskCoverage.ts: side, alpha
+//    inputs, colour-write and depth state kept per mesh). Shadow-proxy meshes
+//    stay out (their colorWrite:false is kept; a scene.overrideMaterial would
+//    have painted their fat stand-in boxes into the mask).
+//  - Camera: y-down ortho with up=+Z, so the mask is nose-up with the
+//    vehicle's RIGHT side on the image's right (screen-x = -world-x — the
+//    same handedness the live top-down view has).
+//  - Hull pass: turret hidden, frustum centered on the hull's plan bbox
+//    center. Turret pass: hull hidden, turret+gun at neutral yaw/pitch,
+//    frustum centered on the TURRET PIVOT so rotating the canvas about its
+//    center IS rotating the turret about its ring.
+//  - Procedural geometry is final at construction time. The rig renders once,
+//    disposes the temporary build, and caches masks per specId (small LRU).
+// ---------------------------------------------------------------------------
+
+let maskEngineCtx: TopMaskEngineContext | null = null; // main.ts hands over its engineCtx once at boot
+
+/** Wire the shared engine context (renderer + shadow hook) for mask renders.
+ *  Without it, masks remain unavailable. Covered battle entry requires this
+ *  rig before preparing its player panel. @param {object} engineCtx */
+export function initTopMaskRig(engineCtx: RuntimeValue): void {
+  maskEngineCtx = asTopMaskEngineContext(engineCtx);
+}
+
+const MASK_RT_SIZE = 384;  // supersampled render
+const MASK_SIZE = 192;     // cached layer canvas (downscale = cheap AA)
+const MASK_MARGIN_M = 0.35;
+const maskCache = new Map<string, MaskCacheValue>();
+// Pending work is separate from the bounded completed cache: eviction must
+// never schedule a second render into the same shared target/pixel buffer.
+const pendingMasks = new Map<string, Promise<TopDownMaskEntry | null>>();
+let maskWorkTail = Promise.resolve();
+const MASK_CACHE_MAX = 10;
+// 2026-09-25 (owner report: an M1A3 panel kept the vector stand-in for a whole
+// battle): a failed build is remembered for `negativeCacheMs`, after which one
+// more build may run, up to `maxAttempts` hard failures per spec per session.
+// A borrowed live source disposed mid-build (the battle-start race) is not a
+// hard failure: it is recorded for the subscriber but never counted or cached.
+export const TOP_DOWN_MASK_RETRY = Object.freeze({ negativeCacheMs: 8000, maxAttempts: 3 });
+interface MaskFailureRecord {
+  code: string;
+  message: string;
+  at: number;
+  attempts: number;
+}
+const maskFailures = new Map<string, MaskFailureRecord>();
+const MASK_FAILURE_RECORDS_MAX = 32;
+let maskRT: THREE.WebGLRenderTarget | null = null;
+const maskPixels: Partial<Record<'hull' | 'turret', Uint8Array>> = {};
+
+interface MaskPixelBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+interface MaskRenderResources {
+  target: THREE.WebGLRenderTarget;
+  pixels: Uint8Array;
+}
+
+interface PendingMaskPass {
+  // Observe rejection immediately, even while the next layer's compile waits.
+  completion: Promise<PromiseSettledResult<MaskPassResult | null>>;
+}
+
+interface MaskCanvasResult {
+  canvas: HTMLCanvasElement;
+  bounds: MaskPixelBounds;
+}
+
+interface MaskSourceLifetime {
+  readonly invalidated: boolean;
+  assertAlive(): void;
+  release(): void;
+}
+
+const MASK_BATCH_CONTROL_KEYS = ['_matricesTexture', '_indirectTexture', '_colorsTexture'] as const;
+type MaskBatchControlKey = typeof MASK_BATCH_CONTROL_KEYS[number];
+type MaskBatchControls = Record<MaskBatchControlKey, THREE.DataTexture | null>;
+interface MaskBatchControlSnapshot {
+  key: MaskBatchControlKey;
+  texture: THREE.DataTexture | null;
+  image: THREE.DataTexture['image'] | null;
+  data: THREE.DataTexture['image']['data'];
+  sourceVersion: number;
+}
+
+function isShadowOnlyMaskObject(object: THREE.Object3D): boolean {
+  return object.userData.shadowOnly === true;
+}
+
+/**
+ * Object3D.copy deep-copies userData through JSON (JSON.parse(JSON.stringify(source.userData))), and a built vehicle's
+ * root keeps live objects there (nearVehicleShadowDetail.ts: its near shadow details and proxies), so cloning it
+ * serialized every one of them through three's toJSON — geometry, materials and each canvas texture encoded to PNG:
+ * 0.8 s of start-battle's uiAndCamera (the time-to-battle lane, 2026-10-08). The masks read names, transforms and
+ * geometry, never userData: the clone is taken with every userData set aside (restored at once) and carries none.
+ */
+function cloneWithoutUserData(source: THREE.Object3D, recursive: boolean): THREE.Object3D {
+  const saved: [THREE.Object3D, THREE.Object3D['userData']][] = [];
+  const setAside = (object: THREE.Object3D): void => { saved.push([object, object.userData]); object.userData = {}; };
+  if (recursive) source.traverse(setAside);
+  else setAside(source);
+  try {
+    return source.clone(recursive);
+  } finally {
+    for (const [object, userData] of saved) object.userData = userData;
+  }
+}
+
+/** Shadow-only helpers can retain live owners and require constructor arguments.
+ * Clone only the presentation hierarchy; never invoke those helpers' clone hooks.
+ */
+function cloneMaskPresentation(root: THREE.Object3D): THREE.Object3D {
+  const filteredBranches = new Set<THREE.Object3D>();
+  root.traverse((object) => {
+    if (!isShadowOnlyMaskObject(object)) return;
+    for (let parent = object.parent; parent; parent = parent.parent) {
+      filteredBranches.add(parent);
+      if (parent === root) break;
+    }
+  });
+  const cloneBranch = (source: THREE.Object3D): THREE.Object3D => {
+    if (!filteredBranches.has(source)) return cloneWithoutUserData(source, true);
+    const clone = cloneWithoutUserData(source, false);
+    try {
+      for (const child of source.children) {
+        if (!isShadowOnlyMaskObject(child)) clone.add(cloneBranch(child));
+      }
+      return clone;
+    } catch (error) {
+      disposeMaskClone(clone);
+      throw error;
+    }
+  };
+  return cloneBranch(root);
+}
+
+function snapshotMaskBatchControls(root: THREE.Object3D): MaskBatchControlSnapshot[][] {
+  const snapshots: MaskBatchControlSnapshot[][] = [];
+  root.traverse((object) => {
+    if (!(object instanceof THREE.BatchedMesh) || isShadowOnlyMaskObject(object)) return;
+    const controls = object as THREE.BatchedMesh & MaskBatchControls;
+    snapshots.push(MASK_BATCH_CONTROL_KEYS.map((key) => {
+      const texture = controls[key];
+      const image = texture?.image ?? null;
+      const data = image?.data ?? null;
+      if (texture && !data) throw new Error('top_mask_batch_control_unavailable');
+      return { key, texture, image, data, sourceVersion: texture?.source.version ?? 0 };
+    }));
+  });
+  return snapshots;
+}
+
+function detachMaskBatchControls(batch: THREE.BatchedMesh, snapshots: MaskBatchControlSnapshot[]): void {
+  const controls = batch as THREE.BatchedMesh & MaskBatchControls;
+  for (const snapshot of snapshots) {
+    const { key, texture, image, data } = snapshot;
+    if (!texture || !image || !data) continue;
+    // Pinned BatchedMesh.copy drops colors when its fresh destination has none.
+    // Reuse copied wrappers where present, but explicitly preserve source colors.
+    const detached = controls[key] ?? texture.clone();
+    detached.source = new THREE.Source({ ...image, data: data.slice() });
+    controls[key] = detached;
+  }
+}
+
+function restoreMaskBatchControls(snapshots: MaskBatchControlSnapshot[][]): void {
+  for (const batch of snapshots) {
+    for (const snapshot of batch) {
+      if (snapshot.image && snapshot.image.data !== snapshot.data) snapshot.image.data = snapshot.data;
+      // Texture.copy also bumps the shared Source version. The native clone
+      // transaction is synchronous; restore it before any caller can render.
+      if (snapshot.texture) (snapshot.texture.source as { version: number }).version = snapshot.sourceVersion;
+    }
+  }
+}
+
+function cloneMaskSource(root: THREE.Object3D): THREE.Object3D {
+  const snapshots = snapshotMaskBatchControls(root);
+  let clone: THREE.Object3D | null = null;
+  try {
+    clone = cloneMaskPresentation(root);
+    let batchIndex = 0;
+    clone.traverse((object) => {
+      if (!(object instanceof THREE.BatchedMesh)) return;
+      const snapshot = snapshots[batchIndex++];
+      if (!snapshot) throw new Error('top_mask_batch_clone_mismatch');
+      detachMaskBatchControls(object, snapshot);
+    });
+    if (batchIndex !== snapshots.length) throw new Error('top_mask_batch_clone_mismatch');
+    return clone;
+  } catch (error) {
+    disposeMaskClone(clone);
+    throw error;
+  } finally {
+    // Native texture clones share Source; BatchedMesh.copy temporarily replaces
+    // its image.data array. Restore original identities even when cloning fails.
+    restoreMaskBatchControls(snapshots);
+  }
+}
+
+function disposeMaskClone(root: THREE.Object3D | null): void {
+  root?.traverse((object) => {
+    // These mesh classes copy per-object GPU allocations when cloned. Their
+    // own disposer leaves shared material (and ordinary mesh geometry) alone.
+    if (object instanceof THREE.InstancedMesh || object instanceof THREE.BatchedMesh) {
+      try { object.dispose(); } catch { /* Continue releasing the other clones. */ }
+    }
+  });
+}
+
+function watchMaskSourceLifetime(root: THREE.Object3D): MaskSourceLifetime {
+  const resources = new Set<THREE.BufferGeometry | THREE.Material>();
+  let disposed = false;
+  const onDispose = (): void => { disposed = true; };
+  const release = (): void => {
+    for (const resource of resources) {
+      try { resource.removeEventListener('dispose', onDispose); }
+      catch { /* Continue detaching the other borrowed resources. */ }
+    }
+    resources.clear();
+  };
+  try {
+    root.traverse((object) => {
+      const renderable = object as THREE.Object3D & {
+        geometry?: THREE.BufferGeometry;
+        material?: THREE.Material | THREE.Material[];
+      };
+      if (renderable.geometry instanceof THREE.BufferGeometry) resources.add(renderable.geometry);
+      const materials = Array.isArray(renderable.material) ? renderable.material : [renderable.material];
+      for (const material of materials) {
+        if (material instanceof THREE.Material) resources.add(material);
+      }
+    });
+    for (const resource of resources) resource.addEventListener('dispose', onDispose);
+  } catch (error) {
+    release();
+    throw error;
+  }
+  return {
+    get invalidated() { return disposed; },
+    assertAlive() {
+      if (disposed) throw new Error('top_mask_source_disposed');
+    },
+    release,
+  };
+}
+
+/**
+ * (battle-spikes-253) Start linking the mask passes' coverage programs for this tank now, against the mask's own target and
+ * a light-less scene, as a mask pass compiles them (compileMaskPass) — nothing is drawn or waited for. A covered entry
+ * calls it when its warm starts, so the player panel's stage finds the programs linked: on a loaded multiplayer guest the
+ * links outlasted the mask wait's 2 s stall when they began at that stage (top_mask_program_timeout, "still linking at
+ * reveal"; nav-perf's rooms census). Its stand-ins are the ones the clone's passes take (shared by three's program key).
+ */
+export function warmTopMaskPrograms(root: THREE.Object3D | null | undefined): boolean {
+  const renderer = maskEngineCtx?.renderer;
+  if (!renderer || !root) return false;
+  const { target } = ensureMaskRenderResources('hull');
+  const previousTarget = renderer.getRenderTarget(), face = renderer.getActiveCubeFace(), mip = renderer.getActiveMipmapLevel();
+  const visible = root.visible;
+  const restoreMaterials = applyTopMaskCoverage(root);
+  try {
+    root.visible = true;
+    renderer.setRenderTarget(target);
+    renderer.compile(root, new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100), new THREE.Scene());
+    return true;
+  } catch {
+    return false; // the panel's own stage compiles them
+  } finally {
+    renderer.setRenderTarget(previousTarget, face, mip);
+    root.visible = visible;
+    restoreMaterials();
+  }
+}
+
+function ensureMaskRenderResources(layer: 'hull' | 'turret'): MaskRenderResources {
+  if (!maskRT) {
+    maskRT = new THREE.WebGLRenderTarget(MASK_RT_SIZE, MASK_RT_SIZE, {
+      depthBuffer: true, stencilBuffer: false,
+    });
+  }
+  const pixels = maskPixels[layer] ??= new Uint8Array(MASK_RT_SIZE * MASK_RT_SIZE * 4);
+  return { target: maskRT, pixels };
+}
+
+async function compileMaskPass(
+  renderer: THREE.WebGLRenderer,
+  target: THREE.WebGLRenderTarget,
+  scene: THREE.Scene,
+  camera: THREE.OrthographicCamera,
+  sourceLifetime: MaskSourceLifetime | null,
+): Promise<TopMaskProgramPreparation> {
+  sourceLifetime?.assertAlive();
+  const info = renderer.info;
+  const context = renderer.getContext();
+  const rendererIsCurrent = (): boolean => renderer.info === info && renderer.getContext() === context;
+  const lifetime = {
+    isCurrent() {
+      sourceLifetime?.assertAlive();
+      return rendererIsCurrent();
+    },
+    isContextLost: () => context.isContextLost(),
+    hasProgram: (program: TopMaskProgram) => !!info.programs?.some((candidate) => Object.is(candidate, program)),
+  };
+  const previousTarget = renderer.getRenderTarget();
+  const face = renderer.getActiveCubeFace();
+  const mip = renderer.getActiveMipmapLevel();
+  const programs: TopMaskProgram[] = [];
+  let failed = false;
+  try {
+    renderer.setRenderTarget(target);
+    const materials = renderer.compile(scene, camera);
+    sourceLifetime?.assertAlive();
+    // Shared materials retain ordinary/instanced/batched and both-sided
+    // variants. currentProgram names only the final visited variant, not the
+    // full compiled cohort. Freeze the complete cache before another frame.
+    for (const material of materials) {
+      const properties = renderer.properties.get(material) as { programs?: Map<RuntimeValue, TopMaskProgram> };
+      const cache = properties?.programs;
+      if (!(cache instanceof Map) || !cache.size) throw new Error('top_mask_program_cache_unavailable');
+      programs.push(...cache.values());
+    }
+  } catch (error) {
+    failed = true;
+    throw error;
+  } finally {
+    try {
+      // A replaced context must not receive render targets from its old owner.
+      if (!rendererIsCurrent()) throw new Error('top_mask_program_context_changed');
+      renderer.setRenderTarget(previousTarget, face, mip);
+    }
+    catch (error) { if (!failed) throw error; }
+  }
+  return waitForTopMaskPrograms(programs, lifetime);
+}
+
+function renderMaskPixels(
+  renderer: THREE.WebGLRenderer,
+  target: THREE.WebGLRenderTarget,
+  pixels: Uint8Array,
+  scene: THREE.Scene,
+  camera: THREE.OrthographicCamera,
+  trace: TopMaskLoadTrace,
+  layer: 'hull' | 'turret',
+): { completion: Promise<void>; failed: boolean } {
+  const previousTarget = renderer.getRenderTarget();
+  const previousFace = renderer.getActiveCubeFace();
+  const previousMip = renderer.getActiveMipmapLevel();
+  const previousColor = new THREE.Color();
+  renderer.getClearColor(previousColor);
+  const previousAlpha = renderer.getClearAlpha();
+  let readback: Promise<void> | null = null;
+  let failure: { reason: RuntimeValue } | null = null;
+  const interval: TopMaskLoadInterval = { stage: `${layer}Readback`, startTime: 0 };
+  try {
+    renderer.setRenderTarget(target);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear(true, true, false);
+    measureTopMaskStage(trace, `${layer}Render`, () => renderer.render(scene, camera));
+    interval.startTime = performance.now();
+    trace.intervals.push(interval);
+    // Submit while the exact mask framebuffer is bound. The helper restores
+    // its PBO binding synchronously; normal renderer frames can run while the
+    // fence completes, without a blocking GPU readPixels on the reveal frame.
+    const gl = renderer.getContext();
+    if (!('fenceSync' in gl)) throw new Error('top-down masks require WebGL2 readback');
+    const timings = trace.readbacks[layer] = {};
+    readback = beginRgba8Readback(gl, MASK_RT_SIZE, MASK_RT_SIZE, pixels, { timings });
+  } catch (error) {
+    failure = { reason: error };
+  }
+  // Attempt both restores even if a context/renderer failure interrupts one.
+  // Always join an already-submitted copy before releasing shared pixels to
+  // the next tank; a restore failure must not leave a late writer behind.
+  try { renderer.setRenderTarget(previousTarget, previousFace, previousMip); }
+  catch (error) { failure ??= { reason: error }; }
+  try { renderer.setClearColor(previousColor, previousAlpha); }
+  catch (error) { failure ??= { reason: error }; }
+  return { completion: finishMaskReadback(readback, failure, interval), failed: failure !== null };
+}
+
+async function finishMaskReadback(
+  readback: Promise<void> | null,
+  failure: { reason: RuntimeValue } | null,
+  interval: TopMaskLoadInterval,
+): Promise<void> {
+  if (readback) {
+    try { await readback; }
+    catch (error) { failure ??= { reason: error }; }
+    finally { interval.endTime = performance.now(); }
+  }
+  if (failure) throw failure.reason;
+}
+
+function maskCanvasFromPixels(pixels: Uint8Array): MaskCanvasResult | null {
+  const size = MASK_RT_SIZE;
+  const big = scratchCanvas(size, size);
+  const context = canvas2d(big);
+  const image = context.createImageData(size, size);
+  const data = image.data;
+  const bounds: MaskPixelBounds = { minX: size, maxX: -1, minY: size, maxY: -1 };
+  for (let y = 0; y < size; y++) {
+    const sourceRow = (size - 1 - y) * size * 4;
+    const targetRow = y * size * 4;
+    for (let x = 0; x < size; x++) {
+      const alpha = pixels[sourceRow + x * 4 + 3];
+      if (alpha <= 8) continue;
+      const offset = targetRow + x * 4;
+      data[offset] = 255;
+      data[offset + 1] = 255;
+      data[offset + 2] = 255;
+      data[offset + 3] = alpha;
+      bounds.minX = Math.min(bounds.minX, x);
+      bounds.maxX = Math.max(bounds.maxX, x);
+      bounds.minY = Math.min(bounds.minY, y);
+      bounds.maxY = Math.max(bounds.maxY, y);
+    }
+  }
+  if (bounds.maxX < 0) return null;
+  context.putImageData(image, 0, 0);
+  return { canvas: big, bounds };
+}
+
+/** A transparent layer canvas the size of every cached mask layer (a turretless build's turret layer). */
+function emptyMaskCanvas(): HTMLCanvasElement {
+  return scratchCanvas(MASK_SIZE, MASK_SIZE);
+}
+
+function downscaleMask(source: HTMLCanvasElement): HTMLCanvasElement {
+  const output = scratchCanvas(MASK_SIZE, MASK_SIZE);
+  canvas2d(output).drawImage(source, 0, 0, MASK_SIZE, MASK_SIZE);
+  return output;
+}
+
+function maskPassResult(
+  rendered: MaskCanvasResult,
+  camX: number,
+  camZ: number,
+  halfM: number,
+): MaskPassResult {
+  const metresPerPixel = (halfM * 2) / MASK_RT_SIZE;
+  const { bounds } = rendered;
+  return {
+    canvas: downscaleMask(rendered.canvas),
+    minX: camX + halfM - (bounds.maxX + 1) * metresPerPixel,
+    maxX: camX + halfM - bounds.minX * metresPerPixel,
+    minZ: camZ + halfM - (bounds.maxY + 1) * metresPerPixel,
+    maxZ: camZ + halfM - bounds.minY * metresPerPixel,
+  };
+}
+
+/** One alpha-coverage pass -> white mask canvas (also reports plan bounds).
+ *  @returns {{canvas:HTMLCanvasElement,minX:number,maxX:number,minZ:number,maxZ:number}|null} */
+async function submitMaskPass(
+  scene: THREE.Scene,
+  camX: number,
+  camZ: number,
+  halfM: number,
+  trace: TopMaskLoadTrace,
+  layer: 'hull' | 'turret',
+  sourceLifetime: MaskSourceLifetime | null,
+): Promise<PendingMaskPass> {
+  sourceLifetime?.assertAlive();
+  const engine = maskEngineCtx;
+  if (!engine) return { completion: Promise.resolve({ status: 'fulfilled', value: null }) };
+  const renderer = engine.renderer;
+  const { target, pixels } = ensureMaskRenderResources(layer);
+  const cam = new THREE.OrthographicCamera(-halfM, halfM, halfM, -halfM, 0.1, 80);
+  cam.position.set(camX, 40, camZ);
+  cam.up.set(0, 0, 1);
+  cam.lookAt(camX, 0, camZ);
+  cam.updateMatrixWorld(true);
+  const compile: TopMaskLoadInterval = { stage: `${layer}Compile`, startTime: performance.now() };
+  trace.intervals.push(compile);
+  let prepared: TopMaskProgramPreparation;
+  try { prepared = await compileMaskPass(renderer, target, scene, cam, sourceLifetime); }
+  finally { compile.endTime = performance.now(); }
+  sourceLifetime?.assertAlive();
+  prepared.assertCurrent();
+  const submitted = renderMaskPixels(renderer, target, pixels, scene, cam, trace, layer);
+  // A synchronous render/binding failure cannot hand the renderer to another
+  // pass. Drain its submitted writer and propagate the original failure first.
+  if (submitted.failed) await submitted.completion;
+  const result = submitted.completion.then(() => {
+    sourceLifetime?.assertAlive();
+    return finishMaskPass(pixels, camX, camZ, halfM, trace, layer);
+  });
+  return { completion: result.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (reason: RuntimeValue) => ({ status: 'rejected', reason }),
+  ) };
+}
+
+function finishMaskPass(
+  pixels: Uint8Array,
+  camX: number,
+  camZ: number,
+  halfM: number,
+  trace: TopMaskLoadTrace,
+  layer: 'hull' | 'turret',
+): MaskPassResult | null {
+  // Alpha coverage becomes a white mask. readPixels rows are bottom-up, so
+  // maskCanvasFromPixels flips them while collecting exact plan bounds.
+  return measureTopMaskStage(trace, `${layer}Canvas`, () => {
+    const rendered = maskCanvasFromPixels(pixels);
+    if (!rendered) return null;
+    // opaque pixel bounds back in METERS (pixel x = camX-half..camX+half maps
+    // world -x; pixel y top = camZ+half): used for tight panel scaling.
+    return maskPassResult(rendered, camX, camZ, halfM);
+  });
+}
+
+/** Render both layers for a built visual. @returns {object|null} entry */
+async function renderMaskEntry(
+  visual: TankMaskVisual,
+  spec: TankMaskSpec,
+  trace: TopMaskLoadTrace,
+  sourceLifetime: MaskSourceLifetime | null,
+): Promise<TopDownMaskEntry | null> {
+  sourceLifetime?.assertAlive();
+  const root = visual.root;
+  const scene = new THREE.Scene();
+  scene.add(root);
+  // A staged/culled source can be hidden; this private orthographic clone
+  // must render independently of its live visibility.
+  root.visible = true;
+  root.position.set(0, 0, 0);
+  root.rotation.set(0, 0, 0);
+  root.updateMatrixWorld(true);
+  const hullG = root.getObjectByName('rig_hull');
+  const turretG = root.getObjectByName('rig_turret');
+  if (!hullG || !turretG) { scene.remove(root); return null; }
+  const passes: PendingMaskPass[] = [];
+  // Alpha coverage is all a pass reads: draw it with coverage-only stand-ins, not the tank's real materials, so the
+  // masks link a few shared basic programs instead of ~38 physical ones (topMaskCoverage.ts).
+  const restoreMaterials = applyTopMaskCoverage(root);
+  try {
+  // neutral articulation for the canonical masks
+  turretG.rotation.y = 0;
+  const gunG = root.getObjectByName('rig_gun');
+  if (gunG) gunG.rotation.x = 0;
+  root.updateMatrixWorld(true);
+
+  const dims = spec.dims || {};
+  const overall = Math.max(dims.overallLengthM || 8, dims.hullLengthM || 6);
+  const tp = (spec.armor && spec.armor.turretPivot) || [0, 1.5, 0];
+
+  // hull pass (turret hidden) — generous frustum, bounds measured from pixels
+  turretG.visible = false;
+  hullG.visible = true;
+  const hullHalf = overall * 0.62 + MASK_MARGIN_M;
+  const hullPass = await submitMaskPass(scene, 0, 0, hullHalf, trace, 'hull', sourceLifetime);
+  passes.push(hullPass);
+  sourceLifetime?.assertAlive();
+
+  // turret pass (hull hidden), centered on the PIVOT; the frustum must reach
+  // the muzzle: gun length from the pivot + bustle margin
+  turretG.visible = true;
+  hullG.visible = false;
+  const gunReach = Math.max(
+    (spec.armor && spec.armor.gunBarrel && spec.armor.gunBarrel.lengthM) || 4,
+    overall - (dims.hullLengthM || overall) / 2 - tp[2]);
+  const turretHalf = Math.max(2.2, gunReach + 1.6) + MASK_MARGIN_M;
+  // Hull pixels are already captured in its own PBO. Reuse the framebuffer
+  // while that copy waits; only this transaction may change clone visibility.
+  const turretPass = await submitMaskPass(scene, tp[0], tp[2], turretHalf, trace, 'turret', sourceLifetime);
+  passes.push(turretPass);
+  const hull = completedMaskPass(await hullPass.completion);
+  const turret = completedMaskPass(await turretPass.completion);
+  sourceLifetime?.assertAlive();
+  // (2026-10-13, the MP stream) a turretless build whose rig_turret holds nothing (the Strv 103 and 103A casemates: the
+  // gun is fused into the hull, profiles/casemate.ts) renders an empty turret pass. The entry used to come back null and
+  // the HUD damage panel ran without a mask for those two, retrying and failing every match; such a build now gets an
+  // empty turret layer. A turretless build with turret content (UDES 03, JPz E-100) keeps its rendered layer, and an
+  // empty pass on a turreted build still fails as before.
+  const turretless = !!(spec.armor && spec.armor.turretless);
+  if (!hull || (!turret && !turretless)) return null;
+
+  // plan-space layout facts for the panel (meters)
+  const hullCx = (hull.minX + hull.maxX) / 2;
+  const hullCz = (hull.minZ + hull.maxZ) / 2;
+  return {
+    ready: true,
+    hull: {
+      canvas: hull.canvas, camX: 0, camZ: 0, halfM: hullHalf,
+      cx: hullCx, cz: hullCz,
+      // swept radius when the layer rotates about the hull content center
+      radiusM: Math.hypot((hull.maxX - hull.minX) / 2, (hull.maxZ - hull.minZ) / 2),
+      widthM: hull.maxX - hull.minX, lengthM: hull.maxZ - hull.minZ,
+    },
+    turret: turret ? {
+      canvas: turret.canvas, camX: tp[0], camZ: tp[2], halfM: turretHalf,
+      // swept radius about the pivot (canvas center)
+      radiusM: Math.max(
+        Math.hypot(turret.minX - tp[0], turret.minZ - tp[2]),
+        Math.hypot(turret.maxX - tp[0], turret.maxZ - tp[2])),
+    } : {
+      // turretless: nothing turns; the radius runs from the pivot to the hull's (fused gun's) front, so a damaged gun's
+      // state line on the panel still runs the length of the real barrel
+      canvas: emptyMaskCanvas(), camX: tp[0], camZ: tp[2], halfM: turretHalf,
+      radiusM: Math.max(0, hull.maxZ - tp[2]),
+    },
+    pivot: [tp[0], tp[2]],
+    pxPerM: MASK_SIZE / (hullHalf * 2), // hull layer scale (turret differs)
+  };
+  } finally {
+    // Compile/render/source failures must join every submitted writer before
+    // clone disposal, cache publication, or the next tank can reuse pixels.
+    await Promise.all(passes.map((pass) => pass.completion));
+    restoreMaterials();
+    hullG.visible = true;
+    turretG.visible = true;
+    scene.remove(root);
+  }
+}
+
+function completedMaskPass(result: PromiseSettledResult<MaskPassResult | null>): MaskPassResult | null {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+}
+
+function maskFailureCode(error: RuntimeValue): string {
+  const message = errorMessage(error);
+  // The pipeline throws bare snake_case codes; free-form messages report their error name.
+  if (/^[A-Za-z0-9_.:-]{1,48}$/.test(message)) return message;
+  return error instanceof Error && error.name && error.name !== 'Error' ? error.name : 'mask_build_error';
+}
+
+function recordMaskFailure(id: string, error: RuntimeValue, hard: boolean): void {
+  const previous = maskFailures.get(id);
+  maskFailures.delete(id);
+  maskFailures.set(id, {
+    code: maskFailureCode(error),
+    message: errorMessage(error).slice(0, 200),
+    at: performance.now(),
+    attempts: (previous?.attempts ?? 0) + (hard ? 1 : 0),
+  });
+  while (maskFailures.size > MASK_FAILURE_RECORDS_MAX) {
+    const oldest = maskFailures.keys().next().value;
+    if (oldest === undefined) break;
+    maskFailures.delete(oldest);
+  }
+}
+
+function maskFailureView(id: string): TopDownMaskFailure {
+  const record = maskFailures.get(id);
+  const attempts = record?.attempts ?? 0;
+  return {
+    code: record?.code ?? 'top_mask_unavailable',
+    message: record?.message ?? 'top-down mask unavailable',
+    attempts,
+    retryable: attempts < TOP_DOWN_MASK_RETRY.maxAttempts,
+  };
+}
+
+/** A negatively cached spec may rebuild once its failure has aged out, until the attempt cap. */
+function maskFailureBlocks(id: string): boolean {
+  const record = maskFailures.get(id);
+  if (!record) return false;
+  return record.attempts >= TOP_DOWN_MASK_RETRY.maxAttempts
+    || performance.now() - record.at < TOP_DOWN_MASK_RETRY.negativeCacheMs;
+}
+
+function notifyMaskSubscriber(
+  onReady: TopDownMaskSubscriber,
+  ready: boolean,
+  failure: TopDownMaskFailure | null,
+): void {
+  try { onReady(ready, failure); }
+  catch (error) { console.warn('[tankThumbs] mask subscriber failed:', errorMessage(error)); }
+}
+
+/**
+ * Per-tank top-down layer masks for the damage panel. Returns the cached
+ * entry, or null while building/unavailable. Covered entry awaits preparation;
+ * live callers leave an unfinished schematic blank. Every pending subscriber receives its own callback:
+ * `onReady(true)` when the entry is cached, `onReady(false, failure)` when the
+ * build failed or a hot negative cache refused it (2026-09-25: the old
+ * success-only callback left the damage panel on its stand-in until reload).
+ * Without a rig (harness/booth contexts) the masks are unavailable, not
+ * failed, and nobody is notified.
+ * @param {TankSpec} spec full tank spec (dims + armor needed)
+ * @param {?Function} onReady
+ * @param {?object} sourceVisual optional already-built first-party visual
+ * @returns {?object}
+ */
+export function getTopDownMasks(
+  spec: TankMaskSpec,
+  onReady: TopDownMaskSubscriber | null,
+  sourceVisual: TankMaskVisual | null = null,
+): TopDownMaskEntry | null {
+  if (!spec || typeof document === 'undefined') return null;
+  const got = maskCache.get(spec.id);
+  if (got && got !== 'failed') return got;
+  if (!maskEngineCtx) return null;
+  if (got === 'failed' && maskFailureBlocks(spec.id)) {
+    // Hot negative cache: no GPU work, but the subscriber still learns the
+    // terminal state so its own retry policy continues. Asynchronous like a
+    // real build, so no caller observes a re-entrant callback.
+    if (onReady) void Promise.resolve().then(() => notifyMaskSubscriber(onReady, false, maskFailureView(spec.id)));
+    return null;
+  }
+  void prepareTopDownMasks(spec, sourceVisual).then((entry) => {
+    if (onReady) notifyMaskSubscriber(onReady, !!entry, entry ? null : maskFailureView(spec.id));
+  });
+  return null;
+}
+
+function cacheMaskResult(id: string, entry: TopDownMaskEntry | null): void {
+  maskCache.delete(id);
+  maskCache.set(id, entry || 'failed');
+  while (maskCache.size > MASK_CACHE_MAX) {
+    const oldest = maskCache.keys().next().value;
+    if (oldest === undefined) break;
+    maskCache.delete(oldest);
+  }
+}
+
+const MASK_TANK_OPTIONS = { camoSeed: 4000, quality: 'high' } as const;
+
+/**
+ * (2026-10-26, UI-LOCKDOWN E) The mask's own tank, a frame-sized slice at a time, its decoration planned in the decor
+ * worker (stage 2b): the damage panel's last attempt and the callers with no live visual built it in one task (m1a3,
+ * 1.0 s in a room entry's last seconds, 0.24 s of it the decoration). A sliced build that fails builds at once.
+ */
+async function buildMaskTank(id: string): Promise<TankMaskVisual> {
+  let sliceStartedAt = performance.now();
+  let steps: ReturnType<typeof createTankSteps> | null = createTankSteps(id, maskEngineCtx,
+    { ...MASK_TANK_OPTIONS, decorPlanner: offThreadDecorPlanner() ?? undefined });
+  try {
+    for (;;) {
+      const result = steps.next();
+      if (result.done) {
+        steps = null;
+        return result.value as TankMaskVisual;
+      }
+      if (result.value) { await result.value; sliceStartedAt = performance.now(); }
+      else if (performance.now() - sliceStartedAt >= 8) { await nextFrame(); sliceStartedAt = performance.now(); }
+    }
+  } catch (error) {
+    steps = null;
+    console.warn(`[tankThumbs] the sliced mask build failed for ${id}; building at once:`, errorMessage(error));
+    return createTank(id, maskEngineCtx, MASK_TANK_OPTIONS) as TankMaskVisual;
+  } finally {
+    // an abandoned build closes its iterator, which disposes what it had made
+    steps?.return(undefined as never);
+  }
+}
+
+async function buildTopDownMasks(
+  spec: TankMaskSpec,
+  clonedRoot: THREE.Object3D | null,
+  trace: TopMaskLoadTrace,
+  sourceLifetime: MaskSourceLifetime | null,
+): Promise<TopDownMaskEntry | null> {
+  let visual: TankMaskVisual | null = null;
+  let entry: TopDownMaskEntry | null = null;
+  let failure: RuntimeValue = null;
+  try {
+    // Preserve lazy setTank semantics, but expose a promise for covered entry.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    sourceLifetime?.assertAlive();
+    const id = spec.id;
+    const build: TopMaskLoadInterval = { stage: 'build', startTime: performance.now() };
+    trace.intervals.push(build);
+    try {
+      if (!clonedRoot) await ensureTankBuilder(id);
+      sourceLifetime?.assertAlive();
+      visual = clonedRoot
+        ? { root: clonedRoot, dispose() {} }
+        : await buildMaskTank(id);
+    } finally { build.endTime = performance.now(); }
+    const prepared = await renderMaskEntry(visual, spec, trace, sourceLifetime);
+    sourceLifetime?.assertAlive();
+    entry = prepared;
+  } catch (error) {
+    failure = error;
+    console.warn(`[tankThumbs] top-down mask build failed for ${spec.id}:`, errorMessage(error));
+  } finally {
+    // Full factory builds own their resources. The queue finalizer separately
+    // releases only the per-mesh allocations owned by borrowed hierarchies.
+    try { visual?.dispose(); } catch { /* released */ }
+  }
+  if (entry) {
+    maskFailures.delete(spec.id);
+    cacheMaskResult(spec.id, entry);
+  } else {
+    // A cancelled source belongs to an old match, not a permanently bad spec.
+    // Preserve ordinary failed-GPU negative caching (expiring, attempt-capped),
+    // but let a new live source retry at once; either way the subscriber
+    // learns why.
+    const hard = !sourceLifetime?.invalidated;
+    recordMaskFailure(spec.id, failure ?? new Error('top_mask_render_unavailable'), hard);
+    if (hard) cacheMaskResult(spec.id, null);
+  }
+  finishTopMaskLoad(trace, entry ? 'complete' : 'failed');
+  return entry;
+}
+
+/** Cache-only preparation; never changes the current tank or damage-panel DOM. */
+export function prepareTopDownMasks(
+  spec: TankMaskSpec,
+  sourceVisual: TankMaskVisual | null = null,
+): Promise<TopDownMaskEntry | null> {
+  if (!spec || typeof document === 'undefined' || !maskEngineCtx) return Promise.resolve(null);
+  const id = spec.id;
+  const got = maskCache.get(id);
+  if (got && (got !== 'failed' || maskFailureBlocks(id))) {
+    // Touch completed entries, while keeping pending ownership out of the LRU.
+    maskCache.delete(id);
+    maskCache.set(id, got);
+    return Promise.resolve(got === 'failed' ? null : got);
+  }
+  // An aged-out failure rebuilds: this pass owns the id until it settles, and a
+  // repeated failure re-inserts the sentinel with one more attempt counted.
+  if (got === 'failed') maskCache.delete(id);
+  const pending = pendingMasks.get(id);
+  if (pending) return pending;
+  const trace = beginTopMaskLoad();
+  // Clone the already-built battle/garage hierarchy while it is known alive.
+  // Object3D cloning shares immutable geometry/material resources but avoids
+  // constructing and texture-baking a duplicate tank during a transition.
+  let clonedRoot: THREE.Object3D | null = null;
+  let sourceLifetime: MaskSourceLifetime | null = null;
+  try {
+    clonedRoot = measureTopMaskStage(trace, 'clone', () => sourceVisual ? cloneMaskSource(sourceVisual.root) : null);
+    // Watch the original resources, including queued time. Some cloned mesh
+    // classes copy geometry, but disposal of their live source still cancels
+    // this borrowed-source job instead of reacquiring it on a later pass.
+    if (clonedRoot && sourceVisual) sourceLifetime = watchMaskSourceLifetime(sourceVisual.root);
+  } catch (error) {
+    disposeMaskClone(clonedRoot);
+    finishTopMaskLoad(trace, 'failed');
+    recordMaskFailure(id, error, true);
+    cacheMaskResult(id, null);
+    console.warn('[tankThumbs] mask clone failed:', errorMessage(error));
+    return Promise.resolve(null);
+  }
+  const work = maskWorkTail.then(() => buildTopDownMasks(spec, clonedRoot, trace, sourceLifetime))
+    .finally(() => {
+      disposeMaskClone(clonedRoot);
+      sourceLifetime?.release();
+      pendingMasks.delete(id);
+    });
+  pendingMasks.set(id, work);
+  // Shared target/pixel storage is exclusively owned through BOTH passes and
+  // their canvas copies, including failures. Different tanks cannot interleave.
+  maskWorkTail = work.then(() => undefined, () => undefined);
+  return work;
+}

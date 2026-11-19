@@ -1,0 +1,219 @@
+import fs from 'node:fs';
+import { uniqueIds } from './id-list.mjs';
+import path from 'node:path';
+import {Matrix4,Quaternion,Vector3} from 'three';
+import {createTank} from '../src/vehicles/tankFactory.ts';
+import {TANK_SPECS} from '../src/vehicles/specs.ts';
+import {TANK_IDS} from '../src/vehicles/tankIdAliases.ts';
+import {ensureInteriorFills} from '../src/vehicles/interiorFills.ts';
+import {MISSION_ATTACHMENT_SEATS} from '../src/sim/missionAttachmentSeats.generated.ts';
+import {MISSION_DOCK_SEATS_PATH,missionDockSeatsSource} from './mission-dock-seats.mjs';
+import {missionAttachmentCandidates,missionAttachmentMotionClear,missionAttachmentSignature,missionAttachmentTurretPivot,DRONE_DOCK_CRADLE} from '../src/sim/missionAttachment.ts';
+import {authoredSupportCandidates,collectMissionStock,nativeSupportedSeat,nativeMissionCollision,nativeMissionTakeoffCollision,nativeRoofHeight,missionStockFingerprint} from './mission-attachment-geometry.mjs';
+import {missionSeatTrials} from './mission-attachment-seat-trials.mjs';
+import {DRONE_DOCK_EXEMPT} from '../src/sim/droneDockExempt.ts';
+import {LIVED_IN_RACKS,publishedStowageRacks,seatRackOverlaps} from '../src/vehicles/stowageRacks.ts';
+import {partArgs,writePartRows} from './changed-only/parts.mjs';
+const args=process.argv.slice(2),value=(name,fallback)=>args.find(a=>a.startsWith(name+'='))?.slice(name.length+1)??fallback;
+const check=args.includes('--check'),dryRun=args.includes('--dry-run'),ids=uniqueIds(value('--ids',Object.keys(TANK_SPECS).join(',')).split(','),'gen-mission-attachment-seats --ids');
+const seeds=value('--seeds','4000,4242,8191').split(',').map(Number),qualities=value('--qualities','high,low').split(',');
+const reportPath=value('--report','.qa-dev/drone-dock/native-seats-report.json');
+// Parts (268, tools/changed-only/parts.mjs): --ids --out-dir=<dir> seats its ids into dir alone (each id's record, or
+// null for a removed one, and its report row); --merge-from=<dir>,<dir> takes those rows in place of seating them and
+// writes both tables and the report once, as one run does. A part writes nothing in the tree, so parts never race
+// through flush(); a failing id is a report row there too, and the merge's exit says so.
+const PART_TOOL='gen-mission-attachment-seats',parts=partArgs(args,PART_TOOL),partRows={};
+if((parts.partDir||parts.merging)&&(check||dryRun))throw new Error(PART_TOOL+': parts (--out-dir, --merge-from) seat; never with --check or --dry-run');
+// Authored stands taller than the standard rises reach, or a seat the grid's order passes over (a level seat clear of
+// hatches); a --hints row for the same id replaces one. The BMPT's braced
+// stand is the one src/game/missionAttachmentMechanical.selftest.mjs certifies independently: no other BMPT roof or
+// hull seat clears its twin 30 mm envelope (2026-10-08: none in 295,000 grid candidates).
+const AUTHORED_DOCKS=[
+ {id:'bmpt_t90',chosen:{frame:'turret',x:.07,y:1.3280000162124634,z:.09,payloadOffset:[-.24,-.24],braced:true},riseM:.32},
+ // 2026-11-01 (267, the CV90 rebuild): the Strf 9040's roof station at the right rear sweeps about 1 m, which leaves the
+ // left front of the roof as the only patch clear of it; the feet stand on the roof plate ahead of the commander's sight
+ // and the pad cantilevers 0.24 m forward over the left cheek, outside the gun mask's ±90 degree sweep. The native grid
+ // and its cantilever pass do not reach this foot/offset pair, so the seat is offered first (standard rise; every check runs).
+ {id:'cv90',chosen:{frame:'turret',x:.6,y:.747,z:.46,payloadOffset:[0,.24]}},
+ // 2026-11-02 (268 r11, the KF51-U's RWS moved beside the sensor tower as photographed): the tower top that carried the
+ // dock is now under the RWS barrel's sweep, and the suit nets the rest of the roof; the dock takes the roof plate the
+ // RWS left at the turret's back (installed frame; roof y 0.634 there), clear of that sweep, in the suit's hole for it.
+ {id:'kf51_u',chosen:{frame:'turret',x:.315,y:.679,z:-2.205}},
+ // Round 270 (the coordinator, 2026-11-06: a dock foot on the gunner's hatch lid rim is not clear of hatches): the M2A2
+ // classic turret's roof between the commander's ring (x -0.36, z -0.25, r 0.32) and the gunner's hatch (x 0.38,
+ // z -0.42, r 0.25), all four feet on the 0.66 roof plane and the airframe forward of the bustle rack (z -0.98). The
+ // chooser's first seat at the standard rises stood one foot on the hatch lid (0.71); this is the one level, rack-clear
+ // seat a 2 cm grid of the roof found, on the standard 0.125 rise.
+ {id:'m2a2_bradley',chosen:{frame:'turret',x:.02,y:.785,z:-.58},riseM:.125},
+];
+const hintsPath=value('--hints',''),fileHints=hintsPath?JSON.parse(fs.readFileSync(hintsPath)):[];
+const hintRows=[...AUTHORED_DOCKS.filter(dock=>!fileHints.some(row=>row.id===dock.id)),...fileHints];
+const hints=Object.fromEntries(hintRows.filter(r=>r.chosen).map(r=>[r.id,r.chosen]));
+// A measured, authored bracket may need a nonstandard rise. This is only a
+// candidate preference: every support, weapon, launch and seed/LOD check runs.
+const hintRises=new Map(hintRows.filter(r=>r.riseM!==undefined).map(r=>{
+ if(!r.chosen||!Number.isFinite(r.riseM)||r.riseM<.025||r.riseM>.35)throw new Error('Invalid authored dock rise for '+r.id);
+ return [r.id,r.riseM];
+}));
+const stockPool=new Map();
+// A row under an id the tank id alias layer renamed moves to the new id unchanged; a row no spec carries is dropped
+// (SSOT 2.19).
+const records=Object.fromEntries(Object.entries(MISSION_ATTACHMENT_SEATS)
+  .map(([id,record])=>[Object.hasOwn(TANK_SPECS,id)?id:TANK_IDS.resolveIncoming(id),record])
+  .filter(([id])=>Object.hasOwn(TANK_SPECS,id))),report={schemaVersion:1,seeds,qualities,mode:check?'check':dryRun?'dry-run':'update',rows:[]};
+function ensureCase(cases,id,quality,seed){
+ const key=quality+':'+seed;
+ if(!cases.has(key)){
+  const tank=createTank(id,null,{proceduralOnly:true,geometryReceipt:true,quality,camoSeed:seed});tank.root.updateMatrixWorld(true);
+  cases.set(key,{tank,spec:TANK_SPECS[id],frames:new Map(),quality,seed});
+ }
+ return cases.get(key);
+}
+function caseStock(entry,frame,candidates){
+ if(!entry.frames.has(frame)){
+  const heights=candidates.filter(c=>c.frame===frame).map(c=>c.y);
+  const floor=heights.length?Math.min(...heights)-.50:-Infinity;
+  const fingerprint=missionStockFingerprint(entry.tank,frame),key=frame+':'+floor+':'+fingerprint;
+  let stock=stockPool.get(key);if(!stock){stock=collectMissionStock(entry.tank,frame,floor,false,entry.spec);stockPool.set(key,stock);}
+  entry.frames.set(frame,stock);
+ }
+ return entry.frames.get(frame);
+}
+// Round 270 (Main, 2026-11-06: "The rack and its load are the real vehicle's stowage; the dock is a mission add-on, so it
+// finds clear deck"): a stowage rack (src/vehicles/stowageRacks.ts: the racks the lived-in decor loads and every rack fitting
+// the builders publish) and the load over its rails are occupied, so the chooser passes over a seat whose keep-out boxes
+// enter one. Only the chooser reads it: a kept record is held to it by src/vehicles/stowageRackSeats.selftest.mjs.
+function caseRacks(entry){
+ entry.racks??=[...(LIVED_IN_RACKS[entry.spec.id]??[]),...publishedStowageRacks(entry.tank.root)];
+ return entry.racks;
+}
+function sameSupport(stock,seat){
+ const supported=nativeSupportedSeat(stock,{...seat,y:Math.max(...seat.supportY)+.045},seat.y-Math.max(...seat.supportY));
+ if(!supported)return false;
+ return supported.supportY.every((y,i)=>Math.abs(y-seat.supportY[i])<.001);
+}
+function launchPivotFailure(entry,spec){
+ if(spec.armor.turretless)return null;
+ const owner=entry.tank.root.getObjectByName('rig_turret');
+ if(!owner)return {kind:'missing native turret owner'};
+ const local=new Matrix4().copy(entry.tank.root.matrixWorld).invert().multiply(owner.matrixWorld);
+ const native=new Vector3(),orientation=new Quaternion();local.decompose(native,orientation,new Vector3());
+ if(orientation.angleTo(new Quaternion())>1e-6)return {kind:'unsupported native launch orientation',actual:orientation.toArray()};
+ // Auxiliary inventory datums are serialized to four decimal places.
+ return native.distanceTo(new Vector3(...missionAttachmentTurretPivot(spec)))>1e-4?{kind:'native launch pivot',actual:native.toArray()}:null;
+}
+function validateCases(spec,seat,candidates,cases){
+ const failures=[],hashes={};
+ for(const quality of qualities)for(const seed of seeds){
+  const entry=ensureCase(cases,spec.id,quality,seed),stock=caseStock(entry,seat.frame,candidates);
+  hashes[quality+':'+seed]=stock.geometryHash;
+  const pivotFailure=launchPivotFailure(entry,spec);if(pivotFailure)failures.push({quality,seed,...pivotFailure});
+  if(!sameSupport(stock,seat))failures.push({quality,seed,kind:'support'});
+  const collision=nativeMissionCollision(stock,seat)??nativeMissionTakeoffCollision(stock,seat);if(collision)failures.push({quality,seed,...collision});
+  if(!nativeMissionCollision(stock,{...seat,y:seat.y-.3}))failures.push({quality,seed,kind:'buried-payload negative control missed'});
+ }
+ return {failures,hashes};
+}
+function refinedCandidates(spec,cases,candidates){
+ // The cantilever pass offsets this list, so it carries the authored supports too.
+ const entry=ensureCase(cases,spec.id,'high',4000),result=authoredSupportCandidates(spec.id,DRONE_DOCK_CRADLE).map(c=>({...c,...DRONE_DOCK_CRADLE}));
+ for(const frame of spec.armor.turretless?['hull']:['turret','hull']){
+  const stock=caseStock(entry,frame,candidates),rows=stock.support;if(!rows.length)continue;
+  const minX=Math.min(...rows.map(r=>r.bounds.min.x)),maxX=Math.max(...rows.map(r=>r.bounds.max.x));
+  const minZ=Math.min(...rows.map(r=>r.bounds.min.z)),maxZ=Math.max(...rows.map(r=>r.bounds.max.z));
+  for(let z=minZ+.18;z<maxZ-.18;z+=.06)for(let x=minX+.17;x<maxX-.17;x+=.06){
+   const y=nativeRoofHeight(stock,x,z);if(Number.isFinite(y))result.push({frame,x,y:y+.045,z,...DRONE_DOCK_CRADLE});
+  }
+ }
+ return result;
+}
+function reportSearchProgress(id,refined,checked,rejections){
+ if(checked%500===0)console.log(id,'search',refined?'native-grid':'metadata-grid',checked,JSON.stringify(rejections));
+}
+function findSeat(spec,candidates,cases,refined=false,cantilever=false){
+ const entry=ensureCase(cases,spec.id,'high',4000);
+ const pivotFailure=launchPivotFailure(entry,spec);if(pivotFailure)return {seat:null,checked:0,firstFailure:pivotFailure,reason:pivotFailure.kind};
+ let checked=0,firstFailure=null;const rejections={};
+ const reject=key=>{rejections[key]=(rejections[key]??0)+1;};
+ const authored=!refined&&hintRises.has(spec.id)
+  ?{candidate:{...hints[spec.id],...DRONE_DOCK_CRADLE},riseM:hintRises.get(spec.id)}:undefined;
+ for(const {rise,candidate} of missionSeatTrials(candidates,authored)){
+  const stock=caseStock(entry,candidate.frame,candidates),seat=nativeSupportedSeat(stock,candidate,rise);checked++;
+  reportSearchProgress(spec.id,refined,checked,rejections);
+  if(!seat){reject(candidate.frame+':support');continue;}
+  if(!missionAttachmentMotionClear(spec,seat)){reject(candidate.frame+':roof-gun');continue;}
+  if(seatRackOverlaps(seat,caseRacks(entry)).length){reject(candidate.frame+':stowage-rack');continue;}
+  const collision=nativeMissionCollision(stock,seat)??nativeMissionTakeoffCollision(stock,seat);if(collision){reject(candidate.frame+':'+collision.kind+':'+collision.mesh);firstFailure??=collision;continue;}
+  const validation=validateCases(spec,seat,candidates,cases);
+  if(validation.failures.length){firstFailure??=validation.failures[0];continue;}
+  return {seat:{...seat,signature:missionAttachmentSignature(spec),geometryHash:stock.geometryHash},checked,validation};
+ }
+ if(!refined){
+  const result=findSeat(spec,refinedCandidates(spec,cases,candidates),cases,true);
+  return {...result,checked:checked+result.checked,refined:true};
+ }
+ if(!cantilever){
+  const offsets=[[.24,0],[-.24,0],[0,.24],[0,-.24],[.36,0],[-.36,0],[0,.36],[0,-.36],[.48,0],[-.48,0],[0,.48],[0,-.48]];
+  const shifted=offsets.flatMap(payloadOffset=>candidates.map(c=>({...c,payloadOffset})));
+  const result=findSeat(spec,shifted,cases,true,true);return {...result,checked:checked+result.checked,cantilever:true};
+ }
+ return {seat:null,checked,firstFailure,rejections};
+}
+function inspectRecord(spec,seat,candidates,cases){
+ if(!seat)return {pass:false,reason:'missing native seat record'};
+ if(seat.signature!==missionAttachmentSignature(spec))return {pass:false,reason:'stale authoritative geometry signature'};
+ if(!missionAttachmentMotionClear(spec,seat))return {pass:false,reason:'authoritative roof-gun sweep'};
+ const validation=validateCases(spec,seat,candidates,cases);
+ const entry=ensureCase(cases,spec.id,'high',4000),stock=caseStock(entry,seat.frame,candidates);
+ if(stock.geometryHash!==seat.geometryHash)validation.failures.push({kind:'stale native geometry hash'});
+ // Actual buried-volume negative control must fail on the same real stock.
+ const buried=nativeMissionCollision(stock,{...seat,y:seat.y-.3});
+ if(!buried)validation.failures.push({kind:'buried-payload negative control missed'});
+ return {pass:validation.failures.length===0,validation};
+}
+/** A plain run writes the report and tables after every id (a long run keeps what it has done); parts and a merge
+ * write once, at the end. */
+const progress=()=>{if(!parts.partDir&&!parts.merging)flush();};
+function flush(){
+ fs.mkdirSync(path.dirname(reportPath),{recursive:true});fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
+ if(check||dryRun)return;
+ const rows=Object.entries(records).sort(([a],[b])=>a.localeCompare(b)).map(([id,record])=>'  '+JSON.stringify(id)+': '+JSON.stringify(record));
+ fs.writeFileSync('src/sim/missionAttachmentSeats.generated.ts',`// Generated by tools/gen-mission-attachment-seats.mjs. Do not hand-edit.\nimport type { MissionAttachmentNativeRecord } from './missionAttachment.ts';\nexport const MISSION_ATTACHMENT_SEATS: Readonly<Record<string,MissionAttachmentNativeRecord>> = {\n${rows.join(',\n')}\n};\n`);
+ // (2026-10-12) the boot-side projection beside it: the same records without their audit keys (tools/mission-dock-seats.mjs)
+ fs.writeFileSync(MISSION_DOCK_SEATS_PATH,missionDockSeatsSource(records));
+}
+for(const id of ids){
+ const taken=parts.take(id);
+ if(taken){
+  if(taken.record)records[id]=taken.record;else delete records[id];
+  report.rows.push(taken.report);console.log(id,taken.report.pass?'PASS':'FAIL','(part)');continue;
+ }
+ stockPool.clear();
+ const spec=TANK_SPECS[id];if(!spec)throw new Error('Unknown vehicle '+id);
+ // a sealed dockless vehicle (src/sim/droneDockExempt.ts DRONE_DOCK_EXEMPT) keeps no seat record
+ if(Object.hasOwn(DRONE_DOCK_EXEMPT,id)){
+  const pass=!check||!records[id];delete records[id];
+  const row={id,pass,exempt:DRONE_DOCK_EXEMPT[id]};report.rows.push(row);partRows[id]={record:null,report:row};progress();
+  console.log(id,pass?'EXEMPT':'FAIL','',pass?DRONE_DOCK_EXEMPT[id]:'an exempt vehicle keeps a seat record');continue;
+ }
+ await ensureInteriorFills([id]);
+ // Authored supports (a receiver's pads, a welded patch) are narrow, and the
+ // .06 m native grid can step over them (2026-10-08: no Twardy, M1A1 SA or
+ // Russian patch seat in 280,000+ candidates each). Offer them after any
+ // hint and the current record, before the broad grid; every check runs.
+ const candidates=[...(hints[id]?[hints[id]]:[]),...(records[id]?[records[id]]:[]),...authoredSupportCandidates(id,DRONE_DOCK_CRADLE),...missionAttachmentCandidates(spec)].map(c=>({...c,...DRONE_DOCK_CRADLE})),cases=new Map();
+ try{
+  const result=check?inspectRecord(spec,records[id],candidates,cases):findSeat(spec,candidates,cases);
+  if(result.seat)records[id]=result.seat;
+  const pass=check?result.pass:!!result.seat;
+  const row={id,pass,...result};report.rows.push(row);partRows[id]={record:records[id]??null,report:row};progress();
+  console.log(id,pass?'PASS':'FAIL',result.checked??'',result.reason??'');
+ }finally{for(const entry of cases.values())entry.tank.dispose();}
+}
+parts.done();
+if(parts.partDir){
+ writePartRows(parts.partDir,PART_TOOL,partRows);
+ console.log(`mission seats: part of ${Object.keys(partRows).length} ids written to ${parts.partDir}`);process.exit(0);
+}
+report.pass=report.rows.every(r=>r.pass);flush();console.log(`mission seats: ${report.rows.filter(r=>r.pass).length}/${report.rows.length} ${check?'verified':'generated'}`);
+if(!report.pass)process.exitCode=1;

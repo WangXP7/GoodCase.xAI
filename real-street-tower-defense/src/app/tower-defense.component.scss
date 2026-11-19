@@ -1,0 +1,272 @@
+@use './styles/game-ui' as ui;
+
+// Layout of the game: header, map, sidebar; the overlays over the map. The
+// look comes from the td-* classes.
+
+/* === Container === */
+.td-container {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 1400px;
+  height: 85vh;
+  max-height: 900px;
+  background: var(--td-bg-dark);
+  overflow: hidden;
+}
+
+.td-container.td-fullscreen {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+}
+
+/* === Main Layout === */
+.td-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden; /* Constrain sidebar height; canvas-area handles its own overflow */
+}
+
+/* === Canvas Area === */
+.td-canvas-area {
+  flex: 1;
+  position: relative;
+  background: var(--td-panel-shadow);
+  overflow: visible; /* Allow quick-actions to extend beyond bounds */
+  /* Logo row at the bottom left (.td-logo-attribution): its offset from the
+   * bottom edge and its height. The ability bar keeps above it. */
+  --td-logo-bottom: 5px;
+  --td-logo-height: 16px;
+}
+
+.td-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.td-canvas.hidden {
+  visibility: hidden;
+}
+
+.td-canvas.td-placement-cursor {
+  cursor: none;
+}
+
+/* Top centre column: game speed with its PAUSED chip, under it the boss
+   bar. The column itself lets clicks through to the map. */
+.td-hud-top {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.td-hud-top > app-game-speed {
+  pointer-events: auto;
+}
+
+/* The boss intro holds the screen: the column steps back, its components
+   stay alive (the boss bar keeps the boss it has just seen) */
+.td-hud-top.td-hud-muted {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--td-dur-mid) var(--td-ease-out), visibility 0s linear var(--td-dur-mid);
+}
+
+/* Bottom centre of the map, stacked upwards (skip intro, LOS legend, hint box).
+   Absolute in .td-canvas-area, so the centre is the map's, not the page's. */
+.td-bottom-stack {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* Logo Attribution (bottom left) */
+.td-logo-attribution {
+  position: absolute;
+  bottom: var(--td-logo-bottom);
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.td-google-logo {
+  height: var(--td-logo-height);
+  width: auto;
+  display: block;
+}
+
+.td-cesium-logo {
+  height: var(--td-logo-height);
+  width: auto;
+  display: block;
+  opacity: 0.85;
+}
+
+/* Map Attribution (bottom right) */
+.td-map-attribution {
+  position: absolute;
+  bottom: 5px;
+  right: 10px;
+  padding: 1px 8px;
+  z-index: 5;
+  max-width: 500px;
+}
+
+/* === Overlays === */
+/* The engine failed where no menu stands, or the key screen did not load:
+ * a dialog over the dark page, the menu's plate says it otherwise */
+.td-error-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  background: var(--td-bg-dark);
+}
+
+.td-error-plate {
+  width: 480px;
+}
+
+/* === Game over and connection lost ===
+ * Game over: GAME OVER over the greyed map under a red vignette, the line
+ * with place and wave under it, the plate with the run's figures and the
+ * buttons below (td-gameover-* recipes); connection lost: a dialog over the
+ * darkened map. The overlays take the focus to be
+ * announced (tdFocusOnShow); they are no control to ring. */
+.td-gameover-overlay:focus,
+.td-lost-overlay:focus {
+  outline: none;
+}
+
+.td-gameover-overlay,
+.td-lost-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.td-gameover-overlay {
+  z-index: 20;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.td-gameover-title {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+/* Coop: the connection broke in the game (TODO E40); above the map, below the game over screen */
+.td-lost-overlay {
+  z-index: 19;
+}
+
+.td-lost-content {
+  width: 520px;
+}
+
+.td-gameover-content {
+  width: 760px;
+  min-height: 0;
+  max-height: 100%;
+}
+
+/* The dialog stands, its body scrolls */
+.td-gameover-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-sp-4);
+}
+
+/* Coop: each player's part of the run (R16); colour dot and name */
+.td-coop-player {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+/* === Start menu ===
+ * The scene alone behind the start menu, the whole width (Main.dc.html):
+ * no header, no sidebar; the canvas follows its box. The pause layer keeps
+ * them under its veil. */
+.td-start-menu > app-game-header,
+.td-start-menu app-game-sidebar {
+  display: none !important;
+}
+
+/* === Photo mode ===
+ * Header, sidebar and every overlay of the canvas area go; the canvas, the
+ * map attribution the tiles require, the photo bar, and screens that block
+ * the game (loading, token, error, game over) stay. */
+.td-photo-mode > app-game-header,
+.td-photo-mode app-game-sidebar,
+.td-photo-mode .td-canvas-area > :not(canvas):not(.td-logo-attribution):not(.td-map-attribution):not(.td-photo-bar):not(.td-gameover-overlay):not(.td-error-overlay):not(td-token-setup) {
+  display: none !important;
+}
+
+/* === Manned tower (TowerControlService) ===
+ * The view is the tower's aim: the sidebar and the overlays of the canvas
+ * area go, the header (wave, HQ, credits) and the info overlay (FPS) stay,
+ * the crosshair HUD comes. */
+.td-tower-control app-game-sidebar,
+.td-tower-control .td-canvas-area > :not(canvas):not(.td-logo-attribution):not(.td-map-attribution):not(app-tower-control-hud):not(app-info-overlay):not(.td-error-overlay):not(td-token-setup) {
+  display: none !important;
+}
+
+/* === Replay of the last wave ===
+ * As in photo mode header, sidebar and the overlays of the canvas area go,
+ * the game-over screen as well: the replay can start from it. The replay
+ * bar (app-replay-bar) places itself at the bottom. */
+.td-replay-mode > app-game-header,
+.td-replay-mode app-game-sidebar,
+.td-replay-mode .td-canvas-area > :not(canvas):not(.td-logo-attribution):not(.td-map-attribution):not(app-replay-bar):not(.td-error-overlay):not(td-token-setup) {
+  display: none !important;
+}
+
+.td-photo-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  padding: 6px;
+}
+
+/* The one message banner across the top, with Reload where it helps */
+.notice-banner {
+  position: absolute;
+  // Under the header and the game speed, over the map (TODO E137)
+  top: calc(var(--td-h-topbar) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(720px, calc(100% - 32px));
+  box-sizing: border-box;
+}

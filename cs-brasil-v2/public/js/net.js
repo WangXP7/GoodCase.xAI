@@ -1,0 +1,344 @@
+/* TRANSPORTE DE REDE. WebSocket puro atrás de uma interface pequena (trocável por
+   WebTransport). Daqui só sai INPUT. Nós, salas e paridade: nos-rede.js. */
+
+/* NÓS OFICIAIS. Cada um é um processo do servidor numa região. Acrescentar região é
+   acrescentar uma linha aqui e subir a VM com o mesmo script de deploy. */
+// Registro de nós em nos.js: a página de convite do site lê a MESMA lista.
+export { NOS, parseConvite, linkDeConvite, httpDoNo, NO_RE, ordenarNos, FAIXA_PING_MS, melhorNoParaJogar, TETO_COMPANHIA_MS } from './nos.js';
+import { NOS } from './nos.js';
+import { decodeSnapshot, MAX_SNAPSHOT_BYTES, CLIENT_SNAPSHOT_PROTOCOL, snapshotVersionForProtocol } from './netcodec.js';
+import { TransporteWS, TransporteWT } from './transporte.js';
+import { MedidorDeTaxa } from './netrate.js';
+import { versaoCompativel } from './nos-rede.js';
+import * as versao from './version.js';
+const { VERSION } = versao;
+
+/* CHAT DE SALA (docs/chat-de-sala.md §6): frames que chegam antes de existir painel ficam
+   em `_chatFila`; o teto é o `filaClienteMax` da tabela, cobrado por eval:chat (CC7). */
+export const CHAT_FILA_MAX = 64;
+const CHAT_CID_RE = /^[A-Za-z0-9_-]{1,12}$/;
+const CHAT_CANAIS = ['sala', 'time'];
+const formaChat = (m) => Number.isInteger(m.id) && typeof m.txt === 'string' && typeof m.h === 'string' && CHAT_CANAIS.includes(m.ch);
+// `espera` fora de número finito e positivo vira '(NaN s)' no aviso: cai antes do painel
+const nackLimpo = (m) => (Number.isFinite(m.espera) && m.espera > 0 ? m : { type: m.type, cid: m.cid, motivo: m.motivo });
+
+// Online o lado vem do servidor; offline, da aba escolhida. A facção nunca decide o lado.
+export const resolvePlayerSide = (team) => (team === 'B' ? 'B' : 'E');
+// Lado local velho (REINICIAR/REVANCHE) monta o elenco do servidor do avesso: 6×5 (#785).
+export const ladoOnline = (team, net) => (net && (net.yourTeam === 'E' || net.yourTeam === 'B') ? net.yourTeam : team);
+
+/* Regra do personagem no MP (docs/adr/0007-personagem-escolhido.md): pede o escolhido se ele joga no
+   lado; se não joga, avisa e oferece a troca. Nunca troca calado. */
+export function decidirPersonagemMp({ escolhido, atual, lado, espectador, aceita, podeNoLado }) {
+  if (espectador || (lado !== 'E' && lado !== 'B') || !escolhido) return { acao: 'nada' };
+  if (escolhido.id === atual) return { acao: 'ok' };
+  if (!podeNoLado(escolhido, lado)) return { acao: 'avisar-lado', outroLado: lado === 'E' ? 'B' : 'E' };
+  if (!aceita) return { acao: 'avisar-servidor' };
+  return { acao: 'pedir', id: escolhido.id };
+}
+
+export async function transitionSlot(m, meta, current, validChar, remount) {
+  const next = { ...current, spectator: !!m.espectador };
+  if (!next.spectator && (m.yourTeam === 'E' || m.yourTeam === 'B')) {
+    next.team = m.yourTeam;
+    next.faction = next.team === 'B' ? meta.faccaoB : meta.faccaoE;
+    next.enemyFaction = next.team === 'B' ? meta.faccaoE : meta.faccaoB;
+    const corpo = (meta.roster || []).find((r) => r.id === m.yourEnt);
+    if (corpo && validChar(corpo.char)) next.char = corpo.char;
+  }
+  await remount(next);
+  return next;
+}
+
+
+export class NetClient {
+  constructor(url, { nome = null, room = null, codigo = null, pw = '', team = 'auto', ticket = '', refreshTicket = null, wt = '', wtHashes = null, csha = '' } = {}) {
+    // `sp` leva o subprotocolo para o gateway: quem escolhe a versão do snapshot é quem
+    // vai decodificá-la, e no caminho WebTransport não existe handshake para negociar
+    // `pronto=1`: este cliente avisa quando montou o mapa novo (o nó segura o round 1, com teto)
+    const qs = new URLSearchParams({ team, ...(codigo ? { codigo } : room ? { room } : {}), ...(pw ? { pw } : {}), ...(nome ? { nome } : {}), ...(ticket ? { ticket } : {}), ...(/^[a-f0-9]{7,40}$/.test(csha) ? { csha } : {}), pronto: '1' });
+    this.url = `${url}${url.includes('?') ? '&' : '?'}${qs}`;
+    this.wtUrl = wt ? `${wt}${wt.includes('?') ? '&' : '?'}${qs}&sp=${encodeURIComponent(CLIENT_SNAPSHOT_PROTOCOL)}` : '';
+    this.wtHashes = wtHashes;
+    this._refreshTicket = refreshTicket;
+    this.tp = null;
+    this.connected = false;
+    // `ws` continua legível (overlay de rede, réguas, sonda): é o socket de VERDADE, mas
+    // ninguém mais fala com ele — quem fala é o transporte.
+    Object.defineProperty(this, 'ws', { get: () => this.tp?.ws || null, configurable: true });
+    this.yourEnt = null;     // id do combatente que ESTE cliente controla (null = espectador)
+    this.yourTeam = null;
+    this.espectador = true;
+    // welcome (meta) + os dois últimos snapshots, que é o que a interpolação consome.
+    this.meta = null;
+    this.snap = null;
+    this.events = [];   // lotes `ev` (tick, t, list) — ver netgame._drenar
+    this.prev = null;
+    this.seq = 0;
+    this.seqCompra = 0;   // seq próprio dos pedidos de compra (`compra-ok`/`compra-nack`)
+    this.onWelcome = null; this.onSnapshot = null; this.onSlot = null; this.onPartida = null; this.onClose = null;
+    this.onCompra = null;
+    this.proximo = null; this.onProximo = null;   // próximo mapa anunciado no placar (nó antigo nunca manda)
+    this.onPersonagem = null;
+    this.onChat = null; this._chatFila = [];
+    // Taxa estimada pelo tempo de simulação; relógio parado publica indisponibilidade.
+    // Chegada local mede silêncio; quadros de render não definem emissão.
+    this.stats = { hz: 0, kbps: 0, gapMax: 0, sinceLast: 0, ents: 0, tick: 0, ping: 0, snaps: 0, bytes: 0 };
+    this._taxa = new MedidorDeTaxa();
+    this._lastSnapT = 0;
+    this._rttSamples = []; this._gapSamples = [];
+    this._pingTimer = null;
+  }
+
+  computeStats() {
+    const now = performance.now();
+    const taxa = this._taxa.atualizar(now);
+    // relógio do servidor parado publica null: indisponível, telemetria filtra antes de Number
+    this.stats.hz = taxa.hz;
+    this.stats.kbps = taxa.kbps;
+    // `sinceLast` é "há quanto tempo NÓS não vemos um pacote": é propriedade do
+    // cliente e continua no relógio local, de propósito.
+    this.stats.sinceLast = this._lastSnapT ? now - this._lastSnapT : 0;
+    return this.stats;
+  }
+
+  /* RTT medido no PRÓPRIO canal do jogo (ping/pong pelo WS). O módulo antigo media por
+     `fetch /health`: outra conexão, outro caminho, sem a fila do WebSocket — dava um número
+     bonito e errado, justamente quando o socket estava congestionado (que é quando importa). */
+  startPing(intervalMs = 1500) {
+    if (this._pingTimer) return;
+    const bate = () => { this.tp?.enviar(JSON.stringify({ type: 'ping', t: performance.now() })); };
+    bate();
+    this._pingTimer = setInterval(bate, intervalMs);
+  }
+  stopPing() { if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; } }
+  drainRttSamples() { return this._rttSamples.splice(0); }
+  drainGapSamples() { return this._gapSamples.splice(0); }
+
+  /* NEGOCIAÇÃO DE TRANSPORTE. WebSocket continua o PADRÃO: o datagrama só vira padrão
+     depois que o canário provar, e até lá quem pede é `?wt=`. Prazo curto e queda em
+     SILÊNCIO — um gateway fora do ar não pode virar "o jogo não abre". */
+  async connect(timeoutMs = 8000) {
+    const ticket = new URL(this.url).searchParams.get('ticket') || '';
+    // Sem emissor, usa WS direto: uma tentativa WT pode consumir o nonce mesmo sem welcome.
+    if (this.wtUrl && typeof WebTransport === 'function' && (!ticket || typeof this._refreshTicket === 'function')) {
+      try {
+        return await this._conectar(timeoutMs, () => new TransporteWT(this.wtUrl, { hashes: this.wtHashes }));
+      } catch (e) {
+        const falhou = this.tp;
+        this.tp = null; this.connected = false;
+        falhou?.fechar(1000, 'transport_fallback');
+        if (ticket) {
+          // O nó antigo consome o ticket antes de a ponte descobrir a incompatibilidade.
+          // O emissor garante nonce novo; o cliente mantém o ticket opaco.
+          const novoTicket = await this._refreshTicket();
+          if (typeof novoTicket !== 'string' || !novoTicket.trim() || novoTicket === ticket) throw new Error('ticket_refresh_invalid');
+          const url = new URL(this.url);
+          url.searchParams.set('ticket', novoTicket);
+          this.url = url.href;
+        }
+        try { console.info('[net] WebTransport falhou, caindo para WebSocket:', e?.message || e); } catch { /* console mudo */ }
+      }
+    }
+    return this._conectar(timeoutMs, () => new TransporteWS(this.url));
+  }
+
+  _conectar(timeoutMs, fabrica) {
+    return new Promise((resolve, reject) => {
+      let done = false, ended = false, tp = null, prazo = null;
+      const ativo = () => !ended && this.tp === tp;
+      const assenta = (fn, v) => { if (done) return; done = true; if (prazo) clearTimeout(prazo); fn(v); };
+      const falha = (e, codigo = 1002, motivo = 'protocolo_incompativel') => {
+        if (!ativo()) return;
+        ended = true; this.connected = false;
+        const accepted = done;
+        assenta(reject, e);
+        tp.fechar(codigo, motivo);
+        if (accepted) this.onClose?.();
+      };
+      const trata = (dados, binary, bytes) => {
+        if (!ativo()) return;
+        let m;
+        try { m = binary ? decodeSnapshot(dados) : JSON.parse(dados); }
+        catch { if (binary) falha(new Error('snapshot_invalid'), 1002, 'snapshot_invalid'); return; }
+        if (m.type === 'welcome') {
+          if (m.protocolVersion < 8 || m.protocolVersion !== snapshotVersionForProtocol(tp.protocolo)) { falha(new Error('protocolo_incompativel')); return; }
+          // Versão diferente do nó não tira ninguém da partida (decisão do dono, 13/10);
+          // ?mpversao=1 volta a recusar, para diagnóstico.
+          this.versaoDiferente = versaoCompativel(m.clientVersion, VERSION, m.simHash)
+            ? null : { no: m.clientVersion, jogo: VERSION };
+          if (this.versaoDiferente && new URLSearchParams(globalThis.location?.search || '').get('mpversao') === '1') {
+            const e = new Error('versao_incompativel');
+            e.detalhe = this.versaoDiferente;
+            falha(e, 1002, 'versao_incompativel');
+            return;
+          }
+          if (this.versaoDiferente) console.warn('[mp] nó em outra versão, entrando mesmo assim', this.versaoDiferente);
+          this.meta = m; this.yourEnt = m.yourEnt; this.yourTeam = m.yourTeam; this.espectador = !!m.espectador;
+          this.onWelcome?.(m);
+          assenta(resolve, m);
+        } else if (m.type === 'error') {
+          assenta(reject, new Error(m.error || 'erro'));
+        } else if (m.type === 'pong') {
+          const rtt = performance.now() - m.t;
+          if (Number.isFinite(rtt) && rtt >= 0 && rtt <= 60000) {
+            this.stats.ping = rtt;
+            // Mesma regra do gap: aba oculta = ping inflado pelo throttle do navegador,
+            // não pela rede. stats.ping atualiza (informativo), a AMOSTRA não entra.
+            if (!(typeof document !== 'undefined' && document.hidden)) {
+              this._rttSamples.push(+rtt.toFixed(1));
+              if (this._rttSamples.length > 32) this._rttSamples.shift();
+            }
+          }
+        } else if (m.type === 'partida') {
+          if (m.protocolVersion < 8 || m.protocolVersion !== snapshotVersionForProtocol(tp.protocolo)) { falha(new Error('protocolo_incompativel')); return; }
+          // o servidor girou o mapa: meta NOVA (roster, ids, mapa, facções) + o seu slot (BUG-112)
+          this.meta = m; this.yourEnt = m.yourEnt; this.yourTeam = m.yourTeam; this.espectador = !!m.espectador;
+          this.snap = null; this.prev = null;   // snapshots do jogo velho não servem para o novo
+          this.events.length = 0;               // eventos do jogo velho idem
+          this.proximo = null;
+          // a janela de taxa pertence ao jogo que acabou de morrer: recomeça do zero
+          this._taxa.reiniciar();
+          this.onPartida?.(m);
+        } else if (m.type === 'proximo') {
+          if (typeof m.map === 'string' && m.map) {
+            this.proximo = { ...m, recebidoEm: Date.now() };
+            this.onProximo?.(this.proximo);
+          }
+        } else if (m.type === 'slot') {
+          // entrou em campo / virou espectador (o servidor confirma; a UI nunca decide sozinha)
+          this.yourEnt = m.yourEnt; this.yourTeam = m.yourTeam; this.espectador = !!m.espectador;
+          this.onSlot?.(m);
+        } else if (m.type === 'clans') {
+          if (this.meta && Array.isArray(m.clanTags)) this.meta.clanTags = m.clanTags.slice(0, 64);
+        } else if (m.type === 'personagem') {
+          // um corpo trocou de personagem: o roster da partida acompanha, o netgame remonta a malha
+          if (Number.isInteger(m.ent) && typeof m.char === 'string') {
+            const r = (this.meta?.roster || []).find((x) => x.id === m.ent);
+            if (r) { r.char = m.char; r.skinId = m.skinId || null; r.eyewearId = m.eyewearId || null; }
+            this.onPersonagem?.(m);
+          }
+        } else if (m.type === 'ev') {
+          // eventos do servidor (acerto/abate com autor): texto, drenados pelo netgame no tick deles
+          if (Array.isArray(m.list) && Number.isInteger(m.tick)) {
+            this.events.push({ tick: m.tick, t: m.t, list: m.list.slice(0, 32) });
+            if (this.events.length > 256) this.events.splice(0, this.events.length - 256);
+            this.stats.evs = (this.stats.evs || 0) + 1;
+          }
+        } else if (m.type === 'snapshot') {
+          this.prev = this.snap; this.snap = m;
+          const now = performance.now();
+          this.stats.tick = m.tick | 0; this.stats.ents = (m.ents && m.ents.length) || 0;
+          if (this._lastSnapT) {
+            const gap = now - this._lastSnapT;
+            this.stats.gapMax = Math.max(gap, this.stats.gapMax * 0.92);
+            // Aba oculta não é experiência de jogo: o navegador suspende o event loop e
+            // os gaps viram segundos (falso "atenção" mobile que polui o p95). Congela.
+            if (!(typeof document !== 'undefined' && document.hidden)) {
+              this._gapSamples.push(+gap.toFixed(1));
+              if (this._gapSamples.length > 512) this._gapSamples.shift();
+            }
+          }
+          this._lastSnapT = now;
+          // `m.t` é o relógio DO SERVIDOR (netcodec, f64 s): `now` é quando o render
+          // liberou a thread, não quando o pacote chegou — ver netrate.js.
+          this._taxa.amostra(bytes, m.t, now);
+          this.stats.snaps++; this.stats.bytes += bytes;
+          this.onSnapshot?.(m);
+        } else if (m.type === 'compra-ok' || m.type === 'compra-nack') {
+          // economia de partida no MP (docs/ECONOMIA-PARTIDA.md): resposta do nó ao pedido;
+          // sem _compra (nó antigo / espectador) o frame morre aqui.
+          if (Number.isInteger(m.seq)) this.onCompra?.(m);
+        } else if (m.type === 'chat') {
+          // chat de sala: sem meta.chat o cliente é inerte, e frame malformado é descartado
+          if (this.chatLigado() && formaChat(m)) this._entregaChat(m);
+        } else if (m.type === 'chat_hist') {
+          if (this.chatLigado() && Array.isArray(m.list)) this._entregaChat({ type: 'chat_hist', list: m.list.filter((x) => x && formaChat(x)) });
+        } else if (m.type === 'chat_nack') {
+          if (this.chatLigado() && typeof m.cid === 'string' && typeof m.motivo === 'string') this._entregaChat(nackLimpo(m));
+        } else if (m.type === 'chat_denuncia') {
+          if (this.chatLigado() && Number.isInteger(m.id) && typeof m.estado === 'string') this._entregaChat(m);
+        }
+      };
+      try {
+        tp = fabrica(); this.tp = tp;
+        prazo = Number.isFinite(timeoutMs)
+          ? setTimeout(() => falha(new Error('timeout'), 1000, 'timeout'), timeoutMs) : null;
+        tp.abrir({
+          aberto: () => { if (ativo()) this.connected = true; },
+          erro: (e) => falha(e),
+          fechado: () => {
+            if (!ativo()) return;
+            ended = true; this.connected = false;
+            const accepted = done;
+            assenta(reject, new Error('closed'));
+            if (accepted) this.onClose?.();
+          },
+          mensagem: trata,
+        });
+      } catch (e) { if (tp) falha(e); else assenta(reject, e); }
+    });
+  }
+
+  // input compacto — o servidor sanitiza tudo de novo (cliente = território inimigo).
+  sendInput(inp) {
+    if (!this.tp?.pronto) return 0;
+    const seq = ++this.seq;
+    // INPUT tolera perda (o próximo comando corrige): é o primeiro candidato a datagrama
+    this.tp.enviarInseguro(JSON.stringify({ type: 'input', seq, ...inp }));
+    return seq;   // netgame ancora a pose predita no mesmo input que o servidor reconhece no v4
+  }
+  // Amostra de EXPERIÊNCIA do cliente (não autoridade): FPS só existe no navegador.
+  // O nó valida/taxa e junta isto à sessão autoritativa de sala para o painel interno.
+  sendClientStats(sample) {
+    this.tp?.enviar(JSON.stringify({ type: 'client_stats', ...sample }));
+  }
+  // pedir vaga num time ('E' | 'B' | 'auto'); o servidor responde com `slot`.
+  pedirTime(team = 'auto') { this.tp?.enviar(JSON.stringify({ type: 'time', team })); }
+  /* Só servidor que anuncia o recurso troca o corpo; servidor antigo ignora tipo desconhecido. */
+  aceitaPersonagem() { return Array.isArray(this.meta?.recursos) && this.meta.recursos.includes('personagem'); }
+  pedirPersonagem(id) { if (typeof id === 'string') this.tp?.enviar(JSON.stringify({ type: 'personagem', id })); }
+  /* Mapa novo montado: libera o round 1 no nó. Sem `partida` na meta (nó antigo) não há o que avisar. */
+  avisarPronto(partida) {
+    if (!Number.isInteger(partida)) return false;
+    return !!this.tp?.enviar(JSON.stringify({ type: 'pronto', partida }));
+  }
+  // O cliente só pede; preço/saldo/tempo/zona o nó lê do próprio estado (doc ECONOMIA).
+  pedirCompra(id) {
+    if (typeof id !== 'string' || !id || !this.tp?.pronto) return 0;
+    const seq = ++this.seqCompra;
+    this.tp.enviar(JSON.stringify({ type: 'compra', id, seq }));
+    return seq;
+  }
+  // sair de campo e assistir: o corpo volta a ser bot e a partida segue cheia.
+  espectar() { this.tp?.enviar(JSON.stringify({ type: 'espectar' })); }
+
+  /* ── chat de sala (docs/chat-de-sala.md) ── versão desconhecida da meta vale como ausente;
+     tudo sai por `enviar` (confiável), nunca por `enviarInseguro`. */
+  chatLigado() { const c = this.meta?.chat; return !!c && c.v === 1; }
+  _chatPronto() { return this.chatLigado() && !!this.tp?.pronto; }
+  _entregaChat(m) {
+    if (this.onChat) { this.onChat(m); return; }
+    this._chatFila.push(m);
+    if (this._chatFila.length > CHAT_FILA_MAX) this._chatFila.splice(0, this._chatFila.length - CHAT_FILA_MAX);
+  }
+  drenarChat() { return this._chatFila.splice(0, this._chatFila.length); }
+  enviarChat(ch, txt, cid) {
+    if (!this._chatPronto() || !this.meta.chat.pode) return false;
+    if (typeof txt !== 'string' || !CHAT_CID_RE.test(String(cid)) || !(this.meta.chat.canais || []).includes(ch)) return false;
+    return this.tp.enviar(JSON.stringify({ type: 'chat', ch, txt, cid }));
+  }
+  denunciarChat(id, motivo) {
+    if (!this._chatPronto() || !Number.isInteger(id) || !(this.meta.chat.denuncia || []).includes(motivo)) return false;
+    return this.tp.enviar(JSON.stringify({ type: 'chat_report', id, motivo }));
+  }
+
+  close() {
+    this.stopPing();
+    if (!this.tp) return;
+    // O close handshake do navegador pode demorar; avisa o nó antes para devolver o slot
+    // humano imediatamente e não deixar Rubao fantasma no lobby até o timeout de 45 s.
+    this.tp.enviar(JSON.stringify({ type: 'leave' }));
+    this.tp.fechar(1000, 'client_quit');
+  }
+}

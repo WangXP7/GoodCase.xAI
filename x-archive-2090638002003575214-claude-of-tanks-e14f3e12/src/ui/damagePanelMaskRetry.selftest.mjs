@@ -1,0 +1,446 @@
+// src/ui/damagePanelMaskRetry.selftest.mjs — the damage panel's mask retry
+// receipt (2026-09-25 owner report: an M1A3 battle showed the vector stand-in
+// until reload). The real panel is driven with a scripted mask source and
+// injected timers: a build that fails or is cancelled by a disposed borrowed
+// visual is retried after 1.5 s WITHOUT the borrowed visual, then after 8 s;
+// the third failure warns once and beacons one `hud_mask_failed` event that
+// the v2 client folds into a session note the shared validator accepts. A new tank cancels a pending retry and
+// ignores late callbacks from the old build.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createDamagePanel, DAMAGE_PANEL_MASK_RETRY } from './damagePanel.ts';
+import { telemetryTankId } from '../game/tankIdBoundaries.ts';
+import { createEntryTelemetry } from '../entry/telemetry.ts';
+import { validateTelemetryRecord } from '../../server/telemetryRecord.ts';
+
+function fakeElement(tag) {
+  const selected = new Map();
+  const element = {
+    tagName: tag.toUpperCase(), id: '', className: '', textContent: '', innerHTML: '',
+    style: {}, dataset: {}, children: [],
+    appendChild(child) { element.children.push(child); return child; },
+    querySelector(selector) {
+      let found = selected.get(selector);
+      if (!found) { found = fakeElement('span'); selected.set(selector, found); }
+      return found;
+    },
+  };
+  return element;
+}
+const passiveContext = () => new Proxy({}, {
+  get: (target, key) => (key in target ? target[key] : () => undefined),
+  set: (target, key, value) => { target[key] = value; return true; },
+});
+function fakeCanvas() {
+  const canvas = fakeElement('canvas');
+  canvas.width = 0;
+  canvas.height = 0;
+  const context = passiveContext();
+  canvas.getContext = (kind) => { assert.equal(kind, '2d'); return context; };
+  return canvas;
+}
+
+const saved = new Map(['document', 'window'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+Object.defineProperties(globalThis, {
+  document: { configurable: true, value: {
+    head: fakeElement('head'), getElementById: () => null,
+    createElement: (kind) => (kind === 'canvas' ? fakeCanvas() : fakeElement(kind)),
+  } },
+  window: { configurable: true, value: {} },
+});
+const originalWarn = console.warn;
+const warnings = [];
+console.warn = (...args) => warnings.push(args);
+
+const spec = {
+  id: 'receipt-tank', hp: 1000,
+  dims: { hullLengthM: 7, widthM: 3.6, overallLengthM: 9.5 },
+  armor: {
+    turretPivot: [0, 1.4, -0.3], gunBarrel: { lengthM: 5 },
+    modules: [
+      { module: 'engine', min: [-0.6, 0, -2.4], max: [0.6, 1, -1.2] },
+      { module: 'gun', min: [-0.1, 0, 0.2], max: [0.1, 1, 3], turretLocal: true },
+    ],
+    crew: [{ crew: 'driver', min: [-0.4, 0.4, 1.4], max: [0.4, 1.2, 2.2] }],
+  },
+};
+const maskEntry = () => ({
+  ready: true,
+  hull: { canvas: fakeCanvas(), camX: 0, camZ: 0, halfM: 5, cx: 0, cz: 0, radiusM: 4, widthM: 3.6, lengthM: 7 },
+  turret: { canvas: fakeCanvas(), camX: 0, camZ: 0, halfM: 4, radiusM: 3 },
+  pivot: [0, -0.3], pxPerM: 19.2,
+});
+
+function timers() {
+  const list = [];
+  return {
+    list,
+    schedule(callback, delayMs) { const timer = { callback, delayMs, fired: false, cancelled: false }; list.push(timer); return timer; },
+    cancel(handle) { handle.cancelled = true; },
+    fire(index) {
+      const timer = list[index];
+      assert.ok(timer && !timer.fired && !timer.cancelled, `timer ${index} is live`);
+      timer.fired = true;
+      timer.callback();
+    },
+  };
+}
+function scriptedMaskSource() {
+  const calls = [];
+  const queue = [];
+  return {
+    calls,
+    plan(handler) { queue.push(handler); },
+    source: {
+      get(tank, onReady, sourceVisual = null) {
+        const call = { id: tank.id, onReady, sourceVisual };
+        calls.push(call);
+        const handler = queue.shift();
+        return handler ? handler(call) : null;
+      },
+      async prepare() { return null; },
+    },
+  };
+}
+const sink = () => ({ events: [], send(event) { this.events.push(event); return true; } });
+const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+const failure = (code, attempts, retryable = true) => ({
+  code, message: code === 'mask_build_error' ? 'injected compile failure' : code, attempts, retryable,
+});
+const failing = (detail) => (call) => { queueMicrotask(() => call.onReady(false, detail)); return null; };
+const cached = (entry) => () => entry;
+function harness() {
+  const clock = timers();
+  const masks = scriptedMaskSource();
+  const telemetry = sink();
+  const panel = createDamagePanel({ maskSource: masks.source, telemetry, schedule: clock.schedule, cancel: clock.cancel });
+  return { panel, clock, masks, telemetry };
+}
+
+try {
+  assert.deepEqual(DAMAGE_PANEL_MASK_RETRY, { maxAttempts: 3, delaysMs: [1500, 8000] },
+    'attempt 2 after 1.5 s, attempt 3 after a further 8 s, then give up');
+
+  // The owner's battle: the borrowed live visual is disposed mid-build (the
+  // battle-start race). Attempt 2 runs without it and the panel ends with masks.
+  {
+    const h = harness();
+    const visual = { root: {}, dispose() {} };
+    h.masks.plan(failing(failure('top_mask_source_disposed', 0)));
+    h.panel.setTank(spec, visual);
+    assert.equal(h.masks.calls.length, 1);
+    assert.strictEqual(h.masks.calls[0].sourceVisual, visual, 'attempt 1 borrows the live battle visual');
+    assert.equal(h.panel.debugState().masksReady, false, 'the vector stand-in covers the first frames');
+    await flush();
+    assert.deepEqual(h.clock.list.map((timer) => timer.delayMs), [1500], 'the race schedules attempt 2 after 1.5 s');
+    const entry = maskEntry();
+    h.masks.plan((call) => {
+      assert.equal(call.sourceVisual, null, 'attempt 2 drops the borrowed visual so the factory build owns its resources');
+      queueMicrotask(() => call.onReady(true)); // a single-argument success still adopts
+      return null;
+    });
+    h.masks.plan(cached(entry));
+    h.clock.fire(0);
+    await flush();
+    assert.equal(h.masks.calls.length, 3);
+    assert.equal(h.masks.calls[2].onReady, null, 'adoption re-reads the cache without subscribing again');
+    assert.equal(h.panel.debugState().masksReady, true, 'the panel ends with the real masks');
+    assert.equal(h.panel.debugState().markers.length, 3, 'the module map is painted on the real layers');
+    assert.deepEqual(warnings, [], 'a recovered race is silent');
+    assert.deepEqual(h.telemetry.events, [], 'a recovered race sends no beacon');
+  }
+
+  // Covered preparation joins the injected mask source and adopts before returning.
+  {
+    const h = harness();
+    let resolve;
+    h.masks.source.prepare = () => new Promise(done => { resolve = done; });
+    h.panel.setTank(spec);
+    const work = h.panel.prepareTankMasks(spec);
+    assert.equal(h.panel.debugState().markers.length, 0);
+    resolve(maskEntry());
+    assert.equal(await work, true);
+    assert.equal(h.panel.debugState().masksReady, true);
+    assert.equal(h.panel.debugState().markers.length, 3);
+    h.masks.source.prepare = async () => null;
+    assert.equal(await h.panel.prepareTankMasks(spec), false, 'missing mask cannot certify readiness');
+  }
+  {
+    const h = harness();
+    let resolve;
+    h.masks.source.prepare = () => new Promise(done => { resolve = done; });
+    h.panel.setTank(spec);
+    const work = h.panel.prepareTankMasks(spec);
+    h.panel.setTank({ ...spec, id: 'new-tank' });
+    resolve(maskEntry());
+    await work;
+    assert.equal(h.panel.debugState().masksReady, false, 'late preparation cannot paint the next tank');
+    assert.equal(h.panel.debugState().specId, 'new-tank');
+  }
+
+  // A synchronous cache hit needs no retry machinery at all.
+  {
+    const h = harness();
+    h.masks.plan(cached(maskEntry()));
+    h.panel.setTank(spec, null);
+    assert.equal(h.panel.debugState().masksReady, true);
+    assert.deepEqual(h.clock.list, []);
+  }
+
+  // (battle-spikes-253) A mask pass's links outlasting its wait under load: attempt 2 clones the live visual again (the
+  // factory build was one 700-1,000 ms task of a whole tank in a loaded room's last seconds) and adopts.
+  {
+    const h = harness();
+    const live = { root: {}, dispose() {} };
+    h.masks.plan(failing(failure('top_mask_program_timeout', 0)));
+    h.panel.setTank(spec, live);
+    await flush();
+    const entry = maskEntry();
+    h.masks.plan((call) => {
+      assert.strictEqual(call.sourceVisual, live, 'attempt 2 borrows the live visual again');
+      queueMicrotask(() => call.onReady(true));
+      return null;
+    });
+    h.masks.plan(cached(entry));
+    h.clock.fire(0);
+    await flush();
+    assert.equal(h.panel.debugState().masksReady, true, 'and the panel ends with the masks');
+  }
+
+  // Three hard failures: one warning, one bounded beacon the server accepts.
+  {
+    const h = harness();
+    const live = { root: {}, dispose() {} };
+    h.masks.plan(failing(failure('mask_build_error', 1)));
+    h.panel.setTank(spec, live);
+    await flush();
+    h.masks.plan(failing(failure('mask_build_error', 1))); // the hot negative cache answers at once
+    h.clock.fire(0);
+    await flush();
+    assert.deepEqual(h.clock.list.map((timer) => timer.delayMs), [1500, 8000]);
+    // (battle-spikes-253) a failure that is not the source's disposal retries on the live visual; the last attempt drops it
+    assert.strictEqual(h.masks.calls[1].sourceVisual, live, 'attempt 2 keeps the live visual (its source was not disposed)');
+    assert.deepEqual(warnings, [], 'no warning before the last attempt');
+    h.masks.plan(failing(failure('mask_build_error', 2)));
+    h.clock.fire(1);
+    await flush();
+    assert.equal(h.masks.calls.length, 3, 'three attempts, then the panel gives up');
+    assert.equal(h.masks.calls[2].sourceVisual, null, 'the last attempt is the factory build');
+    assert.equal(h.clock.list.length, 2, 'no fourth attempt is scheduled');
+    assert.equal(warnings.length, 1, 'exactly one console warning at the terminal failure');
+    assert.match(warnings[0][0], /receipt-tank after 3 attempt\(s\) \(mask_build_error: injected compile failure\)/);
+    assert.deepEqual(h.telemetry.events, [{
+      kind: 'hud_mask_failed', stage: 'damagePanel', code: 'mask_build_error', reason: telemetryTankId('receipt-tank'),
+      error: { message: 'injected compile failure', frames: [] },
+    }], 'one hud_mask_failed event with the spec id and the pipeline code/message');
+    // Telemetry v2: the event folds into one session note that the shared validator accepts.
+    const bodies = [];
+    const client = createEntryTelemetry({
+      build: 'v1.0.0+greceipt', sessionId: 'sess_hud_mask_1', now: () => 10_000,
+      endpoints: { session: '/api/telemetry', error: '/api/telemetry' },
+      transport: (endpoint, body) => { bodies.push(JSON.parse(body)); return true; },
+      schedule: () => 1, cancel: () => {},
+    });
+    for (const event of h.telemetry.events) assert.equal(client.send(event), true, 'the v2 client folds the event');
+    client.flush();
+    assert.equal(bodies.length, 1, 'one session record carries the note');
+    const validation = validateTelemetryRecord(bodies[0]);
+    assert.equal(validation.ok, true, `the shared validator accepts the record: ${JSON.stringify(validation)}`);
+    assert.deepEqual(validation.record.notes, [`hud_mask:${telemetryTankId('receipt-tank')}:mask_build_error`],
+      'the spec id and the pipeline code travel as one session note');
+    assert.equal(h.panel.debugState().masksReady, false);
+    assert.equal(h.panel.debugState().markers.length, 0, 'no orphan markers or substitute vehicle on failure');
+    warnings.length = 0;
+  }
+
+  // A pipeline that reports its attempt cap is terminal at once.
+  {
+    const h = harness();
+    h.masks.plan(failing(failure('top_mask_program_context_lost', 3, false)));
+    h.panel.setTank(spec, null);
+    await flush();
+    assert.deepEqual(h.clock.list, [], 'a capped pipeline failure schedules nothing');
+    assert.equal(warnings.length, 1);
+    assert.equal(h.telemetry.events.length, 1);
+    assert.equal(h.telemetry.events[0].code, 'top_mask_program_context_lost');
+    warnings.length = 0;
+  }
+
+  // A new tank cancels the pending retry; the old build's late callbacks and
+  // its stale timer are inert.
+  {
+    const h = harness();
+    let staleReady = null;
+    h.masks.plan((call) => {
+      staleReady = call.onReady;
+      queueMicrotask(() => call.onReady(false, failure('top_mask_source_disposed', 0)));
+      return null;
+    });
+    h.panel.setTank(spec, null);
+    await flush();
+    assert.equal(h.clock.list.length, 1);
+    const other = { ...spec, id: 'receipt-other' };
+    h.masks.plan(cached(maskEntry()));
+    h.panel.setTank(other, null);
+    assert.equal(h.clock.list[0].cancelled, true, 'a new tank cancels the pending retry');
+    assert.deepEqual(h.masks.calls.map((call) => call.id), ['receipt-tank', 'receipt-other']);
+    assert.equal(h.panel.debugState().masksReady, true);
+    staleReady(true);
+    h.clock.list[0].callback();
+    await flush();
+    assert.equal(h.masks.calls.length, 2, 'a stale callback or timer neither adopts nor requests masks');
+    assert.equal(h.panel.debugState().specId, 'receipt-other');
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(h.telemetry.events, []);
+  }
+
+  // 2026-11-02 audit (04-ui-1 #7): the battle's end clears the panel. A retry pending for the last battle's tank
+  // never runs its build in the Garage, a late callback is inert, and the battle's visual is let go.
+  {
+    const h = harness();
+    const visual = { root: {}, dispose() {} };
+    let lateReady = null;
+    h.masks.plan((call) => {
+      lateReady = call.onReady;
+      queueMicrotask(() => call.onReady(false, failure('top_mask_program_timeout', 0)));
+      return null;
+    });
+    h.panel.setTank(spec, visual);
+    await flush();
+    assert.equal(h.clock.list.length, 1, 'attempt 2 is pending');
+    h.panel.clear();
+    assert.equal(h.clock.list[0].cancelled, true, 'the clear cancels it');
+    h.clock.list[0].callback();
+    lateReady(true);
+    await flush();
+    assert.equal(h.masks.calls.length, 1, 'no mask build after the battle');
+    assert.equal(h.panel.debugState().specId, null, 'the panel holds no tank');
+    assert.equal(h.panel.debugState().masksReady, false);
+    h.masks.plan(cached(maskEntry()));
+    h.panel.setTank(spec, null);
+    assert.equal(h.panel.debugState().masksReady, true, 'the next battle sets its tank as before');
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(h.telemetry.events, []);
+  }
+  {
+    const source = readFileSync(new URL('./battleHudAccess.ts', import.meta.url), 'utf8');
+    assert.match(source, /bus\.on\('phase:change', \(payload\) => \{\n\s+if \(\(payload as \{ phase\?: string \} \| null\)\?\.phase === 'garage'\) damagePanel\.clear\(\);/,
+      'the return to the Garage clears the battle HUD\'s panel');
+  }
+  // 2026-11-02 audit (04-ui-1 item 7): the battle ends (the Garage return's clearBattle) while a retry waits. The
+  // pending retry is cancelled, a build still in flight is inert when it lands, and the battle's visual is let go: the
+  // panel had no teardown, so the retry fired for the last battle's tank in the Garage (a 700-1,000 ms mask build) and
+  // the visual stayed referenced until the next battle.
+  {
+    const h = harness();
+    const live = { root: {}, dispose() {} };
+    let lateReady = null;
+    h.masks.plan(failing(failure('top_mask_program_timeout', 0)));
+    h.panel.setTank(spec, live);
+    await flush();
+    assert.equal(h.clock.list.length, 1, 'a retry waits');
+    assert.equal(h.panel.debugState().holdsSourceVisual, true);
+    h.masks.plan((call) => { lateReady = call.onReady; return null; });
+    h.panel.clear();
+    assert.equal(h.clock.list[0].cancelled, true, 'the battle teardown cancels the pending retry');
+    assert.equal(h.panel.debugState().holdsSourceVisual, false, "and lets the battle's tank visual go");
+    h.clock.list[0].callback(); // a timer that fired anyway
+    await flush();
+    assert.equal(h.masks.calls.length, 1, 'no mask build runs for the last battle in the Garage');
+    // a build in flight at the teardown lands after it: inert
+    const h2 = harness();
+    h2.masks.plan((call) => { lateReady = call.onReady; return null; });
+    h2.panel.setTank(spec, live);
+    h2.panel.clear();
+    lateReady(false, failure('top_mask_program_timeout', 0));
+    await flush();
+    assert.deepEqual(h2.clock.list, [], 'a failure that lands after the teardown schedules no retry');
+    lateReady(true);
+    assert.equal(h2.panel.debugState().masksReady, false);
+    // the next battle starts afresh
+    h2.masks.plan(cached(maskEntry()));
+    h2.panel.setTank(spec, live);
+    assert.equal(h2.panel.debugState().masksReady, true);
+    assert.deepEqual(warnings, []);
+  }
+
+  // (integration review r1) a teardown that keeps the screens up (a mid-battle Leave, a report preparing the Garage
+  // behind it: main.ts clearBattle with keepScreens) releases the panel: the pending retry is cancelled, a build in
+  // flight is inert when it lands, and the battle's visual is let go while the Garage pedestal adopts it, but the plan
+  // stays (no empty repaint before the veil); clear() under the veil then drops it.
+  {
+    const h = harness();
+    const live = { root: {}, dispose() {} };
+    h.masks.plan(cached(maskEntry()));
+    h.panel.setTank(spec, live);
+    assert.equal(h.panel.debugState().masksReady, true, 'setup: the plan is painted');
+    // a retry waits for a tank whose masks did not build
+    const h2 = harness();
+    let lateReady = null;
+    h2.masks.plan(failing(failure('top_mask_program_timeout', 0)));
+    h2.panel.setTank(spec, live);
+    await flush();
+    assert.equal(h2.clock.list.length, 1, 'a retry waits');
+    h2.masks.plan((call) => { lateReady = call.onReady; return null; });
+    h2.panel.release();
+    assert.equal(h2.clock.list[0].cancelled, true, 'the release cancels the pending retry');
+    assert.equal(h2.panel.debugState().holdsSourceVisual, false, "and lets the battle's tank visual go");
+    assert.equal(h2.panel.debugState().specId, spec.id, 'the panel keeps its tank');
+    h2.clock.list[0].callback(); // a timer that fired anyway
+    await flush();
+    assert.equal(h2.masks.calls.length, 1, 'no mask build runs behind the report');
+    // the painted panel keeps its plan through the release
+    h.panel.release();
+    assert.equal(h.masks.calls.length, 1, 'the release asks for no mask build');
+    assert.equal(h.panel.debugState().masksReady, true, 'the release keeps the plan painted');
+    assert.equal(h.panel.debugState().specId, spec.id);
+    assert.equal(h.panel.debugState().holdsSourceVisual, false);
+    h.panel.update({ hp: 600, maxHp: 1000, destroyed: false, modules: {}, crew: {}, fire: { burning: false, tickTimer: 0, ticksLeft: 0 } });
+    assert.equal(h.panel.debugState().masksReady, true, 'and the HUD frame still paints it');
+    // a build in flight at the release lands after it: inert
+    const h3 = harness();
+    h3.masks.plan((call) => { lateReady = call.onReady; return null; });
+    h3.panel.setTank(spec, live);
+    h3.panel.release();
+    lateReady(false, failure('top_mask_program_timeout', 0));
+    await flush();
+    assert.deepEqual(h3.clock.list, [], 'a failure that lands after the release schedules no retry');
+    lateReady(true);
+    assert.equal(h3.panel.debugState().masksReady, false, 'nor does a late success adopt');
+    // under the veil the clear drops the rest; the next battle starts afresh
+    h.panel.clear();
+    assert.equal(h.panel.debugState().specId, null);
+    assert.equal(h.panel.debugState().masksReady, false);
+    h.masks.plan(cached(maskEntry()));
+    h.panel.setTank(spec, live);
+    assert.equal(h.panel.debugState().masksReady, true);
+    assert.deepEqual(warnings, []);
+  }
+  {
+    const source = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+    assert.match(source, /watchOwner\.current\?\.stop\(\);\n\s+currentDamagePanel\(\)\?\.release\(\);\n\s+if \(keepScreens\) return;\n\s+currentDamagePanel\(\)\?\.clear\(\);/,
+      'main.ts clearBattle releases the panel at every teardown, keepScreens included, and clears it under the veil');
+  }
+
+  // Without an injected sink (Node has no page beacon) the terminal failure
+  // still warns and never throws.
+  {
+    const clock = timers();
+    const masks = scriptedMaskSource();
+    const panel = createDamagePanel({ maskSource: masks.source, schedule: clock.schedule, cancel: clock.cancel });
+    masks.plan(failing(failure('mask_build_error', 3, false)));
+    panel.setTank(spec, null);
+    await flush();
+    assert.equal(warnings.length, 1, 'the default beacon lookup is guarded');
+    warnings.length = 0;
+  }
+} finally {
+  console.warn = originalWarn;
+  for (const [key, descriptor] of saved) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else delete globalThis[key];
+  }
+}
+
+console.log('damagePanelMaskRetry.selftest: race retry without the borrowed visual, 1.5 s / 8 s backoff, '
+  + 'one warning + one accepted hud_mask_failed beacon, tank-switch cancellation, the release that keeps the plan and the battle teardown pass');

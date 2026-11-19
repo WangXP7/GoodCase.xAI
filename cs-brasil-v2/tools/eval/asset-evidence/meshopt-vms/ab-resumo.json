@@ -1,0 +1,13 @@
+{
+  "quando": "2026-10-14T20:56:40Z",
+  "metodo": "in-game (?debug=1&auto=P,mst&map=piscina_treta, _switchWeapon, 420ms, clip 960x504) na rodada boa; quantificacao de pixels na pose de bind (public/vm-meshopt-eval.html)",
+  "tetos": { "pct8": 1, "pct64": 0.1 },
+  "medido": {
+    "ak":     { "pct8": 0.026, "pct64": 0.0 },
+    "p90":    { "pct8": 0.724, "pct64": 0.032 },
+    "pistol": { "pct8": 0.006, "pct64": 0.0 }
+  },
+  "veredito_visual": "diferencas so na silhueta (borda AA deslocada sub-pixel pela quantizacao); area de textura identica (visao confirmou 'dois contornos ligeiramente desalinhados', zero diff em plano de textura)",
+  "aviso": "o arnês de screenshot sob SwiftShader tem viés determinístico de contexto (A/A = 25% de falso positivo); rodadas seguintes do vm-meshopt-ab.mjs mostraram 25% uniforme e NAO sao evidência. Os números acima são da rodada boa, in-game.",
+  "nota": "aprovacao visual final em 3:2 é do dono (regra 7)"
+}

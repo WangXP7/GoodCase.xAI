@@ -1,0 +1,729 @@
+import assert from 'node:assert/strict';
+import '../vehicles/tankFactory.ts';
+import { TANK_SPECS } from '../vehicles/specs.ts';
+import { SECOND_WAVE_X_IDS } from '../vehicles/sourceXSecondWaveSpecs.ts';
+import { ABRAMS_SOURCE_X_IDS } from '../vehicles/abramsSourceXSpecs.ts';
+import { SUPPLIED_SOURCE_IDS } from '../vehicles/suppliedSourceFleetSpecs.ts';
+import { NATIONAL_MODERNIZATION_IDS } from '../vehicles/nationalModernizationConfig.ts';
+import { LONGWEI_FAMILY } from '../vehicles/longweiFamilyConfig.ts';
+import {
+  firstAvailableAmmunitionSlot,
+  hasAmmunition,
+  shellAmmunitionCapacity,
+  totalAmmunition,
+  totalAmmunitionCapacity,
+} from './ammunition.ts';
+import { createAuthoritativeMatch } from './authoritativeMatch.ts';
+import { createCombatState, selectFirstAvailableShell, selectShell } from './damage.ts';
+import { SIM_DT } from './movement.ts';
+
+const input = (shellSlot, fire = false) => ({
+  throttle: 0,
+  steer: 0,
+  brake: false,
+  fire,
+  aimYaw: 0,
+  aimPitch: 0,
+  aimDistance: 400,
+  shellSlot,
+  actionBits: 0,
+});
+
+const guidedRounds = [];
+const supportedShellTypes = new Set(['AP', 'APCR', 'APFSDS', 'HEAT', 'HE', 'HESH']);
+let authoredShellChannels = 0;
+let multiChannelLoadouts = 0;
+let depletedChannelTransitions = 0;
+for (const spec of Object.values(TANK_SPECS)) {
+  assert.ok(spec.gun.shells.length >= 1 && spec.gun.shells.length <= 3,
+    `${spec.id}: every playable gun exposes one to three numbered ammunition channels`);
+  assert.ok(Number.isFinite(spec.gun.reloadS) && spec.gun.reloadS > 0,
+    `${spec.id}: gun reload is finite and positive`);
+  const fresh = createCombatState(spec);
+  assert.equal(fresh.shellSlot, 0, `${spec.id}: a fresh vehicle selects slot 1`);
+  assert.equal(fresh.ammo.length, spec.gun.shells.length,
+    `${spec.id}: inventory length matches its authored loadout`);
+  assert.equal(fresh.ammoCapacity.length, spec.gun.shells.length,
+    `${spec.id}: capacity length matches its authored loadout`);
+  assert.equal(fresh.reloadChannels.length, spec.gun.shells.length,
+    `${spec.id}: every ammunition type owns a reload-channel binding`);
+  assert.deepEqual(fresh.ammo, fresh.ammoCapacity,
+    `${spec.id}: every ammunition channel starts fully stocked`);
+  assert.equal(totalAmmunition(fresh), totalAmmunitionCapacity(fresh),
+    `${spec.id}: fresh total inventory equals authored total capacity`);
+
+  const shellNames = new Set();
+  for (let slot = 0; slot < spec.gun.shells.length; slot++) {
+    const round = spec.gun.shells[slot];
+    authoredShellChannels++;
+    assert.equal(typeof round.name, 'string', `${spec.id} slot ${slot + 1}: shell is named`);
+    assert.ok(round.name.trim().length > 0,
+      `${spec.id} slot ${slot + 1}: shell name is non-empty`);
+    assert.equal(shellNames.has(round.name), false,
+      `${spec.id} slot ${slot + 1}: shell name is unique within the vehicle`);
+    shellNames.add(round.name);
+    assert.ok(supportedShellTypes.has(round.type),
+      `${spec.id} slot ${slot + 1}: ${round.type} has combat behavior`);
+    for (const field of ['caliberMm', 'dmg', 'velocityMps']) {
+      assert.ok(Number.isFinite(round[field]) && round[field] > 0,
+        `${spec.id} slot ${slot + 1}: ${field} is finite and positive`);
+    }
+    for (const field of ['pen100Mm', 'pen1000Mm']) {
+      assert.ok(Number.isFinite(round[field]) && round[field] >= 0,
+        `${spec.id} slot ${slot + 1}: ${field} is finite and non-negative`);
+    }
+    if (round.pen2000Mm != null) {
+      assert.ok(Number.isFinite(round.pen2000Mm) && round.pen2000Mm >= 0,
+        `${spec.id} slot ${slot + 1}: optional 2 km penetration is valid`);
+    }
+    if (round.reloadS != null) {
+      assert.ok(Number.isFinite(round.reloadS) && round.reloadS > 0,
+        `${spec.id} slot ${slot + 1}: per-channel reload is finite and positive`);
+    }
+    if (round.count != null) {
+      assert.ok(Number.isInteger(round.count) && round.count > 0,
+        `${spec.id} slot ${slot + 1}: authored capacity is a positive integer`);
+    }
+    const capacity = shellAmmunitionCapacity(round);
+    assert.ok(Number.isInteger(capacity) && capacity > 0,
+      `${spec.id} slot ${slot + 1}: resolved capacity is a positive integer`);
+    assert.equal(fresh.ammo[slot], capacity,
+      `${spec.id} slot ${slot + 1}: combat inventory uses the resolved capacity`);
+    const reloadChannel = fresh.reloadChannels[slot];
+    assert.ok(reloadChannel, `${spec.id} slot ${slot + 1}: reload channel exists`);
+    if (round.reloadGroup) {
+      assert.notEqual(reloadChannel, fresh.gunReload,
+        `${spec.id} slot ${slot + 1}: named secondary weapon has its own cycle`);
+      for (let other = 0; other < spec.gun.shells.length; other++) {
+        if (spec.gun.shells[other].reloadGroup !== round.reloadGroup) continue;
+        assert.equal(reloadChannel, fresh.reloadChannels[other],
+          `${spec.id}: all ammunition for ${round.reloadGroup} shares one cycle`);
+      }
+    } else if (round.guided === true && (spec.gun.primaryGuided !== true || spec.gun.launcherMuzzles?.length)) {
+      assert.notEqual(reloadChannel, fresh.gunReload,
+        `${spec.id} slot ${slot + 1}: external guided launcher has an isolated cycle`);
+    } else {
+      assert.equal(reloadChannel, fresh.gunReload,
+        `${spec.id} slot ${slot + 1}: rounds loaded through the main gun share its cycle`);
+    }
+  }
+
+  if (spec.gun.shells.length > 1) {
+    multiChannelLoadouts++;
+    for (let depletedSlot = 0; depletedSlot < spec.gun.shells.length; depletedSlot++) {
+      for (let stockedSlot = 0; stockedSlot < spec.gun.shells.length; stockedSlot++) {
+        if (stockedSlot === depletedSlot) continue;
+        const combat = createCombatState(spec);
+        combat.shellSlot = depletedSlot;
+        combat.ammo[depletedSlot] = 0;
+        if (!hasAmmunition(combat, stockedSlot)) continue;
+        assert.equal(selectShell(combat, stockedSlot, spec), true,
+          `${spec.id}: stocked slot ${stockedSlot + 1} accepts selection`);
+        assert.equal(combat.shellSlot, stockedSlot,
+          `${spec.id}: can leave depleted slot ${depletedSlot + 1} for ${stockedSlot + 1}`);
+        assert.equal(hasAmmunition(combat, combat.shellSlot), true,
+          `${spec.id}: selected replacement slot ${stockedSlot + 1} remains fireable`);
+        assert.equal(combat.reload, combat.reloadChannels[stockedSlot],
+          `${spec.id}: selection activates slot ${stockedSlot + 1}'s reload channel`);
+        assert.equal(combat.reload.t, 0,
+          `${spec.id}: selecting a stocked type never invents a reload`);
+        assert.equal(combat.reload.kind, 'ready');
+        assert.equal(combat.magazine?.rounds, fresh.magazine?.rounds,
+          `${spec.id}: selection preserves the full ready magazine`);
+        depletedChannelTransitions++;
+      }
+    }
+  }
+  for (let slot = 0; slot < spec.gun.shells.length; slot++) {
+    const round = spec.gun.shells[slot];
+    if (!round.guided) continue;
+    guidedRounds.push({ spec, round, slot });
+    if (spec.gun.launcherMuzzles?.length) {
+      const bank = spec.gun.launcherMuzzles.filter(tip => !tip.shellSlots || tip.shellSlots.includes(slot));
+      assert.equal(round.launcherTubes, bank.length,
+        `${spec.id}: physical launcher tips cover every ready tube`);
+    }
+    // Explicit launch points describe geometry, not which weapon is primary.
+    // Autocannon IFVs retain their auxiliary missile cadence with real tips.
+    if (spec.gun.primaryGuided && ['ztz100_prototype', 'object695', 'griffin_viper'].includes(spec.id)) {
+      const expected = spec.id === 'ztz100_prototype' ? [12, 12] : spec.id === 'object695' ? [14, 14] : [1];
+      assert.equal(round.reloadS, expected[slot], `${spec.id}: independently authored missile-primary reload`);
+    } else if (spec.gun.primaryGuided) {
+      assert.equal(round.reloadS, spec.gun.reloadS,
+        `${spec.id} slot ${slot + 1}: primary missile follows the main-gun reload`);
+      assert.ok(round.reloadS >= 6 && round.reloadS <= 10,
+        `${spec.id} slot ${slot + 1}: primary missile uses a standard tank reload`);
+    } else if (spec.gun.launcherSalvo) {
+      // (270, airDefenseFirepower.ts) an auxiliary rack fired whole in salvos reloads as a group: slower than one missile,
+      // as magazineIndicator.selftest.mjs holds every salvo (the Tunguska-M's, the Pantsir-S1's and the PGZ-95's)
+      assert.ok(round.reloadS >= 5 && round.reloadS <= 8,
+        `${spec.id} slot ${slot + 1}: an auxiliary salvo rack reloads in 5-8 seconds`);
+    } else {
+      assert.ok(round.reloadS >= 2 && round.reloadS <= 3,
+        `${spec.id} slot ${slot + 1}: auxiliary missile reload is 2-3 seconds`);
+    }
+  }
+}
+// Legacy guided channels and source-based additions retain their contracts;
+// the two owner-authored concepts add four explicitly checked missile modes.
+const suppliedIds = new Set(SUPPLIED_SOURCE_IDS);
+const conceptIds = new Set(['ztz100_prototype', 'object695', 'griffin_viper', 'm6_linebacker']);
+const concepts = guidedRounds.filter(({spec}) => conceptIds.has(spec.id));
+assert.equal(concepts.length, 6);
+// 2026-09-25 IFV identity batch (docs/references/batches/ifv-replicas-20260925.md, europe-ifvs-20260925.md):
+// the Puma S1 X and Type 89 X replica racks and the Borsuk's Spike LR are three additional guided channels,
+// counted beside the established fleet rather than folded into its immutable census.
+const ifvBatchIds = new Set(['puma_s1', 'cv9040c', 'type89', 'dardo', 'lrmv_lynx', 'borsuk']);
+assert.deepEqual(guidedRounds.filter(({spec}) => ifvBatchIds.has(spec.id)).map(({spec}) => spec.id).sort(),
+  ['borsuk', 'puma_s1', 'type89'], 'the CV9040C, Dardo and LRMV carry no guided channel');
+// 266: the T49 fires the M551's MGM-51 Shillelagh through its M81, one guided channel counted beside the established fleet
+assert.deepEqual(guidedRounds.filter(({spec}) => spec.id === 't49').map(({round}) => round.name), ['MGM-51C Shillelagh ATGM'],
+  "the T49 carries the M551's one guided channel");
+// 267: the BMPT Terminator (Ob'yekt 199 "Ramka") adds its Ataka channel to the established fleet: 23 -> 24
+// 268: the twin-cannon air defence's three SAM channels (the Tunguska-M's 9M311M, the Pantsir-S1's 57E6, the PGZ-95's
+// QW-2), each from its own tubes on the M6 Linebacker's Stinger handling; the Gepard 1A2 and the PGZ-09 carry none
+const airDefense268Ids = new Set(['tunguska_m', 'pantsir_s1', 'gepard_1a2', 'pgz95', 'pgz09']);
+assert.deepEqual(guidedRounds.filter(({spec}) => airDefense268Ids.has(spec.id)).map(({spec, round}) => `${spec.id}/${round.name}`),
+  ['tunguska_m/9M311M', 'pantsir_s1/57E6', 'pgz95/QW-2'], 'the 268 air defence carries three guided channels');
+// 269: the second air-defence round (the Type 87, the two Marksmen, the Lvkv 9040, the K30 Biho, the PZA Loara) carries no
+// missile: guns only
+const airDefense269Ids = new Set(['type87_aw', 'marksman_t55', 'itpsv_leopard2', 'lvkv9040', 'k30_biho', 'pza_loara']);
+assert.deepEqual(guidedRounds.filter(({spec}) => airDefense269Ids.has(spec.id)), [], 'the 269 air defence carries no guided channel');
+// 269: the M163 VADS fires its Vulcan only: no missile
+assert.deepEqual(guidedRounds.filter(({spec}) => spec.id === 'm163_vads'), [], 'the M163 VADS carries no guided channel');
+// 268: the M3A2 fires the M2A2's TOW (its twelve stowed rounds), one guided channel counted beside the established fleet
+assert.deepEqual(guidedRounds.filter(({spec}) => spec.id === 'm3a2_bradley').map(({round}) => round.name), ['BGM-71 TOW-2A'],
+  "the M3A2 carries the M2A2's one TOW channel");
+// 269: the Redback fires its Spike LR2 from its own launcher, one guided channel counted beside the established fleet; the
+// three M113s their twin TOW (owner 2026-11-03: "more firepoweer/tow missiles"), one channel each
+assert.deepEqual(guidedRounds.filter(({spec}) => spec.id === 'redback').map(({round}) => round.name), ['Spike LR2'],
+  'the Redback carries its one guided channel');
+const m113Tows = ['m113a1_fsv', 'm113a1_mrv', 'm113as4'];
+assert.deepEqual(guidedRounds.filter(({spec}) => m113Tows.includes(spec.id)).map(({spec, round}) => `${spec.id} ${round.name}`),
+  ['m113a1_fsv BGM-71A TOW', 'm113a1_mrv BGM-71A TOW', 'm113as4 BGM-71E TOW-2A'], 'each M113 carries its one TOW channel');
+assert.equal(guidedRounds.filter(({spec}) => !suppliedIds.has(spec.id) && !conceptIds.has(spec.id) && !ifvBatchIds.has(spec.id)
+  && spec.id !== 't49' && !airDefense268Ids.has(spec.id) && spec.id !== 'm3a2_bradley' && spec.id !== 'redback'
+  && !m113Tows.includes(spec.id)).length, 24,
+  'the unchanged established guided-ammunition fleet remains covered');
+assert.deepEqual(guidedRounds.filter(({spec}) => suppliedIds.has(spec.id))
+  .map(({spec}) => spec.id).sort(), ['aft10', 'cv90_mk4', 'k21', 'kurganets25', 'kurganets25', 'warrior_tes_h'],
+  'five source configurations carry six guided channels, including both Epokha launchers');
+assert.equal(guidedRounds.length, 48, 'the complete guided-ammunition fleet is covered'); // 34 + the three 2026-09-25 IFV racks; 267: + the BMPT Terminator's Ataka
+// (+ the T49's Shillelagh, 266; + the 268 air defence's three SAMs; + the M3A2's TOW, 268; 269: + the Redback's Spike LR2 and the M113s' three TOW)
+// Preserve the existing 535 channels, including MBT-70's mixed gun/launcher,
+// separately from the 69 second-wave and 15 retained Abrams X channels.
+// Every new variant is exercised in the fleet loop above, not just its donor.
+assert.equal(SECOND_WAVE_X_IDS.length, 23);
+assert.equal(SECOND_WAVE_X_IDS.reduce((n, id) => n + TANK_SPECS[id].gun.shells.length, 0), 69);
+assert.equal(ABRAMS_SOURCE_X_IDS.length, 5); // owner 2026-09-15 retired the M1A1 X / M1A1 HA X studies
+assert.equal(ABRAMS_SOURCE_X_IDS.reduce((n, id) => n + TANK_SPECS[id].gun.shells.length, 0), 15);
+const addedXIds = new Set([...SECOND_WAVE_X_IDS, ...ABRAMS_SOURCE_X_IDS]);
+assert.equal(addedXIds.size, 28, 'the two additive X batches have distinct identities');
+// Later additions are exercised in the fleet loop above but are counted
+// separately from the immutable established channel census.
+const laterChannelCounts = {
+  type100: 3, ztz100: 3, ztz100_prototype: 3, object695: 3,
+  merkava4_trophy: 3, merkava4_barak: 3, namer_ifv: 2, ares_apc: 3,
+  tos1a_tagil: 1, c2_ariete: 3, griffin_viper: 1,
+  // 2026-09-25 IFV identity batch: three X replicas beside their kept originals and three photographic additions.
+  puma_s1: 3, cv9040c: 3, type89: 3, dardo: 2, lrmv_lynx: 2, borsuk: 3,
+  amx10p: 2, amx10p_25: 2, marder2: 2, m6_linebacker: 3,
+  type96_72_long: 3, type96_80_feng: 3, type96_72m_lei: 3, t72_rys: 3,
+  // 2026-10-01 national modernization (cdbfe54dc, docs/history/research/national-modernization-20261001.md): twelve
+  // owner-approved concepts, each carrying the T-90SM X turret's three channels.
+  t80u_zoria: 3, t72b3m_hetman: 3, t72b3_sich: 3,
+  t80u_husarz: 3, t72b3m_wilk: 3, t72b3_zubr: 3,
+  t80u_yun: 3, t72b3m_kunlun: 3, t72b3_qilin: 3,
+  t80u_bars_m: 3, t72b3m_bulat_m: 3, t72b3_bastion_m: 3,
+  // 2026-10-02 (main): the two preserved-design national successors carry the same three channels.
+  t72b3m_hetman_ii: 3, t72b3_zubr_ii: 3,
+  // (the Type 10 Kaitaku, 1cb19b32da/8295c63e03) the Type 10's own three rounds
+  type10_dozer: 3,
+  // 267: the Type 90 (B), the Type 90's three rounds
+  type90b: 3,
+  // 269: the 152 mm line, three rounds each (APFSDS, HEAT-FS, HE-FRAG)
+  object292: 3, object477_molot: 3, object195: 3, t14_152: 3,
+  // (release 262 CN) the new T-55A's D-10T2S rounds
+  t55a: 3,
+  // 262: the ZTZ-20's and the ZTZ-20 Prototype's three 105 mm rounds
+  ztz20: 3, ztz20_prototype: 3,
+  // 263 (integrator): the release's other new tanks, three rounds each (their lanes did not list them here)
+  christian2: 3, bm_oplot_m: 3, bm_oplot_t: 3, t64bm1m: 3, t64bv: 3, t64b1v_2022: 3, pt64_tur: 3,
+  challenger3_td: 3, challenger3_td_rws: 3, challenger1_mk1: 3, challenger_x: 3, challenger_x_sleek: 3,
+  // (release 265 CN) the Longwei-family concepts, each firing its host's three rounds
+  ztz99a2_qinglong: 3, vt4a1_baihu: 3, t72b3_zhuque: 3, t72b3m_xuanwu: 3,
+  // 265 (integration, pattons-m48-266): the four new M48s, three rounds each
+  m48a3_patton: 3, magach3: 3, m48a2ga2: 3, m48_super: 3,
+  // the Centurion family (262, merged on 264c): the L7 marks' and the Olifant's three rounds, the AVRE's one 165 mm HESH
+  shot_kal: 3, centurion13: 3, strv105: 3, olifant_mk2: 3, centurion5_avre: 1, centurion5_1_aus: 3,
+  // (release 265) the Leopard 1A2A1 carries its 1A5's three rounds, DM23 in place of DM63
+  leo1a2a1: 3,
+  // release 265 (the 262 Leopard 2A3 of the fourth batch, with the 2A4-era Leopards): its three rounds
+  leo2a3_b4: 3,
+  // 262 (the PT-84 Polish concepts on the Oplot-M base): the K2PL's K279, K280 and K281 each, the Falarick owed
+  pt84_orzel: 3, pt84_sokol: 3, pt84_zbik: 3,
+  // 266: the Danish Leopards' three rounds each (an APFSDS, a HEAT and an HE round)
+  leo1a3dk: 3, leo1a5dk: 3, leo1a5dk1: 3, leo2a5dk: 3,
+  // 266 (the M60 batch): the IDF's Magach 6B and 7C, the M60A1's three 105 mm rounds each
+  magach6b: 3, magach7c: 3,
+  // 266: the Brazil line's eight (brazilSpecs.ts), three rounds each
+  x1_pioneiro: 3, x1a2_carcara: 3, tamoyo1: 3, tamoyo3: 3, osorio_p1: 3, osorio_p2: 3, ee_t3_osorio: 3, ee_t4_osorio: 3,
+  // 266: the M41 family's three rounds each, the CV9035 DK's three, and the T49's one (the M551's Shillelagh)
+  m41a3: 3, m41_bw: 3, m41_jgsdf: 3, m41dk1: 3, cv9035dk: 3, t49: 1,
+  // 266: the Ukrainian CV9040C (the Swedish CV9040C's three rounds)
+  ua_cv9040c: 3,
+  // 267: the Leopard 2A7 DK (the 2A7V's three rounds) and the Centurion Mk 5/2 DK (the Mk 5/2's three)
+  leo2a7dk: 3, centurion5_2dk: 3,
+  // 267: the BMPT Terminator (Ob'yekt 199 "Ramka"): 3UBR8 APDS, 9M120-1 Ataka-T and 3UOF8 HE-I
+  bmpt_terminator: 3,
+  // 268: the twin-cannon air defence: the SAM carriers' AP, SAM and HE; the Gepard's and the PGZ-09's AP and HE
+  tunguska_m: 3, pantsir_s1: 3, gepard_1a2: 2, pgz95: 3, pgz09: 2,
+  // 268: the M3A2 Bradley, the M2A2's three rounds (the M3's larger stowed loads)
+  m3a2_bradley: 3,
+  // 269: the South African line, three rounds each (the Semel, the Olifant Mk 1, 1A and 1B, the TTD)
+  semel: 3, olifant_mk1: 3, olifant_mk1a: 3, olifant_mk1b: 3, ttd: 3,
+  // 269: the second air-defence round, each its gun's armour-piercing and high-explosive rounds
+  type87_aw: 2, marksman_t55: 2, itpsv_leopard2: 2, lvkv9040: 2, k30_biho: 2, pza_loara: 2,
+  // 269: the Australian line (the M113A1 FSV's and MRV's two 76 mm rounds; three for the rest)
+  m113a1_fsv: 3, m113a1_mrv: 3, m113as4: 3, leopard_as1: 3,
+  // 269: the US M113A3's three .50 belts (the Ares APC's)
+  m113a3: 3, m1a1_aim_sa_aus: 3, m1a2_sepv3_aus: 3, redback: 3,
+  // 270: the T95's three 6"/47 rounds (AP, Common, HC)
+  t95: 3,
+  // 269: the M163 VADS's Vulcan, its M53 API and M56 HEI
+  m163_vads: 2,
+};
+const southAfrica269Channels = ['semel', 'olifant_mk1', 'olifant_mk1a', 'olifant_mk1b', 'ttd'].reduce((n, id) => n + laterChannelCounts[id], 0);
+const australia269Channels = ['m113a1_fsv', 'm113a1_mrv', 'm113as4', 'leopard_as1', 'm1a1_aim_sa_aus', 'm1a2_sepv3_aus', 'redback', 'm113a3']
+  .reduce((n, id) => n + laterChannelCounts[id], 0);
+const pattonM48Channels = ['m48a3_patton', 'magach3', 'm48a2ga2', 'm48_super'].reduce((n, id) => n + laterChannelCounts[id], 0);
+const release263Channels = ['christian2', 'bm_oplot_m', 'bm_oplot_t', 't64bm1m', 't64bv', 't64b1v_2022', 'pt64_tur',
+  'challenger3_td', 'challenger3_td_rws', 'challenger1_mk1', 'challenger_x', 'challenger_x_sleek'].reduce((n, id) => n + laterChannelCounts[id], 0);
+for (const m of LONGWEI_FAMILY) {
+  assert.deepEqual(TANK_SPECS[m.id].gun.shells, TANK_SPECS[m.host].gun.shells,
+    `${m.id}: the concept keeps its host's (${m.host}) ammunition, no invented rounds`);
+}
+const centurionFamilyChannels = ['shot_kal', 'centurion13', 'strv105', 'olifant_mk2', 'centurion5_avre', 'centurion5_1_aus']
+  .reduce((n, id) => n + laterChannelCounts[id], 0);
+const pt84Channels = ['pt84_orzel', 'pt84_sokol', 'pt84_zbik'].reduce((n, id) => n + laterChannelCounts[id], 0);
+const release265Channels = ['leo1a3dk', 'leo1a5dk', 'leo1a5dk1', 'leo2a5dk', 'm41a3', 'm41_bw', 'm41_jgsdf', 'm41dk1',
+  'cv9035dk', 't49', 'ua_cv9040c'].reduce((n, id) => n + laterChannelCounts[id], 0);
+const airDefense268Channels = [...airDefense268Ids].reduce((n, id) => n + laterChannelCounts[id], 0);
+assert.equal(airDefense268Channels, 13, 'the five 268 air-defence vehicles add thirteen channels');
+const airDefense269Channels = [...airDefense269Ids].reduce((n, id) => n + laterChannelCounts[id], 0);
+assert.equal(airDefense269Channels, 12, 'the six 269 air-defence vehicles add twelve channels');
+const brazil266Channels = ['x1_pioneiro', 'x1a2_carcara', 'tamoyo1', 'tamoyo3', 'osorio_p1', 'osorio_p2', 'ee_t3_osorio',
+  'ee_t4_osorio'].reduce((n, id) => n + laterChannelCounts[id], 0);
+const ifvBatchChannels = [...ifvBatchIds].reduce((n, id) => n + laterChannelCounts[id], 0);
+assert.equal(ifvBatchChannels, 16, 'the six 2026-09-25 IFV additions carry sixteen channels');
+const frenchIfvChannels = laterChannelCounts.amx10p + laterChannelCounts.amx10p_25;
+assert.equal(frenchIfvChannels, 4, 'the French autocannon IFVs add four conventional ammunition channels');
+const fleetRenewalChannels = ['type96_72_long', 'type96_80_feng', 'type96_72m_lei', 't72_rys']
+  .reduce((count, id) => count + laterChannelCounts[id], 0);
+assert.equal(fleetRenewalChannels, 12, 'the four fleet-renewal concepts add twelve separately covered channels');
+assert.deepEqual(NATIONAL_MODERNIZATION_IDS.filter((id) => !(id in laterChannelCounts)), [],
+  'every national modernization concept is counted beside the established census');
+const nationalModernizationChannels = NATIONAL_MODERNIZATION_IDS.reduce((count, id) => count + laterChannelCounts[id], 0);
+assert.equal(nationalModernizationChannels, 36, 'the twelve national modernization concepts add thirty-six separately covered channels');
+for (const id of NATIONAL_MODERNIZATION_IDS) {
+  assert.deepEqual(TANK_SPECS[id].gun.shells, TANK_SPECS.t90sm.gun.shells,
+    `${id}: the concept keeps the T-90SM X turret's ammunition, no invented rounds`);
+}
+const nationalChannels = nationalModernizationChannels
+  + laterChannelCounts.t72b3m_hetman_ii + laterChannelCounts.t72b3_zubr_ii;
+assert.equal(nationalChannels, 42, 'fourteen national concepts add three separately exercised ammunition channels each');
+const laterIds = new Set([...Object.keys(laterChannelCounts), ...SUPPLIED_SOURCE_IDS]);
+for (const [id, count] of Object.entries(laterChannelCounts)) {
+  assert.equal(TANK_SPECS[id].gun.shells.length, count,
+    `${id}: its explicit added loadout does not alter the established census`);
+}
+// 2026-09-22 cleanup: 535 -> 526 when the hidden ww2 study variants t34_85_cad, newc_tiger and
+// newc_pziii (three channels each) left the saved fleet. 2026-09-23: 526 -> 420 when the remaining
+// 36 hidden records retired (35 three-channel loadouts plus the two-channel Sturmtiger).
+assert.equal(Object.values(TANK_SPECS).filter(spec => !addedXIds.has(spec.id) && !laterIds.has(spec.id))
+  .reduce((n, spec) => n + spec.gun.shells.length, 0), 420,
+  'the pre-existing ammunition-channel census remains intact');
+assert.equal(SUPPLIED_SOURCE_IDS.length, 12, 'the supplied batch adds twelve distinct loadouts');
+assert.equal(SUPPLIED_SOURCE_IDS.reduce((n, id) => n + TANK_SPECS[id].gun.shells.length, 0), 32,
+  'nine three-channel, two two-channel and one guided-primary loadout');
+// 259 (Main ruling 2026-10-26): the C2 fires the C2 Prototype's rounds, no missile rounds; the 120/44 takes standard
+// NATO rounds and no new-round procurement is named (arieteModernSpecs.selftest cites the 2025 delivery coverage)
+const arieteC2Rounds = TANK_SPECS.c2_ariete.gun.shells;
+const withoutCadence = ({ reloadS, ...round }) => round;
+assert.deepEqual(arieteC2Rounds.map(withoutCadence), TANK_SPECS.c2_ariete_proto.gun.shells.map(withoutCadence),
+  "the C2 upgrade fires its prototype's ammunition, no invented missile rounds");
+assert.deepEqual(arieteC2Rounds.map(round => [round.name, round.type, round.caliberMm,
+  round.guided === true, shellAmmunitionCapacity(round)]), [
+  ['DM73 APFSDS', 'APFSDS', 120, false, 24],
+  ['DM12B HEAT-MP', 'HEAT', 120, false, 16],
+  ['DM11A1 Programmable', 'HE', 120, false, 12],
+]);
+// 2026-09-22 cleanup: 675 -> 666 for the same three retired ww2 study variants; 2026-09-23: 666 -> 560
+// when the remaining 36 hidden records retired (the same 106 channels as the census above).
+// 2026-09-25: the sixteen IFV identity channels are subtracted the same way; the 560 stay covered separately.
+// The French IFVs' four channels, Marder's two, the renewal concepts' twelve and the fourteen national concepts'
+// forty-two are also additions, as are the M6 Linebacker's three (main, 2026-10-04), the Type 10 Kaitaku's three,
+// the T-55A's three (release 262) and the ZTZ-20's and ZTZ-20 Prototype's three each (release 262), and the Longwei family's three each (release 265), and the
+// four new M48s' three each (265 integration), and the Centurion family's six marks (262, merged in 265),
+// and the Leopard 1A2A1's three (265), and the fourth-batch Leopard 2A3's three (release 265), and the three PT-84s'
+// three each (262, merged in 265), and the Danish Leopards' three each (266), and the Magach 6B's and 7C's three each
+// (266), and the Brazil line's eight, three each (266), and the Leopard 2A7 DK's and Centurion Mk 5/2 DK's three each (267),
+// and the Type 90 (B)'s three (267), the M3A2's three (268), and the South African line's five and the Australian line's
+// seven (269), the second air-defence round's twelve and the M163 VADS's two (270), and the 152 mm line's three each (271).
+assert.equal(authoredShellChannels - laterChannelCounts.c2_ariete - laterChannelCounts.griffin_viper - ifvBatchChannels - frenchIfvChannels - laterChannelCounts.marder2 - fleetRenewalChannels - nationalChannels - laterChannelCounts.m6_linebacker - laterChannelCounts.type10_dozer - laterChannelCounts.t55a - laterChannelCounts.ztz20 - laterChannelCounts.ztz20_prototype - release263Channels
+  - LONGWEI_FAMILY.reduce((n, m) => n + laterChannelCounts[m.id], 0) - pattonM48Channels - centurionFamilyChannels
+  - laterChannelCounts.leo1a2a1 - laterChannelCounts.leo2a3_b4 - pt84Channels - release265Channels
+  - laterChannelCounts.magach6b - laterChannelCounts.magach7c - brazil266Channels
+  - laterChannelCounts.leo2a7dk - laterChannelCounts.centurion5_2dk - laterChannelCounts.type90b - airDefense268Channels
+  - laterChannelCounts.bmpt_terminator - laterChannelCounts.m3a2_bradley - southAfrica269Channels - australia269Channels
+  - airDefense269Channels - laterChannelCounts.m163_vads - laterChannelCounts.t95
+  - ['object292', 'object477_molot', 'object195', 't14_152'].reduce((n, id) => n + laterChannelCounts[id], 0), 560,
+  'all 560 pre-C2 authored channels remain covered separately from its three new channels');
+assert.ok(multiChannelLoadouts > 100,
+  `the playable multi-channel fleet is covered (${multiChannelLoadouts})`);
+assert.ok(depletedChannelTransitions > 200,
+  `depleted-channel transitions are covered (${depletedChannelTransitions})`);
+
+{
+  const spec = TANK_SPECS.m1a1_abrams_hc;
+  const combat = createCombatState(spec);
+  combat.shellSlot = 1;
+  combat.ammo = [5, 0, 2];
+  assert.equal(selectShell(combat, 1, spec), false,
+    'an exhausted slot is rejected by the canonical selector');
+  assert.equal(selectFirstAvailableShell(combat, spec), 0,
+    'depletion fallback selects the first stocked ammunition type');
+  assert.equal(combat.shellSlot, 0);
+  assert.equal(combat.reload.t, 0,
+    'automatic fallback preserves the replacement weapon readiness');
+}
+
+let guidedAuthorityLaunches = 0;
+for (const { spec, round, slot } of guidedRounds) {
+  const guidedMatch = createAuthoritativeMatch({
+    mapId: 'verdant',
+    countdownS: 0,
+    players: [
+      { id: 'guided-gunner', specId: spec.id, team: 'alpha',
+        spawn: { x: 0, z: -200, yaw: 0 } },
+      { id: 'guided-target', specId: 't90am', team: 'bravo',
+        spawn: { x: 0, z: 200, yaw: Math.PI } },
+    ],
+  });
+  guidedMatch.onMatchReady();
+  const guidedGunner = guidedMatch.entityById.get('guided-gunner');
+  const fallbackSlot = guidedGunner.spec.gun.shells.findIndex((_, index) => index !== slot);
+  if (fallbackSlot >= 0) {
+    guidedGunner.combat.shellSlot = fallbackSlot;
+    guidedGunner.input.shellSlot = fallbackSlot;
+    guidedGunner.combat.ammo[fallbackSlot] = 0;
+  }
+  const before = guidedGunner.combat.ammo[slot];
+  const inventoriesBefore = [...guidedGunner.combat.ammo];
+  if (fallbackSlot >= 0) {
+    guidedMatch.step({
+      dt: SIM_DT,
+      inputs: new Map([
+        ['guided-gunner', input(slot)],
+        ['guided-target', input(0)],
+      ]),
+    });
+    assert.equal(guidedGunner.combat.reload.t, 0,
+      `${spec.id} slot ${slot + 1}: a stocked launcher is immediately ready after selection`);
+  } else {
+    guidedGunner.combat.reload.t = 0;
+    guidedGunner.combat.reload.kind = 'ready';
+  }
+  guidedMatch.step({
+    dt: SIM_DT,
+    inputs: new Map([
+      ['guided-gunner', input(slot, true)],
+      ['guided-target', input(0)],
+    ]),
+  });
+  assert.deepEqual(guidedGunner.combat.ammo,
+    inventoriesBefore.map((count, index) => count - (index === slot ? 1 : 0)),
+    `${spec.id} slot ${slot + 1}: authoritative launch consumes only this weapon's inventory`);
+  const guidedSnapshot = guidedMatch.snapshot({
+    tick: guidedAuthorityLaunches + 1,
+    serverTimeMs: (guidedAuthorityLaunches + 1) * 17,
+    viewerId: 'guided-gunner',
+    ackInputSeq: guidedAuthorityLaunches + 1,
+  });
+  assert.ok(guidedSnapshot.events.some((event) =>
+    event.type === 'shell_fired' && event.shellName === round.name),
+  `${spec.id} slot ${slot + 1}: guided round fires after leaving a depleted channel`);
+  assert.equal(guidedGunner.combat.ammo[slot], before - 1,
+    `${spec.id} slot ${slot + 1}: guided authority consumes exactly one round`);
+  guidedAuthorityLaunches++;
+}
+
+let fleetFinalRoundLaunches = 0;
+for (const spec of Object.values(TANK_SPECS)) {
+  const fleetMatch = createAuthoritativeMatch({
+    mapId: 'verdant',
+    countdownS: 0,
+    players: [
+      { id: 'fleet-gunner', specId: spec.id, team: 'alpha',
+        spawn: { x: 0, z: -200, yaw: 0 } },
+      { id: 'fleet-target', specId: 't90am', team: 'bravo',
+        spawn: { x: 0, z: 200, yaw: Math.PI } },
+    ],
+  });
+  fleetMatch.onMatchReady();
+  const fleetGunner = fleetMatch.entityById.get('fleet-gunner');
+
+  for (let slot = 0; slot < spec.gun.shells.length; slot++) {
+    const round = spec.gun.shells[slot];
+    const fallbackSlot = spec.gun.shells.findIndex((_, index) => index !== slot);
+    fleetGunner.combat.ammo.fill(0);
+    fleetGunner.combat.ammo[slot] = 1;
+    if (fallbackSlot >= 0) fleetGunner.combat.ammo[fallbackSlot] = 1;
+    fleetGunner.combat.shellSlot = slot;
+    fleetGunner.input.shellSlot = slot;
+    fleetGunner.input.fire = false;
+    fleetGunner._deniedShellSlot = undefined;
+    for (const channel of new Set(fleetGunner.combat.reloadChannels)) {
+      channel.t = 0;
+      channel.kind = 'ready';
+    }
+    fleetGunner.combat.reload = fleetGunner.combat.reloadChannels[slot];
+    if (fleetGunner.combat.magazine) {
+      fleetGunner.combat.magazine.rounds = Math.max(1, fleetGunner.combat.magazine.rounds);
+    }
+
+    fleetMatch.step({
+      dt: SIM_DT,
+      inputs: new Map([
+        ['fleet-gunner', input(slot, true)],
+        ['fleet-target', input(0)],
+      ]),
+    });
+    const fired = fleetMatch.snapshot({
+      tick: fleetFinalRoundLaunches + 1,
+      serverTimeMs: (fleetFinalRoundLaunches + 1) * 17,
+      viewerId: 'fleet-gunner',
+      ackInputSeq: fleetFinalRoundLaunches + 1,
+    });
+    assert.ok(fired.events.some((event) =>
+      event.type === 'shell_fired' && event.shooterId === 'fleet-gunner'
+        && event.shellName === round.name && event.shellType === round.type),
+    `${spec.id} slot ${slot + 1}: final authored round fires through authority`);
+    assert.equal(fleetGunner.combat.ammo[slot], 0,
+      `${spec.id} slot ${slot + 1}: final authored round is consumed exactly once`);
+    assert.ok(fired.events.some((event) =>
+      event.type === 'ammo_depleted' && event.id === 'fleet-gunner'
+        && event.slot === slot && event.fallbackSlot === fallbackSlot),
+    `${spec.id} slot ${slot + 1}: authority reports the exact depletion fallback`);
+    assert.equal(fleetGunner.combat.shellSlot, fallbackSlot >= 0 ? fallbackSlot : slot,
+      `${spec.id} slot ${slot + 1}: depletion leaves a canonical combat selection`);
+    assert.equal(fleetGunner.input.shellSlot, fallbackSlot >= 0 ? fallbackSlot : slot,
+      `${spec.id} slot ${slot + 1}: authority mirrors the canonical input selection`);
+
+    fleetMatch.afterSnapshotBroadcast();
+    if (fallbackSlot >= 0) {
+      fleetMatch.step({
+        dt: SIM_DT,
+        inputs: new Map([
+          ['fleet-gunner', input(slot, true)],
+          ['fleet-target', input(0)],
+        ]),
+      });
+      const denied = fleetMatch.snapshot({
+        tick: fleetFinalRoundLaunches + 2,
+        serverTimeMs: (fleetFinalRoundLaunches + 2) * 17,
+        viewerId: 'fleet-gunner',
+        ackInputSeq: fleetFinalRoundLaunches + 2,
+      });
+      assert.ok(denied.events.some((event) =>
+        event.type === 'ammo_selection_denied' && event.id === 'fleet-gunner'
+          && event.slot === slot && event.reason === 'AMMO_EMPTY'
+          && event.guided === (round.guided === true)),
+      `${spec.id} slot ${slot + 1}: reselecting the empty channel is denied explicitly`);
+      assert.equal(fleetGunner.combat.shellSlot, fallbackSlot,
+        `${spec.id} slot ${slot + 1}: an empty request cannot displace the fallback`);
+      assert.ok(!denied.events.some((event) => event.type === 'shell_fired'),
+        `${spec.id} slot ${slot + 1}: an empty request cannot spawn another shell`);
+      fleetMatch.afterSnapshotBroadcast();
+    } else {
+      assert.equal(firstAvailableAmmunitionSlot(fleetGunner.combat), -1,
+        `${spec.id}: a fully exhausted single-channel vehicle has no synthetic ammunition`);
+    }
+    fleetFinalRoundLaunches++;
+  }
+}
+assert.equal(fleetFinalRoundLaunches, authoredShellChannels,
+  'every authored ammunition channel passes the authoritative final-round flow');
+
+{
+  const guidedCase = guidedRounds.find(({ spec, slot }) =>
+    spec.gun.shells.some((_, index) => index !== slot));
+  assert.ok(guidedCase, 'at least one guided loadout has a conventional fallback');
+  const { spec, slot } = guidedCase;
+  const denialMatch = createAuthoritativeMatch({
+    mapId: 'verdant',
+    countdownS: 0,
+    players: [
+      { id: 'guided-denial-gunner', specId: spec.id, team: 'alpha',
+        spawn: { x: 0, z: -200, yaw: 0 } },
+      { id: 'guided-denial-target', specId: 't90am', team: 'bravo',
+        spawn: { x: 0, z: 200, yaw: Math.PI } },
+    ],
+  });
+  denialMatch.onMatchReady();
+  const gunner = denialMatch.entityById.get('guided-denial-gunner');
+  const fallbackSlot = gunner.spec.gun.shells.findIndex((_, index) => index !== slot);
+  gunner.combat.shellSlot = fallbackSlot;
+  gunner.input.shellSlot = fallbackSlot;
+  gunner.combat.ammo[slot] = 0;
+  denialMatch.step({
+    dt: SIM_DT,
+    inputs: new Map([
+      ['guided-denial-gunner', input(slot)],
+      ['guided-denial-target', input(0)],
+    ]),
+  });
+  const snapshot = denialMatch.snapshot({
+    tick: 1,
+    serverTimeMs: 17,
+    viewerId: 'guided-denial-gunner',
+    ackInputSeq: 1,
+  });
+  assert.ok(snapshot.events.some((event) =>
+    event.type === 'ammo_selection_denied' && event.id === 'guided-denial-gunner'
+      && event.slot === slot && event.reason === 'AMMO_EMPTY' && event.guided === true),
+  'authority identifies an empty guided channel for missile-specific HUD feedback');
+}
+
+const match = createAuthoritativeMatch({
+  mapId: 'verdant',
+  countdownS: 0,
+  players: [
+    { id: 'gunner', specId: 'm1a1_abrams_hc', team: 'alpha', spawn: { x: 0, z: -200, yaw: 0 } },
+    { id: 'target', specId: 't90am', team: 'bravo', spawn: { x: 0, z: 200, yaw: Math.PI } },
+  ],
+});
+match.onMatchReady();
+const gunner = match.entityById.get('gunner');
+const target = match.entityById.get('target');
+
+for (let slot = 0; slot < gunner.spec.gun.shells.length; slot++) {
+  gunner.combat.shellSlot = slot;
+  gunner.input.shellSlot = slot;
+  gunner.combat.reload.t = 0;
+  gunner.combat.reload.kind = 'ready';
+  const before = gunner.combat.ammo[slot];
+  match.step({
+    dt: SIM_DT,
+    inputs: new Map([
+      ['gunner', input(slot, true)],
+      ['target', input(0)],
+    ]),
+  });
+  const snapshot = match.snapshot({
+    tick: slot + 1,
+    serverTimeMs: (slot + 1) * 17,
+    viewerId: 'gunner',
+    ackInputSeq: slot + 1,
+  });
+  assert.ok(snapshot.events.some((event) =>
+    event.type === 'shell_fired' && event.shellName === gunner.spec.gun.shells[slot].name),
+  `slot ${slot + 1}: authored ammunition fires through authority`);
+  assert.equal(gunner.combat.ammo[slot], before - 1,
+    `slot ${slot + 1}: authority consumes exactly one matching round`);
+  match.afterSnapshotBroadcast();
+  target.combat.destroyed = false;
+  target.combat.hp = target.combat.maxHp;
+}
+
+gunner.combat.shellSlot = 1;
+gunner.input.shellSlot = 1;
+gunner.combat.ammo[0] = Math.max(1, gunner.combat.ammo[0]);
+gunner.combat.ammo[1] = 1;
+gunner.combat.reload.t = 0;
+gunner.combat.reload.kind = 'ready';
+match.step({
+  dt: SIM_DT,
+  inputs: new Map([
+    ['gunner', input(1, true)],
+    ['target', input(0)],
+  ]),
+});
+const depleted = match.snapshot({
+  tick: 10,
+  serverTimeMs: 170,
+  viewerId: 'gunner',
+  ackInputSeq: 10,
+});
+assert.ok(depleted.events.some((event) =>
+  event.type === 'ammo_depleted' && event.id === 'gunner' && event.slot === 1
+    && event.fallbackSlot === 0),
+'firing the final round announces depletion and the first stocked fallback');
+assert.equal(gunner.combat.shellSlot, 0);
+assert.equal(gunner.input.shellSlot, 0);
+assert.equal(gunner.combat.reload.t, gunner.combat.reload.totalS,
+  'automatic fallback begins a complete reload for the replacement type');
+
+match.afterSnapshotBroadcast();
+match.step({
+  dt: SIM_DT,
+  inputs: new Map([
+    ['gunner', input(1)],
+    ['target', input(0)],
+  ]),
+});
+const emptySelection = match.snapshot({
+  tick: 11,
+  serverTimeMs: 187,
+  viewerId: 'gunner',
+  ackInputSeq: 11,
+});
+assert.ok(emptySelection.events.some((event) =>
+  event.type === 'ammo_selection_denied' && event.id === 'gunner'
+    && event.slot === 1 && event.reason === 'AMMO_EMPTY'),
+'selecting an empty type is rejected explicitly for HUD feedback');
+assert.equal(gunner.combat.shellSlot, 0,
+  'an empty selection never displaces the stocked fallback');
+assert.ok(!emptySelection.events.some((event) => event.type === 'shell_fired'),
+  'an empty selection never spawns a projectile');
+
+gunner.bot = true;
+gunner.aiCtl = null;
+gunner.combat.shellSlot = 0;
+gunner.input.shellSlot = 2;
+gunner.input.fire = false;
+match.step({ dt: SIM_DT, inputs: new Map() });
+assert.equal(gunner.combat.shellSlot, 2,
+  'bot ammunition requests pass through authoritative shell selection');
+
+// (270) the M163's Vulcan in the authority (sim/fireCycleFloor.ts): one round a tick, every round an event, the viewer's
+// shell rows one round in three (the rest fly unrowed: their hits and impacts are events)
+{
+  const vulcanMatch = createAuthoritativeMatch({
+    mapId: 'verdant',
+    countdownS: 0,
+    players: [
+      { id: 'vulcan', specId: 'm163_vads', team: 'alpha', spawn: { x: 0, z: -200, yaw: 0 } },
+      { id: 'vulcan-target', specId: 't90am', team: 'bravo', spawn: { x: 0, z: 200, yaw: Math.PI } },
+    ],
+  });
+  vulcanMatch.onMatchReady();
+  const skyward = { ...input(0, true), aimPitch: 0.6, aimDistance: 1500 };
+  let fired = 0;
+  for (let tick = 0; tick < 60; tick++) {
+    vulcanMatch.step({ dt: SIM_DT, inputs: new Map([['vulcan', skyward], ['vulcan-target', input(0)]]) });
+    fired += vulcanMatch.eventsForViewer('vulcan').filter((event) => event.type === 'shell_fired').length;
+    vulcanMatch.afterEventBroadcast();
+  }
+  assert.equal(fired, 60, 'the Vulcan fires one round a tick, each an event');
+  const rowEntities = [], rowShells = [];
+  vulcanMatch.observeForViewer('vulcan', rowEntities, rowShells);
+  assert.equal(rowShells.length, 20, 'the viewer\'s shell rows carry one round in three');
+  assert.equal(vulcanMatch.snapshot({ tick: 60, serverTimeMs: 1000, viewerId: 'vulcan', ackInputSeq: null }).shells.length, 20,
+    'and so does its snapshot');
+}
+
+console.log(`ammunitionFlow.selftest: ${multiChannelLoadouts} multi-channel loadouts, ` +
+  `${depletedChannelTransitions} depleted-slot transitions, ${guidedAuthorityLaunches} guided ` +
+  `authority launches, ${fleetFinalRoundLaunches} fleet final-round launches, finite ammo, ` +
+  'and reloads passed');

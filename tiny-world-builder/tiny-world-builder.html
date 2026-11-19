@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tiny World Builder</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Noto+Sans+Thai:wght@300..700&family=Space+Grotesk:wght@300..700&display=swap" />
+  <link rel="stylesheet" href="vendor/driverjs/driver.css">
+  <link rel="stylesheet" href="styles/tiny-world.css">
+  <link rel="stylesheet" href="styles/countdown.css">
+<script src="engine/world/00-custom-confirm.js"></script>
+<script id="tinyworld-feature-flags-bootstrap" type="text/javascript">
+  // Feature flags bootstrap — sync load before first paint. Full apply runs in
+  // engine/world/00b-feature-flags.js after auth is known (admin preview).
+  (function () {
+    var doc = { flags: {} };
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'tinyworld-feature-flags.json', false);
+      xhr.send(null);
+      if (xhr.status >= 200 && xhr.status < 300) doc = JSON.parse(xhr.responseText || '{}');
+    } catch (_) {}
+    window.__tinyworldFeatureFlagsBootstrap = doc;
+    var host = window.location.hostname;
+    var isLocal = window.location.protocol === 'file:'
+      || host === 'localhost'
+      || host === '127.0.0.1'
+      || host === '[::1]'
+      || (host && host.slice(-6) === '.local');
+    var ai = (doc.flags && doc.flags.ai) || {};
+    var aiEnabled = ai.everyone === true;
+    try {
+      var qs = new URLSearchParams(window.location.search);
+      if (qs.get('ai') === '1') aiEnabled = true;
+      if (qs.get('ai') === '0') aiEnabled = false;
+    } catch (_) {}
+    window.__TWB_AI_INTERFACES_ENABLED__ = !!aiEnabled;
+    document.documentElement.classList.toggle('ai-disabled', !aiEnabled);
+  }());
+</script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="root" style="position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;"></div>
+  <div id="cloud-layer"></div>
+  <div id="under-occlusion-cloud-wipe" aria-hidden="true"></div>
+  <div id="tod-tint" aria-hidden="true"></div>
+
+  <!-- Minimap (top-down repaint of the home grid) -->
+  <div class="minimap-wrap" id="minimap-wrap" data-feature-flag="movable-map">
+    <div class="minimap-card">
+      <canvas id="minimap-canvas" width="240" height="240"></canvas>
+      <div class="minimap-foot">
+        <span id="minimap-size">8×8</span>
+        <span id="minimap-fps" data-tooltip="Frames per second" data-i18n-tooltip="minimap.fps">60 fps</span>
+        <button type="button" class="minimap-toggle" id="minimap-toggle" aria-label="Toggle map" title="Hide/show map (N)" data-i18n-title="minimap.toggle">–</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="crowd-panel hidden" id="crowd-panel">
+    <div class="crowd-panel-head">
+      <h3 data-i18n="crowd.title">Crowd controls</h3>
+      <button type="button" class="crowd-panel-toggle" id="crowd-panel-toggle" aria-label="Close crowd controls" data-i18n-aria-label="crowd.close">×</button>
+    </div>
+    <label class="crowd-row"><span data-i18n="crowd.mode">Mode</span>
+      <select id="crowd-mode">
+        <option value="wander" data-i18n="crowd.mode.wander">Wander path</option>
+        <option value="cross" data-i18n="crowd.mode.cross">Cross map</option>
+        <option value="circle" data-i18n="crowd.mode.circle">Circle plaza</option>
+        <option value="static" data-i18n="crowd.mode.static">Static idle</option>
+      </select>
+    </label>
+    <label class="crowd-row"><span data-i18n="crowd.people">People</span>
+      <input id="crowd-count-live" type="range" min="0" max="80" step="1" />
+      <output id="crowd-count-live-value"></output>
+    </label>
+    <label class="crowd-row"><span data-i18n="crowd.height">Height</span>
+      <input id="crowd-scale-live" type="range" min="25" max="160" step="1" />
+      <output id="crowd-scale-live-value"></output>
+    </label>
+    <label class="crowd-row"><span data-i18n="crowd.speed">Speed</span>
+      <input id="crowd-speed-live" type="range" min="0" max="100" step="1" />
+      <output id="crowd-speed-live-value"></output>
+    </label>
+    <label class="crowd-row"><span data-i18n="crowd.zone">Zone</span>
+      <input id="crowd-zone-radius-live" type="range" min="8" max="80" step="1" />
+      <output id="crowd-zone-radius-live-value"></output>
+    </label>
+    <label class="crowd-check"><input id="crowd-enabled-live" type="checkbox" /> <span data-i18n="crowd.enable">Enable crowd</span></label>
+    <label class="crowd-check"><input id="crowd-show-zones-live" type="checkbox" /> <span data-i18n="crowd.showRings">Show rings</span></label>
+    <label class="crowd-check"><input id="crowd-show-arrows-live" type="checkbox" /> <span data-i18n="crowd.showArrows">Show direction arrows</span></label>
+    <label class="crowd-check"><input id="crowd-paused-live" type="checkbox" /> <span data-i18n="crowd.pause">Pause</span></label>
+    <div class="crowd-actions">
+      <button class="btn" id="crowd-reseed-live" type="button" data-i18n="crowd.reseed">Reseed</button>
+      <button class="btn" id="crowd-debug-live" type="button" data-i18n="crowd.debug">Debug</button>
+    </div>
+  </div>
+  <button id="crowd-panel-handle" class="crowd-panel-handle" title="Show crowd controls" aria-label="Show crowd controls" data-i18n-title="crowd.show" data-i18n-aria-label="crowd.show" hidden data-feature-hidden="crowd-handle"></button>
+
+  <button type="button" class="brand brand-home-btn" id="brand-home-btn" data-pos-type="neutral" data-tooltip="Home" data-i18n-tooltip="chrome.home" aria-label="Home" data-i18n-aria-label="chrome.home">
+    <img class="brand-logo" src="assets/twlogo-wordmark.png" alt="" width="1064" height="403" aria-hidden="true">
+  </button>
+
+  <a class="brand-banner" id="brand-banner" style="display:none !important" href="https://x.com/Autoincentiv3" target="_blank" rel="noopener noreferrer" aria-label="Autoincentive on X">
+    <img id="brand-banner-img" alt="Autoincentive" />
+  </a>
+
+  <!-- World menu trigger — top-center rounded pill; menu opens beneath it. -->
+  <div class="world-pill" id="world-pill" data-pos-type="primary">
+    <button type="button" class="brand-title-btn" id="world-menu-btn" aria-haspopup="menu" aria-expanded="false">
+      <span id="world-menu-label">My world</span>
+      <svg class="brand-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </div>
+
+  <div class="live-time-clock" id="live-time-clock" hidden aria-live="polite" aria-label="Time of day">
+    <span class="live-time-clock-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </span>
+    <span class="live-time-clock-val" id="live-time-clock-val">12:00</span>
+  </div>
+
+  <label class="sun-strength-control" data-feature-flag="sun-slider" aria-label="Directional sun strength" hidden>
+    <span>Sun</span>
+    <input id="directional-light-strength" type="range" min="0" max="1000" step="5" value="1000" />
+    <output id="directional-light-strength-readout">1000%</output>
+  </label>
+
+  <div class="token-corner" title="Solana token">
+    <a class="btn icon token-github-link" id="github-link" data-pos-type="neutral" href="https://github.com/jasonkneen/tiny-world-builder" target="_blank" rel="noopener noreferrer" data-tooltip="View on GitHub" data-i18n-tooltip="appbar.github" aria-label="View Tiny World Builder on GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5a13.4 13.4 0 0 0-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5a4.8 4.8 0 0 0-1 3.5v4"/><path d="M9 18c-4.5 2-5-2-7-2"/></svg>
+    </a>
+    <span class="token-corner-text"><span class="ticker">$TINYWORLD</span><span class="token-sep">·</span><span class="ca">CA: 7bK4jRMa3aY85wJMQEQqWsmY9mmrRT32AFWZ23cBpump</span></span>
+  </div>
+
+  <!-- Explorer Binky: prompt to go unpack/claim worlds. Bottom-left of the build screen. -->
+  <div class="unpack-prompt" id="unpack-prompt">
+    <button type="button" class="unpack-prompt-close" id="unpack-prompt-close" aria-label="Dismiss">&times;</button>
+    <a class="unpack-prompt-bubble" href="/card_reveal">
+      <span class="unpack-prompt-text">Time to claim your <strong>FREE</strong> worlds!</span>
+      <span class="unpack-prompt-cta">Unpack now
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </span>
+    </a>
+    <img class="unpack-prompt-binky" src="assets/binky_explore1.png" alt="" aria-hidden="true" width="1414" height="1113" />
+  </div>
+  <script>
+    (function () {
+      var KEY = 'tinyworld:unpack-prompt-dismissed.v1';
+      var el = document.getElementById('unpack-prompt');
+      var x = document.getElementById('unpack-prompt-close');
+      if (!el || !x) return;
+      try { if (localStorage.getItem(KEY) === '1') el.hidden = true; } catch (_) {}
+      x.addEventListener('click', function (e) {
+        e.preventDefault();
+        el.hidden = true;
+        try { localStorage.setItem(KEY, '1'); } catch (_) {}
+      });
+    }());
+  </script>
+
+  <!-- View modes popup -->
+  <div class="topbar-popup" id="view-popup" hidden role="menu">
+    <div class="topbar-popup-title" data-i18n="view.title">Camera view</div>
+    <button class="view-option" data-view="topdown" role="menuitem" hidden aria-hidden="true" tabindex="-1">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><rect x="6" y="6" width="20" height="16" rx="1" fill="#a08454"/><rect x="9" y="9" width="14" height="10" fill="#cdb98a"/><rect x="11" y="11" width="3" height="3" fill="#86b53e"/><rect x="18" y="14" width="3" height="3" fill="#86b53e"/></svg>
+      </span>
+      <span class="view-body"><strong data-i18n="view.topdown">Top-down</strong><em data-i18n="view.topdown.desc">bird's eye, straight down</em></span>
+    </button>
+    <button class="view-option" data-view="ortho" role="menuitem" hidden aria-hidden="true" tabindex="-1">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><path d="M16 4 28 11l-12 7L4 11z" fill="#cdb98a"/><path d="M16 18l12-7v9l-12 7z" fill="#a08454"/><path d="M16 18l-12-7v9l12 7z" fill="#8a6f44"/></svg>
+      </span>
+      <span class="view-body"><strong data-i18n="view.iso">Isometric</strong><em data-i18n="view.iso.desc">angled overhead</em></span>
+    </button>
+    <button class="view-option" data-view="perspective" role="menuitem">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><path d="M16 10 26 12l-10 4L6 12z" fill="#cdb98a"/><path d="M16 16l10-4v6l-10 4z" fill="#a08454"/><path d="M16 16l-10-4v6l10 4z" fill="#8a6f44"/></svg>
+      </span>
+      <span class="view-body"><strong data-i18n="view.perspective">Perspective</strong><em data-i18n="view.perspective.desc">close orbit</em></span>
+    </button>
+    <button class="view-option" data-view="tp" role="menuitem" data-feature-flag="third-person-view" hidden aria-hidden="true" tabindex="-1">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><circle cx="16" cy="13" r="3" fill="#cdb98a"/><path d="M14 17h4l2 7h-8z" fill="#a08454"/><path d="M8 19l8-5 8 5" stroke="#8a6f44" stroke-width="1.5" fill="none"/><path d="M16 6 23 3" stroke="#6f87a8" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+      <span class="view-body"><strong data-i18n="view.walkThird">Walk (third-person)</strong><em data-i18n="view.walkThird.desc">follow behind your character</em></span>
+    </button>
+    <button class="view-option" data-view="fp" role="menuitem">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><circle cx="16" cy="13" r="3" fill="#cdb98a"/><path d="M14 17h4l-2 8z" fill="#a08454"/><path d="M10 22l6-4 6 4" stroke="#8a6f44" stroke-width="1.5" fill="none"/></svg>
+      </span>
+      <span class="view-body"><strong data-i18n="view.walk">Walk (first-person)</strong><em data-i18n="view.walk.desc">through your character's eyes</em></span>
+    </button>
+  </div>
+
+  <!-- Time / season / weather popup -->
+  <div class="topbar-popup time-popup" id="time-popup" hidden role="menu">
+    <div class="topbar-popup-title" data-i18n="time.title">Time &amp; weather</div>
+    <label class="time-row">
+      <span class="time-row-label" data-i18n="time.timeOfDay">Time of day</span>
+      <input id="time-range" type="range" min="0" max="1440" step="5" value="720" />
+      <span class="time-row-val" id="time-readout">12:00</span>
+    </label>
+    <div class="time-row time-row-pills">
+      <span class="time-row-label" data-i18n="time.season">Season</span>
+      <div class="pill-row" id="season-pills">
+        <button class="pill" data-season="spring" data-i18n="season.spring">Spring</button>
+        <button class="pill" data-season="summer" data-i18n="season.summer">Summer</button>
+        <button class="pill" data-season="autumn" data-i18n="season.autumn">Autumn</button>
+        <button class="pill" data-season="winter" data-i18n="season.winter">Winter</button>
+      </div>
+    </div>
+    <div class="time-row time-row-pills" data-feature-weather>
+      <span class="time-row-label" data-i18n="time.weather">Weather</span>
+      <div class="pill-row" id="weather-pills">
+        <button class="pill" data-weather="clear" data-i18n="weather.clear">Clear</button>
+        <button class="pill" data-weather="cloudy" data-i18n="weather.cloudy">Cloudy</button>
+        <button class="pill" data-weather="rain" data-i18n="weather.rain">Rain</button>
+        <button class="pill" data-weather="storm" data-i18n="weather.storm">Storm</button>
+        <button class="pill" data-weather="snow" data-i18n="weather.snow">Snow</button>
+      </div>
+    </div>
+    <label class="time-row" data-feature-weather>
+      <span class="time-row-label" data-i18n="time.intensity">Weather intensity</span>
+      <input id="weather-intensity" type="range" min="25" max="300" step="5" value="25" />
+      <span class="time-row-val" id="weather-intensity-readout">25%</span>
+    </label>
+    <label class="time-row" data-feature-weather>
+      <span class="time-row-label" data-i18n="time.splashes">Splashes / buildup</span>
+      <input id="weather-splashes" type="range" min="0" max="300" step="5" value="150" />
+      <span class="time-row-val" id="weather-splashes-readout">150%</span>
+    </label>
+    <div class="time-foot">
+      <em data-i18n="time.foot">Intensity controls falling particles and storm severity; splashes controls rain impacts, puddles, and snow buildup.</em>
+    </div>
+  </div>
+
+  <!-- World-name popup menu -->
+  <div class="world-menu" id="world-menu" hidden role="menu">
+    <div class="world-menu-head">
+      <input class="world-menu-input" id="world-menu-name" placeholder="Whispering Vale" maxlength="80" aria-label="World name" data-i18n-placeholder="worldmenu.namePlaceholder" data-i18n-aria-label="worldmenu.nameAria" />
+      <button class="world-menu-rename" id="world-menu-rename" data-tooltip="Save name" data-i18n-tooltip="worldmenu.saveName">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+    </div>
+    <div class="world-menu-section">
+      <button class="world-menu-item" data-action="new-blank" role="menuitem">
+        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        <span class="world-menu-label" data-i18n="worldmenu.newBlank">Create new</span>
+        <span class="world-menu-hint" data-i18n="worldmenu.newBlank.hint">blank grass island</span>
+      </button>
+      <button class="world-menu-item" data-action="new-default" role="menuitem">
+        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></svg></span>
+        <span class="world-menu-label" data-i18n="worldmenu.newDefault">Create default</span>
+        <span class="world-menu-hint" data-i18n="worldmenu.newDefault.hint">starter village</span>
+      </button>
+      <button class="world-menu-item" data-action="duplicate" role="menuitem">
+        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+        <span class="world-menu-label" data-i18n="worldmenu.duplicate">Duplicate</span>
+        <span class="world-menu-hint" data-i18n="worldmenu.duplicate.hint">copy of this world</span>
+      </button>
+      <button class="world-menu-item" data-action="generate" role="menuitem" data-feature-flag="generate-prompt">
+        <span class="world-menu-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></span>
+        <span class="world-menu-label">Generate from prompt…</span>
+        <span class="world-menu-hint">⌘G</span>
+      </button>
+    </div>
+    <div class="world-menu-section" id="world-menu-slots">
+      <div class="world-menu-section-title" data-i18n="worldmenu.myWorlds">My worlds</div>
+      <ul class="world-menu-list" id="world-menu-list"></ul>
+      <div class="world-menu-empty" id="world-menu-empty" data-i18n="worldmenu.empty" hidden>No saved worlds yet. Build one and choose “Save as new”.</div>
+    </div>
+    <div class="world-menu-section world-menu-shared" id="world-menu-shared" hidden>
+      <div class="world-menu-section-title">Shared rooms</div>
+      <ul class="world-menu-list world-menu-shared-list" id="world-menu-shared-list"></ul>
+      <div class="world-menu-empty" id="world-menu-shared-empty" hidden>No live shared rooms.</div>
+    </div>
+    <div class="world-menu-foot">
+      <button class="world-menu-foot-btn" data-action="save-as" role="menuitem">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span data-i18n="worldmenu.saveAs">Save as new</span>
+      </button>
+      <button class="world-menu-foot-btn" data-action="share" role="menuitem">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51 15.42 17.49"/><path d="M15.41 6.51 8.59 10.49"/></svg>
+        <span data-i18n="worldmenu.share">Copy share URL</span>
+      </button>
+      <button class="world-menu-foot-btn" data-action="collaborate" role="menuitem">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11c1.66 0 3-1.12 3-2.5S17.66 6 16 6s-3 1.12-3 2.5S14.34 11 16 11Z"/><path d="M8 12c1.66 0 3-1.12 3-2.5S9.66 7 8 7 5 8.12 5 9.5 6.34 12 8 12Z"/><path d="M2 20c.8-3 3-4.5 6-4.5 1.5 0 2.8.38 3.8 1.14"/><path d="M22 20c-.65-2.42-2.32-3.93-5-4.4"/><path d="M14 17h6"/><path d="M17 14v6"/></svg>
+        <span data-i18n="worldmenu.collaborate">Start collaborate room</span>
+      </button>
+      <button class="world-menu-foot-btn" data-action="manage" role="menuitem">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span data-i18n="worldmenu.cloud">Cloud worlds</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="unsaved-banner" id="unsaved-banner" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span id="unsaved-banner-text" data-i18n="unsaved.banner">Areas outside your home grid aren't saved</span>
+  </div>
+
+  <!-- Top-right chrome: menu (sign in / sign out) + home. -->
+  <div id="top-corner-chrome" class="top-corner-chrome">
+    <button type="button" id="auth-login-btn-top" class="corner-chrome-btn corner-chrome-btn--label" data-pos-type="neutral" data-tooltip="Menu" data-i18n-tooltip="chrome.menu" aria-label="Sign in" data-i18n-aria-label="chrome.menuSignIn" hidden>
+      <span class="corner-chrome-label" data-i18n="chrome.menu">Menu</span>
+    </button>
+    <button type="button" id="auth-logout-btn" class="corner-chrome-btn corner-chrome-btn--label" data-pos-type="neutral" data-tooltip="Menu" data-i18n-tooltip="chrome.menu" aria-label="Sign out" data-i18n-aria-label="chrome.menuSignOut" hidden>
+      <span class="corner-chrome-label" data-i18n="chrome.menu">Menu</span>
+    </button>
+  </div>
+
+  <button type="button" id="sound-icon" class="sound-icon" data-pos-type="neutral" data-tooltip="Sound" data-i18n-tooltip="sound.toggle" aria-label="Sound controls" aria-expanded="false" aria-controls="sound-panel">
+    <svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    <svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/></svg>
+  </button>
+  <button type="button" id="layers-toggle" class="layers-handle" data-pos-type="neutral" data-tooltip="World Items" data-i18n-tooltip="layers.toggle" aria-label="Open world items panel" data-i18n-aria-label="layers.open" aria-expanded="false" aria-controls="layers-panel">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
+  </button>
+
+  <div id="sound-panel" class="sound-panel" role="dialog" aria-label="Sound controls" hidden>
+    <div class="sound-panel-head">
+      <h3 data-i18n="sound.title">Sound</h3>
+      <button type="button" class="sound-panel-close" id="sound-panel-close" aria-label="Close sound panel" data-i18n-aria-label="sound.close">×</button>
+    </div>
+
+    <div class="sound-section">
+      <div class="sound-section-title" data-i18n="sound.music">Music</div>
+      <div class="sound-row">
+        <button type="button" class="sound-mute" id="snd-music-mute" data-tooltip="Mute music" data-i18n-tooltip="sound.muteMusic" aria-label="Mute music" data-i18n-aria-label="sound.muteMusic">
+          <svg class="ic-on" viewBox="0 0 24 24"><path d="M9 18V6l11-3v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="15" r="3"/></svg>
+          <svg class="ic-off" viewBox="0 0 24 24"><path d="M9 18V6l11-3v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="15" r="3"/><path d="M3 3l18 18"/></svg>
+        </button>
+        <input type="range" id="snd-music-vol" min="0" max="100" step="1" aria-label="Music volume" />
+      </div>
+      <div class="sound-tracklist" id="snd-music-tracks" role="listbox" aria-label="Music tracks"></div>
+    </div>
+
+    <div class="sound-section">
+      <div class="sound-section-title" data-i18n="sound.effects">Effects</div>
+      <div class="sound-row">
+        <button type="button" class="sound-mute" id="snd-sfx-mute" data-tooltip="Mute SFX" data-i18n-tooltip="sound.muteSfx" aria-label="Mute SFX" data-i18n-aria-label="sound.muteSfx">
+          <svg class="ic-on" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <svg class="ic-off" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/></svg>
+        </button>
+        <input type="range" id="snd-sfx-vol" min="0" max="100" step="1" aria-label="SFX volume" />
+      </div>
+    </div>
+
+    <div class="sound-section">
+      <div class="sound-section-title" data-i18n="sound.ambient">Ambient (water · wind)</div>
+      <div class="sound-row">
+        <button type="button" class="sound-mute" id="snd-ambient-mute" data-tooltip="Mute ambient" data-i18n-tooltip="sound.muteAmbient" aria-label="Mute ambient" data-i18n-aria-label="sound.muteAmbient">
+          <svg class="ic-on" viewBox="0 0 24 24"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/></svg>
+          <svg class="ic-off" viewBox="0 0 24 24"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 3l18 18"/></svg>
+        </button>
+        <input type="range" id="snd-ambient-vol" min="0" max="100" step="1" aria-label="Ambient volume" />
+      </div>
+    </div>
+
+    <div class="sound-section">
+      <div class="sound-section-title" data-i18n="sound.engines">Engines</div>
+      <div class="sound-row">
+        <button type="button" class="sound-mute" id="snd-engines-mute" data-tooltip="Mute engines" data-i18n-tooltip="sound.muteEngines" aria-label="Mute engines" data-i18n-aria-label="sound.muteEngines">
+          <svg class="ic-on" viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M5 8h14"/><path d="M7 16h10"/></svg>
+          <svg class="ic-off" viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M5 8h14"/><path d="M7 16h10"/><path d="M3 3l18 18"/></svg>
+        </button>
+        <input type="range" id="snd-engines-vol" min="0" max="100" step="1" aria-label="Engine volume" />
+      </div>
+    </div>
+  </div>
+
+  <div class="tips-panel" id="tips-panel" role="region" aria-label="Keyboard and mouse tips" hidden>
+    <button type="button" class="tips-close" id="tips-close" aria-label="Hide tips" data-i18n-aria-label="tips.hide">×</button>
+    <div class="tips-grid" id="tips-grid"></div>
+  </div>
+  <button type="button" id="tips-show" class="tips-show" data-tooltip="Show controls" data-i18n-tooltip="tips.show" aria-label="Show controls" data-i18n-aria-label="tips.show" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+  </button>
+
+  <div class="appbar">
+    <div class="language-picker" id="language-picker">
+      <button class="language-trigger" id="language-trigger" type="button" data-pos-type="neutral" aria-label="Language: English" aria-haspopup="menu" aria-expanded="false" aria-controls="language-menu" data-tooltip="Language">
+        <span class="language-current-flag" id="language-current-flag" aria-hidden="true">
+          <svg viewBox="0 0 30 20">
+            <rect width="30" height="20" fill="#012169"/>
+            <path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4"/>
+            <path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="2"/>
+            <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6"/>
+            <path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.5"/>
+          </svg>
+        </span>
+        <span class="sr-only" id="language-current-label">English</span>
+        <svg class="language-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
+      </button>
+      <div class="language-menu" id="language-menu" role="menu" aria-label="Language" hidden>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="en" aria-label="English" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#012169"/>
+              <path d="M0 0 30 20M30 0 0 20" stroke="#fff" stroke-width="4"/>
+              <path d="M0 0 30 20M30 0 0 20" stroke="#C8102E" stroke-width="2"/>
+              <path d="M15 0V20M0 10H30" stroke="#fff" stroke-width="6"/>
+              <path d="M15 0V20M0 10H30" stroke="#C8102E" stroke-width="3.5"/>
+            </svg>
+          </span>
+          <span class="language-label">English</span>
+        </button>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="fr" aria-label="Français" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#fff"/>
+              <rect width="10" height="20" fill="#0055A4"/>
+              <rect x="20" width="10" height="20" fill="#EF4135"/>
+            </svg>
+          </span>
+          <span class="language-label">Français</span>
+        </button>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="es" aria-label="Español" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#AA151B"/>
+              <rect y="5" width="30" height="10" fill="#F1BF00"/>
+            </svg>
+          </span>
+          <span class="language-label">Español</span>
+        </button>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="zh" aria-label="中文" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#EE1C25"/>
+              <g fill="#FFDE00">
+                <path d="M6 2.4 7.27 6.31 3.95 3.89H8.05L4.73 6.31Z"/>
+                <path d="M11.5 2.2 11.99 3.18 11.06 2.6H12.18L11.25 3.18Z"/>
+                <path d="M13.5 4.3 13.78 5.32 13.06 4.66H14.18L13.46 5.32Z"/>
+                <path d="M13.5 7.1 13.78 8.12 13.06 7.46H14.18L13.46 8.12Z"/>
+                <path d="M11.5 9.2 11.99 10.18 11.06 9.6H12.18L11.25 10.18Z"/>
+              </g>
+            </svg>
+          </span>
+          <span class="language-label">中文</span>
+        </button>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="th" aria-label="ไทย" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#A51931"/>
+              <rect y="3" width="30" height="14" fill="#F4F5F8"/>
+              <rect y="6" width="30" height="8" fill="#2D2A4A"/>
+            </svg>
+          </span>
+          <span class="language-label">ไทย</span>
+        </button>
+        <div class="language-menu-divider" role="separator" aria-hidden="true"></div>
+        <button class="language-menu-action" type="button" id="language-menu-signout" role="menuitem" data-i18n="chrome.menuSignOut" hidden>Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="brush-mode-dock" id="brush-mode-dock" data-feature-flag="build-brush" role="group" aria-label="Brush shape quick palette">
+    <div class="brush-mode-dock-head">
+      <span class="brush-mode-dock-kicker">Build Brush</span>
+      <span class="brush-mode-dock-help">Pick paint first. Drag on the island; release paints.</span>
+    </div>
+    <div class="brush-mode-dock-buttons">
+      <button class="brush-mode-btn on" type="button" data-brush-mode="single" data-tooltip="Single brush: pick terrain/object, then drag on the island to paint immediately" aria-label="Single cell brush" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="8" height="8" rx="1.5"/></svg>
+        <span>Single</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="line" data-tooltip="Line brush: drag on the island to preview a line; release paints it" aria-label="Line brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/></svg>
+        <span>Line</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="rect" data-tooltip="Rectangle brush: drag on the island to preview an area; release fills it" aria-label="Rectangle brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2"/></svg>
+        <span>Rect</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="fill" data-tooltip="Fill brush: press a cell to preview the matching connected area; release paints it" aria-label="Fill brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13c2.5-4.8 6.5-7.6 12-8-1.2 5.4-4 9-8.4 10.8"/><path d="M5 13c1.1 1.8 2.7 3.1 4.8 3.8"/><path d="M4 19h16"/></svg>
+        <span>Fill</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="scatter" data-tooltip="Scatter brush: drag an area to preview scattered placements; release paints them" aria-label="Scatter brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="1.7"/><circle cx="15.5" cy="5.5" r="1.4"/><circle cx="18" cy="14" r="1.8"/><circle cx="9" cy="17" r="1.5"/><circle cx="12.5" cy="11" r="1.2"/></svg>
+        <span>Scatter</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn icon" id="home" data-pos-type="primary" data-tooltip="Center on your grid" data-i18n-tooltip="controls.home" aria-label="Center on your grid" data-i18n-aria-label="controls.home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
+    </button>
+    <button class="btn icon" id="persp" data-pos-type="primary" data-tooltip="Perspective" data-i18n-tooltip="controls.perspective" aria-label="Toggle camera mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
+    </button>
+    <button class="btn icon" id="view-modes" data-pos-type="primary" data-tooltip="View modes" data-i18n-tooltip="controls.viewModes" aria-label="Pick a camera view">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="btn icon" id="time-weather" data-pos-type="tertiary" data-tooltip="Time &amp; weather" data-i18n-tooltip="controls.timeWeather" aria-label="Time and weather">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </button>
+    <button class="btn icon" id="showcase-mode" data-pos-type="neutral" data-tooltip="Showcase mode (hide chrome + orbit)" data-i18n-tooltip="controls.showcase" aria-label="Showcase mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
+    </button>
+    <button class="btn build-play-toggle" id="build-play-mode" type="button" data-pos-type="primary" data-tooltip="Switch to play mode" aria-label="Switch to play mode" aria-pressed="false">
+      <svg class="ic-build" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.7 6.3 3 3"/><path d="m5 21 4.8-1 9.4-9.4a2.1 2.1 0 0 0-3-3L6.2 17.2 5 21Z"/><path d="m3 7 4-4 3 3-4 4Z"/></svg>
+      <svg class="ic-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l12-7Z"/></svg>
+      <span id="build-play-mode-label">Build</span>
+    </button>
+    <button class="btn icon" id="stamp-builder" data-pos-type="primary" data-tooltip="Stamps" data-i18n-tooltip="controls.stamps" aria-label="Open stamps">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="m3 7 9 5v10l-9-5V7Z"/><path d="m21 7-9 5v10l9-5V7Z"/></svg>
+    </button>
+    <div class="brush-mode-toolbar" id="brush-mode-toolbar" role="group" aria-label="Brush shape">
+      <span class="brush-mode-title">Brush</span>
+      <button class="brush-mode-btn on" type="button" data-brush-mode="single" data-tooltip="Single brush: pick terrain/object, then drag on the island to paint immediately" aria-label="Single cell brush" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="8" height="8" rx="1.5"/></svg>
+        <span>Single</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="line" data-tooltip="Line brush: drag on the island to preview a line; release paints it" aria-label="Line brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/></svg>
+        <span>Line</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="rect" data-tooltip="Rectangle brush: drag on the island to preview an area; release fills it" aria-label="Rectangle brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="2"/></svg>
+        <span>Rect</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="fill" data-tooltip="Fill brush: press a cell to preview the matching connected area; release paints it" aria-label="Fill brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13c2.5-4.8 6.5-7.6 12-8-1.2 5.4-4 9-8.4 10.8"/><path d="M5 13c1.1 1.8 2.7 3.1 4.8 3.8"/><path d="M4 19h16"/></svg>
+        <span>Fill</span>
+      </button>
+      <button class="brush-mode-btn" type="button" data-brush-mode="scatter" data-tooltip="Scatter brush: drag an area to preview scattered placements; release paints them" aria-label="Scatter brush" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="1.7"/><circle cx="15.5" cy="5.5" r="1.4"/><circle cx="18" cy="14" r="1.8"/><circle cx="9" cy="17" r="1.5"/><circle cx="12.5" cy="11" r="1.2"/></svg>
+        <span>Scatter</span>
+      </button>
+    </div>
+    <button class="btn icon" id="generate" data-pos-type="tertiary" data-tooltip="Generate from prompt" aria-label="Generate world from prompt" data-feature-flag="generate-prompt" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+    </button>
+    <button class="btn icon" id="tips-toggle" data-pos-type="primary" data-tooltip="Keyboard &amp; mouse controls" data-i18n-tooltip="appbar.controls" aria-label="Show keyboard controls">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="6" width="20" height="12" rx="2" ry="2"/>
+        <path d="M6 10h.01"/><path d="M10 10h.01"/><path d="M14 10h.01"/><path d="M18 10h.01"/>
+        <path d="M6 14h12"/>
+      </svg>
+    </button>
+    <button class="btn icon" id="render-settings" data-pos-type="neutral" data-tooltip="Settings" data-i18n-tooltip="appbar.settings" aria-label="Settings" data-i18n-aria-label="appbar.settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <label class="btn icon" id="import" data-pos-type="neutral" for="import-file" role="button" tabindex="0" data-tooltip="Import JSON" data-i18n-tooltip="appbar.import" aria-label="Import world from JSON" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+    </label>
+    <button class="btn icon" id="export" data-pos-type="neutral" data-tooltip="Export JSON" data-i18n-tooltip="appbar.export" aria-label="Export world as JSON" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+    </button>
+    <button class="btn icon" id="reset" data-pos-type="neutral" data-tooltip="Reset world" data-i18n-tooltip="appbar.reset" aria-label="Reset world" data-i18n-aria-label="appbar.reset">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <button class="btn icon" id="dev-mode" data-pos-type="neutral" data-tooltip="Developer overlay (`)" aria-label="Developer overlay">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </button>
+    <input type="file" id="import-file" class="file-input-proxy" accept=".json,application/json" tabindex="-1" aria-hidden="true" disabled />
+    <button class="btn icon" id="account-btn" data-pos-type="neutral" data-tooltip="My account" aria-label="My account" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+    <button class="btn icon" id="clear" data-pos-type="neutral" data-tooltip="Clear to grass" data-i18n-tooltip="controls.clear" aria-label="Clear world to grass">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </button>
+  </div>
+
+  <div class="xr-panel" id="xr-panel" aria-label="XR modes" hidden>
+    <button class="btn icon xr-btn" id="xr-quicklook" type="button" title="View in AR (iOS / iPadOS) – Place the world on a real surface with Apple AR Quick Look" aria-label="View in AR (Apple)" hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 3 7v10l9 5 9-5V7z"/>
+        <path d="M3 7l9 5 9-5"/>
+        <path d="M12 12v10"/>
+      </svg>
+    </button>
+
+    <button class="btn icon xr-btn" id="xr-surface" type="button" title="AR Desk – Pin the board to a real-world surface (TableTop AR)" aria-label="AR Desk">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M8 12h8"/>
+        <path d="M12 8v8"/>
+      </svg>
+    </button>
+
+    <button class="btn icon xr-btn" id="xr-float" type="button" title="Float – Suspend the board in mid-air" aria-label="Float">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="9" width="14" height="6" rx="1"/>
+        <path d="M8 6v3"/>
+        <path d="M16 6v3"/>
+        <path d="M8 15v3"/>
+        <path d="M16 15v3"/>
+      </svg>
+    </button>
+
+    <button class="btn icon xr-btn" id="xr-inside" type="button" title="Enter World – Full VR scale (1:1)" aria-label="Enter World (VR)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 12a10 10 0 0 1 20 0"/>
+        <path d="M12 2v20"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+  </div>
+
+  <p class="xr-status" id="xr-status" role="status" aria-live="polite" hidden></p>
+
+  <section id="layers-panel" class="layers-panel" role="dialog" aria-modal="false" hidden>
+    <div class="layers-panel-head" id="layers-panel-head" aria-label="Drag to move world items panel">
+      <button class="layers-panel-close" id="layers-close" type="button" title="Close" aria-label="Close world items" data-i18n-aria-label="layers.close">×</button>
+    </div>
+    <div class="layers-tabs" role="tablist" aria-label="World Items / Properties">
+      <button class="layers-tab is-active" id="layers-tab-layers" type="button" role="tab" aria-selected="true" data-layers-tab="layers" data-i18n="layers.tabLayers">World Items</button>
+      <button class="layers-tab" id="layers-tab-properties" type="button" role="tab" aria-selected="false" data-layers-tab="properties" data-i18n="layers.tabProperties">Properties</button>
+    </div>
+    <p class="layers-helper" data-i18n="layers.helper">Everything you've placed — click to find and edit it.</p>
+    <div class="layers-tabpanel" id="layers-panel-layers" role="tabpanel" data-layers-panel="layers">
+      <label class="layers-search">
+        <span class="sr-only" data-i18n="layers.searchAria">Search world items</span>
+        <input id="layers-search" type="search" placeholder="Search…" autocomplete="off" data-i18n-placeholder="layers.search" />
+      </label>
+      <div class="layers-tree" id="layers-tree" role="tree" aria-label="World hierarchy"></div>
+    </div>
+    <div class="layers-tabpanel" id="layers-panel-properties" role="tabpanel" data-layers-panel="properties" hidden>
+      <div class="layers-props" id="layers-props-host"></div>
+      <p class="layers-props-empty" id="layers-props-empty" data-i18n="layers.propsEmpty">Select an item in World Items to see its properties.</p>
+    </div>
+    <span id="layers-summary" hidden></span>
+  </section>
+
+  <button class="showcase-exit" id="showcase-exit" type="button" aria-label="Exit showcase mode (Esc)" aria-keyshortcuts="Escape" title="Exit showcase mode (Esc)">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18"></path>
+    </svg>
+  </button>
+
+  <div id="account-modal" class="modal" hidden>
+    <form class="modal-card" role="dialog" aria-modal="true" aria-labelledby="account-title" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="account-title">My Account</strong>
+        <button class="modal-close" id="account-close" title="Close">×</button>
+      </div>
+      <p class="modal-copy">Manage your profile, saved worlds, custom assets, and external integrations.</p>
+      <div class="tab-bar">
+        <button type="button" id="tab-profile" class="active">Profile</button>
+        <button type="button" id="tab-saves">My Worlds</button>
+        <button type="button" id="tab-wallet">Wallet</button>
+        <button type="button" id="tab-players">Players</button>
+        <button type="button" id="tab-api">Developer</button>
+      </div>
+      <div id="panel-profile">
+        <div class="profile-section">
+          <label>Username
+            <input type="text" id="profile-username" autocomplete="username" placeholder="lowercase_name" />
+            <div class="profile-hint">Unique public handle. 3-24 chars: lowercase letters, numbers, underscores.</div>
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Full name / display name
+            <input type="text" id="profile-display-name" autocomplete="name" placeholder="Your display name" />
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Email
+            <input type="email" id="profile-email" autocomplete="email" placeholder="you@example.com" />
+            <div class="profile-hint">Required for Tinyverse access. Signed-in email accounts keep their verified email here.</div>
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Twitter / X
+            <input type="text" id="profile-twitter" autocomplete="off" placeholder="@yourhandle" />
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>GitHub
+            <input type="text" id="profile-github" autocomplete="off" placeholder="github-username" />
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>About
+            <textarea id="profile-about" placeholder="A short bio"></textarea>
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Photo
+            <div class="profile-photo-row">
+              <img class="profile-avatar-preview" id="profile-avatar-img" src="" alt="Profile photo preview" hidden />
+              <div class="profile-photo-actions">
+                <input type="file" id="profile-photo-file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <button class="btn" id="profile-photo-clear" type="button">Remove photo</button>
+              </div>
+            </div>
+            <input type="hidden" id="profile-image" />
+          </label>
+        </div>
+        <div class="modal-foot">
+          <span id="profile-status"></span>
+          <button class="btn" id="profile-save" type="button">Save Profile</button>
+        </div>
+      </div>
+      <div id="panel-saves" hidden>
+        <div class="modal-foot" style="margin-bottom: 10px;">
+          <label style="flex:1;">
+            <input type="text" id="save-name" placeholder="Name this world..." style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px;" />
+          </label>
+          <button class="btn" id="save-current" type="button">Save Current World</button>
+        </div>
+        <ul class="saves-list" id="saves-list"></ul>
+        <div class="save-empty" id="saves-empty" hidden>No saved worlds yet. Build one and save it above.</div>
+      </div>
+      <div id="panel-wallet" hidden>
+        <div class="profile-section">
+          <div class="wallet-summary">
+            <div>
+              <span class="wallet-kicker">Phantom</span>
+              <strong id="wallet-address">Not connected</strong>
+              <span id="wallet-token-count">TINYWORLD: 0</span>
+            </div>
+            <span id="wallet-status" class="wallet-status">Offline</span>
+          </div>
+          <div class="wallet-actions">
+            <button class="btn" id="wallet-connect" type="button">Connect Phantom</button>
+            <button class="btn" id="wallet-refresh" type="button">Refresh</button>
+            <button class="btn" id="wallet-disconnect" type="button">Disconnect</button>
+          </div>
+        </div>
+        <div class="profile-section" id="wallet-payment-section" hidden data-feature-hidden="wallet-payment">
+          <label>Payment
+            <div class="wallet-payment-row">
+              <input type="text" id="wallet-payment-amount" inputmode="decimal" placeholder="Amount" />
+              <button class="btn" id="wallet-payment-create" type="button">Create payment</button>
+            </div>
+            <a class="wallet-payment-link" id="wallet-payment-link" href="" hidden>Open payment</a>
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Wallet activity</label>
+          <ul class="wallet-activity-list" id="wallet-activity-list"></ul>
+          <div class="save-empty wallet-empty" id="wallet-activity-empty">No wallet activity loaded.</div>
+        </div>
+      </div>
+      <div id="panel-players" hidden>
+        <div class="profile-section">
+          <div class="players-stats" id="players-stats"></div>
+        </div>
+        <div class="profile-section" data-feature-flag="player-search">
+          <label>Find players
+            <div class="players-search-row">
+              <input type="text" id="players-search" autocomplete="off" placeholder="username or display name" />
+              <button class="btn" id="players-search-btn" type="button">Search</button>
+            </div>
+          </label>
+          <ul class="players-list" id="players-list"></ul>
+        </div>
+        <div class="profile-section" data-feature-flag="party-creation">
+          <label>Party
+            <div class="players-search-row">
+              <input type="text" id="party-name" maxlength="80" placeholder="Party name" />
+              <button class="btn" id="party-create" type="button">Create party</button>
+            </div>
+            <a class="wallet-payment-link" id="party-link" href="" hidden>Open party room</a>
+          </label>
+        </div>
+        <div class="profile-section" id="voice-section" hidden data-feature-hidden="livekit-voice">
+          <label>Voice
+            <div class="players-search-row">
+              <input type="text" id="voice-room" maxlength="120" placeholder="Voice room" />
+              <button class="btn" id="voice-token" type="button">Prepare voice</button>
+            </div>
+            <div class="profile-hint" id="voice-status">LiveKit token not requested.</div>
+          </label>
+        </div>
+      </div>
+      <div id="panel-api" hidden>
+        <div class="profile-section">
+          <label>API keys
+            <div class="profile-hint">Bearer tokens for external integrations. Treat them like passwords — anyone with one can drive your world.</div>
+          </label>
+          <ul class="api-keys-list" id="api-keys-list"></ul>
+          <div class="modal-foot" style="margin-top:8px;">
+            <label style="flex:1;">
+              <input type="text" id="api-key-label" placeholder="Label (e.g. zapier)" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px;" />
+            </label>
+            <button class="btn" id="api-key-generate" type="button">Generate key</button>
+          </div>
+          <div class="api-key-reveal" id="api-key-reveal" hidden></div>
+        </div>
+        <div class="profile-section">
+          <label>Outbound webhook URL
+            <input type="url" id="api-webhook-url" autocomplete="off" placeholder="https://example.com/hook" />
+            <div class="profile-hint">JSON-POSTed on place / erase / clear / save events. Sent with <code>Authorization: Bearer &lt;key&gt;</code>.</div>
+          </label>
+        </div>
+        <div class="profile-section">
+          <label>Inbound SSE relay URL
+            <input type="url" id="api-sse-url" autocomplete="off" placeholder="https://example.com/sse" />
+            <div class="profile-hint">EventSource the browser will subscribe to. Push commands here to drive the world from outside.</div>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <span id="api-status"></span>
+          <button class="btn" id="api-save" type="button">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div id="auth-modal" class="auth-modal" hidden>
+    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <div class="auth-title" id="auth-title">Tiny World <em>Builder</em></div>
+      <div class="auth-subtitle">Sign in to start building</div>
+      <div id="auth-error" class="auth-error" hidden></div>
+      <div id="auth-success" class="auth-success" hidden></div>
+
+      <!-- Login form -->
+      <form id="auth-login" class="auth-form" onsubmit="return false">
+        <div class="auth-wallet-section">
+          <button class="auth-wallet-btn" id="auth-wallet-login" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 7.5h11.8a2.7 2.7 0 0 1 0 5.4H9.2"/>
+              <path d="M17 12.9h1.5a2.3 2.3 0 0 1 0 4.6H5"/>
+              <path d="M8.5 10.2 5 12l3.5 1.8"/>
+              <path d="M15.5 15.2 19 17l-3.5 1.8"/>
+            </svg>
+            <span class="auth-wallet-label">Sign in with Phantom</span>
+          </button>
+        </div>
+        <div id="auth-oauth-login" class="auth-oauth-section" hidden>
+          <button class="auth-oauth-btn" id="auth-google-login" type="button" data-provider="google" hidden>
+            <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.01 24.01 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            Sign in with Google
+          </button>
+          <button class="auth-oauth-btn" id="auth-github-login" type="button" data-provider="github" hidden>
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5A11.5 11.5 0 0 0 8.36 23.4c.58.11.79-.25.79-.56v-2c-3.22.7-3.9-1.38-3.9-1.38-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.04 1.76 2.72 1.25 3.38.95.11-.75.41-1.25.74-1.54-2.57-.29-5.28-1.29-5.28-5.73 0-1.27.45-2.3 1.19-3.11-.12-.29-.52-1.47.11-3.07 0 0 .98-.31 3.18 1.19a10.96 10.96 0 0 1 5.8 0c2.2-1.5 3.17-1.19 3.17-1.19.64 1.6.24 2.78.12 3.07.74.81 1.19 1.84 1.19 3.11 0 4.45-2.71 5.43-5.3 5.72.42.36.79 1.08.79 2.18v3.24c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+            Sign in with GitHub
+          </button>
+        </div>
+        <div class="auth-divider">or</div>
+        <label>Email
+          <input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <label>Password
+          <input id="auth-password" type="password" autocomplete="current-password" placeholder="Your password" />
+        </label>
+        <button class="auth-btn" id="auth-login-btn" type="button">Sign in</button>
+        <div class="auth-footer">
+          <button class="auth-link" id="auth-show-signup" type="button">Create an account</button>
+          &middot;
+          <button class="auth-link" id="auth-show-forgot" type="button">Forgot password?</button>
+        </div>
+      </form>
+
+      <!-- Signup form -->
+      <form id="auth-signup" class="auth-form" hidden onsubmit="return false">
+        <div id="auth-oauth-signup" class="auth-oauth-section" hidden>
+          <button class="auth-oauth-btn" id="auth-google-signup" type="button" data-provider="google" hidden>
+            <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.01 24.01 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            Sign up with Google
+          </button>
+          <button class="auth-oauth-btn" id="auth-github-signup" type="button" data-provider="github" hidden>
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5A11.5 11.5 0 0 0 8.36 23.4c.58.11.79-.25.79-.56v-2c-3.22.7-3.9-1.38-3.9-1.38-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.04 1.76 2.72 1.25 3.38.95.11-.75.41-1.25.74-1.54-2.57-.29-5.28-1.29-5.28-5.73 0-1.27.45-2.3 1.19-3.11-.12-.29-.52-1.47.11-3.07 0 0 .98-.31 3.18 1.19a10.96 10.96 0 0 1 5.8 0c2.2-1.5 3.17-1.19 3.17-1.19.64 1.6.24 2.78.12 3.07.74.81 1.19 1.84 1.19 3.11 0 4.45-2.71 5.43-5.3 5.72.42.36.79 1.08.79 2.18v3.24c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+            Sign up with GitHub
+          </button>
+          <div class="auth-divider">or</div>
+        </div>
+        <label>Username
+          <input id="auth-signup-username" type="text" autocomplete="username" placeholder="lowercase_name" />
+        </label>
+        <label>Display name
+          <input id="auth-signup-name" type="text" autocomplete="name" placeholder="Your display name" />
+        </label>
+        <label>Email
+          <input id="auth-signup-email" type="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <label>Password
+          <input id="auth-signup-password" type="password" autocomplete="new-password" placeholder="Choose a password" />
+        </label>
+        <button class="auth-btn" id="auth-signup-btn" type="button">Create account</button>
+        <div class="auth-footer">
+          Already have an account? <button class="auth-link" id="auth-show-login" type="button">Sign in</button>
+        </div>
+      </form>
+
+      <!-- Forgot password form -->
+      <form id="auth-forgot" class="auth-form" hidden onsubmit="return false">
+        <label>Email
+          <input id="auth-forgot-email" type="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <button class="auth-btn" id="auth-forgot-btn" type="button">Send reset link</button>
+        <div class="auth-footer">
+          <button class="auth-link" id="auth-back-login" type="button">Back to sign in</button>
+        </div>
+      </form>
+
+      <!-- Password reset form (shown after recovery callback) -->
+      <form id="auth-reset" class="auth-form" hidden onsubmit="return false">
+        <input type="text" autocomplete="username" aria-hidden="true" tabindex="-1" style="display:none" />
+        <label>New password
+          <input id="auth-reset-password" type="password" autocomplete="new-password" placeholder="Choose a new password" />
+        </label>
+        <button class="auth-btn" id="auth-reset-btn" type="button">Set new password</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirm-reset-modal" class="modal" hidden>
+    <form class="modal-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-reset-title" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="confirm-reset-title">Reset to the starter world?</strong>
+        <button class="modal-close" id="confirm-reset-close" title="Close" aria-label="Close">×</button>
+      </div>
+      <p class="confirm-copy" id="confirm-reset-copy">This replaces your current build with the preset village. You'll lose anything you've placed on the home grid.</p>
+      <div class="modal-foot confirm-actions">
+        <button class="btn confirm-cancel" id="confirm-reset-cancel" type="button">Cancel</button>
+        <button class="btn confirm-destructive" id="confirm-reset-ok" type="button">Reset world</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="welcome-modal" class="modal launch-modal" hidden aria-hidden="true">
+    <form class="modal-card welcome-card launch-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title" onsubmit="return false">
+      <h1 class="sr-only" id="welcome-title">Tiny World Builder</h1>
+      <img class="welcome-logo" src="assets/twlogo.png" alt="Tiny World Builder" width="1254" height="1254">
+      <div class="welcome-actions" aria-label="Choose mode">
+        <button class="welcome-mode-btn welcome-tinyverse has-tagline" id="welcome-tinyverse" type="button" data-pos-type="primary">
+          <span class="welcome-mode-label" data-i18n="welcome.collectables">Discover new Worlds</span>
+          <span class="welcome-mode-tag" data-i18n="welcome.collectablesTagline">Explore the Tinyverse</span>
+        </button>
+        <button class="welcome-mode-btn welcome-battleworlds is-soon" id="welcome-battleworlds" type="button" data-pos-type="shield" disabled aria-disabled="true" data-i18n="welcome.battleworlds">BattleWorlds</button>
+        <button class="welcome-mode-btn welcome-build has-tagline" id="welcome-build" type="button" data-pos-type="tertiary">
+          <span class="welcome-mode-label" data-i18n="welcome.creativeMode">Creative Mode</span>
+          <span class="welcome-mode-tag" data-i18n="welcome.creativeModeTagline">Build, share, collaborate</span>
+        </button>
+        <button class="welcome-mode-btn welcome-play" id="welcome-play" type="button" data-pos-type="terrain">Play</button>
+      </div>
+      <p class="welcome-credit">
+        <span>Created by Jason Kneen</span>
+        <a href="https://x.com/jasonkneen" target="_blank" rel="noopener noreferrer" aria-label="Jason Kneen on Twitter">@jasonkneen</a>
+        <a href="https://x.com/tinyworldsapp" target="_blank" rel="noopener noreferrer" aria-label="Tiny Worlds App on Twitter">@tinyworldsapp</a>
+      </p>
+    </form>
+  </div>
+
+  <div id="gen-modal" class="modal" data-feature-flag="generate-prompt" hidden>
+    <form class="modal-card gen-card" role="dialog" aria-modal="true" aria-labelledby="gen-title" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="gen-title">Generate Tiny World</strong>
+        <button class="modal-close" id="gen-close" title="Close">×</button>
+      </div>
+      <p class="modal-copy">Describe the world you want, then tune the generated layout before replacing the current build.</p>
+
+      <label>Prompt
+        <textarea id="gen-prompt" rows="3" placeholder="a small fishing village by a river, a crop field next to two cottages, rocky outcrops on edges"></textarea>
+      </label>
+
+      <div class="gen-section" data-section="size">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Board size</span>
+        </div>
+        <label>Home board
+          <select id="gen-grid-size">
+            <option value="8">8 × 8</option>
+            <option value="10">10 × 10</option>
+            <option value="12">12 × 12</option>
+            <option value="16">16 × 16</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="gen-section" data-section="seed">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Seed</span>
+        </div>
+        <div class="gen-row gen-row-seed">
+          <input id="gen-seed" type="text" placeholder="leave blank for random" autocomplete="off" />
+          <button class="gen-mini" id="gen-seed-random" type="button" data-tooltip="New random seed" aria-label="Random seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+          </button>
+          <button class="gen-mini" id="gen-seed-copy" type="button" data-tooltip="Copy seed" aria-label="Copy seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="gen-mini" id="gen-seed-paste" type="button" data-tooltip="Paste seed" aria-label="Paste seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="biomes">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Composition</span>
+          <span class="gen-section-sum" id="gen-biome-sum">100%</span>
+        </div>
+        <div class="gen-sliders" id="gen-biome-sliders">
+          <label class="gen-slider-row" data-biome="grass">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#9bc16a"></span>Grass</span>
+            <input type="range" min="0" max="100" step="1" value="55" data-biome="grass" />
+            <span class="gen-slider-val">55%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="forest">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#4f8a3a"></span>Forest</span>
+            <input type="range" min="0" max="100" step="1" value="20" data-biome="forest" />
+            <span class="gen-slider-val">20%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="water">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#5da3c8"></span>Water</span>
+            <input type="range" min="0" max="100" step="1" value="10" data-biome="water" />
+            <span class="gen-slider-val">10%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="dirt">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#b8945a"></span>Farmland</span>
+            <input type="range" min="0" max="100" step="1" value="10" data-biome="dirt" />
+            <span class="gen-slider-val">10%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="settlement">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#c98a5b"></span>Settlement</span>
+            <input type="range" min="0" max="100" step="1" value="5" data-biome="settlement" />
+            <span class="gen-slider-val">5%</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="elevation">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Elevation</span>
+          <span class="gen-section-sum" id="gen-elev-sum">100%</span>
+        </div>
+        <div class="gen-sliders" id="gen-elev-sliders">
+          <label class="gen-slider-row" data-elev="plains">
+            <span class="gen-slider-label">Plains</span>
+            <input type="range" min="0" max="100" step="1" value="55" data-elev="plains" />
+            <span class="gen-slider-val">55%</span>
+          </label>
+          <label class="gen-slider-row" data-elev="hills">
+            <span class="gen-slider-label">Hills</span>
+            <input type="range" min="0" max="100" step="1" value="30" data-elev="hills" />
+            <span class="gen-slider-val">30%</span>
+          </label>
+          <label class="gen-slider-row" data-elev="mountains">
+            <span class="gen-slider-label">Mountains</span>
+            <input type="range" min="0" max="100" step="1" value="15" data-elev="mountains" />
+            <span class="gen-slider-val">15%</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="advanced">
+        <label class="gen-check">
+          <input type="checkbox" id="gen-procedural" />
+          <span>Procedural (offline) <em class="gen-hint">— skip the LLM, generate directly from seed</em></span>
+        </label>
+        <label class="gen-check" id="gen-landscape-container" style="display: none; margin-left: 20px;">
+          <input type="checkbox" id="gen-use-landscape" />
+          <span>Use LandscapeEngine <em class="gen-hint">— generate infinite terraced canyons</em></span>
+        </label>
+        <label class="gen-check">
+          <input type="checkbox" id="gen-disable-autofill" />
+          <span>Disable outside auto-fill <em class="gen-hint">blank grass beyond the generated board</em></span>
+        </label>
+        <div id="gen-landscape-style-container" style="margin-top: 8px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 13px; font-weight: 500; color: var(--muted);">Terrain style:</span>
+          <select id="gen-landscape-style" style="padding: 4px 8px; border-radius: 8px; font-size: 12px; min-width: 170px;">
+            <option value="landscape">Landscape (Flight game)</option>
+            <option value="planet-underlay">Floating islands + planet below</option>
+            <option value="lowpoly">Low-poly (Flat panels)</option>
+            <option value="voxel-mixed">Voxelized (Mixed detail)</option>
+            <option value="voxel-4">Voxelized (4 × 4)</option>
+            <option value="voxel-6">Voxelized (6 × 6)</option>
+            <option value="voxel-8">Voxelized (8 × 8)</option>
+            <option value="voxel-12">Voxelized (12 × 12)</option>
+          </select>
+        </div>
+        <div id="gen-landscape-biome-container" style="margin-top: 4px; margin-bottom: 4px; display: none; flex-wrap: wrap; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; font-weight: 500; color: var(--muted);">Environment:</span>
+            <select id="gen-landscape-biome" style="padding: 4px 8px; border-radius: 8px; font-size: 12px; min-width: 130px;">
+              <option value="grassland">🌿 Grassland</option>
+              <option value="desert">🏜️ Desert</option>
+              <option value="snow">❄️ Snow</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; font-weight: 500; color: var(--muted);">Render:</span>
+            <select id="gen-landscape-render" style="padding: 4px 8px; border-radius: 8px; font-size: 12px; min-width: 130px;">
+              <option value="lowpoly">Low-poly (Cel)</option>
+              <option value="realistic">Realistic (voxel blocks)</option>
+            </select>
+          </div>
+          <div id="gen-planet-drop-control" style="display: none; align-items: center; gap: 8px; flex: 1 1 310px; min-width: 280px;">
+            <span style="font-size: 13px; font-weight: 500; color: var(--muted);">Planet distance:</span>
+            <input id="gen-planet-drop" type="range" min="20" max="300" step="5" value="100" style="width: 140px;" />
+            <span id="gen-planet-drop-value" style="font-size: 12px; font-weight: 700; color: var(--ink); min-width: 136px;">100m below</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="help-line">Generate now previews a holographic diff first. Apply the preview only when it looks right.</div>
+      <div class="gen-progress" id="gen-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+        <div class="gen-progress-track">
+          <div class="gen-progress-fill" id="gen-progress-fill"></div>
+        </div>
+        <span class="gen-progress-label" id="gen-progress-label">Preparing generation</span>
+      </div>
+      <div class="modal-foot gen-actions">
+        <span id="gen-status"></span>
+        <button class="btn gen-preview-action" id="gen-discard" type="button" hidden>Discard</button>
+        <button class="btn gen-preview-action" id="gen-regenerate" type="button" hidden>Regenerate</button>
+        <button class="btn gen-preview-action" id="gen-apply" type="button" hidden>Apply preview</button>
+        <button class="btn" id="gen-go" type="button">Generate</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="render-modal" class="modal" hidden>
+    <form class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="render-title" aria-describedby="render-copy" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="render-title">Settings</strong>
+        <button class="modal-close" id="render-close" type="button" title="Close" aria-label="Close settings">×</button>
+      </div>
+      <p class="modal-copy" id="render-copy">Tune workspace defaults, rendering quality, world preview, materials, environment, crowd, and AI configuration.</p>
+      <div class="settings-searchbar">
+        <input class="settings-search" id="settings-search" type="search" placeholder="Search settings..." autocomplete="off" aria-label="Search settings" />
+        <span class="settings-search-status" id="settings-search-status"></span>
+      </div>
+      <div class="settings-layout">
+        <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
+          <button type="button" class="settings-tab active" id="settings-tab-app" role="tab" aria-selected="true" aria-controls="settings-panel-app" tabindex="0" data-settings-tab="app" data-settings-description="Board size" data-settings-keywords="app workspace defaults board grid size home" data-i18n="settings.tab.app">Workspace</button>
+          <button type="button" class="settings-tab" id="settings-tab-rendering" role="tab" aria-selected="false" aria-controls="settings-panel-rendering" tabindex="-1" data-settings-tab="rendering" data-settings-description="Quality and lighting" data-settings-keywords="rendering render performance fps quality resolution shadow lighting image effects pixel shader antialias blur" data-i18n="settings.tab.rendering">Rendering</button>
+          <button type="button" class="settings-tab" id="settings-tab-world" role="tab" aria-selected="false" aria-controls="settings-panel-world" tabindex="-1" data-settings-tab="world" data-settings-description="Preview and terrain" data-settings-keywords="world mechanics preview ghost terrain voxel landscape opacity distance window floors objects" data-i18n="settings.tab.world">World</button>
+          <button type="button" class="settings-tab" id="settings-tab-materials" role="tab" aria-selected="false" aria-controls="settings-panel-materials" tabindex="-1" data-settings-tab="materials" data-settings-description="Colors and textures" data-settings-keywords="materials material colors colours texture tint tone wear finish parts surface" data-i18n="settings.tab.materials">Materials</button>
+          <button type="button" class="settings-tab" id="settings-tab-environment" role="tab" aria-selected="false" aria-controls="settings-panel-environment" tabindex="-1" data-settings-tab="environment" data-settings-description="Sky and atmosphere" data-settings-keywords="environment weather sky clouds atmosphere mist backdrop vignette undercloud" data-i18n="settings.tab.environment">Environment</button>
+          <button type="button" class="settings-tab" id="settings-tab-crowd" role="tab" aria-selected="false" aria-controls="settings-panel-crowd" tabindex="-1" data-settings-tab="crowd" data-settings-description="People and motion" data-settings-keywords="crowd people mechanics movement animation zones debug paths" data-i18n="settings.tab.crowd">Crowd</button>
+          <button type="button" class="settings-tab" id="settings-tab-ai" role="tab" aria-selected="false" aria-controls="settings-panel-ai" tabindex="-1" data-settings-tab="ai" data-settings-description="Provider and model" data-settings-keywords="ai config generate auto provider model api key openai anthropic grok xai gemini" data-ai-interface>AI</button>
+          <button type="button" class="settings-tab" id="settings-tab-feature-flags" role="tab" aria-selected="false" aria-controls="settings-panel-feature-flags" tabindex="-1" data-settings-tab="feature-flags" data-settings-description="Rollout toggles" data-settings-keywords="feature flags admin rollout everyone admins" hidden>Feature flags</button>
+        </nav>
+        <div class="settings-panels">
+          <section class="settings-panel active" id="settings-panel-app" role="tabpanel" aria-labelledby="settings-tab-app" data-settings-panel="app" data-settings-keywords="app workspace defaults board grid size home sponsors partners autoincentive">
+            <div class="settings-section-title" data-i18n="settings.workspace">Workspace</div>
+            <label><span data-i18n="settings.homeBoard">Home board size</span>
+              <select id="render-home-grid">
+                <option value="8">8 × 8</option>
+                <option value="12">12 × 12</option>
+                <option value="16">16 × 16</option>
+              </select>
+            </label>
+            <label data-settings-keywords="language locale translation english french chinese spanish thai français 中文 español ไทย langue idioma 语言 ภาษา">
+              <span data-i18n="settings.language">Language</span>
+              <select id="ui-lang-mode">
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+                <option value="zh">中文</option>
+                <option value="th">ไทย</option>
+              </select>
+            </label>
+            <label data-settings-keywords="theme ui dark mode light night auto chrome after hours">
+              <span data-i18n="settings.uiTheme">UI theme</span>
+              <select id="ui-theme-mode">
+                <option value="auto" data-i18n="settings.theme.auto">Auto</option>
+                <option value="light" data-i18n="settings.theme.light">Light</option>
+                <option value="dark" data-i18n="settings.theme.dark">Dark</option>
+              </select>
+            </label>
+            <label class="gen-check" data-settings-keywords="toolbar groups blocks palette floating panel tools dock">
+              <input type="checkbox" id="toolbar-show-groups" checked />
+              <span><span data-i18n="settings.showGroups">Show groups</span> <em class="gen-hint" data-i18n="settings.showGroups.hint">off swaps the grouped toolbar for a floating palette of every block</em></span>
+            </label>
+            <div class="settings-section-title" data-i18n="settings.controls">Controls</div>
+            <label class="gen-check" data-settings-keywords="controls invert invert-y inverted mouse look camera pitch flight fly aim vertical y-axis">
+              <input type="checkbox" id="controls-invert-y" />
+              <span><span data-i18n="settings.invertY">Invert look (Y axis)</span> <em class="gen-hint" data-i18n="settings.invertY.hint">move the mouse up to look down — applies to first-person and walk-around camera</em></span>
+            </label>
+            <div class="settings-section-title sponsors-title">Thanks to our partners and sponsors</div>
+            <div class="sponsors-logos">
+              <a href="https://x.com/Autoincentiv3" target="_blank" rel="noopener noreferrer" class="sponsor-logo" aria-label="Autoincentive on X">
+                <img id="sponsor-logo-autoincentive" alt="Autoincentive" width="200" />
+              </a>
+            </div>
+            <div class="settings-section-title credits-title">Credits</div>
+            <p class="settings-credits">Toolbar icons by <a href="https://game-icons.net" target="_blank" rel="noopener noreferrer">game-icons.net</a>, licensed under <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>.</p>
+            <!-- <div class="dev-defaults-section" id="dev-defaults-section" hidden>
+              <div class="settings-section-title dev-defaults-title">Dev · Save Defaults</div>
+              <p class="dev-defaults-help">Snapshot every <code>tinyworld:*</code> localStorage key (settings, panel positions, layouts) and write it to <code>tinyworld-defaults.json</code>. Ships with the site as seed defaults for new users — existing user prefs are never overwritten.</p>
+              <div class="dev-defaults-row">
+                <button type="button" class="btn dev-defaults-btn" id="dev-save-defaults-btn">Save Defaults</button>
+                <span class="dev-defaults-status" id="dev-save-defaults-status" role="status" aria-live="polite"></span>
+              </div>
+            </div> -->
+          </section>
+
+          <section class="settings-panel" id="settings-panel-rendering" role="tabpanel" aria-labelledby="settings-tab-rendering" data-settings-panel="rendering" data-settings-keywords="rendering render performance fps quality resolution shadow lighting image effects pixel shader antialias blur" hidden>
+            <div class="settings-section-title">Quality</div>
+            <label>Shadow quality
+              <select id="render-shadow">
+                <option value="low">Low</option>
+                <option value="balanced">Balanced</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <div class="range-row" data-settings-keywords="resolution quality scale dpr pixels performance fps">
+              <span>Resolution</span>
+              <input id="render-resolution" type="range" min="25" max="150" step="5" />
+              <output id="render-resolution-value"></output>
+            </div>
+            <label class="gen-check" data-settings-keywords="dynamic resolution adaptive fps target performance frame rate">
+              <input id="render-dynamic-resolution" type="checkbox" />
+              <span>Dynamic resolution <em class="gen-hint">automatically lowers resolution to hold frame rate</em></span>
+            </label>
+            <div class="range-row" data-settings-keywords="target fps dynamic resolution performance frame rate">
+              <span>Target FPS</span>
+              <input id="render-target-fps" type="range" min="30" max="60" step="5" />
+              <output id="render-target-fps-value"></output>
+            </div>
+            <div class="settings-section-title">Lighting</div>
+            <div class="range-row">
+              <span>Lighting</span>
+              <input id="render-lighting" type="range" min="50" max="145" step="1" />
+              <output id="render-lighting-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Ambient fill</span>
+              <input id="render-ambient-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-ambient-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Front fill</span>
+              <input id="render-front-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-front-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Side fill</span>
+              <input id="render-side-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-side-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Back fill</span>
+              <input id="render-back-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-back-fill-value"></output>
+            </div>
+            <div class="settings-section-title">Image effects</div>
+            <div class="range-row">
+              <span>Brightness</span>
+              <input id="render-brightness" type="range" min="75" max="130" step="1" />
+              <output id="render-brightness-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Saturation</span>
+              <input id="render-saturation" type="range" min="80" max="130" step="1" />
+              <output id="render-saturation-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Contrast</span>
+              <input id="render-contrast" type="range" min="85" max="125" step="1" />
+              <output id="render-contrast-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel size</span>
+              <input id="render-pixel-size" type="range" min="1" max="12" step="1" />
+              <output id="render-pixel-size-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel depth edge</span>
+              <input id="render-pixel-depth-edge" type="range" min="0" max="100" step="1" />
+              <output id="render-pixel-depth-edge-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel normal edge</span>
+              <input id="render-pixel-normal-edge" type="range" min="0" max="100" step="1" />
+              <output id="render-pixel-normal-edge-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Shader antialias</span>
+              <input id="render-shader-antialias" type="range" min="0" max="100" step="1" />
+              <output id="render-shader-antialias-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Tilt blur</span>
+              <input id="render-tilt-blur" type="range" min="0" max="18" step="0.5" />
+              <output id="render-tilt-blur-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Tilt focus</span>
+              <input id="render-tilt-focus" type="range" min="15" max="80" step="1" />
+              <output id="render-tilt-focus-value"></output>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-world" role="tabpanel" aria-labelledby="settings-tab-world" data-settings-panel="world" data-settings-keywords="world mechanics terrain voxel landscape" hidden>
+            <div class="settings-section-title">Terrain style</div>
+            <div class="range-row">
+              <span>Voxel bevel</span>
+              <input id="render-voxel-bevel" type="range" min="0" max="0.06" step="0.001" />
+              <output id="render-voxel-bevel-value"></output>
+            </div>
+            <label class="gen-check" id="render-landscape-mesh-container" style="display: none;">
+              <input type="checkbox" id="render-landscape-mesh-mode" />
+              <span>Continuous landscape mesh <em class="gen-hint">Flight game style terrain</em></span>
+            </label>
+            <label class="gen-check" id="render-planet-underlay-container" style="display: none;">
+              <input type="checkbox" id="render-planet-underlay-active" />
+              <span>Planet underlay <em class="gen-hint">turn off to stop streaming the planet below the islands</em></span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="render-voxel-terrain" />
+              <span>Voxel terrain <em class="gen-hint">flat shaded panels and path edging</em></span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="render-textured-grass" />
+              <span>Cottage grass texture <em class="gen-hint">dense cottage-style grass blades instead of checkerboard</em></span>
+            </label>
+            <label>Terrain voxel resolution
+              <select id="render-terrain-voxel-resolution">
+                <option value="mixed">Mixed detail</option>
+                <option value="4">4 × 4</option>
+                <option value="6">6 × 6</option>
+                <option value="8">8 × 8</option>
+                <option value="12">12 × 12</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-materials" role="tabpanel" aria-labelledby="settings-tab-materials" data-settings-panel="materials" data-settings-keywords="materials material colors colours texture tint tone wear finish parts surface window windows glass interior reflection" hidden>
+            <div class="settings-section-title">Finish</div>
+            <div class="range-row">
+              <span>Wear and tear</span>
+              <input id="render-material-wear" type="range" min="0" max="100" step="1" />
+              <output id="render-material-wear-value"></output>
+            </div>
+            <div class="settings-section-title">Terrain materials</div>
+            <label class="gen-check">
+              <input type="checkbox" id="render-surface-linked-materials" />
+              <span>Link surface finishes <em class="gen-hint">share stone, sand, dirt, and grass texture choices across matching terrain and model surfaces</em></span>
+            </label>
+            <label>Terrain color
+              <select id="render-terrain-color-target">
+                <option value="grass">Grass</option>
+                <option value="path">Path</option>
+                <option value="dirt">Dirt</option>
+                <option value="water">Water</option>
+                <option value="stone">Stone</option>
+                <option value="sand">Sand</option>
+                <option value="snow">Snow</option>
+                <option value="lava">Lava</option>
+              </select>
+            </label>
+            <div class="range-row">
+              <span>Tint</span>
+              <input id="render-terrain-tint" type="color" value="#9ec74b" />
+              <button class="btn" id="render-terrain-color-reset" type="button">Reset</button>
+            </div>
+            <label>Terrain texture
+              <select id="render-terrain-texture"></select>
+            </label>
+            <div class="range-row">
+              <span>Texture density</span>
+              <input id="render-terrain-texture-scale" type="range" min="50" max="400" step="10" />
+              <output id="render-terrain-texture-scale-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Light / dark</span>
+              <input id="render-terrain-tone" type="range" min="-50" max="50" step="1" />
+              <output id="render-terrain-tone-value"></output>
+            </div>
+            <div class="settings-section-title">Object & part materials</div>
+            <label>Part group
+              <select id="render-material-target"></select>
+            </label>
+            <div class="range-row">
+              <span>Tint</span>
+              <input id="render-material-tint" type="color" value="#f2dfb0" />
+              <button class="btn" id="render-material-reset" type="button">Reset</button>
+            </div>
+            <label>Texture
+              <select id="render-material-texture"></select>
+            </label>
+            <div class="range-row">
+              <span>Texture density</span>
+              <input id="render-material-texture-scale" type="range" min="50" max="400" step="10" />
+              <output id="render-material-texture-scale-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Light / dark</span>
+              <input id="render-material-tone" type="range" min="-50" max="50" step="1" />
+              <output id="render-material-tone-value"></output>
+            </div>
+            <div class="settings-section-title">Building windows</div>
+            <div class="range-row">
+              <span>Glass size</span>
+              <input id="render-window-glass" type="range" min="40" max="98" step="2" />
+            </div>
+            <div class="range-row">
+              <span>Glass tint</span>
+              <input id="render-window-tint" type="color" value="#c4d6ea" />
+              <button class="btn" id="render-window-reset" type="button">Reset</button>
+            </div>
+            <div class="range-row">
+              <span>Darkness</span>
+              <input id="render-window-darkness" type="range" min="0" max="100" step="5" />
+            </div>
+            <div class="range-row">
+              <span>Interior light</span>
+              <input id="render-window-interior" type="range" min="0" max="200" step="5" />
+            </div>
+            <div class="range-row">
+              <span>Reflection</span>
+              <input id="render-window-reflect" type="range" min="0" max="100" step="5" />
+            </div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-environment" role="tabpanel" aria-labelledby="settings-tab-environment" data-settings-panel="environment" data-settings-keywords="environment weather sky clouds atmosphere mist backdrop vignette undercloud" hidden>
+            <div class="settings-section-title">Environment</div>
+            <div class="watcher-settings" data-watcher-owner-control hidden>
+              <div class="settings-section-title">The Watcher</div>
+              <label class="gen-check" data-settings-keywords="watcher admin face webcam mediapipe sky layer collaborators multiplayer">
+                <input type="checkbox" id="watcher-enabled" />
+                <span>Watcher layer <em class="gen-hint">admin-only build-mode face and hand layer</em></span>
+              </label>
+              <div class="watcher-actions">
+                <button class="btn" id="watcher-start-camera" type="button">Start watcher camera</button>
+                <span id="watcher-status" role="status" aria-live="polite"></span>
+              </div>
+              <div class="range-row">
+                <span>Size</span>
+                <input id="watcher-size" type="range" min="0.6" max="12" step="0.1" />
+                <output id="watcher-size-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face width</span>
+                <input id="watcher-face-width" type="range" min="0.5" max="2.5" step="0.05" />
+                <output id="watcher-face-width-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face height</span>
+                <input id="watcher-face-height" type="range" min="0.5" max="2.5" step="0.05" />
+                <output id="watcher-face-height-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position X</span>
+                <input id="watcher-pos-x" type="range" min="-80" max="80" step="1" />
+                <output id="watcher-pos-x-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position Y</span>
+                <input id="watcher-pos-y" type="range" min="-20" max="80" step="1" />
+                <output id="watcher-pos-y-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position Z</span>
+                <input id="watcher-pos-z" type="range" min="-120" max="80" step="1" />
+                <output id="watcher-pos-z-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Head tilt</span>
+                <input id="watcher-tilt" type="range" min="-45" max="45" step="1" />
+                <output id="watcher-tilt-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Watcher zoom</span>
+                <input id="watcher-zoom" type="range" min="0.6" max="8" step="0.1" />
+                <output id="watcher-zoom-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Smoothness</span>
+                <input id="watcher-smooth" type="range" min="0" max="0.95" step="0.05" />
+                <output id="watcher-smooth-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face opacity</span>
+                <input id="watcher-face-opacity" type="range" min="0.03" max="1" step="0.01" />
+                <output id="watcher-face-opacity-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Hand opacity</span>
+                <input id="watcher-hand-opacity" type="range" min="0.03" max="1" step="0.01" />
+                <output id="watcher-hand-opacity-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Clouds</span>
+                <input id="watcher-cloud-opacity" type="range" min="0" max="1" step="0.05" />
+                <output id="watcher-cloud-opacity-value"></output>
+              </div>
+            </div>
+            <div class="range-row">
+              <span>Clouds</span>
+              <input id="render-clouds" type="range" min="0" max="100" step="1" />
+              <output id="render-clouds-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Cloud speed</span>
+              <input id="render-cloud-speed" type="range" min="0" max="100" step="1" />
+              <output id="render-cloud-speed-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Cloud height</span>
+              <input id="render-cloud-height" type="range" min="9" max="16" step="0.5" />
+              <output id="render-cloud-height-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Cloud shadow</span>
+              <input id="render-cloud-shadow" type="range" min="0" max="100" step="1" />
+              <output id="render-cloud-shadow-value"></output>
+            </div>
+            <label class="gen-check" data-settings-keywords="planes aircraft crop duster banner flyover motion animation performance">
+              <input type="checkbox" id="render-planes-enabled" />
+              <span>Planes <em class="gen-hint">ambient flyovers and towed banners</em></span>
+            </label>
+            <label class="gen-check" data-settings-keywords="water shader enhanced reflections ripples glint specular foam shimmer ocean river lake sea waves">
+              <input type="checkbox" id="render-enhanced-water" />
+              <span>Enhanced water <em class="gen-hint">animated reflections, sun glints &amp; foam on water</em></span>
+            </label>
+            <label class="gen-check" data-settings-keywords="distant worlds mini islands background dressing decoration performance">
+              <input type="checkbox" id="render-distant-worlds" />
+              <span>Distant worlds <em class="gen-hint">background mini-islands</em></span>
+            </label>
+            <label class="gen-check" data-settings-keywords="cloud sea clouds below islands floating atmosphere fog performance">
+              <input type="checkbox" id="render-cloud-sea" />
+              <span>Cloud sea <em class="gen-hint">soft cloud layer beneath the islands</em></span>
+            </label>
+            <label class="gen-check" data-settings-keywords="soft clouds sprite billboard sky cloud style voxel blocky puffy fluffy">
+              <input type="checkbox" id="render-cloud-soft" />
+              <span>Soft sky clouds <em class="gen-hint">replace blocky clouds with soft sprite puffs</em></span>
+            </label>
+            <label class="gen-check" data-settings-keywords="night stars starfield star map skybox sphere equirectangular space background 360">
+              <input type="checkbox" id="render-star-vault" />
+              <span>Star vault <em class="gen-hint">night-only 360 sky map</em></span>
+            </label>
+            <div class="range-row">
+              <span>Star intensity</span>
+              <input id="render-star-vault-strength" type="range" min="0" max="120" step="1" />
+              <output id="render-star-vault-strength-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Cloud rim light</span>
+              <input id="render-cloud-rim-light" type="range" min="0" max="120" step="1" />
+              <output id="render-cloud-rim-light-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Accent lights</span>
+              <input id="render-accent-lights" type="range" min="0" max="120" step="1" />
+              <output id="render-accent-lights-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Undercloud width</span>
+              <input id="render-undercloud-spread" type="range" min="70" max="220" step="1" />
+              <output id="render-undercloud-spread-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sky blue depth</span>
+              <input id="render-sky-blue-depth" type="range" min="0" max="100" step="1" />
+              <output id="render-sky-blue-depth-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sky blue saturation</span>
+              <input id="render-sky-blue-saturation" type="range" min="25" max="220" step="1" />
+              <output id="render-sky-blue-saturation-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Atmosphere fade</span>
+              <input id="render-distance-mist" type="range" min="0" max="200" step="1" />
+              <output id="render-distance-mist-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Backdrop glow</span>
+              <input id="render-backdrop" type="range" min="0" max="200" step="1" />
+              <output id="render-backdrop-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Backdrop vignette</span>
+              <input id="render-backdrop-vignette" type="range" min="0" max="300" step="1" />
+              <output id="render-backdrop-vignette-value"></output>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-crowd" role="tabpanel" aria-labelledby="settings-tab-crowd" data-settings-panel="crowd" data-settings-keywords="crowd people mechanics movement animation zones debug paths" hidden>
+            <div class="settings-section-title">Crowd</div>
+            <div class="range-row">
+              <span>People</span>
+              <input id="crowd-count" type="range" min="0" max="80" step="1" />
+              <output id="crowd-count-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Height</span>
+              <input id="crowd-scale" type="range" min="25" max="160" step="1" />
+              <output id="crowd-scale-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Speed</span>
+              <input id="crowd-speed" type="range" min="0" max="100" step="1" />
+              <output id="crowd-speed-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Bob</span>
+              <input id="crowd-bob" type="range" min="0" max="8" step="0.1" />
+              <output id="crowd-bob-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sway</span>
+              <input id="crowd-sway" type="range" min="0" max="8" step="0.1" />
+              <output id="crowd-sway-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Lean</span>
+              <input id="crowd-lean" type="range" min="0" max="0.2" step="0.01" />
+              <output id="crowd-lean-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Zone radius</span>
+              <input id="crowd-zone-radius" type="range" min="4" max="60" step="1" />
+              <output id="crowd-zone-radius-value"></output>
+            </div>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-enabled" />
+              <span>Enable crowd <em class="gen-hint">spawn 2.5D ambient people on paths</em></span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-show-zones" />
+              <span>Show collision zones <em class="gen-hint">rings around each 3D point</em></span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-paused" />
+              <span>Pause crowd animation</span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-debug" />
+              <span>Debug animation</span>
+            </label>
+            <button class="btn" id="crowd-reseed" type="button">Reseed crowd</button>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-ai" role="tabpanel" aria-labelledby="settings-tab-ai" data-settings-panel="ai" data-settings-keywords="ai config generate auto provider model api key openai anthropic grok xai gemini" data-ai-interface hidden>
+            <div class="settings-section-title">AI configuration</div>
+            <label>Provider
+              <select id="gen-provider">
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="xai">xAI / Grok</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </label>
+            <label>Model
+              <input id="gen-model" list="gen-model-list" autocomplete="off" spellcheck="false" placeholder="gpt-5.5" />
+              <datalist id="gen-model-list"></datalist>
+              <div class="profile-hint" style="margin-top:4px;">Type any model name your key has access to. Suggestions are just shortcuts.</div>
+            </label>
+            <label>API key <span style="font-weight:400;font-size:11px;">(stored in this browser only)</span>
+              <input id="gen-key" type="password" autocomplete="off" placeholder="sk-... / xai-... / etc" />
+            </label>
+            <div class="help-line">Used by Generate, Auto, and the floating agent. The prompt tells models to assemble requests from Tiny World primitives: terrain, paths, fences, rocks, crops, bridges, trees, tufts, and building clusters.</div>
+          </section>
+
+          <section class="settings-panel" id="settings-panel-feature-flags" role="tabpanel" aria-labelledby="settings-tab-feature-flags" data-settings-panel="feature-flags" data-settings-keywords="feature flags admin rollout everyone admins" hidden>
+            <div class="feature-flags-admin-section" id="feature-flags-admin-section" hidden>
+              <div class="settings-section-title">Admin · Feature flags</div>
+              <p class="feature-flags-admin-help" id="feature-flags-admin-help">Toggle rollout per feature. <strong>Everyone</strong> ships to all signed-in users. <strong>Admins</strong> keeps it visible for world-admin accounts only. Scroll the list — save applies every row.</p>
+              <div class="feature-flags-admin-grid" id="feature-flags-admin-grid"></div>
+              <div class="feature-flags-admin-foot">
+                <button type="button" class="btn dev-defaults-btn" id="feature-flags-admin-save">Save feature flags</button>
+                <span class="dev-defaults-status" id="feature-flags-admin-status" role="status" aria-live="polite"></span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span id="render-status"></span>
+        <button class="btn" id="render-reset" type="button">Reset</button>
+      </div>
+    </form>
+  </div>
+
+  <section id="stamp-builder-panel" class="stamp-panel" role="dialog" aria-modal="false" aria-labelledby="stamp-builder-title" hidden>
+    <div class="stamp-panel-head">
+      <div class="stamp-panel-title">
+        <strong id="stamp-builder-title">Stamps</strong>
+        <span>Models, voxel builds, and board objects. Drop GLB, GLTF, OBJ, FBX, VOX, or VDB files into <code>models/</code>, then scan.</span>
+      </div>
+      <button class="stamp-panel-close" id="stamp-builder-close" title="Close" aria-label="Close stamps">×</button>
+    </div>
+    <p class="stamp-panel-note">Pick a stamp, tune model defaults, then place it on the board. The panel stays open for fast stamping.</p>
+    <div class="stamp-panel-summary" id="stamp-builder-summary">
+      <span><strong>Library</strong> scanning local models…</span>
+      <span>GLB · OBJ</span>
+    </div>
+    <input id="voxel-build-import-file" type="file" accept=".json,application/json" hidden />
+    <div class="stamp-builder-controls">
+      <input class="stamp-builder-search" id="stamp-builder-search" type="search" placeholder="Search stamps and models" autocomplete="off" />
+      <button class="btn" id="stamp-builder-manage" type="button" aria-pressed="false">Manage library</button>
+      <button class="btn" id="model-stamp-refresh" type="button">Scan models</button>
+    </div>
+    <div class="stamp-builder-tools">
+      <button class="btn" id="voxel-build-import" type="button" hidden>Import voxel JSON</button>
+    </div>
+    <div class="stamp-builder-settings" id="model-stamp-settings" hidden>
+      <div class="stamp-model-settings-head">
+        <strong>Model defaults</strong>
+        <span id="model-stamp-settings-name">No model selected</span>
+      </div>
+      <label class="stamp-model-range">
+        <span>Size</span>
+        <input id="model-stamp-size" type="range" min="20" max="400" step="5" />
+        <output id="model-stamp-size-value"></output>
+      </label>
+      <label class="stamp-model-range">
+        <span>Lift</span>
+        <input id="model-stamp-offset-y" type="range" min="-100" max="200" step="5" />
+        <output id="model-stamp-offset-y-value"></output>
+      </label>
+      <label class="stamp-model-range">
+        <span>Rotate</span>
+        <input id="model-stamp-rotation" type="range" min="0" max="345" step="15" />
+        <output id="model-stamp-rotation-value"></output>
+      </label>
+      <div class="stamp-model-actions">
+        <button class="btn" id="model-stamp-save-default" type="button">Save default</button>
+        <button class="btn" id="model-stamp-reset-default" type="button">Reset model</button>
+      </div>
+    </div>
+    <div class="stamp-category-strip" id="stamp-builder-categories" role="tablist" aria-label="Stamp categories"></div>
+    <div class="stamp-builder-grid" id="stamp-builder-grid"></div>
+    <div class="stamp-panel-foot">
+      <span id="stamp-builder-status"></span>
+      <button class="btn" id="stamp-builder-rebuild" type="button">Refresh stamps</button>
+    </div>
+  </section>
+
+  <div id="agent-panel" class="agent-panel collapsed" data-ai-interface aria-live="polite" hidden>
+    <div class="agent-panel-resizer" id="agent-panel-resizer" role="separator" aria-orientation="vertical" aria-label="Resize AI chat"></div>
+    <div class="agent-panel-head">
+      <span id="agent-panel-title">AI chat</span>
+      <div class="agent-panel-actions">
+        <button type="button" class="agent-panel-clear" id="agent-panel-clear" aria-label="Clear conversation">⌫</button>
+        <button type="button" class="agent-panel-toggle" id="agent-panel-toggle" aria-label="Collapse AI chat">×</button>
+      </div>
+    </div>
+    <div class="agent-selection-preview selection-staging" id="agent-selection-preview" hidden aria-hidden="true">
+      <div class="selection-preview-pane" hidden>
+        <canvas id="selection-preview-canvas" width="256" height="256" aria-label="Selected object preview"></canvas>
+        <div class="selection-preview-actions" id="selection-preview-actions"></div>
+      </div>
+      <div class="agent-selection-count" id="agent-selection-count" hidden>0 tiles selected</div>
+      <ul class="agent-selection-list" id="agent-selection-list" hidden></ul>
+      <div class="agent-selection-properties" id="agent-selection-properties" hidden></div>
+    </div>
+    <div class="agent-messages" id="agent-messages"></div>
+    <form id="agent-input" class="agent-input" data-ai-interface autocomplete="off">
+      <button type="button" class="agent-grip" id="agent-grip" title="Attach files" aria-label="Attach files">+</button>
+      <button type="button" class="agent-target-chip" id="agent-target-chip" title="Selected object target" aria-label="Clear selected object target" hidden></button>
+      <input id="agent-prompt" type="text" placeholder="Ask the agent to change this world…" aria-label="Ask the agent" />
+      <button type="submit" class="agent-send" id="agent-send" aria-label="Send to agent">↑</button>
+      <div id="agent-suggestions" class="agent-suggestions" role="listbox" aria-label="Suggested prompts" hidden></div>
+    </form>
+  </div>
+
+  <!-- Persistent right-edge grip handle retained for older code paths; the
+       right-side chat now collapses into its own rail. -->
+  <button id="agent-panel-handle" class="agent-panel-handle" title="Show agent conversation" aria-label="Show agent conversation" hidden>⋮⋮</button>
+
+  <div id="generation-plan-overlay" class="generation-plan-overlay" hidden aria-hidden="true">
+    <img id="generation-plan-image" alt="" />
+  </div>
+
+  <div class="toolbar" id="toolbar"></div>
+  <div class="flyout" id="flyout" hidden></div>
+
+  <!-- Floating block palette — shown when "Show groups" is off. A resizable,
+       draggable panel holding every placeable block; the grid reflows to a
+       square grid as it is resized. -->
+  <div class="tool-palette" id="tool-palette" hidden>
+    <div class="tool-palette-head" id="tool-palette-head" aria-label="Drag to move blocks panel"></div>
+    <div class="tool-palette-grid" id="tool-palette-grid"></div>
+  </div>
+
+
+  <!-- Command palette ⌘K -->
+  <div class="palette-overlay" id="palette-overlay" hidden>
+    <div class="palette">
+      <span class="palette-search-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input class="palette-search" id="palette-search" placeholder="Search tools, commands, settings…" autocomplete="off" />
+      <div class="palette-results" id="palette-results" role="listbox"></div>
+      <div class="palette-footer">
+        <span><kbd>↑↓</kbd> navigate</span>
+        <span><kbd>↵</kbd> select</span>
+        <span><kbd>esc</kbd> close</span>
+      </div>
+    </div>
+  </div>
+
+  <script defer src="vendor/three/tinyworld-three.r185.min.js"></script>
+  <script defer src="vendor/three/VDBLoader.tinyworld.js"></script>
+  <script defer src="vendor/tiny-crowd-layer.js"></script>
+  <script defer src="LandscapeEngine.js"></script>
+  <script defer src="engine/landscape/noise.js"></script>
+  <script defer src="engine/landscape/shaders.js"></script>
+  <script defer src="engine/landscape/geometries.js"></script>
+  <script defer src="engine/landscape/water.js"></script>
+  <script defer src="engine/landscape/chunks.js"></script>
+  <script id="tinyworld-defaults-bootstrap">
+  /* =====================================================================
+     Defaults bootstrap — seeds localStorage from tinyworld-defaults.json
+     for keys the user hasn't already set. Must run before the main app
+     script below so the rest of the code sees the seeded values.
+     ===================================================================== */
+  (function tinyworldDefaultsBootstrap() {
+    try {
+      // Synchronous XHR is deprecated but intentional for this ~4KB file: it
+      // must seed localStorage before the deferred engine modules evaluate
+      // (they read settings at top level), and an async fetch cannot gate
+      // deferred script execution. This is the only parser-blocking request
+      // left — one small same-origin round trip.
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'tinyworld-defaults.json', false);
+      xhr.send(null);
+      if (xhr.status < 200 || xhr.status >= 300) return;
+      var data = JSON.parse(xhr.responseText || '{}');
+      if (!data || !data.settings || typeof data.settings !== 'object') return;
+      Object.keys(data.settings).forEach(function (key) {
+        if (typeof key !== 'string' || key.indexOf('tinyworld:') !== 0) return;
+        if (key.indexOf('tinyworld:auth:') === 0) return;
+        if (localStorage.getItem(key) !== null) return; // user preference wins
+        try { localStorage.setItem(key, String(data.settings[key])); } catch (_) {}
+      });
+    } catch (_) {
+      // Missing file, invalid JSON, blocked fetch — silently fall back to the
+      // app's hard-coded defaults.
+    }
+  })();
+  </script>
+  <script id="tinyworld-default-island-bootstrap">
+  /* =====================================================================
+     Default island bootstrap — caches default_island.json on window so a
+     fresh session (no saved world) and Reset both load it instead of the
+     procedural starter scene. Falls back to the built-in scene if the file
+     is missing/invalid. Fetched once; the browser caches it.
+     ===================================================================== */
+  (function tinyworldDefaultIslandBootstrap() {
+    // Async fetch started at parse time: it downloads in parallel with the
+    // deferred engine scripts, so by boot the data is almost always ready.
+    // applyDefaultIslandState() falls back to __tinyworldDefaultIslandReady
+    // for the rare slow-network case. Missing file / invalid JSON / blocked
+    // fetch — callers fall back to loadInitialScene().
+    window.__tinyworldDefaultIslandSettled = false;
+    window.__tinyworldDefaultIslandReady = fetch('default_island.json')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && Array.isArray(data.cells)) window.__tinyworldDefaultIsland = data;
+      })
+      .catch(function (_) {})
+      .finally(function () { window.__tinyworldDefaultIslandSettled = true; });
+  })();
+  </script>
+  <script id="tinyworld-auth-bootstrap">
+  (function tinyworldAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+  </script>
+  <script id="tinyworld-auth-importmap" type="importmap">
+  {
+    "imports": {
+      "@netlify/identity": "./vendor/netlify/identity.js",
+      "gotrue-js": "./vendor/netlify/gotrue.js"
+    }
+  }
+  </script>
+  <script type="module" src="vendor/tinyworld-auth.js"></script>
+  <!-- i18n: locale data registers onto window.TWI18N_DATA, then the core
+       resolves the active locale and exposes global t()/tx(). Must load before
+       the engine modules so their top-level code can translate at build time. -->
+  <script defer src="engine/i18n/en.js"></script>
+  <script defer src="engine/i18n/fr.js"></script>
+  <script defer src="engine/i18n/es.js"></script>
+  <script defer src="engine/i18n/zh.js"></script>
+  <script defer src="engine/i18n/th.js"></script>
+  <script defer src="engine/i18n/i18n-core.js"></script>
+  <script defer src="scripts/countdown.js"></script>
+  <script defer src="vendor/driverjs/driver.js.iife.js"></script>
+  <script defer src="engine/world/00-prelude.js"></script>
+  <script defer src="engine/world/00b-feature-flags.js"></script>
+  <script defer src="engine/world/00c-asset-store.js"></script>
+  <script defer src="engine/world/01-render-core.js"></script>
+  <script defer src="engine/world/02-cameras-lighting.js"></script>
+  <script defer src="engine/world/03-geometry-materials.js"></script>
+  <script defer src="engine/world/04-textures.js"></script>
+  <script defer src="engine/world/05-tile-factory.js"></script>
+  <script defer src="engine/world/06-history-object-factories.js"></script>
+  <script defer src="engine/world/07-house-primitives.js"></script>
+  <script defer src="engine/world/08-voxel-stamp-renderer.js"></script>
+  <script defer src="engine/world/09-model-stamp-loader.js"></script>
+  <script defer src="engine/world/09b-voxel-build-factories.js"></script>
+  <script defer src="engine/world/10-world-data.js"></script>
+  <script defer src="engine/world/10b-window-lights.js"></script>
+  <script defer src="engine/world/10c-vehicles.js"></script>
+  <script defer src="engine/world/11-vehicle-crowd.js"></script>
+  <script defer src="engine/world/12-selection-tool.js"></script>
+  <script defer src="engine/world/13-distant-dressing-ghost.js"></script>
+  <script defer src="engine/world/14-editable-islands-moorings.js"></script>
+  <script defer src="engine/world/15-ghost-generation-fade.js"></script>
+  <script defer src="engine/world/16-drop-anim-adjacency.js"></script>
+  <script defer src="engine/world/17-tile-renderers.js"></script>
+  <script defer src="engine/world/17b-object-capabilities.js"></script>
+  <script defer src="engine/world/18-scene-pick-xr.js"></script>
+  <script defer src="engine/world/19-tools-toolbar.js"></script>
+  <script defer src="engine/world/20-input-place-erase.js"></script>
+  <script defer src="engine/world/20b-pen-tool.js"></script>
+  <script defer src="engine/world/21-object-transform-voxel-build.js"></script>
+  <script defer src="engine/world/22-audio.js"></script>
+  <script defer src="engine/world/23-particles-clouds.js"></script>
+  <script defer src="engine/world/24-crop-duster-banners.js"></script>
+  <script defer src="engine/world/25-animation-loop-schema.js"></script>
+  <script defer src="engine/world/26b-random-island-economy-profile.js"></script>
+  <script defer src="engine/world/26c-island-view-time-cycle.js"></script>
+  <script defer src="engine/world/26a-island-generator.js"></script>
+  <script defer src="engine/world/26-ai-generation.js"></script>
+  <script defer src="engine/world/27-landscape-engine.js"></script>
+  <script defer src="engine/world/28-generate-panel-agent.js"></script>
+  <script defer src="engine/world/28a-floating-agent.js"></script>
+  <script defer src="engine/world/29-persistence-api.js"></script>
+  <script defer src="scripts/tinyverse-collectibles.js"></script>
+  <script defer src="engine/world/30-ui-boot-wiring.js"></script>
+  <script defer src="engine/world/31-cloud-sea.js"></script>
+  <script defer src="engine/world/32-layers-panel.js"></script>
+  <script defer src="engine/world/33-radial-menu.js"></script>
+  <script defer src="engine/world/33b-context-bar.js"></script>
+  <script defer src="engine/world/33c-build-suggestions.js"></script>
+  <script defer src="engine/world/34-flight-sim.js"></script>
+  <script defer src="engine/world/35-tool-palette.js"></script>
+  <script defer src="engine/world/36-mooring-interaction.js"></script>
+  <script defer src="engine/world/37-island-placement-holos.js"></script>
+  <script defer src="engine/world/38-multiplayer-partykit.js"></script>
+  <script defer src="engine/world/39-atmosphere-effects.js"></script>
+  <script defer src="engine/world/40-shield-system.js"></script>
+  <script defer src="engine/world/41-flight-combat.js"></script>
+  <script defer src="engine/world/42-account-wallet-players.js"></script>
+  <script defer src="engine/world/43-drag-drop-import.js"></script>
+  <script defer src="engine/world/44-sub-object-edit.js"></script>
+  <script defer src="engine/world/45-shader-fx.js"></script>
+  <script defer src="engine/world/46-mesh-terrain.js"></script>
+  <!-- ARCHIVED UI path: universe carousel (46). Still loaded — do not delete core code. -->
+  <script defer src="engine/world/46-worlds-universe.js"></script>
+  <script defer src="engine/world/47a-worlds-emotes.js"></script>
+  <script defer src="engine/world/47b-worlds-chat-bubbles.js"></script>
+  <script defer src="engine/world/47c-worlds-name-labels.js"></script>
+  <script defer src="engine/world/47-worlds-room.js"></script>
+  <script defer src="engine/world/48-worlds-harvest-hud.js"></script>
+  <script defer src="engine/world/49-worlds-avatar-picker.js"></script>
+  <script defer src="engine/world/50-worlds-play-chat.js"></script>
+  <script defer src="engine/world/51-worlds-bots.js"></script>
+  <script defer src="engine/world/52-worlds-demo-seed.js"></script>
+  <script defer src="engine/world/53-voxel-avatar.js"></script>
+  <script defer src="engine/world/54-fly-down.js"></script>
+  <script defer src="engine/world/55-stargate.js"></script>
+  <script defer src="engine/world/56-gate-transit.js"></script>
+  <script defer src="engine/world/57-poser-surface.js"></script>
+  <script defer src="engine/world/58-lobby-presentation.js"></script>
+  <script defer src="engine/world/59-gate-travel-fx.js"></script>
+  <script defer src="engine/world/60-skyfall.js"></script>
+  <!-- 61-tinyverse-race-track.js intentionally not loaded: rally disabled, focus on core multiplayer -->
+  <script defer src="engine/world/62-cctv-truman.js"></script>
+  <script defer src="engine/world/63-cctv-placement.js"></script>
+  <script defer src="engine/world/64-lobby-chat-bridge.js"></script>
+  <script defer src="engine/world/65-lobby-benches.js"></script>
+  <script defer src="engine/world/67-cctv-view.js"></script>
+  <script defer src="engine/world/68-notifications.js"></script>
+  <script defer src="engine/world/69-watcher-layer.js"></script>
+  <script defer src="engine/world/70-onboarding-driver.js"></script>
+  <script defer src="engine/world/70-animal-anim.js"></script>
+  <script defer src="engine/world/71-infinite-surface.js"></script>
+  <script defer src="engine/world/72-survivor-islands.js"></script>
+  <script defer src="engine/world/73-target-planes.js"></script>
+  <script defer src="engine/world/99-late-boot.js"></script>
+</body>
+</html>

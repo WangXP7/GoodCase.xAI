@@ -1,0 +1,240 @@
+// browser smoke tests: real WebGL in headless Chrome with the software renderer, no window and no dependencies
+// npm run test:browser [name...]   run every check, or only the pages and shorts whose names are given
+// Chrome is found in the usual places or from CHROME_PATH and driven over its DevTools socket with Node's WebSocket
+// (Node 22); without either the run is skipped, or fails when CI is set
+// each page runs its checks, reads real pixels, and writes {checks: [{name, ok, detail}]} into <pre id=result>
+// it is kept light on the machine it runs on, which someone may be working at: one Chrome, a few tabs at a time,
+// at a low priority, one run at a time, and a run that takes too long is stopped; the software renderer takes
+// every core a Chrome is given, so more Chromes or more tabs do not make it faster, they only take the machine
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir, setPriority, constants } from 'node:os';
+import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const pages = ['draw2d', 'shaderUniforms', 'textureUpdate', 'layers2d', 'canvasLayer', 'canvasLayerScroll', 'parallax', 'canvas2d', 'textIcons', 'lights2d', 'lights2dSun', 'lights2dNormals', 'shaders', 'postFilter', 'focusBlur', 'draw3d', 'vertexShader', 'billboardLighting', 'depth3d', 'environment', 'shaderFallback', 'spotLight', 'lensFlare', 'gltfAlpha',
+    'editorScene', 'contextLoss'];
+// one Chrome, and this many tabs of it at a time: measured, 4, 6 and 8 take the same 55 seconds, since every tab
+// draws through the one GPU process, and 12 or more are slower; do not raise it, and never start a second Chrome
+const pageTimeout = 60e3, atOnce = 4;
+const runTimeout = 5 * 60e3; // the whole run, a minute on a quiet machine: past this something is wrong
+const lockFile = join(tmpdir(), 'littlejs-smoke.lock');
+
+// below what a person at the machine is doing, and Chrome and its processes start at the same priority
+try { setPriority(constants.priority.PRIORITY_BELOW_NORMAL); } catch {}
+
+// one run at a time: a second one started while a first is going only doubles the load
+let lockTaken = false;
+function takeLock()
+{
+    let running = 0;
+    try
+    {
+        // a lock older than a run can be was left by a run that was killed, whoever has its process id now
+        const pid = +readFileSync(lockFile, 'utf8'), age = Date.now() - statSync(lockFile).mtimeMs;
+        if (pid && pid !== process.pid && age < runTimeout + 30e3)
+        {
+            process.kill(pid, 0); // throws when no such process is running
+            running = pid;
+        }
+    }
+    catch {}
+    if (running)
+    {
+        console.log('browser smoke tests: another run is going (process ' + running + '), not starting a second');
+        process.exit(1);
+    }
+    writeFileSync(lockFile, String(process.pid));
+    lockTaken = true;
+}
+const dropLock = ()=> { try { lockTaken && rmSync(lockFile, {force: true}); } catch {} };
+
+// however the run ends, Chrome goes with it and the lock is given up; set up before Chrome is started, so a run
+// stopped while it starts leaves nothing behind
+let stopChrome, stopped = false;
+function stopAll()
+{
+    if (stopped) return;
+    stopped = true;
+    try { stopChrome?.(); } catch {}
+    dropLock();
+}
+process.on('exit', stopAll);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'])
+    process.on(signal, ()=> { stopAll(); process.exit(1); });
+setTimeout(()=>
+{
+    console.log('browser smoke tests: stopped, the run took more than ' + runTimeout / 60e3 + ' minutes');
+    stopAll();
+    process.exit(1);
+}, runTimeout).unref();
+
+function findChrome()
+{
+    const env = process.env, places = [env.CHROME_PATH,
+        env.PROGRAMFILES && join(env.PROGRAMFILES, 'Google/Chrome/Application/chrome.exe'),
+        env['PROGRAMFILES(X86)'] && join(env['PROGRAMFILES(X86)'], 'Google/Chrome/Application/chrome.exe'),
+        env.LOCALAPPDATA && join(env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe'),
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
+    return places.find((place)=> place && existsSync(place));
+}
+
+// the repository over http, so images and fetches work as they do on a site
+function serve()
+{
+    const types = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.wasm': 'application/wasm', '.css': 'text/css',
+        '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg'};
+    const server = createServer((request, response)=>
+    {
+        try
+        {
+            const file = normalize(join(root, decodeURIComponent(new URL(request.url, 'http://x').pathname)));
+            if (!file.startsWith(root) || !existsSync(file))
+                return response.writeHead(404).end();
+            const data = readFileSync(file);
+            response.writeHead(200, {'Content-Type': types[extname(file)] || 'application/octet-stream'}).end(data);
+        }
+        catch { response.writeHead(404).end(); } // a folder, or a url that does not decode
+    });
+    return new Promise((resolve)=> server.listen(0, '127.0.0.1', ()=> resolve(server)));
+}
+
+// one Chrome for the whole run, driven over its DevTools socket with Node's own WebSocket
+function startChrome(chrome)
+{
+    const profile = mkdtempSync(join(tmpdir(), 'littlejs-smoke-'));
+    const child = spawn(chrome, ['--headless=new', '--no-sandbox', '--disable-gpu-sandbox', '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader', '--mute-audio', '--no-first-run', '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--window-size=1000,700',
+        '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], {windowsHide: true});
+    const stop = stopChrome = ()=>
+    {
+        child.kill();
+        try { rmSync(profile, {recursive: true, force: true, maxRetries: 10, retryDelay: 200}); } catch {}
+    };
+    child.stdout.resume(); // nothing is read from it, and it must not fill up
+    return new Promise((resolve, reject)=>
+    {
+        let text = '', connected = false;
+        const timer = setTimeout(()=> { stop(); reject(new Error('Chrome did not start')); }, 30e3);
+        child.on('error', (error)=> { clearTimeout(timer); stop(); reject(error); });
+        child.stderr.on('data', (data)=>
+        {
+            // it says where it listens once it is up; what it logs after that is not read, one socket is all
+            if (connected) return;
+            const address = (text += data).match(/DevTools listening on (ws:\S+)/)?.[1];
+            if (!address) return;
+            connected = true;
+            clearTimeout(timer);
+            const socket = new WebSocket(address), waiting = new Map;
+            let nextId = 0;
+            // a Chrome that is gone answers nothing more: what waits on it fails now, not at the run's time limit
+            socket.onclose = ()=>
+            {
+                for (const wait of waiting.values())
+                    wait.reject(new Error('Chrome closed'));
+                waiting.clear();
+            };
+            socket.onmessage = (event)=>
+            {
+                const message = JSON.parse(event.data), wait = waiting.get(message.id);
+                if (!wait) return;
+                waiting.delete(message.id);
+                message.error ? wait.reject(new Error(message.error.message)) : wait.resolve(message.result);
+            };
+            const send = (method, params={}, sessionId)=> new Promise((resolve, reject)=>
+            {
+                if (socket.readyState !== 1)
+                    return reject(new Error('Chrome closed'));
+                waiting.set(++nextId, {resolve, reject});
+                socket.send(JSON.stringify({id: nextId, method, params, sessionId}));
+            });
+            socket.onopen = ()=> resolve({send, stop: ()=> { socket.close(); stop(); }});
+            socket.onerror = ()=> { stop(); reject(new Error('no DevTools socket')); };
+        });
+    });
+}
+
+// run one page in a tab of its own and hand back its checks, a failed check when it gave none in time
+async function runPage(browser, url, name)
+{
+    let checks, text;
+    try
+    {
+        const {targetId} = await browser.send('Target.createTarget', {url});
+        const {sessionId} = await browser.send('Target.attachToTarget', {targetId, flatten: true});
+        for (const end = Date.now() + pageTimeout; Date.now() < end;)
+        {
+            await new Promise((resolve)=> setTimeout(resolve, 100));
+            const read = await browser.send('Runtime.evaluate',
+                {expression: "document.getElementById('result')?.textContent", returnByValue: true}, sessionId);
+            text = read.result?.value;
+            if (text && text != 'PENDING') break;
+        }
+        await browser.send('Target.closeTarget', {targetId});
+        checks = JSON.parse(text).checks;
+    }
+    catch (error) { text = String(text) + ' ' + error.message; }
+    if (!Array.isArray(checks) || !checks.length)
+        checks = [{name: 'page ran', ok: false, detail: 'no result: ' + String(text).slice(0, 200)}];
+    return {name, checks};
+}
+
+// the full examples, each run for a few seconds as the site runs it; the Three.js one loads Three.js from a CDN
+const fullExamples = ['starter', 'breakout', 'platformer', 'puzzle', 'box2d', 'htmlMenu', 'uiSystem', '3d'];
+
+// the shorts, by the file names examples/shorts.js lists
+function shortNames()
+{
+    const list = readFileSync(join(root, 'examples/shorts.js'), 'utf8');
+    return [...list.matchAll(/new ExampleInfo\('[^']*', '([\w-]+)\.js'/g)].map((match)=> match[1]);
+}
+
+// without what it needs the run is skipped, or fails where CI is set
+const chrome = findChrome();
+const missing = !chrome ? 'no Chrome found, set CHROME_PATH' :
+    typeof WebSocket == 'undefined' ? 'this Node has no WebSocket, use Node 22 or later' : '';
+if (missing)
+{
+    console.log('browser smoke tests: ' + missing + (process.env.CI ? '' : '; skipped'));
+    process.exit(process.env.CI ? 1 : 0);
+}
+takeLock();
+const browser = await startChrome(chrome);
+
+const server = await serve(), base = 'http://127.0.0.1:' + server.address().port + '/test/browser/';
+const only = process.argv.slice(2);
+const jobs = [...pages.map((name)=> [name, base + name + '.html']),
+    ...shortNames().map((name)=> ['short ' + name, base + 'short.html?short=' + name]),
+    ...fullExamples.map((name)=> ['example ' + name, base + 'example.html?example=' + name])]
+    .filter(([name])=> !only.length || only.some((word)=> name.split(' ').includes(word)));
+
+let failed = 0, passed = 0, next = 0;
+const results = [];
+await Promise.all(Array.from({length: atOnce}, async ()=>
+{
+    while (next < jobs.length)
+    {
+        const index = next++, [name, url] = jobs[index];
+        const short = name.startsWith('short ') && name.slice(6);
+        results[index] = short && !existsSync(join(root, 'examples/shorts', short + '.js')) ?
+            {name, checks: [{name: 'its file is there', ok: false, detail: 'examples/shorts/' + short + '.js'}]} :
+            await runPage(browser, url, name);
+    }
+}));
+stopAll();
+server.close();
+for (const {name, checks} of results)
+    for (const check of checks)
+    {
+        check.ok ? ++passed : ++failed;
+        if (!check.ok || !name.startsWith('short ') && !name.startsWith('example '))
+            console.log((check.ok ? 'ok   ' : 'FAIL ') + name + ': ' + check.name +
+                (check.detail !== undefined ? ' ' + JSON.stringify(check.detail) : ''));
+    }
+console.log(`browser smoke tests: ${passed} passed, ${failed} failed, ${jobs.length} pages`);
+process.exit(failed || !jobs.length ? 1 : 0);

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tria Prima</title>
+    <meta name="description" content="A dark-fantasy alchemy adventure in first person. Light the cold Athanor, brew what the isle gives you, and take the three Primes back from the Gloom. Plays in the browser on WebGL 2." />
+    <meta name="theme-color" content="#050608" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Tria Prima" />
+    <meta property="og:description" content="A dark-fantasy alchemy adventure in first person. Light the cold Athanor, brew what the isle gives you, and take the three Primes back from the Gloom." />
+    <meta property="og:image" content="https://winchxyz.github.io/tria-prima/media/title.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2308090c'/%3E%3Cpath d='M32 12 54 50H10Z' fill='none' stroke='%23d9cfbd' stroke-width='3' stroke-linejoin='round'/%3E%3Cpath d='M32 30l5 7-5 7-5-7z' fill='%23e0612a'/%3E%3C/svg%3E" />
+    <link rel="preload" as="font" type="font/woff2" href="assets/fonts/cormorant-garamond-latin-500-normal.woff2" crossorigin />
+    <style>
+      @font-face { font-family: 'Cormorant Garamond'; font-style: normal; font-weight: 400; font-display: swap; src: url('assets/fonts/cormorant-garamond-latin-400-normal.woff2') format('woff2'); }
+      @font-face { font-family: 'Cormorant Garamond'; font-style: italic; font-weight: 400; font-display: swap; src: url('assets/fonts/cormorant-garamond-latin-400-italic.woff2') format('woff2'); }
+      @font-face { font-family: 'Cormorant Garamond'; font-style: normal; font-weight: 500; font-display: swap; src: url('assets/fonts/cormorant-garamond-latin-500-normal.woff2') format('woff2'); }
+      @font-face { font-family: 'Cormorant Garamond'; font-style: italic; font-weight: 500; font-display: swap; src: url('assets/fonts/cormorant-garamond-latin-500-italic.woff2') format('woff2'); }
+      @font-face { font-family: 'Cormorant Garamond'; font-style: normal; font-weight: 600; font-display: swap; src: url('assets/fonts/cormorant-garamond-latin-600-normal.woff2') format('woff2'); }
+      @font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('assets/fonts/Inter.woff') format('woff'); }
+      :root {
+        --font-display: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+        --font-ui: -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #050608;
+        overflow: hidden;
+      }
+      #c {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        outline: none;
+      }
+      .tp-fatal {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.4em;
+        padding: 10vw;
+        color: #cfc8ba;
+        font: 20px/1.5 var(--font-display);
+        text-align: center;
+        background: #050608;
+      }
+      .tp-fatal p {
+        margin: 0;
+        max-width: 34em;
+      }
+      .tp-fatal a {
+        color: #e0612a;
+        font-size: 0.85em;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="ui"></div>
+    <noscript><div class="tp-fatal"><p>Tria Prima is a game that runs in the browser. It needs JavaScript.</p></div></noscript>
+    <script type="module" src="dist/game.js?v=bda85fabaa"></script>
+    <script nomodule>
+      document.body.insertAdjacentHTML('beforeend', '<div class="tp-fatal"><p>Tria Prima needs a current browser with WebGL 2.</p></div>');
+    </script>
+  </body>
+</html>

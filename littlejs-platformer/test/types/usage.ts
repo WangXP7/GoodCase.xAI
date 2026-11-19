@@ -1,0 +1,155 @@
+// what a TypeScript user writes against the published types, checked strict by test/dts.test.mjs
+// it is only type checked, never run, so nothing here needs an engine, a canvas or Box2D
+import { vec2, vec3, hsl, Vector2, EngineObject, engineObjectsCallback, engineObjectsCallback3D,
+    Tween, Ease, buildGrid, Mesh, Box2dObject, Box2dWheelJoint, Box2dRevoluteJoint, Box2dWeldJoint,
+    Box2dDistanceJoint, AudioFilter, AudioReverb, AudioDelay, Sound, VoxelMap, Ray3D } from 'littlejsengine';
+
+// Box2D joints default their anchors to the objects' positions
+const box2dA = new Box2dObject(vec2(), vec2(1));
+const box2dB = new Box2dObject(vec2(2, 0), vec2(1));
+new Box2dWheelJoint(box2dA, box2dB);
+new Box2dRevoluteJoint(box2dA, box2dB);
+new Box2dWeldJoint(box2dA, box2dB);
+new Box2dDistanceJoint(box2dA, box2dB);
+
+// a tween passes its callback the type it tweens, written out or inferred from start and end
+let countdown = 0;
+new Tween((v: number) => { countdown = v; }, 10, 0, 5);
+new Tween(v => { countdown = v; }, 10, 0, 5).then(() => { countdown = 0; });
+let slidePos: Vector2 = vec2();
+new Tween((p: Vector2) => { slidePos = p; }, vec2(), vec2(5, 2), 2, { ease: Ease.OUT(Ease.SINE) });
+new Tween(p => { slidePos = p.scale(2); }, vec2(), vec2(5, 2));
+export { countdown, slidePos }; // read by nothing, kept so the callbacks' writes are used
+
+// buildGrid calls its color and height functions with the grid position
+const grid: Mesh = buildGrid(vec2(9), 9, (x, z) => hsl(x/9, 1, .5), (x, z) => x*z*.1);
+
+// object callbacks get the object, typed
+engineObjectsCallback(vec2(), 4, (o: EngineObject) => o.destroy());
+engineObjectsCallback(vec2(), vec2(4, 2), o => o.destroy());
+engineObjectsCallback3D(vec3(), 4, o => o.destroy());
+
+// connect returns its target, so effects chain left to right
+const filter = new AudioFilter('lowpass', 800);
+const reverb: AudioReverb = filter.connect(new AudioReverb);
+reverb.connect(new AudioDelay).connect(new AudioFilter);
+
+// a sound's load callback returns nothing
+let soundLoaded = false;
+const loadedSound = new Sound('a.mp3', 0, 30, .7, () => { soundLoaded = true; });
+loadedSound.onloadCallback = () => { soundLoaded = !soundLoaded; };
+
+// Box2D objects destroy like any object, immediate included
+new Box2dObject().destroy(true);
+
+// a voxel raycast that misses is undefined, so its hit is checked before it is read
+const voxels = new VoxelMap(vec3(), vec3(8));
+const voxelHit = voxels.raycast(new Ray3D(vec3(), vec3(1, 0, 0)));
+voxelHit?.cell.add(voxelHit.normal);
+// @ts-expect-error
+voxels.raycast(new Ray3D(vec3(), vec3(0, 1, 0))).distance;
+
+// particle effect options take any effect setting beside scale, hue and the rest
+import { particleEffect, particleEffect3D } from 'littlejsengine';
+particleEffect('fire', vec2(), {scale: 2, hue: .3, emitTime: .5, speed: .1});
+particleEffect3D('fire', vec3(), {flatten: true, emitRate: 30});
+particleEffect('fire', vec2(), {emitSize: vec2(2, 1), shape: 'spark', colorStartA: hsl(0, 1, .5)});
+// @ts-expect-error
+particleEffect('fire', vec2(), {emitRat: 30});
+// @ts-expect-error
+particleEffect('fire', vec2(), {shape: 'sparkle'});
+
+// an effect is plain data, typed: its settings, its behaviors, and what comes back from the library
+import { particleEffectsAdd, particleEffectsGet, ParticleEffect } from 'littlejsengine';
+const sparks: ParticleEffect = {name: 'sparks', settings: {emitRate: 50, additive: true, colorEndA: [1, 1, 0, 0]},
+    behaviors: [{name: 'swirl', strength: .5}]};
+particleEffectsAdd(sparks);
+const sparkRate: number | undefined = particleEffectsGet('sparks')?.settings.emitRate;
+// @ts-expect-error
+particleEffectsAdd({name: 'bad', settings: {emitRate: 'lots'}});
+// a library read from JSON has its strings widened, a shape among them, and may leave settings out
+const shapeFromJSON: string = 'spark';
+particleEffectsAdd({name: 'fromJSON', settings: {shape: shapeFromJSON}});
+particleEffectsAdd({name: 'defaults'});
+
+// a 3D level is typed down to its objects and blocks
+import { level3DLoad, Level3D } from 'littlejsengine';
+const level3D: Level3D = {littlejs3D: 1, objects: [{type: 'Box', pos: [0, 1, 0], properties: {solid: true}}],
+    scene: {sky: ['#88f', '#fff', '#444'], fog: [10, 50]}, terrain: {size: [20, 20], heights: [[0, 1], [1, 0]]}};
+level3DLoad(level3D);
+// @ts-expect-error
+level3DLoad({objects: [{pos: [0, 1, 0]}]});
+// a level or a map read from JSON has arrays of numbers and strings where the format has three of them, and loads
+const levelJSON = {objects: [{type: 'Box', pos: [0, 1, 0] as number[]}], scene: {fog: [10, 50] as number[]}};
+level3DLoad(levelJSON);
+level3DLoad({});
+// a prefab is a level as the editor saves it, its objects left out an empty one
+import { level3DAddPrefab } from 'littlejsengine';
+level3DAddPrefab('crate', level3D);
+level3DAddPrefab('empty', {attached: true});
+import { tileLayersLoad } from 'littlejsengine';
+const mapJSON = {width: 2, height: 1, layers: [{type: 'tilelayer' as string, width: 2, height: 1, data: [1, 0]}]};
+tileLayersLoad(mapJSON);
+export { sparkRate };
+
+// a level editor of the game's own: a class with the hooks as methods, and keys, buttons and tools added to it
+import { LevelEditor, levelEditor, setLevelEditor } from 'littlejsengine';
+import { Light3D, LensFlare3D, tile } from 'littlejsengine';
+class GameEditor extends LevelEditor
+{
+    constructor()
+    {
+        super();
+        this.addKey('k', (shift)=> shift, 'K: mine');
+        this.addButton('Clear', ()=> {}, 'Clear the level');
+        this.addTool('Zone', {key: 'z', hint: 'Zone', onPress(at) { at.pos; }});
+    }
+    onRestart() {}
+    onDraw() {}
+    onSave(text: string, fileName: string) { return text.length > 0 && fileName.length > 0; }
+}
+setLevelEditor(new GameEditor);
+levelEditor.onRestart = ()=> {};
+levelEditor.onPlayFrom = (pos)=> pos;
+levelEditor.edit3D?.strokeEnd();
+levelEditor.edit2D.paint(vec2(), 5);
+levelEditor.edit2D.paint(vec2(), 5, 1, true);
+levelEditor.edit2D.changeObjects((objects)=> objects.forEach((o)=> o.x += 16));
+levelEditor.edit3D?.change((objects)=> objects[0].type);
+levelEditor.addTool('Pick', {onPress(at) { return !!at.pos; }});
+const editing: boolean = levelEditor.isOpen && levelEditor.is3D;
+// @ts-expect-error
+levelEditor.addKey('k');
+
+// onSave may be async, set on the editor or as a method of a class of the game's own
+levelEditor.onSave = async (text, fileName)=> text.length > 0 && fileName.length > 0;
+class ServerEditor extends LevelEditor
+{
+    async onSave(text: string, fileName: string) { return text.length > 0 && fileName.length > 0; }
+}
+setLevelEditor(new ServerEditor);
+
+// a light's flare: addFlare hands it back to change, light.flare is the flare or undefined
+const lamp = new Light3D(vec3(), 10);
+lamp.addFlare().count = 5;
+lamp.addFlare(2, 3).shapes = ['hex'];
+if (lamp.flare)
+    lamp.flare.glowSize = 0;
+const lampFlare = new LensFlare3D(2, 3);
+lampFlare.elements = [{at: 1, size: vec2(.4, .1), color: hsl(0, 0, 1), tileInfo: tile(0), angle: 1}];
+lamp.flare = lampFlare;
+lamp.flare.count = 5;
+lamp.flare?.destroy(); // takes it away
+// @ts-expect-error
+lamp.flare = true;
+
+// addChild and attach hand back the child as its own type, in 2D and 3D
+import { EngineObject3D } from 'littlejsengine';
+class Gun extends EngineObject { fire() {} }
+const holder = new EngineObject(vec2());
+holder.addChild(new Gun(vec2())).fire();
+holder.attach(new Gun(vec2())).fire();
+class Lamp3D extends EngineObject3D { glow() {} }
+const holder3D = new EngineObject3D(vec3());
+holder3D.addChild(new Lamp3D(vec3())).glow();
+holder3D.attach(new Lamp3D(vec3())).glow();

@@ -1,0 +1,82 @@
+// Layout of the tower section: figures three over four, rank, targeting,
+// upgrades, paths; the body scrolls. Damage type in its own colour (data).
+
+
+/* Three tiles over four on a 12-column track */
+.tp-stats {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+
+  > * {
+    grid-column: span 4;
+  }
+
+  > :nth-child(n + 4) {
+    grid-column: span 3;
+  }
+}
+
+.tp-type {
+  outline: 1px solid var(--damage-color);
+  outline-offset: -1px;
+
+  td-icon {
+    color: var(--damage-color);
+  }
+}
+
+.tp-type-name {
+  font-size: var(--td-fs-body);
+}
+
+/* Veteran rank: insignia and name left, kills to the next rank right, the
+   way there under it. Silver like the badge over the tower, brass from
+   Champion on. */
+.tp-rank {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 8px;
+}
+
+.tp-rank-icon {
+  color: var(--td-text-secondary);
+}
+
+.tp-rank-count {
+  justify-self: end;
+}
+
+.tp-rank-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+
+  > * {
+    background: var(--td-text-secondary);
+  }
+}
+
+.tp-rank.is-gold {
+  .tp-rank-icon,
+  .tp-rank-name {
+    color: var(--td-brass-light);
+  }
+
+  .tp-rank-bar > * {
+    background: var(--td-brass);
+  }
+}
+
+/* Below the first rank: the chevron to come, greyed out */
+.tp-rank.is-recruit .tp-rank-icon {
+  color: var(--td-text-disabled);
+}
+
+.tp-targets > button {
+  padding: 0;
+}
+
+.tp-hold[aria-pressed='true'] {
+  color: var(--td-hp-text);
+}
+

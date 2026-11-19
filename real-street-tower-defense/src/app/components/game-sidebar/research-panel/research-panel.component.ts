@@ -1,0 +1,127 @@
+import { ChangeDetectionStrategy, Component, computed, inject, Injector, input, output } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { MatDialog } from '@angular/material/dialog';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TowerDefenseStore } from '../../../store/tower-defense.store';
+import { ResearchStore } from '../../../store/research.store';
+import { UpgradeId } from '../../../configs/tower-types.config';
+import { RESEARCH_TREE, getResearch } from '../../../configs/research/research-tree.config';
+import { ActiveResearch, ResearchId, researchWave } from '../../../configs/research/research.types';
+import { Tower } from '../../../entities/tower.entity';
+import { SellConfirmService } from '../../../services/sell-confirm.service';
+import { UpgradeHintService } from '../../../services/upgrade-hint.service';
+import { TdIconComponent } from '../../icon/icon.component';
+import { upgradeHintView } from '../tower-panel/tower-stats';
+import { UPGRADE_MANY, upgradeTimes, upgradeTrackRefusal } from '../../../utils/player-actions';
+import { openResearchDialog } from '../../research-dialog/open-research-dialog';
+import { researchProgress, researchRemaining, researchStatus } from './research-status';
+
+/**
+ * Panel des gewählten Research Centers: laufende Forschungen mit Fortschritt,
+ * Upgrades des Gebäudes, Verkauf, und der Knopf zum Forschungsbaum.
+ *
+ * Der Baum selbst und die Warteschlange liegen im Dialog
+ * (`research-dialog/`), nicht mehr hier: eine flache Liste aller Knoten zeigt
+ * die Kanten nicht, an denen man sieht, was hinter was hängt (TODO G3).
+ */
+@Component({
+  selector: 'app-sidebar-research-panel',
+  standalone: true,
+  imports: [DecimalPipe, MatTooltipModule, TdIconComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './research-panel.component.html',
+  styleUrl: './research-panel.component.scss',
+  host: { class: 'td-side-section is-fill' },
+})
+export class SidebarResearchPanelComponent {
+  readonly store = inject(TowerDefenseStore);
+  readonly researchStore = inject(ResearchStore);
+  private readonly sellConfirm = inject(SellConfirmService);
+  private readonly upgradeHint = inject(UpgradeHintService);
+  private readonly dialog = inject(MatDialog);
+  // Der Dialog braucht einen Injector aus dem Spielbaum, siehe openResearchDialog.
+  private readonly injector = inject(Injector);
+
+  readonly tower = input.required<Tower>();
+
+  /** The first click on Sell only arms it, see SellConfirmService. */
+  readonly sellArmed = computed(() => this.sellConfirm.armedTowerId() === this.tower().id);
+
+  /** The last U or tile click on the center: the tile it bought flashes, or why it bought nothing */
+  readonly hintView = computed(() => upgradeHintView(this.upgradeHint.hint(), this.tower()));
+
+  readonly sellTower = output<void>();
+  /** An upgrade tile clicked, `times` from the modifier keys (upgradeTimes, TODO E45) */
+  /** Under an upgrade's tooltip: several at once (TODO E45) */
+  readonly upgradeManyHint = ` Shift-click: up to ${UPGRADE_MANY.shift}, Ctrl-click: up to ${UPGRADE_MANY.ctrl}.`;
+
+  readonly upgradeTower = output<{ tower: Tower; upgradeId: UpgradeId; times: number }>();
+  readonly cancelResearch = output<ResearchId>();
+
+  /** Waiting for a slot and the credits, in start order */
+  readonly queue = this.researchStore.queuedResearches;
+
+  readonly researchTotal = Object.keys(RESEARCH_TREE).length;
+  readonly researchDone = computed(() => this.researchStore.completedResearches().size);
+
+  /** How many could be started right now, the reason to open the tree. */
+  readonly openCount = computed(() =>
+    Object.values(RESEARCH_TREE).filter(
+      (research) =>
+        researchStatus(
+          research.id,
+          this.researchStore.completedResearches(),
+          this.researchStore.activeResearches(),
+          this.queue(),
+          researchWave(this.store.waveNumber(), this.store.phase()),
+        ) === 'available',
+    ).length,
+  );
+
+  /** Verkaufswert; ändert sich mit Upgrades, siehe `selectedTowerRevision`. */
+  readonly sellValue = computed(() => {
+    this.store.selectedTowerRevision();
+    return this.tower().getSellValue();
+  });
+
+  getActiveResearchProgress(active: ActiveResearch): number {
+    return researchProgress(active.duration, this.elapsedOf(active));
+  }
+
+  getActiveResearchRemaining(active: ActiveResearch): number {
+    return researchRemaining(active.duration, this.elapsedOf(active));
+  }
+
+  getResearchName(id: ResearchId): string {
+    return getResearch(id)?.name ?? id;
+  }
+
+  /** The tree, the queue and the picking live there. */
+  openTechTree(): void {
+    openResearchDialog(this.dialog, this.injector);
+  }
+
+  onSell(): void {
+    if (this.sellConfirm.request(this.tower().id)) this.sellTower.emit();
+  }
+
+  /** Not buyable right now: the tile looks disabled, a click on it still says why. */
+  isUpgradeRefused(upgradeId: UpgradeId): boolean {
+    this.store.selectedTowerRevision();
+    return upgradeTrackRefusal(
+      this.tower(), upgradeId, this.store.credits(), this.researchStore.maxUpgradeTier(),
+    ) !== null;
+  }
+
+  onUpgradeTower(upgradeId: UpgradeId, event: MouseEvent): void {
+    this.upgradeTower.emit({ tower: this.tower(), upgradeId, times: upgradeTimes(event) });
+  }
+
+  /**
+   * Vergangene Spielzeit aus `researchElapsed` (10 Hz per `research:progress`),
+   * nicht aus `active.elapsed`: das zählt der ResearchManager ohne Signal hoch.
+   */
+  private elapsedOf(active: ActiveResearch): number {
+    return this.researchStore.researchElapsed().get(active.researchId) ?? 0;
+  }
+}

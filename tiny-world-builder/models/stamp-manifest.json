@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "generatedAt": "2026-06-21T04:17:54.920Z",
+  "source": "tools/model-stamps.js",
+  "models": [
+    {
+      "id": "people-cartoon-guy",
+      "label": "Cartoon Guy",
+      "path": "people/cartoon_guy.glb",
+      "url": "models/people/cartoon_guy.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 14044044,
+      "mtimeMs": 1780987943456
+    },
+    {
+      "id": "people-kozak-hytale",
+      "label": "Kozak Hytale",
+      "path": "people/kozak_hytale.glb",
+      "url": "models/people/kozak_hytale.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 71220,
+      "mtimeMs": 1780987943456
+    },
+    {
+      "id": "people-optimus",
+      "label": "Optimus",
+      "path": "people/optimus.glb",
+      "url": "models/people/optimus.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 47654360,
+      "mtimeMs": 1780987943546
+    },
+    {
+      "id": "people-robot",
+      "label": "Robot",
+      "path": "people/robot.glb",
+      "url": "models/people/robot.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 28458152,
+      "mtimeMs": 1780987943696
+    },
+    {
+      "id": "people-stepan-hytale",
+      "label": "Stepan Hytale",
+      "path": "people/stepan_hytale.glb",
+      "url": "models/people/stepan_hytale.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 81764,
+      "mtimeMs": 1780987943697
+    },
+    {
+      "id": "people-warrior-hytale",
+      "label": "Warrior Hytale",
+      "path": "people/warrior_hytale.glb",
+      "url": "models/people/warrior_hytale.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 53612,
+      "mtimeMs": 1780987943924
+    },
+    {
+      "id": "stunt-plane",
+      "label": "Stunt Plane",
+      "path": "stunt_plane.glb",
+      "url": "models/stunt_plane.glb",
+      "format": "glb",
+      "supported": true,
+      "size": 264956,
+      "mtimeMs": 1780560737292,
+      "sidecars": {
+        "textures": [
+          {
+            "path": "Polygon_Plane_Texture_01.png",
+            "url": "models/Polygon_Plane_Texture_01.png",
+            "name": "Polygon_Plane_Texture_01.png",
+            "format": "png",
+            "size": 234637
+          },
+          {
+            "path": "Polygon_Plane_Texture_02.png",
+            "url": "models/Polygon_Plane_Texture_02.png",
+            "name": "Polygon_Plane_Texture_02.png",
+            "format": "png",
+            "size": 224380
+          },
+          {
+            "path": "Polygon_Plane_Texture_03.png",
+            "url": "models/Polygon_Plane_Texture_03.png",
+            "name": "Polygon_Plane_Texture_03.png",
+            "format": "png",
+            "size": 223156
+          }
+        ]
+      }
+    }
+  ]
+}

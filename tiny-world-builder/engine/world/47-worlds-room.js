@@ -1,0 +1,2803 @@
+  // Tinyverse — published-world room client. Connects to the authoritative
+  // PartyKit room ('world-<slug>'), keeps the local mirror of you / peers / nodes /
+  // animals, renders a 2D minimap, and turns input into server-validated move /
+  // harvest requests. The 3D scene shows the world's tiles via applyState().
+  //
+  // Exposes window.__tinyworldWorlds.enterRoom/leaveRoom/harvest + a tiny event
+  // emitter the HUD (48) subscribes to. IIFE-wrapped; no globals leak.
+  (function wireWorldsRoom() {
+    'use strict';
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  
+    const WS = (window.__tinyworldWorlds = window.__tinyworldWorlds || {});
+    function T(k, p) { return typeof window.t === 'function' ? window.t(k, p) : k; }
+    function toast(m) { if (typeof twToast === 'function') twToast(m); else console.log('[worlds]', m); }
+    // Forward a presence/chat event to the notifications module (68). Null-guarded so
+    // the room degrades silently if that module is absent.
+    function notify(kind, name, text) {
+      try {
+        if (window.twNotify && typeof window.twNotify.event === 'function') {
+          window.twNotify.event({ kind: kind, name: name, text: text });
+        }
+      } catch (_) { /* notifications are non-critical */ }
+    }
+    function isBotPeer(p) {
+      if (!p) return false;
+      return String(p.profileId || '').indexOf('bot:') === 0 || String(p.id || '').indexOf('bot-') === 0;
+    }
+    function peerLabel(p) {
+      return (p && p.name != null && String(p.name).trim()) ? String(p.name) : '';
+    }
+
+    // ---- chat emotes extracted to 47a-worlds-emotes.js ----
+
+    // ---- tiny event emitter ----
+    const listeners = {};
+    function on(ev, cb) { (listeners[ev] = listeners[ev] || []).push(cb); }
+    function emit(ev, data) { (listeners[ev] || []).forEach(cb => { try { cb(data); } catch (_) {} }); }
+    WS.on = on;
+    // Expose emit so sibling modules (e.g. 64-lobby-chat-bridge) can inject
+    // synthetic events like a bridged 'chat' line into the same render path.
+    WS.__emit = emit;
+  WS.getInterestPeers = () => Array.from(peers.values());
+
+// ---- real GOLD via mmo-core backend (Phase 2 starter) ----
+  let currentGold = { available: 0, totalAllowance: 0, tier: "none" };
+  let tokenHeld = 22000000; // demo 22m $TINYWORLD holdings (abbrev for UI)
+
+  async function refreshGold() {
+    try {
+      const res = await fetch("/api/me/gold", { credentials: "include" });
+      if (res.ok) {
+        const g = await res.json();
+        currentGold = g;
+        if (g.tinyworldHeld != null) { tokenHeld = Number(g.tinyworldHeld) || tokenHeld; emit("token", tokenHeld); }
+        emit("gold", currentGold);
+        if (window.__tinyworldDebug) console.log("[worlds] GOLD allowance:", currentGold.available, "tier:", currentGold.tier);
+      }
+    } catch (e) { /* offline or no auth — normal in pure static */ }
+  }
+  WS.getGold = () => currentGold;
+  WS.getTokenHeld = () => tokenHeld;
+  WS.refreshGold = refreshGold;
+  WS.setTokenHeld = (n) => { tokenHeld = n || 0; emit("token", tokenHeld); };
+
+  
+    // ---- room state ----
+    let socket = null;
+    let world = null;
+    let token = '';
+    let role = 'play';
+    const WORLD_SELECTION_GATE_DEST = '__world-picker';
+    const ACTIVE_TINYVERSE_LS = 'tinyworld:worlds.activeTinyverse.v1';
+    let gridSize = 8;
+    let taxPercent = null;
+    
+function computeTaxCooldown(lastTaxChangeAt) {
+  const COOLDOWN = 24 * 60 * 60 * 1000;
+  if (!lastTaxChangeAt) return { canChange: true, remainingMs: 0 };
+  const last = new Date(lastTaxChangeAt).getTime();
+  const now = Date.now();
+  const rem = Math.max(0, COOLDOWN - (now - last));
+  return { canChange: rem === 0, remainingMs: rem };
+}
+
+    let taxCooldown = null;
+    let restoreAmbientCrowdVisible = null;
+    let you = { x: 0, z: 0, hearts: 10, role: 'play' };
+    let myId = '';
+    const peers = new Map();
+    // Notification bookkeeping (68-notifications consumes the events): track which
+    // peer ids we've already seen so implicit joins fire exactly once, and remember
+    // names so a 'leave' can still be labelled after the peer is gone. `peersSeeded`
+    // is set by the initial world.state so entering a populated world stays silent.
+    const knownPeerIds = new Set();
+    const peerNames = new Map();
+    let peersSeeded = false;
+    let nodes = {};
+    let animals = [];
+    let cells = [];           // tile cells for minimap (from world.data)
+    let connected = false;
+    // Flight ghost state: keyed by peer id, tracks peer planes rendered in
+    // the world-room scene under avatarParent(). Populated by incoming 'entity'
+    // messages relayed through the world-room onWorldMessage entity branch.
+    const flightGhosts = new Map();
+    // Track which peers are currently flying so the roster can badge them.
+    const flyingById = new Set();
+    // Per-room multiplayer stub saved/restored on enter/leave so 34-flight-sim.js
+    // can call broadcastFlight without knowing which mode it's in.
+    let _prevMultiplayer = null;
+    // True only while OUR world-room stub owns window.__tinyworldMultiplayer. Gates the
+    // restore in leaveRoom() so the top-of-enterRoom() reset call can't null out the
+    // builder's live 38 instance before we've saved it (would kill builder flight+combat).
+    let _mpInstalled = false;
+    // Roster DOM element (mirrors the .multiplayer-roster pill from 38-multiplayer-partykit).
+    let rosterEl = null;
+    // Throttle flight broadcasts to ~15/s (same cadence as 38-multiplayer-partykit).
+    let _lastFlightSent = 0;
+    let selectionGateArrivalPending = false;
+    let selectionGateArrivalTimer = null;
+
+    function rememberActiveTinyverseSession(slug) {
+      const s = String(slug || '').trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(s) || s === 'tinyverse-nexus') return;
+      try { localStorage.setItem(ACTIVE_TINYVERSE_LS, JSON.stringify({ slug: s, ts: Date.now() })); } catch (_) {}
+    }
+    function clearActiveTinyverseSession() {
+      try { localStorage.removeItem(ACTIVE_TINYVERSE_LS); } catch (_) {}
+    }
+
+    function host() {
+      const explicit = window.__TINY_WORLD_PARTYKIT_HOST__ || '';
+      const h = String(explicit || '').trim().replace(/\/+$/, '');
+      if (h) return h.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'ws://localhost:1999';
+      return 'wss://tinyworld-shared-building.jasonkneen.partykit.dev';
+    }
+    function connToken() {
+      try {
+        let v = localStorage.getItem('tinyworld:multiplayer:client-id');
+        if (!v) { v = 'u_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('tinyworld:multiplayer:client-id', v); }
+        return v;
+      } catch (_) { return 'u_' + Math.random().toString(36).slice(2, 10); }
+    }
+    // Stable per-device guest label (e.g. "Guest 3F9A") so two not-logged-in
+    // visitors are never both the literal "Player". Mirrors 38-multiplayer-partykit's
+    // localName(): reads the SAME 'tinyworld:multiplayer:client-id' key via connToken,
+    // so the builder and tinyverse show the same guest name on a given device.
+    function guestName() {
+      try { return 'Guest ' + connToken().slice(-4).toUpperCase(); }
+      catch (_) { return 'Guest'; }
+    }
+    function playerName() {
+      try {
+        const account = window.__tinyworldAccount || null;
+        const profile = account && typeof account.profile === 'function' ? account.profile() : null;
+        const profileName = profile && (profile.displayName || profile.username);
+        const named = (profileName || localStorage.getItem('tinyworld:multiplayer:name') || '').slice(0, 48);
+        return named || guestName();
+      } catch (_) { return guestName(); }
+    }
+    const PLAYER_COLORS = ['#e05c5c','#e08c3c','#d4c040','#5ac44e','#40b8d0','#5a78e0','#b060e0','#e060a0'];
+    function playerColor() {
+      try {
+        let c = localStorage.getItem('tinyworld:multiplayer:color');
+        if (!c || !/^#[0-9a-f]{6}$/i.test(c)) {
+          c = PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
+          localStorage.setItem('tinyworld:multiplayer:color', c);
+        }
+        return c;
+      } catch (_) { return '#5a78e0'; }
+    }
+  
+    // When the account profile loads (async, possibly after world join), refresh our
+    // presence so peers see the real display name rather than the 'Player' fallback.
+    // 30-ui-boot-wiring.js fires 'tinyworld:profile-loaded' on the document after
+    // each successful profile GET or PUT, so we don't need a reference to the modal
+    // closure's callback list — we just listen on the document.
+    document.addEventListener('tinyworld:profile-loaded', function () {
+      if (!connected) return;
+      send({ type: 'presence', presence: { name: playerName(), color: playerColor() } });
+      // Update our own name label immediately.
+      if (typeof selfEnt !== 'undefined' && selfEnt) {
+        if (typeof ensureNameLabel === 'function') ensureNameLabel(selfEnt, playerName(), playerColor());
+      }
+    });
+
+    function send(obj) { if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
+
+    // Compact [x,z,terrain,kind?] tuples — small enough for the join envelope and
+    // exactly what the server's deriveWorldState() consumes to seed nodes.
+    function compactCells(data) {
+      const out = [];
+      const cs = (data && Array.isArray(data.cells)) ? data.cells : [];
+      for (const c of cs) {
+        const x = Array.isArray(c) ? c[0] : c.x, z = Array.isArray(c) ? c[1] : c.z;
+        if (x == null || z == null) continue;
+        const ter = (Array.isArray(c) ? c[2] : c.terrain) || 'grass';
+        const k = Array.isArray(c) ? c[3] : c.kind;
+        out.push(k ? [x, z, ter, k] : [x, z, ter]);
+        if (out.length >= 1500) break;
+      }
+      return out;
+    }
+
+    let stateTimer = null, sawWorldState = false;
+    let prevPlayMode = null;
+    function enterRoom(w, joinToken, joinRole) {
+      leaveRoom();
+      // Tear down the home-builder first/third-person walk avatar if it's active.
+      // It lives in the shared worldGroup, so leaving it up would render a second
+      // copy of you alongside the room's networked avatar ("two of me").
+      try { if (typeof window.__tinyworldExitWalkMode === 'function') window.__tinyworldExitWalkMode(); } catch (_) {}
+      world = w; token = joinToken || ''; role = joinRole || 'play';
+      try { if (typeof WS.seedDemoResources === 'function') WS.seedDemoResources(w); } catch (_) {}
+      try { window.__tinyworldInWorldRoom = true; } catch (_) {}   // relax camera pan clamp (02) for island exploration
+      try { window.__tinyworldCurrentWorldSlug = (w && w.slug) || null; } catch (_) {}
+      try { window.__tinyworldIsHubWorld = (w && w.slug === 'tinyverse-nexus'); } catch (_) {}
+      rememberActiveTinyverseSession(w && w.slug);
+      selectionGateArrivalPending = true;
+      // Resolve the SAME grid size the terrain/board uses (applyState -> coerceGridSize),
+      // so movement clamp, stargate cell, and worldRoomTilePos can't diverge from the
+      // rendered ground. coerceGridSize snaps off-list sizes (e.g. 18, 22) to a legal
+      // option; falling back to the raw value here would re-introduce the mismatch.
+      {
+        const raw = (w.data && w.data.gridSize) || w.gridSize || 8;
+        gridSize = (typeof coerceGridSize === 'function')
+          ? coerceGridSize(raw, 8)
+          : Math.max(1, Math.round(Number(raw)));
+      }
+      taxPercent = w.taxPercent != null ? w.taxPercent : null;
+      taxCooldown = w.taxCooldown || (w.lastTaxChange ? computeTaxCooldown(w.lastTaxChange) : null);
+      cells = w.data && Array.isArray(w.data.cells) ? w.data.cells : [];
+      try { window.__twStargateAnimated = []; } catch (_) {}   // reset portal anim registry for the new world
+      rebuildBlocked();
+      if (w.data && typeof applyState === 'function') {
+        // The lobby/demo world is static (visitors don't edit it), so bake its
+        // ground tiles into merged meshes once it finishes rendering — big draw-call
+        // cut on the larger 20x20 board. onDone fires after tiles paint + settle.
+        const bakeOnDone = (w.slug === 'tidewater-bay')
+          ? { onDone: () => { try { if (typeof window.__tinyworldSetTerrainBakeForced === 'function') window.__tinyworldSetTerrainBakeForced(true); } catch (_) {} } }
+          : undefined;
+        try { applyState(w.data, bakeOnDone); } catch (_) {}
+      }
+      // One map: hide the builder's own minimap, and lock out builder tools.
+      hideBaseMinimap(true);
+      setAmbientCrowdVisibleForRoom(false);
+      if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(true);
+      // Tilt-shift reads as a toy-diorama effect; turn it off for the immersive
+      // tinyverse view. Remember prior state so leaving restores the build setting.
+      try { window.__twTiltWasOff = document.body.classList.contains('tilt-blur-off'); document.body.classList.add('tilt-blur-off'); } catch (_) {}
+      // Force play mode so all edit gates block building while in a tinyverse world.
+      const mode = window.__tinyworldMode;
+      if (mode) {
+        prevPlayMode = mode.isPlay();
+        if (typeof mode.setPlayTemporary === 'function') mode.setPlayTemporary();
+        else mode.setPlay();
+      }
+      // Install a compatible broadcastFlight / flightGhosts stub so 34-flight-sim.js
+      // can call broadcastFlight() while the player is in a tinyverse world room.
+      // Save and restore the previous value so 38-multiplayer-partykit stays intact
+      // if it was already installed (e.g. the player is also in a shared build room).
+      _prevMultiplayer = window.__tinyworldMultiplayer || null;
+      window.__tinyworldMultiplayer = {
+        broadcastFlight: _broadcastFlightWorld,
+        // Mirror 38's shape: include the peer id (map KEY) and filter to visible ghosts,
+        // or 41-flight-combat targets every ghost as id:undefined (hit routing + speed
+        // tracking break, and stale/hidden ghosts get targeted).
+        flightGhosts: () => { const out = []; flightGhosts.forEach((ghost, id) => { if (ghost && ghost.group && ghost.group.visible) out.push({ id, group: ghost.group, name: peerNames.get(id) || 'Pilot' }); }); return out; },
+        canInteract: () => connected,
+        roomId: () => 'world-' + (w ? w.slug : ''),
+        send,
+      };
+      _mpInstalled = true;
+      emit('enter', { world: w, role });
+      const roomId = 'world-' + w.slug;
+      const url = host() + '/party/' + encodeURIComponent(roomId) + '?_pk=' + encodeURIComponent(connToken());
+      try { socket = new WebSocket(url); } catch (_) { toast(T('worlds.error')); return; }
+      sawWorldState = false;
+      socket.addEventListener('open', () => {
+        connected = true;
+        send({
+          type: 'world.join', token, worldId: w.id, name: playerName(), color: playerColor(),
+          role, profileId: (WS.myProfileId != null ? WS.myProfileId : null),
+          gridSize, cells: compactCells(w.data), taxPercent: w.taxPercent, ownerProfileId: w.ownerProfileId, lastTaxChange: w.taxCooldown ? w.taxCooldown.lastChange : (w.lastTaxChange || null),
+          avatar: getSelfAvatarDescriptor(), // networked voxel identity (server validates via cleanAvatar)
+        });
+        emit('status', { connected: true });
+        // If the room never answers with world.state, it's an un-upgraded server.
+        if (stateTimer) clearTimeout(stateTimer);
+        stateTimer = setTimeout(() => { if (!sawWorldState) { toast(T('worlds.serverOld')); WS.leaveRoom(); } }, 4000);
+      });
+      socket.addEventListener('close', () => {
+        connected = false; emit('status', { connected: false });
+        // A passive close (network drop / server restart) sends no entity active:false,
+        // so clear peer flight ghosts here or they freeze in the scene for the session.
+        _clearFlightGhosts(); flyingById.clear();
+      });
+      socket.addEventListener('message', (e) => { const d = safeParse(e.data); if (d) onMessage(d); });
+      bindInput();
+      showMinimap();
+      startAvatars();
+    }
+    WS.enterRoom = enterRoom;
+  
+    function leaveRoom() {
+      selectionGateArrivalPending = false;
+      if (selectionGateArrivalTimer) { clearTimeout(selectionGateArrivalTimer); selectionGateArrivalTimer = null; }
+      cancelWalk();
+      stopAvatars();
+      try { window.__tinyworldInWorldRoom = false; } catch (_) {}   // restore tight board pin for the home builder
+      // Turn off the static terrain bake and restore live tiles before the world
+      // tears down, so the next world / home builder never inherits a stale merged
+      // mesh or a "baked" cell set that blocks re-baking.
+      try {
+        if (typeof window.__tinyworldSetTerrainBakeForced === 'function') window.__tinyworldSetTerrainBakeForced(false);
+        if (typeof window.__tinyworldUnbakeTerrain === 'function') window.__tinyworldUnbakeTerrain();
+      } catch (_) {}
+      // If the player is currently flying, exit flight cleanly before closing the
+      // socket so the server and peers get the active:false entity message.
+      try { if (window.__flightActive && typeof window.exitFlight === 'function') window.exitFlight(); } catch (_) {}
+      _selfFlying = false;
+      // Restore previous __tinyworldMultiplayer (may be from 38-multiplayer-partykit),
+      // but ONLY if our stub is the one currently installed. enterRoom() calls leaveRoom()
+      // first as a reset; without this guard that call would null the builder's live 38
+      // instance before it was ever saved, silently killing builder flight + air combat.
+      if (_mpInstalled) { window.__tinyworldMultiplayer = _prevMultiplayer; _prevMultiplayer = null; _mpInstalled = false; }
+      // Clear all flight ghosts from the scene.
+      _clearFlightGhosts();
+      flyingById.clear();
+      // Hide and clean up the tinyverse roster pill.
+      if (rosterEl) { rosterEl.classList.remove('visible'); }
+      if (socket) { try { socket.close(); } catch (_) {} socket = null; }
+      connected = false; peers.clear(); nodes = {}; animals = [];
+      knownPeerIds.clear(); peerNames.clear(); peersSeeded = false;
+      unbindInput(); hideMinimap();
+      setAmbientCrowdVisibleForRoom(true);
+      hideBaseMinimap(false);
+      if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(false);
+      try { if (!window.__twTiltWasOff) document.body.classList.remove('tilt-blur-off'); } catch (_) {}
+      // Leaving a multiplayer room should restore normal building chrome. Room play
+      // mode is temporary and must not trap the app in persisted Play after refresh.
+      const mode = window.__tinyworldMode;
+      if (mode && typeof mode.setBuild === 'function') mode.setBuild();
+      prevPlayMode = null;
+      emit('leave', {});
+    }
+
+    // Hide/restore the builder's own minimap so there's a single in-world map.
+    let baseMapEl = null, baseMapPrevDisplay = '';
+    function hideBaseMinimap(hide) {
+      baseMapEl = baseMapEl || document.getElementById('minimap-wrap');
+      if (!baseMapEl) return;
+      if (hide) { baseMapPrevDisplay = baseMapEl.style.display; baseMapEl.style.display = 'none'; }
+      else { baseMapEl.style.display = baseMapPrevDisplay || ''; }
+    }
+
+    function setAmbientCrowdVisibleForRoom(visible) {
+      const api = window.__tinyworldCrowd;
+      if (!api || typeof api.setRuntimeVisible !== 'function') return;
+      if (!visible) {
+        if (restoreAmbientCrowdVisible === null) {
+          restoreAmbientCrowdVisible = typeof api.runtimeVisible === 'function' ? api.runtimeVisible() : true;
+        }
+        api.setRuntimeVisible(false);
+        return;
+      }
+      if (restoreAmbientCrowdVisible !== null) {
+        api.setRuntimeVisible(restoreAmbientCrowdVisible);
+        restoreAmbientCrowdVisible = null;
+      }
+    }
+    WS.leaveRoom = function () {
+      leaveRoom();
+      clearActiveTinyverseSession();
+      if (typeof WS.restoreFreeform === 'function') WS.restoreFreeform();
+    };
+    WS.exitToWorldPicker = function () {
+      leaveRoom();
+      clearActiveTinyverseSession();
+      if (typeof WS.restoreFreeform === 'function') WS.restoreFreeform();
+      setTimeout(() => {
+        try { if (typeof WS.open === 'function') WS.open(); } catch (_) {}
+      }, 0);
+    };
+    WS.getSelfEnt = () => selfEnt;
+  
+    function safeParse(s) { try { return JSON.parse(s); } catch (_) { return null; } }
+  
+    function onMessage(d) {
+      switch (d.type) {
+        case 'welcome':
+          myId = d.id || myId;
+          if (typeof d.role === 'string') role = d.role;
+          emit('status', { connected: true, role });
+          // An upgraded world server flags the welcome; an old collab server does
+          // not — bail out so the minimap/HUD don't linger over the builder.
+          if (d.world !== true) { sawWorldState = true; toast(T('worlds.serverOld')); WS.leaveRoom(); }
+          break;
+        case 'world.state':
+          sawWorldState = true;
+          // Snap the server's broadcast grid to the same legal size the terrain
+          // renders at (a warm PartyKit room cached before the cap fix can still
+          // push a raw off-list size like 18); otherwise movement/gate diverge
+          // from the board. coerceGridSize lives in 01-render-core's shared scope.
+          if (d.gridSize) gridSize = (typeof coerceGridSize === 'function') ? coerceGridSize(d.gridSize, gridSize) : (d.gridSize || gridSize);
+          taxPercent = d.taxPercent != null ? d.taxPercent : taxPercent;
+          you = Object.assign(you, d.you || {});
+          if (typeof you.role === 'string') role = you.role;
+          nodes = d.nodes || {}; animals = d.animals || [];
+          peers.clear(); knownPeerIds.clear(); peerNames.clear();
+          (d.peers || []).forEach(p => { if (p.id && !isSelfPresence(p)) { p._t = Date.now(); peers.set(p.id, p); knownPeerIds.add(p.id); peerNames.set(p.id, peerLabel(p)); } });
+          peersSeeded = true;  // peers already here when we arrived are not "joins"
+          emit('state', snapshot()); drawMinimap(); updateSelfAvatar(); scheduleSelectionGateArrival(); updatePeerAvatars(); break;
+        case 'presence': {
+          const p = d.presence; if (!p || !p.id) break;
+          if (isSelfPresence(p)) {
+            if (p.id !== myId) {
+              const old = peerEnts.get(p.id);
+              if (old) { disposeEntity(old); peerEnts.delete(p.id); }
+              peers.delete(p.id); knownPeerIds.delete(p.id); peerNames.delete(p.id);
+            }
+            // Our own presence echo carries authoritative grid state, except while
+            // surface roam owns the avatar's free-world position.
+            if (!selfEnt || !selfEnt._srActive) {
+              if (p.cursor) { you.x = p.cursor.x; you.z = p.cursor.z; }
+              if (p.hearts != null) you.hearts = p.hearts;
+              emit('you', you); updateSelfAvatar();
+            }
+          } else {
+            p._t = Date.now(); peers.set(p.id, p);
+            // Joins are implicit (no join message) — a peer id we haven't seen, once
+            // seeded, is a fresh arrival. Repeated presence (movement) is ignored.
+            if (peersSeeded && !knownPeerIds.has(p.id)) notify(isBotPeer(p) ? 'bot-join' : 'join', peerLabel(p), null);
+            knownPeerIds.add(p.id); peerNames.set(p.id, peerLabel(p));
+            emit('peers', Array.from(peers.values())); updatePeerAvatars();
+          }
+          drawMinimap(); break;
+        }
+        case 'leave': {
+          if (peersSeeded && knownPeerIds.has(d.id)) notify('leave', peerNames.get(d.id) || '', null);
+          peers.delete(d.id); knownPeerIds.delete(d.id); peerNames.delete(d.id);
+          // A departing/kicked peer who was flying sends no entity active:false, so drop
+          // their flight ghost + flying flag here or it lingers frozen mid-air.
+          if (flyingById.delete(d.id)) { _removeFlightGhost(d.id); emit('flight', {}); }
+          emit('peers', Array.from(peers.values())); updatePeerAvatars(); drawMinimap(); break;
+        }
+        case 'node.update': if (d.node && d.node.id) { if (d.node.gone) delete nodes[d.node.id]; else nodes[d.node.id] = d.node; emit('nodes', nodes); drawMinimap(); } break;
+        case 'animal.spawn': if (d.animal) { animals.push(d.animal); drawMinimap(); } break;
+        case 'animal.remove': animals = animals.filter(a => a.id !== d.id); drawMinimap(); break;
+        case 'harvest.progress': if (d.hearts != null) { you.hearts = d.hearts; emit('you', you); } emit('progress', d); break;
+        case 'harvest.result':
+          if (d.hearts != null) { you.hearts = d.hearts; emit('you', you); }
+          emit('result', d);
+          // Track local resource counts for the HUD (server is the bank of record).
+          addLocalResource(d.resource, Math.floor((d.harvesterMilli || 0) / 1000));
+          break;
+        case 'harvest.deny': emit('deny', d); break;
+        case 'chat': emit('chat', d); if (d && d.text != null) { showChatBubble(d.id, d.text); if (d.id !== myId) notify('chat', peerNames.get(d.id) || d.name || '', d.text); } break;
+        case 'emote': {
+          if (!d.cmd || !EMOTES[d.cmd]) break;            // ignore unknown (defensive)
+          const ent = (d.id != null && d.id === myId) ? selfEnt : peerEnts.get(d.id);
+          applyEmote(ent, d.cmd);                          // drive the rig (self re-confirms)
+          const name = String(d.name || 'Player');
+          const line = name + ' ' + T('worlds.emote.' + d.cmd);   // e.g. "Jason waves"
+          showChatBubble(d.id, line);                      // floating bubble (existing path)
+          emit('chat', { id: d.id, name, text: line, action: true });  // chat-log entry
+          break;
+        }
+        case 'chat.typing': emit('typing', d); break;
+        case 'present': emit('present', d); break;   // lobby slide sync (58-lobby-presentation)
+        case 'entity':
+          // Live plane transform from a peer who is flying. Relayed through the
+          // world-room onWorldMessage entity branch (added to party/index.js).
+          _applyRemoteEntity(d);
+          break;
+        case 'combat.hit':
+          // Damage relayed to us as the victim (server delivers only to the
+          // target's socket, but keep the d.to guard as defense-in-depth to
+          // match 38-multiplayer-partykit's handling of the same message).
+          if (d.to === myId && window.__flightCombat && typeof window.__flightCombat.onIncomingHit === 'function') {
+            window.__flightCombat.onIncomingHit(d);
+          }
+          break;
+        default: break;
+      }
+    }
+  
+    // Local optimistic resource tally (whole units). The authoritative balance is
+    // in Postgres; this just gives the HUD immediate feedback.
+    const localRes = { fish: 0, meat: 0, plants: 0, ore: 0 };
+    function addLocalResource(r, n) { if (localRes[r] != null && n > 0) { localRes[r] += n; emit('resources', Object.assign({}, localRes)); } }
+    WS.getResources = () => Object.assign({}, localRes);
+
+    // ---- world-room flight ghost helpers --------------------------------
+    // Build a minimal placeholder mesh for a peer's ghost plane. Prefer the real
+    // model stamp if makeModelStamp is available; fall back to a small cone so
+    // the ghost is still visible before any GLB loads. No emoji, no PNG icons.
+    function _buildWorldFlightGhostModel() {
+      if (typeof makeModelStamp === 'function') {
+        try {
+          // Look for a flyable stamp in the world's cell data.
+          if (typeof isFlyableStampCell === 'function' && cells && Array.isArray(cells)) {
+            for (const c of cells) {
+              if (!c) continue;
+              const cell = Array.isArray(c) ? null : c;
+              if (cell && isFlyableStampCell(cell)) {
+                const sid = cell.appearance && cell.appearance.modelStampId;
+                if (sid) { try { const m = makeModelStamp(sid); if (m) return m; } catch (_) {} }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      // Fallback: translucent cone pointing forward. No emoji, no PNG.
+      if (typeof THREE === 'undefined') return null;
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.ConeGeometry(0.22, 0.9, 12),
+        new THREE.MeshBasicMaterial({ color: 0x9bb8e8, transparent: true, opacity: 0.85 })
+      );
+      body.rotation.x = -Math.PI / 2;
+      g.add(body);
+      return g;
+    }
+
+    // Sibling of ghost.group, not a child — ghost.group carries the plane's
+    // full flight rotation, and a child sprite would inherit that as a
+    // world-position offset, swinging sideways during rolls/loops instead of
+    // holding steady above the plane.
+    const FLIGHT_GHOST_LABEL_Y = 1.6;
+    function _flightGhostDisposeSprite(sprite) {
+      if (!sprite) return;
+      if (sprite.parent) sprite.parent.remove(sprite);
+      if (sprite.material) { if (sprite.material.map) sprite.material.map.dispose(); sprite.material.dispose(); }
+    }
+    function _updateFlightGhostLabel(ghost, id, px, py, pz) {
+      if (typeof WS._makeNameLabelSprite !== 'function') return;
+      const name = peerNames.get(id) || 'Pilot';
+      if (ghost.labelName !== name) {
+        _flightGhostDisposeSprite(ghost.label);
+        const p = peers.get(id);
+        const color = p && p.color;
+        ghost.label = WS._makeNameLabelSprite(name, color);
+        const par = avatarParent();
+        if (par) par.add(ghost.label);
+        ghost.labelName = name;
+      }
+      if (ghost.label) ghost.label.position.set(px, py + FLIGHT_GHOST_LABEL_Y, pz);
+    }
+
+    function _removeFlightGhost(id) {
+      const ghost = flightGhosts.get(id);
+      if (!ghost) return;
+      const par = avatarParent();
+      if (par && ghost.group && ghost.group.parent) par.remove(ghost.group);
+      if (ghost.group && typeof ghost.group.traverse === 'function') {
+        ghost.group.traverse(o => {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) {
+            if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+            else o.material.dispose();
+          }
+        });
+      }
+      _flightGhostDisposeSprite(ghost.label);
+      flightGhosts.delete(id);
+    }
+
+    function _clearFlightGhosts() {
+      flightGhosts.forEach((_, id) => _removeFlightGhost(id));
+    }
+
+    function _applyRemoteEntity(msg) {
+      if (!msg || msg.kind !== 'plane') return;
+      const id = String(msg.id || '');
+      if (!id) return;
+      // Never render our own ghost — the flyer sees the real plane.
+      if (id === myId) return;
+      if (msg.active === false) {
+        _removeFlightGhost(id);
+        if (flyingById.delete(id)) emit('flight', {});   // notify chat list of the change
+        _renderWorldRoster();
+        return;
+      }
+      const wasFlying = flyingById.has(id);
+      flyingById.add(id);
+      if (!wasFlying) emit('flight', {});                // new flyer -> refresh chat badges
+      let ghost = flightGhosts.get(id);
+      if (!ghost) {
+        const model = _buildWorldFlightGhostModel();
+        if (!model) return;
+        const group = new THREE.Group();
+        group.name = 'world-plane-' + id;
+        group.add(model);
+        const par = avatarParent();
+        if (par) par.add(group);
+        ghost = { group, label: null, labelName: '' };
+        flightGhosts.set(id, ghost);
+      }
+      const p = msg.p || {};
+      const r = msg.r || {};
+      const px = Number(p.x), py = Number(p.y), pz = Number(p.z);
+      if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz)) {
+        ghost.group.position.set(px, py, pz);
+      }
+      ghost.group.rotation.set(
+        Number.isFinite(Number(r.x)) ? Number(r.x) : 0,
+        Number.isFinite(Number(r.y)) ? Number(r.y) : 0,
+        Number.isFinite(Number(r.z)) ? Number(r.z) : 0,
+        'XYZ'
+      );
+      ghost.group.visible = true;
+      _updateFlightGhostLabel(ghost, id, ghost.group.position.x, ghost.group.position.y, ghost.group.position.z);
+      _renderWorldRoster();
+    }
+
+    // Broadcast own flight position to world room peers (~15/s when active).
+    // Called by 34-flight-sim.js via window.__tinyworldMultiplayer.broadcastFlight.
+    const _flBcPos = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
+    const _flBcEuler = typeof THREE !== 'undefined' ? new THREE.Euler() : null;
+    const _flBcQuat = typeof THREE !== 'undefined' ? new THREE.Quaternion() : null;
+    let _selfFlying = false;
+    function _broadcastFlightWorld(active) {
+      if (!connected) return;
+      if (active === false) {
+        if (_selfFlying) { _selfFlying = false; _renderWorldRoster(); emit('flight', {}); }
+        send({ type: 'entity', kind: 'plane', active: false, p: { x: 0, y: 0, z: 0 }, r: { x: 0, y: 0, z: 0 } });
+        return;
+      }
+      const jet = window.__flightJet;
+      if (!jet || !_flBcPos || !_flBcEuler || !_flBcQuat) return;
+      if (!_selfFlying) { _selfFlying = true; _renderWorldRoster(); emit('flight', {}); }
+      const now = Date.now();
+      if (now - _lastFlightSent < 66) return;   // ~15/s
+      _lastFlightSent = now;
+      // Capture in world space; convert into avatarParent() local frame so the ghost
+      // lands in the same content-local frame that peers render in (same as 38-multiplayer-partykit).
+      jet.getWorldPosition(_flBcPos);
+      const par = avatarParent();
+      if (par) par.worldToLocal(_flBcPos);
+      jet.getWorldQuaternion(_flBcQuat);
+      _flBcEuler.setFromQuaternion(_flBcQuat, 'XYZ');
+      send({
+        type: 'entity',
+        kind: 'plane',
+        active: true,
+        p: { x: _flBcPos.x, y: _flBcPos.y, z: _flBcPos.z },
+        r: { x: _flBcEuler.x, y: _flBcEuler.y, z: _flBcEuler.z },
+      });
+    }
+    // Lobby presentation: broadcast the current slide index to the room (58 listens
+    // for the server's 'present' echo to apply it on every client).
+    WS.present = function (slide) { send({ type: 'present', slide: slide | 0 }); };
+
+    // ---- tinyverse player roster (top-center pill) -----------------------
+    // Mirrors the .multiplayer-roster pill from 38-multiplayer-partykit but lives
+    // here for the world-room path. Shows self + peers with a plane SVG badge for
+    // anyone currently flying. No emoji, no PNG.
+    function _ensureWorldRoster() {
+      if (rosterEl) return rosterEl;
+      rosterEl = document.createElement('div');
+      rosterEl.className = 'multiplayer-roster tw-worlds-roster';
+      rosterEl.dataset.posType = 'neutral';
+      rosterEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(rosterEl);
+      return rosterEl;
+    }
+    function _planeIconSvg() {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '10');
+      svg.setAttribute('height', '10');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('class', 'mp-flight-badge-icon');
+      // Simple paper-plane / chevron path — no emoji.
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', 'M2 12 L22 4 L14 22 L11 14 Z M11 14 L22 4');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'currentColor');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
+      return svg;
+    }
+    function _avatarInitials(name) {
+      const t = String(name || '').trim();
+      if (!t) return '?';
+      const parts = t.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return t.slice(0, 2).toUpperCase();
+    }
+    function _renderWorldRoster() {
+      const el = _ensureWorldRoster();
+      el.textContent = '';
+      if (!connected) { el.classList.remove('visible'); return; }
+      const selfName = playerName();
+      const selfColor = playerColor();
+      const selfFlying = _selfFlying;
+      // Build list: self first, then up to 5 peers.
+      const people = [{ id: myId, name: selfName, color: selfColor, self: true, flying: selfFlying }];
+      peers.forEach((p, pid) => {
+        if (!p || pid === myId) return;
+        people.push({ id: pid, name: p.name || 'Player', color: p.color || '#5a78e0', self: false, flying: flyingById.has(pid) });
+      });
+      const MAX_SHOWN = 6;
+      const shown = people.slice(0, MAX_SHOWN);
+      const extra = people.length - MAX_SHOWN;
+      // Count pill
+      const cnt = document.createElement('span');
+      cnt.className = 'mp-count';
+      cnt.setAttribute('aria-label', people.length + ' player' + (people.length === 1 ? '' : 's'));
+      cnt.textContent = String(people.length);
+      el.appendChild(cnt);
+      // Avatar initials
+      const avs = document.createElement('span');
+      avs.className = 'mp-avatars';
+      for (const person of shown) {
+        const av = document.createElement('span');
+        av.className = 'mp-avatar' + (person.self ? ' mp-self' : '');
+        if (/^#[0-9a-f]{6}$/i.test(String(person.color || ''))) av.style.background = person.color;
+        av.textContent = _avatarInitials(person.name);
+        av.title = person.name + (person.flying ? ' (flying)' : '');
+        if (person.flying) {
+          // Plane badge clipped to bottom-right of the avatar circle.
+          const badge = document.createElement('span');
+          badge.className = 'mp-role-badge mp-flight-badge';
+          badge.setAttribute('aria-label', 'flying');
+          badge.appendChild(_planeIconSvg());
+          av.classList.add('is-flying');
+          av.appendChild(badge);
+        }
+        avs.appendChild(av);
+      }
+      if (extra > 0) {
+        const more = document.createElement('span');
+        more.className = 'mp-avatar mp-more';
+        more.textContent = '+' + extra;
+        avs.appendChild(more);
+      }
+      el.appendChild(avs);
+      el.classList.add('visible');
+    }
+    // Update the roster whenever peers change or we connect.
+    on('peers', () => _renderWorldRoster());
+    on('you', () => _renderWorldRoster());
+    on('enter', () => _renderWorldRoster());
+    // 'state' fires when the server sends world.state (always the first server
+    // message on join). At that point connected===true, so this is the earliest
+    // reliable moment to paint a solo player's pill.
+    on('state', () => _renderWorldRoster());
+    on('leave', () => { if (rosterEl) rosterEl.classList.remove('visible'); });
+    on('status', (d) => {
+      if (d && !d.connected && rosterEl) { rosterEl.classList.remove('visible'); return; }
+      // Reconnected — repaint so the pill reappears.
+      if (d && d.connected) _renderWorldRoster();
+    });
+
+    function myPresencePos() {
+      // The server tracks our position and broadcasts it in presence.cursor; mirror
+      // it from the latest 'you' we last saw plus presence echoes.
+      return { x: you.x, z: you.z };
+    }
+  
+    function snapshot() {
+      return { world, role, gridSize, taxPercent, you, peers: Array.from(peers.values()), nodes, animals };
+    }
+    WS.getState = snapshot;
+    WS.getMyId = () => myId;
+    WS.playerName = () => playerName();
+    WS.playerColor = () => playerColor();
+    // Expose flying state so chat/players panels can badge flying peers.
+    WS.isFlying = (id) => id === myId ? _selfFlying : flyingById.has(String(id || ''));
+    function sameProfileId(a, b) {
+      if (a == null || b == null) return false;
+      return String(a) === String(b);
+    }
+    function isSelfPresence(p) {
+      if (!p) return false;
+      if (p.id != null && p.id === myId) return true;
+      return sameProfileId(p.profileId, WS.myProfileId);
+    }
+  
+    // ---- movement + click-to-walk pathfinding ----
+    // Low ground cover, animals, plants, bridges, and stargates are walkable.
+    // Unknown object kinds are solid by default, matching the PartyKit validator.
+    const STANDABLE_OBJECT_KINDS = new Set([
+      'stargate', 'bridge', 'bush', 'flower', 'tuft',
+      'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower',
+      'cow', 'sheep', 'pig',
+    ]);
+    function isWorldRoomStandableKind(kind) {
+      return !kind || STANDABLE_OBJECT_KINDS.has(kind);
+    }
+    let blocked = new Set();   // 'x,z' cells you cannot stand on (mirrors server)
+    function rebuildBlocked() {
+      blocked = new Set();
+      for (const c of cells) {
+        const x = Array.isArray(c) ? c[0] : c.x, z = Array.isArray(c) ? c[1] : c.z;
+        if (x == null || z == null) continue;
+        const ter = Array.isArray(c) ? c[2] : c.terrain, k = Array.isArray(c) ? c[3] : c.kind;
+        if (ter === 'lava' || !isWorldRoomStandableKind(k)) blocked.add(x + ',' + z);   // water/stone walkable
+      }
+    }
+    function standable(x, z) { return x >= 0 && z >= 0 && x < gridSize && z < gridSize && !blocked.has(x + ',' + z); }
+
+    let lastStepAt = 0;
+    function step(dx, dz) {
+      if (selfEnt && (selfEnt._traveling || selfEnt._climb || selfEnt._srActive)) return;   // no grid move mid-portal/climb/surface-roam
+      const now = Date.now();
+      // Pace hold-to-move to the GLIDE, not a magic number. The avatar tweens one
+      // tile (1 unit) at VOXEL_WALK_SPEED u/s, so a tile takes ~1000/VOXEL_WALK_SPEED ms.
+      // A faster cadence lets the logical/network position outrun the tween; the gap
+      // accumulates until it crosses animVoxel's 2.5-unit snap threshold and the avatar
+      // teleports across tiles — visible to peers too (they render the same glide off
+      // our move stream). Gating on glide time keeps both self and peers smooth.
+      const STEP_MS = Math.ceil(1000 / VOXEL_WALK_SPEED);
+      if (now - lastStepAt < STEP_MS) return;
+      // The island edge is SOLID: a step past the rim clamps to a no-op below (you can't walk
+      // off and freefall). To descend to the surface, walk through a stargate (see tryEnterGate).
+      const nx = Math.max(0, Math.min(gridSize - 1, you.x + dx));   // cadence so key-repeat can't skip tiles
+      const nz = Math.max(0, Math.min(gridSize - 1, you.z + dz));
+      if (nx === you.x && nz === you.z) return;
+      if (!standable(nx, nz)) return;
+      lastStepAt = now;
+      you.x = nx; you.z = nz;       // optimistic; server presence will correct
+      send({ type: 'move', x: nx, z: nz });
+      emit('you', you); drawMinimap(); updateSelfAvatar();
+      tryEnterGate();              // walked onto a lobby gate cell? -> use the portal
+    }
+
+    // If the player has just stepped onto a lobby-gate cell, run the gate-to-gate travel
+    // on THEIR avatar (dissolve here, emerge at the paired gate) and teleport their grid
+    // cell to the destination. animVoxel cedes control while _traveling (see its guard).
+    
+    // Cross-island stargates now use a single center gate per island. The gate
+    // leads back to the picker rather than a Nexus hub; world entry emerges from
+    // the destination island's center gate.
+    function cellKindOf(c) { return Array.isArray(c) ? c[3] : (c && c.kind); }
+    function cellDestOf(c) { return Array.isArray(c) ? c[4] : (c && c.dest); }
+    function cellXOf(c) { return Array.isArray(c) ? c[0] : (c && c.x); }
+    function cellZOf(c) { return Array.isArray(c) ? c[1] : (c && c.z); }
+    function getCellAt(x, z) {
+      if (!Array.isArray(cells)) return null;
+      return cells.find(c => Math.round(Number(cellXOf(c))) === Math.round(x) && Math.round(Number(cellZOf(c))) === Math.round(z));
+    }
+    function selectionGateCell() {
+      if (!Array.isArray(cells)) return null;
+      return cells.find(c => {
+        if (cellKindOf(c) !== 'stargate') return false;
+        const dest = cellDestOf(c);
+        return !dest || dest === WORLD_SELECTION_GATE_DEST;
+      }) || null;
+    }
+    function renderedGateForCell(cell) {
+      const GT = window.__tinyworldGateTransit;
+      if (!GT || typeof GT.renderedGateAtCell !== 'function') return null;
+      return GT.renderedGateAtCell({ x: cellXOf(cell), z: cellZOf(cell) });
+    }
+    function openWorldPickerFromGate() {
+      try { selfEnt && (selfEnt._traveling = false); } catch (_) {}
+      try {
+        if (typeof WS.exitToWorldPicker === 'function') WS.exitToWorldPicker();
+        else if (typeof WS.leaveRoom === 'function') WS.leaveRoom();
+      } catch (_) {}
+    }
+    // The emerge animation (56's arriveFromGate) walks the VISUAL avatar a couple of feet
+    // out the gate's front, but the logical grid cell stays on the stargate tile. The moment
+    // travel ends, animVoxel tweens the avatar back toward that cell — so the player appears
+    // to arrive, turn around, and walk straight back into the portal. Fix: when arrival
+    // completes, settle the player's grid cell to a standable tile in the SAME direction they
+    // emerged (the gate's local +z), so the avatar drifts forward off the gate and stops
+    // there. Stepping off the gate cell also avoids instantly re-triggering its travel.
+    function settleAfterGateArrival(gateCell, gate) {
+      if (!selfEnt || !gateCell) return;
+      const gx = cellXOf(gateCell), gz = cellZOf(gateCell);
+      if (gx == null || gz == null) return;
+      // Emerge direction in world space = the gate opening's +z. worldRoomTilePos maps grid
+      // axes 1:1 onto world x/z, so snap that vector to the dominant cardinal to get the row
+      // or column the avatar walks out along.
+      let dx = 0, dz = 1;
+      try {
+        if (gate && gate.group && typeof THREE !== 'undefined') {
+          gate.group.updateWorldMatrix(true, false);
+          const fwd = new THREE.Vector3(0, 0, 1).transformDirection(gate.group.matrixWorld);
+          if (Math.abs(fwd.x) >= Math.abs(fwd.z)) { dx = Math.sign(fwd.x) || 1; dz = 0; }
+          else { dz = Math.sign(fwd.z) || 1; dx = 0; }
+        }
+      } catch (_) {}
+      // Prefer 2 cells out (≈ where the emerge animation ends) so the avatar steps FORWARD;
+      // fall back to 1 cell, then leave them on the gate if both are blocked.
+      let nx = gx, nz = gz;
+      for (const d of [2, 1]) {
+        const cx = gx + dx * d, cz = gz + dz * d;
+        if (standable(cx, cz)) { nx = cx; nz = cz; break; }
+      }
+      if (nx === gx && nz === gz) return;
+      you.x = nx; you.z = nz;
+      moveEntity(selfEnt, nx, nz);
+      try { send({ type: 'move', x: nx, z: nz }); } catch (_) {}
+      emit('you', you);
+      if (typeof drawMinimap === 'function') drawMinimap();
+    }
+    function scheduleSelectionGateArrival() {
+      if (!selectionGateArrivalPending || selectionGateArrivalTimer) return;
+      let tries = 0;
+      const attempt = () => {
+        selectionGateArrivalTimer = null;
+        if (!selectionGateArrivalPending) return;
+        tries += 1;
+        const gateCell = selectionGateCell();
+        const GT = window.__tinyworldGateTransit;
+        const gate = gateCell ? renderedGateForCell(gateCell) : null;
+        if (!gate || !selfEnt || !selfEnt.voxel || !GT || typeof GT.arriveFromGate !== 'function') {
+          if (tries < 14) selectionGateArrivalTimer = setTimeout(attempt, 140);
+          return;
+        }
+        selectionGateArrivalPending = false;
+        selfEnt._traveling = true;
+        const ok = GT.arriveFromGate(gate, selfEnt.voxel, {
+          onArrive: () => {
+            settleAfterGateArrival(gateCell, gate);
+            if (selfEnt) selfEnt._traveling = false;
+          },
+        });
+        if (!ok && selfEnt) selfEnt._traveling = false;
+      };
+      selectionGateArrivalTimer = setTimeout(attempt, 120);
+    }
+    function tryCrossIslandGate() {
+      if (!selfEnt || !selfEnt.voxel) return false;
+      const c = getCellAt(you.x, you.z);
+      if (!c || cellKindOf(c) !== 'stargate') return false;
+      const dest = cellDestOf(c);
+      if (dest && dest !== WORLD_SELECTION_GATE_DEST) return false;
+      const GT = window.__tinyworldGateTransit;
+      const gate = renderedGateForCell(c);
+      selfEnt._traveling = true;
+      if (GT && gate && typeof GT.departThroughGate === 'function') {
+        const ok = GT.departThroughGate(gate, selfEnt.voxel, { onDepart: openWorldPickerFromGate });
+        if (ok) return true;
+      }
+      openWorldPickerFromGate();
+      return true;
+    }
+
+function tryEnterGate() {
+  if (!selfEnt || !selfEnt.voxel || selfEnt._traveling) return;
+  if (tryCrossIslandGate()) return;
+      const GT = window.__tinyworldGateTransit;
+      if (!GT) return;
+      // Sky-edge stargate -> descend to the mainland (replaces walk-off-the-edge). J still works.
+      if (typeof GT.skyGateCell === 'function') {
+        const sc = GT.skyGateCell();
+        if (sc && sc.x === you.x && sc.z === you.z) {
+          const FD = window.__tinyworldFlyDown;
+          if (FD && !FD.isDown()) { if (GT.flashSky) GT.flashSky(); FD.descend(); }
+          return;
+        }
+      }
+      if (typeof GT.travelPlayer !== 'function') return;
+      if (typeof GT.gateAtCell === 'function' && !GT.gateAtCell({ x: you.x, z: you.z })) return;
+      selfEnt._traveling = true;
+      const ok = GT.travelPlayer({ x: you.x, z: you.z }, selfEnt.voxel, (destCell) => {
+        if (destCell) {
+          you.x = destCell.x; you.z = destCell.z;
+          moveEntity(selfEnt, destCell.x, destCell.z);   // settle avatar on the destination cell
+          try { send({ type: 'move', x: destCell.x, z: destCell.z }); } catch (_) {}
+          emit('you', you); if (typeof drawMinimap === 'function') drawMinimap();
+        }
+        selfEnt._traveling = false;
+      });
+      if (!ok) selfEnt._traveling = false;
+    }
+
+    // ---- skyfall (RETIRED): walk-off-edge freefall was disabled — islands
+    // have solid edges and descent is via stargate. All skyfall code removed.
+
+
+    // ---- surface roam: descended free movement on the poser surface --------
+    // Activated when fly-down (54) is fully descended and not in skyfall.
+    // Uses camera-relative WASD + drag-look (hold LMB to rotate camera yaw/pitch).
+    // Deactivates when J ascends back to the lobby. LOCAL-SELF only (no networked 3D pos yet).
+
+    const _srKeys = { up: false, down: false, left: false, right: false, fly: false, sink: false, sprint: false };
+    let _srActive = false;         // surface roam is live
+    let _srYaw = 0;                // camera yaw (radians, same convention as skyYaw)
+    let _srPitch = 0.35;           // look pitch (radians); positive = look DOWN (both cam modes)
+    let _srX = 0, _srZ = 0;       // avatar world position (3D)
+    let _srY = 0;                  // avatar Y (world units)
+    let _srVY = 0;                 // vertical velocity (flying mode)
+    let _srFlying = false;         // true while in air above surface
+    let _srHudEl = null;
+    // drag-look state
+    let _srDragActive = false;
+    let _srDragLX = 0, _srDragLY = 0;
+    // fly-down poll state
+    let _srWasDown = false;
+    // saved grid position to restore on ascend
+    let _srSavedYouX = 0, _srSavedYouZ = 0;
+    // camera zoom + first-person
+    let _srCamDist = 5.0;          // live chase-cam distance (wheel-adjustable)
+    let _srFirstPerson = false;    // true once zoomed all the way in
+    let _srEyeH = 1.6;             // eye height above feet (measured at activate)
+    let _srPrevFov = 28;           // persCam fov to restore when leaving first-person
+    let _srFovSaved = false;
+    const SR_FP_FOV = 75;          // natural first-person field of view (game default is a 28° telephoto)
+    // jump arc (visible hop while grounded)
+    let _srJumping = false;
+    let _srJumpT = 0;
+    let _srLastSpace = 0;          // ms timestamp of last Space press (double-tap -> toggle fly)
+    const _srEye = new THREE.Vector3();
+    const _srTmp = new THREE.Vector3();
+    // surface stargate (walk into it to ascend back up)
+    let _srGatePos = null;         // world XZ of the mainland gate (THREE.Vector3) or null
+    let _srGateArmed = false;      // true once you're clear of the gate (so emerging doesn't re-trigger)
+    let _srAscending = false;      // guard so we fire ascend() once
+    const SR_GATE_R = 2.2;         // trigger radius around the surface gate (world units)
+    const SR_GATE_SPAWN = 3.4;     // spawn this far in front (+z) of the gate
+
+    // speed tunables (world units/sec)
+    const SR_WALK = 3.2;
+    const SR_SPRINT = 6.4;
+    const SR_FLY_V = 4.0;       // vertical fly speed
+    const SR_CAM_UP = 2.4;      // chase-cam height above avatar
+    const SR_DRAG_SENS = 0.005; // mouse drag sensitivity (rad/px)
+    const SR_PITCH_MIN = 0.05;  // 3rd-person pitch floor (camera elevation)
+    const SR_PITCH_MAX = 1.4;
+    const SR_FP_PITCH_MIN = -1.30; // first-person: look up
+    const SR_FP_PITCH_MAX = 1.30;  // first-person: look down
+    const SR_CAM_MIN = 2.4;     // zoom-in limit (below this -> first person)
+    const SR_CAM_MAX = 14.0;    // zoom-out limit
+    const SR_FP_THRESH = 2.6;   // cam distance at/below which first-person engages
+    const SR_JUMP_DUR = 0.46;   // matches voxel-avatar JUMP_DUR
+    const SR_JUMP_H = 1.4;      // peak hop height (world units)
+    const SR_DBL_MS = 320;      // double-tap window for Space -> fly toggle
+
+    function _srActivate() {
+      if (!selfEnt || !selfEnt.sprite) return;
+      _srActive = true;
+      window.__tinyworldSurfaceRoamActive = true;
+      // Position the avatar at the surface centre (local 0,0 = under the island group)
+      const PS = window.__tinyworldPoserSurface;
+      const gx = (typeof target !== 'undefined' && target) ? target.x : 0;
+      const gz = (typeof target !== 'undefined' && target) ? target.z : 0;
+      // Place the mainland stargate (surface-local 0,0) and spawn just in FRONT of it (+z),
+      // as if you stepped out of it. Walk back into it to ascend (see _srStep).
+      _srGatePos = null; _srGateArmed = false; _srAscending = false;
+      const GT = window.__tinyworldGateTransit;
+      if (GT && typeof GT.ensureLandGate === 'function') {
+        try {
+          GT.ensureLandGate();
+          if (typeof GT.landGateWorldPos === 'function') _srGatePos = GT.landGateWorldPos();
+        } catch (_) {}
+      }
+      if (_srGatePos) {
+        _srX = _srGatePos.x; _srZ = _srGatePos.z + SR_GATE_SPAWN;
+        _srGateArmed = true;                 // spawned clear of the gate -> ready to re-enter
+      } else {
+        _srX = gx; _srZ = gz;
+      }
+      if (PS && typeof PS.sampleWorld === 'function') {
+        const s = PS.sampleWorld(_srX, _srZ);
+        _srY = s.walkWorldY;
+      } else {
+        _srY = -58; // fallback: approx ground level (DROP=60, slight isle height)
+      }
+      _srVY = 0; _srFlying = false;
+      _srYaw = 0; _srPitch = 0.35;
+      _srCamDist = 5.0; _srFirstPerson = false;
+      _srJumping = false; _srJumpT = 0; _srLastSpace = 0;
+      selfEnt._srActive = true;
+      selfEnt.sprite.position.set(_srX, _srY, _srZ);
+      selfEnt._yc = _srY; selfEnt.ty = _srY;
+      selfEnt.tx = _srX; selfEnt.tz = _srZ;
+      // measure rendered avatar height so the first-person eye sits near the head
+      try {
+        const box = new THREE.Box3().setFromObject(selfEnt.sprite);
+        const h = box.max.y - box.min.y;
+        if (isFinite(h) && h > 0.3) _srEyeH = Math.max(1.0, Math.min(2.6, h * 0.9));
+      } catch (_) {}
+      if (selfEnt.voxel) {
+        selfEnt.voxel.setBodyPitch(0);
+        selfEnt.voxel.setState('idle');
+        selfEnt.voxel.setHeading(_srYaw);
+        if (selfEnt.voxel.setFirstPerson) selfEnt.voxel.setFirstPerson(false);
+      }
+      document.body.classList.add('surface-roam-active');
+      _srShowHud();
+      _srBindInput();
+    }
+
+    function _srDeactivate() {
+      if (!_srActive) return;
+      _srActive = false;
+      window.__tinyworldSurfaceRoamActive = false;
+      if (selfEnt) {
+        selfEnt._srActive = false;
+        if (selfEnt.voxel) {
+          selfEnt.voxel.setBodyPitch(0); selfEnt.voxel.setState('idle');
+          if (selfEnt.voxel.setFirstPerson) selfEnt.voxel.setFirstPerson(false);
+        }
+      }
+      _srFirstPerson = false;
+      try { if (_srFovSaved && typeof persCam !== 'undefined' && persCam) { persCam.fov = _srPrevFov; persCam.updateProjectionMatrix(); } } catch (_) {}
+      _srFovSaved = false;
+      _srGatePos = null; _srGateArmed = false; _srAscending = false;
+      document.body.classList.remove('surface-roam-fp');
+      // restore grid position
+      you.x = _srSavedYouX; you.z = _srSavedYouZ;
+      if (selfEnt) moveEntity(selfEnt, you.x, you.z);
+      document.body.classList.remove('surface-roam-active');
+      _srHideHud();
+      _srUnbindInput();
+      // restore orbit camera
+      if (typeof updateCamera === 'function') updateCamera();
+    }
+
+    function _srStep(dt) {
+      if (!selfEnt || !selfEnt.sprite || !_srActive) return;
+      const PS = window.__tinyworldPoserSurface;
+      const speed = _srKeys.sprint ? SR_SPRINT : SR_WALK;
+      // camera-relative WASD. forward = dir from camera into the screen; right =
+      // cross(forward, up) = (-cosYaw, sinYaw) so D moves screen-RIGHT (was inverted).
+      const fx = Math.sin(_srYaw), fz = Math.cos(_srYaw);   // forward (into screen)
+      const rx = -Math.cos(_srYaw), rz = Math.sin(_srYaw);  // screen-right
+      let mx = 0, mz = 0;
+      if (_srKeys.up)    { mx += fx; mz += fz; }
+      if (_srKeys.down)  { mx -= fx; mz -= fz; }
+      if (_srKeys.right) { mx += rx; mz += rz; }
+      if (_srKeys.left)  { mx -= rx; mz -= rz; }
+      const md = Math.hypot(mx, mz);
+      if (md > 0) { mx /= md; mz /= md; }
+      _srX += mx * speed * dt;
+      _srZ += mz * speed * dt;
+
+      // clamp to sea-plane edge (~118 world units at SCALE=1.6, SURF_CLAMP=74)
+      const SEA_EDGE = 74 * 1.6;
+      const gx = (typeof target !== 'undefined' && target) ? target.x : 0;
+      const gz = (typeof target !== 'undefined' && target) ? target.z : 0;
+      _srX = Math.max(gx - SEA_EDGE, Math.min(gx + SEA_EDGE, _srX));
+      _srZ = Math.max(gz - SEA_EDGE, Math.min(gz + SEA_EDGE, _srZ));
+
+      // ---- stargate: walk into the mainland gate to ascend back to the sky island ----
+      if (_srGatePos && !_srAscending) {
+        const gd = Math.hypot(_srX - _srGatePos.x, _srZ - _srGatePos.z);
+        if (!_srGateArmed) {
+          if (gd > SR_GATE_R * 2) _srGateArmed = true;   // must clear the gate before it re-triggers
+        } else if (gd < SR_GATE_R) {
+          _srAscending = true;
+          const GT = window.__tinyworldGateTransit;
+          if (GT && GT.flashLand) GT.flashLand();
+          const FD = window.__tinyworldFlyDown;
+          if (FD && FD.isDown()) FD.ascend();
+        }
+      }
+
+      // sample ground height
+      let groundY = _srY;
+      if (PS && typeof PS.sampleWorld === 'function') {
+        const s = PS.sampleWorld(_srX, _srZ);
+        groundY = s.walkWorldY;
+      }
+
+      // ---- vertical: fly mode (double-tap Space) or a grounded jump arc ----
+      if (_srFlying) {
+        let vy = 0;
+        if (_srKeys.fly)  vy += SR_FLY_V;   // Space held = rise
+        if (_srKeys.sink) vy -= SR_FLY_V;   // C held = sink
+        _srY += vy * dt;
+        if (_srY < groundY) { _srY = groundY; _srFlying = false; }  // touched down -> walk
+        _srJumping = false;
+      } else if (_srJumping) {
+        _srJumpT += dt;
+        const t = _srJumpT / SR_JUMP_DUR;
+        if (t >= 1) { _srJumping = false; _srY = groundY; }
+        else { _srY = groundY + SR_JUMP_H * Math.sin(Math.PI * t); }  // parabolic hop
+      } else {
+        _srY = groundY;
+      }
+
+      // ---- avatar facing + pose ----
+      if (selfEnt.voxel) {
+        // first-person faces where you LOOK (arms align with view); 3rd-person faces travel
+        const heading = (md > 0) ? Math.atan2(mx, mz) : _srYaw;
+        selfEnt.voxel.setHeading(_srFirstPerson ? _srYaw : heading);
+        const cur = selfEnt.voxel.getState ? selfEnt.voxel.getState() : '';
+        // don't stomp one-shot swings/hops — the rig auto-reverts to idle when each ends
+        if (cur !== 'attack' && cur !== 'jump') {
+          selfEnt.voxel.setState(_srFlying ? 'rocket' : (md > 0 ? 'walk' : 'idle'));
+        }
+        selfEnt.voxel.update(dt);
+      }
+
+      selfEnt.sprite.position.set(_srX, _srY, _srZ);
+      selfEnt._yc = _srY; selfEnt.ty = _srY;
+      selfEnt.tx = _srX; selfEnt.tz = _srZ;
+    }
+
+    function _srUpdateCamera() {
+      if (!selfEnt || !selfEnt.sprite || typeof camera === 'undefined' || !camera) return;
+      const sp = selfEnt.sprite.position;
+      const sinY = Math.sin(_srYaw), cosY = Math.cos(_srYaw);
+      const sinP = Math.sin(_srPitch), cosP = Math.cos(_srPitch);
+      camera.up.set(0, 1, 0);
+      if (_srFirstPerson) {
+        // Through-the-eyes: camera at the head, looking along yaw/pitch (positive pitch = down).
+        const eyeY = sp.y + _srEyeH;
+        const dir = _srTmp.set(sinY * cosP, -sinP, cosY * cosP);
+        camera.position.set(sp.x + dir.x * 0.18, eyeY, sp.z + dir.z * 0.18);
+        camera.lookAt(camera.position.x + dir.x, eyeY + dir.y, camera.position.z + dir.z);
+      } else {
+        // Chase cam: behind + above the avatar; wheel adjusts _srCamDist.
+        const back = _srCamDist * cosP;
+        const up   = _srCamDist * sinP + SR_CAM_UP;
+        camera.position.set(sp.x - sinY * back, sp.y + up, sp.z - cosY * back);
+        camera.lookAt(sp.x, sp.y + 0.8, sp.z);
+      }
+      camera.updateMatrixWorld();
+      // keep orbit target in sync so landing doesn't jerk
+      if (typeof target !== 'undefined' && target) {
+        target.x = sp.x; target.z = sp.z; target.y = sp.y;
+      }
+    }
+
+    // Toggle first-person (zoomed all the way in). Hides the local avatar body and
+    // lets the pitch range cover looking up; restoring 3rd person re-clamps pitch.
+    function _srSetFirstPerson(on) {
+      if (on === _srFirstPerson) return;
+      _srFirstPerson = on;
+      if (selfEnt && selfEnt.voxel && selfEnt.voxel.setFirstPerson) selfEnt.voxel.setFirstPerson(on);
+      if (typeof document !== 'undefined') document.body.classList.toggle('surface-roam-fp', on);
+      // Widen the FOV: the game's persCam is a 28° telephoto (looks orthographic). At that FOV a
+      // first-person view is a claustrophobic zoom; ~75° reads as natural through-the-eyes.
+      try {
+        if (typeof persCam !== 'undefined' && persCam) {
+          if (on) { if (!_srFovSaved) { _srPrevFov = persCam.fov; _srFovSaved = true; } persCam.fov = SR_FP_FOV; }
+          else if (_srFovSaved) { persCam.fov = _srPrevFov; _srFovSaved = false; }
+          persCam.updateProjectionMatrix();
+        }
+      } catch (_) {}
+      if (!on) _srPitch = Math.max(SR_PITCH_MIN, Math.min(SR_PITCH_MAX, _srPitch));
+      _srUpdateHudText();
+    }
+
+    function _srShowHud() {
+      if (typeof document === 'undefined') return;
+      if (!_srHudEl) {
+        _srHudEl = document.createElement('div');
+        _srHudEl.id = 'tw-surface-roam-hud';
+        _srHudEl.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:96;' +
+          "font:700 12px 'Pixelify Sans',ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#c8f0c8;" +
+          'background:rgba(8,22,8,.78);padding:8px 16px;border-radius:8px;box-shadow:inset 0 0 0 2px #2b7a2b;text-transform:uppercase';
+        document.body.appendChild(_srHudEl);
+      }
+      _srHudEl.style.display = '';
+      _srUpdateHudText();
+    }
+
+    function _srUpdateHudText() {
+      if (!_srHudEl) return;
+      const view = _srFirstPerson ? '1ST-PERSON' : (_srFlying ? 'FLYING' : 'SURFACE');
+      _srHudEl.textContent = view + '  ·  WASD Move  ·  Drag Look  ·  Scroll Zoom  ·  '
+        + (_srFlying ? 'Space Up / C Down' : 'Space Jump (2× = Fly)')
+        + '  ·  F Swing  ·  V 1st-Person  ·  Gate or J to Ascend';
+    }
+
+    function _srHideHud() { if (_srHudEl) _srHudEl.style.display = 'none'; }
+
+    function _srOnKeyDown(e) {
+      if (!_srActive) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const k = e.key.toLowerCase();
+      let handled = true;
+      if (k === 'arrowup' || k === 'w')         _srKeys.up    = true;
+      else if (k === 'arrowdown' || k === 's')  _srKeys.down  = true;
+      else if (k === 'arrowleft' || k === 'a')  _srKeys.left  = true;
+      else if (k === 'arrowright' || k === 'd') _srKeys.right = true;
+      else if (k === ' ' || k === 'spacebar') {
+        _srKeys.fly = true;                       // held = rise while flying
+        if (!e.repeat) {
+          const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+          const dbl = (now - _srLastSpace) < SR_DBL_MS;
+          _srLastSpace = now;
+          if (dbl) {                              // double-tap Space toggles fly mode
+            _srFlying = !_srFlying; _srJumping = false; _srUpdateHudText();
+          } else if (!_srFlying) {
+            _srTryJump();                         // single tap on the ground = hop
+          }
+        }
+      }
+      else if (k === 'c')                        _srKeys.sink  = true;
+      else if (k === 'shift')                    _srKeys.sprint = true;
+      else if (k === 'f') { if (!e.repeat) _srTryAttack(); }  // swing / fight
+      else if (k === 'v') {                                   // toggle first-person view
+        if (!e.repeat) {
+          if (_srFirstPerson) { _srCamDist = 5.0; _srSetFirstPerson(false); }
+          else { _srCamDist = SR_CAM_MIN; _srSetFirstPerson(true); }
+        }
+      }
+      else handled = false;
+      if (handled) e.stopPropagation();
+    }
+
+    function _srTryJump() {
+      if (_srFlying || _srJumping) return;
+      const cur = (selfEnt && selfEnt.voxel && selfEnt.voxel.getState) ? selfEnt.voxel.getState() : '';
+      if (cur === 'jump' || cur === 'attack') return;
+      _srJumping = true; _srJumpT = 0;
+      if (selfEnt && selfEnt.voxel) selfEnt.voxel.setState('jump');
+    }
+
+    function _srTryAttack() {
+      const v = selfEnt && selfEnt.voxel;
+      if (!v) return;
+      const cur = v.getState ? v.getState() : '';
+      if (cur === 'attack' || cur === 'jump') return;
+      v.setState('attack');
+    }
+
+    function _srOnKeyUp(e) {
+      if (!_srActive) return;
+      const k = e.key.toLowerCase();
+      if (k === 'arrowup' || k === 'w')         _srKeys.up    = false;
+      else if (k === 'arrowdown' || k === 's')  _srKeys.down  = false;
+      else if (k === 'arrowleft' || k === 'a')  _srKeys.left  = false;
+      else if (k === 'arrowright' || k === 'd') _srKeys.right = false;
+      else if (k === ' ' || k === 'spacebar')   _srKeys.fly   = false;
+      else if (k === 'c')                        _srKeys.sink  = false;
+      else if (k === 'shift')                    _srKeys.sprint = false;
+    }
+
+    function _srOnPointerDown(e) {
+      if (!_srActive) return;
+      if (e.button !== 0) return;
+      _srDragActive = true;
+      _srDragLX = e.clientX; _srDragLY = e.clientY;
+      e.stopPropagation();
+    }
+
+    function _srOnPointerMove(e) {
+      if (!_srActive || !_srDragActive) return;
+      const dx = e.clientX - _srDragLX;
+      const dy = e.clientY - _srDragLY;
+      _srDragLX = e.clientX; _srDragLY = e.clientY;
+      _srYaw -= dx * SR_DRAG_SENS;
+      const lo = _srFirstPerson ? SR_FP_PITCH_MIN : SR_PITCH_MIN;
+      const hi = _srFirstPerson ? SR_FP_PITCH_MAX : SR_PITCH_MAX;
+      const _srPitchDir = window.__twInvertLookY ? -1 : 1;
+      _srPitch = Math.max(lo, Math.min(hi, _srPitch + dy * SR_DRAG_SENS * _srPitchDir));
+      e.stopPropagation();
+    }
+
+    function _srOnPointerUp(e) {
+      if (!_srActive) return;
+      _srDragActive = false;
+      e.stopPropagation();
+    }
+
+    function _srOnContextMenu(e) {
+      if (!_srActive) return;
+      e.stopPropagation(); e.preventDefault();
+    }
+
+    function _srOnWheel(e) {
+      if (!_srActive) return;
+      e.stopPropagation(); e.preventDefault();
+      // scroll up (deltaY<0) = zoom in; clamp; cross SR_FP_THRESH -> first person
+      const step = (e.deltaY > 0 ? 1 : -1) * 0.9;
+      _srCamDist = Math.max(SR_CAM_MIN, Math.min(SR_CAM_MAX, _srCamDist + step));
+      _srSetFirstPerson(_srCamDist <= SR_FP_THRESH);
+    }
+
+    function _srResetKeys() {
+      _srKeys.up = false; _srKeys.down = false; _srKeys.left = false;
+      _srKeys.right = false; _srKeys.fly = false; _srKeys.sink = false; _srKeys.sprint = false;
+      _srDragActive = false;
+    }
+
+    function _srBindInput() {
+      // capture-phase so surface keys intercept before regular 20/30 handlers
+      window.addEventListener('keydown', _srOnKeyDown, true);
+      window.addEventListener('keyup',   _srOnKeyUp,   true);
+      const el = (typeof renderer !== 'undefined' && renderer && renderer.domElement) ? renderer.domElement : document;
+      el.addEventListener('pointerdown',  _srOnPointerDown, true);
+      el.addEventListener('pointermove',  _srOnPointerMove, true);
+      el.addEventListener('pointerup',    _srOnPointerUp,   true);
+      el.addEventListener('contextmenu',  _srOnContextMenu, true);
+      el.addEventListener('wheel',        _srOnWheel, { capture: true, passive: false });
+    }
+
+    function _srUnbindInput() {
+      _srResetKeys();
+      window.removeEventListener('keydown', _srOnKeyDown, true);
+      window.removeEventListener('keyup',   _srOnKeyUp,   true);
+      const el = (typeof renderer !== 'undefined' && renderer && renderer.domElement) ? renderer.domElement : document;
+      el.removeEventListener('pointerdown',  _srOnPointerDown, true);
+      el.removeEventListener('pointermove',  _srOnPointerMove, true);
+      el.removeEventListener('pointerup',    _srOnPointerUp,   true);
+      el.removeEventListener('contextmenu',  _srOnContextMenu, true);
+      el.removeEventListener('wheel',        _srOnWheel, true);
+    }
+
+    // Poll fly-down state each avatar tick — called from startAvatars tick
+    function _srPollFlyDown() {
+      const FD = window.__tinyworldFlyDown;
+      if (!FD) return;
+      const st = FD.state();
+      const isNowDown = st.down && !st.transitioning;
+      const isNowUp   = !st.down && !st.transitioning;
+      if (isNowDown && !_srWasDown && !_srActive) {
+        // just finished descending — activate
+        _srSavedYouX = you.x; _srSavedYouZ = you.z;
+        _srActivate();
+        _srWasDown = true;
+      } else if (isNowUp && _srWasDown && _srActive) {
+        // just finished ascending — deactivate
+        _srDeactivate();
+        _srWasDown = false;
+      } else if (!st.down && !st.transitioning) {
+        _srWasDown = false;
+      }
+    }
+
+    // BFS over standable cells; returns the ordered list of steps to (tx,tz).
+    function findPath(tx, tz) {
+      if (!standable(tx, tz)) return null;
+      const start = you.x + ',' + you.z, goal = tx + ',' + tz;
+      if (start === goal) return [];
+      const q = [[you.x, you.z]]; const prev = new Map([[start, null]]); let head = 0;
+      while (head < q.length) {
+        const [x, z] = q[head++];
+        if (x + ',' + z === goal) break;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, nz = z + dz, nk = nx + ',' + nz;
+          if (prev.has(nk) || !standable(nx, nz)) continue;
+          prev.set(nk, x + ',' + z); q.push([nx, nz]);
+        }
+      }
+      if (!prev.has(goal)) return null;
+      const path = []; let cur = goal;
+      while (cur && cur !== start) { const [x, z] = cur.split(',').map(Number); path.push([x, z]); cur = prev.get(cur); }
+      return path.reverse();
+    }
+    let walkTimer = null;
+    function cancelWalk() { if (walkTimer) { clearTimeout(walkTimer); walkTimer = null; } }
+    function walkTo(tx, tz) {
+      cancelWalk();
+      const path = findPath(tx, tz);
+      if (!path || !path.length) return;
+      let i = 0;
+      const next = () => {
+        if (i >= path.length) { walkTimer = null; return; }
+        const [nx, nz] = path[i++];
+        you.x = nx; you.z = nz; send({ type: 'move', x: nx, z: nz }); emit('you', you); drawMinimap(); updateSelfAvatar();
+        tryEnterGate();
+        if (selfEnt && selfEnt._traveling) { walkTimer = null; return; }   // portal took over
+        walkTimer = setTimeout(next, 170);
+      };
+      next();
+    }
+
+    // ---- ladder climb (LOCAL-SELF only, v1) ----
+    // A maintenance rig (58-lobby-presentation) tags its ladder with an Object3D named
+    // 'climb-ladder' carrying userData = { baseY, topY, halfW, halfD, exitDX, exitDZ } in
+    // the lobby group's LOCAL frame. The lobby group and the avatars share avatarParent()
+    // (both resolve to worldGroup), but we still convert through world space so any future
+    // scale/offset is honoured: marker world pos -> avatarParent local = the avatar frame
+    // the rig's group.position lives in. Climbing is a LOCAL VISUAL mode (the server only
+    // tracks grid x,z, like crouch/sit) — peers don't see it (peer sync deferred, see report).
+    const CLIMB_SPEED = 1.4;          // world units/sec along the ladder (W up / S down)
+    const CLIMB_ENTER_MARGIN = 0.85;  // horizontal slack: halfW=0.35 is sub-tile (TILE=1), so
+    // the nearest standable tile centre can sit up to ~0.7 from the ladder centre; the margin
+    // must reach a real tile or enter never fires. reach = halfW+margin = 1.2 > tile pitch 1.0,
+    // so a tile geometrically lands in range. NOT yet measured against the live rig (room is
+    // role-gated) — the live check must confirm a STANDABLE tile actually sits within ~1 unit
+    // of the ladder base (the ladder is behind the lobby screen near the north edge; if the
+    // rig/screen tiles are blocked, the enter tile/margin may need adjustment).
+    const _v3a = (typeof THREE !== 'undefined') ? new THREE.Vector3() : null;
+    // Resolve the NEAREST ladder marker (if present + visible) into the avatar's frame.
+    // Multiple rigs can each tag a 'climb-ladder' Object3D (e.g. the lobby screen catwalk
+    // has one at each end); we pick whichever is closest to the self avatar in x/z so
+    // "press up" enters the ladder you're standing at. Returns the resolved descriptor
+    // { cx, cz, markerY, halfW, halfD, exitDX, exitDZ, _ud, _marker, _sc } or null.
+    function findLadder() {
+      const par = avatarParent();
+      if (!par || !_v3a) return null;
+      // collect all visible climb-ladder markers under the avatar parent
+      const markers = [];
+      par.traverse((o) => {
+        if (!o || o.name !== 'climb-ladder') return;
+        let p = o, vis = true;
+        while (p) { if (p.visible === false) { vis = false; break; } p = p.parent; }
+        if (vis) markers.push(o);
+      });
+      if (!markers.length) return null;
+      const sp = selfEnt && selfEnt.sprite ? selfEnt.sprite.position : null;
+      let marker = markers[0], bestD = Infinity;
+      for (const m of markers) {
+        m.getWorldPosition(_v3a);
+        par.worldToLocal(_v3a);
+        const d = sp ? ((_v3a.x - sp.x) ** 2 + (_v3a.z - sp.z) ** 2) : 0;
+        if (d < bestD) { bestD = d; marker = m; }
+      }
+      const ud = marker.userData || {};
+      marker.getWorldPosition(_v3a);
+      par.worldToLocal(_v3a);                          // marker origin -> avatar/group frame
+      // scale local userData distances by the marker's world scale so volume dims match.
+      const sc = marker.getWorldScale(new THREE.Vector3()).x || 1;
+      return {
+        cx: _v3a.x, cz: _v3a.z,                        // ladder centre in the avatar frame
+        markerY: _v3a.y,                               // marker origin (avatar-frame Y datum)
+        halfW: (typeof ud.halfW === 'number' ? ud.halfW : 0.35) * sc,
+        halfD: (typeof ud.halfD === 'number' ? ud.halfD : 0.35) * sc,
+        exitDX: (typeof ud.exitDX === 'number' ? ud.exitDX : 0) * sc,
+        exitDZ: (typeof ud.exitDZ === 'number' ? ud.exitDZ : 0) * sc,
+        _ud: ud, _marker: marker, _sc: sc,
+      };
+    }
+    // Convert a rig-local height (baseY/topY, heights ABOVE the rig origin) to the avatar
+    // frame Y: marker origin's avatar-frame Y + (height * world scale).
+    function resolveLadderY(L, hLocal) {
+      return L.markerY + (hLocal || 0) * L._sc;
+    }
+    // Can the local self enter the ladder right now? (within footprint, near the base.)
+    function ladderEnterable(L) {
+      if (!L || !selfEnt || !selfEnt.sprite) return false;
+      const p = selfEnt.sprite.position;
+      const dx = p.x - L.cx, dz = p.z - L.cz;
+      if (Math.abs(dx) > L.halfW + CLIMB_ENTER_MARGIN) return false;
+      if (Math.abs(dz) > L.halfD + CLIMB_ENTER_MARGIN) return false;
+      const baseY = resolveLadderY(L, L._ud.baseY || 0);
+      return Math.abs(p.y - baseY) < 0.9;              // must be near the foot of the ladder
+    }
+    // Enter climb mode: snap x/z to the ladder centre, face the rungs, suspend grid move.
+    function enterClimb(L) {
+      if (!selfEnt || !selfEnt.voxel) return false;
+      cancelWalk();
+      const baseY = resolveLadderY(L, L._ud.baseY || 0);
+      const topY = resolveLadderY(L, (typeof L._ud.topY === 'number' ? L._ud.topY : L._ud.baseY) || 0);
+      selfEnt._climb = { cx: L.cx, cz: L.cz, baseY, topY, exitDX: L.exitDX, exitDZ: L.exitDZ, dir: 0 };
+      const sp = selfEnt.sprite.position;
+      sp.x = L.cx; sp.z = L.cz;                          // snap to centre
+      selfEnt.tx = L.cx; selfEnt.tz = L.cz;              // kill any pending grid tween
+      sp.y = Math.max(baseY, Math.min(topY, sp.y));
+      selfEnt._yc = sp.y; selfEnt.ty = sp.y;
+      // face the ladder: you climb facing the rungs (chest toward the ladder), not away.
+      // The prior heading (PI) pointed the climber OUTWARD; flip it to face the rungs.
+      selfEnt.voxel.setHeading(0);
+      selfEnt.voxel.setState('climb');
+      return true;
+    }
+    function exitClimbToGround() {
+      if (!selfEnt) return;
+      selfEnt._climb = null;
+      if (selfEnt.voxel) selfEnt.voxel.setState('idle');
+      // grid x,z unchanged (still the base tile); let placeEntity re-ground on next move.
+    }
+    function exitClimbToPlatform(c) {
+      if (!selfEnt || !selfEnt.sprite) return;
+      const sp = selfEnt.sprite.position;
+      sp.x = c.cx + c.exitDX; sp.z = c.cz + c.exitDZ;    // step off onto the deck
+      sp.y = c.topY;
+      selfEnt.tx = sp.x; selfEnt.tz = sp.z; selfEnt.ty = c.topY; selfEnt._yc = c.topY;
+      selfEnt._climb = null;
+      if (selfEnt.voxel) selfEnt.voxel.setState('idle');
+      // NOTE: the platform is not a grid tile (server tracks only x,z). The avatar rests at
+      // platform height until the first grid move re-grounds it. Honest v1 limit (see report).
+    }
+    // Held-key vertical intent, set by onKey/onKeyUp while climbing (1 up, -1 down, 0 hold).
+    let climbDir = 0;
+    // Advance the climb each frame: move group.position.y toward top/bottom, feed the rig a
+    // phase delta proportional to the distance moved (so limbs cycle while moving, hang when
+    // still), and exit at either end. Called from animVoxel for the local self only.
+    function stepClimb(ent, dt) {
+      const c = ent._climb; if (!c) return;
+      const sp = ent.sprite.position;
+      const vy = climbDir * CLIMB_SPEED * dt;            // signed vertical move this frame
+      let ny = sp.y + vy;
+      let exited = false;
+      if (ny >= c.topY) { ny = c.topY; if (climbDir > 0) { exitClimbToPlatform(c); exited = true; } }
+      else if (ny <= c.baseY) { ny = c.baseY; if (climbDir < 0) { sp.y = ny; ent._yc = ny; ent.ty = ny; exitClimbToGround(); exited = true; } }
+      if (exited) return;
+      sp.x = c.cx; sp.z = c.cz;                          // stay locked to the ladder — no sideways fall-off
+      sp.y = ny; ent._yc = ny; ent.ty = ny;
+      // phase delta: 2*pi per ~0.5 world unit climbed -> a brisk hand-over-hand cadence.
+      ent.voxel.climbAdvance(Math.abs(vy) * (Math.PI * 2 / 0.5));
+      ent.voxel.setState('climb');                      // no-op if already climbing
+      ent.voxel.update(dt);
+    }
+
+    // ---- harvest ----
+    function nodeKindToAction(type) { return type === 'fish' ? 'fish' : type === 'ore' ? 'mine' : 'gather'; }
+    function reach(a, b) { return Math.abs(a.x - b.x) <= 1 && Math.abs(a.z - b.z) <= 1; }
+    function nodeCellPos(n) { if (!n.cell) return null; const p = n.cell.split(',').map(Number); return { x: p[0], z: p[1] }; }
+  
+    // Find an in-reach node/animal that matches `action` and request a harvest.
+    function harvest(action) {
+      cancelWalk();
+      if (role !== 'play') { toast(T('worlds.observing')); return; }
+      if (action === 'hunt') {
+        const a = animals.find(an => reach(you, an));
+        if (!a) { toast(T('worlds.actionHunt') + ' — no animal nearby'); return; }
+        send({ type: 'harvest.start', action: 'hunt', animalId: a.id }); return;
+      }
+      for (const id of Object.keys(nodes)) {
+        const n = nodes[id];
+        if (!n || nodeKindToAction(n.type) !== action) continue;
+        const pos = nodeCellPos(n);
+        if (!pos || !reach(you, pos)) continue;
+        if ((n.charges || 0) < 1 || n.locked) continue;
+        send({ type: 'harvest.start', action, x: pos.x, z: pos.z }); return;
+      }
+      toast('No ' + action + ' node in reach');
+    }
+    WS.harvest = harvest;
+    WS.sendChat = (text, replyTo) => {
+      const r = resolveChatInput(text);
+      if (r.kind === 'emote') {
+        // Instant local pose (responsive); the action line + peer replication
+        // arrive when the server echoes {emote,id,name,cmd} back through onMessage.
+        applyEmote(selfEnt, r.cmd);
+        send({ type: 'emote', cmd: r.cmd });
+        return;
+      }
+      if (r.kind === 'unknown') { toast(T('worlds.unknownCommand')); return; }
+      const t2 = r.text.slice(0, 280).trim();
+      if (!t2) return;
+      const msg = { type: 'chat', text: t2 };
+      if (replyTo && typeof replyTo === 'object' && replyTo.id) {
+        msg.replyTo = {
+          id: String(replyTo.id).slice(0, 64),
+          name: String(replyTo.name || '').slice(0, 48),
+          snippet: String(replyTo.snippet || '').slice(0, 120),
+        };
+      }
+      send(msg);
+    };
+    WS.sendTyping = (typing) => { send({ type: 'chat.typing', typing: !!typing }); };
+
+    // Smoothly fly the orbit camera onto a player's avatar (self or peer). The
+    // chat panel (module 50, isolated IIFE) calls this; the camera state
+    // (target / viewSize / updateCamera / clampViewSize) lives in the shared
+    // engine scope, which only this module can reach. Guarded to the in-world
+    // room + orbit mode — skyfall / surface-roam / first-person drive the camera
+    // directly and bypass updateCamera, so writing `target` there is a no-op.
+    const _focusTmp = (typeof THREE !== 'undefined') ? new THREE.Vector3() : null;
+    let _focusRaf = null;
+    WS.focusPlayer = function (id) {
+      if (!connected || !window.__tinyworldInWorldRoom) { toast('Enter a world to focus a player'); return false; }
+      if (selfEnt && (selfEnt._srActive || selfEnt._traveling)) { toast('Cannot focus a player right now'); return false; }
+      const ent = (id != null && id === myId) ? selfEnt : peerEnts.get(id);
+      if (!ent || !ent.sprite || !_focusTmp || typeof target === 'undefined' || !target) { toast('That player is not in view'); return false; }
+      if (_focusRaf) { cancelAnimationFrame(_focusRaf); _focusRaf = null; }
+      const sTx = target.x, sTy = target.y, sTz = target.z;
+      const hasVs = (typeof viewSize !== 'undefined');
+      const sVs = hasVs ? viewSize : 0;
+      const tVs = hasVs ? Math.max(3.2, sVs * 0.5) : 0;   // zoom in, but not past a sane floor
+      const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const DUR = 420;
+      function step() {
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        const k = Math.min(1, (now - t0) / DUR);
+        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;   // easeInOutQuad
+        ent.sprite.getWorldPosition(_focusTmp);   // re-read each frame so a moving peer is tracked
+        target.x = sTx + (_focusTmp.x - sTx) * e;
+        target.y = sTy + (_focusTmp.y - sTy) * e;
+        target.z = sTz + (_focusTmp.z - sTz) * e;
+        if (hasVs) {
+          const v = sVs + (tVs - sVs) * e;
+          viewSize = (typeof clampViewSize === 'function') ? clampViewSize(v) : v;
+        }
+        if (typeof updateCamera === 'function') updateCamera();
+        if (k < 1) _focusRaf = requestAnimationFrame(step); else _focusRaf = null;
+      }
+      _focusRaf = requestAnimationFrame(step);
+      return true;
+    };
+  
+    // ---- input ----
+    function onKey(e) {
+      if (!connected) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      let handled = true;
+      const k = e.key.toLowerCase();
+      // ---- climb intercept (LOCAL-SELF only) ----
+      // While climbing, W/Up drives UP the ladder, S/Down drives DOWN; left/right and jump
+      // drop off. When NOT climbing, pressing W/Up into a nearby ladder ENTERS climb mode
+      // instead of taking the grid step.
+      if (selfEnt && selfEnt._climb) {
+        if (k === 'arrowup' || k === 'w') { climbDir = 1; e.preventDefault(); return; }
+        if (k === 'arrowdown' || k === 's') { climbDir = -1; e.preventDefault(); return; }
+        if (k === 'arrowleft' || k === 'a' || k === 'arrowright' || k === 'd' || k === ' ' || k === 'spacebar') {
+          exitClimbToGround(); climbDir = 0; e.preventDefault(); return;   // hop off, resume grid movement
+        }
+      } else if ((k === 'arrowup' || k === 'w') && selfEnt) {
+        const L = findLadder();
+        if (L && ladderEnterable(L) && enterClimb(L)) { climbDir = 1; e.preventDefault(); return; }
+      }
+      // Movement is relative to the camera/player view (his up/down/left/right).
+      if (k === 'arrowup' || k === 'w') { cancelWalk(); const [x, z] = worldStepFromScreen(0, 1); step(x, z); }
+      else if (k === 'arrowdown' || k === 's') { cancelWalk(); const [x, z] = worldStepFromScreen(0, -1); step(x, z); }
+      else if (k === 'arrowleft' || k === 'a') { cancelWalk(); const [x, z] = worldStepFromScreen(-1, 0); step(x, z); }
+      else if (k === 'arrowright' || k === 'd') { cancelWalk(); const [x, z] = worldStepFromScreen(1, 0); step(x, z); }
+      else if (k === ' ' || k === 'spacebar') startJump();
+      else if (k === ATTACK_KEY) startAttack();
+      // crouch = HOLD 'c' (released on keyup, see onKeyUp); sit = TOGGLE 'x'. These set
+      // local-self rig pose flags only; animVoxel reads them. Crouch/sit are v1
+      // LOCAL-SELF only (peer sync would need an avatar-state party message — see report).
+      else if (k === 'c') { if (selfEnt) selfEnt._crouchHeld = true; }
+      else if (k === 'x') { if (selfEnt) selfEnt._sitToggle = !selfEnt._sitToggle; }
+      else if (e.code === 'BracketLeft' || k === '[') cycleAvatarClass(-1);
+      else if (e.code === 'BracketRight' || k === ']') cycleAvatarClass(1);
+      else handled = false;
+      if (handled) e.preventDefault();
+    }
+    function onKeyUp(e) {
+      if (!connected) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key.toLowerCase() === 'c' && selfEnt) selfEnt._crouchHeld = false;  // release crouch hold
+      // releasing the climb keys stops vertical motion -> the rig holds a static hang pose.
+      const ku = e.key.toLowerCase();
+      if (selfEnt && selfEnt._climb && (ku === 'w' || ku === 's' || ku === 'arrowup' || ku === 'arrowdown')) climbDir = 0;
+    }
+    function bindInput() { window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp); }
+    function unbindInput() { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); }
+  
+    // ---- minimap ----
+    let mapWrap = null, canvas = null, ctx = null, mapResizeHandle = null, mapScaleBadge = null;
+    const CELL = 16;
+    const MAP_SCALE_LS = 'tinyworld:worlds.map.scale';
+    const MAP_MIN_SCALE = 0.25;
+    const MAP_MAX_SCALE = 1;
+    let mapScale = readMapScale();
+    function showMinimap() {
+      if (mapWrap) { mapWrap.style.display = 'block'; drawMinimap(); return; }
+      if (!document.getElementById('tw-worlds-map-style')) {
+        const css = '.tw-worlds-map{position:fixed;right:12px;top:72px;z-index:65;background:rgba(8,11,28,.82);border:1px solid rgba(80,110,200,.22);border-radius:14px;padding:8px;backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);box-shadow:inset 0 1px 0 rgba(120,150,230,.12),0 16px 40px -12px rgba(0,0,20,.55)}'
+          + '.tw-worlds-map h4{margin:0 0 6px;font:600 11px \'Space Grotesk\',system-ui,sans-serif;color:#cfe0ff;text-transform:uppercase;letter-spacing:.05em;cursor:grab;user-select:none;display:flex;align-items:center;gap:6px}'
+          + '.tw-worlds-map .tw-map-scale{margin-left:auto;font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#8ea8d8;background:rgba(150,180,255,.12);border:1px solid rgba(150,180,255,.18);border-radius:999px;padding:1px 5px}'
+          + '.tw-worlds-map.dragging h4{cursor:grabbing}'
+          + '.tw-worlds-map canvas{display:block;border-radius:8px;cursor:pointer;background:#0a1428;image-rendering:pixelated}'
+          + '.tw-worlds-map .tw-map-resize{position:absolute;right:3px;bottom:3px;width:17px;height:17px;border-radius:6px 0 11px 0;cursor:nwse-resize;background:linear-gradient(135deg,transparent 0 45%,rgba(205,225,255,.20) 46% 58%,transparent 59%),linear-gradient(135deg,transparent 0 62%,rgba(205,225,255,.34) 63% 76%,transparent 77%);opacity:.82}'
+          + '.tw-worlds-map .tw-map-resize:hover{opacity:1;background-color:rgba(120,160,255,.08)}'
+          + '@media (max-width:700px){.tw-worlds-map{right:8px;top:54px;padding:6px;border-radius:10px}.tw-worlds-map h4{font-size:9px;margin-bottom:4px}.tw-worlds-map .tw-map-scale{display:none}.tw-worlds-map .tw-map-resize{display:none}}';
+        document.head.appendChild(Object.assign(document.createElement('style'), { id: 'tw-worlds-map-style', textContent: css }));
+      }
+      mapWrap = document.createElement('div'); mapWrap.className = 'tw-worlds-map';
+      const h = document.createElement('h4');
+      const title = document.createElement('span'); title.textContent = T('worlds.minimap');
+      mapScaleBadge = document.createElement('span'); mapScaleBadge.className = 'tw-map-scale';
+      h.appendChild(title); h.appendChild(mapScaleBadge);
+      if (window.twNotify && typeof window.twNotify.mountToggle === 'function') window.twNotify.mountToggle(h);
+      canvas = document.createElement('canvas');
+      canvas.addEventListener('click', onMapClick);
+      mapResizeHandle = document.createElement('div');
+      mapResizeHandle.className = 'tw-map-resize';
+      mapResizeHandle.title = 'Resize map';
+      mapWrap.appendChild(h); mapWrap.appendChild(canvas); mapWrap.appendChild(mapResizeHandle);
+      document.body.appendChild(mapWrap);
+      restoreMapPos();
+      makeMapDraggable(h);
+      makeMapResizable(mapResizeHandle);
+      ctx = canvas.getContext('2d');
+      drawMinimap();
+    }
+    function hideMinimap() { if (mapWrap) mapWrap.style.display = 'none'; }
+
+    window.addEventListener('resize', () => {
+      if (canvas) applyMapScale();
+    });
+
+    function clampMapScale(v) {
+      v = Number(v);
+      if (!Number.isFinite(v)) v = 1;
+      return Math.max(MAP_MIN_SCALE, Math.min(MAP_MAX_SCALE, v));
+    }
+    function smallMapScreen() {
+      try { return !!(window.matchMedia && window.matchMedia('(max-width:700px)').matches); } catch (_) { return false; }
+    }
+    function defaultMapScale() {
+      return smallMapScreen() ? 0.58 : 1;
+    }
+    function readMapScale() {
+      try {
+        const stored = localStorage.getItem(MAP_SCALE_LS);
+        return clampMapScale(stored == null || stored === '' ? defaultMapScale() : stored);
+      } catch (_) { return defaultMapScale(); }
+    }
+    function writeMapScale(v) {
+      mapScale = clampMapScale(v);
+      try { localStorage.setItem(MAP_SCALE_LS, String(mapScale)); } catch (_) {}
+      applyMapScale();
+    }
+    function applyMapScale() {
+      if (!canvas) return;
+      const base = Math.max(1, gridSize * CELL);
+      const rawPx = Math.max(1, Math.round(base * clampMapScale(mapScale)));
+      const mobileMax = smallMapScreen() ? Math.max(96, Math.min(136, Math.round(window.innerWidth * 0.34))) : rawPx;
+      const px = Math.min(rawPx, mobileMax);
+      canvas.style.width = px + 'px';
+      canvas.style.height = px + 'px';
+      if (mapScaleBadge) mapScaleBadge.textContent = Math.round((px / base) * 100) + '%';
+    }
+    function makeMapResizable(handle) {
+      if (!handle || !mapWrap) return;
+      let startX = 0, startY = 0, startW = 0, resizing = false;
+      handle.addEventListener('pointerdown', (e) => {
+        resizing = true;
+        const r = canvas ? canvas.getBoundingClientRect() : mapWrap.getBoundingClientRect();
+        startX = e.clientX; startY = e.clientY; startW = Math.max(1, r.width);
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault(); e.stopPropagation();
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!resizing || !canvas) return;
+        const base = Math.max(1, gridSize * CELL);
+        const delta = Math.max(e.clientX - startX, e.clientY - startY);
+        mapScale = clampMapScale((startW + delta) / base);
+        applyMapScale();
+        e.preventDefault(); e.stopPropagation();
+      });
+      const end = (e) => {
+        if (!resizing) return;
+        resizing = false;
+        writeMapScale(mapScale);
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    }
+
+    function restoreMapPos() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('tinyworld:worlds.map.pos') || 'null');
+        if (saved && saved.left && saved.top) { mapWrap.style.left = saved.left; mapWrap.style.top = saved.top; mapWrap.style.right = 'auto'; mapWrap.style.bottom = 'auto'; }
+      } catch (_) {}
+    }
+    function makeMapDraggable(handle) {
+      let sx = 0, sy = 0, ox = 0, oy = 0, drag = false;
+      handle.addEventListener('pointerdown', (e) => {
+        drag = true; mapWrap.classList.add('dragging');
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const r = mapWrap.getBoundingClientRect(); ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+        mapWrap.style.right = 'auto'; mapWrap.style.bottom = 'auto'; mapWrap.style.left = ox + 'px'; mapWrap.style.top = oy + 'px';
+        e.preventDefault();
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const nx = Math.max(0, Math.min(window.innerWidth - 60, ox + e.clientX - sx));
+        const ny = Math.max(0, Math.min(window.innerHeight - 40, oy + e.clientY - sy));
+        mapWrap.style.left = nx + 'px'; mapWrap.style.top = ny + 'px';
+      });
+      const end = () => {
+        if (!drag) return; drag = false; mapWrap.classList.remove('dragging');
+        try { localStorage.setItem('tinyworld:worlds.map.pos', JSON.stringify({ left: mapWrap.style.left, top: mapWrap.style.top })); } catch (_) {}
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    }
+  
+    function mapCellRect(x, z) {
+      return { x: x * CELL, y: z * CELL };
+    }
+    function mapCellCenter(x, z) {
+      return { x: x * CELL + CELL / 2, y: z * CELL + CELL / 2 };
+    }
+    function mapCanvasPointToCell(px, py, width, height) {
+      const sx = width > 0 ? width / Math.max(1, gridSize) : CELL;
+      const sy = height > 0 ? height / Math.max(1, gridSize) : CELL;
+      const cx = Math.floor(px / sx);
+      const cz = Math.floor(py / sy);
+      return { x: cx, z: cz };
+    }
+
+    function onMapClick(e) {
+      const rect = canvas.getBoundingClientRect();
+      const p = mapCanvasPointToCell(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      const cx = p.x;
+      const cz = p.z;
+      if (cx < 0 || cz < 0 || cx >= gridSize || cz >= gridSize) return;
+      // Walk (auto-path) to the clicked tile; the server still validates each
+      // one-cell step. Arrow/WASD keys interrupt the walk.
+      walkTo(cx, cz);
+    }
+  
+    function terrainColor(t) {
+      return t === 'water' ? '#2f6fb0' : t === 'stone' ? '#7d8794' : t === 'sand' ? '#cdb98a'
+        : t === 'dirt' ? '#7a5a3a' : t === 'path' ? '#b9a06a' : t === 'lava' ? '#c0431f' : t === 'snow' ? '#e6eef6' : '#3f8f53';
+    }
+
+    // Shared isometric 2D tile preview (used by the universe cards in 46). This
+    // intentionally avoids Three.js so the Worlds screen can show many islands
+    // as cheap pixel-style atlas thumbnails.
+    const PREVIEW_PLANTS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
+    const PREVIEW_ISO_KIND_COLORS = {
+      tree: '#1f6f3a',
+      bush: '#2f8b49',
+      rock: '#9ba8ae',
+      house: '#c76e46',
+      fence: '#7a4b2c',
+      cow: '#f0d8b8',
+      sheep: '#f7f1dc',
+      stargate: '#7fe6ff',
+    };
+    function previewShade(hex, amt) {
+      const h = String(hex || '#000000').replace('#', '');
+      const n = parseInt(h.length === 3 ? h.replace(/(.)/g, '$1$1') : h, 16);
+      const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
+      const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+      const b = Math.max(0, Math.min(255, (n & 255) + amt));
+      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+    function previewCellTuple(c) {
+      if (!c) return null;
+      if (Array.isArray(c)) return { x: c[0], z: c[1], terrain: c[2] || 'grass', kind: c[3] || '' };
+      return { x: c.x, z: c.z, terrain: c.terrain || 'grass', kind: c.kind || '' };
+    }
+    function drawPreviewDiamond(ctx, cx, cy, hw, hh, fill, stroke) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - hh);
+      ctx.lineTo(cx + hw, cy);
+      ctx.lineTo(cx, cy + hh);
+      ctx.lineTo(cx - hw, cy);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+    }
+    function drawPreviewSide(ctx, cx, cy, hw, hh, depth, side, fill) {
+      ctx.beginPath();
+      if (side === 'right') {
+        ctx.moveTo(cx + hw, cy);
+        ctx.lineTo(cx, cy + hh);
+        ctx.lineTo(cx, cy + hh + depth);
+        ctx.lineTo(cx + hw, cy + depth);
+      } else {
+        ctx.moveTo(cx - hw, cy);
+        ctx.lineTo(cx, cy + hh);
+        ctx.lineTo(cx, cy + hh + depth);
+        ctx.lineTo(cx - hw, cy + depth);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    function drawPreviewObject(ctx, cx, cy, s, kind) {
+      const k = PREVIEW_PLANTS.has(kind) ? 'plant' : kind;
+      if (k === 'tree' || k === 'bush' || k === 'plant') {
+        ctx.fillStyle = k === 'plant' ? '#d5df57' : PREVIEW_ISO_KIND_COLORS[k];
+        ctx.beginPath();
+        ctx.arc(cx, cy - s * 0.34, s * (k === 'tree' ? 0.22 : 0.16), 0, Math.PI * 2);
+        ctx.fill();
+        if (k === 'tree') {
+          ctx.fillStyle = '#7b5434';
+          ctx.fillRect(cx - s * 0.035, cy - s * 0.28, s * 0.07, s * 0.28);
+        }
+      } else if (k === 'rock') {
+        ctx.fillStyle = PREVIEW_ISO_KIND_COLORS.rock;
+        drawPreviewDiamond(ctx, cx, cy - s * 0.18, s * 0.16, s * 0.09, '#9ba8ae', '#65737b');
+      } else if (k === 'house') {
+        ctx.fillStyle = '#c76e46';
+        ctx.fillRect(cx - s * 0.18, cy - s * 0.34, s * 0.36, s * 0.26);
+        ctx.fillStyle = '#7b3340';
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.22, cy - s * 0.34);
+        ctx.lineTo(cx, cy - s * 0.56);
+        ctx.lineTo(cx + s * 0.22, cy - s * 0.34);
+        ctx.closePath();
+        ctx.fill();
+      } else if (PREVIEW_ISO_KIND_COLORS[k]) {
+        ctx.fillStyle = PREVIEW_ISO_KIND_COLORS[k];
+        ctx.fillRect(cx - s * 0.08, cy - s * 0.28, s * 0.16, s * 0.16);
+      }
+    }
+    function renderPreview(cnv, preview) {
+      if (!cnv || !preview) return;
+      const g = Math.max(1, preview.gridSize || 8);
+      const suppliedList = Array.isArray(preview.cells) ? preview.cells : [];
+      const list = suppliedList.map(previewCellTuple).filter(Boolean);
+      const cssW = cnv.clientWidth || cnv.width || 320;
+      const cssH = cnv.clientHeight || cnv.height || 200;
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      cnv.width = Math.round(cssW * dpr); cnv.height = Math.round(cssH * dpr);
+      const c2 = cnv.getContext('2d');
+      c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c2.clearRect(0, 0, cssW, cssH);
+      const bg = c2.createLinearGradient(0, 0, 0, cssH);
+      bg.addColorStop(0, '#070911');
+      bg.addColorStop(1, '#030509');
+      c2.fillStyle = bg;
+      c2.fillRect(0, 0, cssW, cssH);
+      c2.fillStyle = 'rgba(169,199,255,.22)';
+      for (let i = 0; i < 26; i++) {
+        const sx = (i * 47 + g * 13) % Math.max(1, cssW);
+        const sy = (i * 31 + g * 7) % Math.max(1, cssH);
+        c2.fillRect(sx, sy, 1, 1);
+      }
+      const map = new Map();
+      for (let z = 0; z < g; z++) for (let x = 0; x < g; x++) map.set(x + ',' + z, { x, z, terrain: 'grass', kind: '' });
+      for (const cell of list) {
+        const x = Number(cell.x), z = Number(cell.z);
+        if (!Number.isFinite(x) || !Number.isFinite(z) || x < 0 || z < 0 || x >= g || z >= g) continue;
+        map.set(x + ',' + z, cell);
+      }
+      const tileW = Math.max(14, Math.min(30, cssW / (g + 2.4)));
+      const tileH = tileW * 0.5;
+      const depth = Math.max(8, tileH * 0.9);
+      const originX = cssW * 0.5;
+      const originY = Math.max(18, (cssH - (g * tileH + depth)) * 0.38);
+      const sorted = Array.from(map.values()).sort((a, b) => ((Number(a.x) + Number(a.z)) - (Number(b.x) + Number(b.z))) || (Number(a.z) - Number(b.z)));
+      for (const cell of sorted) {
+        const x = Number(cell.x), z = Number(cell.z);
+        const cx = originX + (x - z) * tileW * 0.5;
+        const cy = originY + (x + z) * tileH * 0.5;
+        const top = terrainColor(cell.terrain);
+        if (!map.has((x + 1) + ',' + z)) drawPreviewSide(c2, cx, cy, tileW * 0.5, tileH * 0.5, depth, 'right', previewShade(top, -62));
+        if (!map.has(x + ',' + (z + 1))) drawPreviewSide(c2, cx, cy, tileW * 0.5, tileH * 0.5, depth, 'left', previewShade(top, -42));
+      }
+      for (const cell of sorted) {
+        const x = Number(cell.x), z = Number(cell.z);
+        const cx = originX + (x - z) * tileW * 0.5;
+        const cy = originY + (x + z) * tileH * 0.5;
+        const top = terrainColor(cell.terrain);
+        drawPreviewDiamond(c2, cx, cy, tileW * 0.5, tileH * 0.5, top, 'rgba(3,5,9,.36)');
+      }
+      for (const cell of sorted) {
+        if (!cell.kind) continue;
+        const x = Number(cell.x), z = Number(cell.z);
+        const cx = originX + (x - z) * tileW * 0.5;
+        const cy = originY + (x + z) * tileH * 0.5;
+        drawPreviewObject(c2, cx, cy, tileW, cell.kind);
+      }
+    }
+    WS.renderPreview = renderPreview;
+
+    // ---- in-world avatars: 2.5D animated sprite-sheet billboards (models/people/25D) ----
+    // Each sheet is 8 direction-rows x N frame-cols of 64x64 cells. Facing comes from
+    // the movement direction (8-way); state is idle vs walk. No fallback — if a sheet
+    // fails to load we surface an error.
+    const SHEET = {
+      idle: { baseUrl: 'models/people/25D/idle/Sprite Sheet/idle full sprite sheet (transparent BG).png', sw: 768, sh: 512, frame: 64, cols: 12, fps: 8 },
+      walk: { baseUrl: 'models/people/25D/walk/Sprite Sheet/walk complete sprite sheet (transparent BG).png', sw: 512, sh: 512, frame: 64, cols: 8, fps: 12 },
+      attack: { baseUrl: 'models/people/25D/attack/Sprite Sheet/attack full sprite sheet (transparent BG).png', sw: 672, sh: 768, frame: 96, cols: 7, fps: 16 },
+    };
+    const AVATAR_CLASSES = ['knight', 'baird', 'wizard', 'knave', 'template'];
+    // open-pets pets (vendored under models/pets/<id>/, @open-pets/pet-format atlas).
+    // Mutually exclusive with classes: a selected pet renders as a billboard using its
+    // idle / left / right animation frame ranges (not 8-directional). frame index ->
+    // col = f % cols, row = floor(f / cols) within a cols x rows atlas.
+    const PETS = {
+      boba: {
+        id: 'boba', sheet: 'models/pets/boba/spritesheet.webp', cols: 8, rows: 9, aspect: 192 / 208,
+        anims: {
+          idle: { f: [0, 1, 2, 3, 4, 5], fps: 5 },
+          left: { f: [8, 9, 10, 11, 12, 13, 14, 15], fps: 10 },
+          right: { f: [16, 17, 18, 19, 20, 21, 22, 23], fps: 10 },
+        },
+      },
+    };
+    // ---- side-view STRIP avatars (hybrid) ----
+    // Texture storage like the class path (ent.tex = {idle,walk,run,attack}, swap
+    // material.map per state); animation like the pet path (named anim, single facing,
+    // flip L/R via scale.x sign). Sheets are 64px grids with animation frames in
+    // columns and direction rows stacked vertically; sample one row, never the full
+    // 256px column, or the avatar renders as four stacked bodies.
+    const STRIPS = (function buildStrips() {
+      const out = {};
+      // Swordsman levels 1-6 (provider 'warriors'). lv1-3 use the long 'Swordsman_lvlN_'
+      // prefix; lv4-6 use the short 'lvlN_' prefix. attack frames: lv1-3 = 8, lv4-6 = 7.
+      const swDir = function (n) { return 'models/people/swordsman/PNG/Swordsman_lvl' + n + '/Without_shadow/'; };
+      for (let n = 1; n <= 6; n++) {
+        const pre = n <= 3 ? ('Swordsman_lvl' + n + '_') : ('lvl' + n + '_');
+        const atkF = n <= 3 ? 8 : 7;
+        out['swordsman-l' + n] = {
+          id: 'swordsman-l' + n, aspect: 1, facing: 'right',
+          anims: {
+            idle: { sheet: swDir(n) + pre + 'Idle_without_shadow.png', fw: 64, fh: 64, frames: 12, rows: 4, row: 0, fps: 7 },
+            walk: { sheet: swDir(n) + pre + 'Walk_without_shadow.png', fw: 64, fh: 64, frames: 6, rows: 4, row: 0, fps: 10 },
+            run: { sheet: swDir(n) + pre + 'Run_without_shadow.png', fw: 64, fh: 64, frames: 8, rows: 4, row: 0, fps: 12 },
+            attack: { sheet: swDir(n) + pre + 'attack_without_shadow.png', fw: 64, fh: 64, frames: atkF, rows: 4, row: 0, fps: 14 },
+          },
+        };
+      }
+      // Orcs 1-3 (provider 'orcs'). No 'run'. attack = 8 frames.
+      for (let n = 1; n <= 3; n++) {
+        const oDir = 'models/people/orcs/PNG/Orc' + n + '/Without_shadow/';
+        out['orc-' + n] = {
+          id: 'orc-' + n, aspect: 1, facing: 'right',
+          anims: {
+            idle: { sheet: oDir + 'orc' + n + '_idle_without_shadow.png', fw: 64, fh: 64, frames: 4, rows: 4, row: 0, fps: 7 },
+            walk: { sheet: oDir + 'orc' + n + '_walk_without_shadow.png', fw: 64, fh: 64, frames: 6, rows: 4, row: 0, fps: 10 },
+            attack: { sheet: oDir + 'orc' + n + '_attack_without_shadow.png', fw: 64, fh: 64, frames: 8, rows: 4, row: 0, fps: 12 },
+          },
+        };
+      }
+      return out;
+    })();
+    const JUMP_MS = 460, ATTACK_KEY = 'f';
+    // Sheet row (top->bottom) for each movement sector. Sectors: 0=S 1=SE 2=E 3=NE
+    // 4=N 5=NW 6=W 7=SW. If a character faces the wrong way, reorder this array.
+    const SECTOR_TO_ROW = [0, 1, 2, 3, 4, 5, 6, 7];
+    // 4-row side-view sheets use the common down/left/right/up order.
+    const STRIP_SECTOR_TO_ROW = [0, 0, 2, 3, 3, 3, 1, 0];
+    let selfEnt = null;
+    const peerEnts = new Map();
+    let avatarRaf = null;
+    let avatarErrored = false;
+    const AVATAR_CLASS_LS = 'tinyworld:multiplayer:avatar-class';
+    function savedAvatarClass() { try { const v = localStorage.getItem(AVATAR_CLASS_LS); return v || 'knight'; } catch (_) { return 'knight'; } }
+    let avatarClassName = savedAvatarClass();
+    let avatarPetId = null; // non-null => pet mode (overrides class)
+    let avatarStripId = null; // non-null => strip mode (overrides class). Mutually exclusive with avatarPetId.
+    let _texLoader = null;
+    // The player's NETWORKED voxel identity: a fully-resolved descriptor sent in
+    // world.join so every other client renders THIS player's chosen look (not a
+    // local id-seed). Defaults to a descriptor seeded from a stable per-browser id
+    // (persisted like the class choice) so a fresh visitor still looks consistent
+    // across reloads. myId is NOT available at join time (it arrives in `welcome`
+    // AFTER the join envelope is sent), so the seed must be a local id.
+    const AVATAR_VOXEL_LS = 'tinyworld:multiplayer:avatar-voxel-seed';
+    const AVATAR_VOXEL_DESC_LS = 'tinyworld:multiplayer:avatar-voxel';
+    function numericSeedFromString(s) {
+      s = String(s == null ? 'avatar' : s);
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      return h >>> 0;
+    }
+    function stableVoxelSeed() {
+      try {
+        let v = localStorage.getItem(AVATAR_VOXEL_LS);
+        if (!v) { v = String(Math.floor(Math.random() * 0xffffffff) >>> 0); localStorage.setItem(AVATAR_VOXEL_LS, v); }
+        const n = Number(v);
+        if (Number.isFinite(n)) return n >>> 0;
+        // Migrate older string seeds ("vabc123") to a numeric seed so the server
+        // and voxel rig do not collapse every default avatar to seed 0.
+        const migrated = numericSeedFromString(v);
+        localStorage.setItem(AVATAR_VOXEL_LS, String(migrated));
+        return migrated;
+      } catch (_) { return Math.floor(Math.random() * 0xffffffff) >>> 0; }
+    }
+    function readStoredAvatarDescriptor() {
+      try {
+        const raw = localStorage.getItem(AVATAR_VOXEL_DESC_LS);
+        if (!raw) return null;
+        const desc = JSON.parse(raw);
+        return desc && typeof desc === 'object' ? desc : null;
+      } catch (_) { return null; }
+    }
+    function writeStoredAvatarDescriptor(desc) {
+      if (!desc || typeof desc !== 'object') return;
+      try { localStorage.setItem(AVATAR_VOXEL_DESC_LS, JSON.stringify(desc)); } catch (_) {}
+    }
+    // Resolved LAZILY: 53-voxel-avatar.js loads AFTER this file, so
+    // window.voxelAvatarDescriptor is undefined at 47's module-load time. Resolving
+    // eagerly here would collapse every player's default to a single seed. All read
+    // sites fire at join/render time (post-load), so getSelfAvatarDescriptor() sees
+    // the real 53 helper and seeds from the stable per-browser id => distinct defaults.
+    let selfAvatarDescriptor = null;
+    function getSelfAvatarDescriptor() {
+      if (!selfAvatarDescriptor) {
+        const stored = readStoredAvatarDescriptor();
+        const source = stored || { seed: stableVoxelSeed() };
+        selfAvatarDescriptor = (typeof window !== 'undefined' && typeof window.voxelAvatarDescriptor === 'function')
+          ? window.voxelAvatarDescriptor(source)
+          : Object.assign({ kind: 'voxel' }, source);
+        if (stored) writeStoredAvatarDescriptor(selfAvatarDescriptor);
+      }
+      return selfAvatarDescriptor;
+    }
+
+    function avatarParent() {
+      if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
+      if (typeof xrWorldRoot !== 'undefined' && xrWorldRoot) return xrWorldRoot;
+      return (typeof scene !== 'undefined') ? scene : null;
+    }
+    function hashId(s) { s = String(s); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+    function dirSector(dx, dz) { if (!dx && !dz) return null; return ((Math.round(Math.atan2(dx, dz) / (Math.PI / 4)) % 8) + 8) % 8; }
+    // Camera-relative ground axes from the orbit azimuth (a classic-script global).
+    function camGround() {
+      const az = (typeof azimuth === 'number') ? azimuth : 0;
+      return { f: { x: -Math.cos(az), z: -Math.sin(az) }, r: { x: Math.sin(az), z: -Math.cos(az) } };
+    }
+    // Facing relative to the player's view: rotate a world delta into screen space so
+    // S = toward the camera, N = away, E = his right, W = his left.
+    function screenSector(dx, dz) {
+      const { f, r } = camGround();
+      return dirSector(dx * r.x + dz * r.z, -(dx * f.x + dz * f.z));
+    }
+    // Screen input (right=+x, forward=+y) -> the single grid step that best matches it.
+    function worldStepFromScreen(sxi, syi) {
+      const { f, r } = camGround();
+      const wx = r.x * sxi + f.x * syi, wz = r.z * sxi + f.z * syi;
+      return (Math.abs(wx) >= Math.abs(wz)) ? [Math.sign(wx), 0] : [0, Math.sign(wz)];
+    }
+    function startAttack() { if (selfEnt && selfEnt.sprite && !selfEnt.attacking) { selfEnt.attacking = true; selfEnt.state = 'attack'; selfEnt.frame = 0; selfEnt.frameTime = 0; if (selfEnt.voxel) { selfEnt.voxel.setState('attack'); } else if (selfEnt.sprite.material) { selfEnt.sprite.material.map = selfEnt.tex.attack; } } }
+    function startJump() { if (selfEnt && !selfEnt.jumpStart) selfEnt.jumpStart = Date.now(); }
+    // Preview the freefall/rocket postures on the local avatar without the full skyfall.
+    // Console: __tinyworldWorlds.previewPose('skydive' | 'rocket' | 'idle'). The FALL
+    // CONTROLLER owns body pitch (face-down for skydive, upright for rocket) per the rig's
+    // ownership contract; the rig state poses limbs.
+    function previewPose(state) {
+      if (!selfEnt || !selfEnt.voxel) return false;
+      const v = selfEnt.voxel;
+      if (state === 'skydive') { v.setBodyPitch(SKY_DIVE_BODY_PITCH); v.setState('skydive'); if (v.setRocketVisible) v.setRocketVisible(false); }
+      else if (state === 'rocket') { v.setBodyPitch(0); v.setState('rocket'); if (v.setRocketVisible) { v.setRocketVisible(true); v.setThrusting(true); } }
+      else { v.setBodyPitch(0); v.setState('idle'); if (v.setRocketVisible) v.setRocketVisible(false); }
+      return true;
+    }
+    WS.previewPose = previewPose;
+    function avatarError(msg) {
+      if (avatarErrored) return; avatarErrored = true;
+      try { console.error('[worlds] avatar sprite failed:', msg); } catch (_) {}
+      toast('Avatar sprites failed to load');
+    }
+    function avatarSheetUrl(action, className) {
+      const s = SHEET[action];
+      if (className && className !== 'template') return 'models/people/25D/classes/' + encodeURIComponent(className) + '/' + action + '.png';
+      return s.baseUrl;
+    }
+    function loadSheetTexture(url) {
+      _texLoader = _texLoader || new THREE.TextureLoader();
+      const t = _texLoader.load(url, undefined, undefined, () => avatarError(url));
+      t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+      twSetTextureSRGB(t);
+      return t;
+    }
+    function disposeAvatarTextures(ent) {
+      if (!ent || !ent.tex) return;
+      Object.keys(ent.tex).forEach(k => { if (ent.tex[k] && typeof ent.tex[k].dispose === 'function') ent.tex[k].dispose(); });
+      ent.tex = {};
+    }
+    function loadAvatarTextures(ent, className) {
+      if (!ent) return;
+      disposeAvatarTextures(ent);
+      ent.pet = null; // leaving pet mode
+      ent.strip = null; // leaving strip mode
+      ent.avatarClassName = className;
+      for (const k of Object.keys(SHEET)) {
+        const s = SHEET[k];
+        const t = loadSheetTexture(avatarSheetUrl(k, className));
+        t.repeat.set(s.frame / s.sw, s.frame / s.sh);
+        t.offset.set(0, 1 - s.frame / s.sh);
+        ent.tex[k] = t;
+      }
+      if (ent.sprite && ent.sprite.material) {
+        ent.sprite.material.map = ent.tex[ent.state] || ent.tex.idle;
+        ent.sprite.scale.set(1.7, 1.7, 1); // restore class sprite size (pet mode rescales)
+      }
+    }
+    function setAvatarClass(name) {
+      const next = AVATAR_CLASSES.includes(name) ? name : 'knight';
+      avatarClassName = next;
+      try { localStorage.setItem(AVATAR_CLASS_LS, next); } catch (_) {}
+      avatarPetId = null; // class, pet and strip avatars are mutually exclusive
+      avatarStripId = null;
+      if (selfEnt) loadAvatarTextures(selfEnt, avatarClassName);
+      return avatarClassName;
+    }
+    function cycleAvatarClass(delta) {
+      const current = Math.max(0, AVATAR_CLASSES.indexOf(avatarClassName));
+      return setAvatarClass(AVATAR_CLASSES[(current + delta + AVATAR_CLASSES.length) % AVATAR_CLASSES.length]);
+    }
+    // ---- pet avatars (open-pets billboards) ----
+    function loadPetTextures(ent, pet) {
+      if (!ent || !pet) return;
+      disposeAvatarTextures(ent);
+      ent.pet = pet; ent.strip = null; ent.avatarClassName = null; ent._petAnim = null; ent.frame = 0; ent.frameTime = 0;
+      const t = loadSheetTexture(pet.sheet);
+      t.repeat.set(1 / pet.cols, 1 / pet.rows);
+      t.offset.set(0, 1 - 1 / pet.rows); // frame 0 (top-left)
+      ent.tex = { pet: t };
+      if (ent.sprite && ent.sprite.material) {
+        ent.sprite.material.map = t; ent.sprite.material.needsUpdate = true;
+        const s = 1.9; ent.sprite.scale.set(s * pet.aspect, s, 1);
+      }
+    }
+    function setAvatarPet(petId) {
+      const pet = PETS[petId];
+      if (!pet) return null;
+      avatarPetId = petId;
+      avatarStripId = null; // pet and strip avatars are mutually exclusive
+      if (selfEnt) loadPetTextures(selfEnt, pet);
+      return avatarPetId;
+    }
+    // ---- strip avatars (side-view hybrid: class-style tex storage, pet-style anim) ----
+    function loadStripTextures(ent, strip) {
+      if (!ent || !strip) return;
+      disposeAvatarTextures(ent);
+      ent.strip = strip; ent.pet = null; ent.avatarClassName = null;
+      ent.state = 'idle'; ent.frame = 0; ent.frameTime = 0;
+      ent.tex = {};
+      for (const k of Object.keys(strip.anims)) {
+        const anim = strip.anims[k];
+        const t = loadSheetTexture(anim.sheet);
+        t.repeat.set(1 / anim.frames, 1 / (anim.rows || 1));
+        setStripTextureFrame(t, anim, 0);
+        ent.tex[k] = t;
+      }
+      if (ent.sprite && ent.sprite.material) {
+        ent.sprite.material.map = ent.tex[ent.state] || ent.tex.idle;
+        ent.sprite.material.needsUpdate = true;
+        const s = 2.0; ent.sprite.scale.set(s * strip.aspect, s, 1);
+      }
+    }
+    function setAvatarStrip(id) {
+      const strip = STRIPS[id];
+      if (!strip) return null;
+      avatarStripId = id;
+      avatarPetId = null; // strip and pet avatars are mutually exclusive
+      if (selfEnt) loadStripTextures(selfEnt, strip);
+      return avatarStripId;
+    }
+    function stripRowForSector(sector) {
+      const idx = Number.isFinite(sector) ? Math.max(0, Math.min(7, sector | 0)) : 0;
+      return STRIP_SECTOR_TO_ROW[idx] || 0;
+    }
+    function setStripTextureFrame(tex, anim, frame, sector) {
+      if (!tex || !anim) return;
+      const rows = Math.max(1, anim.rows || 1);
+      const row = Math.max(0, Math.min(rows - 1, sector == null ? (anim.row || 0) : stripRowForSector(sector)));
+      tex.offset.set((frame || 0) / anim.frames, 1 - (row + 1) / rows);
+    }
+    WS.setAvatarClass = setAvatarClass;
+    WS.cycleAvatarClass = cycleAvatarClass;
+    WS.avatarClasses = () => AVATAR_CLASSES.slice();
+    WS.avatarClass = () => ((avatarPetId || avatarStripId) ? null : avatarClassName);
+    WS.setAvatarPet = setAvatarPet;
+    WS.avatarPet = () => avatarPetId;
+    WS.pets = () => Object.keys(PETS);
+    WS.setAvatarStrip = setAvatarStrip;
+    WS.avatarStrip = () => avatarStripId;
+    WS.strips = () => Object.keys(STRIPS);
+    // ---- voxel avatar identity (networked) ----
+    // Set the player's chosen voxel look. Unlike class/pet/strip (which swap textures
+    // in place), a voxel body is BAKED at makeVoxelAvatar construction — there is no
+    // in-place swap — so the self entity must be rebuilt. The descriptor is stored and
+    // persisted for future joins and, when already connected, sent immediately so peers
+    // rebuild the look in the current session.
+    function setAvatarVoxel(desc) {
+      if (!desc || typeof desc !== 'object') return null;
+      const resolved = (typeof window !== 'undefined' && typeof window.voxelAvatarDescriptor === 'function')
+        ? window.voxelAvatarDescriptor(desc)
+        : desc;
+      selfAvatarDescriptor = resolved;
+      writeStoredAvatarDescriptor(resolved);
+      // Persist to the logged-in account so the chosen look follows the player
+      // across devices. Fire-and-forget — the local write above is the offline
+      // source of truth; a failed save just isn't cross-device until next save.
+      try {
+        if (typeof window !== 'undefined' && window.__loggedIn && typeof window.__tinyworldCloudApiCall === 'function') {
+          window.__tinyworldCloudApiCall('/api/avatar', 'PUT', { avatar: resolved }).catch(() => {});
+        }
+      } catch (_) {}
+      if (selfEnt) { disposeEntity(selfEnt); selfEnt = null; updateSelfAvatar(); }
+      try { if (connected && socket && socket.readyState === WebSocket.OPEN) send({ type: 'world.avatar', avatar: resolved }); } catch (_) {}
+      return selfAvatarDescriptor;
+    }
+    WS.setAvatarVoxel = setAvatarVoxel;
+    WS.avatarVoxel = () => getSelfAvatarDescriptor();
+    // Voxel avatars (real 3D voxel people) replace the 2.5D sprite "stripes" when the
+    // builder module is loaded. Opt out with ?voxel=0 to fall back to sprites.
+    function voxelAvatarsOn() {
+      if (typeof window === 'undefined' || typeof window.makeVoxelAvatar !== 'function') return false;
+      try { return new URLSearchParams(location.search).get('voxel') !== '0'; } catch (_) { return true; }
+    }
+    // A fresh texture per avatar+sheet so each can hold its own frame/row offset.
+    // `idOrDescriptor` is EITHER a networked voxel descriptor ({ kind:'voxel', ... } —
+    // a player's chosen look) OR a string id (peer/self) used purely as a seed so each
+    // person renders DISTINCT even with no chosen identity. A descriptor wins; a string
+    // becomes { seed: id }. Backward compatible with the old seed-only call.
+    function createAvatar(idOrDescriptor) {
+      const isDesc = idOrDescriptor && typeof idOrDescriptor === 'object';
+      const voxOpts = isDesc
+        ? idOrDescriptor
+        : { seed: numericSeedFromString(idOrDescriptor != null ? idOrDescriptor : ('a' + Math.floor(Math.random() * 1e9))) };
+      const ent = { x: 0, z: 0, sector: 0, lastMove: 0, lastDx: 0, lastDz: 0, state: 'idle', frame: 0, frameTime: 0, tex: {}, sprite: null, voxel: null, disposed: false, avatarClassName };
+      if (typeof THREE === 'undefined') { avatarError('THREE unavailable'); return ent; }
+      if (voxelAvatarsOn()) {
+        try {
+          ent.voxel = window.makeVoxelAvatar(voxOpts);
+          if (ent.voxel && ent.voxel.group) {
+            ent.sprite = ent.voxel.group;            // alias so placeEntity/moveEntity/bubble keep working
+            ent.sprite.renderOrder = 10;
+            const par0 = avatarParent(); if (par0) par0.add(ent.sprite);
+            return ent;
+          }
+          ent.voxel = null;
+        } catch (e) { try { console.warn('[worlds] voxel avatar failed, using sprite:', e); } catch (_) {} ent.voxel = null; }
+      }
+      loadAvatarTextures(ent, avatarClassName);
+      const mat = new THREE.SpriteMaterial({ map: ent.tex.idle, transparent: true, depthWrite: false, alphaTest: 0.2 });
+      ent.sprite = new THREE.Sprite(mat);
+      ent.sprite.center.set(0.5, 0.12);  // anchor near the feet (cells have transparent padding below)
+      ent.sprite.scale.set(1.7, 1.7, 1);
+      ent.sprite.renderOrder = 10;
+      const par = avatarParent(); if (par) par.add(ent.sprite);
+      return ent;
+    }
+    // Surface height for a cell's tile top (world Y). Sprites are billboards anchored
+    // with center(0.5,0.12) so they used a flat 0.02; a solid voxel body must plant its
+    // feet on the ACTUAL tile top, which varies with terrain/floors.
+    function voxelGroundY(x, z) {
+      if (window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+        const s = window.__tinyworldMeshTerrain.anchorForCell(x, z, { radius: 0.18 });
+        if (s && Number.isFinite(s.y)) return s.y;
+      }
+      if (typeof cellMeshes === 'undefined') return 0.02;
+      const cm = cellMeshes[x + ',' + z];
+      if (cm && cm.tile && typeof tileSurfaceWorldY === 'function') {
+        // Walkable cap height — ignores decorative edge weeds/kerbs/bevels that
+        // poke above the surface (those made avatars bob up/down over "nothing").
+        const y = tileSurfaceWorldY(cm.tile);
+        if (typeof y === 'number' && isFinite(y)) return y;
+      }
+      // Tile baked away (static lobby): use the height cached at bake time.
+      if (cm && typeof cm.bakedGroundY === 'number') return cm.bakedGroundY;
+      return 0.02;
+    }
+    function worldRoomTilePos(x, z) {
+      const g = Math.max(1, Math.round(Number(gridSize || (typeof GRID !== 'undefined' ? GRID : 8))) || 8);
+      if (typeof THREE !== 'undefined' && THREE && typeof THREE.Vector3 === 'function') {
+        return new THREE.Vector3(x - g / 2 + 0.5, 0, z - g / 2 + 0.5);
+      }
+      return { x: x - g / 2 + 0.5, y: 0, z: z - g / 2 + 0.5 };
+    }
+    function placeEntity(ent) {
+      if (!ent || !ent.sprite) return;
+      const p = worldRoomTilePos(ent.x, ent.z);
+      const gy = voxelGroundY(ent.x, ent.z);
+      ent.groundY = gy;
+      if (ent.voxel) {
+        // Voxel avatars GLIDE to the new tile (animVoxel tweens toward this target);
+        // snap only on first spawn so they don't moon-walk in from the origin.
+        ent.tx = p.x; ent.tz = p.z; ent.ty = gy;
+        if (!ent._placed) { ent.sprite.position.set(p.x, gy, p.z); ent._yc = gy; ent._placed = true; }
+      } else {
+        ent.sprite.position.set(p.x, gy, p.z);
+      }
+    }
+    function moveEntity(ent, x, z) {
+      if (!ent) return;
+      const dx = x - ent.x, dz = z - ent.z;
+      const s = screenSector(dx, dz); if (s != null) ent.sector = s;
+      if (dx || dz) {
+        ent.lastMove = Date.now();
+        ent.lastDx = dx;
+        ent.lastDz = dz;
+      }
+      ent.x = x; ent.z = z; placeEntity(ent);
+    }
+    function disposeEntity(ent) {
+      if (!ent) return; ent.disposed = true;
+      removeBubble(ent);
+      removeNameLabel(ent);
+      if (ent.voxel) {
+        try { ent.voxel.dispose(); } catch (_) {}        // disposes own geometry + material, removes from parent
+        ent.voxel = null; ent.sprite = null;
+      } else if (ent.sprite) {
+        if (ent.sprite.parent) ent.sprite.parent.remove(ent.sprite);
+        if (ent.sprite.material) ent.sprite.material.dispose();  // SpriteMaterial is per-entity, not shared
+      }
+      disposeAvatarTextures(ent);
+    }
+    // Pet billboards animate via named anims (idle / left / right), not 8-way sheets.
+    function animPet(ent, dt) {
+      const pet = ent.pet, tex = ent.tex && ent.tex.pet;
+      if (!pet || !tex) return;
+      const moving = (Date.now() - ent.lastMove) < 200;
+      const name = moving ? (ent.lastDx < 0 ? 'left' : 'right') : 'idle';
+      const anim = pet.anims[name] || pet.anims.idle;
+      if (ent._petAnim !== name) { ent._petAnim = name; ent.frame = 0; ent.frameTime = 0; }
+      ent.frameTime += dt;
+      const fdur = 1 / (anim.fps || 6);
+      while (ent.frameTime >= fdur) { ent.frameTime -= fdur; ent.frame = (ent.frame + 1) % anim.f.length; }
+      const f = anim.f[ent.frame] | 0;
+      const col = f % pet.cols, rw = (f / pet.cols) | 0;
+      tex.offset.set(col / pet.cols, 1 - (rw + 1) / pet.rows);
+      let py = 0.02;
+      if (ent.jumpStart) { const jt = (Date.now() - ent.jumpStart) / JUMP_MS; if (jt >= 1) ent.jumpStart = 0; else py += Math.sin(jt * Math.PI) * 0.8; }
+      ent.sprite.position.y = py;
+    }
+    // Strip billboards: hybrid. State (attack/walk/idle) drives which tex.map is bound
+    // (class-style); a single horizontal row of frames is advanced (pet-style) and the
+    // sprite is flipped L/R via scale.x SIGN (never negative repeat).
+    function animStrip(ent, dt) {
+      const strip = ent.strip;
+      const s = 2.0;
+      if (!strip || !ent.tex) return;
+      const moving = (Date.now() - ent.lastMove) < 200;
+      let state = ent.attacking ? 'attack' : (moving ? 'walk' : 'idle');
+      if (state === 'walk' && !strip.anims.walk) state = 'idle';
+      const anim = strip.anims[state] || strip.anims.idle;
+      if (state !== ent.state) {
+        ent.state = state; ent.frame = 0; ent.frameTime = 0;
+        ent.sprite.material.map = ent.tex[state] || ent.tex.idle;
+        ent.sprite.material.needsUpdate = true;
+      }
+      ent.frameTime += dt;
+      const fdur = 1 / (anim.fps || 6);
+      while (ent.frameTime >= fdur) {
+        ent.frameTime -= fdur; ent.frame += 1;
+        if (ent.frame >= anim.frames) { ent.frame = 0; if (ent.attacking) ent.attacking = false; } // attack plays once
+      }
+      const tex = ent.tex[ent.state] || ent.tex.idle;
+      setStripTextureFrame(tex, anim, ent.frame, ent.sector);
+      ent.sprite.scale.x = Math.abs(s * strip.aspect);
+      let py = 0.02;
+      if (ent.jumpStart) { const jt = (Date.now() - ent.jumpStart) / JUMP_MS; if (jt >= 1) ent.jumpStart = 0; else py += Math.sin(jt * Math.PI) * 0.8; }
+      ent.sprite.position.y = py;
+    }
+    // Voxel avatars: glide (tween) toward the target tile, driving the walk cycle while
+    // translating and idle on arrival. Heading faces the actual direction of travel.
+    // Attack is one-shot inside the rig — do not re-trigger it.
+    const VOXEL_WALK_SPEED = 1.8;   // world units/sec between tiles
+    function animVoxel(ent, dt) {
+      const pos = ent.sprite.position;
+      // ---- climb mode (LOCAL-SELF only): owns position.y + the 'climb' rig pose, and
+      // short-circuits the grid tween/state logic below so it can't yank the avatar back
+      // to its base tile while it's on the ladder. ----
+      if (ent === selfEnt && ent._srActive) { _srStep(dt); updateBubble(ent); return; }
+      if (ent === selfEnt && ent._climb) { stepClimb(ent, dt); updateBubble(ent); return; }
+      // portal travel (LOCAL-SELF): 56's travel() owns the avatar's position + pose during
+      // the dissolve/emerge; cede the grid tween so it can't fight the effect.
+      if (ent === selfEnt && ent._traveling) { updateBubble(ent); return; }
+      const tx = (ent.tx != null) ? ent.tx : pos.x;
+      const tz = (ent.tz != null) ? ent.tz : pos.z;
+      const ty = (ent.ty != null) ? ent.ty : (ent.groundY != null ? ent.groundY : 0.02);
+      const dxw = tx - pos.x, dzw = tz - pos.z;
+      const dist = Math.hypot(dxw, dzw);
+      let moving = false;
+      if (dist > 2.5) {                          // teleport / respawn — snap, don't slide across the map
+        pos.x = tx; pos.z = tz;
+      } else if (dist > 0.012) {
+        const step = Math.min(dist, VOXEL_WALK_SPEED * dt);
+        pos.x += (dxw / dist) * step; pos.z += (dzw / dist) * step;
+        moving = true;
+        ent.voxel.setHeadingFromDelta(dxw, dzw);
+      }
+      // Jump: fire the rig's jump pose on the rising edge of ent.jumpStart (set by
+      // startJump / a peer jump). The pose (crouch -> launch -> land, arms + legs
+      // bending) is self-timed inside the rig and auto-returns to idle.
+      if (ent.jumpStart && !ent._jumpPrev) ent.voxel.setState('jump');
+      ent._jumpPrev = !!ent.jumpStart;
+      // ---- emote layer (networked; runs for self AND peers). One field set by
+      // applyEmote replaces six special cases. While an emote is active it OWNS
+      // the rig state, so the walk/idle precedence below is skipped (note the
+      // `!ent.emote` guard) — without that guard the idle fallback would stomp
+      // the pose every frame, and peers (who have no _crouchHeld/_sitToggle)
+      // would never show sit/crouch at all.
+      if (ent.emote) {
+        // Always render the rising-edge frame before movement/expiry can cancel, so a
+        // HOLD emote applied while the entity is still tweening isn't swallowed unseen.
+        if (!ent._emoteFresh && emoteShouldClear(ent.emote, Date.now(), moving)) {
+          ent.emote = null;            // expired, or movement cancelled a HOLD pose
+        } else {
+          // one-shot: set once on the rising edge; HOLD: re-assert each frame so
+          // the rig can't fall back to idle (and dance keeps looping).
+          if (ent._emoteFresh || ent.emote.hold) ent.voxel.setState(ent.emote.state);
+          ent._emoteFresh = false;
+        }
+      }
+      const rigState = ent.voxel.getState();
+      // attack and jump are one-shot poses owned by the rig — don't stomp them with
+      // walk/idle each frame (the rig clears back to idle when the pose finishes).
+      // An active emote also owns the state, hence the `!ent.emote` guard.
+      if (!ent.emote && rigState !== 'attack' && rigState !== 'jump') {
+        if (ent.attacking) ent.attacking = false;          // rig finished the swing
+        let want;
+        if (moving) { want = 'walk'; if (ent === selfEnt) ent._sitToggle = false; }
+        else if (ent === selfEnt && ent._crouchHeld) want = 'crouch';
+        else if (ent === selfEnt && ent._sitToggle) want = 'sit';
+        else want = 'idle';
+        ent.voxel.setState(want); ent.state = want;
+      }
+      ent.voxel.update(dt);
+      // vertical: ease toward the target tile's ground height, then add the jump arc
+      ent._yc = (ent._yc != null) ? ent._yc + (ty - ent._yc) * Math.min(1, dt * 10) : ty;
+      let y = ent._yc;
+      if (ent.jumpStart) { const jt = (Date.now() - ent.jumpStart) / JUMP_MS; if (jt >= 1) ent.jumpStart = 0; else y = ent._yc + Math.sin(jt * Math.PI) * 0.3; }
+      pos.y = y;
+      updateBubble(ent);
+    }
+    function animEntity(ent, dt) {
+      if (!ent.sprite) return;
+      // Freefall takes over the local avatar regardless of render type (voxel/sprite/strip),
+      // so dispatch it HERE — not inside animVoxel, which only runs for voxel avatars and
+      // would leave a sprite-avatar skyfall frozen (HUD up, no fall). Posture is voxel-only
+      if (ent === selfEnt && ent._srActive) { _srStep(dt); updateBubble(ent); return; }
+      if (ent.voxel) { animVoxel(ent, dt); return; }
+      if (ent.strip) { animStrip(ent, dt); return; }
+      if (ent.pet) { animPet(ent, dt); return; }
+      const state = ent.attacking ? 'attack' : ((Date.now() - ent.lastMove) < 200 ? 'walk' : 'idle');
+      if (state !== ent.state) { ent.state = state; ent.frame = 0; ent.frameTime = 0; ent.sprite.material.map = ent.tex[state]; }
+      const sh = SHEET[state];
+      ent.frameTime += dt;
+      const fdur = 1 / sh.fps;
+      while (ent.frameTime >= fdur) {
+        ent.frameTime -= fdur; ent.frame += 1;
+        if (ent.frame >= sh.cols) { ent.frame = 0; if (ent.attacking) ent.attacking = false; }   // attack plays once
+      }
+      const row = SECTOR_TO_ROW[ent.sector] || 0;
+      ent.tex[ent.state].offset.set(ent.frame * (sh.frame / sh.sw), 1 - (row + 1) * (sh.frame / sh.sh));
+      let y = 0.02;
+      if (ent.jumpStart) { const jt = (Date.now() - ent.jumpStart) / JUMP_MS; if (jt >= 1) ent.jumpStart = 0; else y += Math.sin(jt * Math.PI) * 0.8; }
+      ent.sprite.position.y = y;
+      updateBubble(ent);
+    }
+    function avatarAngleLerp(a, b, t) {
+      const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+      return a + d * t;
+    }
+    // Avatar's last rendered XZ — the camera follows only while it actually changes
+    // (i.e. while walking), so a standing player can pan freely without snap-back.
+    let _camFollowLastX = null, _camFollowLastZ = null;
+    function updateAvatarCameraOrbit(dt) {
+      if (!selfEnt || !selfEnt.sprite) return;
+      if (window.__flightActive) return;
+      // Surface roam: use the drag-look chase cam.
+      if (selfEnt._srActive) {
+        _srUpdateCamera();
+        return;
+      }
+      if (typeof cameraMode !== 'undefined' && (cameraMode === 'fp' || cameraMode === 'tp')) {
+        return;
+      }
+      if (typeof updateCamera !== 'function' || typeof target === 'undefined' || !target) return;
+      // Follow the RENDERED position (tweened for voxel) so the camera glides with the
+      // avatar — BUT only while the avatar is actually MOVING. When it's idle, leave the
+      // target wherever the player panned it so they can look around the island without
+      // the view snapping back to the avatar. (Position only; the player owns the orbit.)
+      const px = selfEnt.sprite.position.x, pz = selfEnt.sprite.position.z;
+      const moving = _camFollowLastX === null
+        || Math.hypot(px - _camFollowLastX, pz - _camFollowLastZ) > 0.0015;
+      _camFollowLastX = px; _camFollowLastZ = pz;
+      if (moving) {
+        target.x += (px - target.x) * 0.15;
+        target.z += (pz - target.z) * 0.15;
+        target.y += (0 - target.y) * 0.18;                // restore ground level after a landing
+      }
+      updateCamera();
+    }
+
+    // ---- speech bubbles + name labels extracted to 47b/47c ----
+    // The IIFE-local showChatBubble/updateBubble/removeBubble and
+    // ensureNameLabel/updateNameLabel/removeNameLabel are now provided
+    // by 47b-worlds-chat-bubbles.js and 47c-worlds-name-labels.js via
+    // the WS namespace. Forward the calls so existing IIFE references work.
+
+    function showChatBubble(id, text) { if (WS.showChatBubble) WS.showChatBubble(id, text); }
+    function updateBubble(ent) { if (WS._updateBubble) WS._updateBubble(ent); }
+    function removeBubble(ent) { if (WS._removeBubble) WS._removeBubble(ent); }
+    function ensureNameLabel(ent, name, color) { if (WS._ensureNameLabel) WS._ensureNameLabel(ent, name, color); }
+    function updateNameLabel(ent) { if (WS._updateNameLabel) WS._updateNameLabel(ent); }
+    function removeNameLabel(ent) { if (WS._removeNameLabel) WS._removeNameLabel(ent); }
+
+    // Live subject feed for the CCTV/Truman cameras: every avatar currently in the
+    // room (self + peers) as { pos, name }. The cameras use this to pan and look at
+    // whoever is moving — the hidden-camera "show" tracking its subject. Positions
+    // are in the avatarParent() local frame, which is the same frame the cameras
+    // live in (they are added under avatarParent too), so no conversion is needed.
+    WS.subjects = function subjects() {
+      const out = [];
+      if (selfEnt && selfEnt.sprite && selfEnt.sprite.visible !== false) {
+        out.push({ pos: selfEnt.sprite.position, name: (playerName ? playerName() : 'YOU') || 'YOU' });
+      }
+      if (peerEnts && peerEnts.size) {
+        peerEnts.forEach((ent) => {
+          if (ent && ent.sprite && ent.sprite.visible !== false) {
+            out.push({ pos: ent.sprite.position, name: (ent.name || 'BUILDER').toUpperCase() });
+          }
+        });
+      }
+      return out;
+    };
+    // The parent the cameras should attach to (shared avatar/lobby frame).
+    WS.avatarParent = function () { return avatarParent(); };
+    // Expose entity accessors so extracted modules (chat bubbles, name labels)
+    // can read the self/peer entity state without IIFE closure access.
+    WS.selfEnt = function () { return selfEnt; };
+    WS.peerEnts = function () { return peerEnts; };
+
+    function updateSelfAvatar() {
+      if (!selfEnt) selfEnt = createAvatar(getSelfAvatarDescriptor());
+      // Pet choice is SELF-ONLY and local (peers keep their class avatars; createAvatar
+      // is shared with the peer path, so the pet must never be applied there).
+      if (avatarPetId && PETS[avatarPetId] && (!selfEnt.pet || selfEnt.pet.id !== avatarPetId)) loadPetTextures(selfEnt, PETS[avatarPetId]);
+      if (avatarStripId && STRIPS[avatarStripId] && (!selfEnt.strip || selfEnt.strip.id !== avatarStripId)) loadStripTextures(selfEnt, STRIPS[avatarStripId]);
+      ensureNameLabel(selfEnt, (typeof playerName === 'function' ? playerName() : 'You'), (typeof playerColor === 'function' ? playerColor() : null));
+      if (selfEnt._srActive) return;   // surface roam owns position; don't let presence echoes yank us back
+      moveEntity(selfEnt, you.x, you.z);
+    }
+    const STALE_PEER_MS = 9000; // ~3 missed presence heartbeats => treat as gone
+    function updatePeerAvatars() {
+      // Drop ghost peers that stopped heartbeating (missed 'leave', hard refresh, or a
+      // stale server session) so the player never sees phantom duplicate avatars.
+      const nowMs = Date.now();
+      peers.forEach((p, id) => {
+        if (p && p._t && nowMs - p._t > STALE_PEER_MS) {
+          peers.delete(id);
+          // A stale flyer (hard refresh / lost connection, no 'leave') leaks its ghost
+          // and flying flag unless swept alongside the avatar prune.
+          if (flyingById.delete(id)) { _removeFlightGhost(id); _renderWorldRoster(); emit('flight', {}); }
+        }
+      });
+      const seen = new Set();
+      peers.forEach((p) => {
+        if (!p || p.id == null || isSelfPresence(p)) return;   // never draw yourself as a peer
+        const pos = p.cursor || p; if (pos.x == null) return;
+        seen.add(p.id);
+        let ent = peerEnts.get(p.id);
+        // Prefer the peer's NETWORKED voxel look (round-tripped via the server);
+        // fall back to the id-seed so a peer with no descriptor still renders distinct.
+        const avatarKey = p.avatar ? JSON.stringify(p.avatar) : String(p.id);
+        if (!ent || ent._avatarKey !== avatarKey) {
+          if (ent) disposeEntity(ent);
+          ent = createAvatar(p.avatar || p.id);
+          ent._avatarKey = avatarKey;
+          peerEnts.set(p.id, ent);
+        }
+        moveEntity(ent, pos.x, pos.z);
+        ensureNameLabel(ent, p.name, p.color);
+      });
+      peerEnts.forEach((ent, id) => { if (!seen.has(id)) { disposeEntity(ent); peerEnts.delete(id); } });
+    }
+    function startAvatars() {
+      if (avatarRaf || typeof requestAnimationFrame !== 'function') return;
+      let prev = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      let prunePrev = prev;
+      const tick = () => {
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+        _srPollFlyDown();   // detect fly-down transitions, activate/deactivate surface roam
+        if (selfEnt) { animEntity(selfEnt, dt); updateNameLabel(selfEnt); }
+        peerEnts.forEach((e) => { animEntity(e, dt); updateNameLabel(e); });
+        // Sweep stale/ghost peers ~every 1.5s even when no messages arrive, so a peer
+        // that hard-disconnected (missed 'leave') stops rendering as a phantom avatar.
+        if (now - prunePrev > 1500) { prunePrev = now; if (peerEnts.size) updatePeerAvatars(); }
+        // Follow camera: keep the player centered (player controls the orbit).
+        updateAvatarCameraOrbit(dt);
+        avatarRaf = requestAnimationFrame(tick);
+      };
+      avatarRaf = requestAnimationFrame(tick);
+    }
+    function stopAvatars() {
+      if (avatarRaf) { cancelAnimationFrame(avatarRaf); avatarRaf = null; }
+      try { const PS = window.__tinyworldPoserSurface; if (PS && PS.hide) PS.hide(); } catch (_) {}
+      if (_srActive) { _srUnbindInput(); _srHideHud(); _srActive = false; window.__tinyworldSurfaceRoamActive = false; document.body.classList.remove('surface-roam-active'); }
+      disposeEntity(selfEnt); selfEnt = null;
+      peerEnts.forEach((e) => disposeEntity(e)); peerEnts.clear();
+      avatarErrored = false;
+    }
+
+    function drawMinimap() {
+      if (!ctx || !canvas) return;
+      canvas.width = gridSize * CELL; canvas.height = gridSize * CELL;
+      applyMapScale();
+      ctx.fillStyle = '#13243f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // base grass
+      ctx.fillStyle = '#3f8f53'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // tiles
+      for (const c of cells) {
+        const x = Array.isArray(c) ? c[0] : c.x, z = Array.isArray(c) ? c[1] : c.z, ter = Array.isArray(c) ? c[2] : c.terrain;
+        if (x == null || z == null || x < 0 || z < 0 || x >= gridSize || z >= gridSize) continue;
+        const p = mapCellRect(Number(x), Number(z));
+        ctx.fillStyle = terrainColor(ter); ctx.fillRect(p.x, p.y, CELL, CELL);
+      }
+      // nodes
+      for (const id of Object.keys(nodes)) {
+        const n = nodes[id]; const pos = nodeCellPos(n); if (!pos && n.type !== 'fish') continue;
+        const p = pos || null; if (!p) continue;
+        const cp = mapCellCenter(Number(p.x), Number(p.z));
+        ctx.fillStyle = n.charges > 0 ? (n.type === 'ore' ? '#d8c150' : '#9fe0ff') : '#555';
+        ctx.beginPath(); ctx.arc(cp.x, cp.y, 4, 0, 7); ctx.fill();
+      }
+      // animals
+      ctx.fillStyle = '#f0c0a0';
+      for (const a of animals) {
+        const p = mapCellRect(Number(a.x), Number(a.z));
+        ctx.fillRect(p.x + 4, p.y + 4, CELL - 8, CELL - 8);
+      }
+      // peers
+      for (const p of peers.values()) {
+        if (isSelfPresence(p)) continue;   // never plot yourself as a separate peer dot
+        const pos = p.cursor || p; if (pos.x == null) continue;
+        const cp = mapCellCenter(Number(pos.x), Number(pos.z));
+        ctx.fillStyle = p.color || '#ffd166';
+        ctx.beginPath(); ctx.arc(cp.x, cp.y, 5, 0, 7); ctx.fill();
+      }
+      // you
+      const yp = mapCellCenter(Number(you.x), Number(you.z));
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#1f6feb'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(yp.x, yp.y, 5, 0, 7); ctx.fill(); ctx.stroke();
+    }
+  })();

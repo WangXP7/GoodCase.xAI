@@ -1,0 +1,286 @@
+// Receipt: every national tree holds the shape rules and draws cleanly (no connector through a node, no two parents'
+// connectors crossing or overlapping), and the trees hold every production vehicle once, in its own nation's tree. The
+// tree view is read-only: its data carries no census rating or tier note, and neither the data nor the screen reaches
+// a progression module. The trees' content hash pins their shape: a deliberate change re-pins it here.
+// First-party: Kevin B. Liu (NOTICE.md).
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import '../vehicles/fleetRegistration.ts';
+import { TANK_CATALOGS, TANK_SPECS } from '../vehicles/specs.ts';
+import { layoutProblems, layoutTree } from './layout.ts';
+import { displayTier, tierNumeral } from './tiers.ts';
+import { TECH_TREES, childrenOf, nodeForVehicle, rootOf, validateTree, vehiclesOf } from './trees.ts';
+
+const tree = (id) => TECH_TREES.find((entry) => entry.id === id);
+
+// ------------------------------------------------------------------------------------------------ shape and layout
+assert.equal(TECH_TREES.length, 17, 'seventeen national trees'); // 266: Denmark, Brazil; 269: South Africa, Australia
+for (const entry of TECH_TREES) {
+  assert.deepEqual(validateTree(entry), [], `${entry.id} breaks a shape rule`);
+  assert.deepEqual(layoutProblems(entry), [], `${entry.id} draws a connector badly`);
+  assert.equal(rootOf(entry).parents.length, 0, `${entry.id} opens on its root`);
+}
+
+// The layout check sees what it should: a run through a node, and two parents' runs crossing.
+const synthetic = (id, tier, lane, parents) => ({ id, tier, line: 'a', lane, parents, slot: 'line' });
+const bad = { id: 't', nations: [], flagNation: 'USA', name: 't', lines: [{ id: 'a', name: 'a' }], nodes: [
+  synthetic('a', 1, 0, []), synthetic('b', 2, 0, ['a']), synthetic('c', 3, 0, ['a']),
+  synthetic('d', 1, 2, ['a']), synthetic('f', 1, 1, ['a']), synthetic('g', 4, 1, ['f']), synthetic('e', 4, 0, ['d']),
+] };
+assert.deepEqual(layoutProblems(bad).sort(), ['a -> c runs through b', 'a -> d runs through f', 'f -> g and d -> e: crossing']);
+// A second parent drops into its child from above or below rather than sharing the left entry.
+const merge = layoutTree(tree('japan')).edges.find((edge) => edge.parent === 'type10b' && edge.child === 'type10');
+assert.equal(merge.points.length, 3, 'the Type 10B enters the Type 10 from above or below');
+
+// ------------------------------------------------------------------------------------------------ the fleet, once each
+const production = [...TANK_CATALOGS.production].sort();
+const drawn = TECH_TREES.flatMap((entry) => entry.nodes.flatMap((n) => vehiclesOf(n))).sort();
+assert.deepEqual(drawn, production, 'the trees hold every production vehicle exactly once');
+for (const entry of TECH_TREES) {
+  for (const n of entry.nodes) {
+    for (const id of vehiclesOf(n)) {
+      assert.ok(entry.nations.includes(TANK_SPECS[id].nation), `${id} (${TANK_SPECS[id].nation}) drawn in ${entry.id}`);
+      assert.equal(nodeForVehicle(id)?.node, n);
+      // the shown tier everywhere in the game is this column (tiers.ts, generated with the trees)
+      assert.equal(displayTier(id), n.tier, `${id}: the shown tier is its column`);
+      assert.equal(tierNumeral(id), ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][n.tier]);
+    }
+  }
+}
+assert.equal(nodeForVehicle('not_a_tank'), null);
+assert.equal(displayTier('not_a_tank'), 0, 'an id no tree draws sorts last');
+assert.equal(tierNumeral('not_a_tank'), '', 'and shows no numeral');
+assert.equal(displayTier('toString'), 0, 'the table answers own ids only');
+assert.deepEqual(childrenOf(tree('usa'), 'm1a1_abrams_hc').map((n) => n.id).sort(), ['m1a1_abrams_aim']);
+assert.equal(nodeForVehicle('t90a')?.node.id, 't90a_2004', 'a twin build resolves to its node');
+
+// ------------------------------------------------------------------------------------------------ the 257 order
+// Owner 2026-10-26 (257): "fix tank ordering. we need more tier 9s, stuff like leopard 2a6m,2a5, m1a2s, like these are all
+// powerful tanks". The shown tier follows a capability score (stats against the vehicle's own class, generation, era and
+// the 251 tier; the release-257 re-tier study), with the owner's anchors. These rules hold whatever
+// the scores: the anchors, the owner's Japan and Korea rulings, the T-90 line and the equal-rank lineages never stepping
+// down, an upgrade never below its base, and a prototype never above its production type.
+assert.deepEqual(['leo2a5', 'leo2a6', 'leo2a6m', 'm1a2_abrams', 'm1a2_abrams_sepv2', 'm1a2_abrams_tusk'].map(displayTier),
+  [9, 9, 9, 9, 9, 9], "the owner's Tier IX anchors");
+assert.deepEqual(['type10', 'type10_dozer', 'type10_tk_x', 'type10b'].map(displayTier), [10, 10, 9, 9], "the owner's Type 10 tiers");
+// the owner's Korean order (2026-10-25): the K1A1 above the K1E1 and the K2B, the XK2 above the K21, the K2 above the K2B
+for (const [above, below] of [['k1a1', 'k1e1'], ['k1a1', 'k2b'], ['xk2_black_panther', 'k21'], ['k2_black_panther', 'k2b']]) {
+  assert.ok(displayTier(above) > displayTier(below), `${above} shows above ${below}`);
+}
+// the T-72 and T-80 lineages' 251 rank, the era breaking ties
+const ERA = { ww2: 0, 'cold-war': 1, modern: 2, 'next-generation': 3 };
+// (258: matchmaking now reads the shown tier, so the 251 tiers these lineages compare are kept here)
+const AT_251 = Object.freeze({ t72b3m_2022: 9, t72bu_1989: 8, pt91m: 8, t80: 8, t80b: 9, t80bv: 9, t80uk: 8, t84: 9 });
+const rank = (id) => [AT_251[id], ERA[TANK_SPECS[id].era]];
+const t90Line = ['t90_1992', 't90a_2004', 't90a_2006', 't90a_burlak_proto', 't90sm_2013', 't90am', 't90ms_2011', 't90m_proryv'];
+t90Line.forEach((a, i) => t90Line.slice(i + 1).forEach((b) => assert.ok(displayTier(a) <= displayTier(b), `${a} never shows above ${b}`)));
+for (const line of [['t72b3m_2022', 't72bu_1989', 'pt91m'], ['t80', 't80b', 't80bv', 't80uk', 't84']]) {
+  line.forEach((a, i) => line.slice(i + 1).forEach((b) => {
+    if (String(rank(a)) === String(rank(b))) assert.ok(displayTier(a) <= displayTier(b), `${a} never shows above ${b}`);
+  }));
+}
+// 258b (Main 2026-10-26: the Leopard 2A5M stood at VII under its 2A5 at IX): every big family's base -> upgrade steps
+// (gen_trees.py FAMILY_UPGRADES holds the same map), so an upgrade never shows below its base
+const after = (base, ids) => ids.map((id) => [base, id]);
+const FAMILY_UPGRADES = Object.freeze({
+  leopard2: [['leopard2_proto', 'leo2a2'], ['leo2a2', 'leo2a3'], ['leo2a3', 'leo2a4'],
+    ...after('leo2a4', ['leo2a4_v', 'leo2a4_otco', 'leo2a4m', 'leo2a4m_can', 'leo2a5', 'leo2_revolution', 'strv121']),
+    ...after('leo2a5', ['leo2a5m', 'leo2a6', 'strv122']), ...after('leo2a6', ['leo2a6m', 'leo2a6_ua', 'leo2a7v'])],
+  m1: [...after('m1a1', ['m1a1ha', 'm1a1_abrams_aim', 'm1a1_abrams_sa', 'm1a1_abrams_fep', 'm1a2_abrams']),
+    ['m1a1ha', 'm1a1_abrams_hc'], ['m1a1_abrams_sa', 'ua_m1a1'], ['m1a2_abrams_sepv2', 'm1a2_abrams_sepv3'],
+    ...after('m1a2_abrams', ['m1a2_abrams_sepv2', 'm1a2_abrams_tusk', 'ua_m1a2_abrams'])],
+  t72: [['t72b_1987', 't72b3'], ['t72b3', 't72b3m_2016'], ['t72b3m_2016', 't72b3m_2022'],
+    ...after('t72b3', ['t72b3_sich', 't72b3_zubr', 't72b3_zubr_ii', 't72b3_qilin', 't72b3_bastion_m', 't72b3m_hetman',
+      't72b3m_hetman_ii', 't72b3m_wilk', 't72b3m_kunlun', 't72b3m_bulat_m'])],
+  t80: [['t80', 't80b'], ['t80b', 't80bv'], ['t80bv', 't80u'], ['t80bv', 'ua_t80bv'], ['t84', 't84bm_oplot_m'],
+    // 262: the T-84U Oplot (478DU9) -> the T-84BM Oplot-M (478DU9-1) -> its Thai export, the Oplot-T (478DU9-T)
+    ['t84bm_oplot_m', 'bm_oplot_m'], ['bm_oplot_m', 'bm_oplot_t'],
+    ...after('t80u', ['t80u_kursk', 't80uk', 't84', 't80u_zoria', 't80u_husarz', 't80u_yun', 't80u_bars_m'])],
+  t90: [['t72bu', 't90_1992'], ['t90_1992', 't90'], ['t90a_2004', 't90a'], ['t90a_2006', 't90a_vladimir'],
+    ['t90ms_2011', 't90ms_tagil'], ['t90sm_2013', 't90sm'], ['t90am', 't90m']],
+  challenger: [['challenger1_mk1', 'challenger1_mk2'], ['challenger1_mk2', 'challenger1_mk3'], ['challenger1_mk3', 'challenger2'],
+    ...after('challenger2', ['challenger2e', 'ua_challenger2', 'challenger3'])],
+  leclerc: [['leclerc_s1', 'leclerc_s2'], ['leclerc_s2', 'leclerc_sxxi'], ['leclerc_sxxi', 'leclerc_xlr']],
+  merkava: [['merkava1b', 'merkava2b'], ['merkava2b', 'merkava2d'], ['merkava2d', 'merkava3c'], ['merkava3c', 'merkava3_baz'],
+    ['merkava3_baz', 'merkava3d'], ['merkava3d', 'merkava4'], ...after('merkava4', ['merkava4b', 'merkava4_trophy', 'merkava4_barak'])],
+  other: [['chieftain3', 'chieftain5'], ['chieftain5', 'chieftain_mk9'], ['chieftain_mk9', 'chieftain_mk10'],
+    ['centurion3', 'centurion5_2'], ['amx30', 'amx30b'], ['amx30b', 'amx30b2'], ['m48a5_patton', 'm60a1'], ['m60a1', 'm60a3'],
+    ['m60a1', 'm60a2'], ['m60a3', 'sabra_mk2'], ['t62_1975', 't62mv1'], ['t64bv1', 't64bv_donbas'], ['t64bv1', 't64bm1m'], ['t64bv1', 't64bv'], ['t64bv_donbas', 't64b1v_2022'], ['type90', 'type90a'],
+    ['ztz99a', 'ztz99a2'], ['c1_ariete', 'c2_ariete']],
+  // 265: the Danish Leopards
+  denmark: [['leo1a3dk', 'leo1a5dk'], ['leo1a5dk', 'leo2a5dk'], ['leo2a5dk', 'leo2a7dk']],
+  // 266: the Osório's two prototypes (the 105 mm P.1 before the 120 mm P.2)
+  brazil: [['x1_pioneiro', 'x1a2_carcara'], ['tamoyo1', 'tamoyo3'], ['osorio_p1', 'osorio_p2'], ['ee_t3_osorio', 'ee_t4_osorio']],
+  // 265: the M41s (the Danish rebuild at II over the originals at I)
+  m41: [['m41a3', 'm41dk1'], ['m41_bw', 'm41dk1'], ['m41_jgsdf', 'm41dk1']],
+  // 265: the Danish Centurion over its Mk 5/2, the CV9035 DK over the Swedish CV90 (CV9040)
+  denmarkB: [['centurion5_2', 'centurion5_2dk'], ['cv90', 'cv9035dk']],
+});
+const upgrades = Object.values(FAMILY_UPGRADES).flat();
+for (const id of upgrades.flat()) assert.ok(TANK_SPECS[id] && displayTier(id), `${id}: a drawn vehicle in the family map`);
+for (const [base, upgrade] of upgrades) assert.ok(displayTier(upgrade) >= displayTier(base), `${upgrade} never shows below ${base}`);
+for (const [proto, production] of [['amx40_proto', 'amx40'], ['c1_ariete_proto_serie1', 'c1_ariete'],
+  ['c1_ariete_preserie', 'c1_ariete'], ['c2_ariete_proto', 'c2_ariete'], ['challenger3_proto', 'challenger3'],
+  ['challenger3_td', 'challenger3'], ['challenger3_td_rws', 'challenger3'],
+  ['cv90_mk4_concept', 'cv90_mk4'], ['leo2_revolution_proto', 'leo2_revolution'], ['leopard2_proto', 'leo2a2'],
+  ['t90a_burlak_proto', 't90a_burlak'], ['ztz100_prototype', 'ztz100'], ['ztz20_prototype', 'ztz20'], ['t84', 't84bm_oplot_m']]) {
+  assert.ok(displayTier(proto) <= displayTier(production), `${proto} never shows above ${production}`);
+}
+// no tier piles up: at most about 1.6x the average
+const perTier = new Map();
+for (const id of drawn) perTier.set(displayTier(id), (perTier.get(displayTier(id)) ?? 0) + 1);
+for (const [tier, count] of perTier) assert.ok(count <= Math.ceil(1.6 * drawn.length / 10), `Tier ${tier} holds ${count}`);
+
+// ------------------------------------------------------------------------------------------------ read-only
+for (const entry of TECH_TREES) {
+  for (const n of entry.nodes) {
+    assert.deepEqual(Object.keys(n).filter((key) => !['id', 'tier', 'line', 'lane', 'parents', 'slot', 'builds'].includes(key)), [],
+      `${n.id} carries only the drawing`);
+  }
+}
+const sources = [
+  ...readdirSync(new URL('./', import.meta.url)).filter((file) => file.endsWith('.ts')).map((file) => `./${file}`),
+  ...readdirSync(new URL('./nations/', import.meta.url)).map((file) => `./nations/${file}`),
+  '../ui/techTree.ts', '../ui/techTreeStrings.ts',
+];
+for (const file of sources) {
+  const text = readFileSync(new URL(file, import.meta.url), 'utf8');
+  assert.doesNotMatch(text, /progression\/|ratedTier|tierNote/, `${file} reaches nothing of the progression work`);
+}
+
+// ------------------------------------------------------------------------------------------------ keyboard (improve-271 plan 026)
+// The tree owns the keyboard while it is open: it takes the focus a board press or an open leaves on no node, the Garage
+// yields every key to a shown modal box outside its root (the page body's focus included), and the Garage's hide()
+// closes the tree and the info dossiers (neither outlives it over the cover or a battle)
+{
+  const tree = readFileSync(new URL('../ui/techTree.ts', import.meta.url), 'utf8');
+  assert.match(tree, /root\.setAttribute\('aria-modal', 'true'\);\s*(?:\/\/[^\n]*\n\s*)*root\.tabIndex = -1;/, 'the tree root takes focus');
+  assert.match(tree, /board\.addEventListener\('pointerdown', \(event\) => \{\s*if \(event\.button !== 0\) return;\s*(?:\/\/[^\n]*\n\s*)*if \(!root\.contains\(document\.activeElement\)\) root\.focus\(\{ preventScroll: true \}\);/,
+    'a board press keeps the keyboard in the tree');
+  assert.match(tree, /if \(node\) node\.focus\(\{ preventScroll: true \}\);\s*else root\.focus\(\{ preventScroll: true \}\);/, 'an open with no node focuses the tree');
+  const garage = readFileSync(new URL('../ui/garage.ts', import.meta.url), 'utf8');
+  // (9bf01e0c01, round 8 Y4 residual r1) the Garage's own first check is garageScreen.interactive (open and uncovered),
+  // which replaced api.isOpen; the yield to a foreign modal is the first key decision after it
+  assert.match(garage, /function onKey\(e: KeyboardEvent\): void \{\s*(?:\/\/[^\n]*\n\s*)*if \(!garageScreen\.interactive\) return;\s*(?:\/\/[^\n]*\n\s*)*if \(foreignModalOpen\(\)\) return;/,
+    'the Garage yields every key to an open foreign modal surface first');
+  assert.match(garage, /function foreignModalOpen\(\): boolean \{\s*for \(const box of document\.querySelectorAll<HTMLElement>\('\[aria-modal="true"\]'\)\) \{\s*if \(!root\.contains\(box\) && box\.getClientRects\(\)\.length > 0\) return true;/,
+    'a foreign modal is any shown aria-modal box outside the Garage');
+  // (dddfb6071b) the audit F5 lines that open hide() put the tree's close past 600 characters; one close, not two
+  assert.match(garage, /hide\(\) \{[\s\S]{0,900}techTreeScreen\?\.close\(\{ restoreFocus: false \}\);\s*closeContextInfo\(\);/, 'hide() closes the tree and the dossiers');
+  const hideBody = garage.slice(garage.indexOf('    hide() {'), garage.indexOf('closeSurfacesWithin(root);', garage.indexOf('    hide() {')));
+  assert.equal(hideBody.split('techTreeScreen?.close(').length - 1, 1, 'hide() closes the tree once');
+  // (3f437d6c27, round 8 Y4 residual) the tree opens for the press its latched opener answered
+  assert.match(garage, /techTreeScreen = screen;\s*screen\.open\(opening\.press\);/, 'the open tree is kept for hide()');
+  assert.match(garage, /if \(techTreeScreen === screen\) techTreeScreen = null;/, 'and let go when it closes');
+}
+
+// ------------------------------------------------------------------------------------------------ pin
+const digest = createHash('sha256').update(JSON.stringify(TECH_TREES)).digest('hex').slice(0, 16);
+// 2026-10-26 re-pin (257): every tree re-tiered by capability and re-laid (RETIER-257.md), keeping the owner's anchors and
+// the Japan and Korea rulings. 258b: the Leopard 2A5M drawn on its 2A5's node at IX, the T-84 at VI with its T-80U
+// (FAMILY_UPGRADES above). 262: the Challenger 1 Mk 1 at VIII on the Challenger line, lane 0, off the Chieftain Mk 5
+// beside the Mk 2; the fictional FV4030/5 and FV4030/6 (the rebuilt hull's turrets as their own tanks) at VIII, lanes 4
+// and 5, off the Chieftain Mk 10.
+// 2026-10-27 re-pin (262): the Danish Christian II drawn as a Nordic special at VIII in the Sweden tree (its special line
+// added; 'Denmark' joins the tree's nations).
+// 262: the T-55A joins Russia at I, stacked between the KV-2 and the T-62 obr. 1975.
+// 262: China's line ends ZTZ-100 Prototype → ZTZ-100 → ZTZ-20 Prototype → ZTZ-20, all at X.
+// 262: the new true T-64s, the T-64BM1M and the T-64B1V mod. 2022 at IV under the T-64BV mod. 2017
+// and the T-64BV at III beside the T-64BV1.
+// 262 (owner approval 2026-10-27): the T-84BM Oplot-M and Oplot-T at X on the Kharkiv line;
+// the older pair renamed Object 478DU2 (VI) and T-84U Oplot (VI on its period 2000 ammunition, score 0.772), the T-84U
+// leading the line's row 0 to the Oplot-M, the T-80U Kursk a VI side branch; the M1A1 SA (Ukraine) moves to lane 1 so
+// the Oplot-M's connector clears it.
+// 262: the Challenger 3 TD in the UK special lane at VIII (with its prototype's tier), its RWS field fit as its twin.
+// 2026-10-28 re-cut (263, the merged release tree): every node above at once (the T-55A, the Challenger 1 Mk 1, the
+// FV4030/5 and FV4030/6 (vickers-cr1-262 @ 31d83cdcdb), the Christian II, the ZTZ-20 pair, the four true T-64s, the two Oplots and the two Challenger 3 TDs).
+// 2026-10-29 re-pin (263): vickers-cr1-262 a3b7d3f661's FV4030/5 and FV4030/6 at VIII, lanes 4 and 5, in the Challenger 1
+// Granby's place.
+// 265: the Longwei family joins China's special lane (Zhuque, Xuanwu and Baihu at VII, Qinglong at IX; tiers
+// for Main's ruling), out of release 264 into 265.
+// 265 (integration): the Pattons' four new M48s (the M48A3, Magach 3, M48A2GA2 and M48 Super; pattons-m48-266) join
+// the tree with the Longwei family (re-pinned 2026-10-30 at integ/265 791de05f98: every other tree check passes; the
+// M48 line, the Magach 3 special and the M48A3 between the M47 and the A5 are pattons-m48-266's nodes).
+// 2026-10-30 re-pin (the Centurion family 262 merged on 264c): the Sho't Kal (Israel's special lane at III), the Centurion Mk 13 (III, after the Mk 5/2),
+// the Strv 105 (Sweden's new special lane at III), the Olifant Mk 2 (III) and the Mk 5 AVRE (II) in the UK's special lane,
+// each at the tier its same-tier duels hold; the UK tree drawing South Africa's and Australia's one hull each (the Olifant
+// and the Australian Mk 5/1, at II beside the Strv 81 it shares a package with, fly their own flags).
+// Re-pinned 2026-10-30 at integ/265 4e349bd6bc (every other tree check passes): the Pattons' M48 nodes and the Centurion
+// family's six beside the Longwei family.
+// 265: the Leopard 1A2A1 drawn on its 1A5's node at I.
+// Re-pinned 2026-10-30 at integ/265 79f8a35382 (every other tree check passes): + the Leopard 1A2A1 on its 1A5's node.
+// 2026-10-30 re-pin (265, merging 262 and 263): the fourth batch's Leopard 2A3 (leo2a3_b4) beside the 2A3 OTCO at IV in
+// the Germany tree (Leopard side line, lane 2: lanes 4 and 5 put it on the 2A2's connectors to the A4 and A4 V).
+// Re-pinned 2026-10-30 at integ/265 (leo2a4-family-265 ca927a900a merged; every other tree check passes): + the fourth
+// batch's Leopard 2A3 beside the 2A3 OTCO.
+// 262 (owner 2026-10-28): the PT-84 Orzeł, the Polish concept on the Oplot-M's base, ends Poland's Twardy line at X (lane 3:
+// the Upiór holds lane 2 at X); its light hunter, the PT-84 Sokół, leads to it at IX and the assault PT-84 Żbik branches
+// from the Sokół at X (lane 4). Re-pinned on the merged tree (main 637c3b4ccf + the PT-84s).
+// Re-pinned 2026-10-30 at integ/265 (pt91-twardy-262 bbf22b6ce3 merged; every other tree check passes): + the three
+// PT-84s on Poland's Twardy line.
+// 2026-10-31 re-pin (266, Main's ruling on the Denmark line): the Denmark tree, its root the Leopard 1A3 DK (I) and the
+// Leopard line on through the 1A5 DK (I, the DK-1 its twin) to the 2A5 DK (IX), the 2A7 DK held (2026-10-30, Main: its
+// Barracuda lands later); the Christian II moves out of the Sweden tree into Denmark's special lane, and Sweden's nations
+// are Sweden's alone again.
+// Re-pinned 2026-10-31 at integ/266 (leo2-front-265 3fc640ea29 merged; every other tree check passes): 265's trees + the
+// Denmark tree (the Christian II out of Sweden's special lane, the Strv 105 kept there).
+// 266 (m60-family-265): the Magach 6B (I) and 7C (II) in Israel's second special lane, beside the Magach 3 and the Sabra.
+// Re-pinned 2026-10-31 at integ/266 (m60-family-265 17fe8bb7d1 merged; every other tree check passes): + the Magach 6B and 7C.
+// 2026-10-31 re-pin (266): the owner moved the Challenger 3 TD and its RWS build to tier X beside the Challenger 3.
+// Re-pinned 2026-10-31 at integ/266 (cr3td-tier-x-266 986c7a4452 merged; every other tree check passes).
+// 2026-10-29 re-pin (266, Main's ruling on the Brazil line): the Brazil tree, head A: its root the X1 Pioneiro (I) and the
+// Bernardini and Engesa line on through the X1A2 Carcará (I), the MB-3 Tamoyo 1 (II) and 3 (III) and the EE-T1 Osório P.1
+// (III) and P.2 (IV); head B's Army-fleet line (the M41C, the Leopards, the M60A3 TTS) re-cuts it again.
+// 2026-10-30 re-pin (266, the owner's ask and Main's ruling the same day): the fictional EE-T3 (IX) and EE-T4 (X) Osório
+// on from the P.2, lane 2.
+// Re-pinned 2026-10-31 at integ/266 (brazil-line-266 22327fcc1f merged; every other tree check passes): + the Brazil tree.
+// 265 (the same day, Main's rulings on the owner's M41 ask): Denmark's recce line (the M41 DK-1 at II off the 1A3 DK, the
+// Centurion Mk 5/2 DK at III) and CV90 line (the CV9035 DK at V); the M41A3 at I off the M46 (USA), the Bundeswehr M41 at I
+// off the Jagdpanzer E100 (Germany) and the JGSDF M41 at I off the STB-1 (Japan), each on an M41 line.
+// 265 (the owner 2026-10-30): the T49 at II off the M41A3 on the US M41 line (lane 10, clear of the M551's and M60A3's
+// connectors).
+// Re-pinned 2026-10-31 at integ/266 (wip/denmark-c-265 e7b231c694 merged; every other tree check passes): + the M41s, the T49 and
+// the CV9035 DK; the US M41A3 on lane 6 beside the M46, the Bundeswehr M41 a Germany special at I.
+// 265 (the owner 2026-10-30): the Ukrainian CV9040C at IV beside the Bradley on Ukraine's aid line.
+// Re-pinned 2026-10-31 at integ/266 (ua-cv9040c-265 49ecc585b4 merged; every other tree check passes): + the Ukrainian CV9040C.
+// 267 (the owner 2026-11-01, "finish it"): the Leopard 2A7 DK, held since 2026-10-30, at X after the 2A5 DK; the
+// Centurion Mk 5/2 DK (the owner, the same day) at III after the M41 DK-1, the CV9035 DK after it again.
+// 267 (the Japan line): the Type 90 (B) built on the Type 90's node (builds: type90_kyumaru, type90b), its tier 8.
+// 267 re-pin (lane bmpt-family-267, the owner's "make a BMPT Terminator"): the original Ob'yekt 199 Terminator at VI on
+// the support line (lane 13) off the BMPT-72, beside the BMPT T-90.
+// 268 (the twin-cannon air defence; tiers by capability on the coordinator's suggestion): Russia's Tunguska and Pantsir
+// line (the 2K22M Tunguska-M at V off the BMP-3, lane 14 under the BMPTs, the tracked Pantsir-S1 at VI after it); the
+// Flakpanzer Gepard 1A2 at V on Germany's Leopard 1 row after the MBT-70 (lane 5); China's PGZ-95 and PGZ-09 line (the
+// PGZ-95 at V off the AFT-10, lane 4, the PGZ-09 at VI after it).
+// 2026-11-02 re-pin (268, lane abrams-bradley-268, the owner's ask): the M3A2 Bradley at II beside the M2A2 on the
+// Bradley line (lane 10, off the M2A2); the T49 one lane down to 11 so that connector runs clear.
+// 268 integration (2026-11-04): both 268 trees together, the twin-cannon air defence's lanes and the M3A2 on the
+// Bradley line; neither moves the other's nodes (Russia/Germany/China vs USA).
+// 2026-11-02 re-pin (269, Main's ruling on the South Africa tree, head A): the South Africa tree, its root the Olifant Mk 1
+// (II) with the Semel as its twin, the Mk 1A and Mk 1B (III) and the Olifant Mk 2 (III) moved here from the UK tree's
+// special lane; the TTD the special (III by its same-tier duels; IV ruled). The UK tree's nations drop South Africa.
+// 269 (the second air-defence round; tiers by capability on the coordinator's suggestion): the Type 87 SPAAG at V on
+// Japan's STB-1 to Type 10 line off the Type 74 (lane 1); the UK's new Marksman line off the Chieftain Mk 10 on lane 5,
+// the Marksman (T-55) at V and the ItPsv Leopard 2 at VI after it; the Lvkv 9040 at V straight on from Sweden's CV90
+// (lane 2); the K30 Biho at V off South Korea's BMP-3 (ROK), lane 2 under the K21; the PZA Loara at VI off Poland's
+// PT-91A Twardy (lane 1). (Pinned be0f063a807fb64f on the air-defence side.)
+// 2026-11-02 re-pin (269, Main's ruling on the Australia tree, head B): the Australia tree, its root the Leopard AS1 (I),
+// the M1A1 AIM SA (VIII) and the M1A2 SEPv3 (IX) after it, the Centurion Mk 5/1 (II) moved here from the UK tree's special
+// lane, the M113A1 FSV and MRV (I), the M113AS4 (II, with the Ares APC) and the AS21 Redback (VI). The UK tree's nations
+// drop Australia. 2026-11-03 re-pin (Main's ruling on the M113s' TOW): the M113AS4 from II to III.
+// 269 integration (2026-11-06): 268's trees, the South Africa tree and the Australia tree together; the UK tree's
+// nations drop both.
+// 2026-11-03 re-pin (the owner: "make a USA m113 variant, that plays similar to the ares apc"): the US M113A3 in the US
+// tree's special lane at II.
+// 269 integration (2026-11-06): + the US M113A3 at II in the US special lane.
+// 270 (the owner 2026-11-05; Main's tier ruling the same day): the T95 with its fictional 152 mm on the US special lane at II. Merged onto 269 (2026-11-08): re-pinned with the 268 and 269 trees; the T95 moves to the US special line's lane 2 (the M113A3 holds lane 1 at II).
+// 270 (item/twin-aa-269): the second air-defence round (above) and the M163 VADS in the US tree's special lane at IV,
+// after the M113A3 on its lane 1 (the owner, 2026-11-04: "also add the m163 VADS"); the merge of main 72addd0635
+// (release 269): both sides' trees together. (Pinned 3a59594b312e8b40 at the merge.)
+// 271 (integration): the T95 (270) and the twin-aa round's trees together; re-pinned at the merge (6a5a7ecd456ca7fd).
+// russia-152 (main 3f31c66abc): Russia's 152 mm line on from the T-80U along its row (Object 292 VII, Object 477
+// Molot IX, Object 195 X) with the T-14 152 beside the Object 195 at X (Main's tiers, 2026-11-04); its own pin was
+// 7c47bfa998d2369b. 271 (integration): merged after the twin-aa round; re-pinned at the merge (98286838a838e422).
+assert.equal(digest, '98286838a838e422', `tree content changed: re-pin to ${digest} if deliberate`);
+console.log(`techTree: ${TECH_TREES.length} trees, ${drawn.length} vehicles, pin ${digest}`);

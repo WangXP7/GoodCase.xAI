@@ -1,0 +1,363 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Only their DI tokens are needed. The real modules pull in the engine, and
+// the partially compiled CDK needs the JIT compiler under vitest.
+vi.mock('@angular/cdk/a11y', () => ({ LiveAnnouncer: class LiveAnnouncer {} }));
+vi.mock('../sim/client/sim-client.service', () => ({ SimClient: class SimClient {} }));
+vi.mock('./tower-selection.service', () => ({ TowerSelectionService: class TowerSelectionService {} }));
+vi.mock('../store/game.store', () => ({ GameStore: class GameStore {} }));
+vi.mock('../store/tower-defense.store', () => ({ TowerDefenseStore: class TowerDefenseStore {} }));
+vi.mock('../store/ui.store', () => ({ UIStore: class UIStore {} }));
+vi.mock('./tower-placement.service', () => ({ TowerPlacementService: class TowerPlacementService {} }));
+vi.mock('./world/map-placement.service', () => ({ MapPlacementService: class MapPlacementService {} }));
+vi.mock('./ability-targeting.service', () => ({ AbilityTargetingService: class AbilityTargetingService {} }));
+vi.mock('./camera-control.service', () => ({ CameraControlService: class CameraControlService {} }));
+vi.mock('./photo-mode.service', () => ({ PhotoModeService: class PhotoModeService {} }));
+vi.mock('./hero-control.service', () => ({ HeroControlService: class HeroControlService {} }));
+vi.mock('./boss-intro.service', () => ({ BossIntroService: class BossIntroService {} }));
+vi.mock('./infrastructure/engine-initialization.service', () => ({
+  EngineInitializationService: class EngineInitializationService {},
+}));
+vi.mock('../director/wave-director', () => ({ WaveDirector: class WaveDirector {} }));
+vi.mock('./location/location-management.service', () => ({
+  LocationManagementService: class LocationManagementService {},
+}));
+vi.mock('./world/main-world.service', () => ({ MainWorldService: class MainWorldService {} }));
+vi.mock('./world/world-package-loader.service', () => ({ WorldPackageLoader: class WorldPackageLoader {} }));
+vi.mock('./world/intro-camera-flight.service', () => ({ IntroCameraFlightService: class IntroCameraFlightService {} }));
+vi.mock('../run-log/config-hash', () => ({ balanceConfigHash: () => 'hash' }));
+
+// No change detection here: the recording's effect and the focus after layout stay idle
+vi.mock('@angular/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@angular/core')>()),
+  effect: () => ({ destroy: () => undefined }),
+  afterNextRender: () => undefined,
+}));
+
+import { ElementRef, Injector, NgZone, runInInjectionContext, signal } from '@angular/core';
+import { LiveAnnouncer } from '@angular/cdk/a11y';
+import { ReplayService } from './replay.service';
+import { SimClient } from '../sim/client/sim-client.service';
+import { TowerSelectionService } from './tower-selection.service';
+import { initialScalars } from '../sim/client/mirror/sim-mirror';
+import type { SimFramePacket } from '../sim/protocol/packet';
+import { GameStore } from '../store/game.store';
+import { TowerDefenseStore } from '../store/tower-defense.store';
+import { UIStore } from '../store/ui.store';
+import { TowerPlacementService } from './tower-placement.service';
+import { MapPlacementService } from './world/map-placement.service';
+import { AbilityTargetingService } from './ability-targeting.service';
+import { CameraControlService } from './camera-control.service';
+import { PhotoModeService } from './photo-mode.service';
+import { HeroControlService } from './hero-control.service';
+import { BossIntroService } from './boss-intro.service';
+import { EngineInitializationService } from './infrastructure/engine-initialization.service';
+import { WaveDirector } from '../director/wave-director';
+import { LocationManagementService } from './location/location-management.service';
+import { MainWorldService } from './world/main-world.service';
+import { WorldPackageLoader } from './world/world-package-loader.service';
+import { IntroCameraFlightService } from './world/intro-camera-flight.service';
+import { WorldContext } from '../world/world-context.service';
+import { fakeWorldContext } from '../../test/world-context-fake';
+
+/**
+ * The gate of ReplayService.enter(): a replay starts only with a recorded
+ * wave, between waves, and not while a boss intro holds the camera (the
+ * intro pauses the game and puts the camera back itself). The simulation
+ * re-simulates the wave (SimClient.rpc replayEnter); its packets name the
+ * waves it can show.
+ */
+describe('ReplayService.enter gate', () => {
+  let host: HTMLElement;
+  let introActive: ReturnType<typeof signal<boolean>>;
+  /** The frame listeners the service put on the SimClient */
+  let frames: ((packet: SimFramePacket) => void)[];
+  /** The rpcs the simulation got */
+  let rpc: ReturnType<typeof vi.fn>;
+  let phase: ReturnType<typeof signal<string>>;
+  let paused: ReturnType<typeof signal<boolean>>;
+  let getEngine: ReturnType<typeof vi.fn>;
+  let service: ReplayService;
+  let injector: Injector;
+  /** What SimScalars.snapshotRefusal says: shots still flying or a quiet field */
+  let refusal: string | null;
+  /** The place loader: where it stands, what it was asked */
+  let loader: {
+    worldHere: ReturnType<typeof vi.fn>; placeLoaded: ReturnType<typeof vi.fn>; standsOn: ReturnType<typeof vi.fn>;
+    sameHq: ReturnType<typeof vi.fn>; moveTo: ReturnType<typeof vi.fn>; takeSpawns: ReturnType<typeof vi.fn>; adopt: ReturnType<typeof vi.fn>;
+  };
+
+  /** A packet naming the waves the simulation can re-simulate */
+  const recorded = (...waves: number[]) => {
+    const scalars = { ...initialScalars(), replayableWaves: waves };
+    for (const listener of frames) listener({ scalars } as SimFramePacket);
+  };
+  /** The replays the simulation was asked to enter */
+  const entered = () => rpc.mock.calls.filter(([method]) => method === 'replayEnter');
+  /** Let the async start (rpc replayEnter) finish */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  const pose = () => ({ clone: () => ({}), copy: vi.fn() });
+
+  beforeEach(() => {
+    frames = [];
+    rpc = vi.fn(async (method: string, wave?: number) =>
+      (method === 'replayEnter' ? { wave, startStep: 0, lengthInSteps: 100, waves: [wave], markers: [] } : null));
+    refusal = null;
+    host = document.createElement('div');
+    document.body.append(host);
+    introActive = signal(false);
+    phase = signal('setup');
+    paused = signal(false);
+    const engine = {
+      towerBadges: { setVisible: vi.fn() },
+      getCamera: () => ({ position: pose(), quaternion: pose(), up: pose(), updateMatrixWorld: vi.fn() }),
+      getControls: () => null,
+    };
+    getEngine = vi.fn(() => engine);
+    let there = false;
+    loader = {
+      worldHere: vi.fn(() => null),
+      placeLoaded: vi.fn(async () => true),
+      standsOn: vi.fn(() => there),
+      sameHq: vi.fn(() => false),
+      moveTo: vi.fn(async () => (there = true)),
+      takeSpawns: vi.fn(async () => true),
+      adopt: vi.fn((world: { worldKey: string }) => world.worldKey),
+    };
+
+    injector = Injector.create({
+      providers: [
+        {
+          provide: UIStore,
+          useValue: { replayMode: signal(false), openMenu: signal(null), mapPlacementMode: signal(false), coopMapLocked: signal(false) },
+        },
+        { provide: TowerDefenseStore, useValue: { loading: signal(false), error: signal(null), phase } },
+        { provide: GameStore, useValue: { paused, mannedTowerId: signal(null) } },
+        { provide: WorldContext, useValue: fakeWorldContext() },
+        {
+          provide: SimClient,
+          useValue: {
+            bus: { emit: vi.fn() },
+            get scalars() {
+              return { ...initialScalars(), snapshotRefusal: refusal, baseHealth: 100 };
+            },
+            onFrame: (listener: (packet: SimFramePacket) => void) => {
+              frames.push(listener);
+              return () => frames.splice(frames.indexOf(listener), 1);
+            },
+            rpc,
+            replay: null,
+          },
+        },
+        { provide: TowerSelectionService, useValue: { select: vi.fn() } },
+        { provide: TowerPlacementService, useValue: { buildMode: signal(false) } },
+        { provide: MapPlacementService, useValue: {} },
+        { provide: AbilityTargetingService, useValue: { targeting: signal(null) } },
+        { provide: CameraControlService, useValue: { cancelJump: vi.fn() } },
+        { provide: EngineInitializationService, useValue: { getEngine } },
+        { provide: PhotoModeService, useValue: { active: signal(false) } },
+        { provide: HeroControlService, useValue: { deselect: vi.fn() } },
+        { provide: BossIntroService, useValue: { active: introActive } },
+        { provide: LiveAnnouncer, useValue: { announce: vi.fn() } },
+        { provide: NgZone, useValue: { run: (fn: () => unknown) => fn() } },
+        { provide: ElementRef, useValue: new ElementRef(host) },
+        { provide: WaveDirector, useValue: { source: { id: 'budget' } } },
+        { provide: LocationManagementService, useValue: { editableHqLocation: () => null } },
+        { provide: MainWorldService, useValue: { source: () => null } },
+        { provide: WorldPackageLoader, useValue: loader },
+        { provide: IntroCameraFlightService, useValue: { cancel: vi.fn() } },
+      ],
+    });
+    service = runInInjectionContext(injector, () => new ReplayService());
+    recorded(3);
+  });
+
+  afterEach(() => {
+    host.remove();
+  });
+
+  it('stops listening to the frames of the simulation when the game component goes', () => {
+    expect(frames).toHaveLength(1);
+    (injector as unknown as { destroy(): void }).destroy();
+    expect(frames).toHaveLength(0);
+  });
+
+  it('does not start while a boss intro holds the camera', async () => {
+    introActive.set(true);
+    expect(service.available()).toBe(true);
+
+    service.enter();
+    await settle();
+
+    expect(service.active()).toBe(false);
+    expect(getEngine).not.toHaveBeenCalled();
+    expect(entered()).toHaveLength(0);
+    expect(paused()).toBe(false);
+  });
+
+  it('starts once the intro is over, pausing the live game', async () => {
+    introActive.set(true);
+    service.enter();
+    introActive.set(false);
+
+    service.enter();
+    await settle();
+
+    expect(service.active()).toBe(true);
+    expect(entered()).toEqual([['replayEnter', 3, false]]);
+    expect(paused()).toBe(true);
+  });
+
+  it('plays at the original tempo only once switched on, and a chosen speed ends it', async () => {
+    service.enter();
+    await settle();
+    const sim = injector.get(SimClient);
+    expect(sim.replay).toEqual({ playing: true, speed: 1, original: false });
+
+    service.toggleOriginalTempo();
+    expect(service.originalTempo()).toBe(true);
+    expect(sim.replay!.original).toBe(true);
+    // No recorded speed in the packet (a file from before): the chosen one runs
+    expect(service.timescale()).toBe(1);
+
+    service.setSpeed(4);
+    expect(service.originalTempo()).toBe(false);
+    expect(sim.replay).toEqual({ playing: true, speed: 4, original: false });
+  });
+
+  it('offers the player the button while REPLAY_CONFIG.offered is on', async () => {
+    expect(service.available()).toBe(true);
+    expect(service.offered()).toBe(true);
+
+    service.enter();
+    await settle();
+    expect(service.active()).toBe(true);
+  });
+
+  it('does not start without a recorded wave or during a wave', async () => {
+    recorded();
+    service.enter();
+    recorded(3);
+    phase.set('wave');
+    service.enter();
+    await settle();
+
+    expect(service.active()).toBe(false);
+    expect(entered()).toHaveLength(0);
+  });
+
+  it('stays out when the simulation cannot re-simulate the wave, and gives the pause back', async () => {
+    rpc.mockResolvedValueOnce(null);
+    service.enter();
+    await settle();
+
+    expect(entered()).toHaveLength(1);
+    expect(service.active()).toBe(false);
+    expect(paused()).toBe(false);
+  });
+
+  it('waits for the last shots of a wave to land, then starts by itself (R8)', async () => {
+    vi.useFakeTimers();
+    try {
+      refusal = 'projectiles';
+      service.enter();
+      expect(service.active()).toBe(false);
+      service.update();
+      expect(entered()).toHaveLength(0);
+
+      refusal = null;
+      service.update();
+      await vi.runAllTimersAsync();
+      expect(service.active()).toBe(true);
+      expect(entered()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after 5 s of shots in the air and starts nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      refusal = 'projectiles';
+      service.enter();
+      vi.advanceTimersByTime(5001);
+      service.update();
+      refusal = null;
+      service.update();
+      await vi.runAllTimersAsync();
+      expect(service.active()).toBe(false);
+      expect(entered()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('switches the wave of a loaded file without letting go of the file', async () => {
+    rpc.mockImplementation(async (method: string, wave?: number) => {
+      if (method === 'loadReplayFile') return { refusal: null, note: null, waves: [1, 2] };
+      return method === 'replayEnter' ? { wave, startStep: 0, lengthInSteps: 100, waves: [1, 2], markers: [] } : null;
+    });
+    await service.loadFile(new Blob(['{}']));
+    expect(service.active()).toBe(true);
+
+    await service.switchWave(1);
+
+    expect(rpc.mock.calls.map(([method]) => method)).toEqual(['loadReplayFile', 'replayEnter', 'replayEnter']);
+    expect(entered()).toEqual([['replayEnter', 1, true], ['replayEnter', 2, true]]);
+    expect(service.fromFile()).toBe(true);
+  });
+
+  it('lets the simulation drop a loaded file that could not be entered', async () => {
+    rpc.mockImplementation(async (method: string) =>
+      (method === 'loadReplayFile' ? { refusal: null, note: 'other version', waves: [1] } : null));
+    introActive.set(true);
+
+    await service.loadFile(new Blob(['{}']));
+
+    expect(service.active()).toBe(false);
+    expect(service.fromFile()).toBe(false);
+    expect(service.fileNote()).toBeNull();
+    expect(rpc.mock.calls.map(([method]) => method)).toEqual(['loadReplayFile', 'replayExit']);
+  });
+
+  it('offers to go to the place a file was played at, goes there, takes its world and plays the file', async () => {
+    const place = { name: 'Heilbronn', world: { worldKey: 'w-heilbronn', hq: { lat: 49.1, lon: 9.2 }, spawns: [] } };
+    let here = 'w-here';
+    rpc.mockImplementation(async (method: string, wave?: number) => {
+      if (method === 'loadReplayFile') {
+        return here === place.world.worldKey
+          ? { refusal: null, note: null, waves: [1], place: null }
+          : { refusal: 'other-world', note: null, waves: [], place };
+      }
+      return method === 'replayEnter' ? { wave, startStep: 0, lengthInSteps: 100, waves: [1], markers: [] } : null;
+    });
+    loader.adopt.mockImplementation((world: { worldKey: string }) => (here = world.worldKey));
+
+    await service.loadFile(new Blob(['{}']));
+    expect(service.active()).toBe(false);
+    expect(service.elsewhere()).toEqual({ name: 'Heilbronn' });
+    expect(service.fileProblem()).toBe('That replay was played in Heilbronn. Going there ends the run here.');
+
+    await service.playThere();
+    expect(loader.moveTo).toHaveBeenCalledWith(place.world, 'Heilbronn');
+    expect(loader.adopt).toHaveBeenCalledWith(place.world);
+    expect(service.active()).toBe(true);
+    expect(service.fromFile()).toBe(true);
+    expect(service.elsewhere()).toBeNull();
+    expect(service.fileProblem()).toBeNull();
+  });
+
+  it('does not offer to go to a place of another world, and says why the file does not load', async () => {
+    const place = { name: 'Witch Marsh', world: { worldKey: 'w-marsh', hq: { lat: 0, lon: 0 }, spawns: [] } };
+    rpc.mockImplementation(async (method: string) =>
+      (method === 'loadReplayFile' ? { refusal: 'other-world', note: null, waves: [], place } : null));
+    loader.worldHere.mockReturnValue('It plays the map "Witch Marsh", which is not open here. Open that map first.');
+
+    await service.loadFile(new Blob(['{}']));
+    expect(service.elsewhere()).toBeNull();
+    expect(service.fileProblem()).toBe('That replay was played on another map. Load the same place first.');
+    await service.playThere();
+    expect(loader.moveTo).not.toHaveBeenCalled();
+  });
+});

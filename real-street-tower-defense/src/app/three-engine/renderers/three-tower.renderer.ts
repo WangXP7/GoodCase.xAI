@@ -1,0 +1,1073 @@
+import { isDevMode } from '@angular/core';
+import {
+  Scene,
+  Object3D,
+  Mesh,
+  LineLoop,
+  AnimationMixer,
+  AnimationClip,
+  AnimationAction,
+  MeshBasicMaterial,
+  RingGeometry,
+  DoubleSide,
+  LoopPingPong,
+  LoopRepeat,
+  Material,
+  MeshStandardMaterial,
+  Group,
+  Frustum,
+  Matrix4,
+  Camera,
+  Sphere,
+  Texture,
+  WebGLRenderer,
+} from 'three';
+import { CoordinateSync } from './index';
+import { TowerTypeConfig, TOWER_TYPES, TowerTypeId } from '../../configs/tower-types.config';
+import { AssetManagerService } from '../../services/infrastructure/asset-manager.service';
+import { createLosRing, createTipMarker } from './tower-overlays';
+import { RangeRingKit, placeRangeRing } from './range-ring';
+import { TurretPitch, createTurretPitch, drawTurretAim } from './tower-turret-aim';
+import type { TowerAim } from '../../entities/tower-aim';
+import { TowerMuzzleFlash } from './tower-muzzle-flash';
+import { setTowerGreyedOut } from './tower-hold-fire';
+import { TowerBuild } from './tower-scaffold';
+import { getTowerPath } from '../../configs/tower-paths.config';
+
+/**
+ * Tower render data - stored per tower
+ */
+export interface TowerRenderData {
+  id: string;
+  mesh: Object3D;
+  turretPart: Object3D | null; // Rotating turret part (e.g., turret_top)
+  rangeIndicator: Group | null; // Range ring, see range-ring.ts
+  selectionRing: Mesh | null;
+  tipMarker: Mesh | null; // Debug marker showing LoS origin point
+  losRing: LineLoop | null; // Debug ring showing LOS origin circle
+  typeConfig: TowerTypeConfig;
+  isSelected: boolean;
+  /**
+   * Coop (review R14): a partner's tower; its selection ring, shown on hover
+   * and selection, is in the owner's lane colour, with a material of its own
+   */
+  ownerRing?: boolean;
+  /** Greyed out on hold fire (Tower.holdFire) */
+  holdFire: boolean;
+  // Geo coordinates for terrain sampling
+  lat: number;
+  lon: number;
+  height: number;
+  // Tower tip position for LoS calculations
+  tipY: number;
+  // Custom rotation set by user during placement (radians)
+  customRotation: number;
+  /**
+   * The tower's aim (Tower.aim), turned by the simulation; drawn on the
+   * turret part every render frame. A tower without a turret part turns it
+   * all the same, nothing in the model shows it (see entities/tower-aim.ts).
+   */
+  aim: TowerAim;
+  // Turret hover animation (e.g., magic tower orb)
+  turretBaseY: number; // Original Y position of turret part
+  hoverPhaseOffset: number; // Random phase offset for desynchronized hover
+  /** Guns that tilt towards the target's height (TowerTypeConfig.pitchNodes) */
+  pitch?: TurretPitch;
+  // GLTF animation support
+  mixer: AnimationMixer | null;
+  animations: Map<string, AnimationClip>;
+  currentAction: AnimationAction | null;
+}
+
+/**
+ * ThreeTowerRenderer - Renders towers using Three.js
+ *
+ * Features:
+ * - GLB model loading with caching
+ * - Range ring on whatever surface lies at the range (range-ring.ts)
+ * - Selection highlight ring
+ */
+export class ThreeTowerRenderer {
+  private scene: Scene;
+  private sync: CoordinateSync;
+  private assetManager: AssetManagerService;
+
+  // Loaded model URLs for reference counting
+  private loadedModelUrls = new Set<string>();
+
+  /**
+   * Towers whose model is still loading, by id, with the token of their
+   * create(). remove() and clear() drop the entry, so a model that arrives
+   * for a tower gone meanwhile is not added.
+   */
+  private readonly pendingCreates = new Map<string, number>();
+  private createToken = 0;
+  /**
+   * Hold fire and a range grown by upgrades, set before the model may have
+   * arrived (a snapshot restore builds a tower and sets both at once):
+   * create() applies them when it does.
+   */
+  private readonly heldIds = new Set<string>();
+  private readonly ranges = new Map<string, number>();
+  /** The path a tower took (setPath), before its model may have arrived: create() hangs it on */
+  private readonly pathIds = new Map<string, string>();
+  /** A scout's detection ring (TowerPath.detectionRadius), shown with its range */
+  private readonly detectionRings = new Map<string, Group>();
+  /** The node of a path's attachment that sweeps (TowerPath.attachment.sweepNode), by tower */
+  private readonly sweepNodes = new Map<string, Object3D>();
+  /** A partner's lane colour per tower (setOwnerRing), set as the tower is placed, before its model arrives */
+  private readonly ownerColors = new Map<string, number>();
+  /** A build (setBuild) that came before the tower's model: create() starts it */
+  private readonly pendingBuilds = new Map<string, { remainingMs: number; totalMs: number }>();
+  /** The towers growing in their scaffold, or whose scaffold is coming down, see TowerBuild */
+  private readonly builds = new Map<string, TowerBuild>();
+
+  /** Tower types whose configured turretNode the model lacks, warned about once. */
+  private readonly missingTurretNodes = new Set<string>();
+
+  // Active tower renders
+  private towers = new Map<string, TowerRenderData>();
+
+  /** Tower under the pointer, shows its range like a selected one, see setHovered */
+  private hoveredId: string | null = null;
+
+  /** Model nodes the game shows or hides per tower type, by node name, see setPartShown */
+  private readonly partsShown = new Map<TowerTypeId, Map<string, boolean>>();
+
+  /** Geometry and materials every range ring shares */
+  private readonly rangeRings = new RangeRingKit();
+  /** The same for a scout's detection rings, teal, drawn after the range rings */
+  private readonly detectionRingKit = new RangeRingKit(0x4fc3c3, 3);
+
+  /** Range ring of the tower the build preview shows, see showPreviewRange */
+  private readonly previewRange: Group;
+
+  // Static shared selection ring geometry + material (created once, reused across all instances)
+  private static sharedSelectionMaterial: MeshBasicMaterial | null = null;
+  private static sharedSelectionGeometry: RingGeometry | null = null;
+  private static sharedRefCount = 0;
+
+  // Muzzle flash (pooled - single reusable light)
+  private readonly muzzleFlash: TowerMuzzleFlash;
+
+  // Debug mode - shows LOS rings and aim arrows for all towers
+  private debugMode = false;
+
+  // Show shoot height mode - shows tip markers (magenta spheres) for all towers
+  private showShootHeight = false;
+
+  // Animation time accumulator for frame-independent animations
+  private animationTime = 0;
+  private frustum = new Frustum();
+  private projScreenMatrix = new Matrix4();
+  private boundingSphere = new Sphere();
+  private _animFrameCount = 0;
+
+  // Radius of the debug LOS ring around the tip, m
+  private readonly LOS_OFFSET_MIN = 2.4;
+
+  constructor(scene: Scene, sync: CoordinateSync, assetManager: AssetManagerService) {
+    this.scene = scene;
+    this.sync = sync;
+    this.assetManager = assetManager;
+
+    // The muzzle flash light lives in the scene for good, dark between shots
+    // (see TowerMuzzleFlash).
+    this.muzzleFlash = new TowerMuzzleFlash(this.scene);
+
+    this.previewRange = this.rangeRings.create();
+    this.scene.add(this.previewRange);
+
+    // Static shared selection ring geometry + material (created once, reused across all instances)
+    if (!ThreeTowerRenderer.sharedSelectionMaterial) {
+      ThreeTowerRenderer.sharedSelectionMaterial = new MeshBasicMaterial({
+        color: 0xc9a44c, // TD gold from design system
+        transparent: true,
+        opacity: 0.85,
+        side: DoubleSide,
+        depthWrite: false,
+        depthTest: false, // Always render on top
+      });
+    }
+    if (!ThreeTowerRenderer.sharedSelectionGeometry) {
+      ThreeTowerRenderer.sharedSelectionGeometry = new RingGeometry(8, 12, 48);
+    }
+    ThreeTowerRenderer.sharedRefCount++;
+  }
+
+  /**
+   * Preload model template for a tower type
+   */
+  async preloadModel(typeId: TowerTypeId): Promise<void> {
+    const config = TOWER_TYPES[typeId];
+    if (!config) return;
+
+    // Skip if already loaded
+    if (this.loadedModelUrls.has(config.modelUrl)) {
+      return;
+    }
+
+    try {
+      const cachedModel = await this.assetManager.loadModel(config.modelUrl);
+      this.loadedModelUrls.add(config.modelUrl);
+
+      if (cachedModel.animations.length > 0) {
+        if (isDevMode()) console.log(`[ThreeTowerRenderer] Loaded ${typeId} with ${cachedModel.animations.length} animation(s): ${cachedModel.animations.map(a => a.name).join(', ')}`);
+      }
+    } catch (err) {
+      console.error(`[ThreeTowerRenderer] Failed to load model: ${typeId}`, err);
+    }
+  }
+
+  /**
+   * Preload all tower type models
+   */
+  async preloadAllModels(): Promise<void> {
+    const types = Object.keys(TOWER_TYPES) as TowerTypeId[];
+    await Promise.all(types.map((t) => this.preloadModel(t)));
+  }
+
+  /**
+   * Compile every tower model's shader programs and upload its textures
+   * ahead of the first placement, which otherwise stalls the frame the tower
+   * appears in on a synchronous compile. With KHR_parallel_shader_compile the
+   * driver compiles off the main thread. Clones are built the way `create`
+   * builds them; their materials share program cache keys with real towers.
+   */
+  async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
+    const warm = new Group();
+    const urls = new Set(Object.values(TOWER_TYPES).map((config) => config.modelUrl));
+    for (const url of urls) {
+      const model = this.assetManager.cloneModel(url);
+      if (!model) continue;
+      warm.add(model);
+    }
+
+    // Lights come from the real scene, so the program keys match what renders.
+    await renderer.compileAsync(warm, camera, this.scene);
+
+    warm.traverse((node) => {
+      const material = (node as Mesh).material;
+      if (!material) return;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        for (const value of Object.values(m)) {
+          if (value instanceof Texture) renderer.initTexture(value);
+        }
+      }
+    });
+  }
+
+  /**
+   * Create tower render - spawns mesh in scene
+   * @param id Tower ID
+   * @param typeId Tower type
+   * @param lat Latitude
+   * @param lon Longitude
+   * @param height Terrain height
+   * @param customRotation Custom rotation set by user during placement (radians)
+   * @param aim The tower's aim (Tower.aim), which the turret shows
+   */
+  async create(
+    id: string,
+    typeId: TowerTypeId,
+    lat: number,
+    lon: number,
+    height: number,
+    customRotation: number,
+    aim: TowerAim,
+  ): Promise<TowerRenderData | null> {
+    const config = TOWER_TYPES[typeId];
+    if (!config) {
+      console.error(`[ThreeTowerRenderer] Unknown tower type: ${typeId}`);
+      return null;
+    }
+    // See pendingCreates: the model loads after this call returns
+    const token = ++this.createToken;
+    this.pendingCreates.set(id, token);
+
+    // Load model via AssetManager (cached)
+    let cachedModel;
+    try {
+      cachedModel = await this.assetManager.loadModel(config.modelUrl);
+      this.loadedModelUrls.add(config.modelUrl);
+    } catch (err) {
+      console.error(`[ThreeTowerRenderer] Failed to load model: ${typeId}`, err);
+      return null;
+    }
+    // The tower went (or came again) while its model loaded: a snapshot
+    // restore removes and builds towers in one go, and a replay switching
+    // waves does so twice in a frame. Its model must not stand orphaned.
+    if (this.pendingCreates.get(id) !== token) return null;
+    this.pendingCreates.delete(id);
+
+    // Clone the model
+    const mesh = this.assetManager.cloneModel(config.modelUrl);
+    if (!mesh) {
+      console.error(`[ThreeTowerRenderer] Failed to clone model: ${typeId}`);
+      return null;
+    }
+
+    mesh.scale.setScalar(config.scale);
+
+    // Apply rotation: custom rotation + config rotation
+    const baseRotation = config.rotationY ?? 0;
+    mesh.rotation.y = baseRotation + customRotation;
+
+    // Find turret part if it exists (for turret rotation). A turretNode in the
+    // config replaces the default names 'turret_top', 'tower_top' and 'top',
+    // there is no fallback to them.
+    const isTurretNode = (name: string): boolean => config.turretNode
+      ? name === config.turretNode
+      : name === 'turret_top' || name === 'tower_top' || name === 'top';
+    let turretPart: Object3D | null = null;
+    let turretBaseY = 0;
+    mesh.traverse((node) => {
+      if (isTurretNode(node.name) && !turretPart) {
+        turretPart = node;
+        turretBaseY = node.position.y;
+      }
+    });
+    // A configured node that is missing is a config error; once per type, so
+    // a bot placing towers does not flood the console.
+    if (config.turretNode && !turretPart && !this.missingTurretNodes.has(typeId)) {
+      this.missingTurretNodes.add(typeId);
+      console.warn(`[ThreeTowerRenderer] ${typeId}: turretNode '${config.turretNode}' is not in the model, the turret will not turn`);
+    }
+    // (Diagnostic removed — fires on every tower placement for types without
+    // a named turret part, which was flooding the console during training.)
+
+    // Position in local coordinates - terrain level (without height offset)
+    const terrainPos = this.sync.geoToLocal(lat, lon, height);
+
+    // Tower mesh position with height offset
+    const localPos = terrainPos.clone();
+    localPos.y += config.heightOffset;
+    mesh.position.copy(localPos);
+
+    // Add to scene
+    this.scene.add(mesh);
+
+    // Range ring around the foot (terrain level, not tower level), hidden
+    // until hovered or selected
+    const rangeIndicator = this.rangeRings.create();
+    placeRangeRing(rangeIndicator, terrainPos.x, terrainPos.y, terrainPos.z, config.range);
+    this.scene.add(rangeIndicator);
+
+    // Create selection ring at terrain level (shared geometry + material)
+    const selectionRing = new Mesh(ThreeTowerRenderer.sharedSelectionGeometry!, ThreeTowerRenderer.sharedSelectionMaterial!);
+    selectionRing.rotation.x = -Math.PI / 2;
+    selectionRing.position.copy(terrainPos);
+    selectionRing.position.y += 1.5; // Slightly above terrain
+    selectionRing.visible = false;
+    selectionRing.renderOrder = 5; // Render on top
+    this.scene.add(selectionRing);
+
+    // Calculate tower shooting position Y (for LoS calculations)
+    // Uses configurable shootHeight per tower type
+    const tipY = terrainPos.y + config.heightOffset + config.shootHeight;
+
+    // Check if this is a pure air tower (only targets air, not ground)
+    // Pure air towers don't need LOS visualization since air enemies are always visible
+    const isPureAirTower = (config.canTargetAir ?? false) && !(config.canTargetGround ?? true);
+
+    // Create tip marker (magenta sphere showing projectile origin point),
+    // controlled by the "Show Shoot Height" option
+    const tipMarker = createTipMarker(terrainPos.x, tipY, terrainPos.z, this.showShootHeight);
+    this.scene.add(tipMarker);
+
+    // Create LOS ring (cyan circle showing where LOS raycasts originate)
+    // Skip for pure air towers
+    let losRing: LineLoop | null = null;
+    if (!isPureAirTower) {
+      losRing = createLosRing(terrainPos.x, tipY, terrainPos.z, this.LOS_OFFSET_MIN, this.debugMode);
+      this.scene.add(losRing);
+    }
+
+    // Setup animation mixer if model has animations AND config allows it
+    let mixer: AnimationMixer | null = null;
+    const animations = new Map<string, AnimationClip>();
+    let currentAction: AnimationAction | null = null;
+
+    if (config.hasAnimations && cachedModel.animations && cachedModel.animations.length > 0) {
+      mixer = new AnimationMixer(mesh);
+      for (const clip of cachedModel.animations) {
+        animations.set(clip.name, clip);
+      }
+
+      // Auto-play first animation (typically the idle/base animation)
+      const firstClip = cachedModel.animations[0];
+      if (firstClip) {
+        const action = mixer.clipAction(firstClip);
+        // Use PingPong for smooth back-and-forth animation if configured
+        if (config.animationPingPong) {
+          action.setLoop(LoopPingPong, Infinity);
+        } else {
+          action.setLoop(LoopRepeat, Infinity);
+        }
+        action.play();
+        currentAction = action;
+      }
+    }
+
+    const renderData: TowerRenderData = {
+      id,
+      mesh,
+      turretPart,
+      rangeIndicator,
+      selectionRing,
+      tipMarker,
+      losRing,
+      typeConfig: config,
+      isSelected: false,
+      holdFire: false,
+      lat,
+      lon,
+      height,
+      tipY,
+      customRotation,
+      aim,
+      turretBaseY, // Store original Y for hover animation
+      hoverPhaseOffset: Math.random() * Math.PI * 2, // Random start phase
+      mixer,
+      animations,
+      currentAction,
+    };
+
+    if (config.pitchNodes && turretPart) {
+      renderData.pitch = createTurretPitch(config, turretPart);
+    }
+    // Where the aim points already: the model loads while the simulation turns it
+    this.drawAim(renderData);
+
+    this.applyParts(renderData);
+    this.towers.set(id, renderData);
+    if (this.heldIds.has(id)) {
+      renderData.holdFire = true;
+      setTowerGreyedOut(renderData.mesh, true);
+    }
+    const range = this.ranges.get(id);
+    if (range !== undefined) this.updateRangeIndicator(id, range);
+    const ownerColor = this.ownerColors.get(id);
+    if (ownerColor !== undefined) this.setOwnerRing(id, ownerColor);
+    const pathId = this.pathIds.get(id);
+    if (pathId) void this.applyPath(renderData, pathId);
+    const build = this.pendingBuilds.get(id);
+    if (build) {
+      this.pendingBuilds.delete(id);
+      this.setBuild(id, build.remainingMs, build.totalMs);
+    }
+    return renderData;
+  }
+
+  /**
+   * The tower grows in its scaffold for `remainingMs` more game ms out of `totalMs` (Tower.builtAtMs); 0
+   * ends the build and the scaffold comes down. Before the model arrives it waits for create().
+   */
+  setBuild(id: string, remainingMs: number, totalMs: number): void {
+    const data = this.towers.get(id);
+    if (!data) {
+      if (remainingMs > 0) this.pendingBuilds.set(id, { remainingMs, totalMs });
+      else this.pendingBuilds.delete(id);
+      return;
+    }
+    const build = this.builds.get(id);
+    if (build) {
+      build.set(remainingMs, totalMs);
+    } else if (remainingMs > 0) {
+      this.builds.set(id, new TowerBuild(this.scene, data.mesh, data.typeConfig.footprintRadius, remainingMs, totalMs));
+    }
+  }
+
+  /**
+   * The tower took path `pathId`: its attachment goes on the model, a detection radius gets its ring.
+   * Before the model arrives create() does it.
+   */
+  setPath(id: string, pathId: string): void {
+    if (this.pathIds.get(id) === pathId) return;
+    this.pathIds.set(id, pathId);
+    const data = this.towers.get(id);
+    if (data) void this.applyPath(data, pathId);
+  }
+
+  private async applyPath(data: TowerRenderData, pathId: string): Promise<void> {
+    const path = getTowerPath(pathId);
+    if (!path) return;
+    if ((path.detectionRadius ?? 0) > 0 && !this.detectionRings.has(data.id)) {
+      const ring = this.detectionRingKit.create();
+      const foot = this.sync.geoToLocal(data.lat, data.lon, data.height);
+      placeRangeRing(ring, foot.x, foot.y, foot.z, path.detectionRadius!);
+      ring.visible = data.isSelected || data.id === this.hoveredId;
+      this.scene.add(ring);
+      this.detectionRings.set(data.id, ring);
+    }
+    const attachment = path.attachment;
+    if (!attachment) return;
+    try {
+      await this.assetManager.loadModel(attachment.modelUrl);
+      this.loadedModelUrls.add(attachment.modelUrl);
+    } catch (err) {
+      console.error(`[ThreeTowerRenderer] Failed to load path attachment: ${pathId}`, err);
+      return;
+    }
+    // The tower went or took the attachment meanwhile
+    if (this.towers.get(data.id) !== data || data.mesh.getObjectByName(`path:${pathId}`)) return;
+    const model = this.assetManager.cloneModel(attachment.modelUrl);
+    if (!model) return;
+    model.name = `path:${pathId}`;
+    data.mesh.add(model);
+    const sweep = attachment.sweepNode ? model.getObjectByName(attachment.sweepNode) : undefined;
+    if (sweep) this.sweepNodes.set(data.id, sweep);
+  }
+
+  /** The builds of one render frame, `gameDeltaMs` of game time (0 while paused) */
+  updateBuilds(gameDeltaMs: number): void {
+    for (const [id, build] of this.builds) {
+      build.update(gameDeltaMs);
+      if (build.finished) {
+        build.dispose();
+        this.builds.delete(id);
+      }
+    }
+  }
+
+  /**
+   * Show or hide the node `node` in the model of every tower of `typeId`,
+   * standing or built later: the missile standing in the missile silo while
+   * a strike is loaded (VFXService). A model without the node is left as it
+   * is. The tower's own visibility (`mesh.visible`) is not touched.
+   */
+  setPartShown(typeId: TowerTypeId, node: string, shown: boolean): void {
+    let parts = this.partsShown.get(typeId);
+    if (!parts) {
+      parts = new Map();
+      this.partsShown.set(typeId, parts);
+    }
+    parts.set(node, shown);
+    for (const data of this.towers.values()) {
+      if (data.typeConfig.id === typeId) this.applyPart(data, node, shown);
+    }
+  }
+
+  /** Whether `node` shows in the models of `typeId`: true until setPartShown hides it. */
+  isPartShown(typeId: TowerTypeId, node: string): boolean {
+    return this.partsShown.get(typeId)?.get(node) ?? true;
+  }
+
+  private applyParts(data: TowerRenderData): void {
+    const parts = this.partsShown.get(data.typeConfig.id);
+    if (!parts) return;
+    for (const [node, shown] of parts) this.applyPart(data, node, shown);
+  }
+
+  private applyPart(data: TowerRenderData, node: string, shown: boolean): void {
+    const part = data.mesh.getObjectByName(node);
+    if (part) part.visible = shown;
+  }
+
+  /**
+   * Update tower position (normally static, but useful for editor)
+   */
+  updatePosition(id: string, lat: number, lon: number, height: number): void {
+    const data = this.towers.get(id);
+    if (!data) return;
+
+    // Terrain level position (without heightOffset)
+    const terrainPos = this.sync.geoToLocal(lat, lon, height);
+
+    // Tower mesh gets heightOffset
+    const localPos = terrainPos.clone();
+    localPos.y += data.typeConfig.heightOffset;
+    data.mesh.position.copy(localPos);
+
+    // Range ring around the foot, same range
+    data.rangeIndicator?.position.copy(terrainPos);
+
+    // Selection ring at terrain level
+    if (data.selectionRing) {
+      data.selectionRing.position.copy(terrainPos);
+      data.selectionRing.position.y += 1.5;
+    }
+
+    // Update stored coordinates
+    data.lat = lat;
+    data.lon = lon;
+    data.height = height;
+  }
+
+  /**
+   * Apply debug overrides to all towers of a specific type.
+   * Updates scale, position (heightOffset), tipMarker (shootHeight), and base rotation.
+   */
+  applyDebugOverrides(
+    typeId: TowerTypeId,
+    overrides: { scale: number; heightOffset: number; shootHeight: number; rotationY: number }
+  ): void {
+    for (const data of this.towers.values()) {
+      if (data.typeConfig.id !== typeId) continue;
+
+      // Update scale
+      data.mesh.scale.setScalar(overrides.scale);
+
+      // Update position (heightOffset)
+      const terrainPos = this.sync.geoToLocal(data.lat, data.lon, data.height);
+      data.mesh.position.set(
+        terrainPos.x,
+        terrainPos.y + overrides.heightOffset,
+        terrainPos.z
+      );
+
+      // Update base rotation (preserving custom rotation)
+      data.mesh.rotation.y = overrides.rotationY + data.customRotation;
+
+      // Update tipY and tipMarker position (shootHeight)
+      const newTipY = terrainPos.y + overrides.heightOffset + overrides.shootHeight;
+      data.tipY = newTipY;
+
+      if (data.tipMarker) {
+        data.tipMarker.position.set(terrainPos.x, newTipY, terrainPos.z);
+      }
+
+      if (data.losRing) {
+        data.losRing.position.set(terrainPos.x, newTipY, terrainPos.z);
+      }
+    }
+  }
+
+  /**
+   * Geo heading tower `id` aims at right now (Tower.aim): where its turret
+   * points, for a tower without one where its aim has turned to. null while
+   * its model is still loading. The blood moon searchlight follows it.
+   */
+  aimHeading(id: string): number | null {
+    return this.towers.get(id)?.aim.current ?? null;
+  }
+
+  /**
+   * Show the range ring and selection ring of the tower under the pointer
+   * (InputHandlerService), or of none. The selected tower keeps its own, a
+   * hover only adds a second one; the LOS view stays with the selection.
+   */
+  setHovered(id: string | null): void {
+    if (id === this.hoveredId) return;
+    const previous = this.hoveredId !== null ? this.towers.get(this.hoveredId) : undefined;
+    this.hoveredId = id;
+    if (previous && !previous.isSelected) this.setRangeVisible(previous, false);
+    const next = id !== null ? this.towers.get(id) : undefined;
+    if (next) this.setRangeVisible(next, true);
+  }
+
+  private setRangeVisible(data: TowerRenderData, visible: boolean): void {
+    if (data.rangeIndicator) data.rangeIndicator.visible = visible;
+    const detection = this.detectionRings.get(data.id);
+    if (detection) detection.visible = visible;
+    if (data.selectionRing) data.selectionRing.visible = visible;
+  }
+
+  /**
+   * Coop (review R14): a partner's tower wears its ring in the owner's lane
+   * colour (`color`, 0xRRGGBB) where the gold one would show, on hover (PLAYTEST
+   * T51: always on was too much); null gives it the shared gold ring back.
+   */
+  setOwnerRing(id: string, color: number | null): void {
+    if (color === null) this.ownerColors.delete(id);
+    else this.ownerColors.set(id, color);
+    const data = this.towers.get(id);
+    const ring = data?.selectionRing;
+    const shared = ThreeTowerRenderer.sharedSelectionMaterial;
+    if (!data || !ring || !shared) return;
+    if (ring.material !== shared) (ring.material as Material).dispose();
+    if (color === null) {
+      ring.material = shared;
+      data.ownerRing = false;
+      ring.visible = data.isSelected || this.hoveredId === id;
+      return;
+    }
+    const material = shared.clone();
+    material.color.setHex(color);
+    material.opacity = 0.7;
+    ring.material = material;
+    data.ownerRing = true;
+    ring.visible = data.isSelected || this.hoveredId === id;
+  }
+
+  /**
+   * Select tower (show range indicator and selection ring)
+   * Note: LOS visualization is now handled by GlobalRouteGrid
+   */
+  select(id: string): void {
+    const data = this.towers.get(id);
+    if (!data) return;
+
+    data.isSelected = true;
+    this.setRangeVisible(data, true);
+    if (data.tipMarker) data.tipMarker.visible = this.showShootHeight;
+    if (data.losRing) data.losRing.visible = this.debugMode;
+  }
+
+  /**
+   * Deselect tower
+   */
+  deselect(id: string): void {
+    const data = this.towers.get(id);
+    if (!data) return;
+
+    data.isSelected = false;
+    // Still under the pointer: the hover keeps showing the range
+    this.setRangeVisible(data, this.hoveredId === id);
+    // Keep debug markers visible when enabled
+    if (data.tipMarker) data.tipMarker.visible = this.showShootHeight;
+    if (data.losRing) data.losRing.visible = this.debugMode;
+  }
+
+  /** Grey out the tower's model on hold fire, or give it its colours back (TowerLifecycle.setHoldFire). */
+  setHoldFire(id: string, holdFire: boolean): void {
+    if (holdFire) this.heldIds.add(id);
+    else this.heldIds.delete(id);
+    const data = this.towers.get(id);
+    if (!data || data.holdFire === holdFire) return;
+    data.holdFire = holdFire;
+    setTowerGreyedOut(data.mesh, holdFire);
+  }
+
+  /**
+   * Deselect all towers
+   */
+  deselectAll(): void {
+    for (const id of this.towers.keys()) {
+      this.deselect(id);
+    }
+  }
+
+  /**
+   * Set debug mode - shows LOS rings and aim arrows for all towers
+   * (Raycast lines removed - visualization is now via routeLosViz)
+   */
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+
+    for (const data of this.towers.values()) {
+      if (data.losRing) {
+        data.losRing.visible = enabled;
+      }
+    }
+  }
+
+  /**
+   * Set show shoot height mode - shows tip markers (magenta spheres) for all towers
+   * Controlled by Tower Debug Panel's "Show Shoot Height" checkbox
+   */
+  setShowShootHeight(enabled: boolean): void {
+    this.showShootHeight = enabled;
+
+    for (const data of this.towers.values()) {
+      if (data.tipMarker) {
+        data.tipMarker.visible = enabled;
+      }
+    }
+  }
+
+  /**
+   * Get current debug mode state
+   */
+  isDebugMode(): boolean {
+    return this.debugMode;
+  }
+
+  /**
+   * Remove tower from scene
+   */
+  remove(id: string): void {
+    this.pendingCreates.delete(id);
+    this.pendingBuilds.delete(id);
+    this.pathIds.delete(id);
+    this.sweepNodes.delete(id);
+    const detection = this.detectionRings.get(id);
+    if (detection) this.scene.remove(detection);
+    this.detectionRings.delete(id);
+    this.builds.get(id)?.dispose();
+    this.builds.delete(id);
+    this.heldIds.delete(id);
+    this.ranges.delete(id);
+    this.ownerColors.delete(id);
+    const data = this.towers.get(id);
+    if (!data) return;
+
+    // Remove mesh
+    this.scene.remove(data.mesh);
+    this.disposeObject(data.mesh);
+
+    // Remove range ring (geometry and materials are shared, see rangeRings)
+    if (data.rangeIndicator) {
+      this.scene.remove(data.rangeIndicator);
+    }
+
+    // Remove selection ring (geometry and material are shared, do NOT dispose;
+    // a partner's coloured ring has a material of its own, see setOwnerRing)
+    if (data.selectionRing) {
+      this.scene.remove(data.selectionRing);
+      if (data.selectionRing.material !== ThreeTowerRenderer.sharedSelectionMaterial) {
+        (data.selectionRing.material as Material).dispose();
+      }
+    }
+
+    // Remove tip marker
+    if (data.tipMarker) {
+      this.scene.remove(data.tipMarker);
+      data.tipMarker.geometry.dispose();
+      (data.tipMarker.material as Material).dispose();
+    }
+
+    // Remove LOS ring
+    if (data.losRing) {
+      this.scene.remove(data.losRing);
+      data.losRing.geometry.dispose();
+      (data.losRing.material as Material).dispose();
+    }
+
+    // Clean up animation mixer
+    if (data.mixer) {
+      data.mixer.stopAllAction();
+      for (const clip of data.animations.values()) {
+        data.mixer.uncacheClip(clip);
+      }
+      data.mixer.uncacheRoot(data.mesh);
+    }
+    data.animations.clear();
+    data.currentAction = null;
+
+    if (this.hoveredId === id) this.hoveredId = null;
+    this.towers.delete(id);
+  }
+
+  /**
+   * Visual update, once per RENDER frame. Drives the selection-ring pulse and
+   * the GLTF mixer (LOD) and draws each turret where its aim points. NO
+   * gameplay-affecting state here: the simulation turns the aim per sub-step
+   * in game-time (Tower.aim, GameStateManager.runSubStep).
+   */
+  updateAnimations(deltaTime: number, camera: Camera): void {
+    this.animationTime += deltaTime * 0.001;
+    this._animFrameCount++;
+
+    const deltaSeconds = deltaTime * 0.001;
+
+    // Frustum for culling GLTF animations
+    this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+
+    for (const data of this.towers.values()) {
+      // GLTF mixer LOD (visual only)
+      if (data.mixer) {
+        this.boundingSphere.center.copy(data.mesh.position);
+        this.boundingSphere.radius = 3;
+        if (this.frustum.intersectsSphere(this.boundingSphere)) {
+          const distSq = data.mesh.position.distanceToSquared(camera.position);
+          if (distSq > 40000) {
+            // >200m: skip
+          } else if (distSq > 10000) {
+            if (this._animFrameCount % 4 === 0) data.mixer.update(deltaSeconds * 4);
+          } else if (distSq > 2500) {
+            if (this._animFrameCount % 2 === 0) data.mixer.update(deltaSeconds * 2);
+          } else {
+            data.mixer.update(deltaSeconds);
+          }
+        }
+      }
+
+      // Selection ring (visual), also on the hovered tower
+      if ((data.isSelected || data.id === this.hoveredId) && data.selectionRing) {
+        const scale = 1 + Math.sin(this.animationTime) * 0.1;
+        data.selectionRing.scale.setScalar(scale);
+        data.selectionRing.rotation.z += deltaTime * 0.001;
+      }
+    }
+
+    // A lookout sweeps the land around it, slowly to and fro
+    for (const [id, node] of this.sweepNodes) {
+      const phase = this.towers.get(id)?.hoverPhaseOffset ?? 0;
+      node.rotation.y = Math.sin(this.animationTime * 0.35 + phase) * 1.3;
+    }
+
+    // Turret aim and the magic hover
+    this.updateTurretVisuals();
+  }
+
+  /** Turn and tilt the turret of `data` to its aim. */
+  private drawAim(data: TowerRenderData): void {
+    drawTurretAim(data.typeConfig, data.mesh.rotation.y, data.turretPart, data.pitch, data.aim);
+  }
+
+  /** Per render frame: every turret where its aim points, the magic hover. */
+  updateTurretVisuals(): void {
+    for (const data of this.towers.values()) {
+      if (!data.turretPart) continue;
+      this.drawAim(data);
+
+      // Magic tower orb: hover animation (always active, purely visual)
+      if (data.typeConfig.id === 'magic') {
+        const hoverAmplitude = 0.006;
+        const hoverSpeed = 0.6;
+        const phase = this.animationTime * hoverSpeed * Math.PI * 2 + data.hoverPhaseOffset;
+        data.turretPart.position.y = data.turretBaseY + Math.sin(phase) * hoverAmplitude;
+      }
+    }
+  }
+
+  /**
+   * Get tower render data
+   */
+  get(id: string): TowerRenderData | undefined {
+    return this.towers.get(id);
+  }
+
+  /**
+   * Get count of active towers
+   */
+  get count(): number {
+    return this.towers.size;
+  }
+
+  /**
+   * Get all tower meshes for raycasting
+   * Returns array of { id, mesh } for intersection testing
+   */
+  getAllMeshes(): { id: string; mesh: Object3D }[] {
+    const result: { id: string; mesh: Object3D }[] = [];
+    for (const [id, data] of this.towers) {
+      result.push({ id, mesh: data.mesh });
+    }
+    return result;
+  }
+
+  /**
+   * Clear all towers
+   */
+  clear(): void {
+    this.pendingCreates.clear();
+    this.pendingBuilds.clear();
+    this.pathIds.clear();
+    this.heldIds.clear();
+    this.ranges.clear();
+    this.ownerColors.clear();
+    for (const id of this.towers.keys()) {
+      this.remove(id);
+    }
+  }
+
+  /**
+   * Set the range ring of this tower to `range`, the runtime range after a
+   * range upgrade; without it the base range of its type. The ring finds
+   * the surface under it every frame, a changed tile needs no call.
+   */
+  updateRangeIndicator(id: string, range?: number): void {
+    if (range === undefined) this.ranges.delete(id);
+    else this.ranges.set(id, range);
+    const data = this.towers.get(id);
+    if (!data || !data.rangeIndicator) return;
+
+    const terrainPos = this.sync.geoToLocal(data.lat, data.lon, data.height);
+    placeRangeRing(data.rangeIndicator, terrainPos.x, terrainPos.y, terrainPos.z, range ?? data.typeConfig.range);
+  }
+
+  /**
+   * Range ring of the tower the build preview stands for, around its foot
+   * at local (x, y, z), `range` m wide. Looks like a placed tower's ring.
+   */
+  showPreviewRange(x: number, y: number, z: number, range: number): void {
+    placeRangeRing(this.previewRange, x, y, z, range);
+    this.previewRange.visible = true;
+  }
+
+  /** Hide the build preview's range ring. */
+  hidePreviewRange(): void {
+    this.previewRange.visible = false;
+  }
+
+  /**
+   * Switch the muzzle flash light on or off (VFX setting muzzleFlash). The
+   * light stays in the scene, dark as between shots: taking it out would
+   * give every lit material a new shader program (see TowerMuzzleFlash).
+   */
+  setMuzzleFlashEnabled(enabled: boolean): void {
+    this.muzzleFlash.setEnabled(enabled);
+  }
+
+  /**
+   * Light the tower's shoot position with the pooled muzzle flash light for
+   * 50 ms. The particles are spawned separately (ThreeEffectsRenderer).
+   * Nothing while muzzle flashes are off.
+   *
+   * @param intensity - Light intensity, from the tower's MUZZLE_FLASH_PROFILES entry
+   */
+  triggerMuzzleFlash(towerId: string, intensity: number): void {
+    if (!this.muzzleFlash.isEnabled) return;
+    const data = this.towers.get(towerId);
+    if (!data) return;
+
+    const terrainPos = this.sync.geoToLocal(data.lat, data.lon, data.height);
+    this.muzzleFlash.flash(terrainPos.x, data.tipY, terrainPos.z, intensity);
+  }
+
+  /**
+   * Recursively dispose Three.js object
+   */
+  private disposeObject(obj: Object3D): void {
+    obj.traverse((node) => {
+      const mesh = node as Mesh;
+      if (mesh.geometry) {
+        mesh.geometry.dispose();
+      }
+      if (mesh.material) {
+        const materials: Material[] = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        for (const mat of materials) {
+          const stdMat = mat as MeshStandardMaterial;
+          // Dispose all possible texture maps
+          if (stdMat.map) stdMat.map.dispose();
+          if (stdMat.normalMap) stdMat.normalMap.dispose();
+          if (stdMat.roughnessMap) stdMat.roughnessMap.dispose();
+          if (stdMat.metalnessMap) stdMat.metalnessMap.dispose();
+          if (stdMat.emissiveMap) stdMat.emissiveMap.dispose();
+          if (stdMat.aoMap) stdMat.aoMap.dispose();
+          mat.dispose();
+        }
+      }
+    });
+  }
+
+  /**
+   * Dispose all resources including shared materials and model templates
+   */
+  dispose(): void {
+    // Remove and dispose all individual tower renders
+    this.clear();
+
+    // Release model references from AssetManager (decrements ref counts, disposes at 0)
+    for (const url of this.loadedModelUrls) {
+      this.assetManager.releaseModel(url);
+    }
+    this.loadedModelUrls.clear();
+
+    // Dispose shared geometry and materials
+    this.scene.remove(this.previewRange);
+    this.rangeRings.dispose();
+    this.detectionRingKit.dispose();
+
+    // Only dispose static selection resources when last instance is destroyed
+    ThreeTowerRenderer.sharedRefCount--;
+    if (ThreeTowerRenderer.sharedRefCount <= 0) {
+      ThreeTowerRenderer.sharedSelectionGeometry?.dispose();
+      ThreeTowerRenderer.sharedSelectionGeometry = null;
+      ThreeTowerRenderer.sharedSelectionMaterial?.dispose();
+      ThreeTowerRenderer.sharedSelectionMaterial = null;
+      ThreeTowerRenderer.sharedRefCount = 0;
+    }
+
+    // Clean up muzzle flash
+    this.muzzleFlash.dispose();
+
+    // Clear map reference to allow GC
+    this.towers.clear();
+  }
+}

@@ -1,0 +1,335 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
+import { RovingGroupDirective } from '../../../roving-group.directive';
+import { TdIconComponent, type TdIconName } from '../../../icon/icon.component';
+import { MainMenuService } from '../../main-menu.service';
+import { EngineInitializationService } from '../../../../services/infrastructure/engine-initialization.service';
+import { GameStore } from '../../../../store/game.store';
+import { loadingPlateView } from '../../loading/loading-plate';
+import type { MenuLayer, MenuPage } from '../../menu-page';
+import { CUSTOM_MAPS_OPEN } from '../../../../world/custom-maps-open';
+
+/** An entry of the list */
+export type HomeEntryId =
+  | 'continue' | 'play' | 'new-game' | 'coop' | 'save' | 'load' | 'settings' | 'extras' | 'editor' | 'restart' | 'quit';
+
+export interface HomeEntry {
+  id: HomeEntryId;
+  label: string;
+  /** The line under it: "Heilbronn, wave 12" */
+  sub: string | null;
+  /** Below the line of the list (New game in the pause layer, Restart, Quit) */
+  below: boolean;
+  /** Loads with the place: its bar shows while it does */
+  loads: boolean;
+  /** Shown but not yet open (the map editor before its release) */
+  off?: boolean;
+}
+
+/** The icon before each entry */
+export const HOME_ENTRY_ICON: Record<HomeEntryId, TdIconName> = {
+  continue: 'play',
+  play: 'play',
+  'new-game': 'flag',
+  coop: 'users',
+  save: 'download',
+  load: 'filing',
+  settings: 'cog',
+  extras: 'manual',
+  editor: 'terrain',
+  restart: 'refresh',
+  quit: 'power',
+};
+
+/** What the list asks before it does it, in its own place under the list */
+export type HomeConfirm =
+  | { kind: 'leave'; from: string; to: string }
+  | { kind: 'restart' }
+  | { kind: 'editor' }
+  | { kind: 'quit' };
+
+const PAGE_OF: Partial<Record<HomeEntryId, MenuPage>> = {
+  'new-game': 'new-game',
+  coop: 'coop',
+  save: 'save',
+  load: 'load',
+  settings: 'settings',
+  extras: 'extras',
+};
+
+/**
+ * The menu's list (docs/MAIN_MENU_UI_PLAN.md, Menü 4). In the start layer:
+ * Continue (an autosave, or a run loaded), Play (the place behind the menu),
+ * New game, Coop, Save (with a run), Load, Settings, Extras, Quit in the app.
+ * In the pause layer: Continue back to the game, Save, Load, Settings,
+ * Extras, and below the line New game, Coop, Restart here, Quit. Not in a
+ * coop game: Save, Load, Restart, New game (the map is the room's).
+ *
+ * While the place loads, one entry shows the bar: the one the player chose,
+ * else the first that loads (Play and Continue both can); a click then
+ * waits and plays once it stands. Continue to an autosave at another
+ * place asks first (E120), Restart and Quit with a run under way too.
+ */
+@Component({
+  selector: 'app-menu-home',
+  standalone: true,
+  imports: [RovingGroupDirective, TdIconComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './menu-home.component.html',
+  styleUrl: './menu-home.component.scss',
+  host: { '(keydown.escape)': 'onEscape($event)' },
+})
+export class MenuHomeComponent {
+  /** The layer the menu stands in: some entries differ before a run and in it */
+  readonly layer = input.required<MenuLayer>();
+  readonly icons = HOME_ENTRY_ICON;
+  readonly menu = inject(MainMenuService);
+  /** The map editor opens; until its release the entry shows disabled */
+  private readonly mapsOpen = inject(CUSTOM_MAPS_OPEN);
+  private readonly engineInit = inject(EngineInitializationService);
+  private readonly store = inject(GameStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly injector = inject(Injector);
+
+  readonly confirm = signal<HomeConfirm | null>(null);
+  /** The last Continue went wrong: why */
+  readonly status = signal<string | null>(null);
+  /** The autosave loads */
+  readonly busy = signal(false);
+  /** The entry that loads the player last chose: it carries the bar */
+  private readonly chosen = signal<HomeEntryId | null>(null);
+
+  readonly plate = computed(() => loadingPlateView(this.engineInit.loadingSteps()));
+
+  constructor() {
+    // The first choice is the top entry (TODO E151). The menu focuses the
+    // first entry as it opens, often before the place behind it is known;
+    // Play or Continue then come in above New game. Focus still on the old
+    // top entry means the player has not moved it: it goes to the new one.
+    let top: HomeEntryId | null = null;
+    effect(() => {
+      const now = this.entries()[0]?.id ?? null;
+      const before = top;
+      top = now;
+      if (before === null || now === null || now === before) return;
+      afterNextRender(() => {
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && focused.dataset['entry'] === before && this.host.contains(focused)) {
+          this.focusEntry(now);
+        }
+      }, { injector: this.injector });
+    });
+  }
+
+  /** What the run loaded here is: "Heilbronn | wave 12" */
+  readonly runLine = computed(() => {
+    const place = this.menu.placeName();
+    const wave = Math.max(1, this.store.waveNumber());
+    return place ? `${place} | wave ${wave}` : `wave ${wave}`;
+  });
+
+  readonly entries = computed<HomeEntry[]>(() => {
+    const menu = this.menu;
+    const solo = !menu.inCoop();
+    const entry = (id: HomeEntryId, label: string, sub: string | null = null, below = false, loads = false): HomeEntry =>
+      ({ id, label, sub, below, loads });
+    const list: HomeEntry[] = [];
+
+    if (this.layer() === 'pause') {
+      list.push(entry('continue', 'Continue'));
+      if (solo && menu.underWay()) list.push(entry('save', 'Save game'));
+      if (solo) list.push(entry('load', 'Load game'));
+      list.push(entry('settings', 'Settings'), entry('extras', 'Extras'));
+      if (menu.canChangePlace()) list.push(entry('new-game', 'New game', null, true));
+      list.push(entry('coop', 'Coop', null, true));
+      if (menu.canRestart()) list.push(entry('restart', 'Restart here', null, true));
+      if (menu.canQuit) list.push(entry('quit', 'Quit 3DTD', null, true));
+      return list;
+    }
+
+    const offer = menu.autosaveOffer();
+    const head: HomeEntry[] = [];
+    if (offer) {
+      const line = `${offer.place} | wave ${offer.wave}`;
+      head.push(entry('continue', 'Continue', offer.elsewhere ? `in ${line}` : line, false, !offer.elsewhere));
+    } else if (menu.hasPlace() && menu.underWay()) {
+      head.push(entry('continue', 'Continue', this.runLine(), false, true));
+    }
+    if (menu.hasPlace() && !menu.underWay()) head.push(entry('play', 'Play', menu.placeName(), false, true));
+    // A place in the link: it is what the player came for
+    if (menu.linkedPlace) head.reverse();
+    // No place yet: choosing one comes first
+    if (!menu.hasPlace() && menu.canChangePlace()) head.push(entry('new-game', 'New game'));
+    list.push(...head);
+    if (menu.hasPlace() && menu.canChangePlace()) list.push(entry('new-game', 'New game'));
+    list.push(entry('coop', 'Coop'));
+    if (solo && menu.underWay()) list.push(entry('save', 'Save game'));
+    if (solo) list.push(entry('load', 'Load game'));
+    list.push(entry('settings', 'Settings'), entry('extras', 'Extras'));
+    list.push({ ...entry('editor', 'Map editor', this.mapsOpen ? null : 'Coming soon', true), off: !this.mapsOpen });
+    if (menu.canQuit) list.push(entry('quit', 'Quit 3DTD', null, true));
+    return list;
+  });
+
+  /** The head of the pause list: "Paused" left, the run's line right; in coop the game goes on */
+  readonly pauseWord = computed(() => (this.menu.inCoop() ? 'Coop' : 'Paused'));
+
+  /** The one entry that shows the loading: the one chosen, else the first that loads */
+  private readonly loadingEntry = computed<HomeEntryId | null>(() => {
+    const loading = this.entries().filter((entry) => entry.loads);
+    const chosen = this.chosen();
+    return loading.find((entry) => entry.id === chosen)?.id ?? loading[0]?.id ?? null;
+  });
+
+  /** Play or Continue waits for the place: the bar shows in one entry, not in both */
+  showsBar(entry: HomeEntry): boolean {
+    return entry.id === this.loadingEntry() && this.menu.placeLoading();
+  }
+
+  /** The line under an entry: what it plays, or that it waits */
+  subOf(entry: HomeEntry): string | null {
+    if (entry.id === this.loadingEntry() && this.menu.pendingPlay()) return 'Starts when loaded';
+    if (entry.id === 'continue' && this.busy()) return 'Loading the save';
+    return entry.sub;
+  }
+
+  activate(entry: HomeEntry): void {
+    if (entry.off) return;
+    this.status.set(null);
+    if (entry.loads) this.chosen.set(entry.id);
+    const page = PAGE_OF[entry.id];
+    if (page) {
+      this.menu.open(page);
+      return;
+    }
+    switch (entry.id) {
+      case 'continue':
+        this.continue();
+        return;
+      case 'play':
+        this.menu.requestPlay();
+        return;
+      case 'restart':
+        if (this.menu.underWay()) this.ask({ kind: 'restart' });
+        else this.menu.restart();
+        return;
+      case 'editor':
+        if (this.menu.underWay() || this.menu.inCoop()) this.ask({ kind: 'editor' });
+        else openMapEditor();
+        return;
+      case 'quit':
+        if (this.menu.underWay() || this.menu.inCoop()) this.ask({ kind: 'quit' });
+        else this.menu.quit();
+        return;
+    }
+  }
+
+  /** Continue: back to the game, the run loaded, or the autosave (asking first when it leaves this place) */
+  private continue(): void {
+    if (this.layer() === 'pause') {
+      this.menu.close();
+      return;
+    }
+    const offer = this.menu.autosaveOffer();
+    if (!offer) {
+      this.menu.requestPlay();
+      return;
+    }
+    if (offer.elsewhere) {
+      this.ask({ kind: 'leave', from: this.menu.placeName() ?? 'this place', to: offer.place });
+      return;
+    }
+    void this.loadAutosave();
+  }
+
+  /** The confirmation's yes */
+  confirmed(): void {
+    const confirm = this.confirm();
+    this.confirm.set(null);
+    if (!confirm) return;
+    if (confirm.kind === 'leave') void this.loadAutosave();
+    else if (confirm.kind === 'restart') this.menu.restart();
+    else if (confirm.kind === 'editor') openMapEditor();
+    else this.menu.quit();
+  }
+
+  cancelConfirm(): void {
+    const kind = this.confirm()?.kind;
+    this.confirm.set(null);
+    // Back on the entry that asked
+    const id: HomeEntryId = kind === 'leave' ? 'continue' : kind ?? 'continue';
+    afterNextRender(() => this.focusEntry(id), { injector: this.injector });
+  }
+
+  private async loadAutosave(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    try {
+      const result = await this.menu.continueAutosave();
+      if (!result.ok) this.status.set(result.reason);
+      else if (result.note) this.status.set(`Loaded. ${result.note}`);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private ask(confirm: HomeConfirm): void {
+    this.confirm.set(confirm);
+    afterNextRender(() => this.host.querySelector<HTMLElement>('.mh-confirm button')?.focus(), { injector: this.injector });
+  }
+
+  private focusEntry(id: HomeEntryId): void {
+    this.host.querySelector<HTMLElement>(`[data-entry="${id}"]`)?.focus();
+  }
+
+  /**
+   * The pointer over an entry takes the focus along while it is on the list,
+   * so hover and keyboard focus never mark two entries at once. Not while the
+   * focus is elsewhere (a page's search field): crossing the list with the
+   * mouse must not pull it out.
+   */
+  followPointer(event: MouseEvent): void {
+    const entry = event.currentTarget as HTMLElement;
+    const focused = document.activeElement;
+    if (focused === entry || !(focused instanceof HTMLElement) || focused.getAttribute('role') !== 'menuitem') return;
+    if (!this.host.contains(focused)) return;
+    entry.focus({ preventScroll: true });
+  }
+
+  /** Esc on a question takes it back, before the menu steps back */
+  onEscape(event: Event): void {
+    if (!this.confirm()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.cancelConfirm();
+  }
+
+  /** The confirmation's question and its yes */
+  confirmText(confirm: HomeConfirm): { question: string; yes: string } {
+    switch (confirm.kind) {
+      case 'leave':
+        return { question: `Leaves ${confirm.from}: the save plays in ${confirm.to}.`, yes: 'Continue anyway' };
+      case 'restart':
+        return { question: 'Restart here? The run ends.', yes: 'Restart' };
+      case 'editor':
+        return { question: 'Open the map editor? The run ends.', yes: 'Open the editor' };
+      case 'quit':
+        return { question: 'Quit 3DTD? The run ends.', yes: 'Quit' };
+    }
+  }
+}
+
+/** The map editor is its own page (`/editor`): leave the game for it */
+export function openMapEditor(): void {
+  window.location.assign(new URL('editor', document.baseURI).toString());
+}

@@ -1,0 +1,146 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadEngine } from './vmEngine.mjs';
+
+// Object to object collision finds what is near each mover through a grid once there are many solids, rather than
+// checking every pair; it must resolve every contact exactly as checking every pair does, in the same order, so a
+// game plays the same either way: the same scene is run both ways and compared value for value, frame by frame.
+
+// a scene of movers and fixed solids of many sizes, some fixed ones moving, made the same in each engine
+const scene = (count, grid)=> `
+    setHeadlessMode(true);
+    engineCollideGridMin = ${grid ? 0 : 1e9};
+    setGravity(vec2(0, -.01));
+    const random = new RandomGenerator(7);
+    var bodies = [];
+    for (let i = 0; i < ${count}; ++i)
+    {
+        const fixed = random.float() < .2;
+        const o = new EngineObject(vec2(random.float(-40, 40), random.float(-30, 30)),
+            vec2(random.float(.3, fixed ? 12 : 2), random.float(.3, fixed ? 3 : 2)));
+        o.setCollision(true, random.float() < .8);
+        o.mass = fixed ? 0 : random.float(.5, 2);
+        o.restitution = random.float(0, .8);
+        o.velocity = vec2(random.float(-.3, .3), random.float(-.3, .3));
+        if (fixed && random.float() < .3)
+            o.velocity = vec2(random.float(-.05, .05), 0); // a moving platform
+        bodies.push(o);
+    }
+    // a floor and walls so they pile up
+    for (const [x, y, w, h] of [[0, -32, 90, 2], [-46, 0, 2, 70], [46, 0, 2, 70]])
+    {
+        const wall = new EngineObject(vec2(x, y), vec2(w, h));
+        wall.setCollision(); wall.mass = 0; bodies.push(wall);
+    }
+    var state = ()=> bodies.map((o)=> [o.pos.x, o.pos.y, o.velocity.x, o.velocity.y, o.groundObject ? bodies.indexOf(o.groundObject) : -1]);`;
+
+test('collision through the grid resolves every contact exactly as checking every pair does', () =>
+{
+    const grid = loadEngine(), all = loadEngine();
+    grid.run(scene(400, true));
+    all.run(scene(400, false));
+    for (let frame = 0; frame < 120; ++frame)
+    {
+        grid.run('engineObjectsUpdate()');
+        all.run('engineObjectsUpdate()');
+        const a = JSON.stringify(grid.run('state()')), b = JSON.stringify(all.run('state()'));
+        if (a !== b)
+            assert.fail('frame ' + frame + ' differs');
+    }
+});
+
+test('with many solids the grid checks far fewer boxes than every pair', () =>
+{
+    const counts = {};
+    for (const [name, grid] of [['grid', true], ['all', false]])
+    {
+        const { run } = loadEngine();
+        run(scene(1000, grid));
+        run(`var checks = 0; const overlap = EngineObject.prototype.isOverlappingObject;
+            EngineObject.prototype.isOverlappingObject = function(o) { ++checks; return overlap.call(this, o); };
+            engineObjectsUpdate();`);
+        counts[name] = run('checks');
+    }
+    assert.ok(counts.grid * 10 < counts.all, JSON.stringify(counts));
+});
+
+test('the grid follows a collision callback that moves the other object far away, or destroys it', () =>
+{
+    const runs = [true, false].map((grid)=>
+    {
+        const engine = loadEngine();
+        engine.run(scene(300, grid) + `
+            bodies.forEach((o, i)=>
+            {
+                if (i % 7 == 0) // throws what it touches across the room
+                    o.collideWithObject = (other)=> (other.mass && other.pos.set(-other.pos.x, other.pos.y + 5), true);
+                if (i % 11 == 0) // breaks what it touches
+                    o.collideWithObject = (other)=> (other.mass && other.size.x < .5 && other.destroy(), true);
+            });`);
+        return engine;
+    });
+    for (let frame = 0; frame < 90; ++frame)
+    {
+        const [a, b] = runs.map(({ run })=> (run('engineObjectsUpdate()'), JSON.stringify(run('state()'))));
+        if (a !== b)
+            assert.fail('frame ' + frame + ' differs');
+    }
+});
+
+test('a negative size, a solid too big for cells and objects far out collide as checking every pair does', () =>
+{
+    // a negative size is a mirrored sprite of that size; a box past 2^31 cells out would loop for ever, as ++ stops
+    // changing a number past 2^53, so it counts as too big for cells, as one with no finite box does
+    const extras = `
+        for (const [x, y, w, h, mass] of [
+            [0, 50, -1, 1, 0], [0, 52, 2, 2, 1],        // a box lands on a solid of negative width
+            [8, 50, 4, 1, 0], [8, 52, -1, -2, 1],       // a mover of negative size lands
+            [200, -75, 150, 150, 0], [200, 2, 1, 1, 1], [205, 4, 2, 1, 1], // landing on one too big for cells
+            [1e17, 0, 4, 1, 0], [1e17, 2, 1, 1, 1]])    // far out
+        {
+            const o = new EngineObject(vec2(x, y), vec2(w, h));
+            o.setCollision();
+            o.mass = mass;
+            bodies.push(o);
+        }`;
+    const grid = loadEngine(), all = loadEngine();
+    grid.run(scene(400, true) + extras);
+    all.run(scene(400, false) + extras);
+    for (let frame = 0; frame < 60; ++frame)
+    {
+        grid.run('engineObjectsUpdate()');
+        all.run('engineObjectsUpdate()');
+        const a = JSON.stringify(grid.run('state()')), b = JSON.stringify(all.run('state()'));
+        if (a !== b)
+            assert.fail('frame ' + frame + ' differs');
+    }
+    assert.ok(grid.run('bodies.at(-8).groundObject === bodies.at(-9)'), 'the box stands on the negative width solid');
+});
+
+test('a collision callback that throws leaves no grid behind', () =>
+{
+    const { run } = loadEngine();
+    run(scene(100, true) + `bodies.forEach((o)=> o.collideWithObject = ()=> { throw 'thrown'; });`);
+    assert.throws(()=> run('engineObjectsUpdate()'));
+    assert.equal(run('engineCollideGrid'), undefined);
+});
+
+test('the grid is made only when a 2D mover asks for it, so 3D solids alone make none', () =>
+{
+    // 3D solids are in the list of solids but resolve in 3D and never walk the grid, which cost them a build and a
+    // place each a frame; a 2D mover among enough solids still gets one, made once an update
+    const { run } = loadEngine();
+    run(`setHeadlessMode(true); new Render3DPlugin;
+        var builds = 0; const build = engineCollideGridBuild;
+        engineCollideGridBuild = (...a)=> (++builds, build(...a));
+        for (let i = 0; i < 80; ++i)
+        {
+            const o = new EngineObject3D(vec3(i * 2, 0, 0)); o.setCollision(); o.mass = i % 2;
+        }`);
+    run('for (let i = 3; i--;) engineObjectsUpdate();');
+    assert.equal(run('builds'), 0, '3D solids alone');
+    run(`for (let i = 0; i < 70; ++i) { const o = new EngineObject(vec2(i * 2, 50), vec2(1)); o.setCollision(); o.mass = 0; }
+        const mover = new EngineObject(vec2(0, 52), vec2(1)); mover.setCollision();`);
+    run('for (let i = 3; i--;) engineObjectsUpdate();');
+    assert.equal(run('builds'), 3, 'once an update with a 2D mover');
+});
