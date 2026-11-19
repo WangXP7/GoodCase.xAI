@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "timeBasis": "Latest Git committer timestamp for the case directory (standalone entries use their own file)",
-  "snapshot": "2a4cfc99a5aa11f7717047a3367de6151b6468f2",
+  "snapshot": "c9cbaa32461a001d43becd05736fe2af82e40ba4",
   "entries": {
     "codex/2066-world-cup/index.html": {
       "committedAt": "2026-11-15T05:15:50Z",
@@ -184,8 +184,8 @@
       "scope": "codex/threejs-visual-top10/graveyard-shift-fable-52"
     },
     "codex/threejs-visual-top10/hexgl/index.html": {
-      "committedAt": "2026-11-19T02:21:46Z",
-      "commit": "7fb71067f12e0ce3a5188b87e5c1e6ea14fd7a5f",
+      "committedAt": "2026-11-19T02:30:08Z",
+      "commit": "9eed8c1cba9b02d7a260deeda76454331ce861c6",
       "scope": "codex/threejs-visual-top10/hexgl"
     },
     "codex/threejs-visual-top10/infinity-castle/index.html": {
