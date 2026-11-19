@@ -1,0 +1,311 @@
+{
+  "sourceRef": "threejs-source",
+  "sourceCommit": "8dc888b571f44c1805f4b7656490133fe9cdb51a",
+  "sourceProjects": 30,
+  "selfHostedProjects": 17,
+  "sourceOnlyProjects": 13,
+  "publishedSiteBytes": 131146669,
+  "cases": [
+    {
+      "slug": "tria-prima-fable-52",
+      "title": "三原质 · Tria Prima",
+      "entry": "codex/threejs-visual-top10/tria-prima-fable-52/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/tria-prima-fable-52",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "acce14089aeee01f3225a09a3a8a9532612359fb",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/tria-prima-fable-52/app/index.html"
+    },
+    {
+      "slug": "x-archive-auth-2094239964162843048-f501587b",
+      "title": "沼泽气垫船 · Emerald Bayou",
+      "entry": "codex/threejs-visual-top10/x-archive-auth-2094239964162843048-f501587b/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/x-archive-auth-2094239964162843048-f501587b",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "e87c03688263daadb1bfbf35efaddc5ab7d53912",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/x-archive-auth-2094239964162843048-f501587b/app/index.html"
+    },
+    {
+      "slug": "graveyard-shift-fable-52",
+      "title": "公路夜班 · Graveyard Shift",
+      "entry": "codex/threejs-visual-top10/graveyard-shift-fable-52/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/graveyard-shift-fable-52",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "4bc991d2a11b036df6a9e81baac0fc7d8d16972c",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/graveyard-shift-fable-52/app/index.html"
+    },
+    {
+      "slug": "x-archive-auth-2081716631986983093-fa546a89",
+      "title": "星陨 · Starfall 太空即时战略",
+      "entry": "codex/threejs-visual-top10/x-archive-auth-2081716631986983093-fa546a89/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/x-archive-auth-2081716631986983093-fa546a89",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "f062c9b2b7e770e184a328bcf7f2bf216554d3ee",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/x-archive-auth-2081716631986983093-fa546a89/app/index.html"
+    },
+    {
+      "slug": "x-archive-2090638002003575214-claude-of-tanks-e14f3e12",
+      "title": "坦克作战模拟器 · Claude of Tanks",
+      "entry": "codex/threejs-visual-top10/x-archive-2090638002003575214-claude-of-tanks-e14f3e12/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/x-archive-2090638002003575214-claude-of-tanks-e14f3e12",
+      "sourceScope": "code-only",
+      "upstreamRevision": "e5e937cb713fc2b6fc39b2abf4b3c3747996d1ea",
+      "status": "source-only",
+      "note": "现行上游许可保留车辆、地图等发行资源，已导入可分发代码。"
+    },
+    {
+      "slug": "tidewater-dgreenheck",
+      "title": "海岛钓鱼 · Tidewater",
+      "entry": "codex/threejs-visual-top10/tidewater-dgreenheck/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/tidewater-dgreenheck",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "4811ba48d795197de5621985f404e765c0b7c0ef",
+      "status": "hosted-existing",
+      "runtime": "workbuddy/tidewater-fish-site/index.html",
+      "note": "复用同仓库已有 Tidewater 运行版，上游源码固定提交另存。"
+    },
+    {
+      "slug": "marco-fugaro-worm-monster",
+      "title": "虫群怪物 · Worm Monster",
+      "entry": "codex/threejs-visual-top10/marco-fugaro-worm-monster/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/marco-fugaro-worm-monster",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "c6e4175baeb5daa8c66d2991d9991a31574dc273",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/marco-fugaro-worm-monster/app/examples/worm-monster.html"
+    },
+    {
+      "slug": "drcollect-github-io-demolition-derby",
+      "title": "撞车竞技 · Demolition Derby",
+      "entry": "codex/threejs-visual-top10/drcollect-github-io-demolition-derby/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/drcollect-github-io-demolition-derby",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "f559fc60a7f2ee3a21a4faf77e998ae31ad67c43",
+      "status": "source-only",
+      "note": "Collect 原版车模另行授权，替代车辆的站内构建尚未通过验证。"
+    },
+    {
+      "slug": "vale-dos-vinhedos-lucas579686-chatgpt-site",
+      "title": "自由游戏 · 中世纪村庄经营",
+      "entry": "codex/threejs-visual-top10/vale-dos-vinhedos-lucas579686-chatgpt-site/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/vale-dos-vinhedos-lucas579686-chatgpt-site",
+      "sourceScope": "code-only",
+      "upstreamRevision": "7798cd9771f99d5c99422789a9b94a69df6c3e3e",
+      "status": "source-only",
+      "note": "Godot 项目，需要生成并验证 Web 导出包及其资源。"
+    },
+    {
+      "slug": "real-street-tower-defense",
+      "title": "真实街区塔防",
+      "entry": "codex/threejs-visual-top10/real-street-tower-defense/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/real-street-tower-defense",
+      "sourceScope": "code-only",
+      "upstreamRevision": "2a092a2b8d9f21c4826e3377acbcdbf64fe6923c",
+      "status": "source-only",
+      "note": "完整构建包含大体积地图和服务相关资源，尚未生成通过验证的 Pages 版本。"
+    },
+    {
+      "slug": "bruno-simon",
+      "title": "驾车探索作品集 · Bruno Simon",
+      "entry": "codex/threejs-visual-top10/bruno-simon/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/bruno-simon",
+      "sourceScope": "code-only",
+      "upstreamRevision": "70764a94756cc4de564e493c8ba46c4b5fe03ed1",
+      "status": "source-only",
+      "note": "原站运行资源约 346 MiB，超过当前 Pages 剩余空间，音乐等资源也有单独条款。"
+    },
+    {
+      "slug": "papertrails",
+      "title": "纸上漫游 · Papertrails",
+      "entry": "codex/threejs-visual-top10/papertrails/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/papertrails",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "5a284f71164ea3bd54ee788553e21f7f21a1b7b7",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/papertrails/app/index.html"
+    },
+    {
+      "slug": "slop-new-york",
+      "title": "曼哈顿漫游 · Slop New York",
+      "entry": "codex/threejs-visual-top10/slop-new-york/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/slop-new-york",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "2813185434ec4f11e105fff7fb87665fab81b558",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/slop-new-york/app/index.html"
+    },
+    {
+      "slug": "infinity-castle",
+      "title": "无限城 · 立体城堡漫游",
+      "entry": "codex/threejs-visual-top10/infinity-castle/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/infinity-castle",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "d0a9f2eb387684679dea5ef43ae9198389ee1e02",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/infinity-castle/app/index.html"
+    },
+    {
+      "slug": "procedural-tokyo",
+      "title": "三维东京 · Procedural Tokyo",
+      "entry": "codex/threejs-visual-top10/procedural-tokyo/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/procedural-tokyo",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "1984760653e4800adeadcb3505b1e92347415dc3",
+      "status": "source-only",
+      "note": "上游源码未包含完整的材质和城市瓦片，站内版本仍缺这些运行资产。"
+    },
+    {
+      "slug": "slop-singapore",
+      "title": "新加坡街景 · Slop Singapore",
+      "entry": "codex/threejs-visual-top10/slop-singapore/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/slop-singapore",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "3b98b6765a658e7da241f11da569abb8b44d2822",
+      "status": "source-only",
+      "note": "地图瓦片和树木数据另有来源，完整数据的再发布范围尚未核实。"
+    },
+    {
+      "slug": "starter-kit-racing",
+      "title": "赛道幽灵 · Starter Kit Racing",
+      "entry": "codex/threejs-visual-top10/starter-kit-racing/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/starter-kit-racing",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "e8cd9c08ac13e508a430c776576380bfdf4b4444",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/starter-kit-racing/app/index.html"
+    },
+    {
+      "slug": "moon-rover",
+      "title": "月球车驾驶 · Moon Rover",
+      "entry": "codex/threejs-visual-top10/moon-rover/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/moon-rover",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "f5f25ba6bf7477c612b408b265c9275a4fd1200d",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/moon-rover/app/index.html"
+    },
+    {
+      "slug": "hexgl",
+      "title": "极速飞船 · HexGL",
+      "entry": "codex/threejs-visual-top10/hexgl/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/hexgl",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "6addc95a2fce3bf05f4d751823cc054c61a16d68",
+      "status": "source-only",
+      "note": "进入加载提示后仍未在本站测试环境确认飞船画面运行。"
+    },
+    {
+      "slug": "tiny-world-builder",
+      "title": "微缩世界构建器 · Tiny World Builder",
+      "entry": "codex/threejs-visual-top10/tiny-world-builder/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/tiny-world-builder",
+      "sourceScope": "code-only",
+      "upstreamRevision": "19824acbff3148287b717e4bab4f1136bb6dc762",
+      "status": "source-only",
+      "note": "上游包含大量场景素材及联机服务，尚未验收可独立运行的静态版。"
+    },
+    {
+      "slug": "backroom",
+      "title": "阈限空间漫游 · Backroom",
+      "entry": "codex/threejs-visual-top10/backroom/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/backroom",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "79ba82b3ba25ea40c8ec633eeccd00b605f22ba6",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/backroom/app/index.html"
+    },
+    {
+      "slug": "threejs-descent",
+      "title": "立体迷宫空战 · Three.js Descent",
+      "entry": "codex/threejs-visual-top10/threejs-descent/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/threejs-descent",
+      "sourceScope": "code-only",
+      "upstreamRevision": "e8570178df232cdc8e96d923c2fc2c760e67964a",
+      "status": "source-only",
+      "note": "原游戏数据按独立条款处理，当前入库范围为可分发代码。"
+    },
+    {
+      "slug": "threejs-quake",
+      "title": "雷神之锤移植 · Three.js Quake",
+      "entry": "codex/threejs-visual-top10/threejs-quake/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/threejs-quake",
+      "sourceScope": "code-only",
+      "upstreamRevision": "6d6177b11f81f390d8e527dd5dd738d981eb13fa",
+      "status": "source-only",
+      "note": "GPL 代码已导入，Quake 原版数据的再分发授权需单独核对。"
+    },
+    {
+      "slug": "toy-maker",
+      "title": "木制玩具工坊 · Toy Maker",
+      "entry": "codex/threejs-visual-top10/toy-maker/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/toy-maker",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "829e15e9821958a30a337b08def148b3590b3e08",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/toy-maker/app/index.html"
+    },
+    {
+      "slug": "stick-and-steel",
+      "title": "火柴人与钢铁",
+      "entry": "codex/threejs-visual-top10/stick-and-steel/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/stick-and-steel",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "4c8e1d05a1ec47db93b687a81a82878727308b20",
+      "status": "source-only",
+      "note": "专用前端依赖未按锁文件完整安装，静态构建尚未通过。"
+    },
+    {
+      "slug": "boba-bar",
+      "title": "珍珠奶茶工坊 · Boba Bar",
+      "entry": "codex/threejs-visual-top10/boba-bar/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/boba-bar",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "a4bbb89dacb9a2ce4942df1815faadce17ca74a2",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/boba-bar/app/index.html"
+    },
+    {
+      "slug": "cs-brasil-v2",
+      "title": "巴西街区对战 · CS BRASIL v2",
+      "entry": "codex/threejs-visual-top10/cs-brasil-v2/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/cs-brasil-v2",
+      "sourceScope": "code-only",
+      "upstreamRevision": "b814e8b7b4c6b35bbdd41237a6998d53675984d3",
+      "status": "source-only",
+      "note": "上游完整项目超过 1 GiB，尚未切出能在 Pages 容量内运行的发行包。"
+    },
+    {
+      "slug": "water-ring-toss",
+      "title": "水中套圈 · 三维怀旧玩具",
+      "entry": "codex/threejs-visual-top10/water-ring-toss/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/water-ring-toss",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "5a274a8e4cd2f2ed3a0aa58e73bc65c084aa430f",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/water-ring-toss/app/index.html"
+    },
+    {
+      "slug": "one-in-300m",
+      "title": "三亿分之一 · 在线竞速",
+      "entry": "codex/threejs-visual-top10/one-in-300m/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/one-in-300m",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "e36c43a2c289591478d243e55b88fcbe684cba30",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/one-in-300m/app/index.html"
+    },
+    {
+      "slug": "littlejs-platformer",
+      "title": "三维平台跳跃 · LittleJS",
+      "entry": "codex/threejs-visual-top10/littlejs-platformer/index.html",
+      "source": "https://github.com/WangXP7/GoodCase.xAI/tree/threejs-source/littlejs-platformer",
+      "sourceScope": "project-snapshot",
+      "upstreamRevision": "42619bd28010fb50e400686dcd475eccbd053256",
+      "status": "hosted",
+      "runtime": "codex/threejs-visual-top10/littlejs-platformer/app/examples/threejs/index.html"
+    }
+  ]
+}
